@@ -16,6 +16,8 @@
     "typescript": "latest"
   },
   "dependencies": {
+    "@effect/ai": "^0.33.2",
+    "@effect/ai-openai": "^0.37.2",
     "@effect/platform": "^0.94.3",
     "effect": "^3.19.16"
   }

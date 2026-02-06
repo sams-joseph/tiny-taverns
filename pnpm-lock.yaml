@@ -30,6 +30,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@effect/ai':
+        specifier: ^0.33.2
+        version: 0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16)
+      '@effect/ai-openai':
+        specifier: ^0.37.2
+        version: 0.37.2(@effect/ai@0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16))(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16)
       '@effect/platform':
         specifier: ^0.94.3
         version: 0.94.3(effect@3.19.16)
@@ -83,6 +89,12 @@ importers:
 
   packages/domain:
     dependencies:
+      '@effect/ai':
+        specifier: ^0.33.2
+        version: 0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16)
+      '@effect/ai-openai':
+        specifier: ^0.37.2
+        version: 0.37.2(@effect/ai@0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16))(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16)
       '@effect/platform':
         specifier: ^0.94.3
         version: 0.94.3(effect@3.19.16)
@@ -136,6 +148,22 @@ importers:
   packages/typescript-config: {}
 
 packages:
+
+  '@effect/ai-openai@0.37.2':
+    resolution: {integrity: sha512-1yTkFdJVexcraIF5ChGBOiXyjOeluti1g9AMPFBzo5ZWZWirbWs6t17dn7SamG6RYbXwRPicVA9vGAXmxgzrsQ==}
+    peerDependencies:
+      '@effect/ai': ^0.33.2
+      '@effect/experimental': ^0.58.0
+      '@effect/platform': ^0.94.1
+      effect: ^3.19.14
+
+  '@effect/ai@0.33.2':
+    resolution: {integrity: sha512-iJ6pz9qiKFXhcnriJJSBQ5+Bz3oEg+6hVQ7OPmmTa0dVkKUPIgX9nHqHfstcwLnDfdXBj/zCl79U+iMpGtQBnA==}
+    peerDependencies:
+      '@effect/experimental': ^0.58.0
+      '@effect/platform': ^0.94.1
+      '@effect/rpc': ^0.73.0
+      effect: ^3.19.14
 
   '@effect/cluster@0.56.2':
     resolution: {integrity: sha512-BtYorswZ0MlaTqa7k+57AD80gp/TJfej85vx0gDnIxhbPQ3+xoa3EXlPrfLV7XsiAokOxE5qs/X6UoZtAVeKug==}
@@ -1008,6 +1036,9 @@ packages:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
 
+  gpt-tokenizer@2.9.0:
+    resolution: {integrity: sha512-YSpexBL/k4bfliAzMrRqn3M6+it02LutVyhVpDeMKrC/O9+pCe/5s8U2hYKa2vFLD5/vHhsKc8sOn/qGqII8Kg==}
+
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
     engines: {node: '>= 0.4'}
@@ -1708,6 +1739,22 @@ packages:
     engines: {node: '>=10'}
 
 snapshots:
+
+  '@effect/ai-openai@0.37.2(@effect/ai@0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16))(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16)':
+    dependencies:
+      '@effect/ai': 0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16)
+      '@effect/experimental': 0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16)
+      '@effect/platform': 0.94.3(effect@3.19.16)
+      effect: 3.19.16
+      gpt-tokenizer: 2.9.0
+
+  '@effect/ai@0.33.2(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16)':
+    dependencies:
+      '@effect/experimental': 0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16)
+      '@effect/platform': 0.94.3(effect@3.19.16)
+      '@effect/rpc': 0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16)
+      effect: 3.19.16
+      find-my-way-ts: 0.1.6
 
   '@effect/cluster@0.56.2(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/sql@0.49.0(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/workflow@0.16.0(@effect/experimental@0.58.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(@effect/platform@0.94.3(effect@3.19.16))(@effect/rpc@0.73.0(@effect/platform@0.94.3(effect@3.19.16))(effect@3.19.16))(effect@3.19.16))(effect@3.19.16)':
     dependencies:
@@ -2679,6 +2726,8 @@ snapshots:
       gopd: 1.2.0
 
   gopd@1.2.0: {}
+
+  gpt-tokenizer@2.9.0: {}
 
   has-bigints@1.1.0: {}
 
