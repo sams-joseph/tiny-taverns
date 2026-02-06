@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 
-import { Console, pipe } from "effect";
+import { pipe } from "effect";
 import * as Array from "effect/Array";
 import * as AiResponse from "@effect/ai/Response";
 import * as Chunk from "effect/Chunk";
