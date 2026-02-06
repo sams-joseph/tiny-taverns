@@ -1,0 +1,27 @@
+{
+  "name": "@repo/api",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/server.ts",
+    "./*": "./src/*.ts",
+    "./internal/*": null
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "dotenv -e ../../.env tsx watch src/server.ts",
+    "build": "dotenv -e ../../.env tsx"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.94.3",
+    "@effect/platform-node": "^0.104.1",
+    "@effect/sql": "^0.49.0",
+    "@repo/adapter-postgres": "workspace:*",
+    "@repo/domain": "workspace:*",
+    "effect": "^3.19.16"
+  }
+}
