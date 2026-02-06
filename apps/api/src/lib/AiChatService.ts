@@ -9,13 +9,19 @@ import * as Chunk from "effect/Chunk";
 import * as Prompt from "@effect/ai/Prompt";
 import * as LanguageModel from "@effect/ai/LanguageModel";
 import { toolkit } from "@repo/domain/Toolkit";
+import { MonstersRepository } from "../MonstersRepository.js";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
-    yield* Effect.logInfo("Initializing toolkit");
+    const monsters = yield* MonstersRepository;
+
     return toolkit.of({
-      SendGreeting: Effect.fnUntraced(function* ({ query }) {
-        return { _tag: "Transient", value: "Hello world" } as const;
+      SearchMonsters: Effect.fnUntraced(function* ({ query }) {
+        const results = yield* monsters.findAll();
+
+        console.log(results);
+
+        return { _tag: "Transient", value: results } as const;
       }),
     });
   }),

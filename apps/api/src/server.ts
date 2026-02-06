@@ -22,8 +22,8 @@ const HttpLive = HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
   HttpServer.withLogAddress,
   Layer.provide(ApiLive),
   Layer.provide(TodosRepository.Default),
-  Layer.provide(MonstersRepository.Default),
   Layer.provide(AiChatService.Default),
+  Layer.provide(MonstersRepository.Default),
   Layer.provide(OpenAiWithHttp),
   Layer.provide(NodeHttpServer.layer(createServer, { port: 4001 })),
 );

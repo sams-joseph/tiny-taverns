@@ -1,6 +1,7 @@
 import * as Tool from "@effect/ai/Tool";
 import * as Toolkit from "@effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
+import { Monster } from "./MonstersApi.js";
 
 export const TerminalResponse = <S extends Schema.Schema.Any>(
   schema: S,
@@ -37,12 +38,12 @@ export const TransientResponse = <S extends Schema.Schema.Any>(
   );
 
 export class toolkit extends Toolkit.make(
-  Tool.make("SendGreeting", {
-    description: "Send a greeting message",
+  Tool.make("SearchMonsters", {
+    description: "Search the users monsters by name",
     parameters: {
       query: Schema.String,
     },
-    success: TransientResponse(Schema.String),
+    success: TransientResponse(Schema.Array(Monster)),
   }),
 ) {}
 

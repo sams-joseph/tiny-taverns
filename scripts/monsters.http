@@ -1,0 +1,30 @@
+POST http://localhost:4001/monsters
+content-type: application/json
+
+{
+  "name": "Ash Mire Stalker",
+  "size": "medium",
+  "kind": "humanoid",
+  "subtype": "lizardfolk",
+  "alignment": "neutral evil",
+  "ac": 14,
+  "hpAvg": 45,
+  "hpFormula": "6d8+18",
+  "str": 14,
+  "dex": 13,
+  "con": 16,
+  "int": 9,
+  "wis": 12,
+  "cha": 10,
+  "cr": 2,
+  "xp": 450,
+  "proficiencyBonus": 2,
+  "passivePerception": 1,
+  "languages": "Abyssal, Common",
+  "senses": "Abyssal, Common",
+  "source": "Abyssal, Common"
+}
+
+###
+
+GET http://localhost:4001/monsters
