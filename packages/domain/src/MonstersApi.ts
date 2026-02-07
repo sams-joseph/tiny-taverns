@@ -37,7 +37,7 @@ export class Monster extends Schema.Class<Monster>("Monster")({
   name: Schema.NonEmptyTrimmedString,
   size: MonsterSize,
   kind: MonsterKind,
-  subtype: Schema.optional(Schema.NonEmptyTrimmedString),
+  subtype: Schema.NullishOr(Schema.NonEmptyTrimmedString),
   alignment: Schema.NonEmptyTrimmedString,
   ac: Schema.Int,
   hpAvg: Schema.Int,

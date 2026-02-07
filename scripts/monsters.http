@@ -28,3 +28,14 @@ content-type: application/json
 ###
 
 GET http://localhost:4001/api/monsters
+
+curl -N \
+  -H "Content-Type: application/ndjson" \
+  -d $'{"_tag":"Request","id":"1","tag":"ChatStream","payload":{"text":"What does the monster Ash Mire do?"},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
+  http://localhost:4001/rpc
+
+
+curl -N \
+  -H "Content-Type: application/ndjson" \
+  -d $'{"_tag":"Request","id":"1","tag":"ChatStream","payload":{"text":"I need a new monster that is fierce and cunning."},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
+  http://localhost:4001/rpc

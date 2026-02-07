@@ -1,11 +1,14 @@
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 
+import { Chat } from "@effect/ai";
 import * as Prompt from "@effect/ai/Prompt";
+import * as Response from "@effect/ai/Response";
 import { toolkit } from "@repo/domain/Toolkit";
 import { MonstersRepository } from "../MonstersRepository.js";
-import { Chat } from "@effect/ai";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
@@ -16,6 +19,14 @@ const ToolkitLayer = toolkit.toLayer(
         const results = yield* monsters.findAll({ search: query });
 
         return { _tag: "Transient", value: results } as const;
+      }),
+      CreateMonster: Effect.fnUntraced(function* ({ monster }) {
+        const newMonster = yield* monsters.create(monster);
+
+        return {
+          _tag: "Transient",
+          value: { monsterId: newMonster.id },
+        };
       }),
     });
   }),
@@ -50,13 +61,73 @@ export class AiChatService extends Effect.Service<AiChatService>()(
           const message = yield* makeMessage(options);
           const prompt = Prompt.merge(systemPrompt, [message]);
 
-          //TODO: Right now this ends when a tool is called and does not continue
-          // THe "agentic" loop need to handle this and continue the conversation after tool calls
-          return chat.streamText({
-            prompt: prompt,
-            toolkit: tools,
-            toolChoice: "auto",
-          });
+          const maxIterations = 8;
+
+          const runTurn = (
+            input: Prompt.RawInput,
+            iteration: number,
+          ): Stream.Stream<
+            Response.StreamPart<typeof tools.tools>,
+            unknown,
+            unknown
+          > =>
+            Stream.unwrap(
+              Effect.gen(function* () {
+                const toolCallFound = yield* Ref.make(false);
+                const finishReason = yield* Ref.make<
+                  Response.FinishReason | undefined
+                >(undefined);
+                const continueDeferred = yield* Deferred.make<boolean>();
+
+                const stream = chat.streamText({
+                  prompt: input,
+                  toolkit: tools,
+                  toolChoice: "auto",
+                });
+
+                const tracked = stream.pipe(
+                  Stream.tap((part) => {
+                    if (
+                      part.type === "tool-call" &&
+                      part.providerExecuted === false
+                    ) {
+                      return Ref.set(toolCallFound, true);
+                    }
+
+                    if (part.type === "finish") {
+                      return Ref.set(finishReason, part.reason);
+                    }
+
+                    return Effect.void;
+                  }),
+                  Stream.ensuring(
+                    Effect.gen(function* () {
+                      const shouldContinue =
+                        iteration < maxIterations - 1 &&
+                        ((yield* Ref.get(finishReason)) === "tool-calls" ||
+                          ((yield* Ref.get(finishReason)) === undefined &&
+                            (yield* Ref.get(toolCallFound))));
+
+                      yield* Deferred.succeed(continueDeferred, shouldContinue);
+                    }),
+                  ),
+                );
+
+                const next = Stream.unwrap(
+                  Deferred.await(continueDeferred).pipe(
+                    Effect.map((shouldContinue) =>
+                      shouldContinue
+                        ? runTurn(Prompt.empty, iteration + 1)
+                        : Stream.empty,
+                    ),
+                  ),
+                );
+
+                return Stream.concat(tracked, next);
+              }),
+            );
+
+          return runTurn(prompt, 0);
         },
         Effect.provide(model),
         Stream.unwrap,

@@ -1,7 +1,7 @@
 import * as Tool from "@effect/ai/Tool";
 import * as Toolkit from "@effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
-import { Monster } from "./MonstersApi.js";
+import { CreateMonsterPayload, Monster } from "./MonstersApi.js";
 
 export const TerminalResponse = <S extends Schema.Schema.Any>(
   schema: S,
@@ -44,6 +44,14 @@ export class toolkit extends Toolkit.make(
       query: Schema.optional(Schema.NonEmptyTrimmedString),
     },
     success: TransientResponse(Schema.Array(Monster)),
+  }),
+  Tool.make("CreateMonster", {
+    description:
+      "Create a new monster from the provided information. Returns the new monster ID.",
+    parameters: {
+      monster: CreateMonsterPayload,
+    },
+    success: TransientResponse(Schema.Struct({ monsterId: Schema.String })),
   }),
 ) {}
 
