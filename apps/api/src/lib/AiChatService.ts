@@ -2,10 +2,6 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 
-import { pipe } from "effect";
-import * as Array from "effect/Array";
-import * as AiResponse from "@effect/ai/Response";
-import * as Chunk from "effect/Chunk";
 import * as Prompt from "@effect/ai/Prompt";
 import * as LanguageModel from "@effect/ai/LanguageModel";
 import { toolkit } from "@repo/domain/Toolkit";
@@ -56,43 +52,14 @@ export class AiChatService extends Effect.Service<AiChatService>()(
           const message = yield* makeMessage(options);
           const prompt = Prompt.merge(systemPrompt, [message]);
 
-          let parts = Array.empty<AiResponse.AnyPart>();
-          while (true) {
-            yield* pipe(
-              LanguageModel.streamText({
-                prompt: prompt,
-                toolkit: tools,
-                toolChoice: "auto",
-              }),
-              Stream.mapChunks((chunk) => {
-                parts.push(...chunk);
-                return Chunk.of(Prompt.fromResponseParts(parts));
-              }),
-              Stream.runForEach((response) => {
-                // TODO: Do something with the chunk
-                return Effect.void;
-              }),
-            );
-
-            const response = new LanguageModel.GenerateTextResponse<
-              typeof toolkit.tools
-            >(parts as any);
-
-            // TODO: Do something with the response
-
-            const hasTextParts = parts.some(
-              (part) => part.type === "text" || part.type === "text-delta",
-            );
-            parts = [];
-
-            if (!hasTextParts) {
-              continue;
-            }
-            break;
-          }
+          return LanguageModel.streamText({
+            prompt: prompt,
+            toolkit: tools,
+            toolChoice: "auto",
+          });
         },
         Effect.provide(model),
-        Effect.catchAllCause(Effect.logError),
+        Stream.unwrap,
       );
 
       return { send } as const;

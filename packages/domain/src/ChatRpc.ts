@@ -1,0 +1,12 @@
+import { Rpc, RpcGroup } from "@effect/rpc";
+import { StreamPart } from "@effect/ai/Response";
+import { toolkit } from "./Toolkit.js";
+import { AiError } from "@effect/ai/AiError";
+
+export class ChatRpcs extends RpcGroup.make(
+  Rpc.make("ChatStream", {
+    success: StreamPart(toolkit),
+    error: AiError,
+    stream: true,
+  }),
+) {}
