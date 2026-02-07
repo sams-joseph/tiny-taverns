@@ -2,6 +2,7 @@ import * as Tool from "@effect/ai/Tool";
 import * as Toolkit from "@effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
 import { CreateMonsterPayload, Monster } from "./MonstersApi.js";
+import { CreateCampaignPayload } from "./index.js";
 
 export const TerminalResponse = <S extends Schema.Schema.Any>(
   schema: S,
@@ -52,6 +53,14 @@ export class toolkit extends Toolkit.make(
       monster: CreateMonsterPayload,
     },
     success: TransientResponse(Schema.Struct({ monsterId: Schema.String })),
+  }),
+  Tool.make("CreateCampaign", {
+    description:
+      "Create a new campaign from the provided information. Returns the new campaign ID.",
+    parameters: {
+      campaign: CreateCampaignPayload,
+    },
+    success: TransientResponse(Schema.Struct({ campaignId: Schema.String })),
   }),
 ) {}
 

@@ -1,12 +1,11 @@
 import { HttpApi } from "@effect/platform";
-import { TodosApiGroup } from "./TodosApi.js";
 import { MonstersApiGroup } from "./MonstersApi.js";
+import { CampaignsApiGroup } from "./CampaignsApi.js";
 
-export * from "./TodosApi.js";
 export * from "./MonstersApi.js";
 export * from "./CampaignsApi.js";
 export * from "./ChatRpc.js";
 
 export class DomainApi extends HttpApi.make("api")
-  .add(TodosApiGroup)
-  .add(MonstersApiGroup) {}
+  .add(MonstersApiGroup)
+  .add(CampaignsApiGroup) {}

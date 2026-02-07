@@ -1,0 +1,16 @@
+POST http://localhost:4001/api/campaigns
+content-type: application/json
+
+{
+  "name": "Campaign of the Ash Mire",
+  "description": "This campaign is a beginner campaign"
+}
+
+###
+
+GET http://localhost:4001/api/campaigns
+
+curl -N \
+  -H "Content-Type: application/ndjson" \
+  -d $'{"_tag":"Request","id":"1","tag":"ChatStream","payload":{"text":"Create a new campaign that is epic and mysterious. I am thinking pirate themed."},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
+  http://localhost:4001/rpc

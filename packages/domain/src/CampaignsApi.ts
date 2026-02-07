@@ -1,3 +1,4 @@
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "@effect/platform";
 import { Schema } from "effect";
 
 export const CampaignId = Schema.UUID.pipe(Schema.brand("CampaignId"));
@@ -21,3 +22,21 @@ export class CreateCampaignPayload extends Schema.Class<CreateCampaignPayload>(
   name: Schema.NonEmptyTrimmedString,
   description: Schema.NonEmptyTrimmedString,
 }) {}
+
+export class CampaignsApiGroup extends HttpApiGroup.make("campaigns")
+  .add(
+    HttpApiEndpoint.get("getAllCampaigns", "/campaigns")
+      .addSuccess(Schema.Array(Campaign))
+      .setUrlParams(
+        Schema.Struct({
+          search: Schema.optional(Schema.NonEmptyTrimmedString),
+        }),
+      ),
+  )
+  .add(
+    HttpApiEndpoint.post("createCampaign", "/campaigns")
+      .addSuccess(Campaign)
+      .setPayload(CreateCampaignPayload),
+  ) {}
+
+export class CampaignsApi extends HttpApi.make("api").add(CampaignsApiGroup) {}

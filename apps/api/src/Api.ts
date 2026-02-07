@@ -2,23 +2,9 @@ import { HttpApiBuilder } from "@effect/platform";
 import { Effect, Layer, Stream } from "effect";
 import { DomainApi } from "@repo/domain";
 import { MonstersApi } from "@repo/domain/MonstersApi";
-import { TodosApi } from "@repo/domain/TodosApi";
+import { CampaignsApi } from "@repo/domain/CampaignsApi";
 import { MonstersRepository } from "./MonstersRepository.js";
-import { TodosRepository } from "./TodosRepository.js";
-
-const TodosApiLive = HttpApiBuilder.group(TodosApi, "todos", (handlers) =>
-  Effect.gen(function* () {
-    const todos = yield* TodosRepository;
-    return (
-      handlers
-        .handle("getAllTodos", () => todos.findAll())
-        // .handle("getTodoById", ({ path: { id } }) => todos.getById(id))
-        .handle("createTodo", ({ payload }) => todos.create(payload))
-    );
-    // .handle("completeTodo", ({ path: { id } }) => todos.complete(id))
-    // .handle("removeTodo", ({ path: { id } }) => todos.remove(id));
-  }),
-);
+import { CampaignsRepository } from "./CampaignsRepository.js";
 
 const MonstersApiLive = HttpApiBuilder.group(
   MonstersApi,
@@ -34,7 +20,21 @@ const MonstersApiLive = HttpApiBuilder.group(
     }),
 );
 
+const CampaignsApiLive = HttpApiBuilder.group(
+  CampaignsApi,
+  "campaigns",
+  (handlers) =>
+    Effect.gen(function* () {
+      const campaigns = yield* CampaignsRepository;
+      return handlers
+        .handle("getAllCampaigns", ({ urlParams }) =>
+          campaigns.findAll(urlParams),
+        )
+        .handle("createCampaign", ({ payload }) => campaigns.create(payload));
+    }),
+);
+
 export const ApiLive = HttpApiBuilder.api(DomainApi).pipe(
-  Layer.provide(TodosApiLive),
   Layer.provide(MonstersApiLive),
+  Layer.provide(CampaignsApiLive),
 );

@@ -14,11 +14,11 @@ import { Config, Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { ApiLive } from "./Api.js";
 import { ChatRpcs } from "@repo/domain";
-import { TodosRepository } from "./TodosRepository.js";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { AiChatService } from "./lib/AiChatService.js";
 import { MonstersRepository } from "./MonstersRepository.js";
 import { ChatLive } from "./Rpc.js";
+import { CampaignsRepository } from "./CampaignsRepository.js";
 
 const OpenAi = OpenAiClient.layerConfig({
   apiUrl: Config.string("OPENAI_API_URL"),
@@ -51,9 +51,9 @@ const HttpLive = HttpRouter.Default.serve(HttpMiddleware.logger).pipe(
   Layer.provide(ApiRouterLive),
   Layer.provide(RpcLive),
   Layer.provide(RpcHttpLive),
-  Layer.provide(TodosRepository.Default),
   Layer.provide(AiChatService.Default),
   Layer.provide(MonstersRepository.Default),
+  Layer.provide(CampaignsRepository.Default),
   Layer.provide(LanguageModelLive),
   Layer.provide(OpenAiWithHttp),
   Layer.provide(NodeHttpServer.layer(createServer, { port: 4001 })),
