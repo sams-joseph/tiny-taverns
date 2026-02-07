@@ -27,7 +27,9 @@ const MonstersApiLive = HttpApiBuilder.group(
     Effect.gen(function* () {
       const monsters = yield* MonstersRepository;
       return handlers
-        .handle("getAllMonsters", () => monsters.findAll())
+        .handle("getAllMonsters", ({ urlParams }) =>
+          monsters.findAll(urlParams),
+        )
         .handle("createMonster", ({ payload }) => monsters.create(payload));
     }),
 );

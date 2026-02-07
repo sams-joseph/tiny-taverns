@@ -37,7 +37,7 @@ export class MonstersRepository extends Effect.Service<MonstersRepository>()(
       });
 
       return {
-        findAll: (queryParams: { search: string | undefined }) =>
+        findAll: (queryParams: { search?: string | undefined }) =>
           findAll(queryParams).pipe(
             Effect.catchTags({
               ParseError: Effect.die,
