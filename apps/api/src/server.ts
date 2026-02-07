@@ -1,12 +1,19 @@
-import { HttpApiBuilder, HttpMiddleware, HttpServer } from "@effect/platform";
+import {
+  HttpApiBuilder,
+  HttpMiddleware,
+  HttpRouter,
+  HttpServer,
+} from "@effect/platform";
 import {
   NodeHttpClient,
   NodeHttpServer,
   NodeRuntime,
 } from "@effect/platform-node";
-import { Config, Layer } from "effect";
+import { RpcSerialization, RpcServer } from "@effect/rpc";
+import { Config, Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { ApiLive } from "./Api.js";
+import { ChatRpcs } from "@repo/domain";
 import { TodosRepository } from "./TodosRepository.js";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { AiChatService } from "./lib/AiChatService.js";
@@ -23,10 +30,27 @@ const LanguageModelLive = OpenAiLanguageModel.layer({
   model: "qwen3-0.6b",
 });
 
-const HttpLive = HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
-  HttpServer.withLogAddress,
+const RpcLive = RpcServer.layer(ChatRpcs).pipe(Layer.provide(ChatLive));
+const RpcHttpLive = RpcServer.layerProtocolHttp({ path: "/rpc" }).pipe(
+  Layer.provide(RpcSerialization.layerNdjson),
+);
+
+const ApiRouterLive = HttpRouter.Default.use((router) =>
+  Effect.gen(function* () {
+    const httpApp = yield* HttpApiBuilder.httpApp;
+    yield* router.mountApp("/api", httpApp);
+  }),
+).pipe(
   Layer.provide(ApiLive),
-  Layer.provide(ChatLive),
+  Layer.provide(HttpApiBuilder.Router.Live),
+  Layer.provide(HttpApiBuilder.Middleware.layer),
+);
+
+const HttpLive = HttpRouter.Default.serve(HttpMiddleware.logger).pipe(
+  HttpServer.withLogAddress,
+  Layer.provide(ApiRouterLive),
+  Layer.provide(RpcLive),
+  Layer.provide(RpcHttpLive),
   Layer.provide(TodosRepository.Default),
   Layer.provide(AiChatService.Default),
   Layer.provide(MonstersRepository.Default),

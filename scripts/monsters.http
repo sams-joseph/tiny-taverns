@@ -1,4 +1,4 @@
-POST http://localhost:4001/monsters
+POST http://localhost:4001/api/monsters
 content-type: application/json
 
 {
@@ -27,4 +27,4 @@ content-type: application/json
 
 ###
 
-GET http://localhost:4001/monsters
+GET http://localhost:4001/api/monsters
