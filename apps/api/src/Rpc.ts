@@ -7,7 +7,7 @@ export const ChatLive = ChatRpcs.toLayer(
     const chat = yield* AiChatService;
 
     return {
-      ChatStream: () => chat.send({ text: "Hello", files: null }),
+      ChatStream: (payload) => chat.send(payload),
     };
   }),
 );

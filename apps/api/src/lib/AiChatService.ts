@@ -38,10 +38,7 @@ export class AiChatService extends Effect.Service<AiChatService>()(
       const tools = yield* toolkit;
 
       const send = Effect.fnUntraced(
-        function* (options: {
-          readonly text: string;
-          readonly files: FileList | null;
-        }) {
+        function* (options: { readonly text: string }) {
           const systemPrompt = Prompt.make([
             {
               role: "system",
@@ -83,29 +80,8 @@ export const isVisualPart = (
 
 const makeMessage = Effect.fnUntraced(function* (options: {
   readonly text: string;
-  readonly files: FileList | null;
 }) {
   const content: Array<Prompt.UserMessagePart> = [];
-  if (options.files) {
-    for (let i = 0; i < options.files.length; i++) {
-      const file = options.files[i];
-
-      if (!file) {
-        break;
-      }
-
-      const data = new Uint8Array(
-        yield* Effect.promise(() => file.arrayBuffer()),
-      );
-      content.push(
-        Prompt.filePart({
-          mediaType: file.type,
-          fileName: file.name,
-          data,
-        }),
-      );
-    }
-  }
   content.push(Prompt.textPart({ text: options.text }));
   return Prompt.makeMessage("user", {
     content,
