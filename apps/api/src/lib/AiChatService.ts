@@ -2,11 +2,15 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 
-import { Chat } from "@effect/ai";
+import { Chat, Toolkit } from "@effect/ai";
 import * as Prompt from "@effect/ai/Prompt";
 import { toolkit } from "@repo/domain/Toolkit";
 import { MonstersRepository } from "../MonstersRepository.js";
 import { CampaignsRepository } from "../CampaignsRepository.js";
+import { Chunk, Mailbox, Ref } from "effect";
+import { AnyPart, StreamPart } from "@effect/ai/Response";
+import { systemMessage } from "@effect/ai/Prompt";
+import { Tool } from "@effect/ai/Tool";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
@@ -49,8 +53,7 @@ export class AiChatService extends Effect.Service<AiChatService>()(
         reasoning: { effort: "medium" },
       });
 
-      // TODO: Initialize this with campaign history and other relevant info
-      const chat = yield* Chat.empty;
+      const tools = yield* toolkit;
 
       const baseSystemPrompt = `You are an AI assistant whose role is to support a Dungeon Master (DM) running a Dungeons & Dragons campaign.
 
@@ -69,10 +72,70 @@ Avoid providing information that is already available in the app.
 
 You exist to make the DM's job easier, faster, and more fun, while keeping the story player-driven and memorable.`;
 
-      const tools = yield* toolkit;
+      const runAgentLoop = (
+        chat: Chat.Service,
+        mailbox: Mailbox.Mailbox<StreamPart<typeof toolkit.tools>>,
+      ) =>
+        Effect.iterate(
+          {
+            finishReason: "tool-calls",
+            iteration: 0,
+          },
+          {
+            while: (state) =>
+              state.finishReason === "tool-calls" && state.iteration < 8,
+            body: (state) =>
+              Effect.gen(function* () {
+                const iteration = state.iteration + 1;
+
+                yield* Effect.logInfo(`Iteration ${iteration} starting`);
+
+                const finishReason = yield* Effect.gen(function* () {
+                  const finishReasonRef = yield* Ref.make("stop");
+
+                  yield* chat
+                    .streamText({
+                      prompt: [],
+                      toolkit: tools,
+                    })
+                    .pipe(
+                      Stream.runForEach((chunk) =>
+                        Effect.gen(function* () {
+                          // TODO: This logic for continuing the loop needs work.
+                          // We want to continue the loop if any tool calls are made
+
+                          if (chunk.type === "tool-call") {
+                            yield* Effect.logInfo(
+                              `Received tool call: ${chunk.name}`,
+                            );
+                            yield* Ref.set(finishReasonRef, "tool-calls");
+                          }
+
+                          yield* Effect.logInfo(`Received chat part: ${chunk}`);
+                          yield* mailbox.offer(chunk);
+                        }),
+                      ),
+                      Stream.runDrain,
+                    );
+
+                  return yield* Ref.get(finishReasonRef);
+                });
+
+                yield* Effect.logInfo({ finishReason, state });
+
+                return {
+                  finishReason,
+                  iteration,
+                };
+              }),
+          },
+        );
 
       const send = Effect.fnUntraced(
         function* (options: { readonly text: string }) {
+          const mailbox =
+            yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
+
           const systemPrompt = Prompt.make([
             {
               role: "system",
@@ -83,15 +146,18 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
           const message = yield* makeMessage(options);
           const prompt = Prompt.merge(systemPrompt, [message]);
 
-          // TODO: Implement agent loop
-          return chat.streamText({
-            prompt: prompt,
-            toolkit: tools,
-            toolChoice: "auto",
-          });
+          const chat = yield* Chat.fromPrompt(prompt);
+
+          yield* Effect.forkScoped(
+            Effect.gen(function* () {
+              yield* runAgentLoop(chat, mailbox);
+            }).pipe(Effect.ensuring(mailbox.end)),
+          );
+
+          return mailbox;
         },
         Effect.provide(model),
-        Stream.unwrap,
+        // Stream.unwrap,
       );
 
       return { send } as const;
