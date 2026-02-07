@@ -12,12 +12,16 @@ export class MonstersRepository extends Effect.Service<MonstersRepository>()(
 
       const findAll = SqlSchema.findAll({
         Result: Monster,
-        Request: Schema.Void,
-        execute: () => sql`
+        Request: Schema.Struct({
+          search: Schema.optional(Schema.NonEmptyTrimmedString),
+        }),
+        execute: (request) => sql`
           SELECT
             *
           FROM
             monsters
+          WHERE
+            (${"search" in request && request.search ? sql`name ILIKE '%' || ${request.search} || '%'` : sql`TRUE`})
         `,
       });
 
@@ -33,7 +37,13 @@ export class MonstersRepository extends Effect.Service<MonstersRepository>()(
       });
 
       return {
-        findAll: flow(findAll, Effect.orDie),
+        findAll: (queryParams: { search: string | undefined }) =>
+          findAll(queryParams).pipe(
+            Effect.catchTags({
+              ParseError: Effect.die,
+              SqlError: Effect.die,
+            }),
+          ),
         create: flow(create, Effect.orDie),
       } as const;
     }),

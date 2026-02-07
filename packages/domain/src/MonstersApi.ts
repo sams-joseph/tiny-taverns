@@ -94,9 +94,13 @@ export class MonsterNotFound extends Schema.TaggedError<MonsterNotFound>()(
 
 export class MonstersApiGroup extends HttpApiGroup.make("monsters")
   .add(
-    HttpApiEndpoint.get("getAllMonsters", "/monsters").addSuccess(
-      Schema.Array(Monster),
-    ),
+    HttpApiEndpoint.get("getAllMonsters", "/monsters")
+      .addSuccess(Schema.Array(Monster))
+      .setUrlParams(
+        Schema.Struct({
+          search: Schema.optional(Schema.NonEmptyTrimmedString),
+        }),
+      ),
   )
   .add(
     HttpApiEndpoint.post("createMonster", "/monsters")

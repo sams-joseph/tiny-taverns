@@ -41,7 +41,7 @@ export class toolkit extends Toolkit.make(
   Tool.make("SearchMonsters", {
     description: "Search the users monsters by name",
     parameters: {
-      query: Schema.String,
+      query: Schema.optional(Schema.NonEmptyTrimmedString),
     },
     success: TransientResponse(Schema.Array(Monster)),
   }),

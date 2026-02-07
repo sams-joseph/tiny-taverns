@@ -3,9 +3,9 @@ import * as Stream from "effect/Stream";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 
 import * as Prompt from "@effect/ai/Prompt";
-import * as LanguageModel from "@effect/ai/LanguageModel";
 import { toolkit } from "@repo/domain/Toolkit";
 import { MonstersRepository } from "../MonstersRepository.js";
+import { Chat } from "@effect/ai";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
@@ -13,9 +13,7 @@ const ToolkitLayer = toolkit.toLayer(
 
     return toolkit.of({
       SearchMonsters: Effect.fnUntraced(function* ({ query }) {
-        const results = yield* monsters.findAll();
-
-        console.log(results);
+        const results = yield* monsters.findAll({ search: query });
 
         return { _tag: "Transient", value: results } as const;
       }),
@@ -33,6 +31,9 @@ export class AiChatService extends Effect.Service<AiChatService>()(
         reasoning: { effort: "medium" },
       });
 
+      // TODO: Initialize this with campaign history and other relevant info
+      const chat = yield* Chat.empty;
+
       const baseSystemPrompt = `You are a funny dad`;
 
       const tools = yield* toolkit;
@@ -49,7 +50,9 @@ export class AiChatService extends Effect.Service<AiChatService>()(
           const message = yield* makeMessage(options);
           const prompt = Prompt.merge(systemPrompt, [message]);
 
-          return LanguageModel.streamText({
+          //TODO: Right now this ends when a tool is called and does not continue
+          // THe "agentic" loop need to handle this and continue the conversation after tool calls
+          return chat.streamText({
             prompt: prompt,
             toolkit: tools,
             toolChoice: "auto",
