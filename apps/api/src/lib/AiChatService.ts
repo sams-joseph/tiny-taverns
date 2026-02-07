@@ -2,15 +2,13 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 
-import { Chat, Toolkit } from "@effect/ai";
+import { Chat } from "@effect/ai";
 import * as Prompt from "@effect/ai/Prompt";
 import { toolkit } from "@repo/domain/Toolkit";
 import { MonstersRepository } from "../MonstersRepository.js";
 import { CampaignsRepository } from "../CampaignsRepository.js";
-import { Chunk, Mailbox, Ref } from "effect";
-import { AnyPart, StreamPart } from "@effect/ai/Response";
-import { systemMessage } from "@effect/ai/Prompt";
-import { Tool } from "@effect/ai/Tool";
+import { Mailbox, Ref } from "effect";
+import { StreamPart } from "@effect/ai/Response";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
@@ -131,34 +129,31 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
           },
         );
 
-      const send = Effect.fnUntraced(
-        function* (options: { readonly text: string }) {
-          const mailbox =
-            yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
+      const send = Effect.fnUntraced(function* (options: {
+        readonly text: string;
+      }) {
+        const mailbox = yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
 
-          const systemPrompt = Prompt.make([
-            {
-              role: "system",
-              content: baseSystemPrompt,
-            },
-          ]);
+        const systemPrompt = Prompt.make([
+          {
+            role: "system",
+            content: baseSystemPrompt,
+          },
+        ]);
 
-          const message = yield* makeMessage(options);
-          const prompt = Prompt.merge(systemPrompt, [message]);
+        const message = yield* makeMessage(options);
+        const prompt = Prompt.merge(systemPrompt, [message]);
 
-          const chat = yield* Chat.fromPrompt(prompt);
+        const chat = yield* Chat.fromPrompt(prompt);
 
-          yield* Effect.forkScoped(
-            Effect.gen(function* () {
-              yield* runAgentLoop(chat, mailbox);
-            }).pipe(Effect.ensuring(mailbox.end)),
-          );
+        yield* Effect.forkScoped(
+          Effect.gen(function* () {
+            yield* runAgentLoop(chat, mailbox);
+          }).pipe(Effect.ensuring(mailbox.end)),
+        );
 
-          return mailbox;
-        },
-        Effect.provide(model),
-        // Stream.unwrap,
-      );
+        return mailbox;
+      }, Effect.provide(model));
 
       return { send } as const;
     }),
