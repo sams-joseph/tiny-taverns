@@ -1,5 +1,4 @@
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "@effect/platform";
-import { Rpc, RpcGroup, RpcServer } from "@effect/rpc";
+import { Rpc, RpcGroup } from "@effect/rpc";
 import { Schema } from "effect";
 
 export const MonsterId = Schema.UUID.pipe(Schema.brand("MonsterId"));
@@ -93,27 +92,13 @@ export class MonsterNotFound extends Schema.TaggedError<MonsterNotFound>()(
   },
 ) {}
 
-export class MonstersApiGroup extends HttpApiGroup.make("monsters")
-  .add(
-    HttpApiEndpoint.get("getAllMonsters", "/monsters")
-      .addSuccess(Schema.Array(Monster))
-      .setUrlParams(
-        Schema.Struct({
-          search: Schema.optional(Schema.NonEmptyTrimmedString),
-        }),
-      ),
-  )
-  .add(
-    HttpApiEndpoint.post("createMonster", "/monsters")
-      .addSuccess(Monster)
-      .setPayload(CreateMonsterPayload),
-  ) {}
-
-export class MonstersApi extends HttpApi.make("api").add(MonstersApiGroup) {}
-
 export class MonsterRpc extends RpcGroup.make(
   Rpc.make("MonsterList", {
     success: Monster,
     stream: true,
+  }),
+  Rpc.make("MonsterCreate", {
+    success: Monster,
+    payload: CreateMonsterPayload,
   }),
 ) {}

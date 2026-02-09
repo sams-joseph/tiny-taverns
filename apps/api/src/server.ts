@@ -15,7 +15,7 @@ import { DomainRpc } from "@repo/domain";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
 import { AiChatService } from "./lib/AiChatService.js";
 import { MonstersRepository } from "./MonstersRepository.js";
-import { ChatLive, MonsterLive } from "./Rpc.js";
+import { CampaignLive, ChatLive, MonsterLive } from "./Rpc.js";
 import { CampaignsRepository } from "./CampaignsRepository.js";
 
 const OpenAi = OpenAiClient.layerConfig({
@@ -58,6 +58,7 @@ const HttpLive = HttpLayerRouter.serve(AllRoutes).pipe(
   HttpServer.withLogAddress,
   Layer.provide(ChatLive),
   Layer.provide(MonsterLive),
+  Layer.provide(CampaignLive),
   Layer.provide(AiChatService.Default),
   Layer.provide(MonstersRepository.Default),
   Layer.provide(CampaignsRepository.Default),

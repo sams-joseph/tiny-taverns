@@ -1,4 +1,5 @@
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "@effect/platform";
+import { Rpc, RpcGroup } from "@effect/rpc";
 import { Schema } from "effect";
 
 export const CampaignId = Schema.UUID.pipe(Schema.brand("CampaignId"));
@@ -23,20 +24,13 @@ export class CreateCampaignPayload extends Schema.Class<CreateCampaignPayload>(
   description: Schema.NonEmptyTrimmedString,
 }) {}
 
-export class CampaignsApiGroup extends HttpApiGroup.make("campaigns")
-  .add(
-    HttpApiEndpoint.get("getAllCampaigns", "/campaigns")
-      .addSuccess(Schema.Array(Campaign))
-      .setUrlParams(
-        Schema.Struct({
-          search: Schema.optional(Schema.NonEmptyTrimmedString),
-        }),
-      ),
-  )
-  .add(
-    HttpApiEndpoint.post("createCampaign", "/campaigns")
-      .addSuccess(Campaign)
-      .setPayload(CreateCampaignPayload),
-  ) {}
-
-export class CampaignsApi extends HttpApi.make("api").add(CampaignsApiGroup) {}
+export class CampaignRpc extends RpcGroup.make(
+  Rpc.make("CampaignList", {
+    success: Campaign,
+    stream: true,
+  }),
+  Rpc.make("CampaignCreate", {
+    success: Campaign,
+    payload: CreateCampaignPayload,
+  }),
+) {}

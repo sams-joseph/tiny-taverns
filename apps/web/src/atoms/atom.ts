@@ -1,10 +1,9 @@
-import { Atom, AtomHttpApi, AtomRpc, Registry } from "@effect-atom/atom-react";
+import { Atom, AtomRpc, Registry } from "@effect-atom/atom-react";
 import { Prompt } from "@effect/ai";
 import type { AnyPart } from "@effect/ai/Response";
 import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
 import * as EffectRpcClient from "@effect/rpc/RpcClient";
 import * as RpcSerialization from "@effect/rpc/RpcSerialization";
-import { DomainApi } from "@repo/domain";
 import { DomainRpc } from "@repo/domain";
 import { Chunk } from "effect";
 
@@ -69,9 +68,3 @@ export const chatAtom = runtime.fn(({ text }: { readonly text: string }) =>
     );
   }),
 );
-
-export class ApiClient extends AtomHttpApi.Tag<ApiClient>()("ApiClient", {
-  api: DomainApi,
-  httpClient: FetchHttpClient.layer,
-  baseUrl: "http://localhost:4001/api",
-}) {}

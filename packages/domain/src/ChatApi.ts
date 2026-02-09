@@ -5,7 +5,7 @@ import { AiError } from "@effect/ai/AiError";
 import { Schema } from "effect";
 import { Prompt } from "@effect/ai";
 
-export class ChatRpcs extends RpcGroup.make(
+export class ChatRpc extends RpcGroup.make(
   Rpc.make("ChatStream", {
     success: StreamPart(toolkit),
     payload: {

@@ -8,9 +8,11 @@ export const Route = createFileRoute("/monsters")({
 });
 
 function Monsters() {
-  const monsters = useAtomValue(DomainRpcClient.query("MonsterList", void 0));
-
-  console.log(monsters);
+  const monsters = useAtomValue(
+    DomainRpcClient.query("MonsterList", void 0, {
+      reactivityKeys: ["MonsterList"],
+    }),
+  );
 
   return (
     <div className="p-2">

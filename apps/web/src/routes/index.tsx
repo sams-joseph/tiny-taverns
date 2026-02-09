@@ -29,7 +29,7 @@ function Index() {
   const messages = result.content;
 
   const handleChat = () => {
-    chat({ text: input, history: result });
+    chat({ text: input });
     setInput("");
   };
 
