@@ -120,8 +120,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
         );
 
       const send = Effect.fnUntraced(function* (options: {
-        readonly text: string;
-        readonly history?: Prompt.Prompt;
+        messages: Prompt.Prompt;
       }) {
         const mailbox = yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
 
@@ -132,15 +131,8 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
           },
         ]);
 
-        const message = yield* makeMessage(options);
-        const prompt = Prompt.merge(systemPrompt, [message]);
-
-        const chat = yield* Chat.fromPrompt(
-          Prompt.merge(prompt, options.history ?? Prompt.empty),
-        );
-
-        const test = yield* Ref.get(chat.history);
-        console.log(test);
+        const prompt = Prompt.merge(systemPrompt, options.messages);
+        const chat = yield* Chat.fromPrompt(prompt);
 
         yield* Effect.forkScoped(
           Effect.gen(function* () {
@@ -155,27 +147,3 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
     }),
   },
 ) {}
-
-export const isVisualMessage = (
-  message: Prompt.Message,
-): message is Prompt.UserMessage | Prompt.UserMessage | Prompt.ToolMessage => {
-  if (message.role === "system") return false;
-  return message.content.some(isVisualPart);
-};
-
-export const isVisualPart = (
-  part:
-    | Prompt.UserMessagePart
-    | Prompt.AssistantMessagePart
-    | Prompt.ToolMessagePart,
-): boolean => part.type === "text" || part.type === "tool-result";
-
-const makeMessage = Effect.fnUntraced(function* (options: {
-  readonly text: string;
-}) {
-  const content: Array<Prompt.UserMessagePart> = [];
-  content.push(Prompt.textPart({ text: options.text }));
-  return Prompt.makeMessage("user", {
-    content,
-  });
-});

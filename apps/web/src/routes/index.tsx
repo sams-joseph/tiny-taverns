@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { chatAtom, chatPartsAtom } from "../atoms/atom";
+import { chatAtom, chatHistoryAtom } from "../atoms/atom";
 import { useAtom, useAtomValue } from "@effect-atom/atom-react";
 import type { Prompt } from "@effect/ai";
 import { useState } from "react";
@@ -47,10 +47,8 @@ function Message({ message }: { message: Prompt.Message }) {
 function Index() {
   const [input, setInput] = useState("");
   const [chat, setChat] = useAtom(chatAtom);
-  const result = useAtomValue(chatPartsAtom);
+  const result = useAtomValue(chatHistoryAtom);
   const messages = result.content;
-
-  console.log(result);
 
   const handleChat = () => {
     setChat({ text: input });
@@ -62,11 +60,11 @@ function Index() {
       <input value={input} onChange={(e) => setInput(e.target.value)} />
       <button onClick={handleChat}>Chat</button>
       <div className="space-y-4">
-        {chat.waiting && <div>Thinking...</div>}
         {/* {messages.filter(isVisualMessage).map((message, i) => */}
         {messages.map((message, i) => (
           <Message key={i} message={message} />
         ))}
+        {chat.waiting && <div>Thinking...</div>}
       </div>
     </div>
   );
