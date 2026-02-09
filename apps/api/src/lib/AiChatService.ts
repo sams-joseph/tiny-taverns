@@ -139,6 +139,9 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
           Prompt.merge(prompt, options.history ?? Prompt.empty),
         );
 
+        const test = yield* Ref.get(chat.history);
+        console.log(test);
+
         yield* Effect.forkScoped(
           Effect.gen(function* () {
             yield* runAgentLoop(chat, mailbox);

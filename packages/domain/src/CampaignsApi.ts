@@ -1,4 +1,3 @@
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "@effect/platform";
 import { Rpc, RpcGroup } from "@effect/rpc";
 import { Schema } from "effect";
 

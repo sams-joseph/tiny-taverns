@@ -39,6 +39,7 @@ export const chatAtom = DomainRpcClient.runtime.fn(
 
           const registry = yield* Registry.AtomRegistry;
           const history = registry.get(chatPartsAtom);
+
           return rpc("ChatStream", { text, history });
         }),
       ).pipe(

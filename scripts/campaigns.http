@@ -10,7 +10,31 @@ content-type: application/json
 
 GET http://localhost:4001/api/campaigns
 
+###
+
+POST http://localhost:4001/rpc
+content-type: application/ndjson
+
+{
+  "id": "1",
+  "_tag": "Request",
+  "tag": "UserCreate",
+  "payload": {
+    "name": "John Doe",
+  }
+}
+
 curl -N \
   -H "Content-Type: application/ndjson" \
   -d $'{"_tag":"Request","id":"1","tag":"ChatStream","payload":{"text":"Create a new campaign that is epic and mysterious. I am thinking pirate themed."},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
+  http://localhost:4001/rpc
+
+curl -N \
+  -H "Content-Type: application/ndjson" \
+  -d $'{"_tag":"Request","id":"1","tag":"UserCreate","payload":{"name":"John Doe"},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
+  http://localhost:4001/rpc
+
+curl -N \
+  -H "Content-Type: application/ndjson" \
+  -d $'{"_tag":"Request","id":"1","tag":"CharacterCreate","payload":{"name":"Krucks", "userId":"b3bd350a-b4d3-42db-8263-232c6d3ccf06"},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
   http://localhost:4001/rpc

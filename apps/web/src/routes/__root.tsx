@@ -13,6 +13,12 @@ const RootLayout = () => (
       <Link to="/campaigns" className="[&.active]:font-bold">
         Campaigns
       </Link>
+      <Link to="/users" className="[&.active]:font-bold">
+        Users
+      </Link>
+      <Link to="/characters" className="[&.active]:font-bold">
+        Characters
+      </Link>
     </div>
     <hr />
     <Outlet />
