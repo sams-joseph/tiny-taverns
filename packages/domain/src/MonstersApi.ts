@@ -55,6 +55,7 @@ export class Monster extends Schema.Class<Monster>("Monster")({
   languages: Schema.NonEmptyTrimmedString,
   senses: Schema.NonEmptyTrimmedString,
   source: Schema.NonEmptyTrimmedString,
+  // TODO: Fix this throws a parse error when decoding from postgres TIMESTAMP
   // createdAt: Schema.DateTimeUtc,
   // updatedAt: Schema.DateTimeUtc,
 }) {}

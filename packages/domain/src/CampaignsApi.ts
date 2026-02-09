@@ -12,6 +12,7 @@ export class Campaign extends Schema.Class<Campaign>("Campaign")({
   id: CampaignId,
   name: Schema.NonEmptyTrimmedString,
   description: Schema.NonEmptyTrimmedString,
+  // TODO: Fix this throws a parse error when decoding from postgres TIMESTAMP
   // createdAt: Schema.DateTimeUtcFromDate,
   // updatedAt: Schema.DateTimeUtcFromDate,
 }) {}

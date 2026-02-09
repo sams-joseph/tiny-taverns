@@ -9,6 +9,7 @@ export const UserIdFromString = Schema.UUID.pipe(Schema.compose(UserId));
 export class User extends Schema.Class<User>("User")({
   id: UserId,
   name: Schema.NonEmptyTrimmedString,
+  // TODO: Fix this throws a parse error when decoding from postgres TIMESTAMP
   // createdAt: Schema.DateTimeUtcFromDate,
   // updatedAt: Schema.DateTimeUtcFromDate,
 }) {}

@@ -13,6 +13,7 @@ export class Character extends Schema.Class<Character>("Character")({
   id: CharacterId,
   name: Schema.NonEmptyTrimmedString,
   userId: Schema.optional(UserId),
+  // TODO: Fix this throws a parse error when decoding from postgres TIMESTAMP
   // createdAt: Schema.DateTimeUtcFromDate,
   // updatedAt: Schema.DateTimeUtcFromDate,
 }) {}
