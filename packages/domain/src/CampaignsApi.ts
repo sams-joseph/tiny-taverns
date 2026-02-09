@@ -13,8 +13,8 @@ export class Campaign extends Schema.Class<Campaign>("Campaign")({
   id: CampaignId,
   name: Schema.NonEmptyTrimmedString,
   description: Schema.NonEmptyTrimmedString,
-  createdAt: Schema.DateTimeUtcFromDate,
-  updatedAt: Schema.DateTimeUtcFromDate,
+  // createdAt: Schema.DateTimeUtcFromDate,
+  // updatedAt: Schema.DateTimeUtcFromDate,
 }) {}
 
 export class CreateCampaignPayload extends Schema.Class<CreateCampaignPayload>(

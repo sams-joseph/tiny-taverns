@@ -19,15 +19,6 @@ const ProtocolLive = EffectRpcClient.layerProtocolHttp({
   Layer.provide(RpcSerialization.layerNdjson),
 );
 
-export class RpcClient extends Effect.Service<RpcClient>()("web/RpcClient", {
-  dependencies: [ProtocolLive],
-  scoped: Effect.gen(function* () {
-    return {
-      client: yield* EffectRpcClient.make(DomainRpc),
-    } as const;
-  }),
-}) {}
-
 export class DomainRpcClient extends AtomRpc.Tag<DomainRpcClient>()(
   "DomainRpcClient",
   {
@@ -36,35 +27,34 @@ export class DomainRpcClient extends AtomRpc.Tag<DomainRpcClient>()(
   },
 ) {}
 
-export const runtime = Atom.runtime(RpcClient.Default);
-
 export const chatPartsAtom = Atom.make<Prompt.Prompt>(Prompt.empty);
 
-export const chatAtom = runtime.fn(({ text }: { readonly text: string }) =>
-  Effect.gen(function* () {
-    const parts: AnyPart[] = [];
-    return yield* Stream.unwrap(
-      Effect.gen(function* () {
-        const rpc = yield* RpcClient;
-
-        const registry = yield* Registry.AtomRegistry;
-        const history = registry.get(chatPartsAtom);
-        return rpc.client.ChatStream({ text, history });
-      }),
-    ).pipe(
-      Stream.catchTags({
-        RpcClientError: Effect.die,
-      }),
-      Stream.mapChunks((chunk) => {
-        parts.push(...chunk);
-        return Chunk.of(Prompt.fromResponseParts(parts));
-      }),
-      Stream.runForEach((part) =>
+export const chatAtom = DomainRpcClient.runtime.fn(
+  ({ text }: { readonly text: string }) =>
+    Effect.gen(function* () {
+      const parts: AnyPart[] = [];
+      return yield* Stream.unwrap(
         Effect.gen(function* () {
+          const rpc = yield* DomainRpcClient;
+
           const registry = yield* Registry.AtomRegistry;
-          registry.set(chatPartsAtom, part);
+          const history = registry.get(chatPartsAtom);
+          return rpc("ChatStream", { text, history });
         }),
-      ),
-    );
-  }),
+      ).pipe(
+        Stream.catchTags({
+          RpcClientError: Effect.die,
+        }),
+        Stream.mapChunks((chunk) => {
+          parts.push(...chunk);
+          return Chunk.of(Prompt.fromResponseParts(parts));
+        }),
+        Stream.runForEach((part) =>
+          Effect.gen(function* () {
+            const registry = yield* Registry.AtomRegistry;
+            registry.set(chatPartsAtom, part);
+          }),
+        ),
+      );
+    }),
 );
