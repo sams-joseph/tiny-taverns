@@ -1,4 +1,5 @@
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "@effect/platform";
+import { Rpc, RpcGroup, RpcServer } from "@effect/rpc";
 import { Schema } from "effect";
 
 export const MonsterId = Schema.UUID.pipe(Schema.brand("MonsterId"));
@@ -55,8 +56,8 @@ export class Monster extends Schema.Class<Monster>("Monster")({
   languages: Schema.NonEmptyTrimmedString,
   senses: Schema.NonEmptyTrimmedString,
   source: Schema.NonEmptyTrimmedString,
-  createdAt: Schema.DateTimeUtcFromDate,
-  updatedAt: Schema.DateTimeUtcFromDate,
+  // createdAt: Schema.DateTimeUtc,
+  // updatedAt: Schema.DateTimeUtc,
 }) {}
 
 export class CreateMonsterPayload extends Schema.Class<CreateMonsterPayload>(
@@ -109,3 +110,10 @@ export class MonstersApiGroup extends HttpApiGroup.make("monsters")
   ) {}
 
 export class MonstersApi extends HttpApi.make("api").add(MonstersApiGroup) {}
+
+export class MonsterRpc extends RpcGroup.make(
+  Rpc.make("MonsterList", {
+    success: Monster,
+    stream: true,
+  }),
+) {}

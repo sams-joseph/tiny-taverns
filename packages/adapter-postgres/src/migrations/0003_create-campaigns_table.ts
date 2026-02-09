@@ -10,8 +10,8 @@ export default Effect.flatMap(
       name text NOT NULL CHECK (btrim(name) <> ''),
       description text NOT NULL CHECK (btrim(description) <> ''),
 
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
     CREATE INDEX IF NOT EXISTS campaigns_name_idx ON campaigns (name);

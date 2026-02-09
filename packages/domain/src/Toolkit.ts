@@ -2,7 +2,7 @@ import * as Tool from "@effect/ai/Tool";
 import * as Toolkit from "@effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
 import { CreateMonsterPayload, Monster } from "./MonstersApi.js";
-import { CreateCampaignPayload } from "./index.js";
+import { CreateCampaignPayload } from "./CampaignsApi.js";
 
 export const TerminalResponse = <S extends Schema.Schema.Any>(
   schema: S,

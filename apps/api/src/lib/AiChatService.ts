@@ -85,9 +85,6 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
             body: (state) =>
               Effect.gen(function* () {
                 const iteration = state.iteration + 1;
-
-                yield* Effect.logInfo(`Iteration ${iteration} starting`);
-
                 const finishReason = yield* Effect.gen(function* () {
                   const finishReasonRef = yield* Ref.make("stop");
 
@@ -101,15 +98,10 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
                         Effect.gen(function* () {
                           // TODO: This logic for continuing the loop needs work.
                           // We want to continue the loop if any tool calls are made
-
                           if (chunk.type === "tool-call") {
-                            yield* Effect.logInfo(
-                              `Received tool call: ${chunk.name}`,
-                            );
                             yield* Ref.set(finishReasonRef, "tool-calls");
                           }
 
-                          yield* Effect.logInfo(`Received chat part: ${chunk}`);
                           yield* mailbox.offer(chunk);
                         }),
                       ),
@@ -118,8 +110,6 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
 
                   return yield* Ref.get(finishReasonRef);
                 });
-
-                yield* Effect.logInfo({ finishReason, state });
 
                 return {
                   finishReason,
@@ -131,6 +121,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
 
       const send = Effect.fnUntraced(function* (options: {
         readonly text: string;
+        readonly history?: Prompt.Prompt;
       }) {
         const mailbox = yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
 
@@ -144,7 +135,9 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
         const message = yield* makeMessage(options);
         const prompt = Prompt.merge(systemPrompt, [message]);
 
-        const chat = yield* Chat.fromPrompt(prompt);
+        const chat = yield* Chat.fromPrompt(
+          Prompt.merge(prompt, options.history ?? Prompt.empty),
+        );
 
         yield* Effect.forkScoped(
           Effect.gen(function* () {

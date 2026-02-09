@@ -40,8 +40,8 @@ export default Effect.flatMap(
 
       source text NOT NULL CHECK (btrim(source) <> ''),
 
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
     -- Helpful indexes
