@@ -4,6 +4,7 @@ import {
   MonsterRpc,
   UserRpc,
   CharacterRpc,
+  EncounterRpc,
 } from "@repo/domain";
 import { Effect, Stream } from "effect";
 import { AiChatService } from "./lib/AiChatService.js";
@@ -11,6 +12,7 @@ import { MonstersRepository } from "./MonstersRepository.js";
 import { CampaignsRepository } from "./CampaignsRepository.js";
 import { UsersRepository } from "./UsersRepository.js";
 import { CharactersRepository } from "./CharactersRepository.js";
+import { EncountersRepository } from "./EncountersRepository.js";
 
 export const ChatLive = ChatRpc.toLayer(
   Effect.gen(function* () {
@@ -66,6 +68,18 @@ export const CharacterLive = CharacterRpc.toLayer(
       CharacterList: () =>
         Stream.fromIterableEffect(characters.findAll({ search: undefined })),
       CharacterCreate: (payload) => characters.create(payload),
+    };
+  }),
+);
+
+export const EncounterLive = EncounterRpc.toLayer(
+  Effect.gen(function* () {
+    const encounters = yield* EncountersRepository;
+
+    return {
+      EncounterList: () =>
+        Stream.fromIterableEffect(encounters.findAll({ search: undefined })),
+      EncounterCreate: (payload) => encounters.create(payload),
     };
   }),
 );
