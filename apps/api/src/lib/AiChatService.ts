@@ -94,6 +94,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
       const runAgentLoop = (
         chat: Chat.Service,
         mailbox: Mailbox.Mailbox<StreamPart<typeof toolkit.tools>>,
+        sessionId: SessionId,
       ) =>
         Effect.iterate(
           {
@@ -108,6 +109,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
                 const iteration = state.iteration + 1;
                 const finishReason = yield* Effect.gen(function* () {
                   const finishReasonRef = yield* Ref.make("stop");
+                  const assistantTextChunks: string[] = [];
 
                   yield* chat
                     .streamText({
@@ -121,6 +123,31 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
                           // We want to continue the loop if any tool calls are made
                           if (chunk.type === "tool-call") {
                             yield* Ref.set(finishReasonRef, "tool-calls");
+
+                            // Log tool call as session note
+                            const toolCallNote = new SessionNote({
+                              timestamp: new Date().toISOString(),
+                              type: "tool",
+                              content: chunk.name,
+                              metadata: {
+                                chunk: JSON.parse(JSON.stringify(chunk)),
+                              },
+                            });
+                            yield* sessions.addNote(sessionId, toolCallNote);
+                          } else if (chunk.type === "tool-result") {
+                            // Log tool result as session note
+                            const toolResultNote = new SessionNote({
+                              timestamp: new Date().toISOString(),
+                              type: "tool_result",
+                              content: chunk.name,
+                              metadata: {
+                                chunk: JSON.parse(JSON.stringify(chunk)),
+                              },
+                            });
+                            yield* sessions.addNote(sessionId, toolResultNote);
+                          } else if (chunk.type === "text-delta") {
+                            // Accumulate text chunks
+                            assistantTextChunks.push(chunk.delta);
                           }
 
                           yield* mailbox.offer(chunk);
@@ -128,6 +155,16 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
                       ),
                       Stream.runDrain,
                     );
+
+                  // After stream completes, log accumulated assistant text
+                  if (assistantTextChunks.length > 0) {
+                    const assistantNote = new SessionNote({
+                      timestamp: new Date().toISOString(),
+                      type: "assistant",
+                      content: assistantTextChunks.join(""),
+                    });
+                    yield* sessions.addNote(sessionId, assistantNote);
+                  }
 
                   return yield* Ref.get(finishReasonRef);
                 });
@@ -169,7 +206,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
 
         yield* Effect.forkScoped(
           Effect.gen(function* () {
-            yield* runAgentLoop(chat, mailbox);
+            yield* runAgentLoop(chat, mailbox, sessionId);
           }).pipe(Effect.ensuring(mailbox.end)),
         );
 
