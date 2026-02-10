@@ -5,6 +5,7 @@ import {
   UserRpc,
   CharacterRpc,
   EncounterRpc,
+  SessionRpc,
 } from "@repo/domain";
 import { Effect, Stream } from "effect";
 import { AiChatService } from "./lib/AiChatService.js";
@@ -13,6 +14,7 @@ import { CampaignsRepository } from "./CampaignsRepository.js";
 import { UsersRepository } from "./UsersRepository.js";
 import { CharactersRepository } from "./CharactersRepository.js";
 import { EncountersRepository } from "./EncountersRepository.js";
+import { SessionsRepository } from "./SessionsRepository.js";
 
 export const ChatLive = ChatRpc.toLayer(
   Effect.gen(function* () {
@@ -80,6 +82,20 @@ export const EncounterLive = EncounterRpc.toLayer(
       EncounterList: () =>
         Stream.fromIterableEffect(encounters.findAll({ search: undefined })),
       EncounterCreate: (payload) => encounters.create(payload),
+    };
+  }),
+);
+
+export const SessionLive = SessionRpc.toLayer(
+  Effect.gen(function* () {
+    const sessions = yield* SessionsRepository;
+
+    return {
+      SessionList: () => Stream.fromIterableEffect(sessions.findAll()),
+      SessionCreate: (payload) => sessions.create(payload),
+      SessionGet: (payload) => sessions.findById({ id: payload.id }),
+      SessionAddNote: (payload) =>
+        sessions.addNote(payload.sessionId, payload.note),
     };
   }),
 );

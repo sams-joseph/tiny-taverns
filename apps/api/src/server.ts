@@ -22,11 +22,13 @@ import {
   EncounterLive,
   MonsterLive,
   UserLive,
+  SessionLive,
 } from "./Rpc.js";
 import { CampaignsRepository } from "./CampaignsRepository.js";
 import { UsersRepository } from "./UsersRepository.js";
 import { CharactersRepository } from "./CharactersRepository.js";
 import { EncountersRepository } from "./EncountersRepository.js";
+import { SessionsRepository } from "./SessionsRepository.js";
 
 const OpenAi = OpenAiClient.layerConfig({
   apiUrl: Config.string("OPENAI_API_URL"),
@@ -72,12 +74,14 @@ const HttpLive = HttpLayerRouter.serve(AllRoutes).pipe(
   Layer.provide(UserLive),
   Layer.provide(CharacterLive),
   Layer.provide(EncounterLive),
+  Layer.provide(SessionLive),
   Layer.provide(AiChatService.Default),
   Layer.provide(MonstersRepository.Default),
   Layer.provide(CampaignsRepository.Default),
   Layer.provide(UsersRepository.Default),
   Layer.provide(CharactersRepository.Default),
   Layer.provide(EncountersRepository.Default),
+  Layer.provide(SessionsRepository.Default),
   Layer.provide(LanguageModelLive),
   Layer.provide(OpenAiWithHttp),
   Layer.provide(HttpProtocol),

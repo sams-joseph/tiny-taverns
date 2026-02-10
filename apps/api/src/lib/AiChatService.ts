@@ -10,6 +10,8 @@ import { CampaignsRepository } from "../CampaignsRepository.js";
 import { Mailbox, Ref } from "effect";
 import { StreamPart } from "@effect/ai/Response";
 import { EncountersRepository } from "../EncountersRepository.js";
+import { SessionsRepository } from "../SessionsRepository.js";
+import { SessionId, SessionNote } from "@repo/domain";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
@@ -59,8 +61,9 @@ const ToolkitLayer = toolkit.toLayer(
 export class AiChatService extends Effect.Service<AiChatService>()(
   "api/lib/AiChatService",
   {
-    dependencies: [ToolkitLayer],
+    dependencies: [ToolkitLayer, SessionsRepository.Default],
     scoped: Effect.gen(function* () {
+      const sessions = yield* SessionsRepository;
       // TODO: Make this an env variable
       const model = yield* OpenAiLanguageModel.model("qwen3-0.6b", {
         reasoning: { effort: "medium" },
@@ -139,7 +142,19 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
 
       const send = Effect.fnUntraced(function* (options: {
         messages: Prompt.Prompt;
+        sessionId?: SessionId;
       }) {
+        // Ensure we have a session to store notes
+        const sessionId = options.sessionId ?? (yield* sessions.create({})).id;
+
+        // Store the entire prompt as a session note
+        const promptNote = new SessionNote({
+          timestamp: new Date().toISOString(),
+          type: "user",
+          content: JSON.stringify(options.messages),
+        });
+        yield* sessions.addNote(sessionId, promptNote);
+
         const mailbox = yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
 
         const systemPrompt = Prompt.make([
