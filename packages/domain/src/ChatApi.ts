@@ -6,9 +6,23 @@ import { Prompt } from "@effect/ai";
 import { Schema } from "effect";
 import { SessionId } from "./SessionsApi.js";
 
+// Session metadata chunk that is emitted first in the stream
+export class SessionMetadataChunk extends Schema.Class<SessionMetadataChunk>(
+  "SessionMetadataChunk",
+)({
+  type: Schema.Literal("session-metadata"),
+  sessionId: SessionId,
+}) {}
+
+// Combined stream type: session metadata + AI response parts
+export const ChatStreamPart = Schema.Union(
+  SessionMetadataChunk,
+  StreamPart(toolkit),
+);
+
 export class ChatRpc extends RpcGroup.make(
   Rpc.make("ChatStream", {
-    success: StreamPart(toolkit),
+    success: ChatStreamPart,
     payload: Schema.Struct({
       messages: Prompt.Prompt,
       sessionId: Schema.optional(SessionId),

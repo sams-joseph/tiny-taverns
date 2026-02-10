@@ -4,8 +4,8 @@ import { type AnyPart } from "@effect/ai/Response";
 import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
 import * as EffectRpcClient from "@effect/rpc/RpcClient";
 import * as RpcSerialization from "@effect/rpc/RpcSerialization";
-import { DomainRpc } from "@repo/domain";
-import { Chunk } from "effect";
+import { DomainRpc, SessionId } from "@repo/domain";
+import { Chunk, Option } from "effect";
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -28,6 +28,9 @@ export class DomainRpcClient extends AtomRpc.Tag<DomainRpcClient>()(
 ) {}
 
 export const chatHistoryAtom = Atom.make<Prompt.Prompt>(Prompt.empty);
+export const currentSessionIdAtom = Atom.make<Option.Option<SessionId>>(
+  Option.none(),
+);
 
 export const chatAtom = DomainRpcClient.runtime.fn(
   ({ text }: { readonly text: string }) =>
@@ -41,20 +44,37 @@ export const chatAtom = DomainRpcClient.runtime.fn(
           const rpc = yield* DomainRpcClient;
 
           const history = registry.get(chatHistoryAtom);
+          const sessionId = registry.get(currentSessionIdAtom);
 
           const message = makeMessage(text);
           const prompt = Prompt.merge(history, [message]);
 
           registry.set(chatHistoryAtom, prompt);
 
-          return rpc("ChatStream", { messages: prompt });
+          // Include sessionId if we have one
+          const payload = Option.isSome(sessionId)
+            ? { messages: prompt, sessionId: sessionId.value }
+            : { messages: prompt };
+
+          return rpc("ChatStream", payload);
         }),
       ).pipe(
         Stream.catchTags({
           RpcClientError: Effect.die,
         }),
         Stream.mapChunks((chunk) => {
-          parts.push(...chunk);
+          // Filter and handle session metadata chunks
+          const aiParts: AnyPart[] = [];
+          for (const part of chunk) {
+            if (part.type === "session-metadata") {
+              // Store sessionId for future requests
+              registry.set(currentSessionIdAtom, Option.some(part.sessionId));
+            } else {
+              // AI response parts
+              aiParts.push(part as AnyPart);
+            }
+          }
+          parts.push(...aiParts);
           return Chunk.of(Prompt.fromResponseParts(parts));
         }),
         Stream.runForEach((prompt) =>

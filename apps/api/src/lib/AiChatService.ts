@@ -11,7 +11,12 @@ import { Mailbox, Ref } from "effect";
 import { StreamPart } from "@effect/ai/Response";
 import { EncountersRepository } from "../EncountersRepository.js";
 import { SessionsRepository } from "../SessionsRepository.js";
-import { SessionId, SessionNote } from "@repo/domain";
+import {
+  SessionId,
+  SessionNote,
+  SessionMetadataChunk,
+  ChatStreamPart,
+} from "@repo/domain";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
@@ -93,7 +98,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
 
       const runAgentLoop = (
         chat: Chat.Service,
-        mailbox: Mailbox.Mailbox<StreamPart<typeof toolkit.tools>>,
+        mailbox: Mailbox.Mailbox<typeof ChatStreamPart.Type>,
         sessionId: SessionId,
       ) =>
         Effect.iterate(
@@ -150,7 +155,9 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
                             assistantTextChunks.push(chunk.delta);
                           }
 
-                          yield* mailbox.offer(chunk);
+                          yield* mailbox.offer(
+                            chunk as typeof ChatStreamPart.Type,
+                          );
                         }),
                       ),
                       Stream.runDrain,
@@ -192,7 +199,7 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
         });
         yield* sessions.addNote(sessionId, promptNote);
 
-        const mailbox = yield* Mailbox.make<StreamPart<typeof toolkit.tools>>();
+        const mailbox = yield* Mailbox.make<typeof ChatStreamPart.Type>();
 
         const systemPrompt = Prompt.make([
           {
@@ -206,6 +213,10 @@ You exist to make the DM's job easier, faster, and more fun, while keeping the s
 
         yield* Effect.forkScoped(
           Effect.gen(function* () {
+            // Emit session metadata first
+            yield* mailbox.offer(
+              new SessionMetadataChunk({ type: "session-metadata", sessionId }),
+            );
             yield* runAgentLoop(chat, mailbox, sessionId);
           }).pipe(Effect.ensuring(mailbox.end)),
         );
