@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as MonstersRouteImport } from './routes/monsters'
+import { Route as EncountersRouteImport } from './routes/encounters'
 import { Route as CharactersRouteImport } from './routes/characters'
 import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const UsersRoute = UsersRouteImport.update({
 const MonstersRoute = MonstersRouteImport.update({
   id: '/monsters',
   path: '/monsters',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EncountersRoute = EncountersRouteImport.update({
+  id: '/encounters',
+  path: '/encounters',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CharactersRoute = CharactersRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/campaigns': typeof CampaignsRoute
   '/characters': typeof CharactersRoute
+  '/encounters': typeof EncountersRoute
   '/monsters': typeof MonstersRoute
   '/users': typeof UsersRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/campaigns': typeof CampaignsRoute
   '/characters': typeof CharactersRoute
+  '/encounters': typeof EncountersRoute
   '/monsters': typeof MonstersRoute
   '/users': typeof UsersRoute
 }
@@ -60,21 +68,42 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/campaigns': typeof CampaignsRoute
   '/characters': typeof CharactersRoute
+  '/encounters': typeof EncountersRoute
   '/monsters': typeof MonstersRoute
   '/users': typeof UsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/campaigns' | '/characters' | '/monsters' | '/users'
+  fullPaths:
+    | '/'
+    | '/campaigns'
+    | '/characters'
+    | '/encounters'
+    | '/monsters'
+    | '/users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/campaigns' | '/characters' | '/monsters' | '/users'
-  id: '__root__' | '/' | '/campaigns' | '/characters' | '/monsters' | '/users'
+  to:
+    | '/'
+    | '/campaigns'
+    | '/characters'
+    | '/encounters'
+    | '/monsters'
+    | '/users'
+  id:
+    | '__root__'
+    | '/'
+    | '/campaigns'
+    | '/characters'
+    | '/encounters'
+    | '/monsters'
+    | '/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CampaignsRoute: typeof CampaignsRoute
   CharactersRoute: typeof CharactersRoute
+  EncountersRoute: typeof EncountersRoute
   MonstersRoute: typeof MonstersRoute
   UsersRoute: typeof UsersRoute
 }
@@ -93,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/monsters'
       fullPath: '/monsters'
       preLoaderRoute: typeof MonstersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/encounters': {
+      id: '/encounters'
+      path: '/encounters'
+      fullPath: '/encounters'
+      preLoaderRoute: typeof EncountersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/characters': {
@@ -123,6 +159,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CampaignsRoute: CampaignsRoute,
   CharactersRoute: CharactersRoute,
+  EncountersRoute: EncountersRoute,
   MonstersRoute: MonstersRoute,
   UsersRoute: UsersRoute,
 }

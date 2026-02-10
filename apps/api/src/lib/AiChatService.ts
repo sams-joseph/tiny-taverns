@@ -9,11 +9,13 @@ import { MonstersRepository } from "../MonstersRepository.js";
 import { CampaignsRepository } from "../CampaignsRepository.js";
 import { Mailbox, Ref } from "effect";
 import { StreamPart } from "@effect/ai/Response";
+import { EncountersRepository } from "../EncountersRepository.js";
 
 const ToolkitLayer = toolkit.toLayer(
   Effect.gen(function* () {
     const monsters = yield* MonstersRepository;
     const campaigns = yield* CampaignsRepository;
+    const encounters = yield* EncountersRepository;
 
     return toolkit.of({
       SearchMonsters: Effect.fnUntraced(function* ({ query }) {
@@ -35,6 +37,19 @@ const ToolkitLayer = toolkit.toLayer(
         return {
           _tag: "Transient",
           value: { campaignId: newCampaign.id },
+        };
+      }),
+      SearchCampaigns: Effect.fnUntraced(function* ({ query }) {
+        const results = yield* campaigns.findAll({ search: query });
+
+        return { _tag: "Transient", value: results } as const;
+      }),
+      CreateEncounter: Effect.fnUntraced(function* ({ encounter }) {
+        const newEncounter = yield* encounters.create(encounter);
+
+        return {
+          _tag: "Transient",
+          value: { encounterId: newEncounter.id },
         };
       }),
     });
@@ -60,6 +75,9 @@ export class AiChatService extends Effect.Service<AiChatService>()(
 You have access to some tools that can be used to look up information about the user's monsters, and campaigns.
 
 - Prefer using tools to show information rather than providing it directly.
+- Always try to create monsters, campaigns, and encounters using the appropriate tool when the user requests it.
+- When creating encounters, use the search campaigns tool to find the relevant campaign, and include that information in the encounter creation.
+- Use \`SearchCampaigns\` for getting the current campaign. For example "Create an encounter for this campaign?"
 
 *Important:*
 

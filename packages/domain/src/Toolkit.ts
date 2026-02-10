@@ -2,7 +2,8 @@ import * as Tool from "@effect/ai/Tool";
 import * as Toolkit from "@effect/ai/Toolkit";
 import * as Schema from "effect/Schema";
 import { CreateMonsterPayload, Monster } from "./MonstersApi.js";
-import { CreateCampaignPayload } from "./CampaignsApi.js";
+import { Campaign, CreateCampaignPayload } from "./CampaignsApi.js";
+import { CreateEncounterPayload } from "./EncountersApi.js";
 
 export const TerminalResponse = <S extends Schema.Schema.Any>(
   schema: S,
@@ -61,6 +62,21 @@ export class toolkit extends Toolkit.make(
       campaign: CreateCampaignPayload,
     },
     success: TransientResponse(Schema.Struct({ campaignId: Schema.String })),
+  }),
+  Tool.make("SearchCampaigns", {
+    description: "Search the users campaigns by name",
+    parameters: {
+      query: Schema.optional(Schema.NonEmptyTrimmedString),
+    },
+    success: TransientResponse(Schema.Array(Campaign)),
+  }),
+  Tool.make("CreateEncounter", {
+    description:
+      "Create a new encounter from the provided information. Returns the new encounter ID.",
+    parameters: {
+      encounter: CreateEncounterPayload,
+    },
+    success: TransientResponse(Schema.Struct({ encounterId: Schema.String })),
   }),
 ) {}
 

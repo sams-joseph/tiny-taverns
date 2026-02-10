@@ -20,8 +20,8 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
   name: Schema.NonEmptyTrimmedString,
   campaignId: CampaignId,
   phase: EncounterPhase,
-  startedAt: Schema.optional(Schema.DateTimeUtcFromDate),
-  endedAt: Schema.optional(Schema.DateTimeUtcFromDate),
+  // startedAt: Schema.optional(Schema.DateTimeUtcFromDate),
+  // endedAt: Schema.optional(Schema.DateTimeUtcFromDate),
   // TODO: Fix this throws a parse error when decoding from postgres TIMESTAMP
   // createdAt: Schema.DateTimeUtcFromDate,
   // updatedAt: Schema.DateTimeUtcFromDate,
