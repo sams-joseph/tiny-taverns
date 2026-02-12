@@ -7,7 +7,7 @@ import {
   EncounterRpc,
 } from "@repo/domain";
 import { Effect, Stream } from "effect";
-import { AiChatService } from "./lib/AiChatService.js";
+import { AiAgentOrchestrator } from "./lib/AiAgentOrchestrator.js";
 import { MonstersRepository } from "./MonstersRepository.js";
 import { CampaignsRepository } from "./CampaignsRepository.js";
 import { UsersRepository } from "./UsersRepository.js";
@@ -16,7 +16,7 @@ import { EncountersRepository } from "./EncountersRepository.js";
 
 export const ChatLive = ChatRpc.toLayer(
   Effect.gen(function* () {
-    const chat = yield* AiChatService;
+    const chat = yield* AiAgentOrchestrator;
 
     return {
       ChatStream: (payload) => chat.send(payload),

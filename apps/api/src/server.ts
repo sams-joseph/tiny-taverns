@@ -13,7 +13,7 @@ import { Config, Layer } from "effect";
 import { createServer } from "node:http";
 import { DomainRpc } from "@repo/domain";
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { AiChatService } from "./lib/AiChatService.js";
+import { AiAgentOrchestrator } from "./lib/AiAgentOrchestrator.js";
 import { MonstersRepository } from "./MonstersRepository.js";
 import {
   CampaignLive,
@@ -72,7 +72,7 @@ const HttpLive = HttpLayerRouter.serve(AllRoutes).pipe(
   Layer.provide(UserLive),
   Layer.provide(CharacterLive),
   Layer.provide(EncounterLive),
-  Layer.provide(AiChatService.Default),
+  Layer.provide(AiAgentOrchestrator.Default),
   Layer.provide(MonstersRepository.Default),
   Layer.provide(CampaignsRepository.Default),
   Layer.provide(UsersRepository.Default),
