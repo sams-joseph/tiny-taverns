@@ -9,20 +9,37 @@ export const CharacterIdFromString = Schema.UUID.pipe(
   Schema.compose(CharacterId),
 );
 
+export const CharacterKind = Schema.Literal("player", "npc");
+export type CharacterKind = typeof CharacterKind.Type;
+
+export const NpcMetadata = Schema.Struct({
+  role: Schema.optional(Schema.NonEmptyTrimmedString),
+  location: Schema.optional(Schema.NonEmptyTrimmedString),
+  traits: Schema.optional(Schema.Array(Schema.NonEmptyTrimmedString)),
+  voice: Schema.optional(Schema.NonEmptyTrimmedString),
+  constraints: Schema.optional(Schema.Array(Schema.NonEmptyTrimmedString)),
+});
+export type NpcMetadata = typeof NpcMetadata.Type;
+
+export const NpcMetadataJson = Schema.parseJson(NpcMetadata);
+
 export class Character extends Schema.Class<Character>("Character")({
   id: CharacterId,
   name: Schema.NonEmptyTrimmedString,
-  userId: Schema.optional(UserId),
-  // TODO: Fix this throws a parse error when decoding from postgres TIMESTAMP
-  // createdAt: Schema.DateTimeUtcFromDate,
-  // updatedAt: Schema.DateTimeUtcFromDate,
+  kind: CharacterKind,
+  userId: Schema.NullishOr(UserId),
+  npcMetadata: Schema.NullishOr(NpcMetadataJson),
+  createdAt: Schema.Any,
+  updatedAt: Schema.Any,
 }) {}
 
 export class CreateCharacterPayload extends Schema.Class<CreateCharacterPayload>(
   "CreateCharacterPayload",
 )({
   name: Schema.NonEmptyTrimmedString,
+  kind: Schema.optional(CharacterKind),
   userId: Schema.optional(UserId),
+  npcMetadata: Schema.optional(NpcMetadataJson),
 }) {}
 
 export class CharacterRpc extends RpcGroup.make(

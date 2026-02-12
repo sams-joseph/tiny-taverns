@@ -36,5 +36,5 @@ curl -N \
 
 curl -N \
   -H "Content-Type: application/ndjson" \
-  -d $'{"_tag":"Request","id":"1","tag":"CharacterCreate","payload":{"name":"Krucks", "userId":"b3bd350a-b4d3-42db-8263-232c6d3ccf06"},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
+  -d $'{"_tag":"Request","id":"1","tag":"CharacterCreate","payload":{"name":"Krucks","kind":"npc"},"traceId":"traceId","spanId":"spanId","sampled":true,"headers":[]}\n' \
   http://localhost:4001/rpc

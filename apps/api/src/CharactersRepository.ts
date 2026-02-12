@@ -1,7 +1,20 @@
 import { SqlClient, SqlSchema } from "@effect/sql";
 import { PostgresClient } from "@repo/adapter-postgres/PostgresClient";
-import { Effect, flow, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { Character, CreateCharacterPayload } from "@repo/domain";
+
+class CharacterValidationError extends Schema.TaggedError<CharacterValidationError>()(
+  "CharacterValidationError",
+  {
+    reason: Schema.Literal(
+      "PlayerCharacterRequiresUserId",
+      "NpcCharacterCannotHaveUserId",
+    ),
+  },
+) {}
+
+const CharacterKindNpc = "npc" as const;
+const CharacterKindPlayer = "player" as const;
 
 export class CharactersRepository extends Effect.Service<CharactersRepository>()(
   "api/CharactersRepository",
@@ -44,7 +57,30 @@ export class CharactersRepository extends Effect.Service<CharactersRepository>()
               SqlError: Effect.die,
             }),
           ),
-        create: flow(create, Effect.orDie),
+        create: (payload: CreateCharacterPayload) =>
+          Effect.gen(function* () {
+            const kind =
+              payload.kind ??
+              (payload.userId ? CharacterKindPlayer : CharacterKindNpc);
+
+            if (!payload.userId && kind === CharacterKindPlayer) {
+              return yield* Effect.fail(
+                new CharacterValidationError({
+                  reason: "PlayerCharacterRequiresUserId",
+                }),
+              );
+            }
+
+            if (payload.userId && kind === CharacterKindNpc) {
+              return yield* Effect.fail(
+                new CharacterValidationError({
+                  reason: "NpcCharacterCannotHaveUserId",
+                }),
+              );
+            }
+
+            return yield* create({ ...payload, kind });
+          }).pipe(Effect.catchAll(Effect.die)),
       } as const;
     }),
   },

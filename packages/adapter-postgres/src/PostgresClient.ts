@@ -14,8 +14,6 @@ export const pgConfig = {
   transformResultNames: String.snakeToCamel,
   // - 114: JSON (return as string instead of parsed object)
   // - 1082: DATE
-  // - 1114: TIMESTAMP WITHOUT TIME ZONE
-  // - 1184: TIMESTAMP WITH TIME ZONE
   // - 3802: JSONB (return as string instead of parsed object)
   getTypesParser: {
     114: {
@@ -27,18 +25,6 @@ export const pgConfig = {
     1082: {
       to: 25,
       from: [1082],
-      parse: identity,
-      serialize: identity,
-    },
-    1114: {
-      to: 25,
-      from: [1114],
-      parse: identity,
-      serialize: identity,
-    },
-    1184: {
-      to: 25,
-      from: [1184],
       parse: identity,
       serialize: identity,
     },
