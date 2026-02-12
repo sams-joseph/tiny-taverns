@@ -2,6 +2,8 @@ import { Chat } from "@effect/ai";
 import * as Prompt from "@effect/ai/Prompt";
 import type { StreamPart } from "@effect/ai/Response";
 import type { Prompt as PromptType } from "@effect/ai/Prompt";
+import type * as Toolkit from "@effect/ai/Toolkit";
+import type { npcToolkit } from "@repo/domain/NpcToolkit";
 import { Effect, Mailbox } from "effect";
 import { runAgentLoop } from "./agentLoop.js";
 
@@ -34,6 +36,7 @@ const buildSystemPrompt = (config: NpcAgentConfig) => {
     "Keep responses concise and grounded in the scene.",
     "Offer small hooks: rumors, requests, or reactions that invite the player to act.",
     "Do not force an introduction; respond naturally to the user message.",
+    "Use GetNpcProfile and GetLocationContext to ground details before answering.",
   ];
 
   const extraConstraints = config.constraints ?? [];
@@ -43,6 +46,10 @@ const buildSystemPrompt = (config: NpcAgentConfig) => {
 
   return `You are an in-world NPC.
 
+  ## Tools
+
+  You have access to some tools that can be used to look up information about the yourself, and location context.
+
 ${identity ? `## Identity\n\n${identity}\n\n` : ""}## Constraints\n\n${constraintLines}`;
 };
 
@@ -50,8 +57,10 @@ export const NpcAgent = {
   run: Effect.fnUntraced(function* (options: {
     messages: PromptType;
     config: NpcAgentConfig;
+    tools?: Toolkit.WithHandler<(typeof npcToolkit)["tools"]> | undefined;
   }) {
-    const mailbox = yield* Mailbox.make<StreamPart<{}>>();
+    const mailbox =
+      yield* Mailbox.make<StreamPart<(typeof npcToolkit)["tools"]>>();
 
     yield* Effect.forkScoped(
       Effect.gen(function* () {
@@ -64,7 +73,7 @@ export const NpcAgent = {
 
         const prompt = Prompt.merge(systemPrompt, options.messages);
         const chat = yield* Chat.fromPrompt(prompt);
-        yield* runAgentLoop({ chat, mailbox });
+        yield* runAgentLoop({ chat, mailbox, tools: options.tools });
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {

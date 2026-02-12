@@ -1,7 +1,11 @@
 import { SqlClient, SqlSchema } from "@effect/sql";
 import { PostgresClient } from "@repo/adapter-postgres/PostgresClient";
 import { Effect, Schema } from "effect";
-import { Character, CreateCharacterPayload } from "@repo/domain";
+import {
+  Character,
+  CreateCharacterPayload,
+  CharacterNotFound,
+} from "@repo/domain";
 
 class CharacterValidationError extends Schema.TaggedError<CharacterValidationError>()(
   "CharacterValidationError",
@@ -49,6 +53,23 @@ export class CharactersRepository extends Effect.Service<CharactersRepository>()
         `,
       });
 
+      // TODO: Temporary until we have a more robust way to seed NPC data
+      const findFirstNpc = SqlSchema.findOne({
+        Result: Character,
+        Request: Schema.Void,
+        execute: () => sql`
+          SELECT
+            *
+          FROM
+            characters
+          WHERE
+            kind = 'npc'
+          ORDER BY
+            created_at ASC
+          LIMIT 1
+        `,
+      });
+
       return {
         findAll: (queryParams: { search?: string | undefined }) =>
           findAll(queryParams).pipe(
@@ -80,7 +101,28 @@ export class CharactersRepository extends Effect.Service<CharactersRepository>()
             }
 
             return yield* create({ ...payload, kind });
-          }).pipe(Effect.catchAll(Effect.die)),
+          }).pipe(
+            Effect.catchTags({
+              ParseError: Effect.die,
+              SqlError: Effect.die,
+            }),
+          ),
+        findFirstNpc: () =>
+          findFirstNpc(undefined).pipe(
+            Effect.flatMap((npcOption) =>
+              npcOption._tag === "Some"
+                ? Effect.succeed(npcOption.value)
+                : Effect.fail(
+                    new CharacterNotFound({
+                      reason: "No NPC characters exist.",
+                    }),
+                  ),
+            ),
+            Effect.catchTags({
+              ParseError: Effect.die,
+              SqlError: Effect.die,
+            }),
+          ),
       } as const;
     }),
   },

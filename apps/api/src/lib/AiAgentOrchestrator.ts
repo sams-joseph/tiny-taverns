@@ -3,6 +3,8 @@ import type { Prompt } from "@effect/ai/Prompt";
 import { OpenAiLanguageModel } from "@effect/ai-openai";
 import { NpcAgent } from "./agents/NpcAgent.js";
 import { buildNpcIdentity } from "./agents/npcIdentity.js";
+import { NpcToolkitLayer } from "./NpcToolkitLayer.js";
+import { npcToolkit } from "@repo/domain/NpcToolkit";
 
 export class AiAgentOrchestrator extends Effect.Service<AiAgentOrchestrator>()(
   "api/lib/AiAgentOrchestrator",
@@ -14,9 +16,11 @@ export class AiAgentOrchestrator extends Effect.Service<AiAgentOrchestrator>()(
 
       const send = Effect.fnUntraced(function* (options: { messages: Prompt }) {
         const npcConfig = buildNpcIdentity();
+        const tools = yield* npcToolkit.pipe(Effect.provide(NpcToolkitLayer));
         return yield* NpcAgent.run({
           messages: options.messages,
           config: npcConfig,
+          tools,
         });
       }, Effect.provide(model));
 

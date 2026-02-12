@@ -28,7 +28,7 @@ export class Character extends Schema.Class<Character>("Character")({
   name: Schema.NonEmptyTrimmedString,
   kind: CharacterKind,
   userId: Schema.NullishOr(UserId),
-  npcMetadata: Schema.NullishOr(NpcMetadataJson),
+  npcMetadata: NpcMetadata,
   createdAt: Schema.Any,
   updatedAt: Schema.Any,
 }) {}
@@ -41,6 +41,13 @@ export class CreateCharacterPayload extends Schema.Class<CreateCharacterPayload>
   userId: Schema.optional(UserId),
   npcMetadata: Schema.optional(NpcMetadataJson),
 }) {}
+
+export class CharacterNotFound extends Schema.TaggedError<CharacterNotFound>()(
+  "CharacterNotFound",
+  {
+    reason: Schema.NonEmptyTrimmedString,
+  },
+) {}
 
 export class CharacterRpc extends RpcGroup.make(
   Rpc.make("CharacterList", {

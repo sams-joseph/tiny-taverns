@@ -15,26 +15,26 @@ export const pgConfig = {
   // - 114: JSON (return as string instead of parsed object)
   // - 1082: DATE
   // - 3802: JSONB (return as string instead of parsed object)
-  getTypesParser: {
-    114: {
-      to: 25,
-      from: [114],
-      parse: identity,
-      serialize: identity,
-    },
-    1082: {
-      to: 25,
-      from: [1082],
-      parse: identity,
-      serialize: identity,
-    },
-    3802: {
-      to: 25,
-      from: [3802],
-      parse: identity,
-      serialize: identity,
-    },
-  },
+  // getTypesParser: {
+  //   114: {
+  //     to: 25,
+  //     from: [114],
+  //     parse: identity,
+  //     serialize: identity,
+  //   },
+  //   1082: {
+  //     to: 25,
+  //     from: [1082],
+  //     parse: identity,
+  //     serialize: identity,
+  //   },
+  //   3802: {
+  //     to: 25,
+  //     from: [3802],
+  //     parse: identity,
+  //     serialize: identity,
+  //   },
+  // },
 } as const;
 
 export const PostgresClient = Layer.unwrapEffect(

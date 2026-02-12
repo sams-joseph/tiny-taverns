@@ -18,5 +18,14 @@ export default Effect.flatMap(
     CREATE INDEX IF NOT EXISTS idx_characters_user_id ON characters(user_id);
     CREATE INDEX IF NOT EXISTS characters_kind_idx ON characters (kind);
     CREATE INDEX IF NOT EXISTS characters_name_idx ON characters (name);
+
+    INSERT INTO characters (name, kind, npc_metadata)
+    SELECT
+      'Mira of the Ember' AS name,
+      'npc' AS kind,
+      '{"role": "tavern regular", "location": "The Ember & Oak", "traits": ["wry", "watchful"], "voice": "dry and measured", "constraints": ["Never name names when speaking of the city guard."]}'::jsonb AS npc_metadata
+    WHERE NOT EXISTS (
+      SELECT 1 FROM characters WHERE kind = 'npc'
+    );
   `,
 );

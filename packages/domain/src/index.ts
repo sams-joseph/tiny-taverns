@@ -11,6 +11,7 @@ export * from "./ChatApi.js";
 export * from "./CharactersApi.js";
 export * from "./UsersApi.js";
 export * from "./EncountersApi.js";
+export * from "./NpcToolkit.js";
 
 export const DomainRpc = MonsterRpc.merge(CampaignRpc)
   .merge(ChatRpc)
