@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { npcToolkit } from "@repo/domain/NpcToolkit";
 import { CharactersRepository } from "../CharactersRepository.js";
+import { Option } from "effect";
 
 export const NpcToolkitLayer = npcToolkit.toLayer(
   Effect.gen(function* () {
@@ -9,8 +10,8 @@ export const NpcToolkitLayer = npcToolkit.toLayer(
     return npcToolkit.of({
       GetNpcProfile: Effect.fnUntraced(function* () {
         const npc = yield* characters.findFirstNpc();
-        console.log(npc);
-        return { _tag: "Transient", value: npc } as const;
+
+        return { _tag: "Transient", value: Option.getOrNull(npc) } as const;
       }),
       GetLocationContext: Effect.fnUntraced(function* () {
         return {

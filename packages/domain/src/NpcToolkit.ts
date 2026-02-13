@@ -16,7 +16,7 @@ export class npcToolkit extends Toolkit.make(
   Tool.make("GetNpcProfile", {
     description: "Get the current NPC profile for grounded replies.",
     parameters: {},
-    success: TransientResponse(Character),
+    success: TransientResponse(Schema.NullOr(Character)),
     failure: CharacterNotFound,
   }),
   Tool.make("GetLocationContext", {

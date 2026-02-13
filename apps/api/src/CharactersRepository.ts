@@ -105,19 +105,12 @@ export class CharactersRepository extends Effect.Service<CharactersRepository>()
             Effect.catchTags({
               ParseError: Effect.die,
               SqlError: Effect.die,
+              CharacterValidationError: Effect.die,
+              NoSuchElementException: Effect.die,
             }),
           ),
         findFirstNpc: () =>
           findFirstNpc(undefined).pipe(
-            Effect.flatMap((npcOption) =>
-              npcOption._tag === "Some"
-                ? Effect.succeed(npcOption.value)
-                : Effect.fail(
-                    new CharacterNotFound({
-                      reason: "No NPC characters exist.",
-                    }),
-                  ),
-            ),
             Effect.catchTags({
               ParseError: Effect.die,
               SqlError: Effect.die,

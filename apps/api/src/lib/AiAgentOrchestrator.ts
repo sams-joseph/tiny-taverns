@@ -14,15 +14,19 @@ export class AiAgentOrchestrator extends Effect.Service<AiAgentOrchestrator>()(
         reasoning: { effort: "medium" },
       });
 
-      const send = Effect.fnUntraced(function* (options: { messages: Prompt }) {
-        const npcConfig = buildNpcIdentity();
-        const tools = yield* npcToolkit.pipe(Effect.provide(NpcToolkitLayer));
-        return yield* NpcAgent.run({
-          messages: options.messages,
-          config: npcConfig,
-          tools,
-        });
-      }, Effect.provide(model));
+      const send = Effect.fnUntraced(
+        function* (options: { messages: Prompt }) {
+          const npcConfig = buildNpcIdentity();
+          const tools = yield* npcToolkit;
+          return yield* NpcAgent.run({
+            messages: options.messages,
+            config: npcConfig,
+            tools,
+          });
+        },
+        Effect.provide(model),
+        Effect.provide(NpcToolkitLayer),
+      );
 
       return { send } as const;
     }),
