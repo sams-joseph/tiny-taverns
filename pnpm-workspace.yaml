@@ -1,3 +1,19 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - apps/*
+  - packages/*
+
+catalog:
+  "@effect/ai": ^0.33.2
+  "@effect/ai-openai": ^0.37.2
+  "@effect/platform": ^0.94.3
+  "@effect/platform-node": ^0.104.1
+  "@effect/rpc": ^0.73.0
+  "@effect/sql": ^0.49.0
+  "@effect/sql-pg": ^0.50.2
+  "@effect/vitest": ^0.27.0
+  "@types/node": ^25.2.1
+  dotenv-cli: ^11.0.0
+  effect: "^3.19.16"
+  tsx: ^4.21.0
+  typescript: ^5.9.3
+  vitest: ^2.1.9

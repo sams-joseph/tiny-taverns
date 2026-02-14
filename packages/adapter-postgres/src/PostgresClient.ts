@@ -5,6 +5,7 @@ import {
   Effect,
   identity,
   Layer,
+  Redacted,
   Schedule,
   String,
 } from "effect";
@@ -61,3 +62,9 @@ export const PostgresClient = Layer.unwrapEffect(
     ),
   ),
 );
+
+export const PostgresClientTest = (databaseUrl: string) =>
+  PgClient.layer({
+    url: Redacted.make(databaseUrl),
+    ...pgConfig,
+  });

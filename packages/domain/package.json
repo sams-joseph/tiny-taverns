@@ -13,13 +13,13 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "typescript": "latest"
+    "typescript": "catalog:"
   },
   "dependencies": {
-    "@effect/ai": "^0.33.2",
-    "@effect/ai-openai": "^0.37.2",
-    "@effect/platform": "^0.94.3",
-    "@effect/rpc": "^0.73.0",
-    "effect": "^3.19.16"
+    "@effect/ai": "catalog:",
+    "@effect/ai-openai": "catalog:",
+    "@effect/platform": "catalog:",
+    "@effect/rpc": "catalog:",
+    "effect": "catalog:"
   }
 }
