@@ -5,7 +5,8 @@
     "dev": "dotenv -e ../../.env tsx watch src/index.ts",
     "build": "dotenv -e ../../.env tsc -b",
     "migrate": "dotenv -e ../../.env tsx src/scripts/migrator.ts",
-    "reset": "dotenv -e ../../.env tsx src/scripts/reset.ts"
+    "reset": "dotenv -e ../../.env tsx src/scripts/reset.ts",
+    "seed": "dotenv -e ../../.env tsx src/scripts/seed.ts"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -13,6 +14,7 @@
     "./*": "./src/*.ts",
     "./migrate": "./src/scripts/migrator.ts",
     "./reset": "./src/scripts/reset.ts",
+    "./seed": "./src/scripts/seed.ts",
     "./internal/*": null
   },
   "devDependencies": {
