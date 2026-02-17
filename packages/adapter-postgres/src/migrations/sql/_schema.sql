@@ -78,6 +78,23 @@ CREATE TABLE public.monsters (
     CONSTRAINT monsters_subtype_check CHECK (((subtype IS NULL) OR (btrim(subtype) <> ''::text)))
 );
 
+CREATE TABLE public.quest_encounters (
+    quest_id uuid NOT NULL,
+    encounter_id uuid NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.quests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    campaign_id uuid,
+    parent_quest_id uuid,
+    name text NOT NULL,
+    description text,
+    rewards jsonb NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
@@ -100,6 +117,12 @@ ALTER TABLE ONLY public.encounters
 ALTER TABLE ONLY public.monsters
     ADD CONSTRAINT monsters_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.quest_encounters
+    ADD CONSTRAINT quest_encounters_pkey PRIMARY KEY (quest_id, encounter_id);
+
+ALTER TABLE ONLY public.quests
+    ADD CONSTRAINT quests_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
@@ -115,11 +138,21 @@ CREATE INDEX idx_characters_user_id ON public.characters USING btree (user_id);
 
 CREATE INDEX idx_encounters_campaign_id ON public.encounters USING btree (campaign_id);
 
+CREATE INDEX idx_quest_encounters_encounter_id ON public.quest_encounters USING btree (encounter_id);
+
+CREATE INDEX idx_quest_encounters_quest_id ON public.quest_encounters USING btree (quest_id);
+
+CREATE INDEX idx_quests_campaign_id ON public.quests USING btree (campaign_id);
+
+CREATE INDEX idx_quests_parent_id ON public.quests USING btree (parent_quest_id);
+
 CREATE INDEX monsters_cr_idx ON public.monsters USING btree (cr);
 
 CREATE INDEX monsters_kind_size_idx ON public.monsters USING btree (kind, size);
 
 CREATE INDEX monsters_name_idx ON public.monsters USING btree (name);
+
+CREATE INDEX quests_name_idx ON public.quests USING btree (name);
 
 CREATE INDEX users_name_idx ON public.users USING btree (name);
 
@@ -129,8 +162,21 @@ ALTER TABLE ONLY public.characters
 ALTER TABLE ONLY public.encounters
     ADD CONSTRAINT encounters_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id) ON DELETE SET NULL;
 
+ALTER TABLE ONLY public.quest_encounters
+    ADD CONSTRAINT quest_encounters_encounter_id_fkey FOREIGN KEY (encounter_id) REFERENCES public.encounters(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.quest_encounters
+    ADD CONSTRAINT quest_encounters_quest_id_fkey FOREIGN KEY (quest_id) REFERENCES public.quests(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.quests
+    ADD CONSTRAINT quests_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.quests
+    ADD CONSTRAINT quests_parent_quest_id_fkey FOREIGN KEY (parent_quest_id) REFERENCES public.quests(id) ON DELETE SET NULL;
+
 INSERT INTO public.effect_sql_migrations (migration_id, created_at, name) VALUES (1, '2026-02-17 03:47:29.108351+00', 'create-users_table');
 INSERT INTO public.effect_sql_migrations (migration_id, created_at, name) VALUES (2, '2026-02-17 03:47:29.108351+00', 'create-monsters_table');
 INSERT INTO public.effect_sql_migrations (migration_id, created_at, name) VALUES (3, '2026-02-17 03:47:29.108351+00', 'create-campaigns_table');
 INSERT INTO public.effect_sql_migrations (migration_id, created_at, name) VALUES (4, '2026-02-17 03:47:29.108351+00', 'create-characters_table');
 INSERT INTO public.effect_sql_migrations (migration_id, created_at, name) VALUES (5, '2026-02-17 03:47:29.108351+00', 'create-encounters_table');
+INSERT INTO public.effect_sql_migrations (migration_id, created_at, name) VALUES (6, '2026-02-17 05:00:39.363612+00', 'create-quests_table');

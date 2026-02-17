@@ -5,6 +5,7 @@ import {
   UserRpc,
   CharacterRpc,
   EncounterRpc,
+  QuestRpc,
 } from "@repo/domain";
 import { Effect, Stream } from "effect";
 import { AiAgentOrchestrator } from "./lib/AiAgentOrchestrator.js";
@@ -13,6 +14,7 @@ import { CampaignsRepository } from "./CampaignsRepository.js";
 import { UsersRepository } from "./UsersRepository.js";
 import { CharactersRepository } from "./CharactersRepository.js";
 import { EncountersRepository } from "./EncountersRepository.js";
+import { QuestsRepository } from "./QuestsRepository.js";
 
 export const ChatLive = ChatRpc.toLayer(
   Effect.gen(function* () {
@@ -80,6 +82,26 @@ export const EncounterLive = EncounterRpc.toLayer(
       EncounterList: () =>
         Stream.fromIterableEffect(encounters.findAll({ search: undefined })),
       EncounterCreate: (payload) => encounters.create(payload),
+    };
+  }),
+);
+
+export const QuestLive = QuestRpc.toLayer(
+  Effect.gen(function* () {
+    const quests = yield* QuestsRepository;
+
+    return {
+      QuestList: () =>
+        Stream.fromIterableEffect(
+          quests.findAll({ search: undefined, campaignId: undefined }),
+        ),
+      QuestCreate: (payload) => quests.create(payload),
+      QuestEncounterLink: (payload) => quests.linkEncounter(payload),
+      QuestEncounterUnlink: (payload) => quests.unlinkEncounter(payload),
+      QuestEncountersForQuest: (payload) =>
+        Stream.fromIterableEffect(quests.listEncountersForQuest(payload)),
+      QuestEncountersForEncounter: (payload) =>
+        Stream.fromIterableEffect(quests.listQuestsForEncounter(payload)),
     };
   }),
 );
