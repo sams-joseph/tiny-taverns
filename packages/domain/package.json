@@ -3,7 +3,8 @@
   "type": "module",
   "scripts": {
     "dev": "dotenv -e ../../.env tsc --watch",
-    "build": "dotenv -e ../../.env tsc"
+    "build": "dotenv -e ../../.env tsc",
+    "test": "dotenv -e ../../.env vitest run"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@repo/vitest-config": "workspace:*",
     "typescript": "catalog:"
   },
   "dependencies": {
