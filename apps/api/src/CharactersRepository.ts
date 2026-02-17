@@ -1,11 +1,7 @@
 import { SqlClient, SqlSchema } from "@effect/sql";
 import { PostgresClient } from "@repo/adapter-postgres/PostgresClient";
 import { Effect, Schema } from "effect";
-import {
-  Character,
-  CreateCharacterPayload,
-  CharacterNotFound,
-} from "@repo/domain";
+import { Character, CreateCharacterPayload } from "@repo/domain";
 
 class CharacterValidationError extends Schema.TaggedError<CharacterValidationError>()(
   "CharacterValidationError",

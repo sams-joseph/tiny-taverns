@@ -1,6 +1,5 @@
 import * as NodeContext from "@effect/platform-node/NodeContext";
 import * as FileSystem from "@effect/platform/FileSystem";
-import { PgMigrator } from "@effect/sql-pg";
 import * as PgClient from "@effect/sql-pg/PgClient";
 import * as SqlClient from "@effect/sql/SqlClient";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
@@ -36,15 +35,6 @@ export class PgContainer extends Effect.Service<PgContainer>()("PgContainer", {
 
       const schema = yield* fs.readFileString(schemaPath);
       yield* sql.unsafe(schema);
-
-      // yield* PgMigrator.run({
-      //   loader: PgMigrator.fromFileSystem(
-      //     path.resolve(
-      //       currentFileDir,
-      //       "../../../../../packages/adapter-postgres/src/migrations",
-      //     ),
-      //   ),
-      // });
     }),
   ).pipe(
     Layer.provideMerge(
