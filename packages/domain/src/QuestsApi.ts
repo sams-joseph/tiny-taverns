@@ -18,7 +18,7 @@ export class Quest extends Schema.Class<Quest>("Quest")({
   id: QuestId,
   name: Schema.NonEmptyTrimmedString,
   description: Schema.NullishOr(Schema.NonEmptyTrimmedString),
-  campaignId: CampaignId,
+  campaignId: Schema.optional(CampaignId),
   parentQuestId: Schema.NullishOr(QuestId),
   rewards: QuestReward,
 }) {}

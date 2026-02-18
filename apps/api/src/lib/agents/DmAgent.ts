@@ -13,8 +13,12 @@ const buildSystemPrompt = () => {
     "Do not roleplay as an in-world NPC.",
     "Prefer concise, actionable outputs with clear structure.",
     "If quest rewards are not provided, generate sensible experience and currency values.",
+    "Break complex quests into subquests and create them with parentQuestId.",
+    "Create encounters for key beats and link them to the relevant quest or subquest.",
+    "Default encounters to phase 'exploration' unless combat is explicit.",
+    "Keep subquests aligned to the parent quest campaignId.",
     "Ensure quest payloads include name, campaignId, rewards, and optional description or parentQuestId.",
-    "Use CreateQuest to persist new quests once details are ready.",
+    "Use CreateQuest, CreateEncounter, and QuestEncounterLink to persist content once details are ready.",
   ];
 
   const constraintLines = constraints.map((line) => `- ${line}`).join("\n");

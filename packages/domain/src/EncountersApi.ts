@@ -18,7 +18,7 @@ export const EncounterPhase = Schema.Literal(
 export class Encounter extends Schema.Class<Encounter>("Encounter")({
   id: EncounterId,
   name: Schema.NonEmptyTrimmedString,
-  campaignId: CampaignId,
+  campaignId: Schema.optional(CampaignId),
   phase: EncounterPhase,
   // startedAt: Schema.optional(Schema.DateTimeUtcFromDate),
   // endedAt: Schema.optional(Schema.DateTimeUtcFromDate),
@@ -31,7 +31,7 @@ export class CreateEncounterPayload extends Schema.Class<CreateEncounterPayload>
   "CreateEncounterPayload",
 )({
   name: Schema.NonEmptyTrimmedString,
-  campaignId: CampaignId,
+  campaignId: Schema.optional(CampaignId),
   phase: EncounterPhase,
 }) {}
 
