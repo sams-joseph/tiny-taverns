@@ -28,7 +28,7 @@ export class CreateQuestPayload extends Schema.Class<CreateQuestPayload>(
 )({
   name: Schema.NonEmptyTrimmedString,
   description: Schema.optional(Schema.NonEmptyTrimmedString),
-  campaignId: CampaignId,
+  campaignId: Schema.optional(CampaignId),
   parentQuestId: Schema.optional(QuestId),
   rewards: QuestReward,
 }) {}

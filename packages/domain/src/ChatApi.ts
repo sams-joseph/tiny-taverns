@@ -4,11 +4,16 @@ import { toolkit } from "./Toolkit.js";
 import { AiError } from "@effect/ai/AiError";
 import { Prompt } from "@effect/ai";
 import { npcToolkit } from "./NpcToolkit.js";
+import { dmToolkit } from "./DmToolkit.js";
 import { Schema } from "effect";
 
 export class ChatRpc extends RpcGroup.make(
   Rpc.make("ChatStream", {
-    success: Schema.Union(StreamPart(toolkit), StreamPart(npcToolkit)),
+    success: Schema.Union(
+      StreamPart(toolkit),
+      StreamPart(npcToolkit),
+      StreamPart(dmToolkit),
+    ),
     payload: {
       messages: Prompt.Prompt,
     },
