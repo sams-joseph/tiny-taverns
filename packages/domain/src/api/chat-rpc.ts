@@ -38,13 +38,7 @@ export const ChatWatchEvent = Schema.TaggedStruct("RunChanged", {
 });
 export type ChatWatchEvent = typeof ChatWatchEvent.Type;
 
-export const ToolName = Schema.Literals([
-  "getCurrentDateTime",
-  "getWeather",
-  "fetchRandomJoke",
-  "createNpc",
-  "fetchNpcs",
-]);
+export const ToolName = Schema.Literals(["createNpc", "fetchNpcs"]);
 export type ToolName = typeof ToolName.Type;
 
 export const ToolEvent = Schema.Union([

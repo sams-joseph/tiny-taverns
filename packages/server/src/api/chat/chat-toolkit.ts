@@ -13,34 +13,6 @@ export class ChatMailbox extends Context.Service<
   PubSub.PubSub<Take.Take<Chat.ChatEvent>>
 >()("ChatMailbox") {}
 
-export const getCurrentDateTime = Tool.make("getCurrentDateTime", {
-  description: "Get the current date and time",
-  parameters: Tool.EmptyParams,
-  success: Schema.String,
-  dependencies: [ChatMailbox],
-});
-
-export const getWeather = Tool.make("getWeather", {
-  description: "Get current weather for a location",
-  failureMode: "return",
-  parameters: Schema.Struct({
-    latitude: Schema.Number,
-    longitude: Schema.Number,
-  }),
-  success: Schema.String,
-  failure: Schema.String,
-  dependencies: [ChatMailbox],
-});
-
-export const fetchRandomJoke = Tool.make("fetchRandomJoke", {
-  description: "Fetch a random dad joke",
-  failureMode: "return",
-  parameters: Tool.EmptyParams,
-  success: Schema.String,
-  failure: Schema.String,
-  dependencies: [ChatMailbox],
-});
-
 export const fetchNpcs = Tool.make("fetchNpcs", {
   description: "Fetch a list of NPCs for the current user",
   failureMode: "return",
@@ -61,10 +33,4 @@ export const createNpc = Tool.make("createNpc", {
   dependencies: [ChatMailbox, CurrentUser],
 });
 
-export const ChatToolkit = Toolkit.make(
-  getCurrentDateTime,
-  getWeather,
-  fetchRandomJoke,
-  fetchNpcs,
-  createNpc,
-);
+export const ChatToolkit = Toolkit.make(fetchNpcs, createNpc);

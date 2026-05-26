@@ -7,22 +7,35 @@ const emptyState: StreamState = { contentBlocks: [] };
 
 describe("accumulateEvent", () => {
   it("appends chunk to last text block", () => {
-    const state: StreamState = { contentBlocks: [{ _tag: "text", content: "Hello" }] };
-    const result = accumulateEvent(state, { _tag: "Chunk", delta: " world" } as ChatEvent);
-    expect(result.contentBlocks).toEqual([{ _tag: "text", content: "Hello world" }]);
+    const state: StreamState = {
+      contentBlocks: [{ _tag: "text", content: "Hello" }],
+    };
+    const result = accumulateEvent(state, {
+      _tag: "Chunk",
+      delta: " world",
+    } as ChatEvent);
+    expect(result.contentBlocks).toEqual([
+      { _tag: "text", content: "Hello world" },
+    ]);
   });
 
   it("creates new text block when last block is not text", () => {
     const state: StreamState = {
       contentBlocks: [{ _tag: "reasoning", content: "thinking" }],
     };
-    const result = accumulateEvent(state, { _tag: "Chunk", delta: "Hello" } as ChatEvent);
+    const result = accumulateEvent(state, {
+      _tag: "Chunk",
+      delta: "Hello",
+    } as ChatEvent);
     expect(result.contentBlocks).toHaveLength(2);
     expect(result.contentBlocks[1]).toEqual({ _tag: "text", content: "Hello" });
   });
 
   it("creates new text block from empty state", () => {
-    const result = accumulateEvent(emptyState, { _tag: "Chunk", delta: "Hi" } as ChatEvent);
+    const result = accumulateEvent(emptyState, {
+      _tag: "Chunk",
+      delta: "Hi",
+    } as ChatEvent);
     expect(result.contentBlocks).toEqual([{ _tag: "text", content: "Hi" }]);
   });
 
@@ -34,17 +47,24 @@ describe("accumulateEvent", () => {
       _tag: "ReasoningChunk",
       delta: "ing",
     } as ChatEvent);
-    expect(result.contentBlocks).toEqual([{ _tag: "reasoning", content: "thinking" }]);
+    expect(result.contentBlocks).toEqual([
+      { _tag: "reasoning", content: "thinking" },
+    ]);
   });
 
   it("creates new reasoning block when last block is not reasoning", () => {
-    const state: StreamState = { contentBlocks: [{ _tag: "text", content: "hi" }] };
+    const state: StreamState = {
+      contentBlocks: [{ _tag: "text", content: "hi" }],
+    };
     const result = accumulateEvent(state, {
       _tag: "ReasoningChunk",
       delta: "let me think",
     } as ChatEvent);
     expect(result.contentBlocks).toHaveLength(2);
-    expect(result.contentBlocks[1]).toEqual({ _tag: "reasoning", content: "let me think" });
+    expect(result.contentBlocks[1]).toEqual({
+      _tag: "reasoning",
+      content: "let me think",
+    });
   });
 
   it("appends tool to existing tool_group", () => {
@@ -55,7 +75,7 @@ describe("accumulateEvent", () => {
           tools: [
             {
               id: "t1",
-              toolName: "getWeather",
+              toolName: "fetchNpcs",
               status: "start",
               input: "{}",
               output: null,
@@ -66,23 +86,25 @@ describe("accumulateEvent", () => {
     };
     const result = accumulateEvent(state, {
       _tag: "ToolStart",
-      toolName: "getCurrentDateTime",
+      toolName: "fetchNpcs",
       input: "{}",
     } as ChatEvent);
     const group = result.contentBlocks[0]!;
     expect(group._tag).toBe("tool_group");
     if (group._tag === "tool_group") {
       expect(group.tools).toHaveLength(2);
-      expect(group.tools[1]!.toolName).toBe("getCurrentDateTime");
+      expect(group.tools[1]!.toolName).toBe("fetchNpcs");
     }
   });
 
   it("creates new tool_group when last block is not tool_group", () => {
-    const state: StreamState = { contentBlocks: [{ _tag: "text", content: "hi" }] };
+    const state: StreamState = {
+      contentBlocks: [{ _tag: "text", content: "hi" }],
+    };
     const result = accumulateEvent(state, {
       _tag: "ToolStart",
-      toolName: "getWeather",
-      input: "{\"city\":\"NY\"}",
+      toolName: "fetchNpcs",
+      input: '{"city":"NY"}',
     } as ChatEvent);
     expect(result.contentBlocks).toHaveLength(2);
     const group = result.contentBlocks[1]!;
@@ -99,12 +121,18 @@ describe("accumulateEvent", () => {
         {
           _tag: "tool_group",
           tools: [
-            { id: "t1", toolName: "getWeather", status: "start", input: "{}", output: null },
+            {
+              id: "t1",
+              toolName: "fetchNpcs",
+              status: "start",
+              input: "{}",
+              output: null,
+            },
             {
               id: "t2",
-              toolName: "getWeather",
+              toolName: "fetchNpcs",
               status: "start",
-              input: "{\"city\":\"LA\"}",
+              input: '{"city":"LA"}',
               output: null,
             },
           ],
@@ -113,7 +141,7 @@ describe("accumulateEvent", () => {
     };
     const result = accumulateEvent(state, {
       _tag: "ToolSuccess",
-      toolName: "getWeather",
+      toolName: "fetchNpcs",
       output: "sunny",
     } as ChatEvent);
     const group = result.contentBlocks[0]!;
@@ -130,14 +158,20 @@ describe("accumulateEvent", () => {
         {
           _tag: "tool_group",
           tools: [
-            { id: "t1", toolName: "getWeather", status: "start", input: "{}", output: null },
+            {
+              id: "t1",
+              toolName: "fetchNpcs",
+              status: "start",
+              input: "{}",
+              output: null,
+            },
           ],
         },
       ],
     };
     const result = accumulateEvent(state, {
       _tag: "ToolFailure",
-      toolName: "getWeather",
+      toolName: "fetchNpcs",
     } as ChatEvent);
     const group = result.contentBlocks[0]!;
     if (group._tag === "tool_group") {
@@ -147,10 +181,18 @@ describe("accumulateEvent", () => {
 
   it("accumulates multiple chunks correctly", () => {
     let state = emptyState;
-    state = accumulateEvent(state, { _tag: "Chunk", delta: "Hello" } as ChatEvent);
+    state = accumulateEvent(state, {
+      _tag: "Chunk",
+      delta: "Hello",
+    } as ChatEvent);
     state = accumulateEvent(state, { _tag: "Chunk", delta: " " } as ChatEvent);
-    state = accumulateEvent(state, { _tag: "Chunk", delta: "world" } as ChatEvent);
-    expect(state.contentBlocks).toEqual([{ _tag: "text", content: "Hello world" }]);
+    state = accumulateEvent(state, {
+      _tag: "Chunk",
+      delta: "world",
+    } as ChatEvent);
+    expect(state.contentBlocks).toEqual([
+      { _tag: "text", content: "Hello world" },
+    ]);
   });
 
   it("handles mixed events creating correct block sequence", () => {
@@ -158,15 +200,18 @@ describe("accumulateEvent", () => {
     state = accumulateEvent(state, { _tag: "Chunk", delta: "Hi" } as ChatEvent);
     state = accumulateEvent(state, {
       _tag: "ToolStart",
-      toolName: "getWeather",
+      toolName: "fetchNpcs",
       input: "{}",
     } as ChatEvent);
     state = accumulateEvent(state, {
       _tag: "ToolSuccess",
-      toolName: "getWeather",
+      toolName: "fetchNpcs",
       output: "sunny",
     } as ChatEvent);
-    state = accumulateEvent(state, { _tag: "Chunk", delta: " result" } as ChatEvent);
+    state = accumulateEvent(state, {
+      _tag: "Chunk",
+      delta: " result",
+    } as ChatEvent);
 
     expect(state.contentBlocks).toHaveLength(3);
     expect(state.contentBlocks[0]!._tag).toBe("text");

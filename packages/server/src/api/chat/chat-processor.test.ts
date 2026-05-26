@@ -11,41 +11,54 @@ import type * as Take from "effect/Take";
 import { ChatProcessor, makePrompt } from "./chat-processor.js";
 import { HandlersLive } from "./chat-toolkit-live.js";
 import { ChatMailbox } from "./chat-toolkit.js";
-import { JokeApi } from "./joke-api.js";
-import { WeatherApi } from "./weather-api.js";
+import { NpcRepo } from "@/db/npc-repo.js";
+import { UserId } from "@app/domain/auth";
+import { NpcId } from "@app/domain/api/npc-rpc";
 
-const makeMailbox = Effect.gen(function*() {
-  const mailbox = yield* PubSub.unbounded<
-    Take.Take<Chat.ChatEvent>
-  >({
+const makeMailbox = Effect.gen(function* () {
+  const mailbox = yield* PubSub.unbounded<Take.Take<Chat.ChatEvent>>({
     replay: 100,
   });
   const events = (n: number) =>
-    Stream.fromPubSubTake(mailbox).pipe(
-      Stream.take(n),
-      Stream.runCollect,
-    );
+    Stream.fromPubSubTake(mailbox).pipe(Stream.take(n), Stream.runCollect);
   return { mailbox, events };
 });
 
-const MockWeatherApi = Layer.mock(WeatherApi)({
-  getForecast: () => Effect.succeed("Sunny, 22°C"),
+const MockNpcRepo = Layer.mock(NpcRepo)({
+  listByUser: () =>
+    Effect.succeed({
+      items: [],
+      hasMore: false,
+    }),
+  create: () =>
+    Effect.succeed({
+      id: NpcId.make("npc-1"),
+      userId: UserId.make("user-1"),
+      title: "Test NPC",
+      description: "A test NPC",
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+    }),
+  delete: () => Effect.succeed(undefined),
+  findById: () =>
+    Effect.succeed({
+      id: NpcId.make("npc-1"),
+      userId: UserId.make("user-1"),
+      title: "Test NPC",
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+    }),
 });
 
-const MockJokeApi = Layer.mock(JokeApi)({
-  fetchRandom: () => Effect.succeed("Why did the chicken cross the road?"),
-});
+const TestHandlers = HandlersLive.pipe(Layer.provide(MockNpcRepo));
 
-const TestHandlers = HandlersLive.pipe(
-  Layer.provide(MockWeatherApi),
-  Layer.provide(MockJokeApi),
-);
-
-const mockChat = (overrides?: Partial<typeof ChatModel.Type>): typeof ChatModel.Type => ({
+const mockChat = (
+  overrides?: Partial<typeof ChatModel.Type>,
+): typeof ChatModel.Type => ({
   id: Chat.ChatId.make("00000000-0000-4000-8000-000000000001"),
   userId: "user-1",
   title: "Test Chat",
-  model: "haiku-4.5",
+  model: "qwen3-0.6b",
   messages: [],
   activeRunId: null,
   createdAt: DateTime.nowUnsafe(),
@@ -67,63 +80,84 @@ describe("makePrompt", () => {
   });
 
   it("user array message maps text parts", () => {
-    const result = makePrompt([{ role: "user", content: [{ type: "text", text: "hello" }] }]);
+    const result = makePrompt([
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+    ]);
     expect(result).toHaveLength(2);
-    expect(result[1]).toEqual({ role: "user", content: [{ type: "text", text: "hello" }] });
+    expect(result[1]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "hello" }],
+    });
   });
 
   it("assistant string message wrapped in text array", () => {
     const result = makePrompt([{ role: "assistant", content: "reply" }]);
     expect(result).toHaveLength(2);
-    expect(result[1]).toEqual({ role: "assistant", content: [{ type: "text", text: "reply" }] });
+    expect(result[1]).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: "reply" }],
+    });
   });
 
   it("assistant array with text and tool-call parts forwarded", () => {
-    const result = makePrompt([{
-      role: "assistant",
-      content: [
-        { type: "text", text: "Using tool" },
-        { type: "tool-call", id: "c1", name: "getCurrentDateTime", params: {} },
-      ],
-    }]);
+    const result = makePrompt([
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Using tool" },
+          {
+            type: "tool-call",
+            id: "c1",
+            name: "fetchNpcs",
+            params: {},
+          },
+        ],
+      },
+    ]);
     expect(result).toHaveLength(2);
     expect(result[1]).toEqual({
       role: "assistant",
       content: [
         { type: "text", text: "Using tool" },
-        { type: "tool-call", id: "c1", name: "getCurrentDateTime", params: {} },
+        { type: "tool-call", id: "c1", name: "fetchNpcs", params: {} },
       ],
     });
   });
 
   it("tool message forwarded", () => {
-    const result = makePrompt([{
-      role: "tool",
-      content: [{
-        type: "tool-result",
-        id: "c1",
-        name: "getCurrentDateTime",
-        result: "2024-01-01T00:00:00Z",
-        isFailure: false,
-      }],
-    }]);
+    const result = makePrompt([
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            id: "c1",
+            name: "fetchNpcs",
+            result: "2024-01-01T00:00:00Z",
+            isFailure: false,
+          },
+        ],
+      },
+    ]);
     expect(result).toHaveLength(2);
     expect(result[1]).toEqual({
       role: "tool",
-      content: [{
-        type: "tool-result",
-        id: "c1",
-        name: "getCurrentDateTime",
-        result: "2024-01-01T00:00:00Z",
-        isFailure: false,
-      }],
+      content: [
+        {
+          type: "tool-result",
+          id: "c1",
+          name: "fetchNpcs",
+          result: "2024-01-01T00:00:00Z",
+          isFailure: false,
+        },
+      ],
     });
   });
 });
 
 describe("ChatProcessor", () => {
   it.effect("text-delta parts become Chunk mailbox events", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const { mailbox, events } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -138,16 +172,19 @@ describe("ChatProcessor", () => {
       const evts = yield* events(1);
       expect(evts).toHaveLength(1);
       expect(evts[0]).toEqual({ _tag: "Chunk", delta: "Hello!" });
-    }).pipe(Effect.provide(ChatProcessor.layer)));
+    }).pipe(Effect.provide(ChatProcessor.layer)),
+  );
 
   it.effect("reasoning-delta parts become ReasoningChunk mailbox events", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const { mailbox, events } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
       yield* processor.run(mockChat(), "Think carefully").pipe(
         withLanguageModel({
-          streamText: [{ type: "reasoning-delta", id: "r1", delta: "Thinking..." }],
+          streamText: [
+            { type: "reasoning-delta", id: "r1", delta: "Thinking..." },
+          ],
         }),
         Effect.provideService(ChatMailbox, mailbox),
         Effect.provide(TestHandlers),
@@ -156,46 +193,58 @@ describe("ChatProcessor", () => {
       const evts = yield* events(1);
       expect(evts).toHaveLength(1);
       expect(evts[0]).toEqual({ _tag: "ReasoningChunk", delta: "Thinking..." });
-    }).pipe(Effect.provide(ChatProcessor.layer)));
+    }).pipe(Effect.provide(ChatProcessor.layer)),
+  );
 
-  it.effect("loop continues on tool-calls finish reason and stops on stop", () =>
-    Effect.gen(function*() {
-      const { mailbox } = yield* makeMailbox;
-      const processor = yield* ChatProcessor;
-      let calls = 0;
+  it.effect(
+    "loop continues on tool-calls finish reason and stops on stop",
+    () =>
+      Effect.gen(function* () {
+        const { mailbox } = yield* makeMailbox;
+        const processor = yield* ChatProcessor;
+        let calls = 0;
 
-      yield* processor.run(mockChat(), "What time is it?").pipe(
-        withLanguageModel({
-          streamText: () => {
-            calls += 1;
-            if (calls === 1) {
-              return [{
-                type: "finish" as const,
-                reason: "tool-calls" as const,
-                usage: {
-                  inputTokens: {
-                    uncached: undefined,
-                    total: undefined,
-                    cacheRead: undefined,
-                    cacheWrite: undefined,
+        yield* processor.run(mockChat(), "What time is it?").pipe(
+          withLanguageModel({
+            streamText: () => {
+              calls += 1;
+              if (calls === 1) {
+                return [
+                  {
+                    type: "finish" as const,
+                    reason: "tool-calls" as const,
+                    usage: {
+                      inputTokens: {
+                        uncached: undefined,
+                        total: undefined,
+                        cacheRead: undefined,
+                        cacheWrite: undefined,
+                      },
+                      outputTokens: {
+                        total: undefined,
+                        text: undefined,
+                        reasoning: undefined,
+                      },
+                    },
+                    response: undefined,
                   },
-                  outputTokens: { total: undefined, text: undefined, reasoning: undefined },
-                },
-                response: undefined,
-              }];
-            }
-            return [{ type: "text-delta" as const, id: "t1", delta: "It is noon." }];
-          },
-        }),
-        Effect.provideService(ChatMailbox, mailbox),
-        Effect.provide(TestHandlers),
-      );
+                ];
+              }
+              return [
+                { type: "text-delta" as const, id: "t1", delta: "It is noon." },
+              ];
+            },
+          }),
+          Effect.provideService(ChatMailbox, mailbox),
+          Effect.provide(TestHandlers),
+        );
 
-      expect(calls).toBe(2);
-    }).pipe(Effect.provide(ChatProcessor.layer)));
+        expect(calls).toBe(2);
+      }).pipe(Effect.provide(ChatProcessor.layer)),
+  );
 
   it.effect("text response is returned as assistant message", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const { mailbox } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -209,10 +258,11 @@ describe("ChatProcessor", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ role: "assistant", content: "Hi there" });
-    }).pipe(Effect.provide(ChatProcessor.layer)));
+    }).pipe(Effect.provide(ChatProcessor.layer)),
+  );
 
   it.effect("user message is NOT in returned array", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const { mailbox } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -225,5 +275,6 @@ describe("ChatProcessor", () => {
       );
 
       expect(result.every((m) => m.role !== "user")).toBe(true);
-    }).pipe(Effect.provide(ChatProcessor.layer)));
+    }).pipe(Effect.provide(ChatProcessor.layer)),
+  );
 });
