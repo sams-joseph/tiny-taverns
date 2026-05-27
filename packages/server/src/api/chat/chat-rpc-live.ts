@@ -41,6 +41,7 @@ export const ChatRpcHandler = Chat.ChatRpc.toLayer(
         return yield* runManager.startGeneration({
           chat,
           message: payload.message,
+          currentUser,
         });
       }),
 

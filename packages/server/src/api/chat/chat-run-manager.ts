@@ -1,8 +1,10 @@
 import { ChatModel } from "@/db/chat-model.js";
 import { ChatRepo } from "@/db/chat-repo.js";
+import { NpcRepo } from "@/db/npc-repo.js";
 import { AiModels } from "@/lib/ai-models.js";
 import { WorkflowRunCoordinator } from "@/lib/workflow-run-coordinator.js";
 import * as Chat from "@app/domain/api/chat-rpc";
+import { CurrentUser, CurrentUserSchema } from "@app/domain/auth";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -20,6 +22,7 @@ const ChatGenerationWorkflow = Workflow.make({
     runId: Chat.RunId,
     chat: ChatModel,
     message: Schema.String,
+    currentUser: CurrentUserSchema,
   },
   success: Schema.Void,
   idempotencyKey: ({ runId }) => runId,
@@ -36,7 +39,11 @@ export class ChatRunManager extends Context.Service<
     readonly startGeneration: (args: {
       readonly chat: typeof ChatModel.Type;
       readonly message: string;
-    }) => Effect.Effect<{ readonly runId: Chat.RunId; }, Chat.GenerationInProgressError>;
+      readonly currentUser: typeof CurrentUserSchema.Type;
+    }) => Effect.Effect<
+      { readonly runId: Chat.RunId; },
+      Chat.GenerationInProgressError
+    >;
     readonly interrupt: (chatId: Chat.ChatId) => Effect.Effect<void>;
   }
 >()("ChatRunManager", {
@@ -44,6 +51,7 @@ export class ChatRunManager extends Context.Service<
     const aiModels = yield* AiModels;
     const processor = yield* ChatProcessor;
     const chatRepo = yield* ChatRepo;
+    const npcRepo = yield* NpcRepo;
 
     const runs = yield* WorkflowRunCoordinator.make<
       Chat.ChatId,
@@ -68,7 +76,10 @@ export class ChatRunManager extends Context.Service<
       busy: (chatId) => new Chat.GenerationInProgressError({ chatId }),
 
       prepare: Effect.fnUntraced(function*(payload) {
-        const userMessage: typeof Chat.Message.Type = { role: "user", content: payload.message };
+        const userMessage: typeof Chat.Message.Type = {
+          role: "user",
+          content: payload.message,
+        };
         const started = yield* chatRepo.startRun({
           chatId: payload.chat.id,
           userId: payload.chat.userId,
@@ -76,20 +87,29 @@ export class ChatRunManager extends Context.Service<
           messages: [...payload.chat.messages, userMessage],
         });
         if (!started) {
-          return yield* new Chat.GenerationInProgressError({ chatId: payload.chat.id });
+          return yield* new Chat.GenerationInProgressError({
+            chatId: payload.chat.id,
+          });
         }
         return { userId: payload.chat.userId } as const;
       }),
 
       run: Effect.fnUntraced(function*({ payload, mailbox }) {
-        const userMessage: typeof Chat.Message.Type = { role: "user", content: payload.message };
+        const userMessage: typeof Chat.Message.Type = {
+          role: "user",
+          content: payload.message,
+        };
 
-        const aiMessages = yield* processor.run(payload.chat, payload.message).pipe(
-          aiModels.use(payload.chat.model),
-          Effect.provide(ChatToolkitLive),
-          Effect.provideService(ChatMailbox, mailbox),
-          Effect.orDie,
-        );
+        const aiMessages = yield* processor
+          .run(payload.chat, payload.message)
+          .pipe(
+            aiModels.use(payload.chat.model),
+            Effect.provide(ChatToolkitLive),
+            Effect.provideService(ChatMailbox, mailbox),
+            Effect.provideService(CurrentUser, payload.currentUser),
+            Effect.provideService(NpcRepo, npcRepo),
+            Effect.orDie,
+          );
 
         yield* chatRepo.finishRun({
           chatId: payload.chat.id,
@@ -109,9 +129,11 @@ export class ChatRunManager extends Context.Service<
 
     return {
       watch: (chatId) =>
-        runs.changes(chatId).pipe(
-          Stream.map((runId) => ({ _tag: "RunChanged" as const, runId })),
-        ),
+        runs
+          .changes(chatId)
+          .pipe(
+            Stream.map((runId) => ({ _tag: "RunChanged" as const, runId })),
+          ),
 
       subscribe: (runId, userId) =>
         Stream.unwrap(
@@ -130,6 +152,7 @@ export class ChatRunManager extends Context.Service<
           runId: Chat.RunId.make(crypto.randomUUID()),
           chat: args.chat,
           message: args.message,
+          currentUser: args.currentUser,
         });
       }),
 
@@ -143,6 +166,7 @@ export class ChatRunManager extends Context.Service<
   ).pipe(
     Layer.provide(AiModels.layer),
     Layer.provide(ChatRepo.layer),
+    Layer.provide(NpcRepo.layer),
     Layer.provide(ChatProcessor.layer),
     Layer.provide(WorkflowEngine.layerMemory),
   );

@@ -1,21 +1,21 @@
+import { NpcRepo } from "@/db/npc-repo.js";
 import type * as Chat from "@app/domain/api/chat-rpc";
+import { NpcId } from "@app/domain/api/npc-rpc";
+import { CurrentUser, UserId } from "@app/domain/auth";
 import { describe, expect, it } from "@effect/vitest";
 import { withLanguageModel } from "@test/utils/with-language-model.js";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 import type * as Take from "effect/Take";
 import { LanguageModel } from "effect/unstable/ai";
 import * as Tool from "effect/unstable/ai/Tool";
 import { HandlersLive } from "./chat-toolkit-live.js";
-import {
-  ChatMailbox,
-  ChatToolkit,
-  createNpc,
-  fetchNpcs,
-} from "./chat-toolkit.js";
+import { ChatMailbox, ChatToolkit, createNpc, fetchNpcs } from "./chat-toolkit.js";
 
-const makeMailbox = Effect.gen(function* () {
+const makeMailbox = Effect.gen(function*() {
   const mailbox = yield* PubSub.unbounded<Take.Take<Chat.ChatEvent>>({
     replay: 100,
   });
@@ -24,7 +24,34 @@ const makeMailbox = Effect.gen(function* () {
   return { mailbox, events };
 });
 
-const TestHandlers = HandlersLive;
+const MockNpcRepo = Layer.mock(NpcRepo)({
+  listByUser: () => Effect.succeed({ items: [], hasMore: false }),
+  create: () =>
+    Effect.succeed({
+      id: NpcId.make("npc-1"),
+      userId: "00000000-0000-4000-8000-000000000001",
+      title: "Test NPC",
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+    }),
+  findById: () =>
+    Effect.succeed({
+      id: NpcId.make("npc-1"),
+      userId: "00000000-0000-4000-8000-000000000001",
+      title: "Test NPC",
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+    }),
+  delete: () => Effect.void,
+});
+
+const TestHandlers = HandlersLive.pipe(Layer.provide(MockNpcRepo));
+
+const testCurrentUser = {
+  id: UserId.make("00000000-0000-4000-8000-000000000001"),
+  name: "Test User",
+  email: "test@example.com",
+};
 
 describe("chat toolkit handlers", () => {
   it("uses Anthropic-compatible object schemas for tool inputs", () => {
@@ -34,7 +61,7 @@ describe("chat toolkit handlers", () => {
   });
 
   it.effect("streams tool events through mailbox during streamText", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const { mailbox, events } = yield* makeMailbox;
 
       const parts = yield* LanguageModel.streamText({
@@ -53,6 +80,7 @@ describe("chat toolkit handlers", () => {
           ],
         }),
         Effect.provideService(ChatMailbox, mailbox),
+        Effect.provideService(CurrentUser, testCurrentUser),
         Effect.provide(TestHandlers),
       );
 
@@ -62,6 +90,5 @@ describe("chat toolkit handlers", () => {
       const evts = yield* events(2);
       expect(evts.some((e) => e._tag === "ToolStart")).toBe(true);
       expect(evts.some((e) => e._tag === "ToolSuccess")).toBe(true);
-    }),
-  );
+    }));
 });

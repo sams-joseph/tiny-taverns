@@ -1,8 +1,10 @@
 import { AuthMiddlewareLive } from "@/api/auth-middleware-live.js";
 import type { ChatModel } from "@/db/chat-model.js";
 import { ChatRepo } from "@/db/chat-repo.js";
+import { NpcRepo } from "@/db/npc-repo.js";
 import { AiModels } from "@/lib/ai-models.js";
 import * as Chat from "@app/domain/api/chat-rpc";
+import { NpcId } from "@app/domain/api/npc-rpc";
 import { describe, expect, it } from "@effect/vitest";
 import { withLanguageModel } from "@test/utils/with-language-model.js";
 import * as Cause from "effect/Cause";
@@ -43,8 +45,7 @@ const MockAiModels = Layer.mock(AiModels)({
 });
 
 const MockChatRepo = Layer.mock(ChatRepo)({
-  create: ({ userId, title, model }) =>
-    Effect.succeed(mockChat({ userId, title, model })),
+  create: ({ userId, title, model }) => Effect.succeed(mockChat({ userId, title, model })),
   findById: (chatId, _userId) => Effect.succeed(mockChat({ id: chatId })),
   listByUser: () => Effect.succeed({ items: [mockChat()], hasMore: false }),
   delete: () => Effect.void,
@@ -88,6 +89,27 @@ const DelayedFailingAiModels = Layer.mock(AiModels)({
     ).pipe(Effect.delay("100 millis")) as any,
 });
 
+const MockNpcRepo = Layer.mock(NpcRepo)({
+  listByUser: () => Effect.succeed({ items: [], hasMore: false }),
+  create: ({ userId, title }) =>
+    Effect.succeed({
+      id: NpcId.make("00000000-0000-4000-8000-000000000001"),
+      userId,
+      title,
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+    }),
+  findById: (id, userId) =>
+    Effect.succeed({
+      id,
+      userId,
+      title: "Test NPC",
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+    }),
+  delete: () => Effect.void,
+});
+
 const makeRunManagerLayer = (
   repoLayer: Layer.Layer<ChatRepo>,
   aiLayer: Layer.Layer<AiModels> = MockAiModels,
@@ -95,6 +117,7 @@ const makeRunManagerLayer = (
   Layer.effect(ChatRunManager, ChatRunManager.make).pipe(
     Layer.provide(aiLayer),
     Layer.provide(repoLayer),
+    Layer.provide(MockNpcRepo),
     Layer.provide(ChatProcessor.layer),
     Layer.provide(WorkflowEngine.layerMemory),
   );
@@ -117,71 +140,64 @@ const NotFoundLayer = Layer.mergeAll(
 
 describe("ChatRpc", () => {
   it.effect("chat_create returns a Chat", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const result = yield* client.chat_create({
         title: "New Chat",
-        model: "haiku-4.5",
+        model: "qwen3-0.6b",
       });
       expect(result.title).toBe("New Chat");
-      expect(result.model).toBe("haiku-4.5");
-    }).pipe(Effect.provide(TestLayer)),
-  );
+      expect(result.model).toBe("qwen3-0.6b");
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_list returns items and hasMore", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const result = yield* client.chat_list({ cursor: null });
       expect(result.items).toHaveLength(1);
       expect(result.hasMore).toBe(false);
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_get returns Chat.WithMessages", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       const result = yield* client.chat_get({ chatId });
       expect(result.id).toBe(chatId);
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_delete succeeds", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       yield* client.chat_delete({ chatId });
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_delete fails with ChatNotFoundError when not found", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000099");
       const exit = yield* client.chat_delete({ chatId }).pipe(Effect.exit);
       expect(exit._tag).toBe("Failure");
-    }).pipe(Effect.provide(NotFoundLayer)),
-  );
+    }).pipe(Effect.provide(NotFoundLayer)));
 
   it.effect("chat_ask fails with ChatNotFoundError for invalid chatId", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000099");
       const exit = yield* client
         .chat_ask({ chatId, message: "Hello" })
         .pipe(Effect.exit);
       expect(exit._tag).toBe("Failure");
-    }).pipe(Effect.provide(NotFoundLayer)),
-  );
+    }).pipe(Effect.provide(NotFoundLayer)));
 
   it.effect("chat_ask returns a runId", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       const result = yield* client.chat_ask({ chatId, message: "Hello" });
       expect(result.runId).toBeDefined();
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.live(
     "chat_ask saves user message before starting generation",
@@ -190,15 +206,12 @@ describe("ChatRpc", () => {
         ReadonlyArray<typeof Chat.Message.Type>
       >([]);
       const TrackingRepo = Layer.mock(ChatRepo)({
-        create: ({ userId, title, model }) =>
-          Effect.succeed(mockChat({ userId, title, model })),
+        create: ({ userId, title, model }) => Effect.succeed(mockChat({ userId, title, model })),
         findById: (chatId, _userId) => Effect.succeed(mockChat({ id: chatId })),
-        listByUser: () =>
-          Effect.succeed({ items: [mockChat()], hasMore: false }),
+        listByUser: () => Effect.succeed({ items: [mockChat()], hasMore: false }),
         delete: () => Effect.void,
         updateMessages: ({ messages }) => Ref.set(updatedRef, messages),
-        startRun: ({ messages }) =>
-          Ref.set(updatedRef, messages).pipe(Effect.as(true)),
+        startRun: ({ messages }) => Ref.set(updatedRef, messages).pipe(Effect.as(true)),
         finishRun: () => Effect.void,
         clearActiveRun: () => Effect.void,
       });
@@ -209,7 +222,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -238,7 +251,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -265,7 +278,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -306,7 +319,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -329,10 +342,9 @@ describe("ChatRpc", () => {
   );
 
   it.effect("chat_interrupt is no-op when no generation running", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       yield* client.chat_interrupt({ chatId });
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 });
