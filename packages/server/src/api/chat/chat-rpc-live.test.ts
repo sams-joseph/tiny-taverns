@@ -26,6 +26,7 @@ const mockChat = (
 ): typeof ChatModel.Type => ({
   id: Chat.ChatId.make("00000000-0000-4000-8000-000000000001"),
   userId: "00000000-0000-4000-8000-000000000001",
+  campaignId: null,
   title: "Test Chat",
   model: "qwen3-0.6b",
   messages: [],

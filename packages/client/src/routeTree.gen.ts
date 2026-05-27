@@ -9,17 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ChatRouteRouteImport } from './routes/chat/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as NpcsIndexRouteImport } from './routes/npcs/index'
-import { Route as ChatIndexRouteImport } from './routes/chat/index'
-import { Route as ChatChatIdRouteImport } from './routes/chat/$chatId'
+import { Route as CampaignsIndexRouteImport } from './routes/campaigns/index'
+import { Route as CampaignsCampaignIdIndexRouteImport } from './routes/campaigns/$campaignId/index'
+import { Route as CampaignsCampaignIdConversationsChatIdRouteImport } from './routes/campaigns/$campaignId/conversations/$chatId'
 
-const ChatRouteRoute = ChatRouteRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -30,61 +25,80 @@ const NpcsIndexRoute = NpcsIndexRouteImport.update({
   path: '/npcs/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChatIndexRoute = ChatIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ChatRouteRoute,
+const CampaignsIndexRoute = CampaignsIndexRouteImport.update({
+  id: '/campaigns/',
+  path: '/campaigns/',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const ChatChatIdRoute = ChatChatIdRouteImport.update({
-  id: '/$chatId',
-  path: '/$chatId',
-  getParentRoute: () => ChatRouteRoute,
-} as any)
+const CampaignsCampaignIdIndexRoute =
+  CampaignsCampaignIdIndexRouteImport.update({
+    id: '/campaigns/$campaignId/',
+    path: '/campaigns/$campaignId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const CampaignsCampaignIdConversationsChatIdRoute =
+  CampaignsCampaignIdConversationsChatIdRouteImport.update({
+    id: '/campaigns/$campaignId/conversations/$chatId',
+    path: '/campaigns/$campaignId/conversations/$chatId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/chat': typeof ChatRouteRouteWithChildren
-  '/chat/$chatId': typeof ChatChatIdRoute
-  '/chat/': typeof ChatIndexRoute
+  '/campaigns/': typeof CampaignsIndexRoute
   '/npcs/': typeof NpcsIndexRoute
+  '/campaigns/$campaignId/': typeof CampaignsCampaignIdIndexRoute
+  '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/chat/$chatId': typeof ChatChatIdRoute
-  '/chat': typeof ChatIndexRoute
+  '/campaigns': typeof CampaignsIndexRoute
   '/npcs': typeof NpcsIndexRoute
+  '/campaigns/$campaignId': typeof CampaignsCampaignIdIndexRoute
+  '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/chat': typeof ChatRouteRouteWithChildren
-  '/chat/$chatId': typeof ChatChatIdRoute
-  '/chat/': typeof ChatIndexRoute
+  '/campaigns/': typeof CampaignsIndexRoute
   '/npcs/': typeof NpcsIndexRoute
+  '/campaigns/$campaignId/': typeof CampaignsCampaignIdIndexRoute
+  '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chat' | '/chat/$chatId' | '/chat/' | '/npcs/'
+  fullPaths:
+    | '/'
+    | '/campaigns/'
+    | '/npcs/'
+    | '/campaigns/$campaignId/'
+    | '/campaigns/$campaignId/conversations/$chatId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chat/$chatId' | '/chat' | '/npcs'
-  id: '__root__' | '/' | '/chat' | '/chat/$chatId' | '/chat/' | '/npcs/'
+  to:
+    | '/'
+    | '/campaigns'
+    | '/npcs'
+    | '/campaigns/$campaignId'
+    | '/campaigns/$campaignId/conversations/$chatId'
+  id:
+    | '__root__'
+    | '/'
+    | '/campaigns/'
+    | '/npcs/'
+    | '/campaigns/$campaignId/'
+    | '/campaigns/$campaignId/conversations/$chatId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ChatRouteRoute: typeof ChatRouteRouteWithChildren
+  CampaignsIndexRoute: typeof CampaignsIndexRoute
   NpcsIndexRoute: typeof NpcsIndexRoute
+  CampaignsCampaignIdIndexRoute: typeof CampaignsCampaignIdIndexRoute
+  CampaignsCampaignIdConversationsChatIdRoute: typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -99,41 +113,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NpcsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chat/': {
-      id: '/chat/'
-      path: '/'
-      fullPath: '/chat/'
-      preLoaderRoute: typeof ChatIndexRouteImport
-      parentRoute: typeof ChatRouteRoute
+    '/campaigns/': {
+      id: '/campaigns/'
+      path: '/campaigns'
+      fullPath: '/campaigns/'
+      preLoaderRoute: typeof CampaignsIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/chat/$chatId': {
-      id: '/chat/$chatId'
-      path: '/$chatId'
-      fullPath: '/chat/$chatId'
-      preLoaderRoute: typeof ChatChatIdRouteImport
-      parentRoute: typeof ChatRouteRoute
+    '/campaigns/$campaignId/': {
+      id: '/campaigns/$campaignId/'
+      path: '/campaigns/$campaignId'
+      fullPath: '/campaigns/$campaignId/'
+      preLoaderRoute: typeof CampaignsCampaignIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/campaigns/$campaignId/conversations/$chatId': {
+      id: '/campaigns/$campaignId/conversations/$chatId'
+      path: '/campaigns/$campaignId/conversations/$chatId'
+      fullPath: '/campaigns/$campaignId/conversations/$chatId'
+      preLoaderRoute: typeof CampaignsCampaignIdConversationsChatIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
 
-interface ChatRouteRouteChildren {
-  ChatChatIdRoute: typeof ChatChatIdRoute
-  ChatIndexRoute: typeof ChatIndexRoute
-}
-
-const ChatRouteRouteChildren: ChatRouteRouteChildren = {
-  ChatChatIdRoute: ChatChatIdRoute,
-  ChatIndexRoute: ChatIndexRoute,
-}
-
-const ChatRouteRouteWithChildren = ChatRouteRoute._addFileChildren(
-  ChatRouteRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ChatRouteRoute: ChatRouteRouteWithChildren,
+  CampaignsIndexRoute: CampaignsIndexRoute,
   NpcsIndexRoute: NpcsIndexRoute,
+  CampaignsCampaignIdIndexRoute: CampaignsCampaignIdIndexRoute,
+  CampaignsCampaignIdConversationsChatIdRoute:
+    CampaignsCampaignIdConversationsChatIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

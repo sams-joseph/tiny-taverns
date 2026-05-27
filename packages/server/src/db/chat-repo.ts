@@ -1,4 +1,5 @@
 import { ModelFamily } from "@app/domain/ai-models";
+import * as Campaign from "@app/domain/api/campaign-rpc";
 import * as Chat from "@app/domain/api/chat-rpc";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -14,6 +15,7 @@ import { PgLive } from "./pg-live.js";
 export class ChatRepo extends Context.Service<ChatRepo, {
   readonly create: (args: {
     readonly userId: string;
+    readonly campaignId?: Campaign.CampaignId;
     readonly title: string;
     readonly model: typeof ModelFamily.Type;
   }) => Effect.Effect<typeof ChatModel.Type>;
@@ -161,9 +163,10 @@ export class ChatRepo extends Context.Service<ChatRepo, {
     });
 
     return {
-      create: ({ userId, title, model }) =>
+      create: ({ userId, campaignId, title, model }) =>
         insertQuery(ChatModel.insert.make({
           userId,
+          campaignId: campaignId ?? null,
           title,
           model,
           messages: [],

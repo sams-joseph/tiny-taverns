@@ -6,6 +6,7 @@ import * as HttpRouter from "effect/unstable/http/HttpRouter";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { AuthMiddlewareLive } from "./api/auth-middleware-live.js";
+import { CampaignRpcLive } from "./api/campaigns-rpc-live.js";
 import { ChatRpcLive } from "./api/chat/chat-rpc-live.js";
 import { UsersRpcLive } from "./api/users-rpc-live.js";
 import { MigrationLayer } from "./db/migrator.js";
@@ -22,6 +23,7 @@ const AllRoutes = Layer.mergeAll(RpcRouter).pipe(
   Layer.provide(
     Layer.mergeAll(
       UsersRpcLive,
+      CampaignRpcLive,
       ChatRpcLive,
       NpcRpcLive,
       AuthMiddlewareLive,
