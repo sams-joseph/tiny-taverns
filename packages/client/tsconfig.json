@@ -3,7 +3,12 @@
   "include": [],
   "compilerOptions": {
     "composite": false,
-    "declaration": false
+    "declaration": false,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@app/domain": ["../domain/src/index.js"],
+      "@app/domain/*": ["../domain/src/*.js"]
+    }
   },
   "references": [{ "path": "tsconfig.app.json" }, { "path": "tsconfig.node.json" }]
 }
