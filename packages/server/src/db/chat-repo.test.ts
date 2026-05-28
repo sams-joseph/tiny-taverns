@@ -1,3 +1,4 @@
+import * as Campaign from "@app/domain/api/campaign-rpc";
 import * as Chat from "@app/domain/api/chat-rpc";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as PgMigrator from "@effect/sql-pg/PgMigrator";
@@ -8,6 +9,9 @@ import * as Option from "effect/Option";
 import * as Migrator from "effect/unstable/sql/Migrator";
 import { ChatRepo } from "./chat-repo.js";
 import { PgTest, withTransactionRollback } from "./pg-test.js";
+
+const CAMPAIGN_ID = Campaign.CampaignId.make("00000000-0000-4000-8000-000000000010");
+const OTHER_CAMPAIGN_ID = Campaign.CampaignId.make("00000000-0000-4000-8000-000000000011");
 
 const TestMigrationLayer = PgMigrator.layer({
   loader: Migrator.fromGlob(import.meta.glob("./migrations/*.ts")),
@@ -24,16 +28,18 @@ describe("ChatRepo", () => {
       "create inserts chat and returns it with generated id, createdAt, updatedAt",
       () =>
         withTransactionRollback(
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const repo = yield* ChatRepo;
             const chat = yield* repo.create({
               userId: "user-1",
+              campaignId: CAMPAIGN_ID,
               title: "My Chat",
               model: "qwen3-0.6b",
             });
             expect(chat.title).toBe("My Chat");
             expect(chat.model).toBe("qwen3-0.6b");
             expect(chat.userId).toBe("user-1");
+            expect(chat.campaignId).toBe(CAMPAIGN_ID);
             expect(chat.id).toBeDefined();
             expect(chat.createdAt).toBeDefined();
             expect(chat.updatedAt).toBeDefined();
@@ -44,101 +50,131 @@ describe("ChatRepo", () => {
 
     it.effect("findById returns chat when id and userId match", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const repo = yield* ChatRepo;
           const created = yield* repo.create({
             userId: "user-1",
+            campaignId: CAMPAIGN_ID,
             title: "Find Me",
             model: "qwen3-0.6b",
           });
-          const found = yield* repo.findById(created.id, "user-1");
+          const found = yield* repo.findById(created.id, "user-1", CAMPAIGN_ID);
           expect(found.id).toBe(created.id);
           expect(found.title).toBe("Find Me");
         }),
-      ),
-    );
+      ));
 
     it.effect(
       "findById fails with ChatNotFoundError when userId does not match",
       () =>
         withTransactionRollback(
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const repo = yield* ChatRepo;
             const created = yield* repo.create({
               userId: "user-1",
+              campaignId: CAMPAIGN_ID,
               title: "Secret",
               model: "qwen3-0.6b",
             });
             const exit = yield* repo
-              .findById(created.id, "user-2")
+              .findById(created.id, "user-2", CAMPAIGN_ID)
               .pipe(Effect.exit);
             expect(exit._tag).toBe("Failure");
           }),
         ),
     );
 
+    it.effect("findById fails when campaignId does not match", () =>
+      withTransactionRollback(
+        Effect.gen(function*() {
+          const repo = yield* ChatRepo;
+          const created = yield* repo.create({
+            userId: "user-1",
+            campaignId: CAMPAIGN_ID,
+            title: "Wrong Campaign",
+            model: "qwen3-0.6b",
+          });
+
+          const exit = yield* repo
+            .findById(created.id, "user-1", OTHER_CAMPAIGN_ID)
+            .pipe(Effect.exit);
+
+          expect(exit._tag).toBe("Failure");
+        }),
+      ));
+
     it.effect("findById fails with ChatNotFoundError for non-existent id", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const repo = yield* ChatRepo;
           const fakeId = Chat.ChatId.make(
             "00000000-0000-4000-8000-000000000099",
           );
-          const exit = yield* repo.findById(fakeId, "user-1").pipe(Effect.exit);
+          const exit = yield* repo.findById(fakeId, "user-1", CAMPAIGN_ID).pipe(Effect.exit);
           expect(exit._tag).toBe("Failure");
         }),
-      ),
-    );
+      ));
 
-    it.effect("listByUser returns chats ordered by updatedAt desc", () =>
+    it.effect("listByCampaign returns chats ordered by updatedAt desc", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const repo = yield* ChatRepo;
           yield* repo.create({
             userId: "user-1",
+            campaignId: CAMPAIGN_ID,
             title: "Chat A",
             model: "qwen3-0.6b",
           });
           yield* repo.create({
             userId: "user-1",
+            campaignId: CAMPAIGN_ID,
             title: "Chat B",
             model: "qwen3-0.6b",
           });
           yield* repo.create({
             userId: "user-2",
+            campaignId: OTHER_CAMPAIGN_ID,
             title: "Other User",
             model: "qwen3-0.6b",
           });
+          yield* repo.create({
+            userId: "user-1",
+            campaignId: OTHER_CAMPAIGN_ID,
+            title: "Other Campaign",
+            model: "qwen3-0.6b",
+          });
 
-          const result = yield* repo.listByUser("user-1", Option.none());
+          const result = yield* repo.listByCampaign("user-1", CAMPAIGN_ID, Option.none());
           expect(result.items).toHaveLength(2);
           expect(result.hasMore).toBe(false);
           const titles = result.items.map((c) => c.title);
           expect(titles).toContain("Chat A");
           expect(titles).toContain("Chat B");
         }),
-      ),
-    );
+      ));
 
     it.effect(
-      "listByUser pagination: cursor excludes items at or after it",
+      "listByCampaign pagination: cursor excludes items at or after it",
       () =>
         withTransactionRollback(
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const repo = yield* ChatRepo;
             yield* repo.create({
               userId: "user-1",
+              campaignId: CAMPAIGN_ID,
               title: "Old",
               model: "qwen3-0.6b",
             });
             const newer = yield* repo.create({
               userId: "user-1",
+              campaignId: CAMPAIGN_ID,
               title: "New",
               model: "qwen3-0.6b",
             });
 
-            const result = yield* repo.listByUser(
+            const result = yield* repo.listByCampaign(
               "user-1",
+              CAMPAIGN_ID,
               Option.some(newer.updatedAt),
             );
             expect(result.items.every((c) => c.title !== "New")).toBe(true);
@@ -148,43 +184,63 @@ describe("ChatRepo", () => {
 
     it.effect("delete removes chat", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const repo = yield* ChatRepo;
           const chat = yield* repo.create({
             userId: "user-1",
+            campaignId: CAMPAIGN_ID,
             title: "Delete Me",
             model: "qwen3-0.6b",
           });
-          yield* repo.delete(chat.id, "user-1");
+          yield* repo.delete(chat.id, "user-1", CAMPAIGN_ID);
           const exit = yield* repo
-            .findById(chat.id, "user-1")
+            .findById(chat.id, "user-1", CAMPAIGN_ID)
             .pipe(Effect.exit);
           expect(exit._tag).toBe("Failure");
         }),
-      ),
-    );
+      ));
 
     it.effect("delete fails with ChatNotFoundError for wrong userId", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const repo = yield* ChatRepo;
           const chat = yield* repo.create({
             userId: "user-1",
+            campaignId: CAMPAIGN_ID,
             title: "Mine",
             model: "qwen3-0.6b",
           });
-          const exit = yield* repo.delete(chat.id, "user-2").pipe(Effect.exit);
+          const exit = yield* repo.delete(chat.id, "user-2", CAMPAIGN_ID).pipe(Effect.exit);
           expect(exit._tag).toBe("Failure");
         }),
-      ),
-    );
+      ));
 
-    it.effect("updateMessages persists new messages array", () =>
+    it.effect("delete fails with ChatNotFoundError for wrong campaignId", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const repo = yield* ChatRepo;
           const chat = yield* repo.create({
             userId: "user-1",
+            campaignId: CAMPAIGN_ID,
+            title: "Wrong Campaign Delete",
+            model: "qwen3-0.6b",
+          });
+
+          const exit = yield* repo
+            .delete(chat.id, "user-1", OTHER_CAMPAIGN_ID)
+            .pipe(Effect.exit);
+
+          expect(exit._tag).toBe("Failure");
+        }),
+      ));
+
+    it.effect("updateMessages persists new messages array", () =>
+      withTransactionRollback(
+        Effect.gen(function*() {
+          const repo = yield* ChatRepo;
+          const chat = yield* repo.create({
+            userId: "user-1",
+            campaignId: CAMPAIGN_ID,
             title: "Msg Test",
             model: "qwen3-0.6b",
           });
@@ -198,7 +254,7 @@ describe("ChatRepo", () => {
             ],
           });
 
-          const updated = yield* repo.findById(chat.id, "user-1");
+          const updated = yield* repo.findById(chat.id, "user-1", CAMPAIGN_ID);
           expect(updated.messages).toHaveLength(2);
           expect(updated.messages[0]).toEqual({
             role: "user",
@@ -209,17 +265,17 @@ describe("ChatRepo", () => {
             content: "Hi there",
           });
         }),
-      ),
-    );
+      ));
 
     it.effect(
       "updateMessages round-trips tool-call and tool-result entries",
       () =>
         withTransactionRollback(
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const repo = yield* ChatRepo;
             const chat = yield* repo.create({
               userId: "user-1",
+              campaignId: CAMPAIGN_ID,
               title: "Tools",
               model: "qwen3-0.6b",
             });
@@ -262,7 +318,7 @@ describe("ChatRepo", () => {
               messages,
             });
 
-            const updated = yield* repo.findById(chat.id, "user-1");
+            const updated = yield* repo.findById(chat.id, "user-1", CAMPAIGN_ID);
             expect(updated.messages).toHaveLength(4);
             expect(updated.messages[1]!.role).toBe("assistant");
             expect(Array.isArray(updated.messages[1]!.content)).toBe(true);

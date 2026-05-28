@@ -1,3 +1,4 @@
+import type { CampaignId } from "@app/domain/api/campaign-rpc";
 import type { ChatId } from "@app/domain/api/chat-rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { BotIcon } from "lucide-react";
@@ -12,14 +13,18 @@ const SCROLL_THRESHOLD = 50;
 const EmptyState = () => (
   <div className="flex-1 flex flex-col items-center justify-center text-muted gap-4">
     <BotIcon className="size-12 text-dimmed" />
-    <h2 className="text-xl font-medium text-foreground">Start a conversation</h2>
-    <p className="text-sm">Send a message to begin chatting.</p>
+    <h2 className="text-xl font-medium text-foreground">Start a Conversation</h2>
+    <p className="text-sm">Send a message to begin this Conversation.</p>
   </div>
 );
 
-export const MessageList = ({ chatId }: { readonly chatId: ChatId; }) => {
-  const messages = useAtomValue(messagesFamily(chatId));
-  const isGenerating = useAtomValue(generatingFamily(chatId));
+export const MessageList = ({
+  conversationKey,
+}: {
+  readonly conversationKey: { readonly campaignId: CampaignId; readonly chatId: ChatId; };
+}) => {
+  const messages = useAtomValue(messagesFamily(conversationKey));
+  const isGenerating = useAtomValue(generatingFamily(conversationKey));
   const ref = React.useRef<VListHandle>(null);
   const shouldStickToBottom = React.useRef(true);
 

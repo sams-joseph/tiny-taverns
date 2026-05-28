@@ -1,14 +1,10 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import { ChatId } from "./chat-rpc.js";
 import { AuthMiddleware } from "../auth.js";
+import { CampaignId, ChatId } from "./ids.js";
 
-export const CampaignId = Schema.String.pipe(
-  Schema.check(Schema.isUUID(undefined)),
-  Schema.brand("CampaignId"),
-);
-export type CampaignId = typeof CampaignId.Type;
+export { CampaignId } from "./ids.js";
 
 export class CampaignNotFoundError extends Schema.TaggedErrorClass<CampaignNotFoundError>()(
   "CampaignNotFoundError",

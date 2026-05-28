@@ -1,3 +1,4 @@
+import type { CampaignId } from "@app/domain/api/campaign-rpc";
 import type { ChatId } from "@app/domain/api/chat-rpc";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -7,9 +8,19 @@ import { chatDataFamily, watchChatFamily } from "./chat-atoms.js";
 import { ChatInput } from "./chat-input.js";
 import { MessageList } from "./message-list.js";
 
-export const ChatPage = ({ chatId }: { readonly chatId: ChatId }) => {
-  const chatAtom = chatDataFamily(chatId);
-  const watchAtom = watchChatFamily(chatId);
+export const ChatPage = ({
+  campaignId,
+  chatId,
+}: {
+  readonly campaignId: CampaignId;
+  readonly chatId: ChatId;
+}) => {
+  const conversationKey = React.useMemo(
+    () => ({ campaignId, chatId }),
+    [campaignId, chatId],
+  );
+  const chatAtom = chatDataFamily(conversationKey);
+  const watchAtom = watchChatFamily(conversationKey);
   const chatResult = useAtomValue(chatAtom);
   const watchResult = useAtomValue(watchAtom);
   const setWatchChat = useAtomSet(watchAtom);
@@ -23,8 +34,8 @@ export const ChatPage = ({ chatId }: { readonly chatId: ChatId }) => {
       return;
     }
     if (
-      !AsyncResult.isInitial(watchResult) &&
-      !AsyncResult.isFailure(watchResult)
+      !AsyncResult.isInitial(watchResult)
+      && !AsyncResult.isFailure(watchResult)
     ) {
       return;
     }
@@ -32,8 +43,8 @@ export const ChatPage = ({ chatId }: { readonly chatId: ChatId }) => {
   }, [activeRunId, setWatchChat, watchResult]);
 
   if (
-    AsyncResult.isInitial(chatResult) ||
-    (chatResult.waiting && !AsyncResult.isSuccess(chatResult))
+    AsyncResult.isInitial(chatResult)
+    || (chatResult.waiting && !AsyncResult.isSuccess(chatResult))
   ) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -45,15 +56,15 @@ export const ChatPage = ({ chatId }: { readonly chatId: ChatId }) => {
   if (AsyncResult.isFailure(chatResult)) {
     return (
       <div className="flex-1 flex items-center justify-center text-danger">
-        <p>Failed to load chat</p>
+        <p>Failed to load Conversation</p>
       </div>
     );
   }
 
   return (
     <div className="flex-1 flex flex-col min-h-full max-w-4xl mx-auto">
-      <MessageList chatId={chatId} />
-      <ChatInput chatId={chatId} />
+      <MessageList conversationKey={conversationKey} />
+      <ChatInput conversationKey={conversationKey} />
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import { ModelFamily } from "@app/domain/ai-models";
+import { CampaignId } from "@app/domain/api/campaign-rpc";
 import { ChatId, RunId } from "@app/domain/api/chat-rpc";
 import type { ChatEvent, Message } from "@app/domain/api/chat-rpc";
 import * as BrowserKeyValueStore from "@effect/platform-browser/BrowserKeyValueStore";
@@ -45,6 +46,11 @@ type LocalTranscript =
 
 const localNone: LocalTranscript = { _tag: "None" };
 const localDeleted: LocalTranscript = { _tag: "Deleted" };
+
+type ConversationKey = {
+  readonly campaignId: CampaignId;
+  readonly chatId: ChatId;
+};
 
 export const selectedModelAtom = Atom.kvs({
   runtime: preferencesRuntime,
@@ -172,26 +178,26 @@ export const convertPersistedMessages = (
   return result;
 };
 
-const localTranscriptFamily = Atom.family((_chatId: ChatId) =>
+const localTranscriptFamily = Atom.family((_key: ConversationKey) =>
   Atom.make<LocalTranscript>(localNone).pipe(Atom.setIdleTTL("1 minute"))
 );
 
-export const inputFamily = Atom.family((_chatId: ChatId) =>
+export const inputFamily = Atom.family((_key: ConversationKey) =>
   Atom.make("").pipe(Atom.setIdleTTL("1 day"))
 );
 
-export const chatDataFamily = Atom.family((chatId: ChatId) =>
+export const chatDataFamily = Atom.family((key: ConversationKey) =>
   chatRuntime.atom(
     Effect.gen(function*() {
       const api = yield* ChatApi;
-      return yield* api.chatGet(chatId);
+      return yield* api.chatGet(key);
     }),
   )
 );
 
-const chatViewFamily = Atom.family((chatId: ChatId) =>
+const chatViewFamily = Atom.family((key: ConversationKey) =>
   Atom.readable((get) => {
-    const local = get(localTranscriptFamily(chatId));
+    const local = get(localTranscriptFamily(key));
     switch (local._tag) {
       case "Deleted":
         return { messages: [], generating: false } as const;
@@ -202,7 +208,7 @@ const chatViewFamily = Atom.family((chatId: ChatId) =>
       case "Overlay":
         return { messages: local.messages, generating: false } as const;
       case "None": {
-        const chatResult = get(chatDataFamily(chatId));
+        const chatResult = get(chatDataFamily(key));
         if (!AsyncResult.isSuccess(chatResult)) {
           return { messages: [], generating: false } as const;
         }
@@ -215,12 +221,12 @@ const chatViewFamily = Atom.family((chatId: ChatId) =>
   })
 );
 
-export const messagesFamily = Atom.family((chatId: ChatId) =>
-  Atom.make((get) => get(chatViewFamily(chatId)).messages)
+export const messagesFamily = Atom.family((key: ConversationKey) =>
+  Atom.make((get) => get(chatViewFamily(key)).messages)
 );
 
-export const generatingFamily = Atom.family((chatId: ChatId) =>
-  Atom.make((get) => get(chatViewFamily(chatId)).generating)
+export const generatingFamily = Atom.family((key: ConversationKey) =>
+  Atom.make((get) => get(chatViewFamily(key)).generating)
 );
 
 const appendAssistantPlaceholder = ({
@@ -319,51 +325,51 @@ const makeCompletionRaceOverlay = ({
 
 const refreshChat = Effect.fnUntraced(function*({
   get,
-  chatId,
+  key,
 }: {
   readonly get: Atom.FnContext;
-  readonly chatId: ChatId;
+  readonly key: ConversationKey;
 }) {
-  get.refresh(chatDataFamily(chatId));
-  return yield* get.result(chatDataFamily(chatId), { suspendOnWaiting: true });
+  get.refresh(chatDataFamily(key));
+  return yield* get.result(chatDataFamily(key), { suspendOnWaiting: true });
 });
 
 const loadAuthoritativeMessages = Effect.fnUntraced(function*({
   get,
-  chatId,
+  key,
   forceRefresh,
 }: {
   readonly get: Atom.FnContext;
-  readonly chatId: ChatId;
+  readonly key: ConversationKey;
   readonly forceRefresh: boolean;
 }) {
   if (!forceRefresh) {
-    const chatResult = get(chatDataFamily(chatId));
+    const chatResult = get(chatDataFamily(key));
     if (AsyncResult.isSuccess(chatResult)) {
       return convertPersistedMessages(chatResult.value.messages);
     }
   }
-  const chat = yield* refreshChat({ get, chatId });
+  const chat = yield* refreshChat({ get, key });
   return convertPersistedMessages(chat.messages);
 });
 
 const runStream = Effect.fnUntraced(function*({
   get,
-  chatId,
+  key,
   runId,
 }: {
   readonly get: Atom.FnContext;
-  readonly chatId: ChatId;
+  readonly key: ConversationKey;
   readonly runId: RunId;
 }) {
   const api = yield* ChatApi;
 
   let state: StreamState = { contentBlocks: [] };
 
-  yield* api.chatEvents(runId).pipe(
+  yield* api.chatEvents({ campaignId: key.campaignId, runId }).pipe(
     Stream.runForEach((event: ChatEvent) =>
       Effect.sync(() => {
-        const local = get(localTranscriptFamily(chatId));
+        const local = get(localTranscriptFamily(key));
         if (local._tag !== "Streaming" || local.runId !== runId) {
           return;
         }
@@ -379,7 +385,7 @@ const runStream = Effect.fnUntraced(function*({
           }),
         });
 
-        get.set(localTranscriptFamily(chatId), {
+        get.set(localTranscriptFamily(key), {
           ...local,
           messages,
         });
@@ -389,17 +395,17 @@ const runStream = Effect.fnUntraced(function*({
       Exit.match({
         onSuccess: () =>
           Effect.gen(function*() {
-            const local = get(localTranscriptFamily(chatId));
+            const local = get(localTranscriptFamily(key));
             if (local._tag !== "Streaming" || local.runId !== runId) {
               return;
             }
 
             const refreshExit = yield* Effect.exit(
-              refreshChat({ get, chatId }),
+              refreshChat({ get, key }),
             );
             if (refreshExit._tag === "Failure") {
               get.set(
-                localTranscriptFamily(chatId),
+                localTranscriptFamily(key),
                 makeCompletionRaceOverlay({ local }),
               );
               return;
@@ -407,7 +413,7 @@ const runStream = Effect.fnUntraced(function*({
 
             if (refreshExit.value.activeRunId === runId) {
               get.set(
-                localTranscriptFamily(chatId),
+                localTranscriptFamily(key),
                 makeCompletionRaceOverlay({ local }),
               );
               return;
@@ -415,7 +421,7 @@ const runStream = Effect.fnUntraced(function*({
 
             if (refreshExit.value.activeRunId !== null) {
               get.set(
-                localTranscriptFamily(chatId),
+                localTranscriptFamily(key),
                 makeStreamingTranscript({
                   runId: refreshExit.value.activeRunId,
                   messages: convertPersistedMessages(
@@ -423,40 +429,40 @@ const runStream = Effect.fnUntraced(function*({
                   ),
                 }),
               );
-              get.mount(attachRunFamily(chatId));
-              get.set(attachRunFamily(chatId), {
+              get.mount(attachRunFamily(key));
+              get.set(attachRunFamily(key), {
                 runId: refreshExit.value.activeRunId,
               });
               return;
             }
 
-            get.set(localTranscriptFamily(chatId), localNone);
+            get.set(localTranscriptFamily(key), localNone);
           }),
         onFailure: (cause) =>
           Effect.sync(() => {
-            const local = get(localTranscriptFamily(chatId));
+            const local = get(localTranscriptFamily(key));
             if (local._tag !== "Streaming" || local.runId !== runId) {
               return;
             }
 
             get.set(
-              localTranscriptFamily(chatId),
+              localTranscriptFamily(key),
               Cause.hasInterruptsOnly(cause)
                 ? makeInterruptedOverlay({ local })
                 : makeFailureOverlay({ local, cause }),
             );
-            get.refresh(chatDataFamily(chatId));
+            get.refresh(chatDataFamily(key));
           }),
       }),
     ),
   );
 });
 
-const attachRunFamily = Atom.family((chatId: ChatId) =>
+const attachRunFamily = Atom.family((key: ConversationKey) =>
   chatRuntime
     .fn<{ runId: RunId; }>()(
       Effect.fnUntraced(function*({ runId }, get) {
-        yield* runStream({ get, chatId, runId });
+        yield* runStream({ get, key, runId });
       }),
     )
     .pipe(Atom.setIdleTTL("1 minute"))
@@ -464,14 +470,14 @@ const attachRunFamily = Atom.family((chatId: ChatId) =>
 
 const prepareSend = Effect.fnUntraced(function*({
   get,
-  chatId,
+  key,
   message,
 }: {
   readonly get: Atom.FnContext;
-  readonly chatId: ChatId;
+  readonly key: ConversationKey;
   readonly message: string;
 }) {
-  const local = get(localTranscriptFamily(chatId));
+  const local = get(localTranscriptFamily(key));
   if (
     local._tag === "Sending"
     || local._tag === "Streaming"
@@ -482,7 +488,7 @@ const prepareSend = Effect.fnUntraced(function*({
 
   const baseMessages = yield* loadAuthoritativeMessages({
     get,
-    chatId,
+    key,
     forceRefresh: local._tag === "Overlay",
   });
 
@@ -498,64 +504,64 @@ const prepareSend = Effect.fnUntraced(function*({
     messages: [...baseMessages, userMsg],
   });
 
-  get.set(localTranscriptFamily(chatId), {
+  get.set(localTranscriptFamily(key), {
     _tag: "Sending",
     assistantMsgId: optimistic.assistantMsgId,
     messages: optimistic.messages,
   });
 
-  const askExit = yield* Effect.exit(api.chatAsk({ chatId, message }));
+  const askExit = yield* Effect.exit(api.chatAsk({ ...key, message }));
   if (askExit._tag === "Failure") {
-    get.set(localTranscriptFamily(chatId), localNone);
+    get.set(localTranscriptFamily(key), localNone);
     return yield* Effect.failCause(askExit.cause);
   }
 
-  const latestLocal = get(localTranscriptFamily(chatId));
+  const latestLocal = get(localTranscriptFamily(key));
   if (
     latestLocal._tag !== "Sending"
     || latestLocal.assistantMsgId !== optimistic.assistantMsgId
   ) {
     if (latestLocal._tag !== "Deleted") {
-      yield* api.chatInterrupt(chatId).pipe(Effect.ignore);
+      yield* api.chatInterrupt(key).pipe(Effect.ignore);
     }
     return Option.none<RunId>();
   }
 
-  get.set(localTranscriptFamily(chatId), {
+  get.set(localTranscriptFamily(key), {
     _tag: "Streaming",
     runId: askExit.value.runId,
     assistantMsgId: optimistic.assistantMsgId,
     messages: optimistic.messages,
   });
-  get.set(inputFamily(chatId), "");
+  get.set(inputFamily(key), "");
 
   return Option.some(askExit.value.runId);
 });
 
-export const sendMessageFamily = Atom.family((chatId: ChatId) =>
+export const sendMessageFamily = Atom.family((key: ConversationKey) =>
   chatRuntime
     .fn<{ message: string; }>()(
       Effect.fnUntraced(function*({ message }, get) {
-        const runId = yield* prepareSend({ get, chatId, message });
+        const runId = yield* prepareSend({ get, key, message });
         if (Option.isNone(runId)) {
           return;
         }
-        yield* runStream({ get, chatId, runId: runId.value });
+        yield* runStream({ get, key, runId: runId.value });
       }),
       { concurrent: true },
     )
     .pipe(Atom.setIdleTTL("1 minute"))
 );
 
-export const watchChatFamily = Atom.family((chatId: ChatId) =>
+export const watchChatFamily = Atom.family((key: ConversationKey) =>
   chatRuntime
     .fn<{ activeRunId: RunId | null; }>()(
       Effect.fnUntraced(function*({ activeRunId }, get) {
         const api = yield* ChatApi;
 
-        get.mount(attachRunFamily(chatId));
+        get.mount(attachRunFamily(key));
         get.addFinalizer(() => {
-          get.set(attachRunFamily(chatId), Atom.Interrupt);
+          get.set(attachRunFamily(key), Atom.Interrupt);
         });
 
         const attach = Effect.fnUntraced(function*({
@@ -563,7 +569,7 @@ export const watchChatFamily = Atom.family((chatId: ChatId) =>
         }: {
           readonly runId: RunId;
         }) {
-          const localBefore = get(localTranscriptFamily(chatId));
+          const localBefore = get(localTranscriptFamily(key));
           if (
             localBefore._tag === "Sending"
             || localBefore._tag === "Streaming"
@@ -575,18 +581,18 @@ export const watchChatFamily = Atom.family((chatId: ChatId) =>
             && localBefore.runId === runId
             && localBefore.assistantMsgId !== null
           ) {
-            get.set(localTranscriptFamily(chatId), {
+            get.set(localTranscriptFamily(key), {
               _tag: "Streaming",
               runId,
               assistantMsgId: localBefore.assistantMsgId,
               messages: localBefore.messages,
             });
-            get.set(attachRunFamily(chatId), { runId });
+            get.set(attachRunFamily(key), { runId });
             return;
           }
 
-          const chat = yield* api.chatGet(chatId);
-          const localAfter = get(localTranscriptFamily(chatId));
+          const chat = yield* api.chatGet(key);
+          const localAfter = get(localTranscriptFamily(key));
           if (
             localAfter._tag === "Sending"
             || localAfter._tag === "Streaming"
@@ -598,25 +604,25 @@ export const watchChatFamily = Atom.family((chatId: ChatId) =>
           }
 
           get.set(
-            localTranscriptFamily(chatId),
+            localTranscriptFamily(key),
             makeStreamingTranscript({
               runId,
               messages: convertPersistedMessages(chat.messages),
             }),
           );
-          get.set(attachRunFamily(chatId), { runId });
+          get.set(attachRunFamily(key), { runId });
         });
 
         if (activeRunId !== null) {
           yield* attach({ runId: activeRunId });
         }
 
-        yield* api.chatWatch(chatId).pipe(
+        yield* api.chatWatch(key).pipe(
           Stream.runForEach((event) =>
             event.runId === null
               ? Effect.gen(function*() {
                 const refreshExit = yield* Effect.exit(
-                  refreshChat({ get, chatId }),
+                  refreshChat({ get, key }),
                 );
                 if (refreshExit._tag === "Failure") {
                   return;
@@ -625,12 +631,12 @@ export const watchChatFamily = Atom.family((chatId: ChatId) =>
                   return;
                 }
 
-                const local = get(localTranscriptFamily(chatId));
+                const local = get(localTranscriptFamily(key));
                 if (
                   local._tag === "Overlay"
                   && local.reason === "completion-race"
                 ) {
-                  get.set(localTranscriptFamily(chatId), localNone);
+                  get.set(localTranscriptFamily(key), localNone);
                 }
               })
               : attach({ runId: event.runId })
@@ -641,61 +647,65 @@ export const watchChatFamily = Atom.family((chatId: ChatId) =>
     .pipe(Atom.setIdleTTL("1 minute"))
 );
 
-export const chatListAtom = chatRuntime.atom(
-  Effect.gen(function*() {
-    const api = yield* ChatApi;
-    return yield* api.chatList(null);
-  }),
+export const chatListFamily = Atom.family((campaignId: CampaignId) =>
+  chatRuntime.atom(
+    Effect.gen(function*() {
+      const api = yield* ChatApi;
+      return yield* api.chatList({ campaignId, cursor: null });
+    }),
+  )
 );
 
 export const createChatAtom = chatRuntime.fn(
   Effect.fnUntraced(function*({
+    campaignId,
     title,
     model,
   }: {
+    readonly campaignId: CampaignId;
     readonly title: string;
     readonly model: typeof ModelFamily.Type;
   }) {
     const api = yield* ChatApi;
-    return yield* api.chatCreate({ title, model });
+    return yield* api.chatCreate({ campaignId, title, model });
   }),
 );
 
-export const deleteChatFamily = Atom.family((chatId: ChatId) =>
+export const deleteChatFamily = Atom.family((key: ConversationKey) =>
   chatRuntime
     .fn<void>()(
       Effect.fnUntraced(function*(_, get) {
         const api = yield* ChatApi;
-        yield* api.chatDelete(chatId);
-        get.set(attachRunFamily(chatId), Atom.Interrupt);
-        get.set(watchChatFamily(chatId), Atom.Interrupt);
-        get.set(inputFamily(chatId), "");
-        get.set(localTranscriptFamily(chatId), localDeleted);
+        yield* api.chatDelete(key);
+        get.set(attachRunFamily(key), Atom.Interrupt);
+        get.set(watchChatFamily(key), Atom.Interrupt);
+        get.set(inputFamily(key), "");
+        get.set(localTranscriptFamily(key), localDeleted);
       }),
     )
     .pipe(Atom.setIdleTTL("1 minute"))
 );
 
-export const interruptFamily = Atom.family((chatId: ChatId) =>
+export const interruptFamily = Atom.family((key: ConversationKey) =>
   chatRuntime.fn<void>()(
     Effect.fnUntraced(function*(_, get) {
-      get.set(attachRunFamily(chatId), Atom.Interrupt);
+      get.set(attachRunFamily(key), Atom.Interrupt);
 
-      const local = get(localTranscriptFamily(chatId));
+      const local = get(localTranscriptFamily(key));
       if (local._tag === "Sending") {
-        get.set(localTranscriptFamily(chatId), localNone);
+        get.set(localTranscriptFamily(key), localNone);
         return;
       }
 
       if (local._tag === "Streaming") {
         get.set(
-          localTranscriptFamily(chatId),
+          localTranscriptFamily(key),
           makeInterruptedOverlay({ local }),
         );
       }
 
       const api = yield* ChatApi;
-      yield* api.chatInterrupt(chatId);
+      yield* api.chatInterrupt(key);
     }),
   )
 );

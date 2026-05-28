@@ -2,6 +2,7 @@ import type { ChatModel } from "@/db/chat-model.js";
 import { ChatRepo } from "@/db/chat-repo.js";
 import { NpcRepo } from "@/db/npc-repo.js";
 import { AiModels } from "@/lib/ai-models.js";
+import * as Campaign from "@app/domain/api/campaign-rpc";
 import * as Chat from "@app/domain/api/chat-rpc";
 import { NpcId } from "@app/domain/api/npc-rpc";
 import { UserId } from "@app/domain/auth";
@@ -26,7 +27,7 @@ const mockChat = (
 ): typeof ChatModel.Type => ({
   id: Chat.ChatId.make("00000000-0000-4000-8000-000000000001"),
   userId: "user-1",
-  campaignId: null,
+  campaignId: Campaign.CampaignId.make("00000000-0000-4000-8000-000000000010"),
   title: "Test Chat",
   model: "qwen3-0.6b",
   messages: [],
@@ -86,9 +87,10 @@ const makeMockChatRepo = (
 ) =>
   Layer.mock(ChatRepo)({
     create: () => Effect.succeed(mockChat()),
-    findById: (chatId) => Effect.succeed(mockChat({ id: chatId })),
-    listByUser: () => Effect.succeed({ items: [], hasMore: false }),
+    findById: (chatId, _userId, campaignId) => Effect.succeed(mockChat({ id: chatId, campaignId })),
+    listByCampaign: () => Effect.succeed({ items: [], hasMore: false }),
     delete: () => Effect.void,
+    assignToCampaign: () => Effect.void,
     updateMessages: ({ messages }) =>
       updatedMessagesRef ? Ref.set(updatedMessagesRef, messages) : Effect.void,
     startRun: () => Effect.succeed(true),
@@ -136,7 +138,7 @@ describe("ChatRunManager", () => {
         });
 
         const events = yield* mgr
-          .subscribe(runId, chat.userId)
+          .subscribe(runId, chat.userId, chat.campaignId!)
           .pipe(Stream.runCollect);
         expect(events.some((event) => event._tag === "Chunk")).toBe(true);
       }).pipe(Effect.provide(makeTestLayer(slowAi)));
@@ -191,7 +193,7 @@ describe("ChatRunManager", () => {
         const runId = Chat.RunId.make("00000000-0000-4000-8000-000000000099");
 
         const exit = yield* mgr
-          .subscribe(runId, "user-1")
+          .subscribe(runId, "user-1", "00000000-0000-4000-8000-000000000010")
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {
@@ -220,7 +222,7 @@ describe("ChatRunManager", () => {
         });
 
         const exit = yield* mgr
-          .subscribe(runId, chat.userId)
+          .subscribe(runId, chat.userId, chat.campaignId!)
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {
@@ -256,7 +258,7 @@ describe("ChatRunManager", () => {
           currentUser: testCurrentUser,
         });
         const exitFiber = yield* mgr
-          .subscribe(runId, chat.userId)
+          .subscribe(runId, chat.userId, chat.campaignId!)
           .pipe(Stream.runDrain, Effect.exit, Effect.forkChild);
 
         yield* Effect.sleep("100 millis");
@@ -287,7 +289,7 @@ describe("ChatRunManager", () => {
         yield* Effect.sleep("200 millis");
 
         const exit = yield* mgr
-          .subscribe(runId, chat.userId)
+          .subscribe(runId, chat.userId, chat.campaignId!)
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {
@@ -332,7 +334,7 @@ describe("ChatRunManager", () => {
         yield* Effect.sleep("200 millis");
 
         const exit = yield* mgr
-          .subscribe(runId, chat.userId)
+          .subscribe(runId, chat.userId, chat.campaignId!)
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {

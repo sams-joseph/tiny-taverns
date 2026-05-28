@@ -1,10 +1,7 @@
 import { ModelFamily } from "@app/domain/ai-models";
+import { CampaignId } from "@app/domain/api/campaign-rpc";
 import { ChatId, RunId } from "@app/domain/api/chat-rpc";
-import type {
-  ChatEvent,
-  ChatWatchEvent,
-  Message,
-} from "@app/domain/api/chat-rpc";
+import type { ChatEvent, ChatWatchEvent, Message } from "@app/domain/api/chat-rpc";
 import { addEqualityTesters, describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -31,20 +28,26 @@ addEqualityTesters();
 
 const TEST_CHAT_ID = ChatId.make("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
 const OTHER_CHAT_ID = ChatId.make("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13");
+const TEST_CAMPAIGN_ID = CampaignId.make("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15");
 const TEST_RUN_ID = RunId.make("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12");
 const OTHER_RUN_ID = RunId.make("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14");
 const SELECTED_MODEL_KEY = "@app/chat/selected-model";
+const TEST_KEY = { campaignId: TEST_CAMPAIGN_ID, chatId: TEST_CHAT_ID };
+const OTHER_KEY = { campaignId: TEST_CAMPAIGN_ID, chatId: OTHER_CHAT_ID };
 
 const makeChat = ({
   chatId = TEST_CHAT_ID,
+  campaignId = TEST_CAMPAIGN_ID,
   messages = [],
   activeRunId = null,
 }: {
   readonly chatId?: ChatId;
+  readonly campaignId?: CampaignId;
   readonly messages?: ReadonlyArray<Message>;
   readonly activeRunId?: RunId | null;
 }) => ({
   id: chatId,
+  campaignId,
   title: "Test Chat",
   model: "haiku-4.5" as const,
   createdAt: new Date() as never,
@@ -55,53 +58,56 @@ const makeChat = ({
 
 const makeApiLayer = (options?: {
   readonly chatAsk?: (args: {
+    readonly campaignId: CampaignId;
     readonly chatId: ChatId;
     readonly message: string;
-  }) => Effect.Effect<{ readonly runId: RunId }, unknown>;
+  }) => Effect.Effect<{ readonly runId: RunId; }, unknown>;
   readonly chatEvents?: (runId: RunId) => Stream.Stream<ChatEvent, unknown>;
   readonly chatWatch?: (
+    campaignId: CampaignId,
     chatId: ChatId,
   ) => Stream.Stream<ChatWatchEvent, unknown>;
   readonly chatGet?: (
+    campaignId: CampaignId,
     chatId: ChatId,
   ) => Effect.Effect<ReturnType<typeof makeChat>, unknown>;
-  readonly chatDelete?: (chatId: ChatId) => Effect.Effect<void, unknown>;
-  readonly chatInterrupt?: (chatId: ChatId) => Effect.Effect<void, unknown>;
+  readonly chatDelete?: (campaignId: CampaignId, chatId: ChatId) => Effect.Effect<void, unknown>;
+  readonly chatInterrupt?: (campaignId: CampaignId, chatId: ChatId) => Effect.Effect<void, unknown>;
 }) => {
   const calls = {
-    chatAsk: [] as Array<{ chatId: ChatId; message: string }>,
-    chatEvents: [] as Array<RunId>,
-    chatWatch: [] as Array<ChatId>,
-    chatInterrupt: [] as Array<ChatId>,
-    chatDelete: [] as Array<ChatId>,
+    chatAsk: [] as Array<{ chatId: ChatId; message: string; }>,
+    chatEvents: [] as Array<{ campaignId: CampaignId; runId: RunId; }>,
+    chatWatch: [] as Array<{ campaignId: CampaignId; chatId: ChatId; }>,
+    chatInterrupt: [] as Array<{ campaignId: CampaignId; chatId: ChatId; }>,
+    chatDelete: [] as Array<{ campaignId: CampaignId; chatId: ChatId; }>,
   };
 
   const layer = Layer.mock(ChatApi)({
     chatAsk: (args) => {
       calls.chatAsk.push(args);
-      return (options?.chatAsk?.(args) ??
-        Effect.succeed({ runId: TEST_RUN_ID })) as never;
+      return (options?.chatAsk?.(args)
+        ?? Effect.succeed({ runId: TEST_RUN_ID })) as never;
     },
-    chatEvents: (runId) => {
-      calls.chatEvents.push(runId);
+    chatEvents: ({ campaignId, runId }) => {
+      calls.chatEvents.push({ campaignId, runId });
       return (options?.chatEvents?.(runId) ?? Stream.empty) as never;
     },
-    chatWatch: (chatId) => {
-      calls.chatWatch.push(chatId);
-      return (options?.chatWatch?.(chatId) ?? Stream.never) as never;
+    chatWatch: ({ campaignId, chatId }) => {
+      calls.chatWatch.push({ campaignId, chatId });
+      return (options?.chatWatch?.(campaignId, chatId) ?? Stream.never) as never;
     },
     chatList: () => Effect.succeed({ items: [], hasMore: false }),
-    chatGet: (chatId) =>
-      (options?.chatGet?.(chatId) ??
-        Effect.succeed(makeChat({ chatId }))) as never,
+    chatGet: ({ campaignId, chatId }) =>
+      (options?.chatGet?.(campaignId, chatId)
+        ?? Effect.succeed(makeChat({ campaignId, chatId }))) as never,
     chatCreate: () => Effect.die("not mocked") as never,
-    chatDelete: (chatId) => {
-      calls.chatDelete.push(chatId);
-      return (options?.chatDelete?.(chatId) ?? Effect.void) as never;
+    chatDelete: ({ campaignId, chatId }) => {
+      calls.chatDelete.push({ campaignId, chatId });
+      return (options?.chatDelete?.(campaignId, chatId) ?? Effect.void) as never;
     },
-    chatInterrupt: (chatId) => {
-      calls.chatInterrupt.push(chatId);
-      return (options?.chatInterrupt?.(chatId) ?? Effect.void) as never;
+    chatInterrupt: ({ campaignId, chatId }) => {
+      calls.chatInterrupt.push({ campaignId, chatId });
+      return (options?.chatInterrupt?.(campaignId, chatId) ?? Effect.void) as never;
     },
   });
 
@@ -146,8 +152,9 @@ const makePreferencesLayer = (options?: {
 };
 
 const makeRegistry = (
-  options?: Parameters<typeof makeApiLayer>[0] &
-    Parameters<typeof makePreferencesLayer>[0],
+  options?:
+    & Parameters<typeof makeApiLayer>[0]
+    & Parameters<typeof makePreferencesLayer>[0],
 ) => {
   const { calls, layer } = makeApiLayer(options);
   const preferences = makePreferencesLayer(options);
@@ -174,12 +181,12 @@ describe("chat atoms", () => {
       chatEvents: () => Stream.never,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
 
-    const messages = registry.get(messagesFamily(TEST_CHAT_ID));
+    const messages = registry.get(messagesFamily(TEST_KEY));
     expect(messages).toHaveLength(2);
     expect(messages[0]!.role).toBe("user");
     expect(messages[0]!.content).toBe("hello");
@@ -194,12 +201,12 @@ describe("chat atoms", () => {
       chatEvents: () => Stream.never,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
 
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(true);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(true);
 
     registry.set(sendAtom, Atom.Interrupt);
     await flush();
@@ -214,13 +221,13 @@ describe("chat atoms", () => {
         ).pipe(Stream.concat(Stream.never)),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hi" });
     await flush();
 
     const assistant = registry
-      .get(messagesFamily(TEST_CHAT_ID))
+      .get(messagesFamily(TEST_KEY))
       .find((message) => message.role === "assistant");
     expect(assistant?.content).toBe("Hello world");
     expect(assistant?.contentBlocks).toHaveLength(1);
@@ -232,7 +239,7 @@ describe("chat atoms", () => {
   it("sets generating to false on completion", async () => {
     const { registry } = makeRegistry({
       chatEvents: () => Stream.make({ _tag: "Chunk", delta: "hi" } as const),
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.succeed(
           makeChat({
             chatId,
@@ -244,13 +251,13 @@ describe("chat atoms", () => {
         ),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "test" });
     await flush();
 
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
-    expect(registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.content).toBe(
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
+    expect(registry.get(messagesFamily(TEST_KEY)).at(-1)?.content).toBe(
       "hi",
     );
   });
@@ -260,8 +267,8 @@ describe("chat atoms", () => {
       chatEvents: () => Stream.never,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
-    const interruptAtom = interruptFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
+    const interruptAtom = interruptFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.mount(interruptAtom);
     registry.set(sendAtom, { message: "test" });
@@ -270,8 +277,8 @@ describe("chat atoms", () => {
     registry.set(interruptAtom, undefined);
     await flush();
 
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
-    expect(registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.content).toBe(
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
+    expect(registry.get(messagesFamily(TEST_KEY)).at(-1)?.content).toBe(
       "(interrupted)",
     );
   });
@@ -281,14 +288,14 @@ describe("chat atoms", () => {
       chatEvents: () => Stream.fail("stream-error"),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "test" });
     await flush();
 
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
     expect(
-      registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.error,
+      registry.get(messagesFamily(TEST_KEY)).at(-1)?.error,
     ).not.toBeNull();
   });
 
@@ -297,13 +304,17 @@ describe("chat atoms", () => {
       chatEvents: () => Stream.never,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
 
-    expect(calls.chatAsk).toEqual([{ chatId: TEST_CHAT_ID, message: "hello" }]);
-    expect(calls.chatEvents).toEqual([TEST_RUN_ID]);
+    expect(calls.chatAsk).toEqual([{
+      campaignId: TEST_CAMPAIGN_ID,
+      chatId: TEST_CHAT_ID,
+      message: "hello",
+    }]);
+    expect(calls.chatEvents).toEqual([{ campaignId: TEST_CAMPAIGN_ID, runId: TEST_RUN_ID }]);
 
     registry.set(sendAtom, Atom.Interrupt);
     await flush();
@@ -311,36 +322,35 @@ describe("chat atoms", () => {
 
   it("keeps chats independent", async () => {
     const { registry } = makeRegistry({
-      chatEvents: (runId) =>
-        runId === TEST_RUN_ID ? Stream.never : Stream.empty,
+      chatEvents: (runId) => runId === TEST_RUN_ID ? Stream.never : Stream.empty,
       chatAsk: ({ chatId }) =>
         Effect.succeed({
           runId: chatId === TEST_CHAT_ID ? TEST_RUN_ID : OTHER_RUN_ID,
         }),
     });
 
-    const chatASend = sendMessageFamily(TEST_CHAT_ID);
+    const chatASend = sendMessageFamily(TEST_KEY);
     registry.mount(chatASend);
     registry.set(chatASend, { message: "hello" });
     await flush();
 
-    expect(registry.get(messagesFamily(TEST_CHAT_ID))).toHaveLength(2);
-    expect(registry.get(messagesFamily(OTHER_CHAT_ID))).toHaveLength(0);
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(true);
-    expect(registry.get(generatingFamily(OTHER_CHAT_ID))).toBe(false);
+    expect(registry.get(messagesFamily(TEST_KEY))).toHaveLength(2);
+    expect(registry.get(messagesFamily(OTHER_KEY))).toHaveLength(0);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(true);
+    expect(registry.get(generatingFamily(OTHER_KEY))).toBe(false);
 
     registry.set(chatASend, Atom.Interrupt);
     await flush();
   });
 
   it("makes the second submit a no op while send is pending", async () => {
-    const gate = Effect.runSync(Deferred.make<{ readonly runId: RunId }>());
+    const gate = Effect.runSync(Deferred.make<{ readonly runId: RunId; }>());
     const { calls, registry } = makeRegistry({
       chatAsk: () => Deferred.await(gate),
       chatEvents: () => Stream.never,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
@@ -348,7 +358,7 @@ describe("chat atoms", () => {
     await flush();
 
     expect(calls.chatAsk).toHaveLength(1);
-    const messages = registry.get(messagesFamily(TEST_CHAT_ID));
+    const messages = registry.get(messagesFamily(TEST_KEY));
     expect(messages).toHaveLength(2);
     expect(messages[0]?.content).toBe("hello");
     expect(messages[1]?.content).toBe("");
@@ -360,14 +370,14 @@ describe("chat atoms", () => {
   });
 
   it("interruptFamily cancels a pending send before chatAsk resolves", async () => {
-    const gate = Effect.runSync(Deferred.make<{ readonly runId: RunId }>());
+    const gate = Effect.runSync(Deferred.make<{ readonly runId: RunId; }>());
     const { calls, registry } = makeRegistry({
       chatAsk: () => Deferred.await(gate),
       chatEvents: () => Stream.never,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
-    const interruptAtom = interruptFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
+    const interruptAtom = interruptFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.mount(interruptAtom);
     registry.set(sendAtom, { message: "hello" });
@@ -377,19 +387,19 @@ describe("chat atoms", () => {
     await flush();
 
     expect(calls.chatInterrupt).toEqual([]);
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
-    expect(registry.get(messagesFamily(TEST_CHAT_ID))).toHaveLength(0);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
+    expect(registry.get(messagesFamily(TEST_KEY))).toHaveLength(0);
 
     Effect.runSync(Deferred.succeed(gate, { runId: TEST_RUN_ID }));
     await flush();
 
-    expect(calls.chatInterrupt).toEqual([TEST_CHAT_ID]);
+    expect(calls.chatInterrupt).toEqual([{ campaignId: TEST_CAMPAIGN_ID, chatId: TEST_CHAT_ID }]);
     expect(calls.chatEvents).toEqual([]);
   });
 
   it("uses persisted chat data for selectors when local state is none", async () => {
     const { registry } = makeRegistry({
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.succeed(
           makeChat({
             chatId,
@@ -402,22 +412,22 @@ describe("chat atoms", () => {
         ),
     });
 
-    registry.mount(messagesFamily(TEST_CHAT_ID));
+    registry.mount(messagesFamily(TEST_KEY));
     await flush();
 
     expect(
       registry
-        .get(messagesFamily(TEST_CHAT_ID))
+        .get(messagesFamily(TEST_KEY))
         .map((message) => message.content),
     ).toEqual(["hello", "world"]);
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(true);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(true);
   });
 
   it("keeps completion race overlay when refresh fails", async () => {
     let chatGetCalls = 0;
     const { registry } = makeRegistry({
       chatEvents: () => Stream.make({ _tag: "Chunk", delta: "hi" } as const),
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.sync(() => {
           chatGetCalls++;
           if (chatGetCalls === 1) {
@@ -427,22 +437,22 @@ describe("chat atoms", () => {
         }),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
 
-    expect(registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.content).toBe(
+    expect(registry.get(messagesFamily(TEST_KEY)).at(-1)?.content).toBe(
       "hi",
     );
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
   });
 
   it("keeps completion race overlay when refresh reports same run", async () => {
     let chatGetCalls = 0;
     const { registry } = makeRegistry({
       chatEvents: () => Stream.make({ _tag: "Chunk", delta: "hi" } as const),
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.sync(() => {
           chatGetCalls++;
           return makeChat({
@@ -452,22 +462,22 @@ describe("chat atoms", () => {
         }),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
 
-    expect(registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.content).toBe(
+    expect(registry.get(messagesFamily(TEST_KEY)).at(-1)?.content).toBe(
       "hi",
     );
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
   });
 
   it("clears completion race overlay when watch reports run cleared", async () => {
     let chatGetCalls = 0;
     const { registry } = makeRegistry({
       chatEvents: () => Stream.make({ _tag: "Chunk", delta: "hi" } as const),
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.sync(() => {
           chatGetCalls++;
           if (chatGetCalls === 1) {
@@ -491,12 +501,11 @@ describe("chat atoms", () => {
             ],
           });
         }),
-      chatWatch: () =>
-        Stream.make({ _tag: "RunChanged", runId: null } as const),
+      chatWatch: () => Stream.make({ _tag: "RunChanged", runId: null } as const),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
-    const watchAtom = watchChatFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
+    const watchAtom = watchChatFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.mount(watchAtom);
     registry.set(sendAtom, { message: "hello" });
@@ -506,10 +515,10 @@ describe("chat atoms", () => {
 
     expect(
       registry
-        .get(messagesFamily(TEST_CHAT_ID))
+        .get(messagesFamily(TEST_KEY))
         .map((message) => message.content),
     ).toEqual(["hello", "hi"]);
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
   });
 
   it("chains into the next run after completion", async () => {
@@ -519,7 +528,7 @@ describe("chat atoms", () => {
         runId === TEST_RUN_ID
           ? Stream.make({ _tag: "Chunk", delta: "first" } as const)
           : Stream.never,
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.sync(() => {
           chatGetCalls++;
           if (chatGetCalls === 1) {
@@ -536,16 +545,19 @@ describe("chat atoms", () => {
         }),
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.set(sendAtom, { message: "hello" });
     await flush();
 
-    expect(calls.chatEvents).toEqual([TEST_RUN_ID, OTHER_RUN_ID]);
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(true);
+    expect(calls.chatEvents).toEqual([
+      { campaignId: TEST_CAMPAIGN_ID, runId: TEST_RUN_ID },
+      { campaignId: TEST_CAMPAIGN_ID, runId: OTHER_RUN_ID },
+    ]);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(true);
     expect(
       registry
-        .get(messagesFamily(TEST_CHAT_ID))
+        .get(messagesFamily(TEST_KEY))
         .map((message) => message.content),
     ).toEqual(["hello", "done", ""]);
 
@@ -556,7 +568,7 @@ describe("chat atoms", () => {
   it("attaches an active run from the watcher", async () => {
     const { calls, registry } = makeRegistry({
       chatEvents: () => Stream.never,
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.succeed(
           makeChat({
             chatId,
@@ -567,17 +579,17 @@ describe("chat atoms", () => {
       chatWatch: () => Stream.never,
     });
 
-    const watchAtom = watchChatFamily(TEST_CHAT_ID);
+    const watchAtom = watchChatFamily(TEST_KEY);
     registry.mount(watchAtom);
     registry.set(watchAtom, { activeRunId: TEST_RUN_ID });
     await flush();
 
-    expect(calls.chatWatch).toEqual([TEST_CHAT_ID]);
-    expect(calls.chatEvents).toEqual([TEST_RUN_ID]);
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(true);
+    expect(calls.chatWatch).toEqual([{ campaignId: TEST_CAMPAIGN_ID, chatId: TEST_CHAT_ID }]);
+    expect(calls.chatEvents).toEqual([{ campaignId: TEST_CAMPAIGN_ID, runId: TEST_RUN_ID }]);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(true);
     expect(
       registry
-        .get(messagesFamily(TEST_CHAT_ID))
+        .get(messagesFamily(TEST_KEY))
         .map((message) => message.content),
     ).toEqual(["hello", ""]);
 
@@ -591,17 +603,17 @@ describe("chat atoms", () => {
       chatEvents: (runId) =>
         runId === TEST_RUN_ID
           ? Stream.make({ _tag: "Chunk", delta: "partial" } as const).pipe(
-              Stream.concat(Stream.never),
-            )
+            Stream.concat(Stream.never),
+          )
           : Stream.empty,
-      chatGet: (chatId) =>
+      chatGet: (_campaignId, chatId) =>
         Effect.succeed(makeChat({ chatId, activeRunId: TEST_RUN_ID })),
       chatWatch: () => watchEvents,
     });
 
-    const sendAtom = sendMessageFamily(TEST_CHAT_ID);
-    const interruptAtom = interruptFamily(TEST_CHAT_ID);
-    const watchAtom = watchChatFamily(TEST_CHAT_ID);
+    const sendAtom = sendMessageFamily(TEST_KEY);
+    const interruptAtom = interruptFamily(TEST_KEY);
+    const watchAtom = watchChatFamily(TEST_KEY);
     registry.mount(sendAtom);
     registry.mount(interruptAtom);
     registry.mount(watchAtom);
@@ -611,23 +623,25 @@ describe("chat atoms", () => {
     registry.set(interruptAtom, undefined);
     await flush();
 
-    expect(registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.content).toBe(
+    expect(registry.get(messagesFamily(TEST_KEY)).at(-1)?.content).toBe(
       "partial",
     );
 
-    watchEvents = Stream.make({
-      _tag: "RunChanged",
-      runId: TEST_RUN_ID,
-    } as const);
+    watchEvents = Stream.make(
+      {
+        _tag: "RunChanged",
+        runId: TEST_RUN_ID,
+      } as const,
+    );
     registry.set(watchAtom, Atom.Interrupt);
     await flush();
     registry.set(watchAtom, { activeRunId: TEST_RUN_ID });
     await flush();
 
-    expect(registry.get(messagesFamily(TEST_CHAT_ID)).at(-1)?.content).toBe(
+    expect(registry.get(messagesFamily(TEST_KEY)).at(-1)?.content).toBe(
       "partial",
     );
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(true);
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(true);
   });
 
   it("selectedModelAtom falls back to sonnet-4.6 on storage read failure", async () => {
@@ -659,28 +673,27 @@ describe("chat atoms", () => {
         Effect.succeed({
           runId: chatId === TEST_CHAT_ID ? TEST_RUN_ID : OTHER_RUN_ID,
         }),
-      chatEvents: (runId) =>
-        runId === TEST_RUN_ID ? Stream.never : Stream.never,
+      chatEvents: (runId) => runId === TEST_RUN_ID ? Stream.never : Stream.never,
     });
 
-    const sendA = sendMessageFamily(TEST_CHAT_ID);
-    const sendB = sendMessageFamily(OTHER_CHAT_ID);
-    const deleteA = deleteChatFamily(TEST_CHAT_ID);
+    const sendA = sendMessageFamily(TEST_KEY);
+    const sendB = sendMessageFamily(OTHER_KEY);
+    const deleteA = deleteChatFamily(TEST_KEY);
     registry.mount(sendA);
     registry.mount(sendB);
     registry.mount(deleteA);
     registry.set(sendA, { message: "chat-a" });
     registry.set(sendB, { message: "chat-b" });
-    registry.set(inputFamily(TEST_CHAT_ID), "draft");
+    registry.set(inputFamily(TEST_KEY), "draft");
     await flush();
 
     registry.set(deleteA, undefined);
     await flush();
 
-    expect(registry.get(messagesFamily(TEST_CHAT_ID))).toEqual([]);
-    expect(registry.get(inputFamily(TEST_CHAT_ID))).toBe("");
-    expect(registry.get(generatingFamily(TEST_CHAT_ID))).toBe(false);
-    expect(registry.get(messagesFamily(OTHER_CHAT_ID)).at(0)?.content).toBe(
+    expect(registry.get(messagesFamily(TEST_KEY))).toEqual([]);
+    expect(registry.get(inputFamily(TEST_KEY))).toBe("");
+    expect(registry.get(generatingFamily(TEST_KEY))).toBe(false);
+    expect(registry.get(messagesFamily(OTHER_KEY)).at(0)?.content).toBe(
       "chat-b",
     );
 

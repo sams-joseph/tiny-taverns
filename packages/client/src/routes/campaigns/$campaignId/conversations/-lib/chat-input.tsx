@@ -1,3 +1,4 @@
+import type { CampaignId } from "@app/domain/api/campaign-rpc";
 import type { ChatId } from "@app/domain/api/chat-rpc";
 import { useAtom, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { ArrowUpIcon, StopCircleIcon } from "lucide-react";
@@ -5,11 +6,15 @@ import * as React from "react";
 import { Button } from "react-aria-components";
 import { generatingFamily, inputFamily, interruptFamily, sendMessageFamily } from "./chat-atoms.js";
 
-export const ChatInput = ({ chatId }: { readonly chatId: ChatId; }) => {
-  const [input, setInput] = useAtom(inputFamily(chatId));
-  const isGenerating = useAtomValue(generatingFamily(chatId));
-  const sendMessage = useAtomSet(sendMessageFamily(chatId));
-  const interrupt = useAtomSet(interruptFamily(chatId));
+export const ChatInput = ({
+  conversationKey,
+}: {
+  readonly conversationKey: { readonly campaignId: CampaignId; readonly chatId: ChatId; };
+}) => {
+  const [input, setInput] = useAtom(inputFamily(conversationKey));
+  const isGenerating = useAtomValue(generatingFamily(conversationKey));
+  const sendMessage = useAtomSet(sendMessageFamily(conversationKey));
+  const interrupt = useAtomSet(interruptFamily(conversationKey));
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {

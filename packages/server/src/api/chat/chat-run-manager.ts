@@ -35,6 +35,7 @@ export class ChatRunManager extends Context.Service<
     readonly subscribe: (
       runId: Chat.RunId,
       userId: string,
+      campaignId: string,
     ) => Stream.Stream<Chat.ChatEvent, Chat.ChatRunNotFoundError>;
     readonly startGeneration: (args: {
       readonly chat: typeof ChatModel.Type;
@@ -61,7 +62,7 @@ export class ChatRunManager extends Context.Service<
       typeof ChatGenerationWorkflow.payloadSchema,
       typeof ChatGenerationWorkflow.successSchema,
       typeof ChatGenerationWorkflow.errorSchema,
-      { readonly userId: string; },
+      { readonly userId: string; readonly campaignId: string; },
       Chat.ChatRunNotFoundError,
       Chat.GenerationInProgressError
     >({
@@ -91,7 +92,10 @@ export class ChatRunManager extends Context.Service<
             chatId: payload.chat.id,
           });
         }
-        return { userId: payload.chat.userId } as const;
+        return {
+          userId: payload.chat.userId,
+          campaignId: payload.chat.campaignId ?? "",
+        } as const;
       }),
 
       run: Effect.fnUntraced(function*({ payload, mailbox }) {
@@ -135,11 +139,11 @@ export class ChatRunManager extends Context.Service<
             Stream.map((runId) => ({ _tag: "RunChanged" as const, runId })),
           ),
 
-      subscribe: (runId, userId) =>
+      subscribe: (runId, userId, campaignId) =>
         Stream.unwrap(
           runs.resolve(runId).pipe(
             Effect.flatMap((run) => {
-              if (run.metadata.userId !== userId) {
+              if (run.metadata.userId !== userId || run.metadata.campaignId !== campaignId) {
                 return Effect.fail(new Chat.ChatRunNotFoundError({ runId }));
               }
               return Effect.succeed(run.events);

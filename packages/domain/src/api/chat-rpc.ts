@@ -3,12 +3,11 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { ModelFamily } from "../ai-models.js";
 import { AuthMiddleware } from "../auth.js";
+import { CampaignNotFoundError } from "./campaign-rpc.js";
+import { CampaignId } from "./ids.js";
+import { ChatId, RunId } from "./ids.js";
 
-export const ChatId = Schema.String.pipe(
-  Schema.check(Schema.isUUID(undefined)),
-  Schema.brand("ChatId"),
-);
-export type ChatId = typeof ChatId.Type;
+export { ChatId, RunId } from "./ids.js";
 
 export class ChatNotFoundError extends Schema.TaggedErrorClass<ChatNotFoundError>()(
   "ChatNotFoundError",
@@ -16,12 +15,6 @@ export class ChatNotFoundError extends Schema.TaggedErrorClass<ChatNotFoundError
     id: ChatId,
   },
 ) {}
-
-export const RunId = Schema.String.pipe(
-  Schema.check(Schema.isUUID(undefined)),
-  Schema.brand("RunId"),
-);
-export type RunId = typeof RunId.Type;
 
 export class ChatRunNotFoundError extends Schema.TaggedErrorClass<ChatRunNotFoundError>()(
   "ChatRunNotFoundError",
@@ -89,6 +82,7 @@ export class Message extends Schema.Opaque<Message>()(
 export class Chat extends Schema.Opaque<Chat>()(
   Schema.Struct({
     id: ChatId,
+    campaignId: CampaignId,
     title: Schema.String,
     model: ModelFamily,
     createdAt: Schema.DateTimeUtcFromString,
@@ -137,6 +131,7 @@ export type MessageEvent = typeof MessageEvent.Type;
 
 export class ChatAskRpc extends Rpc.make("chat_ask", {
   payload: {
+    campaignId: CampaignId,
     chatId: ChatId,
     message: Schema.String,
   },
@@ -146,50 +141,54 @@ export class ChatAskRpc extends Rpc.make("chat_ask", {
 
 export class ChatEventsRpc extends Rpc.make("chat_events", {
   stream: true,
-  payload: { runId: RunId },
+  payload: { campaignId: CampaignId, runId: RunId },
   success: ChatEvent,
-  error: ChatRunNotFoundError,
+  error: Schema.Union([ChatRunNotFoundError, CampaignNotFoundError]),
 }) {}
 
 export class ChatWatchRpc extends Rpc.make("chat_watch", {
   stream: true,
-  payload: { chatId: ChatId },
+  payload: { campaignId: CampaignId, chatId: ChatId },
   success: ChatWatchEvent,
   error: ChatNotFoundError,
 }) {}
 
 export class ChatCreateRpc extends Rpc.make("chat_create", {
   payload: {
+    campaignId: CampaignId,
     title: Schema.NonEmptyString,
     model: ModelFamily,
   },
   success: Chat,
+  error: CampaignNotFoundError,
 }) {}
 
 export class ChatListRpc extends Rpc.make("chat_list", {
   payload: {
+    campaignId: CampaignId,
     cursor: Schema.NullOr(Schema.DateTimeUtcFromString),
   },
   success: Schema.Struct({
     items: Schema.Array(Chat),
     hasMore: Schema.Boolean,
   }),
+  error: CampaignNotFoundError,
 }) {}
 
 export class ChatGetRpc extends Rpc.make("chat_get", {
-  payload: { chatId: ChatId },
+  payload: { campaignId: CampaignId, chatId: ChatId },
   success: Chat.WithMessages,
   error: ChatNotFoundError,
 }) {}
 
 export class ChatDeleteRpc extends Rpc.make("chat_delete", {
-  payload: { chatId: ChatId },
+  payload: { campaignId: CampaignId, chatId: ChatId },
   success: Schema.Void,
   error: ChatNotFoundError,
 }) {}
 
 export class ChatInterruptRpc extends Rpc.make("chat_interrupt", {
-  payload: { chatId: ChatId },
+  payload: { campaignId: CampaignId, chatId: ChatId },
   success: Schema.Void,
   error: ChatNotFoundError,
 }) {}

@@ -18,13 +18,19 @@ export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
         const defaultChat = yield* chatRepo.create({
           userId: currentUser.id,
           title: "General",
-          model: "qwen3-0.6b",
+          model: "qwen3-0.6b" as const,
         });
-        return yield* campaignRepo.create({
+        const campaign = yield* campaignRepo.create({
           userId: currentUser.id,
           title: payload.title,
           defaultChatId: defaultChat.id,
         });
+        yield* chatRepo.assignToCampaign({
+          chatId: defaultChat.id,
+          userId: currentUser.id,
+          campaignId: campaign.id,
+        });
+        return campaign;
       }),
 
       campaign_list: Effect.fnUntraced(function*(payload) {

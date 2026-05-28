@@ -22,18 +22,27 @@ export class ChatRepo extends Context.Service<ChatRepo, {
   readonly findById: (
     chatId: Chat.ChatId,
     userId: string,
+    campaignId: Campaign.CampaignId,
   ) => Effect.Effect<typeof ChatModel.Type, Chat.ChatNotFoundError>;
-  readonly listByUser: (
+  readonly listByCampaign: (
     userId: string,
+    campaignId: Campaign.CampaignId,
     cursor: Option.Option<DateTime.Utc>,
   ) => Effect.Effect<{ items: ReadonlyArray<typeof ChatModel.Type>; hasMore: boolean; }>;
   readonly delete: (
     chatId: Chat.ChatId,
     userId: string,
+    campaignId: Campaign.CampaignId,
   ) => Effect.Effect<void, Chat.ChatNotFoundError>;
+  readonly assignToCampaign: (args: {
+    readonly chatId: Chat.ChatId;
+    readonly userId: string;
+    readonly campaignId: Campaign.CampaignId;
+  }) => Effect.Effect<void>;
   readonly updateMessages: (args: {
     readonly chatId: Chat.ChatId;
     readonly userId: string;
+    readonly campaignId?: Campaign.CampaignId;
     readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
   }) => Effect.Effect<void>;
   readonly startRun: (args: {
@@ -64,12 +73,16 @@ export class ChatRepo extends Context.Service<ChatRepo, {
     });
 
     const findByIdQuery = SqlSchema.findOneOption({
-      Request: Schema.Struct({ chatId: Chat.ChatId, userId: Schema.String }),
+      Request: Schema.Struct({
+        chatId: Chat.ChatId,
+        userId: Schema.String,
+        campaignId: Campaign.CampaignId,
+      }),
       Result: ChatModel,
-      execute: ({ chatId, userId }) =>
+      execute: ({ chatId, userId, campaignId }) =>
         sql`
         SELECT * FROM chats
-        WHERE id = ${chatId} AND user_id = ${userId}
+        WHERE id = ${chatId} AND user_id = ${userId} AND campaign_id = ${campaignId}
       `,
     });
 
@@ -78,13 +91,14 @@ export class ChatRepo extends Context.Service<ChatRepo, {
     const listQuery = SqlSchema.findAll({
       Request: Schema.Struct({
         userId: Schema.String,
+        campaignId: Campaign.CampaignId,
         cursor: Schema.NullOr(Schema.DateTimeUtcFromString),
       }),
       Result: ChatModel,
-      execute: ({ userId, cursor }) =>
+      execute: ({ userId, campaignId, cursor }) =>
         sql`
         SELECT * FROM chats
-        WHERE user_id = ${userId}
+        WHERE user_id = ${userId} AND campaign_id = ${campaignId}
           ${cursor !== null ? sql`AND updated_at < ${cursor}` : sql``}
         ORDER BY updated_at DESC
         LIMIT ${PAGE_SIZE + 1}
@@ -92,13 +106,31 @@ export class ChatRepo extends Context.Service<ChatRepo, {
     });
 
     const deleteQuery = SqlSchema.findOneOption({
-      Request: Schema.Struct({ chatId: Chat.ChatId, userId: Schema.String }),
+      Request: Schema.Struct({
+        chatId: Chat.ChatId,
+        userId: Schema.String,
+        campaignId: Campaign.CampaignId,
+      }),
       Result: Schema.Struct({ id: Chat.ChatId }),
-      execute: ({ chatId, userId }) =>
+      execute: ({ chatId, userId, campaignId }) =>
         sql`
         DELETE FROM chats
-        WHERE id = ${chatId} AND user_id = ${userId}
+        WHERE id = ${chatId} AND user_id = ${userId} AND campaign_id = ${campaignId}
         RETURNING id
+      `,
+    });
+
+    const assignToCampaignQuery = SqlSchema.void({
+      Request: Schema.Struct({
+        chatId: Chat.ChatId,
+        userId: Schema.String,
+        campaignId: Campaign.CampaignId,
+      }),
+      execute: ({ chatId, userId, campaignId }) =>
+        sql`
+        UPDATE chats
+        SET campaign_id = ${campaignId}, updated_at = NOW()
+        WHERE id = ${chatId} AND user_id = ${userId}
       `,
     });
 
@@ -179,8 +211,8 @@ export class ChatRepo extends Context.Service<ChatRepo, {
           }),
         ),
 
-      findById: (chatId, userId) =>
-        findByIdQuery({ chatId, userId }).pipe(
+      findById: (chatId, userId, campaignId) =>
+        findByIdQuery({ chatId, userId, campaignId }).pipe(
           Effect.catchTags({
             SchemaError: Effect.die,
             SqlError: Effect.die,
@@ -193,9 +225,10 @@ export class ChatRepo extends Context.Service<ChatRepo, {
           ),
         ),
 
-      listByUser: (userId, cursor) =>
+      listByCampaign: (userId, campaignId, cursor) =>
         listQuery({
           userId,
+          campaignId,
           cursor: Option.getOrNull(cursor),
         }).pipe(
           Effect.catchTags({
@@ -208,8 +241,8 @@ export class ChatRepo extends Context.Service<ChatRepo, {
           })),
         ),
 
-      delete: (chatId, userId) =>
-        deleteQuery({ chatId, userId }).pipe(
+      delete: (chatId, userId, campaignId) =>
+        deleteQuery({ chatId, userId, campaignId }).pipe(
           Effect.catchTags({
             SchemaError: Effect.die,
             SqlError: Effect.die,
@@ -220,6 +253,14 @@ export class ChatRepo extends Context.Service<ChatRepo, {
               onSome: () => Effect.void,
             }),
           ),
+        ),
+
+      assignToCampaign: ({ chatId, userId, campaignId }) =>
+        assignToCampaignQuery({ chatId, userId, campaignId }).pipe(
+          Effect.catchTags({
+            SchemaError: Effect.die,
+            SqlError: Effect.die,
+          }),
         ),
 
       updateMessages: ({ chatId, userId, messages }) =>
