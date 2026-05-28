@@ -7,7 +7,7 @@ import { chatDataFamily, watchChatFamily } from "./chat-atoms.js";
 import { ChatInput } from "./chat-input.js";
 import { MessageList } from "./message-list.js";
 
-export const ChatPage = ({ chatId }: { readonly chatId: ChatId; }) => {
+export const ChatPage = ({ chatId }: { readonly chatId: ChatId }) => {
   const chatAtom = chatDataFamily(chatId);
   const watchAtom = watchChatFamily(chatId);
   const chatResult = useAtomValue(chatAtom);
@@ -22,14 +22,18 @@ export const ChatPage = ({ chatId }: { readonly chatId: ChatId; }) => {
     if (activeRunId === undefined) {
       return;
     }
-    if (!AsyncResult.isInitial(watchResult) && !AsyncResult.isFailure(watchResult)) {
+    if (
+      !AsyncResult.isInitial(watchResult) &&
+      !AsyncResult.isFailure(watchResult)
+    ) {
       return;
     }
     setWatchChat({ activeRunId });
   }, [activeRunId, setWatchChat, watchResult]);
 
   if (
-    AsyncResult.isInitial(chatResult) || (chatResult.waiting && !AsyncResult.isSuccess(chatResult))
+    AsyncResult.isInitial(chatResult) ||
+    (chatResult.waiting && !AsyncResult.isSuccess(chatResult))
   ) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -47,13 +51,7 @@ export const ChatPage = ({ chatId }: { readonly chatId: ChatId; }) => {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-        <h1 className="text-sm font-medium truncate">{chatResult.value.title}</h1>
-        <span className="text-xs text-muted bg-elevated px-2 py-0.5 rounded">
-          {chatResult.value.model}
-        </span>
-      </div>
+    <div className="flex-1 flex flex-col min-h-full max-w-4xl mx-auto">
       <MessageList chatId={chatId} />
       <ChatInput chatId={chatId} />
     </div>

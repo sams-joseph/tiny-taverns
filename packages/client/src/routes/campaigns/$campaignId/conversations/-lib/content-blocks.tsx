@@ -1,7 +1,17 @@
-import { BrainIcon, CheckIcon, ChevronDownIcon, Loader2Icon, XIcon } from "lucide-react";
-import { Button, Disclosure, DisclosurePanel } from "react-aria-components";
+import {
+  BrainIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  Loader2Icon,
+  XIcon,
+} from "lucide-react";
 import type { ContentBlock, ToolStatus } from "./chat-types.js";
 import { Markdown } from "./markdown.js";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible.js";
 
 const TOOL_LABELS: Record<string, string> = {
   getCurrentDateTime: "Get Date/Time",
@@ -17,7 +27,11 @@ const tryFormatJson = (value: string): string => {
   }
 };
 
-const ToolStatusIcon = ({ status }: { readonly status: ToolStatus["status"]; }) => {
+const ToolStatusIcon = ({
+  status,
+}: {
+  readonly status: ToolStatus["status"];
+}) => {
   switch (status) {
     case "start":
       return <Loader2Icon className="size-3.5 animate-spin text-muted" />;
@@ -28,17 +42,14 @@ const ToolStatusIcon = ({ status }: { readonly status: ToolStatus["status"]; }) 
   }
 };
 
-const ToolItemRow = ({ tool }: { readonly tool: ToolStatus; }) => (
-  <Disclosure>
-    <Button
-      slot="trigger"
-      className="flex items-center gap-2 text-sm text-muted hover:text-foreground w-full py-1 group cursor-pointer"
-    >
-      <ChevronDownIcon className="size-3.5 -rotate-90 group-data-[expanded]:rotate-0 transition-transform" />
+const ToolItemRow = ({ tool }: { readonly tool: ToolStatus }) => (
+  <Collapsible className="group/collapsible-tool">
+    <CollapsibleTrigger className="flex items-center gap-2">
+      <ChevronDownIcon className="size-3.5 -rotate-90 group-data-open/collapsible-tool:rotate-0 transition-transform" />
       <ToolStatusIcon status={tool.status} />
       <span>{TOOL_LABELS[tool.toolName] ?? tool.toolName}</span>
-    </Button>
-    <DisclosurePanel>
+    </CollapsibleTrigger>
+    <CollapsibleContent className="mt-1 ml-5 style-lyra:ml-4">
       <div className="pl-6 pb-2 space-y-2 text-xs font-mono">
         <div>
           <span className="text-muted">Input</span>
@@ -55,8 +66,8 @@ const ToolItemRow = ({ tool }: { readonly tool: ToolStatus; }) => (
           </div>
         )}
       </div>
-    </DisclosurePanel>
-  </Disclosure>
+    </CollapsibleContent>
+  </Collapsible>
 );
 
 const ToolGroupBlock = ({
@@ -71,25 +82,31 @@ const ToolGroupBlock = ({
   const anyFailure = tools.some((t) => t.status === "failure");
 
   return (
-    <Disclosure defaultExpanded={isStreaming || anyRunning}>
-      <Button
-        slot="trigger"
-        className="flex items-center gap-2 text-sm text-muted hover:text-foreground py-1 group cursor-pointer"
-      >
-        <ChevronDownIcon className="size-4 -rotate-90 group-data-[expanded]:rotate-0 transition-transform" />
+    <Collapsible
+      defaultOpen={isStreaming || anyRunning}
+      className="group/collapsible"
+    >
+      <CollapsibleTrigger className="flex items-center gap-2">
+        <ChevronDownIcon className="size-4 -rotate-90 group-data-open/collapsible:rotate-0 transition-transform" />
         <span>
           {tools.length} {tools.length === 1 ? "step" : "steps"}
         </span>
         {anyRunning && <Loader2Icon className="size-3.5 animate-spin" />}
-        {!anyRunning && allSuccess && <CheckIcon className="size-3.5 text-success" />}
-        {!anyRunning && anyFailure && <XIcon className="size-3.5 text-danger" />}
-      </Button>
-      <DisclosurePanel>
+        {!anyRunning && allSuccess && (
+          <CheckIcon className="size-3.5 text-success" />
+        )}
+        {!anyRunning && anyFailure && (
+          <XIcon className="size-3.5 text-danger" />
+        )}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1 ml-5 style-lyra:ml-4">
         <div className="pl-4 border-l border-border ml-2">
-          {tools.map((tool) => <ToolItemRow key={tool.id} tool={tool} />)}
+          {tools.map((tool) => (
+            <ToolItemRow key={tool.id} tool={tool} />
+          ))}
         </div>
-      </DisclosurePanel>
-    </Disclosure>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
@@ -100,20 +117,18 @@ const ReasoningBlock = ({
   readonly content: string;
   readonly isStreaming: boolean;
 }) => (
-  <Disclosure>
-    <Button
-      slot="trigger"
-      className="flex items-center gap-2 text-sm text-muted hover:text-foreground py-1 group cursor-pointer"
-    >
-      <ChevronDownIcon className="size-4 -rotate-90 group-data-[expanded]:rotate-0 transition-transform" />
+  <Collapsible className="group/collapsible">
+    <CollapsibleTrigger className="flex items-center gap-2">
+      <ChevronDownIcon className="size-4 -rotate-90 group-data-open/collapsible:rotate-0 transition-transform" />
+      <ChevronDownIcon className="size-4 -rotate-90 group-data-open/collapsible:rotate-0 transition-transform" />
       <BrainIcon className="size-4" />
       <span>Reasoning</span>
       {isStreaming && <Loader2Icon className="size-3.5 animate-spin" />}
-    </Button>
-    <DisclosurePanel>
+    </CollapsibleTrigger>
+    <CollapsibleContent className="mt-1 ml-5 style-lyra:ml-4">
       <Markdown content={content} className="pl-6 pt-2 text-sm text-muted" />
-    </DisclosurePanel>
-  </Disclosure>
+    </CollapsibleContent>
+  </Collapsible>
 );
 
 export const ContentBlockRenderer = ({
@@ -129,7 +144,9 @@ export const ContentBlockRenderer = ({
       return <Markdown content={block.content} />;
     }
     case "reasoning":
-      return <ReasoningBlock content={block.content} isStreaming={isStreaming} />;
+      return (
+        <ReasoningBlock content={block.content} isStreaming={isStreaming} />
+      );
     case "tool_group":
       return <ToolGroupBlock tools={block.tools} isStreaming={isStreaming} />;
   }
