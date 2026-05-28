@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as NpcsIndexRouteImport } from './routes/npcs/index'
 import { Route as CampaignsIndexRouteImport } from './routes/campaigns/index'
+import { Route as NpcsNpcIdIndexRouteImport } from './routes/npcs/$npcId/index'
 import { Route as CampaignsCampaignIdIndexRouteImport } from './routes/campaigns/$campaignId/index'
 import { Route as CampaignsCampaignIdConversationsChatIdRouteImport } from './routes/campaigns/$campaignId/conversations/$chatId'
 
@@ -28,6 +29,11 @@ const NpcsIndexRoute = NpcsIndexRouteImport.update({
 const CampaignsIndexRoute = CampaignsIndexRouteImport.update({
   id: '/campaigns/',
   path: '/campaigns/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NpcsNpcIdIndexRoute = NpcsNpcIdIndexRouteImport.update({
+  id: '/npcs/$npcId/',
+  path: '/npcs/$npcId/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CampaignsCampaignIdIndexRoute =
@@ -48,6 +54,7 @@ export interface FileRoutesByFullPath {
   '/campaigns/': typeof CampaignsIndexRoute
   '/npcs/': typeof NpcsIndexRoute
   '/campaigns/$campaignId/': typeof CampaignsCampaignIdIndexRoute
+  '/npcs/$npcId/': typeof NpcsNpcIdIndexRoute
   '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 export interface FileRoutesByTo {
@@ -55,6 +62,7 @@ export interface FileRoutesByTo {
   '/campaigns': typeof CampaignsIndexRoute
   '/npcs': typeof NpcsIndexRoute
   '/campaigns/$campaignId': typeof CampaignsCampaignIdIndexRoute
+  '/npcs/$npcId': typeof NpcsNpcIdIndexRoute
   '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 export interface FileRoutesById {
@@ -63,6 +71,7 @@ export interface FileRoutesById {
   '/campaigns/': typeof CampaignsIndexRoute
   '/npcs/': typeof NpcsIndexRoute
   '/campaigns/$campaignId/': typeof CampaignsCampaignIdIndexRoute
+  '/npcs/$npcId/': typeof NpcsNpcIdIndexRoute
   '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 export interface FileRouteTypes {
@@ -72,6 +81,7 @@ export interface FileRouteTypes {
     | '/campaigns/'
     | '/npcs/'
     | '/campaigns/$campaignId/'
+    | '/npcs/$npcId/'
     | '/campaigns/$campaignId/conversations/$chatId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -79,6 +89,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/npcs'
     | '/campaigns/$campaignId'
+    | '/npcs/$npcId'
     | '/campaigns/$campaignId/conversations/$chatId'
   id:
     | '__root__'
@@ -86,6 +97,7 @@ export interface FileRouteTypes {
     | '/campaigns/'
     | '/npcs/'
     | '/campaigns/$campaignId/'
+    | '/npcs/$npcId/'
     | '/campaigns/$campaignId/conversations/$chatId'
   fileRoutesById: FileRoutesById
 }
@@ -94,6 +106,7 @@ export interface RootRouteChildren {
   CampaignsIndexRoute: typeof CampaignsIndexRoute
   NpcsIndexRoute: typeof NpcsIndexRoute
   CampaignsCampaignIdIndexRoute: typeof CampaignsCampaignIdIndexRoute
+  NpcsNpcIdIndexRoute: typeof NpcsNpcIdIndexRoute
   CampaignsCampaignIdConversationsChatIdRoute: typeof CampaignsCampaignIdConversationsChatIdRoute
 }
 
@@ -120,6 +133,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CampaignsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/npcs/$npcId/': {
+      id: '/npcs/$npcId/'
+      path: '/npcs/$npcId'
+      fullPath: '/npcs/$npcId/'
+      preLoaderRoute: typeof NpcsNpcIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/campaigns/$campaignId/': {
       id: '/campaigns/$campaignId/'
       path: '/campaigns/$campaignId'
@@ -142,6 +162,7 @@ const rootRouteChildren: RootRouteChildren = {
   CampaignsIndexRoute: CampaignsIndexRoute,
   NpcsIndexRoute: NpcsIndexRoute,
   CampaignsCampaignIdIndexRoute: CampaignsCampaignIdIndexRoute,
+  NpcsNpcIdIndexRoute: NpcsNpcIdIndexRoute,
   CampaignsCampaignIdConversationsChatIdRoute:
     CampaignsCampaignIdConversationsChatIdRoute,
 }

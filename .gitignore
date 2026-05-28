@@ -12,3 +12,4 @@ dist/
 .envrc
 coverage/
 .DS_Store
+.scratch/
