@@ -11,18 +11,22 @@ const preferencesLayer: Layer.Layer<KeyValueStore.KeyValueStore> =
   BrowserKeyValueStore.layerLocalStorage;
 export const preferencesRuntime = Atom.runtime(preferencesLayer);
 
-export const npcListAtom = npcsRuntime.atom(
-  Effect.gen(function* () {
-    const api = yield* NpcApi;
-    return yield* api.npcList(null);
-  }),
-);
-
-export const npcDataFamily = Atom.family((npcId: NpcId) =>
-  npcsRuntime.atom(
+export const npcListAtom = npcsRuntime
+  .atom(
     Effect.gen(function* () {
       const api = yield* NpcApi;
-      return yield* api.npcGet(npcId);
+      return yield* api.npcList(null);
     }),
-  ),
+  )
+  .pipe(Atom.refreshOnWindowFocus);
+
+export const npcDataFamily = Atom.family((npcId: NpcId) =>
+  npcsRuntime
+    .atom(
+      Effect.gen(function* () {
+        const api = yield* NpcApi;
+        return yield* api.npcGet(npcId);
+      }),
+    )
+    .pipe(Atom.withReactivity(["items"])),
 );

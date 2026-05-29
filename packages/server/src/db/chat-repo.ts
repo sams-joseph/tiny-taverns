@@ -12,64 +12,71 @@ import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { ChatModel } from "./chat-model.js";
 import { PgLive } from "./pg-live.js";
 
-export class ChatRepo extends Context.Service<ChatRepo, {
-  readonly create: (args: {
-    readonly userId: string;
-    readonly campaignId?: Campaign.CampaignId;
-    readonly title: string;
-    readonly model: typeof ModelFamily.Type;
-  }) => Effect.Effect<typeof ChatModel.Type>;
-  readonly findById: (
-    chatId: Chat.ChatId,
-    userId: string,
-    campaignId: Campaign.CampaignId,
-  ) => Effect.Effect<typeof ChatModel.Type, Chat.ChatNotFoundError>;
-  readonly listByCampaign: (
-    userId: string,
-    campaignId: Campaign.CampaignId,
-    cursor: Option.Option<DateTime.Utc>,
-  ) => Effect.Effect<{ items: ReadonlyArray<typeof ChatModel.Type>; hasMore: boolean; }>;
-  readonly delete: (
-    chatId: Chat.ChatId,
-    userId: string,
-    campaignId: Campaign.CampaignId,
-  ) => Effect.Effect<void, Chat.ChatNotFoundError>;
-  readonly assignToCampaign: (args: {
-    readonly chatId: Chat.ChatId;
-    readonly userId: string;
-    readonly campaignId: Campaign.CampaignId;
-  }) => Effect.Effect<void>;
-  readonly updateMessages: (args: {
-    readonly chatId: Chat.ChatId;
-    readonly userId: string;
-    readonly campaignId?: Campaign.CampaignId;
-    readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
-  }) => Effect.Effect<void>;
-  readonly startRun: (args: {
-    readonly chatId: Chat.ChatId;
-    readonly userId: string;
-    readonly runId: Chat.RunId;
-    readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
-  }) => Effect.Effect<boolean>;
-  readonly finishRun: (args: {
-    readonly chatId: Chat.ChatId;
-    readonly userId: string;
-    readonly runId: Chat.RunId;
-    readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
-  }) => Effect.Effect<void>;
-  readonly clearActiveRun: (args: {
-    readonly chatId: Chat.ChatId;
-    readonly userId: string;
-    readonly runId: Chat.RunId;
-  }) => Effect.Effect<void>;
-}>()("ChatRepo", {
-  make: Effect.gen(function*() {
+export class ChatRepo extends Context.Service<
+  ChatRepo,
+  {
+    readonly create: (args: {
+      readonly userId: string;
+      readonly campaignId: Campaign.CampaignId;
+      readonly title: string;
+      readonly model: typeof ModelFamily.Type;
+    }) => Effect.Effect<typeof ChatModel.Type>;
+    readonly findById: (
+      chatId: Chat.ChatId,
+      userId: string,
+      campaignId: Campaign.CampaignId,
+    ) => Effect.Effect<typeof ChatModel.Type, Chat.ChatNotFoundError>;
+    readonly listByCampaign: (
+      userId: string,
+      campaignId: Campaign.CampaignId,
+      cursor: Option.Option<DateTime.Utc>,
+    ) => Effect.Effect<{
+      items: ReadonlyArray<typeof ChatModel.Type>;
+      hasMore: boolean;
+    }>;
+    readonly delete: (
+      chatId: Chat.ChatId,
+      userId: string,
+      campaignId: Campaign.CampaignId,
+    ) => Effect.Effect<void, Chat.ChatNotFoundError>;
+    readonly assignToCampaign: (args: {
+      readonly chatId: Chat.ChatId;
+      readonly userId: string;
+      readonly campaignId: Campaign.CampaignId;
+    }) => Effect.Effect<void>;
+    readonly updateMessages: (args: {
+      readonly chatId: Chat.ChatId;
+      readonly userId: string;
+      readonly campaignId?: Campaign.CampaignId;
+      readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
+    }) => Effect.Effect<void>;
+    readonly startRun: (args: {
+      readonly chatId: Chat.ChatId;
+      readonly userId: string;
+      readonly runId: Chat.RunId;
+      readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
+    }) => Effect.Effect<boolean>;
+    readonly finishRun: (args: {
+      readonly chatId: Chat.ChatId;
+      readonly userId: string;
+      readonly runId: Chat.RunId;
+      readonly messages: ReadonlyArray<typeof Chat.Message.Type>;
+    }) => Effect.Effect<void>;
+    readonly clearActiveRun: (args: {
+      readonly chatId: Chat.ChatId;
+      readonly userId: string;
+      readonly runId: Chat.RunId;
+    }) => Effect.Effect<void>;
+  }
+>()("ChatRepo", {
+  make: Effect.gen(function* () {
     const sql = yield* SqlClient;
 
     const insertQuery = SqlSchema.findOne({
       Request: ChatModel.insert,
       Result: ChatModel,
-      execute: (req) => sql`INSERT INTO chats ${sql.insert(req).returning("*")}`,
+      execute: (req) =>
+        sql`INSERT INTO chats ${sql.insert(req).returning("*")}`,
     });
 
     const findByIdQuery = SqlSchema.findOneOption({
@@ -196,14 +203,16 @@ export class ChatRepo extends Context.Service<ChatRepo, {
 
     return {
       create: ({ userId, campaignId, title, model }) =>
-        insertQuery(ChatModel.insert.make({
-          userId,
-          campaignId: campaignId ?? null,
-          title,
-          model,
-          messages: [],
-          activeRunId: null,
-        })).pipe(
+        insertQuery(
+          ChatModel.insert.make({
+            userId,
+            campaignId,
+            title,
+            model,
+            messages: [],
+            activeRunId: null,
+          }),
+        ).pipe(
           Effect.catchTags({
             SchemaError: Effect.die,
             SqlError: Effect.die,
@@ -219,7 +228,8 @@ export class ChatRepo extends Context.Service<ChatRepo, {
           }),
           Effect.flatMap(
             Option.match({
-              onNone: () => Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
+              onNone: () =>
+                Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
               onSome: Effect.succeed,
             }),
           ),
@@ -249,7 +259,8 @@ export class ChatRepo extends Context.Service<ChatRepo, {
           }),
           Effect.flatMap(
             Option.match({
-              onNone: () => Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
+              onNone: () =>
+                Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
               onSome: () => Effect.void,
             }),
           ),

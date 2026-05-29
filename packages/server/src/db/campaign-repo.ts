@@ -1,5 +1,4 @@
 import * as Campaign from "@app/domain/api/campaign-rpc";
-import * as Chat from "@app/domain/api/chat-rpc";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -11,32 +10,44 @@ import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { CampaignModel } from "./campaign-model.js";
 import { PgLive } from "./pg-live.js";
 
-export class CampaignRepo extends Context.Service<CampaignRepo, {
-  readonly create: (args: {
-    readonly userId: string;
-    readonly title: string;
-    readonly defaultChatId: Chat.ChatId;
-  }) => Effect.Effect<typeof CampaignModel.Type>;
-  readonly findById: (
-    campaignId: Campaign.CampaignId,
-    userId: string,
-  ) => Effect.Effect<typeof CampaignModel.Type, Campaign.CampaignNotFoundError>;
-  readonly listByUser: (
-    userId: string,
-    cursor: Option.Option<DateTime.Utc>,
-  ) => Effect.Effect<{ items: ReadonlyArray<typeof CampaignModel.Type>; hasMore: boolean; }>;
-}>()("CampaignRepo", {
-  make: Effect.gen(function*() {
+export class CampaignRepo extends Context.Service<
+  CampaignRepo,
+  {
+    readonly create: (args: {
+      readonly userId: string;
+      readonly title: string;
+    }) => Effect.Effect<typeof CampaignModel.Type>;
+    readonly findById: (
+      campaignId: Campaign.CampaignId,
+      userId: string,
+    ) => Effect.Effect<
+      typeof CampaignModel.Type,
+      Campaign.CampaignNotFoundError
+    >;
+    readonly listByUser: (
+      userId: string,
+      cursor: Option.Option<DateTime.Utc>,
+    ) => Effect.Effect<{
+      items: ReadonlyArray<typeof CampaignModel.Type>;
+      hasMore: boolean;
+    }>;
+  }
+>()("CampaignRepo", {
+  make: Effect.gen(function* () {
     const sql = yield* SqlClient;
 
     const insertQuery = SqlSchema.findOne({
       Request: CampaignModel.insert,
       Result: CampaignModel,
-      execute: (req) => sql`INSERT INTO campaigns ${sql.insert(req).returning("*")}`,
+      execute: (req) =>
+        sql`INSERT INTO campaigns ${sql.insert(req).returning("*")}`,
     });
 
     const findByIdQuery = SqlSchema.findOneOption({
-      Request: Schema.Struct({ campaignId: Campaign.CampaignId, userId: Schema.String }),
+      Request: Schema.Struct({
+        campaignId: Campaign.CampaignId,
+        userId: Schema.String,
+      }),
       Result: CampaignModel,
       execute: ({ campaignId, userId }) =>
         sql`
@@ -64,8 +75,8 @@ export class CampaignRepo extends Context.Service<CampaignRepo, {
     });
 
     return {
-      create: ({ userId, title, defaultChatId }) =>
-        insertQuery(CampaignModel.insert.make({ userId, title, defaultChatId })).pipe(
+      create: ({ userId, title }) =>
+        insertQuery(CampaignModel.insert.make({ userId, title })).pipe(
           Effect.catchTags({
             SchemaError: Effect.die,
             SqlError: Effect.die,
@@ -81,7 +92,10 @@ export class CampaignRepo extends Context.Service<CampaignRepo, {
           }),
           Effect.flatMap(
             Option.match({
-              onNone: () => Effect.fail(new Campaign.CampaignNotFoundError({ id: campaignId })),
+              onNone: () =>
+                Effect.fail(
+                  new Campaign.CampaignNotFoundError({ id: campaignId }),
+                ),
               onSome: Effect.succeed,
             }),
           ),

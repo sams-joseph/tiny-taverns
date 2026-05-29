@@ -7,7 +7,7 @@ import { Model } from "effect/unstable/schema";
 export class ChatModel extends Model.Class<ChatModel>("ChatModel")({
   id: Model.Generated(Chat.ChatId),
   userId: Schema.String,
-  campaignId: Schema.NullOr(Campaign.CampaignId),
+  campaignId: Campaign.CampaignId,
   title: Schema.NonEmptyString,
   model: ModelFamily,
   messages: Model.JsonFromString(Schema.Array(Chat.Message)),

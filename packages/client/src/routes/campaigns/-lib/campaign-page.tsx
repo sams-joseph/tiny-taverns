@@ -26,6 +26,7 @@ import {
   selectedModelAtom,
 } from "../$campaignId/conversations/-lib/chat-atoms.js";
 import { campaignDataFamily } from "../-lib/campaign-atoms.js";
+import { Array, Option, pipe } from "effect";
 
 export const Route = createFileRoute("/campaigns/$campaignId/")({
   component: CampaignLayout,
@@ -51,6 +52,15 @@ export function CampaignOverviewPage() {
   const refreshConversations = useAtomRefresh(conversationsAtom);
   const createConversation = useAtomSet(createChatAtom, { mode: "promise" });
   const selectedModel = useAtomValue(selectedModelAtom);
+
+  const initialChat = React.useMemo(() => {
+    return pipe(
+      Array.head(
+        AsyncResult.isSuccess(conversations) ? conversations.value.items : [],
+      ),
+      Option.getOrElse(() => null),
+    );
+  }, [conversations]);
 
   const handleCreateConversation = () => {
     void createConversation({
@@ -84,21 +94,23 @@ export function CampaignOverviewPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <Button
-          onClick={() =>
-            navigate({
-              to: "/campaigns/$campaignId/conversations/$chatId",
-              params: {
-                campaignId: campaign.value.id,
-                chatId: campaign.value.defaultChatId,
-              },
-            })
-          }
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground"
-        >
-          <MessageSquareIcon className="size-4" />
-          Open General Conversation
-        </Button>
+        {initialChat && (
+          <Button
+            onClick={() =>
+              navigate({
+                to: "/campaigns/$campaignId/conversations/$chatId",
+                params: {
+                  campaignId: campaign.value.id,
+                  chatId: initialChat?.id,
+                },
+              })
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground"
+          >
+            <MessageSquareIcon className="size-4" />
+            Open General Conversation
+          </Button>
+        )}
         <Button
           onClick={handleCreateConversation}
           variant="outline"

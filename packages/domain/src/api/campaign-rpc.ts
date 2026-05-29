@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { AuthMiddleware } from "../auth.js";
-import { CampaignId, ChatId } from "./ids.js";
+import { CampaignId } from "./ids.js";
 
 export { CampaignId } from "./ids.js";
 
@@ -17,7 +17,6 @@ export class Campaign extends Schema.Opaque<Campaign>()(
   Schema.Struct({
     id: CampaignId,
     title: Schema.String,
-    defaultChatId: ChatId,
     createdAt: Schema.DateTimeUtcFromString,
     updatedAt: Schema.DateTimeUtcFromString,
   }),

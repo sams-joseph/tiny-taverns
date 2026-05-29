@@ -8,38 +8,35 @@ import * as Option from "effect/Option";
 import type * as Rpc from "effect/unstable/rpc/Rpc";
 
 export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const campaignRepo = yield* CampaignRepo;
     const chatRepo = yield* ChatRepo;
 
     return Campaign.CampaignRpc.of({
-      campaign_create: Effect.fnUntraced(function*(payload) {
+      campaign_create: Effect.fnUntraced(function* (payload) {
         const currentUser = yield* CurrentUser;
-        const defaultChat = yield* chatRepo.create({
-          userId: currentUser.id,
-          title: "General",
-          model: "qwen3-0.6b" as const,
-        });
         const campaign = yield* campaignRepo.create({
           userId: currentUser.id,
           title: payload.title,
-          defaultChatId: defaultChat.id,
         });
-        yield* chatRepo.assignToCampaign({
-          chatId: defaultChat.id,
+
+        yield* chatRepo.create({
           userId: currentUser.id,
           campaignId: campaign.id,
+          title: "General",
+          model: "qwen3-0.6b" as const,
         });
         return campaign;
       }),
 
-      campaign_list: Effect.fnUntraced(function*(payload) {
+      campaign_list: Effect.fnUntraced(function* (payload) {
         const currentUser = yield* CurrentUser;
-        const cursor = payload.cursor === null ? Option.none() : Option.some(payload.cursor);
+        const cursor =
+          payload.cursor === null ? Option.none() : Option.some(payload.cursor);
         return yield* campaignRepo.listByUser(currentUser.id, cursor);
       }),
 
-      campaign_get: Effect.fnUntraced(function*(payload) {
+      campaign_get: Effect.fnUntraced(function* (payload) {
         const currentUser = yield* CurrentUser;
         return yield* campaignRepo.findById(payload.campaignId, currentUser.id);
       }),
@@ -48,7 +45,9 @@ export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
 );
 
 export const CampaignRpcLive: Layer.Layer<
-  Rpc.Handler<"campaign_create"> | Rpc.Handler<"campaign_list"> | Rpc.Handler<"campaign_get">
+  | Rpc.Handler<"campaign_create">
+  | Rpc.Handler<"campaign_list">
+  | Rpc.Handler<"campaign_get">
 > = CampaignRpcHandler.pipe(
   Layer.provide(CampaignRepo.layer),
   Layer.provide(ChatRepo.layer),
