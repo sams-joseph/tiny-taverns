@@ -17,100 +17,99 @@ const TestMigrationLayer = PgMigrator.layer({
 const TestLive = Layer.mergeAll(
   Layer.effect(CampaignRepo, CampaignRepo.make),
   Layer.effect(ChatRepo, ChatRepo.make),
-).pipe(
-  Layer.provideMerge(TestMigrationLayer),
-  Layer.provideMerge(PgTest),
-);
+).pipe(Layer.provideMerge(TestMigrationLayer), Layer.provideMerge(PgTest));
 
 describe("CampaignRepo", () => {
   it.layer(TestLive, { timeout: "30 seconds" })("integration", (it) => {
-    it.effect("create stores a Campaign for a user with a default Conversation", () =>
-      withTransactionRollback(
-        Effect.gen(function*() {
-          const campaigns = yield* CampaignRepo;
-          const chats = yield* ChatRepo;
-          const defaultChat = yield* chats.create({
-            userId: "user-1",
-            title: "General",
-            model: "qwen3-0.6b",
-          });
+    it.effect(
+      "create stores a Campaign for a user with a default Conversation",
+      () =>
+        withTransactionRollback(
+          Effect.gen(function* () {
+            const campaigns = yield* CampaignRepo;
+            const chats = yield* ChatRepo;
 
-          const campaign = yield* campaigns.create({
-            userId: "user-1",
-            title: "The Dawn Marches",
-            defaultChatId: defaultChat.id,
-          });
+            const campaign = yield* campaigns.create({
+              userId: "user-1",
+              title: "The Dawn Marches",
+            });
 
-          expect(campaign.title).toBe("The Dawn Marches");
-          expect(campaign.userId).toBe("user-1");
-          expect(campaign.defaultChatId).toBe(defaultChat.id);
-        }),
-      ));
+            const defaultChat = yield* chats.create({
+              userId: "user-1",
+              title: "General",
+              model: "qwen3-0.6b",
+              campaignId: campaign.id,
+            });
+
+            const chat = yield* chats.findById(
+              defaultChat.id,
+              "user-1",
+              campaign.id,
+            );
+
+            expect(campaign.title).toBe("The Dawn Marches");
+            expect(campaign.userId).toBe("user-1");
+            expect(chat.id).toBe(defaultChat.id);
+          }),
+        ),
+    );
 
     it.effect("listByUser returns only the user's Campaigns", () =>
       withTransactionRollback(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const campaigns = yield* CampaignRepo;
-          const chats = yield* ChatRepo;
-          const userOneChat = yield* chats.create({
-            userId: "user-1",
-            title: "General",
-            model: "qwen3-0.6b",
-          });
-          const userTwoChat = yield* chats.create({
-            userId: "user-2",
-            title: "General",
-            model: "qwen3-0.6b",
-          });
           yield* campaigns.create({
             userId: "user-1",
             title: "Mine",
-            defaultChatId: userOneChat.id,
           });
           yield* campaigns.create({
             userId: "user-2",
             title: "Theirs",
-            defaultChatId: userTwoChat.id,
           });
 
           const result = yield* campaigns.listByUser("user-1", Option.none());
 
-          expect(result.items.map((campaign) => campaign.title)).toEqual(["Mine"]);
+          expect(result.items.map((campaign) => campaign.title)).toEqual([
+            "Mine",
+          ]);
         }),
-      ));
+      ),
+    );
 
     it.effect("findById fails when the Campaign belongs to another user", () =>
       withTransactionRollback(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const campaigns = yield* CampaignRepo;
-          const chats = yield* ChatRepo;
-          const defaultChat = yield* chats.create({
-            userId: "user-1",
-            title: "General",
-            model: "qwen3-0.6b",
-          });
+
           const campaign = yield* campaigns.create({
             userId: "user-1",
             title: "Secret",
-            defaultChatId: defaultChat.id,
           });
 
-          const exit = yield* campaigns.findById(campaign.id, "user-2").pipe(Effect.exit);
+          const exit = yield* campaigns
+            .findById(campaign.id, "user-2")
+            .pipe(Effect.exit);
 
           expect(exit._tag).toBe("Failure");
         }),
-      ));
+      ),
+    );
 
     it.effect("findById fails when the Campaign does not exist", () =>
       withTransactionRollback(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const campaigns = yield* CampaignRepo;
-          const fakeId = Campaign.CampaignId.make("00000000-0000-4000-8000-000000000099");
+          const fakeId = Campaign.CampaignId.make(
+            "00000000-0000-4000-8000-000000000099",
+          );
 
-          const exit = yield* campaigns.findById(fakeId, "user-1").pipe(Effect.exit);
+          const exit = yield* campaigns
+            .findById(fakeId, "user-1")
+            .pipe(Effect.exit);
 
           expect(exit._tag).toBe("Failure");
         }),
-      ));
+      ),
+    );
   });
 });

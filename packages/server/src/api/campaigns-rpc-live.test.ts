@@ -11,15 +11,16 @@ import { RpcTest } from "effect/unstable/rpc";
 import { CampaignRpcHandler } from "./campaigns-rpc-live.js";
 
 const now = DateTime.nowUnsafe();
-const campaignId = Campaign.CampaignId.make("00000000-0000-4000-8000-000000000001");
+const campaignId = Campaign.CampaignId.make(
+  "00000000-0000-4000-8000-000000000001",
+);
 
 const MockCampaignRepo = Layer.mock(CampaignRepo)({
-  create: ({ userId, title, defaultChatId }) =>
+  create: ({ userId, title }) =>
     Effect.succeed({
       id: campaignId,
       userId,
       title,
-      defaultChatId,
       createdAt: now,
       updatedAt: now,
     }),
@@ -67,13 +68,15 @@ const TestLayer = Layer.mergeAll(
 );
 
 describe("CampaignRpc", () => {
-  it.effect("campaign_create returns a Campaign with a default Conversation", () =>
-    Effect.gen(function*() {
+  it.effect("campaign_create returns a Campaign", () =>
+    Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(Campaign.CampaignRpc);
 
-      const result = yield* client.campaign_create({ title: "The Dawn Marches" });
+      const result = yield* client.campaign_create({
+        title: "The Dawn Marches",
+      });
 
       expect(result.title).toBe("The Dawn Marches");
-      expect(result.defaultChatId).toBe("00000000-0000-4000-8000-000000000002");
-    }).pipe(Effect.provide(TestLayer)));
+    }).pipe(Effect.provide(TestLayer)),
+  );
 });
