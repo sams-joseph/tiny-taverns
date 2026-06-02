@@ -9,6 +9,7 @@ import * as Migrator from "effect/unstable/sql/Migrator";
 import { CampaignRepo } from "./campaign-repo.js";
 import { ChatRepo } from "./chat-repo.js";
 import { PgTest, withTransactionRollback } from "./pg-test.js";
+import { CampaignModel } from "./campaign-model.js";
 
 const TestMigrationLayer = PgMigrator.layer({
   loader: Migrator.fromGlob(import.meta.glob("./migrations/*.ts")),
@@ -29,10 +30,12 @@ describe("CampaignRepo", () => {
             const campaigns = yield* CampaignRepo;
             const chats = yield* ChatRepo;
 
-            const campaign = yield* campaigns.create({
-              userId: "user-1",
-              title: "The Dawn Marches",
-            });
+            const campaign = yield* campaigns.insert(
+              CampaignModel.insert.make({
+                userId: "user-1",
+                title: "The Dawn Marches",
+              }),
+            );
 
             const defaultChat = yield* chats.create({
               userId: "user-1",
@@ -58,39 +61,25 @@ describe("CampaignRepo", () => {
       withTransactionRollback(
         Effect.gen(function* () {
           const campaigns = yield* CampaignRepo;
-          yield* campaigns.create({
-            userId: "user-1",
-            title: "Mine",
-          });
-          yield* campaigns.create({
-            userId: "user-2",
-            title: "Theirs",
-          });
+          yield* campaigns.insert(
+            CampaignModel.insert.make({
+              userId: "user-1",
+              title: "Mine",
+            }),
+          );
 
-          const result = yield* campaigns.listByUser("user-1", Option.none());
+          yield* campaigns.insert(
+            CampaignModel.insert.make({
+              userId: "user-2",
+              title: "Theirs",
+            }),
+          );
+
+          const result = yield* campaigns.fetch("user-1", Option.none());
 
           expect(result.items.map((campaign) => campaign.title)).toEqual([
             "Mine",
           ]);
-        }),
-      ),
-    );
-
-    it.effect("findById fails when the Campaign belongs to another user", () =>
-      withTransactionRollback(
-        Effect.gen(function* () {
-          const campaigns = yield* CampaignRepo;
-
-          const campaign = yield* campaigns.create({
-            userId: "user-1",
-            title: "Secret",
-          });
-
-          const exit = yield* campaigns
-            .findById(campaign.id, "user-2")
-            .pipe(Effect.exit);
-
-          expect(exit._tag).toBe("Failure");
         }),
       ),
     );
@@ -103,9 +92,7 @@ describe("CampaignRepo", () => {
             "00000000-0000-4000-8000-000000000099",
           );
 
-          const exit = yield* campaigns
-            .findById(fakeId, "user-1")
-            .pipe(Effect.exit);
+          const exit = yield* campaigns.findById(fakeId).pipe(Effect.exit);
 
           expect(exit._tag).toBe("Failure");
         }),

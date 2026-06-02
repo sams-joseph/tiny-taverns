@@ -16,7 +16,7 @@ const campaignId = Campaign.CampaignId.make(
 );
 
 const MockCampaignRepo = Layer.mock(CampaignRepo)({
-  create: ({ userId, title }) =>
+  insert: ({ userId, title }) =>
     Effect.succeed({
       id: campaignId,
       userId,
@@ -24,16 +24,16 @@ const MockCampaignRepo = Layer.mock(CampaignRepo)({
       createdAt: now,
       updatedAt: now,
     }),
-  findById: (id, userId) =>
+  findById: (id) =>
     Effect.succeed({
       id,
-      userId,
+      userId: "user-1",
       title: "The Dawn Marches",
       defaultChatId: Chat.ChatId.make("00000000-0000-4000-8000-000000000002"),
       createdAt: now,
       updatedAt: now,
     }),
-  listByUser: () => Effect.succeed({ items: [], hasMore: false }),
+  fetch: () => Effect.succeed({ items: [], hasMore: false }),
 });
 
 const MockChatRepo = Layer.mock(ChatRepo)({

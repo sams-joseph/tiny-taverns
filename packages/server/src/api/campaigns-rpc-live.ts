@@ -1,5 +1,7 @@
+import { CampaignModel } from "@/db/campaign-model";
 import { CampaignRepo } from "@/db/campaign-repo.js";
 import { ChatRepo } from "@/db/chat-repo.js";
+import { ensureOwnership } from "@/lib/ensureOwnership";
 import * as Campaign from "@app/domain/api/campaign-rpc";
 import { CurrentUser } from "@app/domain/auth";
 import * as Effect from "effect/Effect";
@@ -15,10 +17,19 @@ export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
     return Campaign.CampaignRpc.of({
       campaign_create: Effect.fnUntraced(function* (payload) {
         const currentUser = yield* CurrentUser;
-        const campaign = yield* campaignRepo.create({
-          userId: currentUser.id,
-          title: payload.title,
-        });
+        const campaign = yield* campaignRepo
+          .insert(
+            CampaignModel.insert.make({
+              userId: currentUser.id,
+              title: payload.title,
+            }),
+          )
+          .pipe(
+            Effect.catchTags({
+              SqlError: Effect.die,
+              SchemaError: Effect.die,
+            }),
+          );
 
         yield* chatRepo.create({
           userId: currentUser.id,
@@ -33,12 +44,22 @@ export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
         const currentUser = yield* CurrentUser;
         const cursor =
           payload.cursor === null ? Option.none() : Option.some(payload.cursor);
-        return yield* campaignRepo.listByUser(currentUser.id, cursor);
+        return yield* campaignRepo.fetch(currentUser.id, cursor);
       }),
 
       campaign_get: Effect.fnUntraced(function* (payload) {
         const currentUser = yield* CurrentUser;
-        return yield* campaignRepo.findById(payload.campaignId, currentUser.id);
+        return yield* campaignRepo.findById(payload.campaignId).pipe(
+          Effect.flatMap(ensureOwnership(currentUser.id)),
+          Effect.catchTags({
+            SqlError: (err) => Effect.die(err),
+            SchemaError: (err) => Effect.die(err),
+          }),
+          Effect.mapError(
+            () =>
+              new Campaign.CampaignNotFoundError({ id: payload.campaignId }),
+          ),
+        );
       }),
     });
   }),
