@@ -1,4 +1,5 @@
 import { NpcRepo } from "@/db/npc-repo.js";
+import { NpcModel } from "@/db/npc-model.js";
 import { CurrentUser } from "@app/domain/auth";
 import { Option } from "effect";
 import * as Effect from "effect/Effect";
@@ -9,11 +10,11 @@ import type * as Toolkit from "effect/unstable/ai/Toolkit";
 import { ChatMailbox, ChatToolkit } from "./chat-toolkit.js";
 
 export const HandlersLive = ChatToolkit.toLayer(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const npcRepo = yield* NpcRepo;
 
     return {
-      fetchNpcs: Effect.fnUntraced(function*() {
+      fetchNpcs: Effect.fnUntraced(function* () {
         const mailbox = yield* ChatMailbox;
         const currentUser = yield* CurrentUser;
 
@@ -26,12 +27,12 @@ export const HandlersLive = ChatToolkit.toLayer(
         ]);
 
         const npcs = yield* npcRepo
-          .listByUser(currentUser.id, Option.none())
+          .fetch(currentUser.id, Option.none())
           .pipe(
             Effect.tapError(() =>
               PubSub.publish(mailbox, [
                 { _tag: "ToolFailure", toolName: "fetchNpcs" },
-              ]).pipe(Effect.asVoid)
+              ]).pipe(Effect.asVoid),
             ),
           );
 
@@ -46,7 +47,7 @@ export const HandlersLive = ChatToolkit.toLayer(
         return npcs.items;
       }),
 
-      createNpc: Effect.fnUntraced(function*(params) {
+      createNpc: Effect.fnUntraced(function* (params) {
         const mailbox = yield* ChatMailbox;
         const currentUser = yield* CurrentUser;
 
@@ -59,15 +60,21 @@ export const HandlersLive = ChatToolkit.toLayer(
         ]);
 
         const npc = yield* npcRepo
-          .create({
-            userId: currentUser.id,
-            title: params.title,
-          })
+          .insert(
+            NpcModel.insert.make({
+              userId: currentUser.id,
+              title: params.title,
+            }),
+          )
           .pipe(
+            Effect.catchTags({
+              SqlError: Effect.die,
+              SchemaError: Effect.die,
+            }),
             Effect.tapError(() =>
               PubSub.publish(mailbox, [
                 { _tag: "ToolFailure", toolName: "createNpc" },
-              ]).pipe(Effect.asVoid)
+              ]).pipe(Effect.asVoid),
             ),
           );
 

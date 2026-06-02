@@ -1,4 +1,5 @@
 import { NpcRepo } from "@/db/npc-repo";
+import { ensureOwnership } from "@/lib/ensureOwnership";
 import * as Npc from "@app/domain/api/npc-rpc";
 import { CurrentUser } from "@app/domain/auth";
 import * as Effect from "effect/Effect";
@@ -15,12 +16,21 @@ export const NpcRpcHandler = Npc.NpcRpc.toLayer(
         const currentUser = yield* CurrentUser;
         const cursor =
           payload.cursor === null ? Option.none() : Option.some(payload.cursor);
-        return yield* npcRepo.listByUser(currentUser.id, cursor);
+        return yield* npcRepo.fetch(currentUser.id, cursor);
       }),
 
       npc_get: Effect.fnUntraced(function* (payload) {
         const currentUser = yield* CurrentUser;
-        return yield* npcRepo.findById(payload.npcId, currentUser.id);
+        return yield* npcRepo.findById(payload.npcId).pipe(
+          Effect.flatMap(ensureOwnership(currentUser.id)),
+          Effect.catchTags({
+            SqlError: (err) => Effect.die(err),
+            SchemaError: (err) => Effect.die(err),
+          }),
+          Effect.mapError(
+            () => new Npc.NpcNotFoundError({ id: payload.npcId }),
+          ),
+        );
       }),
     });
   }),

@@ -13,9 +13,14 @@ import type * as Take from "effect/Take";
 import { LanguageModel } from "effect/unstable/ai";
 import * as Tool from "effect/unstable/ai/Tool";
 import { HandlersLive } from "./chat-toolkit-live.js";
-import { ChatMailbox, ChatToolkit, createNpc, fetchNpcs } from "./chat-toolkit.js";
+import {
+  ChatMailbox,
+  ChatToolkit,
+  createNpc,
+  fetchNpcs,
+} from "./chat-toolkit.js";
 
-const makeMailbox = Effect.gen(function*() {
+const makeMailbox = Effect.gen(function* () {
   const mailbox = yield* PubSub.unbounded<Take.Take<Chat.ChatEvent>>({
     replay: 100,
   });
@@ -25,8 +30,8 @@ const makeMailbox = Effect.gen(function*() {
 });
 
 const MockNpcRepo = Layer.mock(NpcRepo)({
-  listByUser: () => Effect.succeed({ items: [], hasMore: false }),
-  create: () =>
+  fetch: () => Effect.succeed({ items: [], hasMore: false }),
+  insert: () =>
     Effect.succeed({
       id: NpcId.make("npc-1"),
       userId: "00000000-0000-4000-8000-000000000001",
@@ -61,7 +66,7 @@ describe("chat toolkit handlers", () => {
   });
 
   it.effect("streams tool events through mailbox during streamText", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const { mailbox, events } = yield* makeMailbox;
 
       const parts = yield* LanguageModel.streamText({
@@ -90,5 +95,6 @@ describe("chat toolkit handlers", () => {
       const evts = yield* events(2);
       expect(evts.some((e) => e._tag === "ToolStart")).toBe(true);
       expect(evts.some((e) => e._tag === "ToolSuccess")).toBe(true);
-    }));
+    }),
+  );
 });
