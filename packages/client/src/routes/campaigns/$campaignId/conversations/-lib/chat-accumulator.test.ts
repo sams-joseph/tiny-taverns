@@ -104,7 +104,7 @@ describe("accumulateEvent", () => {
     const result = accumulateEvent(state, {
       _tag: "ToolStart",
       toolName: "fetchNpcs",
-      input: '{"city":"NY"}',
+      input: "{\"city\":\"NY\"}",
     } as ChatEvent);
     expect(result.contentBlocks).toHaveLength(2);
     const group = result.contentBlocks[1]!;
@@ -132,7 +132,7 @@ describe("accumulateEvent", () => {
               id: "t2",
               toolName: "fetchNpcs",
               status: "start",
-              input: '{"city":"LA"}',
+              input: "{\"city\":\"LA\"}",
               output: null,
             },
           ],

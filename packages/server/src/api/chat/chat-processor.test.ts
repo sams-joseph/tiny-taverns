@@ -1,5 +1,6 @@
 import type { ChatModel } from "@/db/chat-model.js";
 import { NpcRepo } from "@/db/npc-repo.js";
+import { CampaignId } from "@app/domain/api/campaign-rpc";
 import * as Chat from "@app/domain/api/chat-rpc";
 import { NpcId } from "@app/domain/api/npc-rpc";
 import { CurrentUser, UserId } from "@app/domain/auth";
@@ -14,9 +15,8 @@ import type * as Take from "effect/Take";
 import { ChatProcessor, makePrompt } from "./chat-processor.js";
 import { HandlersLive } from "./chat-toolkit-live.js";
 import { ChatMailbox } from "./chat-toolkit.js";
-import { CampaignId } from "@app/domain/api/campaign-rpc";
 
-const makeMailbox = Effect.gen(function* () {
+const makeMailbox = Effect.gen(function*() {
   const mailbox = yield* PubSub.unbounded<Take.Take<Chat.ChatEvent>>({
     replay: 100,
   });
@@ -165,7 +165,7 @@ describe("makePrompt", () => {
 
 describe("ChatProcessor", () => {
   it.effect("text-delta parts become Chunk mailbox events", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const { mailbox, events } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -181,11 +181,10 @@ describe("ChatProcessor", () => {
       const evts = yield* events(1);
       expect(evts).toHaveLength(1);
       expect(evts[0]).toEqual({ _tag: "Chunk", delta: "Hello!" });
-    }).pipe(Effect.provide(ChatProcessor.layer)),
-  );
+    }).pipe(Effect.provide(ChatProcessor.layer)));
 
   it.effect("reasoning-delta parts become ReasoningChunk mailbox events", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const { mailbox, events } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -203,13 +202,12 @@ describe("ChatProcessor", () => {
       const evts = yield* events(1);
       expect(evts).toHaveLength(1);
       expect(evts[0]).toEqual({ _tag: "ReasoningChunk", delta: "Thinking..." });
-    }).pipe(Effect.provide(ChatProcessor.layer)),
-  );
+    }).pipe(Effect.provide(ChatProcessor.layer)));
 
   it.effect(
     "loop continues on tool-calls finish reason and stops on stop",
     () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const { mailbox } = yield* makeMailbox;
         const processor = yield* ChatProcessor;
         let calls = 0;
@@ -255,7 +253,7 @@ describe("ChatProcessor", () => {
   );
 
   it.effect("text response is returned as assistant message", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const { mailbox } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -270,11 +268,10 @@ describe("ChatProcessor", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ role: "assistant", content: "Hi there" });
-    }).pipe(Effect.provide(ChatProcessor.layer)),
-  );
+    }).pipe(Effect.provide(ChatProcessor.layer)));
 
   it.effect("user message is NOT in returned array", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const { mailbox } = yield* makeMailbox;
       const processor = yield* ChatProcessor;
 
@@ -288,6 +285,5 @@ describe("ChatProcessor", () => {
       );
 
       expect(result.every((m) => m.role !== "user")).toBe(true);
-    }).pipe(Effect.provide(ChatProcessor.layer)),
-  );
+    }).pipe(Effect.provide(ChatProcessor.layer)));
 });

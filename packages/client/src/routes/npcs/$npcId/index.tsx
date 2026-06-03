@@ -1,9 +1,9 @@
 import { NpcId } from "@app/domain/api/npc-rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
-import { npcDataFamily } from "../-lib/npcs-atoms";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Loader2Icon } from "lucide-react";
+import { npcDataFamily } from "../-lib/npcs-atoms";
 
 export const Route = createFileRoute("/npcs/$npcId/")({
   component: RouteComponent,

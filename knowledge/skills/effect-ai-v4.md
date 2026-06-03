@@ -89,11 +89,11 @@ type ToolChoice<Tools extends string> =
   | "auto"
   | "none"
   | "required"
-  | { readonly tool: Tools }
+  | { readonly tool: Tools; }
   | {
-      readonly mode?: "auto" | "required";
-      readonly oneOf: ReadonlyArray<Tools>;
-    };
+    readonly mode?: "auto" | "required";
+    readonly oneOf: ReadonlyArray<Tools>;
+  };
 ```
 
 ### GenerateTextResponse
@@ -163,8 +163,8 @@ The handler receives `unknown` and must cast:
 ```ts
 toolkit.toLayer({
   SearchTool: (params: unknown) =>
-    Effect.gen(function* () {
-      const { query, limit } = params as { query: string; limit: number };
+    Effect.gen(function*() {
+      const { query, limit } = params as { query: string; limit: number; };
       return Array.from({ length: limit }, (_, i) => `${query}-${i}`);
     }),
 });
@@ -215,8 +215,7 @@ Toolkit.empty;
 
 ```ts
 const HandlersLayer = MyToolkit.toLayer({
-  GetWeather: (params) =>
-    Effect.succeed({ temperature: 72, condition: "sunny" }),
+  GetWeather: (params) => Effect.succeed({ temperature: 72, condition: "sunny" }),
   ListFiles: (params) => Effect.succeed(["file1.txt", "file2.txt"]),
 });
 ```
@@ -227,7 +226,7 @@ The `ctx` parameter (second argument) provides `preliminary(result)` for streami
 
 ```ts
 MyToolkit.toLayer({
-  LongRunningTool: Effect.fnUntraced(function* (params, ctx) {
+  LongRunningTool: Effect.fnUntraced(function*(params, ctx) {
     yield* ctx.preliminary({ status: "loading", progress: 50 });
     const result = yield* doWork(params);
     return { status: "complete", result };
@@ -240,9 +239,8 @@ MyToolkit.toLayer({
 ### Using toolkits with LanguageModel
 
 ```ts
-const response =
-  yield *
-  LanguageModel.generateText({
+const response = yield
+  * LanguageModel.generateText({
     prompt: "What's the weather in NYC?",
     toolkit: MyToolkit,
   }).pipe(Effect.provide(HandlersLayer));
@@ -264,9 +262,8 @@ export class Chat extends ServiceMap.Service<Chat, Service>()(
 
 ```ts
 const chat = yield * Chat.empty;
-const chat =
-  yield *
-  Chat.fromPrompt([{ role: "system", content: "You are a helpful assistant" }]);
+const chat = yield
+  * Chat.fromPrompt([{ role: "system", content: "You are a helpful assistant" }]);
 const chat = yield * Chat.fromExport(data);
 const chat = yield * Chat.fromJson(jsonString);
 ```
@@ -407,7 +404,7 @@ class Usage {
     cacheRead: number;
     cacheWrite: number;
   };
-  outputTokens: { total: number; text: number; reasoning: number };
+  outputTokens: { total: number; text: number; reasoning: number; };
 }
 ```
 
@@ -441,11 +438,7 @@ All providers follow the same architecture:
 ### Anthropic (`@effect/ai-openai`)
 
 ```ts
-import {
-  AnthropicClient,
-  AnthropicLanguageModel,
-  AnthropicTool,
-} from "@effect/ai-openai";
+import { AnthropicClient, AnthropicLanguageModel, AnthropicTool } from "@effect/ai-openai";
 
 AnthropicClient.layer({
   apiKey: Redacted.make("sk-..."),
@@ -490,11 +483,7 @@ Provider-defined tools include the current Anthropic tool set from the checked o
 Uses the **Responses API** (`/responses`), not Chat Completions.
 
 ```ts
-import {
-  OpenAiClient,
-  OpenAiLanguageModel,
-  OpenAiTool,
-} from "@effect/ai-openai";
+import { OpenAiClient, OpenAiLanguageModel, OpenAiTool } from "@effect/ai-openai";
 
 OpenAiClient.layer({
   apiKey: Redacted.make("sk-..."),
@@ -542,10 +531,7 @@ This `effect-smol` checkout does not currently include Google or Amazon Bedrock 
 ### OpenRouter (`@effect/ai-openrouter`)
 
 ```ts
-import {
-  OpenRouterClient,
-  OpenRouterLanguageModel,
-} from "@effect/ai-openrouter";
+import { OpenRouterClient, OpenRouterLanguageModel } from "@effect/ai-openrouter";
 
 OpenRouterClient.layer({
   apiKey: Redacted.make("sk-or-..."),
@@ -566,15 +552,11 @@ Each provider client requires `HttpClient` in context. Use `Layer.unwrap` to bui
 
 ```ts
 const AnthropicLive = Layer.unwrap(
-  Effect.map(EnvVars.ANTHROPIC_API_KEY, (apiKey) =>
-    AnthropicClient.layer({ apiKey }),
-  ),
+  Effect.map(EnvVars.ANTHROPIC_API_KEY, (apiKey) => AnthropicClient.layer({ apiKey })),
 ).pipe(Layer.provide(HttpContext));
 
 const OpenAiLive = Layer.unwrap(
-  Effect.map(EnvVars.OPENAI_API_KEY, (apiKey) =>
-    OpenAiClient.layer({ apiKey }),
-  ),
+  Effect.map(EnvVars.OPENAI_API_KEY, (apiKey) => OpenAiClient.layer({ apiKey })),
 ).pipe(Layer.provide(HttpContext));
 ```
 
@@ -582,13 +564,12 @@ For rate limiting (requires scope):
 
 ```ts
 const AnthropicLive = Layer.unwrapScoped(
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const apiKey = yield* EnvVars.ANTHROPIC_API_KEY;
     const rl = yield* RateLimiter.make({ limit: 50, interval: "1 minute" });
     return AnthropicClient.layer({
       apiKey,
-      transformClient: (client) =>
-        HttpClient.transform(client, (effect) => rl(effect)),
+      transformClient: (client) => HttpClient.transform(client, (effect) => rl(effect)),
     });
   }),
 ).pipe(Layer.provide(HttpContext));
@@ -659,7 +640,7 @@ Use `McpServer.toolkit(MyToolkit)` when you want the layer form.
 const ReadmeResource = McpServer.resource`file://docs/${docId}`({
   name: "Documentation",
   completion: { docId: (_) => Effect.succeed(["readme", "changelog"]) },
-  content: Effect.fn(function* (_uri, docId) {
+  content: Effect.fn(function*(_uri, docId) {
     return `# ${docId}`;
   }),
 });

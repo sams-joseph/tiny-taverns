@@ -1,18 +1,13 @@
+import { Button } from "@/components/ui/button.js";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.js";
+import { Input } from "@/components/ui/input.js";
+import { Form } from "@base-ui/react";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Loader2Icon, PlusIcon } from "lucide-react";
 import * as React from "react";
 import { campaignListAtom, createCampaignAtom } from "./-lib/campaign-atoms.js";
-import { Form } from "@base-ui/react";
-import { Input } from "@/components/ui/input.js";
-import { Button } from "@/components/ui/button.js";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card.js";
 
 export const Route = createFileRoute("/campaigns/")({
   component: CampaignListPage,
@@ -42,7 +37,7 @@ function CampaignListPage() {
           params: { campaignId: campaign.id },
         });
       })
-      .finally(() => setIsCreating(false));
+      .finally(() =>{  setIsCreating(false); });
   };
 
   return (
@@ -50,8 +45,7 @@ function CampaignListPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold">Choose a Campaign</h1>
         <p className="max-w-2xl text-foreground">
-          Start inside the right tabletop game so Conversations and campaign
-          knowledge stay scoped.
+          Start inside the right tabletop game so Conversations and campaign knowledge stay scoped.
         </p>
       </header>
 
@@ -61,7 +55,7 @@ function CampaignListPage() {
       >
         <Input
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) =>{  setTitle(event.target.value); }}
           placeholder="Campaign title"
           className="flex-1"
         />
@@ -70,43 +64,45 @@ function CampaignListPage() {
           size="lg"
           disabled={title.trim() === "" || isCreating}
         >
-          {isCreating ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <PlusIcon className="size-4" />
-          )}
+          {isCreating
+            ? <Loader2Icon className="size-4 animate-spin" />
+            : <PlusIcon className="size-4" />}
           Create Campaign
         </Button>
       </Form>
 
-      {AsyncResult.isInitial(campaigns) || campaigns.waiting ? (
-        <div className="flex justify-center py-8">
-          <Loader2Icon className="size-6 animate-spin text-foreground" />
-        </div>
-      ) : AsyncResult.isFailure(campaigns) ? (
-        <p className="text-danger">Failed to load Campaigns</p>
-      ) : campaigns.value.items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-8 text-center text-foreground">
-          Create your first Campaign to begin.
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {campaigns.value.items.map((campaign) => (
-            <Link
-              key={campaign.id}
-              to="/campaigns/$campaignId"
-              params={{ campaignId: campaign.id }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle>{campaign.title}</CardTitle>
-                  <CardDescription>Open Campaign overview</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+      {AsyncResult.isInitial(campaigns) || campaigns.waiting
+        ? (
+          <div className="flex justify-center py-8">
+            <Loader2Icon className="size-6 animate-spin text-foreground" />
+          </div>
+        )
+        : AsyncResult.isFailure(campaigns)
+        ? <p className="text-danger">Failed to load Campaigns</p>
+        : campaigns.value.items.length === 0
+        ? (
+          <div className="rounded-2xl border border-dashed border-border p-8 text-center text-foreground">
+            Create your first Campaign to begin.
+          </div>
+        )
+        : (
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+            {campaigns.value.items.map((campaign) => (
+              <Link
+                key={campaign.id}
+                to="/campaigns/$campaignId"
+                params={{ campaignId: campaign.id }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{campaign.title}</CardTitle>
+                    <CardDescription>Open Campaign overview</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
     </div>
   );
 }

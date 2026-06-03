@@ -8,11 +8,11 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { AuthMiddlewareLive } from "./api/auth-middleware-live.js";
 import { CampaignRpcLive } from "./api/campaigns-rpc-live.js";
 import { ChatRpcLive } from "./api/chat/chat-rpc-live.js";
+import { NpcRpcLive } from "./api/npcs-rpc-live.js";
 import { UsersRpcLive } from "./api/users-rpc-live.js";
 import { MigrationLayer } from "./db/migrator.js";
 import { RpcLogger, RpcLoggerLive } from "./lib/rpc-logger.js";
 import { TracerLive } from "./lib/tracer.js";
-import { NpcRpcLive } from "./api/npcs-rpc-live.js";
 
 const RpcRouter = RpcServer.layerHttp({
   group: AppRpc.middleware(RpcLogger),

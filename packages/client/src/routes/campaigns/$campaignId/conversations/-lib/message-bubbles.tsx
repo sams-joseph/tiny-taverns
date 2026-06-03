@@ -27,29 +27,31 @@ export const AssistantMessage = React.memo(function AssistantMessage({
 }) {
   return (
     <div className="px-4 py-2 max-w-[80%]">
-      {message.error !== null ? (
-        <div className="text-danger">
-          <pre className="text-sm whitespace-pre-wrap">
+      {message.error !== null
+        ? (
+          <div className="text-danger">
+            <pre className="text-sm whitespace-pre-wrap">
             {Cause.pretty(message.error)}
-          </pre>
-        </div>
-      ) : message.contentBlocks.length > 0 ? (
-        <div className="space-y-1">
-          {message.contentBlocks.map((block, i) => (
-            <ContentBlockRenderer
-              key={i}
-              block={block}
-              isStreaming={isStreaming}
-            />
-          ))}
-        </div>
-      ) : isStreaming && !message.content ? (
-        <span className="text-sm animate-pulse">Thinking...</span>
-      ) : message.content ? (
-        <Markdown content={message.content} />
-      ) : (
-        <span className="text-sm italic">(no response)</span>
-      )}
+            </pre>
+          </div>
+        )
+        : message.contentBlocks.length > 0
+        ? (
+          <div className="space-y-1">
+            {message.contentBlocks.map((block, i) => (
+              <ContentBlockRenderer
+                key={i}
+                block={block}
+                isStreaming={isStreaming}
+              />
+            ))}
+          </div>
+        )
+        : isStreaming && !message.content
+        ? <span className="text-sm animate-pulse">Thinking...</span>
+        : message.content
+        ? <Markdown content={message.content} />
+        : <span className="text-sm italic">(no response)</span>}
     </div>
   );
 });

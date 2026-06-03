@@ -2,20 +2,20 @@
 
 import { Bell, Search } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 interface DashboardHeaderProps {
   title?: string | undefined;
-  breadcrumbs?: { label: string; href?: string }[] | undefined;
+  breadcrumbs?: { label: string; href?: string; }[] | undefined;
 }
 
 export function DashboardHeader({ title = "Dashboard" }: DashboardHeaderProps) {

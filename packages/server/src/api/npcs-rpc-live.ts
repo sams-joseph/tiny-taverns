@@ -8,18 +8,17 @@ import * as Option from "effect/Option";
 import type * as Rpc from "effect/unstable/rpc/Rpc";
 
 export const NpcRpcHandler = Npc.NpcRpc.toLayer(
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const npcRepo = yield* NpcRepo;
 
     return Npc.NpcRpc.of({
-      npc_list: Effect.fnUntraced(function* (payload) {
+      npc_list: Effect.fnUntraced(function*(payload) {
         const currentUser = yield* CurrentUser;
-        const cursor =
-          payload.cursor === null ? Option.none() : Option.some(payload.cursor);
+        const cursor = payload.cursor === null ? Option.none() : Option.some(payload.cursor);
         return yield* npcRepo.fetch(currentUser.id, cursor);
       }),
 
-      npc_get: Effect.fnUntraced(function* (payload) {
+      npc_get: Effect.fnUntraced(function*(payload) {
         const currentUser = yield* CurrentUser;
         return yield* npcRepo.findById(payload.npcId).pipe(
           Effect.flatMap(ensureOwnership(currentUser.id)),

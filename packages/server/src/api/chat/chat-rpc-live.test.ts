@@ -52,8 +52,7 @@ const MockChatRepo = Layer.mock(ChatRepo)({
     Effect.succeed(
       mockChat({ userId, campaignId: campaignId ?? null, title, model }),
     ),
-  findById: (chatId, _userId, campaignId) =>
-    Effect.succeed(mockChat({ id: chatId, campaignId })),
+  findById: (chatId, _userId, campaignId) => Effect.succeed(mockChat({ id: chatId, campaignId })),
   listByCampaign: (_userId, campaignId) =>
     Effect.succeed({ items: [mockChat({ campaignId })], hasMore: false }),
   delete: () => Effect.void,
@@ -191,7 +190,7 @@ const CrossCampaignLayer = Layer.mergeAll(
 
 describe("ChatRpc", () => {
   it.effect("chat_create returns a Chat", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const result = yield* client.chat_create({
         campaignId: TEST_CAMPAIGN_ID,
@@ -200,11 +199,10 @@ describe("ChatRpc", () => {
       });
       expect(result.title).toBe("New Chat");
       expect(result.model).toBe("qwen3-0.6b");
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_list returns items and hasMore", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const result = yield* client.chat_list({
         campaignId: TEST_CAMPAIGN_ID,
@@ -212,11 +210,10 @@ describe("ChatRpc", () => {
       });
       expect(result.items).toHaveLength(1);
       expect(result.hasMore).toBe(false);
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_get returns Chat.WithMessages", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       const result = yield* client.chat_get({
@@ -224,11 +221,10 @@ describe("ChatRpc", () => {
         chatId,
       });
       expect(result.id).toBe(chatId);
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_get denies access when chat is outside the Campaign", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -237,41 +233,37 @@ describe("ChatRpc", () => {
         .pipe(Effect.exit);
 
       expect(exit._tag).toBe("Failure");
-    }).pipe(Effect.provide(CrossCampaignLayer)),
-  );
+    }).pipe(Effect.provide(CrossCampaignLayer)));
 
   it.effect("chat_delete succeeds", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       yield* client.chat_delete({ campaignId: TEST_CAMPAIGN_ID, chatId });
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.effect("chat_delete fails with ChatNotFoundError when not found", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000099");
       const exit = yield* client
         .chat_delete({ campaignId: TEST_CAMPAIGN_ID, chatId })
         .pipe(Effect.exit);
       expect(exit._tag).toBe("Failure");
-    }).pipe(Effect.provide(NotFoundLayer)),
-  );
+    }).pipe(Effect.provide(NotFoundLayer)));
 
   it.effect("chat_ask fails with ChatNotFoundError for invalid chatId", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000099");
       const exit = yield* client
         .chat_ask({ campaignId: TEST_CAMPAIGN_ID, chatId, message: "Hello" })
         .pipe(Effect.exit);
       expect(exit._tag).toBe("Failure");
-    }).pipe(Effect.provide(NotFoundLayer)),
-  );
+    }).pipe(Effect.provide(NotFoundLayer)));
 
   it.effect("chat_ask returns a runId", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       const result = yield* client.chat_ask({
@@ -280,8 +272,7 @@ describe("ChatRpc", () => {
         message: "Hello",
       });
       expect(result.runId).toBeDefined();
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 
   it.live(
     "chat_ask saves user message before starting generation",
@@ -301,8 +292,7 @@ describe("ChatRpc", () => {
         delete: () => Effect.void,
         assignToCampaign: () => Effect.void,
         updateMessages: ({ messages }) => Ref.set(updatedRef, messages),
-        startRun: ({ messages }) =>
-          Ref.set(updatedRef, messages).pipe(Effect.as(true)),
+        startRun: ({ messages }) => Ref.set(updatedRef, messages).pipe(Effect.as(true)),
         finishRun: () => Effect.void,
         clearActiveRun: () => Effect.void,
       });
@@ -314,7 +304,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -345,7 +335,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -377,7 +367,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -423,7 +413,7 @@ describe("ChatRpc", () => {
         ),
         AuthMiddlewareLive,
       );
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const client = yield* RpcTest.makeClient(Chat.ChatRpc);
         const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
 
@@ -450,10 +440,9 @@ describe("ChatRpc", () => {
   );
 
   it.effect("chat_interrupt is no-op when no generation running", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Chat.ChatRpc);
       const chatId = Chat.ChatId.make("00000000-0000-4000-8000-000000000001");
       yield* client.chat_interrupt({ campaignId: TEST_CAMPAIGN_ID, chatId });
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 });

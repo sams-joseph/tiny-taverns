@@ -10,12 +10,12 @@ import * as Option from "effect/Option";
 import type * as Rpc from "effect/unstable/rpc/Rpc";
 
 export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const campaignRepo = yield* CampaignRepo;
     const chatRepo = yield* ChatRepo;
 
     return Campaign.CampaignRpc.of({
-      campaign_create: Effect.fnUntraced(function* (payload) {
+      campaign_create: Effect.fnUntraced(function*(payload) {
         const currentUser = yield* CurrentUser;
         const campaign = yield* campaignRepo
           .insert(
@@ -40,14 +40,13 @@ export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
         return campaign;
       }),
 
-      campaign_list: Effect.fnUntraced(function* (payload) {
+      campaign_list: Effect.fnUntraced(function*(payload) {
         const currentUser = yield* CurrentUser;
-        const cursor =
-          payload.cursor === null ? Option.none() : Option.some(payload.cursor);
+        const cursor = payload.cursor === null ? Option.none() : Option.some(payload.cursor);
         return yield* campaignRepo.fetch(currentUser.id, cursor);
       }),
 
-      campaign_get: Effect.fnUntraced(function* (payload) {
+      campaign_get: Effect.fnUntraced(function*(payload) {
         const currentUser = yield* CurrentUser;
         return yield* campaignRepo.findById(payload.campaignId).pipe(
           Effect.flatMap(ensureOwnership(currentUser.id)),
@@ -56,8 +55,7 @@ export const CampaignRpcHandler = Campaign.CampaignRpc.toLayer(
             SchemaError: (err) => Effect.die(err),
           }),
           Effect.mapError(
-            () =>
-              new Campaign.CampaignNotFoundError({ id: payload.campaignId }),
+            () => new Campaign.CampaignNotFoundError({ id: payload.campaignId }),
           ),
         );
       }),

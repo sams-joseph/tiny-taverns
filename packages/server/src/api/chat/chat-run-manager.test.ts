@@ -87,8 +87,7 @@ const makeMockChatRepo = (
 ) =>
   Layer.mock(ChatRepo)({
     create: () => Effect.succeed(mockChat()),
-    findById: (chatId, _userId, campaignId) =>
-      Effect.succeed(mockChat({ id: chatId, campaignId })),
+    findById: (chatId, _userId, campaignId) => Effect.succeed(mockChat({ id: chatId, campaignId })),
     listByCampaign: () => Effect.succeed({ items: [], hasMore: false }),
     delete: () => Effect.void,
     assignToCampaign: () => Effect.void,
@@ -128,7 +127,7 @@ describe("ChatRunManager", () => {
               }).pipe(Stream.tap(() => Effect.sleep("100 millis"))),
           }),
       });
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -139,7 +138,7 @@ describe("ChatRunManager", () => {
         });
 
         const events = yield* mgr
-          .subscribe(runId, chat.userId, chat.campaignId!)
+          .subscribe(runId, chat.userId, chat.campaignId)
           .pipe(Stream.runCollect);
         expect(events.some((event) => event._tag === "Chunk")).toBe(true);
       }).pipe(Effect.provide(makeTestLayer(slowAi)));
@@ -161,7 +160,7 @@ describe("ChatRunManager", () => {
               }).pipe(Stream.tap(() => Effect.sleep("2 seconds"))),
           }),
       });
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -189,7 +188,7 @@ describe("ChatRunManager", () => {
   it.effect(
     "subscribe fails with ChatRunNotFoundError when run is missing",
     () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const runId = Chat.RunId.make("00000000-0000-4000-8000-000000000099");
 
@@ -201,8 +200,8 @@ describe("ChatRunManager", () => {
           expect(
             exit.cause.reasons.some(
               (reason) =>
-                reason._tag === "Fail" &&
-                reason.error._tag === "ChatRunNotFoundError",
+                reason._tag === "Fail"
+                && reason.error._tag === "ChatRunNotFoundError",
             ),
           ).toBe(true);
         }
@@ -212,7 +211,7 @@ describe("ChatRunManager", () => {
   it.live(
     "failed generation fails stream with defect",
     () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -223,7 +222,7 @@ describe("ChatRunManager", () => {
         });
 
         const exit = yield* mgr
-          .subscribe(runId, chat.userId, chat.campaignId!)
+          .subscribe(runId, chat.userId, chat.campaignId)
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {
@@ -249,7 +248,7 @@ describe("ChatRunManager", () => {
               }).pipe(Stream.tap(() => Effect.sleep("10 seconds"))),
           }),
       });
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -259,7 +258,7 @@ describe("ChatRunManager", () => {
           currentUser: testCurrentUser,
         });
         const exitFiber = yield* mgr
-          .subscribe(runId, chat.userId, chat.campaignId!)
+          .subscribe(runId, chat.userId, chat.campaignId)
           .pipe(Stream.runDrain, Effect.exit, Effect.forkChild);
 
         yield* Effect.sleep("100 millis");
@@ -278,7 +277,7 @@ describe("ChatRunManager", () => {
   it.live(
     "completed run invalidates the run stream entry",
     () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -290,15 +289,15 @@ describe("ChatRunManager", () => {
         yield* Effect.sleep("200 millis");
 
         const exit = yield* mgr
-          .subscribe(runId, chat.userId, chat.campaignId!)
+          .subscribe(runId, chat.userId, chat.campaignId)
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {
           expect(
             exit.cause.reasons.some(
               (reason) =>
-                reason._tag === "Fail" &&
-                reason.error._tag === "ChatRunNotFoundError",
+                reason._tag === "Fail"
+                && reason.error._tag === "ChatRunNotFoundError",
             ),
           ).toBe(true);
         }
@@ -320,7 +319,7 @@ describe("ChatRunManager", () => {
               }).pipe(Stream.tap(() => Effect.sleep("10 seconds"))),
           }),
       });
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -335,15 +334,15 @@ describe("ChatRunManager", () => {
         yield* Effect.sleep("200 millis");
 
         const exit = yield* mgr
-          .subscribe(runId, chat.userId, chat.campaignId!)
+          .subscribe(runId, chat.userId, chat.campaignId)
           .pipe(Stream.runDrain, Effect.exit);
         expect(exit._tag).toBe("Failure");
         if (exit._tag === "Failure") {
           expect(
             exit.cause.reasons.some(
               (reason) =>
-                reason._tag === "Fail" &&
-                reason.error._tag === "ChatRunNotFoundError",
+                reason._tag === "Fail"
+                && reason.error._tag === "ChatRunNotFoundError",
             ),
           ).toBe(true);
         }
@@ -355,7 +354,7 @@ describe("ChatRunManager", () => {
   it.live(
     "completed generation releases the active chat lock",
     () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const mgr = yield* ChatRunManager;
         const chat = mockChat();
 
@@ -399,7 +398,7 @@ describe("ChatRunManager", () => {
               ),
           }),
       });
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const scope = yield* Scope.make();
         const mgr = yield* ChatRunManager.make.pipe(
           Effect.provide(slowAi),

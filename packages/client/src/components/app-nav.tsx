@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from "react";
 import { Link } from "@tanstack/react-router";
+import * as React from "react";
 
 import {
   NavigationMenu,
@@ -43,7 +43,7 @@ function ListItem({
   children,
   to,
   ...props
-}: React.ComponentPropsWithoutRef<"li"> & { to: string }) {
+}: React.ComponentPropsWithoutRef<"li"> & { to: string; }) {
   return (
     <li {...props}>
       <NavigationMenuLink

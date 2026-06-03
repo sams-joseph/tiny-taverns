@@ -1,14 +1,9 @@
 import { Button } from "@/components/ui/button.js";
-import {
-  Card,
-  CardAction,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card.js";
+import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.js";
 import { CampaignId } from "@app/domain/api/campaign-rpc";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { Array, Option, pipe } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   BookOpenIcon,
@@ -26,7 +21,6 @@ import {
   selectedModelAtom,
 } from "../$campaignId/conversations/-lib/chat-atoms.js";
 import { campaignDataFamily } from "../-lib/campaign-atoms.js";
-import { Array, Option, pipe } from "effect";
 
 export const Route = createFileRoute("/campaigns/$campaignId/")({
   component: CampaignLayout,
@@ -103,8 +97,7 @@ export function CampaignOverviewPage() {
                   campaignId: campaign.value.id,
                   chatId: initialChat?.id,
                 },
-              })
-            }
+              })}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground"
           >
             <MessageSquareIcon className="size-4" />
@@ -121,7 +114,8 @@ export function CampaignOverviewPage() {
         </Button>
       </div>
 
-      {/* <Card className="w-full">
+      {
+        /* <Card className="w-full">
         <CardHeader>
           <CardTitle>Conversations</CardTitle>
           <CardDescription>
@@ -162,7 +156,8 @@ export function CampaignOverviewPage() {
               ))
             )}
         </div>
-      </Card> */}
+      </Card> */
+      }
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <OverviewCard
@@ -196,7 +191,8 @@ export function CampaignOverviewPage() {
           </CardAction>
         </CardHeader>
       </Card>
-      {/* <section className="rounded-2xl border border-border bg-elevated p-5">
+      {
+        /* <section className="rounded-2xl border border-border bg-elevated p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-muted">
             <ScrollTextIcon className="size-4" />
             Unresolved Campaign Update Proposals
@@ -204,7 +200,8 @@ export function CampaignOverviewPage() {
           <p className="mt-3 text-sm text-muted">
             No unresolved proposals yet.
           </p>
-        </section> */}
+        </section> */
+      }
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import type * as Chat from "@app/domain/api/chat-rpc";
 import { Npc } from "@app/domain/api/npc-rpc";
+import { CurrentUser } from "@app/domain/auth";
 import * as Context from "effect/Context";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import type * as Take from "effect/Take";
 import * as Tool from "effect/unstable/ai/Tool";
 import * as Toolkit from "effect/unstable/ai/Toolkit";
-import { CurrentUser } from "@app/domain/auth";
 
 export class ChatMailbox extends Context.Service<
   ChatMailbox,

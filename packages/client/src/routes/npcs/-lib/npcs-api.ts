@@ -6,11 +6,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 export class NpcApi extends Context.Service<NpcApi>()("@app/npcs/NpcApi", {
-  make: Effect.gen(function* () {
+  make: Effect.gen(function*() {
     const rpc = yield* DomainRpcClient;
     return {
-      npcList: (cursor: Parameters<typeof rpc.npc_list>[0]["cursor"]) =>
-        rpc.npc_list({ cursor }),
+      npcList: (cursor: Parameters<typeof rpc.npc_list>[0]["cursor"]) => rpc.npc_list({ cursor }),
       npcGet: (npcId: NpcId) => rpc.npc_get({ npcId }),
     };
   }),

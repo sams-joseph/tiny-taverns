@@ -11,6 +11,7 @@ import { SqlSchema } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { ChatModel } from "./chat-model.js";
 import { PgLive } from "./pg-live.js";
+import { makeWhereBuilder } from "./where-builder.js";
 
 export class ChatRepo extends Context.Service<
   ChatRepo,
@@ -69,14 +70,13 @@ export class ChatRepo extends Context.Service<
     }) => Effect.Effect<void>;
   }
 >()("ChatRepo", {
-  make: Effect.gen(function* () {
+  make: Effect.gen(function*() {
     const sql = yield* SqlClient;
 
     const insertQuery = SqlSchema.findOne({
       Request: ChatModel.insert,
       Result: ChatModel,
-      execute: (req) =>
-        sql`INSERT INTO chats ${sql.insert(req).returning("*")}`,
+      execute: (req) => sql`INSERT INTO chats ${sql.insert(req).returning("*")}`,
     });
 
     const findByIdQuery = SqlSchema.findOneOption({
@@ -95,6 +95,11 @@ export class ChatRepo extends Context.Service<
 
     const PAGE_SIZE = 50;
 
+    const listWhereClause = makeWhereBuilder(sql, {
+      userId_equals: (userId: string) => sql`user_id = ${userId}`,
+      campaignId_equals: (campaignId: Campaign.CampaignId) => sql`campaign_id = ${campaignId}`,
+    });
+
     const listQuery = SqlSchema.findAll({
       Request: Schema.Struct({
         userId: Schema.String,
@@ -105,7 +110,14 @@ export class ChatRepo extends Context.Service<
       execute: ({ userId, campaignId, cursor }) =>
         sql`
         SELECT * FROM chats
-        WHERE user_id = ${userId} AND campaign_id = ${campaignId}
+        ${
+          listWhereClause({
+            and: [
+              { userId_equals: userId },
+              { campaignId_equals: campaignId as Campaign.CampaignId },
+            ],
+          })
+        }
           ${cursor !== null ? sql`AND updated_at < ${cursor}` : sql``}
         ORDER BY updated_at DESC
         LIMIT ${PAGE_SIZE + 1}
@@ -228,8 +240,7 @@ export class ChatRepo extends Context.Service<
           }),
           Effect.flatMap(
             Option.match({
-              onNone: () =>
-                Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
+              onNone: () => Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
               onSome: Effect.succeed,
             }),
           ),
@@ -259,8 +270,7 @@ export class ChatRepo extends Context.Service<
           }),
           Effect.flatMap(
             Option.match({
-              onNone: () =>
-                Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
+              onNone: () => Effect.fail(new Chat.ChatNotFoundError({ id: chatId })),
               onSome: () => Effect.void,
             }),
           ),

@@ -69,7 +69,7 @@ const TestLayer = Layer.mergeAll(
 
 describe("CampaignRpc", () => {
   it.effect("campaign_create returns a Campaign", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const client = yield* RpcTest.makeClient(Campaign.CampaignRpc);
 
       const result = yield* client.campaign_create({
@@ -77,6 +77,5 @@ describe("CampaignRpc", () => {
       });
 
       expect(result.title).toBe("The Dawn Marches");
-    }).pipe(Effect.provide(TestLayer)),
-  );
+    }).pipe(Effect.provide(TestLayer)));
 });

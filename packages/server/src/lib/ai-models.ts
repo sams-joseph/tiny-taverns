@@ -15,7 +15,7 @@ const OpenAiLive = OpenAiClient.layerConfig({
 const QwenModel = OpenAiLanguageModel.model("qwen3-0.6b");
 
 export class AiModels extends Context.Service<AiModels>()("@app/ai/AiModels", {
-  make: Effect.gen(function* () {
+  make: Effect.gen(function*() {
     const qwenModel = yield* QwenModel.captureRequirements;
 
     const getModelLayer = (
@@ -28,12 +28,11 @@ export class AiModels extends Context.Service<AiModels>()("@app/ai/AiModels", {
     };
 
     return {
-      use:
-        (model: ModelFamily) =>
-        <A, E, R>(
-          self: Effect.Effect<A, E, R>,
-        ): Effect.Effect<A, E, Exclude<R, LanguageModel.LanguageModel>> =>
-          Effect.provide(self, getModelLayer(model)),
+      use: (model: ModelFamily) =>
+      <A, E, R>(
+        self: Effect.Effect<A, E, R>,
+      ): Effect.Effect<A, E, Exclude<R, LanguageModel.LanguageModel>> =>
+        Effect.provide(self, getModelLayer(model)),
     } as const;
   }),
 }) {

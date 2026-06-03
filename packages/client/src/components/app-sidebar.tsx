@@ -2,6 +2,7 @@
 
 import { ChevronDown, LoaderIcon, Plus, Settings, Sword } from "lucide-react";
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
   SidebarContent,
@@ -15,16 +16,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
-import { Link } from "@tanstack/react-router";
-import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
 import { npcListAtom } from "@/routes/npcs/-lib/npcs-atoms";
+import { useAtomValue } from "@effect/atom-react";
+import { Link } from "@tanstack/react-router";
+import { AsyncResult } from "effect/unstable/reactivity";
 
 export function AppSidebar() {
   const npcs = useAtomValue(npcListAtom);

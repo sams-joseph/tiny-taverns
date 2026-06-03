@@ -8,9 +8,10 @@ import { SqlModel, SqlSchema } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { NpcModel } from "./npc-model.js";
 import { PgLive } from "./pg-live.js";
+import { makeWhereBuilder } from "./where-builder.js";
 
 export class NpcRepo extends Context.Service<NpcRepo>()("NpcRepo", {
-  make: Effect.gen(function* () {
+  make: Effect.gen(function*() {
     const sql = yield* SqlClient;
 
     const repo = yield* SqlModel.makeRepository(NpcModel, {
@@ -21,6 +22,10 @@ export class NpcRepo extends Context.Service<NpcRepo>()("NpcRepo", {
 
     const PAGE_SIZE = 50;
 
+    const whereClause = makeWhereBuilder(sql, {
+      userId_equals: (userId: string) => sql`user_id = ${userId}`,
+    });
+
     const fetchQuery = SqlSchema.findAll({
       Request: Schema.Struct({
         userId: Schema.String,
@@ -30,7 +35,7 @@ export class NpcRepo extends Context.Service<NpcRepo>()("NpcRepo", {
       execute: ({ userId, cursor }) =>
         sql`
         SELECT * FROM npcs
-        WHERE user_id = ${userId}
+        ${whereClause({ userId_equals: userId })}
           ${cursor !== null ? sql`AND updated_at < ${cursor}` : sql``}
         ORDER BY updated_at DESC
         LIMIT ${PAGE_SIZE + 1}

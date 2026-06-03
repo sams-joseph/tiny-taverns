@@ -8,11 +8,12 @@ import { SqlModel, SqlSchema } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { CampaignModel } from "./campaign-model.js";
 import { PgLive } from "./pg-live.js";
+import { makeWhereBuilder } from "./where-builder.js";
 
 export class CampaignRepo extends Context.Service<CampaignRepo>()(
   "CampaignRepo",
   {
-    make: Effect.gen(function* () {
+    make: Effect.gen(function*() {
       const sql = yield* SqlClient;
 
       const repo = yield* SqlModel.makeRepository(CampaignModel, {
@@ -23,6 +24,10 @@ export class CampaignRepo extends Context.Service<CampaignRepo>()(
 
       const PAGE_SIZE = 50;
 
+      const whereClause = makeWhereBuilder(sql, {
+        userId_equals: (userId: string) => sql`user_id = ${userId}`,
+      });
+
       const listQuery = SqlSchema.findAll({
         Request: Schema.Struct({
           userId: Schema.String,
@@ -32,7 +37,7 @@ export class CampaignRepo extends Context.Service<CampaignRepo>()(
         execute: ({ userId, cursor }) =>
           sql`
         SELECT * FROM campaigns
-        WHERE user_id = ${userId}
+        ${whereClause({ userId_equals: userId })}
           ${cursor !== null ? sql`AND updated_at < ${cursor}` : sql``}
         ORDER BY updated_at DESC
         LIMIT ${PAGE_SIZE + 1}

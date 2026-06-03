@@ -6,10 +6,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Migrator from "effect/unstable/sql/Migrator";
+import { CampaignModel } from "./campaign-model.js";
 import { CampaignRepo } from "./campaign-repo.js";
 import { ChatRepo } from "./chat-repo.js";
 import { PgTest, withTransactionRollback } from "./pg-test.js";
-import { CampaignModel } from "./campaign-model.js";
 
 const TestMigrationLayer = PgMigrator.layer({
   loader: Migrator.fromGlob(import.meta.glob("./migrations/*.ts")),
@@ -26,7 +26,7 @@ describe("CampaignRepo", () => {
       "create stores a Campaign for a user with a default Conversation",
       () =>
         withTransactionRollback(
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const campaigns = yield* CampaignRepo;
             const chats = yield* ChatRepo;
 
@@ -59,7 +59,7 @@ describe("CampaignRepo", () => {
 
     it.effect("listByUser returns only the user's Campaigns", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const campaigns = yield* CampaignRepo;
           yield* campaigns.insert(
             CampaignModel.insert.make({
@@ -81,12 +81,11 @@ describe("CampaignRepo", () => {
             "Mine",
           ]);
         }),
-      ),
-    );
+      ));
 
     it.effect("findById fails when the Campaign does not exist", () =>
       withTransactionRollback(
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const campaigns = yield* CampaignRepo;
           const fakeId = Campaign.CampaignId.make(
             "00000000-0000-4000-8000-000000000099",
@@ -96,7 +95,6 @@ describe("CampaignRepo", () => {
 
           expect(exit._tag).toBe("Failure");
         }),
-      ),
-    );
+      ));
   });
 });

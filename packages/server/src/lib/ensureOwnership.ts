@@ -9,9 +9,7 @@ export class Unauthorized extends Schema.TaggedErrorClass<Unauthorized>()(
   },
 ) {}
 
-export const ensureOwnership =
-  (userId: UserId) =>
-  <T extends { userId: string }>(record: T) =>
-    record.userId === userId
-      ? Effect.succeed(record)
-      : Effect.fail(new Unauthorized({ actorId: userId, entity: "NPC" }));
+export const ensureOwnership = (userId: UserId) => <T extends { userId: string; }>(record: T) =>
+  record.userId === userId
+    ? Effect.succeed(record)
+    : Effect.fail(new Unauthorized({ actorId: userId, entity: "NPC" }));
