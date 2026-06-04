@@ -17,3 +17,9 @@ export const RunId = Schema.String.pipe(
   Schema.brand("RunId"),
 );
 export type RunId = typeof RunId.Type;
+
+export const NpcId = Schema.String.pipe(
+  Schema.check(Schema.isUUID(undefined)),
+  Schema.brand("NpcId"),
+);
+export type NpcId = typeof NpcId.Type;
