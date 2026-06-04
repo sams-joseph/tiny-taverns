@@ -3,4 +3,4 @@ set -euo pipefail
 
 pnpm install
 
-# Seeded by lalph. Customize this to prepare new worktrees.
+git subtree pull -P repos/effect --squash https://github.com/effect-ts/effect-smol.git main
