@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import type * as Tool from "effect/unstable/ai/Tool";
 import type * as Toolkit from "effect/unstable/ai/Toolkit";
-import { ChatMailbox, ChatToolkit } from "./chat-toolkit.js";
+import { ChatMailbox, ChatRunContext, ChatToolkit } from "./chat-toolkit.js";
 
 export const HandlersLive = ChatToolkit.toLayer(
   Effect.gen(function*() {
@@ -16,6 +16,7 @@ export const HandlersLive = ChatToolkit.toLayer(
     return {
       fetchNpcs: Effect.fnUntraced(function*() {
         const mailbox = yield* ChatMailbox;
+        const ctx = yield* ChatRunContext;
         const currentUser = yield* CurrentUser;
 
         yield* PubSub.publish(mailbox, [
@@ -27,7 +28,7 @@ export const HandlersLive = ChatToolkit.toLayer(
         ]);
 
         const npcs = yield* npcRepo
-          .fetch(currentUser.id, Option.none())
+          .fetch(currentUser.id, ctx.campaignId, Option.none())
           .pipe(
             Effect.tapError(() =>
               PubSub.publish(mailbox, [
@@ -49,6 +50,7 @@ export const HandlersLive = ChatToolkit.toLayer(
 
       createNpc: Effect.fnUntraced(function*(params) {
         const mailbox = yield* ChatMailbox;
+        const ctx = yield* ChatRunContext;
         const currentUser = yield* CurrentUser;
 
         yield* PubSub.publish(mailbox, [
@@ -63,6 +65,7 @@ export const HandlersLive = ChatToolkit.toLayer(
           .insert(
             NpcModel.insert.make({
               userId: currentUser.id,
+              campaignId: ctx.campaignId,
               title: params.title,
             }),
           )

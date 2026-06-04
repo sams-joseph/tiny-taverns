@@ -14,7 +14,9 @@ import * as Stream from "effect/Stream";
 import type * as Take from "effect/Take";
 import { ChatProcessor, makePrompt } from "./chat-processor.js";
 import { HandlersLive } from "./chat-toolkit-live.js";
-import { ChatMailbox } from "./chat-toolkit.js";
+import { ChatMailbox, ChatRunContext } from "./chat-toolkit.js";
+
+const TEST_CAMPAIGN_ID = CampaignId.make("00000000-0000-4000-8000-000000000001");
 
 const makeMailbox = Effect.gen(function*() {
   const mailbox = yield* PubSub.unbounded<Take.Take<Chat.ChatEvent>>({
@@ -26,25 +28,25 @@ const makeMailbox = Effect.gen(function*() {
 });
 
 const MockNpcRepo = Layer.mock(NpcRepo)({
-  fetch: () =>
+  fetch: (_userId, _campaignId, _cursor) =>
     Effect.succeed({
       items: [],
       hasMore: false,
     }),
-  insert: () =>
+  insert: (req) =>
     Effect.succeed({
       id: NpcId.make("npc-1"),
-      userId: "user-1",
-      title: "Test NPC",
-      description: "A test NPC",
+      userId: req.userId,
+      campaignId: req.campaignId,
+      title: req.title,
       createdAt: DateTime.nowUnsafe(),
       updatedAt: DateTime.nowUnsafe(),
     }),
-  delete: () => Effect.succeed(undefined),
-  findById: () =>
+  findById: (id, _userId, _campaignId) =>
     Effect.succeed({
-      id: NpcId.make("npc-1"),
+      id,
       userId: "user-1",
+      campaignId: TEST_CAMPAIGN_ID,
       title: "Test NPC",
       createdAt: DateTime.nowUnsafe(),
       updatedAt: DateTime.nowUnsafe(),
@@ -174,6 +176,7 @@ describe("ChatProcessor", () => {
           streamText: [{ type: "text-delta", id: "t1", delta: "Hello!" }],
         }),
         Effect.provideService(ChatMailbox, mailbox),
+        Effect.provideService(ChatRunContext, { campaignId: TEST_CAMPAIGN_ID }),
         Effect.provideService(CurrentUser, testCurrentUser),
         Effect.provide(TestHandlers),
       );
@@ -195,6 +198,7 @@ describe("ChatProcessor", () => {
           ],
         }),
         Effect.provideService(ChatMailbox, mailbox),
+        Effect.provideService(ChatRunContext, { campaignId: TEST_CAMPAIGN_ID }),
         Effect.provideService(CurrentUser, testCurrentUser),
         Effect.provide(TestHandlers),
       );
@@ -244,6 +248,7 @@ describe("ChatProcessor", () => {
             },
           }),
           Effect.provideService(ChatMailbox, mailbox),
+          Effect.provideService(ChatRunContext, { campaignId: TEST_CAMPAIGN_ID }),
           Effect.provideService(CurrentUser, testCurrentUser),
           Effect.provide(TestHandlers),
         );
@@ -262,6 +267,7 @@ describe("ChatProcessor", () => {
           streamText: [{ type: "text-delta", id: "t1", delta: "Hi there" }],
         }),
         Effect.provideService(ChatMailbox, mailbox),
+        Effect.provideService(ChatRunContext, { campaignId: TEST_CAMPAIGN_ID }),
         Effect.provideService(CurrentUser, testCurrentUser),
         Effect.provide(TestHandlers),
       );
@@ -280,6 +286,7 @@ describe("ChatProcessor", () => {
           streamText: [{ type: "text-delta", id: "t1", delta: "Reply" }],
         }),
         Effect.provideService(ChatMailbox, mailbox),
+        Effect.provideService(ChatRunContext, { campaignId: TEST_CAMPAIGN_ID }),
         Effect.provideService(CurrentUser, testCurrentUser),
         Effect.provide(TestHandlers),
       );

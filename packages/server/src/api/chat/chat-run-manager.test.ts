@@ -62,24 +62,26 @@ const FailingAiModels = Layer.mock(AiModels)({
 });
 
 const MockNpcRepo = Layer.mock(NpcRepo)({
-  fetch: () => Effect.succeed({ items: [], hasMore: false }),
-  insert: ({ userId, title }) =>
+  fetch: (_userId, _campaignId, _cursor) =>
+    Effect.succeed({ items: [], hasMore: false }),
+  insert: ({ userId, campaignId, title }) =>
     Effect.succeed({
       id: NpcId.make("00000000-0000-4000-8000-000000000001"),
       userId,
+      campaignId,
       title,
       createdAt: DateTime.nowUnsafe(),
       updatedAt: DateTime.nowUnsafe(),
     }),
-  findById: (id) =>
+  findById: (id, _userId, _campaignId) =>
     Effect.succeed({
       id,
       userId: "00000000-0000-4000-8000-000000000001",
+      campaignId: mockChat().campaignId,
       title: "Test NPC",
       createdAt: DateTime.nowUnsafe(),
       updatedAt: DateTime.nowUnsafe(),
     }),
-  delete: () => Effect.void,
 });
 
 const makeMockChatRepo = (
