@@ -23,7 +23,7 @@ export const NpcDetail = ({
   }
 
   if (AsyncResult.isFailure(npc)) {
-    return <div className="p-6 text-danger">Failed to load Campaign</div>;
+    return <div className="p-6 text-danger">Failed to load NPC</div>;
   }
 
   return (
