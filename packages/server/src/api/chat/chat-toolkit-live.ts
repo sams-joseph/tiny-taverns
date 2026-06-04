@@ -70,10 +70,6 @@ export const HandlersLive = ChatToolkit.toLayer(
             }),
           )
           .pipe(
-            Effect.catchTags({
-              SqlError: Effect.die,
-              SchemaError: Effect.die,
-            }),
             Effect.tapError(() =>
               PubSub.publish(mailbox, [
                 { _tag: "ToolFailure", toolName: "createNpc" },

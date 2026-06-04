@@ -1,3 +1,4 @@
+import { CampaignId } from "@app/domain/api/campaign-rpc";
 import { NpcId } from "@app/domain/api/npc-rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -5,13 +6,17 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Loader2Icon } from "lucide-react";
 import { npcDataFamily } from "../-lib/npcs-atoms";
 
+const PLACEHOLDER_CAMPAIGN_ID = CampaignId.make("00000000-0000-4000-8000-000000000000");
+
 export const Route = createFileRoute("/npcs/$npcId/")({
   component: RouteComponent,
 });
 
 function RouteComponent() {
   const { npcId } = Route.useParams();
-  const npc = useAtomValue(npcDataFamily(NpcId.make(npcId)));
+  const npc = useAtomValue(
+    npcDataFamily({ campaignId: PLACEHOLDER_CAMPAIGN_ID, npcId: NpcId.make(npcId) }),
+  );
 
   if (AsyncResult.isInitial(npc) || npc.waiting) {
     return (

@@ -1,30 +1,22 @@
 "use client";
 
-import { ChevronDown, LoaderIcon, Plus, Settings, Sword } from "lucide-react";
+import { Settings, Sword } from "lucide-react";
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import { npcListAtom } from "@/routes/npcs/-lib/npcs-atoms";
-import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import { AsyncResult } from "effect/unstable/reactivity";
 
 export function AppSidebar() {
-  const npcs = useAtomValue(npcListAtom);
-
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader>
@@ -60,15 +52,6 @@ export function AppSidebar() {
                   render={
                     <Link to="/campaigns">
                       <span>Campaigns</span>
-                    </Link>
-                  }
-                />
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  render={
-                    <Link to="/npcs">
-                      <span>NPCs</span>
                     </Link>
                   }
                 />

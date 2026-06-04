@@ -1,3 +1,4 @@
+import type { CampaignId } from "@app/domain/api/campaign-rpc";
 import type { NpcId } from "@app/domain/api/npc-rpc";
 import * as BrowserKeyValueStore from "@effect/platform-browser/BrowserKeyValueStore";
 import * as Effect from "effect/Effect";
@@ -11,21 +12,23 @@ const preferencesLayer: Layer.Layer<KeyValueStore.KeyValueStore> =
   BrowserKeyValueStore.layerLocalStorage;
 export const preferencesRuntime = Atom.runtime(preferencesLayer);
 
-export const npcListAtom = npcsRuntime
-  .atom(
-    Effect.gen(function*() {
-      const api = yield* NpcApi;
-      return yield* api.npcList(null);
-    }),
-  )
-  .pipe(Atom.refreshOnWindowFocus);
-
-export const npcDataFamily = Atom.family((npcId: NpcId) =>
+export const npcListFamily = Atom.family((campaignId: CampaignId) =>
   npcsRuntime
     .atom(
       Effect.gen(function*() {
         const api = yield* NpcApi;
-        return yield* api.npcGet(npcId);
+        return yield* api.npcList(campaignId, null);
+      }),
+    )
+    .pipe(Atom.refreshOnWindowFocus)
+);
+
+export const npcDataFamily = Atom.family((input: { campaignId: CampaignId; npcId: NpcId; }) =>
+  npcsRuntime
+    .atom(
+      Effect.gen(function*() {
+        const api = yield* NpcApi;
+        return yield* api.npcGet(input.campaignId, input.npcId);
       }),
     )
     .pipe(Atom.withReactivity(["items"]))

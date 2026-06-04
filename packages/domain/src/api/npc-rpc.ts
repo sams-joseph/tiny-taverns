@@ -3,6 +3,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 import { AuthMiddleware } from "../auth.js";
+import { CampaignNotFoundError } from "./campaign-rpc.js";
 import { CampaignId } from "./ids.js";
 import { NpcId } from "./ids.js";
 
@@ -34,6 +35,7 @@ export class NpcListRpc extends Rpc.make("npc_list", {
     items: Schema.Array(Npc),
     hasMore: Schema.Boolean,
   }),
+  error: CampaignNotFoundError,
 }) {}
 
 export class NpcGetRpc extends Rpc.make("npc_get", {
