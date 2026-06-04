@@ -1,15 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { CampaignId } from "@app/domain/api/campaign-rpc";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Loader2Icon } from "lucide-react";
 import React from "react";
-import { npcListAtom } from "./npcs-atoms";
+import { npcListFamily } from "./npcs-atoms";
+
+const PLACEHOLDER_CAMPAIGN_ID = CampaignId.make("00000000-0000-4000-8000-000000000000");
 
 export const NpcList = () => {
-  const npcListResult = useAtomValue(npcListAtom);
-  const refreshNpcList = useAtomRefresh(npcListAtom);
+  const npcListResult = useAtomValue(npcListFamily(PLACEHOLDER_CAMPAIGN_ID));
+  const refreshNpcList = useAtomRefresh(npcListFamily(PLACEHOLDER_CAMPAIGN_ID));
 
   // TODO: There has to be a better way to do this.
   React.useEffect(() => {

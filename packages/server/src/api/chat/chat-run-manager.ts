@@ -14,7 +14,7 @@ import * as Workflow from "effect/unstable/workflow/Workflow";
 import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
 import { ChatProcessor } from "./chat-processor.js";
 import { ChatToolkitLive } from "./chat-toolkit-live.js";
-import { ChatMailbox } from "./chat-toolkit.js";
+import { ChatMailbox, ChatRunContext } from "./chat-toolkit.js";
 
 const ChatGenerationWorkflow = Workflow.make({
   name: "chat/GenerationWorkflow",
@@ -94,7 +94,7 @@ export class ChatRunManager extends Context.Service<
         }
         return {
           userId: payload.chat.userId,
-          campaignId: payload.chat.campaignId ?? "",
+          campaignId: payload.chat.campaignId,
         } as const;
       }),
 
@@ -110,6 +110,7 @@ export class ChatRunManager extends Context.Service<
             aiModels.use(payload.chat.model),
             Effect.provide(ChatToolkitLive),
             Effect.provideService(ChatMailbox, mailbox),
+            Effect.provideService(ChatRunContext, { campaignId: payload.chat.campaignId }),
             Effect.provideService(CurrentUser, payload.currentUser),
             Effect.provideService(NpcRepo, npcRepo),
             Effect.orDie,

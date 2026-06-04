@@ -1,4 +1,5 @@
 import type * as Chat from "@app/domain/api/chat-rpc";
+import { CampaignId } from "@app/domain/api/ids";
 import { Npc } from "@app/domain/api/npc-rpc";
 import { CurrentUser } from "@app/domain/auth";
 import * as Context from "effect/Context";
@@ -13,24 +14,28 @@ export class ChatMailbox extends Context.Service<
   PubSub.PubSub<Take.Take<Chat.ChatEvent>>
 >()("ChatMailbox") {}
 
+export class ChatRunContext extends Context.Service<ChatRunContext, {
+  readonly campaignId: CampaignId;
+}>()("ChatRunContext") {}
+
 export const fetchNpcs = Tool.make("fetchNpcs", {
-  description: "Fetch a list of NPCs for the current user",
+  description: "Fetch the list of NPCs in the active Campaign.",
   failureMode: "return",
   parameters: Tool.EmptyParams,
   success: Schema.Array(Npc),
   failure: Schema.String,
-  dependencies: [ChatMailbox, CurrentUser],
+  dependencies: [ChatMailbox, ChatRunContext, CurrentUser],
 });
 
 export const createNpc = Tool.make("createNpc", {
-  description: "Create a new NPC for the current user",
+  description: "Create a new NPC in the active Campaign. Returns the new NPC.",
   failureMode: "return",
   parameters: Schema.Struct({
     title: Schema.String,
   }),
   success: Npc,
   failure: Schema.String,
-  dependencies: [ChatMailbox, CurrentUser],
+  dependencies: [ChatMailbox, ChatRunContext, CurrentUser],
 });
 
 export const ChatToolkit = Toolkit.make(fetchNpcs, createNpc);
