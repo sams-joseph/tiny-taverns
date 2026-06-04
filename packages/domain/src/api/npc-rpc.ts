@@ -3,6 +3,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 import { AuthMiddleware } from "../auth.js";
+import { CampaignId } from "./ids.js";
 import { NpcId } from "./ids.js";
 
 export { NpcId } from "./ids.js";
@@ -17,6 +18,7 @@ export class NpcNotFoundError extends Schema.TaggedErrorClass<NpcNotFoundError>(
 export class Npc extends Schema.Opaque<Npc>()(
   Schema.Struct({
     id: NpcId,
+    campaignId: CampaignId,
     title: Schema.String,
     createdAt: Schema.DateTimeUtcFromString,
     updatedAt: Schema.DateTimeUtcFromString,
@@ -25,6 +27,7 @@ export class Npc extends Schema.Opaque<Npc>()(
 
 export class NpcListRpc extends Rpc.make("npc_list", {
   payload: {
+    campaignId: CampaignId,
     cursor: Schema.NullOr(Schema.DateTimeUtcFromString),
   },
   success: Schema.Struct({
@@ -34,7 +37,7 @@ export class NpcListRpc extends Rpc.make("npc_list", {
 }) {}
 
 export class NpcGetRpc extends Rpc.make("npc_get", {
-  payload: { npcId: NpcId },
+  payload: { campaignId: CampaignId, npcId: NpcId },
   success: Npc,
   error: NpcNotFoundError,
 }) {}
