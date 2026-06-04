@@ -32,8 +32,7 @@ const makeMailbox = Effect.gen(function*() {
 });
 
 const MockNpcRepo = Layer.mock(NpcRepo)({
-  fetch: (_userId, _campaignId, _cursor) =>
-    Effect.succeed({ items: [], hasMore: false }),
+  fetch: (_userId, _campaignId, _cursor) => Effect.succeed({ items: [], hasMore: false }),
   insert: (req) =>
     Effect.succeed({
       id: NpcId.make("npc-1"),
@@ -108,8 +107,7 @@ describe("chat toolkit handlers", () => {
     Effect.gen(function*() {
       const insertCalls = yield* Ref.make<ReadonlyArray<NpcInsert>>([]);
       const TrackingRepo = Layer.succeed(NpcRepo, {
-        fetch: (_userId, _campaignId, _cursor) =>
-          Effect.succeed({ items: [], hasMore: false }),
+        fetch: (_userId, _campaignId, _cursor) => Effect.succeed({ items: [], hasMore: false }),
         insert: (req) =>
           Effect.gen(function*() {
             yield* Ref.update(insertCalls, (calls) => [...calls, req]);
