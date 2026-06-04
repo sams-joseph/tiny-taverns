@@ -8,164 +8,165 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as NpcsIndexRouteImport } from './routes/npcs/index'
-import { Route as CampaignsIndexRouteImport } from './routes/campaigns/index'
-import { Route as NpcsNpcIdIndexRouteImport } from './routes/npcs/$npcId/index'
-import { Route as CampaignsCampaignIdIndexRouteImport } from './routes/campaigns/$campaignId/index'
-import { Route as CampaignsCampaignIdConversationsChatIdRouteImport } from './routes/campaigns/$campaignId/conversations/$chatId'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as CampaignsCampaignIdConversationsChatIdRouteImport } from "./routes/campaigns/$campaignId/conversations/$chatId";
+import { Route as CampaignsCampaignIdIndexRouteImport } from "./routes/campaigns/$campaignId/index";
+import { Route as CampaignsCampaignIdNpcsNpcIdRouteImport } from "./routes/campaigns/$campaignId/npcs/$npcId";
+import { Route as CampaignsCampaignIdNpcsIndexRouteImport } from "./routes/campaigns/$campaignId/npcs/index";
+import { Route as CampaignsIndexRouteImport } from "./routes/campaigns/index";
+import { Route as IndexRouteImport } from "./routes/index";
 
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
-const NpcsIndexRoute = NpcsIndexRouteImport.update({
-  id: '/npcs/',
-  path: '/npcs/',
-  getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const CampaignsIndexRoute = CampaignsIndexRouteImport.update({
-  id: '/campaigns/',
-  path: '/campaigns/',
+  id: "/campaigns/",
+  path: "/campaigns/",
   getParentRoute: () => rootRouteImport,
-} as any)
-const NpcsNpcIdIndexRoute = NpcsNpcIdIndexRouteImport.update({
-  id: '/npcs/$npcId/',
-  path: '/npcs/$npcId/',
+} as any);
+const CampaignsCampaignIdIndexRoute = CampaignsCampaignIdIndexRouteImport.update({
+  id: "/campaigns/$campaignId/",
+  path: "/campaigns/$campaignId/",
   getParentRoute: () => rootRouteImport,
-} as any)
-const CampaignsCampaignIdIndexRoute =
-  CampaignsCampaignIdIndexRouteImport.update({
-    id: '/campaigns/$campaignId/',
-    path: '/campaigns/$campaignId/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+} as any);
+const CampaignsCampaignIdNpcsIndexRoute = CampaignsCampaignIdNpcsIndexRouteImport.update({
+  id: "/campaigns/$campaignId/npcs/",
+  path: "/campaigns/$campaignId/npcs/",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const CampaignsCampaignIdNpcsNpcIdRoute = CampaignsCampaignIdNpcsNpcIdRouteImport.update({
+  id: "/campaigns/$campaignId/npcs/$npcId",
+  path: "/campaigns/$campaignId/npcs/$npcId",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const CampaignsCampaignIdConversationsChatIdRoute =
   CampaignsCampaignIdConversationsChatIdRouteImport.update({
-    id: '/campaigns/$campaignId/conversations/$chatId',
-    path: '/campaigns/$campaignId/conversations/$chatId',
+    id: "/campaigns/$campaignId/conversations/$chatId",
+    path: "/campaigns/$campaignId/conversations/$chatId",
     getParentRoute: () => rootRouteImport,
-  } as any)
+  } as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/campaigns/': typeof CampaignsIndexRoute
-  '/npcs/': typeof NpcsIndexRoute
-  '/campaigns/$campaignId/': typeof CampaignsCampaignIdIndexRoute
-  '/npcs/$npcId/': typeof NpcsNpcIdIndexRoute
-  '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
+  "/": typeof IndexRoute;
+  "/campaigns/": typeof CampaignsIndexRoute;
+  "/campaigns/$campaignId/": typeof CampaignsCampaignIdIndexRoute;
+  "/campaigns/$campaignId/conversations/$chatId":
+    typeof CampaignsCampaignIdConversationsChatIdRoute;
+  "/campaigns/$campaignId/npcs/$npcId": typeof CampaignsCampaignIdNpcsNpcIdRoute;
+  "/campaigns/$campaignId/npcs/": typeof CampaignsCampaignIdNpcsIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/campaigns': typeof CampaignsIndexRoute
-  '/npcs': typeof NpcsIndexRoute
-  '/campaigns/$campaignId': typeof CampaignsCampaignIdIndexRoute
-  '/npcs/$npcId': typeof NpcsNpcIdIndexRoute
-  '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
+  "/": typeof IndexRoute;
+  "/campaigns": typeof CampaignsIndexRoute;
+  "/campaigns/$campaignId": typeof CampaignsCampaignIdIndexRoute;
+  "/campaigns/$campaignId/conversations/$chatId":
+    typeof CampaignsCampaignIdConversationsChatIdRoute;
+  "/campaigns/$campaignId/npcs/$npcId": typeof CampaignsCampaignIdNpcsNpcIdRoute;
+  "/campaigns/$campaignId/npcs": typeof CampaignsCampaignIdNpcsIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/campaigns/': typeof CampaignsIndexRoute
-  '/npcs/': typeof NpcsIndexRoute
-  '/campaigns/$campaignId/': typeof CampaignsCampaignIdIndexRoute
-  '/npcs/$npcId/': typeof NpcsNpcIdIndexRoute
-  '/campaigns/$campaignId/conversations/$chatId': typeof CampaignsCampaignIdConversationsChatIdRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/campaigns/": typeof CampaignsIndexRoute;
+  "/campaigns/$campaignId/": typeof CampaignsCampaignIdIndexRoute;
+  "/campaigns/$campaignId/conversations/$chatId":
+    typeof CampaignsCampaignIdConversationsChatIdRoute;
+  "/campaigns/$campaignId/npcs/$npcId": typeof CampaignsCampaignIdNpcsNpcIdRoute;
+  "/campaigns/$campaignId/npcs/": typeof CampaignsCampaignIdNpcsIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
-    | '/'
-    | '/campaigns/'
-    | '/npcs/'
-    | '/campaigns/$campaignId/'
-    | '/npcs/$npcId/'
-    | '/campaigns/$campaignId/conversations/$chatId'
-  fileRoutesByTo: FileRoutesByTo
+    | "/"
+    | "/campaigns/"
+    | "/campaigns/$campaignId/"
+    | "/campaigns/$campaignId/conversations/$chatId"
+    | "/campaigns/$campaignId/npcs/$npcId"
+    | "/campaigns/$campaignId/npcs/";
+  fileRoutesByTo: FileRoutesByTo;
   to:
-    | '/'
-    | '/campaigns'
-    | '/npcs'
-    | '/campaigns/$campaignId'
-    | '/npcs/$npcId'
-    | '/campaigns/$campaignId/conversations/$chatId'
+    | "/"
+    | "/campaigns"
+    | "/campaigns/$campaignId"
+    | "/campaigns/$campaignId/conversations/$chatId"
+    | "/campaigns/$campaignId/npcs/$npcId"
+    | "/campaigns/$campaignId/npcs";
   id:
-    | '__root__'
-    | '/'
-    | '/campaigns/'
-    | '/npcs/'
-    | '/campaigns/$campaignId/'
-    | '/npcs/$npcId/'
-    | '/campaigns/$campaignId/conversations/$chatId'
-  fileRoutesById: FileRoutesById
+    | "__root__"
+    | "/"
+    | "/campaigns/"
+    | "/campaigns/$campaignId/"
+    | "/campaigns/$campaignId/conversations/$chatId"
+    | "/campaigns/$campaignId/npcs/$npcId"
+    | "/campaigns/$campaignId/npcs/";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  CampaignsIndexRoute: typeof CampaignsIndexRoute
-  NpcsIndexRoute: typeof NpcsIndexRoute
-  CampaignsCampaignIdIndexRoute: typeof CampaignsCampaignIdIndexRoute
-  NpcsNpcIdIndexRoute: typeof NpcsNpcIdIndexRoute
-  CampaignsCampaignIdConversationsChatIdRoute: typeof CampaignsCampaignIdConversationsChatIdRoute
+  IndexRoute: typeof IndexRoute;
+  CampaignsIndexRoute: typeof CampaignsIndexRoute;
+  CampaignsCampaignIdIndexRoute: typeof CampaignsCampaignIdIndexRoute;
+  CampaignsCampaignIdConversationsChatIdRoute: typeof CampaignsCampaignIdConversationsChatIdRoute;
+  CampaignsCampaignIdNpcsNpcIdRoute: typeof CampaignsCampaignIdNpcsNpcIdRoute;
+  CampaignsCampaignIdNpcsIndexRoute: typeof CampaignsCampaignIdNpcsIndexRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/npcs/': {
-      id: '/npcs/'
-      path: '/npcs'
-      fullPath: '/npcs/'
-      preLoaderRoute: typeof NpcsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/campaigns/': {
-      id: '/campaigns/'
-      path: '/campaigns'
-      fullPath: '/campaigns/'
-      preLoaderRoute: typeof CampaignsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/npcs/$npcId/': {
-      id: '/npcs/$npcId/'
-      path: '/npcs/$npcId'
-      fullPath: '/npcs/$npcId/'
-      preLoaderRoute: typeof NpcsNpcIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/campaigns/$campaignId/': {
-      id: '/campaigns/$campaignId/'
-      path: '/campaigns/$campaignId'
-      fullPath: '/campaigns/$campaignId/'
-      preLoaderRoute: typeof CampaignsCampaignIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/campaigns/$campaignId/conversations/$chatId': {
-      id: '/campaigns/$campaignId/conversations/$chatId'
-      path: '/campaigns/$campaignId/conversations/$chatId'
-      fullPath: '/campaigns/$campaignId/conversations/$chatId'
-      preLoaderRoute: typeof CampaignsCampaignIdConversationsChatIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/campaigns/": {
+      id: "/campaigns/";
+      path: "/campaigns";
+      fullPath: "/campaigns/";
+      preLoaderRoute: typeof CampaignsIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/campaigns/$campaignId/": {
+      id: "/campaigns/$campaignId/";
+      path: "/campaigns/$campaignId";
+      fullPath: "/campaigns/$campaignId/";
+      preLoaderRoute: typeof CampaignsCampaignIdIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/campaigns/$campaignId/npcs/": {
+      id: "/campaigns/$campaignId/npcs/";
+      path: "/campaigns/$campaignId/npcs";
+      fullPath: "/campaigns/$campaignId/npcs/";
+      preLoaderRoute: typeof CampaignsCampaignIdNpcsIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/campaigns/$campaignId/npcs/$npcId": {
+      id: "/campaigns/$campaignId/npcs/$npcId";
+      path: "/campaigns/$campaignId/npcs/$npcId";
+      fullPath: "/campaigns/$campaignId/npcs/$npcId";
+      preLoaderRoute: typeof CampaignsCampaignIdNpcsNpcIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/campaigns/$campaignId/conversations/$chatId": {
+      id: "/campaigns/$campaignId/conversations/$chatId";
+      path: "/campaigns/$campaignId/conversations/$chatId";
+      fullPath: "/campaigns/$campaignId/conversations/$chatId";
+      preLoaderRoute: typeof CampaignsCampaignIdConversationsChatIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CampaignsIndexRoute: CampaignsIndexRoute,
-  NpcsIndexRoute: NpcsIndexRoute,
   CampaignsCampaignIdIndexRoute: CampaignsCampaignIdIndexRoute,
-  NpcsNpcIdIndexRoute: NpcsNpcIdIndexRoute,
-  CampaignsCampaignIdConversationsChatIdRoute:
-    CampaignsCampaignIdConversationsChatIdRoute,
-}
+  CampaignsCampaignIdConversationsChatIdRoute: CampaignsCampaignIdConversationsChatIdRoute,
+  CampaignsCampaignIdNpcsNpcIdRoute: CampaignsCampaignIdNpcsNpcIdRoute,
+  CampaignsCampaignIdNpcsIndexRoute: CampaignsCampaignIdNpcsIndexRoute,
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();

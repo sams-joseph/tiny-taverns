@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button.js";
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.js";
 import { CampaignId } from "@app/domain/api/campaign-rpc";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { Array, Option, pipe } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
@@ -165,11 +165,16 @@ export function CampaignOverviewPage() {
           title="Conversations"
           description="Prep, play, recap, and worldbuilding threads."
         />
-        <OverviewCard
-          icon={<UsersIcon className="size-5" />}
-          title="NPCs"
-          description="Campaign-scoped cast members."
-        />
+        <Link
+          to="/campaigns/$campaignId/npcs"
+          params={{ campaignId: campaign.value.id }}
+        >
+          <OverviewCard
+            icon={<UsersIcon className="size-5" />}
+            title="NPCs"
+            description="Campaign-scoped cast members."
+          />
+        </Link>
         <OverviewCard
           icon={<BookOpenIcon className="size-5" />}
           title="Campaign Notes"

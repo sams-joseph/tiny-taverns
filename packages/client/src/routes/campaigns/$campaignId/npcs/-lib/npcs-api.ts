@@ -10,9 +10,14 @@ export class NpcApi extends Context.Service<NpcApi>()("@app/npcs/NpcApi", {
   make: Effect.gen(function*() {
     const rpc = yield* DomainRpcClient;
     return {
-      npcList: (campaignId: CampaignId, cursor: Parameters<typeof rpc.npc_list>[0]["cursor"]) =>
-        rpc.npc_list({ campaignId, cursor }),
-      npcGet: (campaignId: CampaignId, npcId: NpcId) => rpc.npc_get({ campaignId, npcId }),
+      npcList: (
+        args: {
+          readonly campaignId: CampaignId;
+          readonly cursor: Parameters<typeof rpc.npc_list>[0]["cursor"];
+        },
+      ) => rpc.npc_list(args),
+      npcGet: (args: { readonly campaignId: CampaignId; readonly npcId: NpcId; }) =>
+        rpc.npc_get(args),
     };
   }),
 }) {

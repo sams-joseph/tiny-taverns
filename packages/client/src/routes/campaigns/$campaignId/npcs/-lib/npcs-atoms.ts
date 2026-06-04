@@ -17,7 +17,7 @@ export const npcListFamily = Atom.family((campaignId: CampaignId) =>
     .atom(
       Effect.gen(function*() {
         const api = yield* NpcApi;
-        return yield* api.npcList(campaignId, null);
+        return yield* api.npcList({ campaignId, cursor: null });
       }),
     )
     .pipe(Atom.refreshOnWindowFocus)
@@ -28,7 +28,7 @@ export const npcDataFamily = Atom.family((input: { campaignId: CampaignId; npcId
     .atom(
       Effect.gen(function*() {
         const api = yield* NpcApi;
-        return yield* api.npcGet(input.campaignId, input.npcId);
+        return yield* api.npcGet(input);
       }),
     )
     .pipe(Atom.withReactivity(["items"]))

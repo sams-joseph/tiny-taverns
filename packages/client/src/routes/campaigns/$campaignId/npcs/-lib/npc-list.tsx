@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
-import { CampaignId } from "@app/domain/api/campaign-rpc";
+import type { CampaignId } from "@app/domain/api/campaign-rpc";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -8,11 +8,9 @@ import { Loader2Icon } from "lucide-react";
 import React from "react";
 import { npcListFamily } from "./npcs-atoms";
 
-const PLACEHOLDER_CAMPAIGN_ID = CampaignId.make("00000000-0000-4000-8000-000000000000");
-
-export const NpcList = () => {
-  const npcListResult = useAtomValue(npcListFamily(PLACEHOLDER_CAMPAIGN_ID));
-  const refreshNpcList = useAtomRefresh(npcListFamily(PLACEHOLDER_CAMPAIGN_ID));
+export const NpcList = ({ campaignId }: { readonly campaignId: CampaignId; }) => {
+  const npcListResult = useAtomValue(npcListFamily(campaignId));
+  const refreshNpcList = useAtomRefresh(npcListFamily(campaignId));
 
   // TODO: There has to be a better way to do this.
   React.useEffect(() => {
@@ -31,7 +29,11 @@ export const NpcList = () => {
         ? <div className="px-3 py-2 text-sm text-danger">Failed to load NPCs</div>
         : (
           npcListResult.value.items.map((npc) => (
-            <Link to="/npcs/$npcId" params={{ npcId: npc.id }} key={npc.id}>
+            <Link
+              to="/campaigns/$campaignId/npcs/$npcId"
+              params={{ campaignId, npcId: npc.id }}
+              key={npc.id}
+            >
               <Item variant="muted">
                 <ItemContent>
                   <ItemTitle>{npc.title}</ItemTitle>
