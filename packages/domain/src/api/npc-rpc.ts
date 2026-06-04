@@ -3,12 +3,9 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 import { AuthMiddleware } from "../auth.js";
+import { NpcId } from "./ids.js";
 
-export const NpcId = Schema.String.pipe(
-  Schema.check(Schema.isUUID(undefined)),
-  Schema.brand("NpcId"),
-);
-export type NpcId = typeof NpcId.Type;
+export { NpcId } from "./ids.js";
 
 export class NpcNotFoundError extends Schema.TaggedErrorClass<NpcNotFoundError>()(
   "NpcNotFoundError",
