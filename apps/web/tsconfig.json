@@ -1,0 +1,7 @@
+{
+  "extends": "@taverns/tsconfig/vite.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client", "vitest/globals"]
+  },
+  "include": ["src", "vite.config.ts", "vitest.setup.ts"]
+}

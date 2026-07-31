@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Vite",
+  "extends": "./react-library.json",
+  "compilerOptions": {
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "useDefineForClassFields": true
+  }
+}
