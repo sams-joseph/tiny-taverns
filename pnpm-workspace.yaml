@@ -4,3 +4,8 @@ packages:
 allowBuilds:
   "@parcel/watcher": true
   esbuild: true
+  # Optional native accelerator for `msgpackr`, pulled in transitively by
+  # `effect` v4. msgpackr falls back to its pure-JS path without it, and nothing
+  # here uses msgpack (it backs effect's rpc/cluster/eventlog modules), so
+  # decline the native build rather than requiring a toolchain to install.
+  msgpackr-extract: false

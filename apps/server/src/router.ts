@@ -1,5 +1,5 @@
-import { HttpRouter, HttpServerResponse } from "@effect/platform";
 import { Effect } from "effect";
+import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { Health } from "./Health";
 
 /**
@@ -13,7 +13,11 @@ export const healthHandler = Effect.gen(function* () {
 });
 
 /**
- * Application router. Routes are Effects that may depend on services (here,
- * `Health`); those dependencies are satisfied when the router is served.
+ * Application routes.
+ *
+ * In v4 the router is a service that routes register themselves against, so a
+ * route is a `Layer` rather than a value threaded through a builder. Anything
+ * the handler needs (here, `Health`) is tracked as a request-level requirement
+ * on this layer and is satisfied where the app is assembled, in `main.ts`.
  */
-export const router = HttpRouter.empty.pipe(HttpRouter.get("/health", healthHandler));
+export const HealthRoutes = HttpRouter.add("GET", "/health", healthHandler);

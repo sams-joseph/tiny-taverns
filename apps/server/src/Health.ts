@@ -9,18 +9,22 @@ export interface HealthStatus {
 /**
  * Service that reports the liveness of the server. Modeled as an Effect service
  * so routes depend on the capability, not a concrete implementation.
+ *
+ * `Context.Service` is v4's single way to declare a service (it replaces v3's
+ * `Context.Tag` / `Context.GenericTag` / `Effect.Tag` / `Effect.Service`). The
+ * class itself is the context key, so `yield* Health` still yields the shape.
  */
-export class Health extends Context.Tag("Health")<
+export class Health extends Context.Service<
   Health,
   {
     readonly check: Effect.Effect<HealthStatus>;
   }
->() {}
-
-/** Live implementation backed by the process uptime. */
-export const HealthLive = Layer.succeed(
-  Health,
-  Health.of({
-    check: Effect.sync(() => ({ status: "ok", uptime: process.uptime() })),
-  }),
-);
+>()("Health") {
+  /**
+   * Live implementation backed by the process uptime. v4 names the primary
+   * layer of a service `layer` rather than v3's `Live`/`Default` suffix.
+   */
+  static readonly layer = Layer.succeed(this, {
+    check: Effect.sync((): HealthStatus => ({ status: "ok", uptime: process.uptime() })),
+  });
+}

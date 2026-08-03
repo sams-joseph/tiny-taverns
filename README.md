@@ -11,7 +11,7 @@ backend, sharing config and a component library across a pnpm + Turborepo worksp
 | Package manager | [pnpm](https://pnpm.io) workspaces                                                     |
 | Task runner     | [Turborepo](https://turborepo.dev)                                                     |
 | Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only) |
-| Backend         | [Effect](https://effect.website) + `@effect/platform` HTTP server                      |
+| Backend         | [Effect](https://effect.website) v4 (beta) HTTP server + `@effect/platform-node`       |
 | Language        | TypeScript (`strict`, ESM everywhere)                                                  |
 | Lint / format   | ESLint (flat config) + Prettier                                                        |
 | Tests           | [Vitest](https://vitest.dev) (+ React Testing Library)                                 |
@@ -104,9 +104,14 @@ curl http://localhost:3000/health
 # {"status":"ok","uptime":...}
 ```
 
-The server is structured idiomatically with Effect: `Health` is a `Context.Tag` service
-with a `HealthLive` layer, routes are `HttpRouter` handlers that depend on that service,
-and `main.ts` assembles the layers and serves them via `@effect/platform-node`.
+The server is structured idiomatically with **Effect v4** (currently in beta, pinned to
+exact versions): `Health` is a `Context.Service` class exposing a `Health.layer`, routes are
+`HttpRouter.add` layers that register a handler depending on that service, and `main.ts`
+assembles them with `HttpRouter.serve` and runs on `@effect/platform-node`.
+
+In v4 there is no `@effect/platform` package — the HTTP layer lives in core `effect` under
+`effect/unstable/http`. `AGENTS.md` records the full v3 → v4 mapping, and `.repos/effect`
+vendors the matching upstream source as the authoritative reference.
 
 ## Testing
 
