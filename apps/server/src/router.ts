@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
-import { Health } from "./Health";
+import { Health } from "./Health.js";
 
 /**
  * Handler for `GET /health`. Exposed on its own so it can be tested in

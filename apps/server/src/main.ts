@@ -2,8 +2,8 @@ import { Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { createServer } from "node:http";
-import { Health } from "./Health";
-import { HealthRoutes } from "./router";
+import { Health } from "./Health.js";
+import { HealthRoutes } from "./router.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 

@@ -60,10 +60,33 @@ Literal types need help: `Layer.succeed` infers through `Types.NoInfer`, so a se
 returning `{ status: "ok" }` widens `status` to `string` unless the producing function is
 annotated (see `Effect.sync((): HealthStatus => ...)` in `apps/server/src/Health.ts`).
 
-Known pre-existing, unrelated to the v4 migration: `pnpm -F server start` (`node dist/main.js`)
-fails with `ERR_MODULE_NOT_FOUND`. The shared tsconfig uses `moduleResolution: "Bundler"`, so
-relative imports are emitted without `.js` extensions, which Node's ESM loader rejects. `dev`
-(tsx) and `build` are unaffected.
+## Module resolution: `Bundler` for the bundled app, `NodeNext` for the executed one
+
+The tsconfig presets are split along **who resolves the specifiers at runtime**, and getting
+this wrong emits code that typechecks and then fails to load:
+
+| preset               | resolution | used by                      | why                                           |
+| -------------------- | ---------- | ---------------------------- | --------------------------------------------- |
+| `vite.json`          | `Bundler`  | `apps/web`                   | Vite really does bundle and resolve           |
+| `react-library.json` | `Bundler`  | `packages/ui`                | emits `.d.ts` only; source is bundled by Vite |
+| `node.json`          | `NodeNext` | `apps/server` (both configs) | `tsc` emit is executed by plain `node`        |
+
+`Bundler` lets relative imports omit their file extension. `tsc` never rewrites relative
+specifiers on emit, so under `Bundler` a plain `tsc` build emits `./Health` verbatim and
+Node's ESM resolver rejects it — the exact `ERR_MODULE_NOT_FOUND` that `apps/server` shipped
+with. `node.json` overrides the `Bundler` inherited from `base.json` with `NodeNext`, which
+makes the compiler _enforce_ what Node requires. Hence the `.js` extensions on relative
+imports in `apps/server/src` and `test`: on a `.ts` source file that is correct and
+intentional under NodeNext — it names the emitted file. Add a new relative import there and
+`typecheck` will tell you.
+
+**The server's build output must be smoke-tested under real `node`.** Nothing routine catches
+a bad emit: `dev` runs under `tsx` and `test` under Vitest, both of which tolerate
+extensionless specifiers, while `build` and `typecheck` only emit or check and never execute.
+`apps/server/test/start.smoke.test.ts` closes that gap — it runs `tsc -p tsconfig.build.json`,
+spawns `dist/main.js` under `process.execPath`, and asserts `GET /health`. Keep it executing
+the real build output under real `node`; rewriting it to import `src` through Vitest silently
+restores the blind spot.
 
 ## Maintaining this file
 

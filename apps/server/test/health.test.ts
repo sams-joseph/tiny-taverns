@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
-import { Health } from "../src/Health";
-import { healthHandler } from "../src/router";
+import { Health } from "../src/Health.js";
+import { healthHandler } from "../src/router.js";
 
 describe("Health service", () => {
   it("reports an ok status with non-negative uptime", async () => {
