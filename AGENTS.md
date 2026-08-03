@@ -24,6 +24,71 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
 
+## The design system: what is canonical, and how it reaches Tailwind
+
+`packages/design-system` is the designers' delivered Tiny Taverns system, copied in whole.
+**`packages/design-system/tokens/*.css` is the single source of truth for every design
+value in the product** — no hex, radius, duration or measurement is restated anywhere else,
+and `packages/ui/src/styles.css` bridges those tokens into Tailwind's theme layer by
+`var()` reference only. `PORT-NOTES.md` in that package records exactly what was brought
+across, what was left out, and the two values added during the port (`--scrim-blur`,
+`--fs-label-l` — both transcribed from prose the designers never tokenised).
+
+`.claude/skills/tiny-taverns-design` symlinks to that package, so the delivered `SKILL.md`
+is installed as a Claude Code skill without a second copy of the tokens.
+
+The guidance material is worth reading before touching anything visual:
+`packages/design-system/readme.md` (the design rules), `guidelines/*.html` (20 specimen
+cards), and one `.prompt.md` + `.d.ts` + `.jsx` per component. **The `.jsx` files are the
+visual specification, not shippable code** — prototype-grade inline styles and hand-rolled
+`useState` hover. The real components live in `packages/ui`. Nothing can import the
+prototypes by accident: they are outside the package's `exports` map, and ESLint forbids it.
+
+Four things about the bridge that are not derivable from reading it:
+
+- **The system is dark only, by design.** "A DM runs it at a lit table." There is no light
+  theme, no `.dark` class and no toggle; the tokens resolve dark at `:root`. `dark:` is
+  meaningless here and `packages/ui/src/adherence.test.ts` fails if one appears.
+- **The theme _replaces_ Tailwind's scales rather than extending them.** A namespace reset
+  (`--color-*: initial` and friends) deletes the built-in palettes and scales outright, so
+  `bg-zinc-900` is not a class that exists. That is what guarantees no default slate/zinc
+  survives — verified: the built CSS contains zero `oklch` values.
+- **Token files are imported one by one, with `layer(base)`.** Not through the design
+  system's own `styles.css` entry. `@import "…" layer(base)` inlines a file into an `@layer`
+  block, and an `@import` nested inside a layer block is invalid CSS — the token files get
+  dropped **silently, with the build still green**. `layer(base)` itself is required so the
+  delivered `tokens/base.css` element rules beat preflight but still lose to utilities. The
+  two import lists are kept in step by a test.
+- **`tailwind-merge` must be told the theme's names** (`packages/ui/src/lib/tw-theme.ts`).
+  With a replaced theme it cannot tell `text-label` (a size) from `text-on-accent` (a
+  colour), lumps them in one group and silently drops one — which rendered primary buttons
+  with slate body text until it was configured. A test parses `@theme inline` and fails if
+  the name lists drift.
+
+## shadcn on Base UI, not Radix
+
+`packages/ui/components.json` sets `"style": "base-nova"`. In shadcn 4.x the _base_ is
+chosen through that style/preset name (`shadcn init --base base|radix|aria`, presets
+`nova`, `vega`, `maia`, …), not a separate registry URL. The package is **`@base-ui/react`**
+— `@base-ui-components/react` is the old name and is deprecated upstream. No `@radix-ui/*`
+package is in the tree, and `adherence.test.ts` asserts that against the lockfile.
+
+`shadcn add <name>` emits `@/` imports; rewrite them to relative ones. `packages/ui` is
+consumed as source by another app's Vite, which resolves `@` to _its own_ `src`.
+
+Two Base UI deltas worth knowing: `Checkbox` takes a separate `indeterminate` prop rather
+than `checked="indeterminate"`, and jsdom ships no `PointerEvent`, which Base UI's controls
+construct on click — hence `packages/ui/test/pointer-event-polyfill.ts`, shared with
+`apps/web` through the package's `exports` map.
+
+**Fonts: Instrument Sans and JetBrains Mono are not self-hosted.** Alegreya ships as real
+variable TTFs in the design system and is wired up by `tokens/fonts.css`; the other two load
+non-blocking from Google Fonts via the `<link>` in `apps/web/index.html`, which is the
+designers' documented approach. Every `--font-*` token carries a real system fallback, so an
+offline page degrades legibly — but a tool used at a table with poor connectivity may want
+those two local later. Uploading `.woff2` files and adding `@font-face` rules to
+`tokens/fonts.css` is all that would be needed.
+
 ## Effect v3 → v4: the API mapping this repo needed
 
 Not derivable from the code. The headline change is **package consolidation**:

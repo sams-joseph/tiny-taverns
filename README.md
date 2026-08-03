@@ -6,15 +6,17 @@ backend, sharing config and a component library across a pnpm + Turborepo worksp
 
 ## Stack
 
-| Concern         | Choice                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------- |
-| Package manager | [pnpm](https://pnpm.io) workspaces                                                     |
-| Task runner     | [Turborepo](https://turborepo.dev)                                                     |
-| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only) |
-| Backend         | [Effect](https://effect.website) v4 (beta) HTTP server + `@effect/platform-node`       |
-| Language        | TypeScript (`strict`, ESM everywhere)                                                  |
-| Lint / format   | ESLint (flat config) + Prettier                                                        |
-| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library)                                 |
+| Concern         | Choice                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------- |
+| Package manager | [pnpm](https://pnpm.io) workspaces                                                      |
+| Task runner     | [Turborepo](https://turborepo.dev)                                                      |
+| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only)  |
+| Backend         | [Effect](https://effect.website) v4 (beta) HTTP server + `@effect/platform-node`        |
+| Language        | TypeScript (`strict`, ESM everywhere)                                                   |
+| Styling         | [Tailwind](https://tailwindcss.com) v4 (`@theme`) bridged onto the design-system tokens |
+| Components      | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives         |
+| Lint / format   | ESLint (flat config) + Prettier                                                         |
+| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library)                                  |
 
 ## Layout
 
@@ -24,7 +26,9 @@ taverns/
     web/                 Vite + React SPA (consumes @taverns/ui)
     server/              Effect.ts HTTP service (GET /health)
   packages/
-    ui/                  @taverns/ui — shared React component library (Button)
+    design-system/       @taverns/design-system — the delivered Tiny Taverns system.
+                         tokens/ is the SINGLE SOURCE OF TRUTH for every design value.
+    ui/                  @taverns/ui — the 14 shadcn components, on Base UI
     tsconfig/            @taverns/tsconfig — shared tsconfig bases
     eslint-config/       @taverns/eslint-config — shared flat ESLint config
   .repos/
@@ -53,9 +57,42 @@ git subtree pull --squash -P .repos/effect https://github.com/Effect-TS/effect e
 ```
 
 Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui`
-(the `Button` is rendered in `App.tsx` and exercised in its test) plus the shared
-`@taverns/tsconfig` and `@taverns/eslint-config` packages, so the wiring is proven, not
-decorative.
+(the component gallery in `App.tsx` renders every primitive, and its test drives them) and
+`@taverns/design-system` (tokens, the Alegreya font files and the brand icons all resolve
+through normal Vite imports), plus the shared `@taverns/tsconfig` and
+`@taverns/eslint-config` packages — so the wiring is proven, not decorative.
+
+## The design system
+
+`packages/design-system` holds the delivered **Tiny Taverns** system: tokens, fonts, brand
+assets, the 20 `guidelines/` specimen cards, and one `.prompt.md` + `.d.ts` + `.jsx` spec
+per component. It is also installed as a Claude Code skill — `.claude/skills/tiny-taverns-design`
+is a symlink to it, so there is only ever one copy.
+
+**`tokens/*.css` is the single source of truth.** No hex, radius, duration or measurement is
+restated anywhere else; `packages/ui/src/styles.css` gives those tokens Tailwind names by
+`var()` reference only. The system is **dark only** — there is no light theme to build, and
+no toggle.
+
+`packages/ui` ships the 14 components as real shadcn/ui components on **Base UI** primitives
+(no `@radix-ui/*` anywhere in the tree), styled to the delivered specs. The delivered `.jsx`
+files are the _visual specification_, not code to ship — see
+`packages/design-system/PORT-NOTES.md`.
+
+Two adherence rules from the designers are enforced in ESLint
+(`packages/eslint-config/design-system.js`): no raw hex colours or `px` literals in component
+code, and no importing component internals. `packages/ui/src/adherence.test.ts` extends the
+same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI-only).
+
+### The gallery
+
+`apps/web` renders a **component gallery**: every component, in every variant and size, on
+the surfaces it is meant to sit on, with the colour ramps, type scale, radii and elevation
+alongside. It is how you check a change against `packages/design-system/guidelines/`.
+
+```bash
+pnpm --filter web dev   # http://localhost:5173
+```
 
 ## Prerequisites
 
@@ -117,9 +154,12 @@ vendors the matching upstream source as the authoritative reference.
 
 Vitest runs in every workspace project. Each has at least one real, passing test:
 
-- `apps/web` — a React Testing Library test of `App` (clicks the shared `Button`).
-- `apps/server` — an Effect-based test of the `Health` service and the `/health` handler.
-- `packages/ui` — a component test of `Button`.
+- `apps/web` — React Testing Library tests that drive the gallery (tabs, dialog, toast,
+  toggles).
+- `apps/server` — an Effect-based test of the `Health` service and the `/health` handler,
+  plus a production-start smoke test that runs the real build output under plain `node`.
+- `packages/ui` — component tests, design-system adherence checks, and a guard that keeps
+  the `tailwind-merge` config in step with the theme.
 
 No Playwright E2E is included: for boilerplate the value did not justify the extra CI
 weight. Add it later under `apps/web` if an end-to-end smoke test becomes useful.

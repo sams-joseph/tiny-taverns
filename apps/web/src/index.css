@@ -1,0 +1,6 @@
+/* The whole theme lives in @taverns/ui — the design system serves two products, so
+   nothing brand-shaped belongs in one app. This file only adds this app's own
+   sources to Tailwind's scan set (the package declares its own). */
+@import "@taverns/ui/styles.css";
+
+@source ".";

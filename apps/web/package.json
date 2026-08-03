@@ -12,11 +12,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@taverns/design-system": "workspace:*",
     "@taverns/ui": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@taverns/eslint-config": "workspace:*",
     "@taverns/tsconfig": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
@@ -28,6 +30,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.17.0",
     "jsdom": "^25.0.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vitest": "^3.0.0"

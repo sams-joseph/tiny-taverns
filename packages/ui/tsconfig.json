@@ -4,5 +4,5 @@
     "types": ["node", "vitest/globals"],
     "noEmit": true
   },
-  "include": ["src", "vitest.setup.ts", "vitest.config.ts"]
+  "include": ["src", "test", "vitest.setup.ts", "vitest.config.ts"]
 }

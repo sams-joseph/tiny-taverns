@@ -1,0 +1,65 @@
+:root{
+/* ---- Base ramps. Cool, low-humidity. Every neutral carries a blue cast. ---- */
+--slate-950:#0A0E13;--slate-900:#111820;--slate-800:#1A2330;--slate-700:#2B3745;--slate-600:#40505F;
+--slate-500:#5B6B7C;--slate-400:#7D8C9C;--slate-300:#A6B3C0;--slate-200:#C8D2DC;--slate-100:#E2E9EF;--slate-50:#F1F5F8;
+--mist:#F5F8FA;--mist-deep:#E8EEF3;--frost:#FDFEFF;
+
+/* Verdigris — the primary. On dark surfaces the lighter steps do the work. */
+--verdigris-700:#06323C;--verdigris-600:#0A4A58;--verdigris-500:#106173;--verdigris-400:#17798C;
+--verdigris-300:#3FA3B5;--verdigris-200:#A2D4DE;--verdigris-100:#DCEFF3;
+
+/* Crimson — damage, destruction, danger. */
+--crimson-700:#7A0B22;--crimson-600:#A0122F;--crimson-500:#C81E43;--crimson-400:#E8375C;--crimson-200:#F9B4C2;--crimson-100:#FDE4EA;
+
+/* Emerald — healing, saves made, success. */
+--emerald-700:#05593C;--emerald-600:#08774F;--emerald-500:#0D9765;--emerald-400:#17B87C;--emerald-200:#A5E9CC;--emerald-100:#DCF7EA;
+
+/* Violet — magic, spells, concentration. Flat, never a gradient. */
+--violet-700:#3A1B7A;--violet-600:#4F27A3;--violet-500:#6633CC;--violet-400:#8154E8;--violet-200:#CBBAF6;--violet-100:#EAE2FD;
+
+/* Azure — information, rules text, cold. */
+--azure-700:#0B3F73;--azure-600:#0F569B;--azure-500:#1470C6;--azure-400:#2E8FE6;--azure-200:#AED5F5;--azure-100:#DEEDFC;
+
+/* ---- Semantic aliases. DARK ONLY. ----
+   This system has no light mode. A DM runs it at a lit table, so every surface is
+   dark and nothing is ever set on a light background. The --mist / --frost tokens
+   remain defined for the odd inverted element, but are NOT page or card surfaces. */
+--surface-page:var(--slate-950);
+--surface-card:var(--slate-900);
+--surface-raised:var(--slate-800);
+--surface-sunken:#06090D;
+--surface-inverse:var(--slate-50);
+--surface-panel:var(--slate-900);
+--surface-panel-raised:var(--slate-800);
+--surface-panel-sunken:#06090D;
+
+--text-heading:var(--slate-50);
+--text-body:var(--slate-200);
+--text-muted:var(--slate-400);
+--text-faint:var(--slate-500);
+--text-on-accent:#F5FBFC;
+--text-on-solid:#FFFFFF;
+--text-on-dark:var(--slate-50);
+--text-on-dark-muted:var(--slate-400);
+--text-link:var(--verdigris-300);
+--text-link-hover:var(--verdigris-200);
+
+--border-hairline:var(--slate-800);
+--border-strong:var(--slate-700);
+--border-ink:var(--slate-700);
+--border-on-dark:var(--slate-700);
+
+--accent:var(--verdigris-400);
+--accent-hover:var(--verdigris-300);
+--accent-press:var(--verdigris-500);
+--accent-soft:#0E2A31;
+--accent-ink:var(--verdigris-300);
+
+--danger:var(--crimson-500);--danger-hover:var(--crimson-400);--danger-soft:#2A0C14;--danger-ink:var(--crimson-200);
+--success:var(--emerald-500);--success-hover:var(--emerald-400);--success-soft:#06231A;--success-ink:var(--emerald-200);
+--magic:var(--violet-500);--magic-hover:var(--violet-400);--magic-soft:#191036;--magic-ink:var(--violet-200);
+--info:var(--azure-500);--info-hover:var(--azure-400);--info-soft:#091E33;--info-ink:var(--azure-200);
+
+--focus-ring:rgba(63,163,181,.60);
+--scrim:rgba(3,5,8,.74);
+}

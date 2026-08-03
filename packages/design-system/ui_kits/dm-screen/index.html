@@ -1,0 +1,32 @@
+<!-- @dsCard group="DM Screen" viewport="1440x900" name="DM screen — live session" subtitle="Campaign home, initiative runner and bestiary; click through the rail" -->
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tiny Taverns — DM screen</title>
+<link rel="icon" type="image/png" href="../../assets/icon/favicon-32.png">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body><div id="root"></div>
+<script src="data.js"></script>
+<script type="text/babel" src="AppShell.jsx"></script>
+<script type="text/babel" src="StatBlock.jsx"></script>
+<script type="text/babel" src="CampaignHome.jsx"></script>
+<script type="text/babel" src="EncounterRunner.jsx"></script>
+<script type="text/babel" src="Bestiary.jsx"></script>
+<script type="text/babel">
+function App() {
+  const [screen, setScreen] = React.useState("home");
+  return (
+    <AppShell screen={screen} setScreen={setScreen}>
+      {screen === "home" ? <CampaignHome onRun={() => setScreen("run")} />
+        : screen === "run" ? <EncounterRunner onExit={() => setScreen("home")} />
+        : <Bestiary onRun={() => setScreen("run")} />}
+    </AppShell>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body></html>

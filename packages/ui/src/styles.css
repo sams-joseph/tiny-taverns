@@ -1,0 +1,335 @@
+/* ==========================================================================
+   @taverns/ui — Tailwind v4 theme, bridged onto the Tiny Taverns design system.
+
+   Every value below is a `var()` reference into @taverns/design-system/tokens.
+   No hex, radius, duration or measurement is restated here: those files are the
+   single source of truth, and this file only gives their values Tailwind names.
+
+   Tiny Taverns is DARK ONLY (readme.md: "A DM runs it at a lit table"). There is
+   no light theme and no `.dark` class — the tokens resolve dark at :root, and
+   `dark:` variants are meaningless in this system.
+   ========================================================================== */
+
+@import "tailwindcss" source(none);
+
+/* shadcn's own Tailwind layer: the data-open / data-checked / data-active custom
+   variants its Base UI components are written against. Carries no palette. */
+@import "shadcn/tailwind.css";
+
+/* The design system's tokens, in layer(base) so its element defaults sit alongside
+   preflight (and beat it) while still losing to utility classes — an unlayered
+   `h2 { font-size: … }` would otherwise outrank every `text-*` class in the app.
+
+   These are listed individually rather than via the package's own `styles.css`
+   entry, because `@import "…" layer(base)` inlines a file into an `@layer` block
+   and an `@import` nested inside a layer block is invalid CSS: the token files get
+   dropped, silently, with the build still green. This list must stay in step with
+   packages/design-system/styles.css — `adherence.test.ts` asserts that it does. */
+@import "@taverns/design-system/tokens/fonts.css" layer(base);
+@import "@taverns/design-system/tokens/colors.css" layer(base);
+@import "@taverns/design-system/tokens/typography.css" layer(base);
+@import "@taverns/design-system/tokens/spacing.css" layer(base);
+@import "@taverns/design-system/tokens/radius.css" layer(base);
+@import "@taverns/design-system/tokens/elevation.css" layer(base);
+@import "@taverns/design-system/tokens/motion.css" layer(base);
+@import "@taverns/design-system/tokens/base.css" layer(base);
+
+/* Explicit source globs: `source(none)` above disables auto-detection, which
+   cannot see this package through the consumer's node_modules symlink anyway. */
+@source ".";
+
+/* --------------------------------------------------------------------------
+   1. Clear Tailwind's built-in scales.
+
+   This is what guarantees no default slate/zinc/indigo can reach shipped CSS:
+   the utilities simply do not exist. Anything not re-declared below is gone.
+   -------------------------------------------------------------------------- */
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+  --leading-*: initial;
+  --font-weight-*: initial;
+  --tracking-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --blur-*: initial;
+  --ease-*: initial;
+  --animate-*: initial;
+}
+
+/* --------------------------------------------------------------------------
+   2. The bridge. `inline` so utilities emit `var(--design-system-token)`
+      directly rather than a second indirection.
+   -------------------------------------------------------------------------- */
+@theme inline {
+  /* -- keywords ---------------------------------------------------------- */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-inherit: inherit;
+
+  /* -- neutral ramp. Every neutral carries a blue cast; there is no true grey. */
+  --color-slate-950: var(--slate-950);
+  --color-slate-900: var(--slate-900);
+  --color-slate-800: var(--slate-800);
+  --color-slate-700: var(--slate-700);
+  --color-slate-600: var(--slate-600);
+  --color-slate-500: var(--slate-500);
+  --color-slate-400: var(--slate-400);
+  --color-slate-300: var(--slate-300);
+  --color-slate-200: var(--slate-200);
+  --color-slate-100: var(--slate-100);
+  --color-slate-50: var(--slate-50);
+  --color-mist: var(--mist);
+  --color-mist-deep: var(--mist-deep);
+  --color-frost: var(--frost);
+
+  /* -- verdigris: the only colour that carries an action -------------------- */
+  --color-verdigris-700: var(--verdigris-700);
+  --color-verdigris-600: var(--verdigris-600);
+  --color-verdigris-500: var(--verdigris-500);
+  --color-verdigris-400: var(--verdigris-400);
+  --color-verdigris-300: var(--verdigris-300);
+  --color-verdigris-200: var(--verdigris-200);
+  --color-verdigris-100: var(--verdigris-100);
+
+  /* -- the four semantic families ----------------------------------------- */
+  --color-crimson-700: var(--crimson-700);
+  --color-crimson-600: var(--crimson-600);
+  --color-crimson-500: var(--crimson-500);
+  --color-crimson-400: var(--crimson-400);
+  --color-crimson-200: var(--crimson-200);
+  --color-crimson-100: var(--crimson-100);
+  --color-emerald-700: var(--emerald-700);
+  --color-emerald-600: var(--emerald-600);
+  --color-emerald-500: var(--emerald-500);
+  --color-emerald-400: var(--emerald-400);
+  --color-emerald-200: var(--emerald-200);
+  --color-emerald-100: var(--emerald-100);
+  --color-violet-700: var(--violet-700);
+  --color-violet-600: var(--violet-600);
+  --color-violet-500: var(--violet-500);
+  --color-violet-400: var(--violet-400);
+  --color-violet-200: var(--violet-200);
+  --color-violet-100: var(--violet-100);
+  --color-azure-700: var(--azure-700);
+  --color-azure-600: var(--azure-600);
+  --color-azure-500: var(--azure-500);
+  --color-azure-400: var(--azure-400);
+  --color-azure-200: var(--azure-200);
+  --color-azure-100: var(--azure-100);
+
+  /* -- shadcn's semantic slots, pointed at brand aliases -------------------- */
+  --color-background: var(--surface-page);
+  --color-foreground: var(--text-body);
+  --color-card: var(--surface-card);
+  --color-card-foreground: var(--text-body);
+  --color-popover: var(--surface-raised);
+  --color-popover-foreground: var(--text-on-dark);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--text-on-accent);
+  --color-secondary: var(--surface-raised);
+  --color-secondary-foreground: var(--text-body);
+  --color-muted: var(--surface-raised);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--text-on-accent);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--text-on-solid);
+  --color-border: var(--border-hairline);
+  --color-input: var(--border-strong);
+  --color-ring: var(--focus-ring);
+
+  /* -- the rest of the brand's semantic aliases ---------------------------- */
+  --color-surface-page: var(--surface-page);
+  --color-surface-card: var(--surface-card);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-inverse: var(--surface-inverse);
+  --color-heading: var(--text-heading);
+  --color-faint: var(--text-faint);
+  --color-on-accent: var(--text-on-accent);
+  --color-on-solid: var(--text-on-solid);
+  --color-on-dark: var(--text-on-dark);
+  --color-on-dark-muted: var(--text-on-dark-muted);
+  --color-link: var(--text-link);
+  --color-link-hover: var(--text-link-hover);
+  --color-hairline: var(--border-hairline);
+  --color-strong: var(--border-strong);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-success: var(--success);
+  --color-success-hover: var(--success-hover);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-magic: var(--magic);
+  --color-magic-hover: var(--magic-hover);
+  --color-magic-soft: var(--magic-soft);
+  --color-magic-ink: var(--magic-ink);
+  --color-info: var(--info);
+  --color-info-hover: var(--info-hover);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-scrim: var(--scrim);
+
+  /* -- type. One sans across display and UI; hierarchy is weight and size. -- */
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+
+  --text-micro: var(--fs-micro);
+  --text-label-s: var(--fs-label-s);
+  --text-caption: var(--fs-caption);
+  --text-label: var(--fs-label);
+  --text-mono: var(--fs-mono);
+  --text-label-l: var(--fs-label-l);
+  --text-body-s: var(--fs-body-s);
+  --text-mono-l: var(--fs-mono-l);
+  --text-body: var(--fs-body);
+  --text-subtitle: var(--fs-subtitle);
+  --text-body-l: var(--fs-body-l);
+  --text-title: var(--fs-title);
+  --text-display-s: var(--fs-display-s);
+  --text-display-m: var(--fs-display-m);
+  --text-display-l: var(--fs-display-l);
+  --text-display-xl: var(--fs-display-xl);
+
+  --leading-none: 1;
+  --leading-tight: var(--lh-tight);
+  --leading-snug: var(--lh-snug);
+  --leading-heading: var(--lh-heading);
+  --leading-body: var(--lh-body);
+  --leading-loose: var(--lh-loose);
+
+  --font-weight-normal: var(--fw-regular);
+  --font-weight-medium: var(--fw-medium);
+  --font-weight-semibold: var(--fw-semibold);
+  --font-weight-bold: var(--fw-bold);
+  --font-weight-black: var(--fw-black);
+
+  --tracking-display: var(--ls-display);
+  --tracking-tight: var(--ls-tight);
+  --tracking-normal: var(--ls-normal);
+  --tracking-wide: var(--ls-wide);
+  --tracking-caps: var(--ls-caps);
+
+  /* -- radii. Restrained: 6px controls, 4px badges, 12px cards, 14px dialogs. */
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-control: var(--r-control);
+  --radius-card: var(--r-card);
+  --radius-panel: var(--r-panel);
+  --radius-dialog: var(--r-dialog);
+  --radius-tag: var(--r-tag);
+  --radius-pill: var(--r-pill);
+  --radius-circle: var(--r-circle);
+
+  /* -- elevation. Black, heavier than a light theme needs. ------------------ */
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+  --shadow-dark: var(--shadow-dark);
+  --shadow-inset-lip: var(--shadow-inset-lip);
+  --shadow-inset-press: var(--shadow-inset-press);
+  --shadow-ring: var(--ring);
+
+  --blur-scrim: var(--scrim-blur);
+
+  /* -- motion. Nothing overshoots and nothing steps. ------------------------ */
+  --ease-out: var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+  --ease-settle: var(--ease-settle);
+  --animate-dialog-in: tt-dialog-in var(--dur-base) var(--ease-out);
+  --animate-dialog-out: tt-dialog-out var(--dur-base) var(--ease-in-out);
+
+  /* -- layout tokens. The 2px spacing scale itself maps onto Tailwind's
+        default steps (2px = 0.5, 6px = 1.5, 20px = 5, …); only the named
+        layout measurements need bridging. --------------------------------- */
+  --spacing-control: var(--control-h);
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control-lg: var(--control-h-lg);
+  --spacing-row: var(--row-h);
+  --spacing-card: var(--pad-card);
+  --spacing-panel: var(--pad-panel);
+  --spacing-gutter: var(--gutter);
+  --spacing-page: var(--pad-page);
+  --spacing-page-sm: var(--pad-page-sm);
+  --spacing-rail: var(--rail-w);
+  --spacing-aside: var(--aside-w);
+  --container-measure: var(--measure);
+}
+
+/* --------------------------------------------------------------------------
+   3. Dialog motion. "Fades up 6px from scale(.98)" — the keyframes carry the
+      centring translate themselves, because an animated `transform` replaces the
+      utility that centres the popup for as long as it runs.
+
+      Toasts slide 10px in from the right; that one is a plain transition on Base
+      UI's data-starting-style / data-ending-style, so it needs no keyframes.
+
+      `prefers-reduced-motion` zeroes the duration tokens upstream, in
+      tokens/motion.css, which flattens both.
+   -------------------------------------------------------------------------- */
+@keyframes tt-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + var(--s-3))) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes tt-dialog-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + var(--s-3))) scale(0.98);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. The one transition every control shares, and the focus ring. Both come
+      straight from the tokens so a control never spells out its own timing.
+   -------------------------------------------------------------------------- */
+@utility transition-control {
+  transition: var(--transition-control);
+}
+
+@utility ring-focus {
+  box-shadow: var(--ring);
+}
+
+/* --------------------------------------------------------------------------
+   5. Base layer. tokens/base.css already sets the body, headings, links and
+      :focus-visible; this only adds what a bundled app needs on top.
+   -------------------------------------------------------------------------- */
+@layer base {
+  body {
+    min-height: 100vh;
+  }
+
+  /* Controls inherit the UI face rather than the browser's. */
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+}

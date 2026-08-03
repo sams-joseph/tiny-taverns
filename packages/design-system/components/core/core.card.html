@@ -1,0 +1,50 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Core" subtitle="Button, Badge, Toggle, Card — shadcn variant names" -->
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:20px;background:var(--surface-page)}.lbl{font:var(--type-label);color:var(--text-faint);margin-bottom:9px}.grp{margin-bottom:20px}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">const { Button, Badge, Toggle, Card, CardHeader, CardTitle, CardDescription, CardContent, Icon } = window.TinyTavernsDesignSystem_a201fd;
+function App(){
+  const [on,setOn] = React.useState(true);
+  return (<>
+  <div className="grp"><div className="lbl">Button — variant</div><div className="row">
+    <Button>Roll</Button>
+    <Button variant="secondary">Add monster</Button>
+    <Button variant="destructive">End</Button>
+    <Button variant="outline">Outline</Button>
+    <Button variant="ghost">Ghost</Button>
+    <Button variant="link">Link</Button>
+    <Button disabled>Disabled</Button>
+  </div></div>
+  <div className="grp"><div className="lbl">Button — size (default / sm / lg / icon)</div><div className="row">
+    <Button size="lg">Large</Button><Button>Default</Button><Button size="sm">Small</Button>
+    <Button size="icon" aria-label="Add"><Icon name="plus" size={16}/></Button>
+    <Button size="icon" variant="secondary" aria-label="Roll"><Icon name="dices" size={16}/></Button>
+    <Button size="icon" variant="ghost" aria-label="Delete"><Icon name="trash-2" size={16}/></Button>
+  </div></div>
+  <div className="grp"><div className="lbl">Badge — variant &nbsp;·&nbsp; Toggle — pressed</div><div className="row">
+    <Badge>CR 4</Badge>
+    <Badge variant="secondary">Humanoid</Badge>
+    <Badge variant="destructive">Hostile</Badge>
+    <Badge variant="outline">Marsh</Badge>
+    <Badge variant="success">Stabilised</Badge>
+    <Badge variant="magic">Concentrating</Badge>
+    <Badge variant="info">Legendary</Badge>
+    <span style={{width:10}}/>
+    <Toggle size="sm" pressed={on} onPressedChange={setOn}>Marsh</Toggle>
+    <Toggle size="sm">Cave</Toggle>
+  </div></div>
+  <div className="row" style={{alignItems:"stretch"}}>
+    <Card style={{flex:1}}><CardHeader><CardTitle>Goblin ambush</CardTitle><CardDescription>6 creatures · light card</CardDescription></CardHeader></Card>
+    <Card tone="panel" style={{flex:1}}><CardHeader><CardTitle>DM screen</CardTitle><CardDescription>Dark panel tone</CardDescription></CardHeader></Card>
+  </div>
+  </>);
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);</script>
+</body></html>

@@ -1,0 +1,13 @@
+{
+  "name": "@taverns/design-system",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The delivered Tiny Taverns design system. Canonical source of every design token.",
+  "type": "module",
+  "exports": {
+    "./styles.css": "./styles.css",
+    "./tokens/*": "./tokens/*",
+    "./fonts/*": "./fonts/*",
+    "./assets/*": "./assets/*"
+  }
+}

@@ -5,3 +5,5 @@ coverage
 pnpm-lock.yaml
 .claude
 .repos
+# The designers' delivery, kept byte-for-byte (see packages/design-system/PORT-NOTES.md).
+packages/design-system

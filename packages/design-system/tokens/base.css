@@ -1,0 +1,11 @@
+/* Minimal element defaults so specimens and kits share a baseline. */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--surface-page);color:var(--text-body);font:var(--type-body);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-wrap:pretty}
+h1,h2,h3,h4{margin:0;font-family:var(--font-display);font-weight:var(--fw-semibold);color:var(--text-heading);line-height:var(--lh-snug);letter-spacing:var(--ls-display)}
+h1{font-size:var(--fs-display-l)}h2{font-size:var(--fs-display-m)}h3{font-size:var(--fs-display-s)}h4{font-size:var(--fs-title)}
+p{margin:0 0 var(--s-5)}
+a{color:var(--text-link);text-decoration-thickness:1px;text-underline-offset:2px;transition:color var(--dur-fast) var(--ease-out)}
+a:hover{color:var(--text-link-hover)}
+:focus-visible{outline:none;box-shadow:var(--ring)}
+code,kbd{font-family:var(--font-mono);font-size:var(--fs-mono)}
+::selection{background:var(--verdigris-200);color:var(--slate-950)}

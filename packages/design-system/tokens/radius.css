@@ -1,0 +1,15 @@
+:root{
+/* Modern and restrained: enough curve to feel soft, never pill-shaped containers. */
+--r-xs:4px; /* @kind radius */
+--r-sm:6px; /* @kind radius */
+--r-md:8px; /* @kind radius */
+--r-lg:12px; /* @kind radius */
+--r-xl:16px; /* @kind radius */
+--r-pill:999px; /* @kind radius */
+--r-circle:50%; /* @kind radius */
+--r-control:6px; /* @kind radius */
+--r-card:12px; /* @kind radius */
+--r-panel:12px; /* @kind radius */
+--r-dialog:14px; /* @kind radius */
+--r-tag:999px; /* @kind radius */
+}

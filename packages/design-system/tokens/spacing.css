@@ -1,0 +1,18 @@
+:root{
+/* 2px-based, loosens as it climbs. Not a strict 4/8 grid — 6 and 20 are used often. */
+--s-1:2px;--s-2:4px;--s-3:6px;--s-4:8px;--s-5:12px;--s-6:16px;--s-7:20px;--s-8:24px;
+--s-9:32px;--s-10:40px;--s-11:56px;--s-12:72px;--s-13:96px;
+
+--gutter:20px;          /* default gap between sibling controls */
+--pad-card:20px;        /* card interior */
+--pad-panel:16px;       /* dark panel interior */
+--pad-page:32px;        /* page edge on desktop */
+--pad-page-sm:16px;
+--row-h:44px;           /* list/initiative row + minimum hit target */
+--control-h:38px;       /* default button/input height */
+--control-h-sm:30px;
+--control-h-lg:46px;
+--rail-w:260px;         /* left navigation rail */
+--aside-w:340px;        /* right inspector */
+--measure:66ch; /* @kind other */         /* prose line length */
+}

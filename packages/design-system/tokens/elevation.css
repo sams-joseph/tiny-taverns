@@ -1,0 +1,21 @@
+:root{
+/* Dark-only elevation. Shadows are black at higher alpha — a cool-tinted shadow is
+   invisible on a near-black page, so depth comes from black plus a lighter surface. */
+--shadow-1:0 1px 2px rgba(0,0,0,.40); /* @kind shadow */
+--shadow-2:0 2px 6px rgba(0,0,0,.45),0 8px 20px -6px rgba(0,0,0,.55); /* @kind shadow */
+--shadow-3:0 12px 32px -8px rgba(0,0,0,.70),0 2px 8px rgba(0,0,0,.50); /* @kind shadow */
+--shadow-dark:0 8px 24px -6px rgba(0,0,0,.60); /* @kind shadow */
+--shadow-inset-lip:inset 0 1px 0 rgba(255,255,255,.07); /* @kind shadow */
+--shadow-inset-press:inset 0 1px 3px rgba(0,0,0,.45); /* @kind shadow */
+--shadow-inset-well:none; /* @kind shadow */
+/* Focus: accent ring held off the control by a 2px halo of the page colour. */
+--ring:0 0 0 2px var(--surface-page),0 0 0 4px var(--focus-ring); /* @kind shadow */
+/* Added during the repo port: readme.md specifies the dialog scrim as "--scrim +
+   blur(3px)" in prose but never tokenised the radius. Tokenised here so the value
+   stays in this file and is never restated in component code. */
+--scrim-blur:3px; /* @kind other */
+
+/* No texture. */
+--grain:none; /* @kind other */
+--grain-size:auto; /* @kind other */
+}
