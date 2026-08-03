@@ -27,8 +27,29 @@ taverns/
     ui/                  @taverns/ui — shared React component library (Button)
     tsconfig/            @taverns/tsconfig — shared tsconfig bases
     eslint-config/       @taverns/eslint-config — shared flat ESLint config
+  .repos/
+    effect/              vendored upstream Effect source (read-only reference)
   turbo.json             build / lint / typecheck / test / dev pipelines
   pnpm-workspace.yaml
+```
+
+### `.repos/` — vendored reference source
+
+`.repos/` holds read-only upstream source vendored for reference. It is **committed on
+purpose** (not gitignored) so the exact source matching our installed dependency travels
+with the repo. Nothing in it is built, linted, formatted, or installed: the
+`pnpm-workspace.yaml` globs are root-anchored (`apps/*`, `packages/*`) so they do not
+match `.repos/effect/packages/*`, and `.repos` is listed in `.prettierignore` and in the
+shared ESLint `ignores`.
+
+`.repos/effect` is the [Effect](https://github.com/Effect-TS/effect) repo at tag
+`effect@4.0.0-beta.102`, added as a squashed subtree so the v4 beta source is available
+locally (v4's published docs are thin — the source and its tests are the authoritative
+reference). It is pinned to a tag, not a branch, so it stays in lockstep with the
+`effect` version `apps/server` installs. To move it to a newer tag:
+
+```bash
+git subtree pull --squash -P .repos/effect https://github.com/Effect-TS/effect effect@<version>
 ```
 
 Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui`
