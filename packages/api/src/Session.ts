@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CampaignId, SessionId } from "./Ids.js";
+import { CampaignId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -13,6 +13,16 @@ export class Session extends Schema.Class<Session>("Session")({
   title: Schema.NullOr(Schema.String),
   startedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   endedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  /**
+   * The fight on the table right now — `data.js:10`'s `active: true`, rendered
+   * as "On the table now" (`CampaignHome.jsx:23`).
+   *
+   * A pointer here rather than a flag on each encounter, because exactly one
+   * encounter is live and two rows must not be able to both claim the table.
+   * Not settable directly: it is written only by starting and ending a run, so
+   * there is no writer that could leave it naming a fight that is over.
+   */
+  activeEncounterRunId: Schema.NullOr(EncounterRunId),
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,

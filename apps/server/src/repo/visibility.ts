@@ -148,7 +148,9 @@ export const rowWritable = (
 
 /**
  * A table whose rows hang off another campaign-scoped row rather than off the
- * campaign directly — today only `prep_item` under `session`.
+ * campaign directly — `prep_item` under `session`, `encounter_creature` under
+ * `encounter`, `encounter_run` under `session`, `combatant` under
+ * `encounter_run`.
  *
  * The alternative is a denormalised `campaign_id` on the child, which would let
  * the existing `rowReadable` apply unchanged. It is rejected because it stores
@@ -167,13 +169,94 @@ export interface NestedTable {
 }
 
 /**
+ * How a table reaches the campaign that scopes it.
+ *
+ * Nesting stopped being one level deep when the live session arrived:
+ * `combatant` hangs off `encounter_run`, which hangs off `session`, which is
+ * the campaign-scoped table. Writing that predicate out by hand would mean a
+ * second, longer restatement of the containment rule, and two statements of one
+ * rule is how they come to disagree. So the chain is data, and the predicate
+ * walks it.
+ */
+export type Containment =
+  | { readonly _tag: "campaign"; readonly table: string }
+  | {
+      readonly _tag: "under";
+      readonly table: string;
+      readonly foreignKey: string;
+      readonly parent: Containment;
+    };
+
+/** A table with a `campaign_id` of its own — the end of every chain. */
+export const inCampaign = (table: string): Containment => ({ _tag: "campaign", table });
+
+/** A table reached through a parent, e.g. `under("combatant", "encounter_run_id", …)`. */
+export const under = (table: string, foreignKey: string, parent: Containment): Containment => ({
+  _tag: "under",
+  table,
+  foreignKey,
+  parent,
+});
+
+/**
+ * Whether the *correlated* row of this table is readable.
+ *
+ * Correlated, meaning no id is bound: the row comes from the query this is
+ * dropped into, or from the `exists (…)` one level up. That is what lets the
+ * chain recurse — each link asks the same question of its parent, and the base
+ * case is `rowReadable`, which is where campaign ownership, credential scope and
+ * the campaign's own visibility are actually checked.
+ *
+ * Every level applies its own row's `visibility` on the way down, so the two
+ * levels the fixtures ask for — the runner's `Share` switch over the whole
+ * fight (`EncounterRunner.jsx:122`) and `Hide from players` on one row (`:139`)
+ * — are the ordinary behaviour of the chain rather than a rule about runs.
+ */
+export const containedRowReadable = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => {
+  if (containment._tag === "campaign") {
+    return rowReadable(sql, containment.table, campaignId, actor);
+  }
+  const { table, foreignKey, parent } = containment;
+  return sql.and([
+    sql`exists (select 1 from ${sql(parent.table)} where ${sql(`${parent.table}.id`)} = ${sql(`${table}.${foreignKey}`)} and ${containedRowReadable(sql, parent, campaignId, actor)})`,
+    actor.seesDmContent ? sql`true` : sql`${sql(`${table}.visibility`)} = 'shared'`,
+  ]);
+};
+
+/**
+ * Whether the correlated row of this table accepts writes from this actor.
+ *
+ * Not `containedRowReadable`, and the difference is the same one `rowWritable`
+ * makes: a player may read a `shared` combatant and must still not be able to
+ * damage it. No level applies a row `visibility` here — the base case refuses
+ * every non-DM outright.
+ */
+export const containedRowWritable = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => {
+  if (containment._tag === "campaign") {
+    return rowWritable(sql, containment.table, campaignId, actor);
+  }
+  const { table, foreignKey, parent } = containment;
+  return sql`exists (select 1 from ${sql(parent.table)} where ${sql(`${parent.table}.id`)} = ${sql(`${table}.${foreignKey}`)} and ${containedRowWritable(sql, parent, campaignId, actor)})`;
+};
+
+/**
  * Rows of a nested table this actor may read.
  *
  * Three levels now rather than two: the campaign has to be readable, *and* the
- * parent row, *and* the child. Composing `rowReadable(parent)` rather than
- * restating it is what carries the campaign-scope containment down — a
- * credential minted for one table cannot reach a prep item through a session in
- * another, because the clause it inherits already refused the session.
+ * parent row, *and* the child. Composing rather than restating is what carries
+ * the campaign-scope containment down — a credential minted for one table
+ * cannot reach a prep item through a session in another, because the clause it
+ * inherits already refused the session.
  */
 export const nestedRowReadable = (
   sql: SqlClient.SqlClient,
@@ -184,8 +267,12 @@ export const nestedRowReadable = (
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
-    sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${sql(`${nested.table}.${nested.foreignKey}`)} and ${rowReadable(sql, nested.parent, campaignId, actor)})`,
-    actor.seesDmContent ? sql`true` : sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
+    containedRowReadable(
+      sql,
+      under(nested.table, nested.foreignKey, inCampaign(nested.parent)),
+      campaignId,
+      actor,
+    ),
   ]);
 
 /**
@@ -318,3 +405,127 @@ export const ensureNestedParentReadable = (
     parentId,
     sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${parentId} and ${rowReadable(sql, nested.parent, campaignId, actor)})`,
   );
+
+/**
+ * Fails with `NotFound` unless the named row of a nested table exists, hangs
+ * off *this* parent, and is readable.
+ *
+ * Both halves matter, and separating them is a real hole rather than a
+ * theoretical one. Checking "the session is readable" and "the run is readable"
+ * as two independent questions is satisfiable by a run in a *different* session
+ * of the same campaign — each check passes on its own, and the pair says
+ * nothing about whether the parent in the path is the parent of the row. The
+ * predicate here binds the foreign key, so the question asked is the one meant:
+ * is this row in this parent, and may this actor have it.
+ */
+export const ensureNestedRowReadable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  id: string,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    nested.table,
+    id,
+    sql`exists (select 1 from ${sql(nested.table)} where ${sql(`${nested.table}.id`)} = ${id} and ${nestedRowReadable(sql, nested, parentId, campaignId, actor)})`,
+  );
+
+/** The same, for writes. Not `ensureNestedRowReadable` — see `rowWritable`. */
+export const ensureNestedRowWritable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  id: string,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    nested.table,
+    id,
+    sql`exists (select 1 from ${sql(nested.table)} where ${sql(`${nested.table}.id`)} = ${id} and ${nestedRowWritable(sql, nested, parentId, campaignId, actor)})`,
+  );
+
+/** Whether the named row of a contained table exists and is readable. */
+export const containedRowReadableById = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  id: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from ${sql(containment.table)} where ${sql(`${containment.table}.id`)} = ${id} and ${containedRowReadable(sql, containment, campaignId, actor)})`;
+
+/**
+ * Fails with `NotFound` unless the named row of a contained table is visible to
+ * this actor.
+ *
+ * Used before reading its children, so an unreachable run is a 404 naming the
+ * *run* rather than an empty initiative list that reads as "this fight has
+ * nobody in it".
+ */
+export const ensureContainedRowReadable = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  id: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    containment.table,
+    id,
+    containedRowReadableById(sql, containment, id, campaignId, actor),
+  );
+
+/**
+ * Fails with `NotFound` unless the named row of a contained table accepts
+ * writes from this actor. Used before inserting a child, where there is no row
+ * yet to constrain.
+ */
+export const ensureContainedRowWritable = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  id: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    containment.table,
+    id,
+    sql`exists (select 1 from ${sql(containment.table)} where ${sql(`${containment.table}.id`)} = ${id} and ${containedRowWritable(sql, containment, campaignId, actor)})`,
+  );
+
+/** Rows of a contained table this actor may write, bound to a parent id. */
+export const containedChildWritable = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  containment._tag === "campaign"
+    ? containedRowWritable(sql, containment, campaignId, actor)
+    : sql.and([
+        sql`${sql(`${containment.table}.${containment.foreignKey}`)} = ${parentId}`,
+        containedRowWritable(sql, containment, campaignId, actor),
+      ]);
+
+/** Rows of a contained table this actor may read, bound to a parent id. */
+export const containedChildReadable = (
+  sql: SqlClient.SqlClient,
+  containment: Containment,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  containment._tag === "campaign"
+    ? containedRowReadable(sql, containment, campaignId, actor)
+    : sql.and([
+        sql`${sql(`${containment.table}.${containment.foreignKey}`)} = ${parentId}`,
+        containedRowReadable(sql, containment, campaignId, actor),
+      ]);

@@ -46,19 +46,23 @@ describe("migrations", () => {
       "account",
       "campaign",
       "character",
+      "combatant",
       "creature",
       "effect_sql_migrations",
       "encounter",
       "encounter_creature",
+      "encounter_run",
       "note",
       "prep_item",
       "session",
+      "session_event",
     ]);
     expect(await runtime.runPromise(appliedMigrations)).toEqual([
       { migration_id: 1, name: "init" },
       { migration_id: 2, name: "clerk_identity" },
       { migration_id: 3, name: "prep_surface" },
       { migration_id: 4, name: "bestiary" },
+      { migration_id: 5, name: "live_session" },
     ]);
   }, 60_000);
 
@@ -73,6 +77,7 @@ describe("migrations", () => {
       { migration_id: 2, name: "clerk_identity" },
       { migration_id: 3, name: "prep_surface" },
       { migration_id: 4, name: "bestiary" },
+      { migration_id: 5, name: "live_session" },
     ]);
   }, 60_000);
 });

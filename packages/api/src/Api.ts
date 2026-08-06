@@ -3,6 +3,12 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/un
 import { Authorization } from "./Actor.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { Character, CharacterCreate, CharacterUpdate } from "./Character.js";
+import {
+  Combatant,
+  CombatantCreate,
+  CombatantDamage,
+  CombatantUpdate,
+} from "./Combatant.js";
 import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
 import {
@@ -10,13 +16,21 @@ import {
   EncounterCreatureCreate,
   EncounterCreatureUpdate,
 } from "./EncounterCreature.js";
+import {
+  EncounterRun,
+  EncounterRunStart,
+  EncounterRunUpdate,
+  NextTurn,
+} from "./EncounterRun.js";
 import { Conflict, NotFound } from "./Errors.js";
 import {
   CampaignId,
   CharacterId,
+  CombatantId,
   CreatureId,
   EncounterCreatureId,
   EncounterId,
+  EncounterRunId,
   NoteId,
   PrepItemId,
   SessionId,
@@ -24,6 +38,7 @@ import {
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
+import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
 /** Liveness. The one endpoint with no actor and no campaign. */
 export class HealthStatus extends Schema.Class<HealthStatus>("HealthStatus")({
@@ -353,6 +368,176 @@ class PrepGroup extends HttpApiGroup.make("prep")
   .middleware(Authorization) {}
 
 /**
+ * The live session: starting a fight, running it, and ending it.
+ *
+ * Nested under the session because a run belongs to one night — and, as
+ * everywhere else here, the campaign stays in the path so the read predicate is
+ * handed the campaign the session must sit inside rather than inferring it from
+ * an id a client supplied.
+ *
+ * `start` is the only endpoint that writes more than one table: it creates the
+ * run, seeds a combatant per party member and per creature-instance on the
+ * roster, points the session at it, and appends the first log line — in one
+ * transaction, because a half-seeded fight is worse than no fight.
+ *
+ * `end` is a `POST` rather than a `DELETE` because nothing is deleted. The run,
+ * its combatants and its log survive: `EncounterRunner.jsx:164` promises the DM
+ * that "initiative order and hit points are saved to Session 12", and a fight
+ * that can be reopened next week is the point of §1.4's "interrupted and
+ * resumed".
+ */
+class RunsGroup extends HttpApiGroup.make("runs")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      success: Schema.Array(EncounterRun),
+      error: NotFound,
+    }),
+    /**
+     * `Conflict` when this session already has a fight on the table. Exactly
+     * one encounter is live — starting a second is a mistake worth saying out
+     * loud rather than a silent switch, because the first one's initiative
+     * order is still on screen.
+     */
+    HttpApiEndpoint.post("start", "/", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      payload: EncounterRunStart,
+      success: EncounterRun,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("findById", "/:runId", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: EncounterRun,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:runId", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: EncounterRunUpdate,
+      success: EncounterRun,
+      error: NotFound,
+    }),
+    /** Advance initiative, rolling the round over at the end of the order. */
+    HttpApiEndpoint.post("nextTurn", "/:runId/next-turn", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: NextTurn,
+      success: EncounterRun,
+      error: NotFound,
+    }),
+    /** Take the fight off the table. Idempotent — ending an ended run is a no-op. */
+    HttpApiEndpoint.post("end", "/:runId/end", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: Schema.Struct({}),
+      success: EncounterRun,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/sessions/:sessionId/runs")
+  .middleware(Authorization) {}
+
+/**
+ * The initiative list — the thing the DM's finger is on all night.
+ *
+ * `damage` is separate from `update` on purpose: it is a delta, it is the write
+ * that happens every few seconds, and it is the one that carries a `requestId`
+ * so a double-tap cannot apply twice. See `CombatantDamage`.
+ *
+ * `remove` is a real delete and the only way a combatant leaves the order.
+ * Hit points reaching zero does **not** do it — `EncounterRunner.jsx:107`.
+ */
+class CombatantsGroup extends HttpApiGroup.make("combatants")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.Array(Combatant),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: CombatantCreate,
+      success: Combatant,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:combatantId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantUpdate,
+      success: Combatant,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("damage", "/:combatantId/damage", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantDamage,
+      success: Combatant,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:combatantId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/sessions/:sessionId/runs/:runId/combatants")
+  .middleware(Authorization) {}
+
+/**
+ * The session log, and the live stream over it.
+ *
+ * **This is the one group where a read is a stream rather than a response**,
+ * and it is the only way in which the live surface differs from the CRUD around
+ * it — writes are still ordinary `POST`s (§4.3).
+ *
+ * `log` and `events` are the same query behind two transports, deliberately:
+ * both take `since`, both return the rows after it in `seq` order, and both
+ * apply the same visibility predicate. A client that cannot hold a connection
+ * open polls `log`; a client that can opens `events` and gets the same rows
+ * pushed. Reconnect is then not a special path — it is the ordinary path with a
+ * cursor, which is why it can be relied on.
+ *
+ * `events` accepts the cursor two ways. `?since=` is what the derived client
+ * uses, because `HttpApiClient` issues a plain `fetch` and a plain `fetch` does
+ * not resend `Last-Event-ID`. The header is what a browser's native
+ * `EventSource` sends by itself on its automatic reconnect, and honouring it is
+ * what makes that reconnect correct for free rather than silently lossy.
+ */
+class LiveGroup extends HttpApiGroup.make("live")
+  .add(
+    HttpApiEndpoint.get("log", "/log", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      query: SessionLogFilter,
+      success: Schema.Array(SessionEvent),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("events", "/runs/:runId/events", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      query: { since: SessionLogFilter.since },
+      headers: { "last-event-id": Schema.optional(Schema.String) },
+      /**
+       * Authorization failures are still an ordinary 404 response, not a
+       * failure event inside a 200 stream: the handler resolves the actor and
+       * checks the run *before* it returns a stream at all.
+       */
+      success: HttpApiSchema.StreamSse({ events: LiveEvent }),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/sessions/:sessionId")
+  .middleware(Authorization) {}
+
+/**
  * The wire contract. The server implements it and `apps/web` derives its client
  * from it, so request and response shapes cannot drift apart — there is only
  * one declaration and no codegen step between them.
@@ -366,4 +551,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(EncountersGroup)
   .add(CreaturesGroup)
   .add(EncounterCreaturesGroup)
-  .add(PrepGroup) {}
+  .add(PrepGroup)
+  .add(RunsGroup)
+  .add(CombatantsGroup)
+  .add(LiveGroup) {}

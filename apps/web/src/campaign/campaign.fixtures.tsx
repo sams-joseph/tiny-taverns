@@ -50,6 +50,11 @@ export const session = {
   title: null,
   startedAt: null,
   endedAt: null,
+  // "On the table now" — a pointer at the live `encounter_run`, null until the
+  // DM starts a fight. Required on the wire, so a fixture that omits it fails
+  // decoding rather than rendering nothing, which is the property this file
+  // exists for. No screen reads it yet; the runner will.
+  activeEncounterRunId: null,
   visibility: "dm",
   ...provenance,
   ...stamps,

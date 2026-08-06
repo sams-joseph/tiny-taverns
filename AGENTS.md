@@ -786,6 +786,103 @@ scope, for the `Context.Reference` reason `api/client.test.ts` records.
 checklist belongs to `session`, so with `campaign.currentSessionId` null the card says so and
 offers no Add row. Session creation is the live-session step's surface, not this one.
 
+## The live session: what is durable, what is fan-out, and how a stream comes back
+
+`packages/design-system/ui_kits/dm-screen/EncounterRunner.jsx` is the specification. Step 4 of
+the backend built against it; the runner UI depends on the two contracts below, so read them
+before changing either.
+
+**Live state is written straight through to Postgres, transactionally. There is no in-memory
+copy of a fight and no write-behind.** `EncounterRunner.jsx:164` promises the DM their
+initiative order and hit points are saved, and the moment that promise matters is a crash
+mid-combat. The write volume does not justify anything cleverer — a four-hour session is order
+10³ writes. What is genuinely different about the live surface is the *read* pattern, and that
+is the stream. Do not add a cache; measure first.
+
+**The fan-out carries no data — it is a doorbell.** `src/live/LiveEvents.ts` publishes
+`{sessionId}` and nothing else; the SSE handler re-reads the log through the ordinary SQL
+predicate every time it rings. That is not indirection for its own sake, it buys three things
+at once: visibility stays in SQL rather than in an in-memory `filter` someone can forget (the
+leak pattern `repo/visibility.ts` exists to prevent); a dropped notification is self-healing,
+because the next one re-reads from the same cursor; and **reconnect is not a separate code
+path** — catching up and tailing live are one query with one cursor, so the path a waking
+laptop takes is the path every event already takes. The `PubSub` is `sliding`, so a frozen tab
+costs latency rather than memory. §4.4's one-process-per-live-session constraint is this
+module and only this module; Postgres `LISTEN`/`NOTIFY` lifts it with no schema change.
+
+**The reconnect contract, which the runner UI must implement:**
+
+- Every SSE event carries `session_event.seq` as its `id:` line. `HttpApiSchema.StreamSse` is
+  given the codec in **`events` mode, not `data` mode** — `data` mode hard-codes the id to
+  `undefined` and the name to `message` (`HttpApiBuilder.encodeSseStream`), throwing away both
+  halves of this.
+- Resume with `?since=<seq>`, exclusive. That is what the derived client uses, because
+  `HttpApiClient` issues a plain `fetch` and a plain `fetch` does not resend `Last-Event-ID`.
+- The `Last-Event-ID` **header** is honoured too, for a browser's native `EventSource`, which
+  cannot rewrite its query string on the automatic reconnect but does send that header.
+- **Heartbeats carry no `id`.** `Sse.encoder` omits the line for `undefined`, so a quiet
+  connection does not overwrite the client's `Last-Event-ID`. The interval is
+  `LIVE_HEARTBEAT_SECONDS` (default 20, under the 30–60s an idle connection survives through a
+  proxy) — configurable mainly so the property costs a test one second instead of twenty.
+- `GET …/log?since=` is the same query over a non-streaming transport, for a client that
+  cannot hold a connection open.
+- Authorization happens **before** a stream is returned, so a denial is a 404 with
+  `content-type: application/json`, not a failure event inside a 200 nobody is listening for.
+
+Modelling decisions that are settled, and that the report or the prototype states differently:
+
+- **The turn marker is `encounter_run.active_combatant_id`, a pointer — not the report's
+  `turn_index`.** The prototype holds an index (`:88`) and never adds a combatant (`:137`),
+  removes one (`:107`) or rerolls initiative (`:138`). All three reorder the list, after which
+  an index silently names a different creature while the screen still says whose turn it is.
+- **There is no `player_view_enabled`.** `encounter_run.visibility` *is* the `Share` switch
+  (`:122`) and `combatant.visibility` is `Hide from players` (`:139`); the nested predicate
+  already gates every combatant on its run, so a second boolean meaning "shared" beside a
+  column called `visibility` would be one question with two answers. Both default to `dm`,
+  unlike the prototype's switch, which starts on.
+- **Hit points reaching zero does nothing but set the number.** No delete, no cascade, no
+  invented `Downed` condition, no turn advance — `:107` says "Still in initiative — remove them
+  when you're ready", and a condition the server adds is one the DM cannot clear.
+- **A combatant snapshots every displayable field at seed time** (`display_name`, `subtitle`,
+  `player_name`, `ac`, `hp_max`). `character_id`/`creature_id` are `on delete set null` and are
+  read by nothing — provenance, not an access path. A name that came from a join goes blank
+  mid-fight when someone tidies the bestiary in another tab. `encounter_run.encounter_name` is
+  snapshotted for the same reason and is *not* a duplicate of `encounter.name`: that column is
+  what the template is called now, this is what the fight was called that night.
+- **`session_event.seq` comes from one global sequence**, not `max(seq)+1` per session. A
+  cursor only has to increase; it does not have to be contiguous, and nothing counts it. Gaps
+  where another session wrote are invisible, and the race that `max+1` needs a lock to survive
+  simply does not exist. It is `bigint`, so **`pg` hands it back as a string** — the mapper
+  narrows it once.
+- **Exactly one live fight per session is a partial unique index**
+  (`encounter_run (session_id) where ended_at is null`), so it holds against `psql` and against
+  two clients racing, not merely against the endpoint. `session.active_encounter_run_id` names
+  which one; it is written only by starting and ending a run, has no payload field, and its
+  foreign key is composite so a session cannot point at another session's fight. Ending frees
+  the session, which is how "a fight interrupted and resumed" is a second row rather than an
+  exception.
+- **Idempotency is one partial unique index** on `(encounter_run_id, request_id)`. Damage and
+  next-turn take a client-generated `requestId`; a repeat returns current state without
+  applying. This is not offline-first design — it stops a double-tapped damage button taking
+  ten hit points instead of five.
+
+**The containment trap this area walked into, and the shape of the fix.** `combatant` sits two
+levels below the campaign (`combatant → encounter_run → session → campaign`), which is one more
+than anything before it, so `repo/visibility.ts` grew a `Containment` chain that the predicate
+walks recursively rather than a second hand-written predicate. **Checking "the session is
+readable" and "the run is readable" as two separate questions is a hole**, and it shipped in a
+first draft: both are satisfied by a run in a *different* session of the same campaign, and the
+pair says nothing about whether the parent in the path is the parent of the row. Use
+`ensureNestedRowReadable`/`ensureNestedRowWritable`, which bind the foreign key.
+`apps/server/test/live-session.test.ts` pins all ten reachable paths.
+
+**`created_at` does not order rows inserted by one transaction.** Postgres `now()` is
+transaction *start* time, so every combatant a seed creates shares a timestamp and
+`initiativeOrder`'s tiebreak falls through to `id` — the seeded list comes back with the party
+interleaved among the monsters, fixed but arbitrary. Harmless (everything seeds at initiative 0,
+so there is no correct order yet) but do not read `created_at asc` as "the order they were
+added".
+
 ## The assistant: a trap to remember before it ships
 
 Nothing here uses `@effect/ai-anthropic` today — the captain's decision is to target locally

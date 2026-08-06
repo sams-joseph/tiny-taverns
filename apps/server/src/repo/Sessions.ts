@@ -2,6 +2,7 @@ import {
   type CampaignId,
   Conflict,
   CurrentActor,
+  type EncounterRunId,
   NotFound,
   Session,
   type SessionCreate,
@@ -25,6 +26,7 @@ interface SessionRow extends ProvenanceColumns {
   readonly title: string | null;
   readonly started_at: Date | null;
   readonly ended_at: Date | null;
+  readonly active_encounter_run_id: EncounterRunId | null;
 }
 
 const toSession = (row: SessionRow): Session =>
@@ -35,6 +37,9 @@ const toSession = (row: SessionRow): Session =>
     title: row.title,
     startedAt: row.started_at === null ? null : DateTime.fromDateUnsafe(row.started_at),
     endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
+    // Read-only on the wire. It is written by starting and ending a run, and
+    // by nothing else — see `SessionUpdate`, which has no field for it.
+    activeEncounterRunId: row.active_encounter_run_id,
     ...provenanceOf(row),
   });
 

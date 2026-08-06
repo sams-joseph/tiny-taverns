@@ -11,13 +11,17 @@ import * as Database from "./Database.js";
 import { ApiLive } from "./handlers.js";
 import { Health } from "./Health.js";
 import { IdentityProvider } from "./IdentityProvider.js";
+import { LiveEvents } from "./live/LiveEvents.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
+import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
+import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 
 /**
@@ -78,12 +82,16 @@ export const servicesOver = <E>(
   | Authorization
   | Campaigns
   | Characters
+  | Combatants
   | Creatures
   | EncounterCreatures
+  | EncounterRuns
   | Encounters
   | Health
+  | LiveEvents
   | Notes
   | PrepItems
+  | SessionEvents
   | Sessions,
   E | Config.ConfigError
 > =>
@@ -92,11 +100,20 @@ export const servicesOver = <E>(
     AuthorizationLive.pipe(Layer.provide([Accounts.layer, identity])),
     Campaigns.layer,
     Characters.layer,
+    // The live repositories ring the in-process fan-out after they commit, so
+    // they take it as a dependency. It is merged in as well, because the
+    // streaming handler subscribes to it — and `Layer` memoises by identity, so
+    // all three share one `PubSub` rather than one each, which is the whole
+    // point of a doorbell.
+    Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
     EncounterCreatures.layer,
+    EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
+    LiveEvents.layer,
     Notes.layer,
     PrepItems.layer,
+    SessionEvents.layer,
     Sessions.layer,
     Health.layer,
   ).pipe(Layer.provide(database));
@@ -126,12 +143,16 @@ export const applicationOver = <E>(
     | Authorization
     | Campaigns
     | Characters
+    | Combatants
     | Creatures
     | EncounterCreatures
+    | EncounterRuns
     | Encounters
     | Health
+    | LiveEvents
     | Notes
     | PrepItems
+    | SessionEvents
     | Sessions,
     E
   >,

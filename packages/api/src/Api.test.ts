@@ -4,13 +4,16 @@ import { Authorization } from "./Actor.js";
 import { TavernsApi } from "./Api.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterCreate } from "./Character.js";
+import { Combatant, CombatantCreate } from "./Combatant.js";
 import { Creature, CreatureCreate } from "./Creature.js";
 import { Encounter, EncounterCreate } from "./Encounter.js";
 import { EncounterCreature, EncounterCreatureCreate } from "./EncounterCreature.js";
+import { EncounterRun, EncounterRunStart } from "./EncounterRun.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
 import { Session, SessionCreate } from "./Session.js";
+import { SessionEvent } from "./SessionEvent.js";
 
 /**
  * The runtime shape this file introspects.
@@ -53,12 +56,15 @@ describe("the API declaration", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "campaigns",
       "characters",
+      "combatants",
       "creatures",
       "encounterCreatures",
       "encounters",
       "health",
+      "live",
       "notes",
       "prep",
+      "runs",
       "sessions",
     ]);
   });
@@ -74,6 +80,13 @@ describe("every content schema", () => {
     PrepItem,
     Creature,
     EncounterCreature,
+    EncounterRun,
+    Combatant,
+    // Append-only, and still a content row: a log line can quote a DM-only
+    // read-aloud, so it fails closed like everything else. There is
+    // deliberately no `SessionEventCreate` — the log has no create payload
+    // because nothing outside a mutation's own transaction may write to it.
+    SessionEvent,
   };
 
   it("carries visibility and provenance", () => {
@@ -98,6 +111,8 @@ describe("every content schema", () => {
       PrepItemCreate,
       CreatureCreate,
       EncounterCreatureCreate,
+      EncounterRunStart,
+      CombatantCreate,
     };
     // The minimum a create needs, per schema. Spelled out rather than merged
     // into one wide object, so a payload that stopped requiring a field would
@@ -111,6 +126,8 @@ describe("every content schema", () => {
       PrepItemCreate: { label: "x" },
       CreatureCreate: { name: "x", type: "Humanoid", cr: "1/4", ac: 15, hp: 11 },
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
+      EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
+      CombatantCreate: { displayName: "x" },
     };
 
     for (const [name, schema] of Object.entries(creates)) {

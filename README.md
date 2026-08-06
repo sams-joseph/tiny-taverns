@@ -188,11 +188,30 @@ curl -X POST http://localhost:3000/campaigns \
 ```
 
 The API surface is `campaign`, `session`, `character`, `note`, `encounter`, `prep` and
-`creature` CRUD, declared once in `packages/api` as an `HttpApi` and implemented in
-`apps/server/src/handlers.ts`. Every
+`creature` CRUD, plus the live session — `run`, `combatant` and the session log — declared
+once in `packages/api` as an `HttpApi` and implemented in `apps/server/src/handlers.ts`. Every
 campaign-scoped group sits behind a bearer-token `Authorization` middleware that resolves
 the request's actor; every repository read carries that actor as a type-level requirement
 and filters in SQL. `AGENTS.md` records the contract each new endpoint has to follow.
+
+**The live session is the one place a read is a stream.** Writes are ordinary `POST`s;
+`GET /campaigns/:c/sessions/:s/runs/:r/events` is Server-Sent Events. Starting a run seeds
+the initiative list from the encounter's roster (one combatant per creature, per `count`)
+plus the party, and points the session at it:
+
+```bash
+curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/sessions/$SESSION/runs" \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d "{\"encounterId\":\"$ENCOUNTER\"}"
+
+# tail the fight; every event carries its cursor as the SSE `id`
+curl -N "http://localhost:3000/campaigns/$CAMPAIGN/sessions/$SESSION/runs/$RUN/events?since=0" \
+  -H "authorization: Bearer $TOKEN"
+```
+
+Reconnect by passing the last `id` you saw back as `?since=` (or as a `Last-Event-ID`
+header, which a browser's `EventSource` sends by itself). `AGENTS.md` has the full contract
+— it is what the runner UI will be written against.
 
 The `Server` section of the web gallery calls the live API through the client derived from
 that same declaration — paste a token there to see it list your campaigns.
@@ -275,7 +294,10 @@ Vitest runs in every workspace project. Each has at least one real, passing test
   guard, the whole API through the derived client against a real in-process server, and a
   production-start smoke test that runs the real build output under plain `node`. Both
   credential kinds are covered, including hosted sign-in — offline, against a keypair the
-  test generates, so the suite needs no vendor account and no network.
+  test generates, so the suite needs no vendor account and no network. The live session gets
+  two files: the state underneath it (seeding, the turn marker, hit points at zero, one live
+  fight per session) and the SSE stream itself, including a client that drops mid-fight and
+  catches up without losing an event.
 - `packages/api` — guards on the wire contract itself: every campaign-scoped endpoint is
   behind `Authorization`, every content schema carries visibility and provenance.
 - `packages/ui` — component tests, design-system adherence checks, and a guard that keeps

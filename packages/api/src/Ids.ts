@@ -42,6 +42,25 @@ export const EncounterCreatureId = id("EncounterCreatureId");
 export type EncounterCreatureId = typeof EncounterCreatureId.Type;
 
 /**
+ * One playing of an encounter. Not the encounter: the same template can be run
+ * again next week, and each run is its own row with its own combatants.
+ */
+export const EncounterRunId = id("EncounterRunId");
+export type EncounterRunId = typeof EncounterRunId.Type;
+
+/**
+ * One creature *instance* in one fight. `data.js:18-19` has two `Goblin Archer`
+ * rows with different ids and different hit points — this is what tells them
+ * apart, and why a combatant is never addressed by its creature.
+ */
+export const CombatantId = id("CombatantId");
+export type CombatantId = typeof CombatantId.Type;
+
+/** One line of the append-only session log. */
+export const SessionEventId = id("SessionEventId");
+export type SessionEventId = typeof SessionEventId.Type;
+
+/**
  * Points at the assistant conversation turn that produced a row. The turn table
  * does not exist yet — see `Provenance.Origin`.
  */

@@ -32,6 +32,23 @@ export const allowedOrigins = Config.string("ALLOWED_ORIGINS").pipe(
 );
 
 /**
+ * How often a quiet live stream emits a keep-alive, in seconds.
+ *
+ * Configurable because the number that matters is a property of whatever sits
+ * in front of the server, not of the server: an idle connection is commonly cut
+ * at 60 seconds by nginx and at 30 or less by some CDNs, with nothing said to
+ * either end. The default is under all of those, and short enough that a client
+ * can call a stream dead after two missed beats without being twitchy.
+ *
+ * It is also what lets the heartbeat be *tested* in a second rather than in
+ * twenty — a property that costs twenty seconds of every CI run tends to get
+ * deleted, and then nothing checks it at all.
+ */
+export const liveHeartbeatSeconds = Config.int("LIVE_HEARTBEAT_SECONDS").pipe(
+  Config.withDefault(20),
+);
+
+/**
  * Clerk's JWT public verification key, in PEM form.
  *
  * **Not a secret** — it is a public key, and verification is the only thing it
