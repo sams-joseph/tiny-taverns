@@ -1,0 +1,35 @@
+# Local development database.
+#
+#   pnpm db:up      start it (and wait until it accepts connections)
+#   pnpm db:down    stop it, keeping the data
+#   pnpm db:reset   stop it and throw the data away
+#
+# Port 5433, not 5432, on purpose: developer machines commonly already run a
+# Postgres on the default port, and a compose file that refuses to start because
+# of an unrelated container is a bad first five minutes. The port is part of the
+# committed default DATABASE_URL, so nothing else has to be configured.
+name: taverns
+
+services:
+  postgres:
+    image: postgres:18
+    # Development credentials only. Nothing here is a secret: the port is bound
+    # to loopback, and deployments supply DATABASE_URL from their own secrets.
+    environment:
+      POSTGRES_USER: taverns
+      POSTGRES_PASSWORD: taverns
+      POSTGRES_DB: taverns
+    ports:
+      - "127.0.0.1:5433:5432"
+    # postgres:18 refuses to start with the volume at the older
+    # /var/lib/postgresql/data path; 18+ wants the whole directory mounted.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taverns -d taverns"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

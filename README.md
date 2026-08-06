@@ -23,9 +23,12 @@ backend, sharing config and a component library across a pnpm + Turborepo worksp
 ```
 taverns/
   apps/
-    web/                 Vite + React SPA (consumes @taverns/ui)
-    server/              Effect.ts HTTP service (GET /health)
+    web/                 Vite + React SPA (consumes @taverns/ui and @taverns/api)
+    server/              Effect.ts HTTP API over Postgres
+      src/migrations/    forward-only numbered migrations
   packages/
+    api/                 @taverns/api — the wire contract: schemas, errors, HttpApi.
+                         The server implements it; the web client is derived from it.
     design-system/       @taverns/design-system — the delivered Tiny Taverns system.
                          tokens/ is the SINGLE SOURCE OF TRUTH for every design value.
     ui/                  @taverns/ui — the 14 shadcn components, on Base UI
@@ -33,6 +36,7 @@ taverns/
     eslint-config/       @taverns/eslint-config — shared flat ESLint config
   .repos/
     effect/              vendored upstream Effect source (read-only reference)
+  compose.yaml           the local development database
   turbo.json             build / lint / typecheck / test / dev pipelines
   pnpm-workspace.yaml
 ```
@@ -99,11 +103,14 @@ pnpm --filter web dev   # http://localhost:5173
 - **Node** >= 20 (developed on Node 26)
 - **pnpm** (version is pinned via the root `package.json` `packageManager` field; run
   `corepack enable` to have the right version selected automatically)
+- **Docker**, for the development database
 
 ## Getting started
 
 ```bash
 pnpm install
+pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
+pnpm -F server token:issue Jo   # prints a DM bearer token, once
 ```
 
 ## Workspace commands
@@ -120,6 +127,9 @@ build order) and caches results.
 | `pnpm test`         | Vitest across the workspace             |
 | `pnpm format`       | Format the repo with Prettier           |
 | `pnpm format:check` | Verify formatting (used in CI)          |
+| `pnpm db:up`        | Start the development database          |
+| `pnpm db:down`      | Stop it, keeping the data               |
+| `pnpm db:reset`     | Stop it and throw the data away         |
 
 Each maps to `turbo run <task>`; you can also target one package, e.g.
 `pnpm turbo run test --filter web`.
@@ -132,34 +142,54 @@ Each maps to `turbo run <task>`; you can also target one package, e.g.
 pnpm --filter web dev
 ```
 
-**Server (Effect.ts)** — starts on <http://localhost:3000> (override with `PORT`):
+**Server (Effect.ts)** — starts on <http://localhost:3000> (override with `PORT`). It runs
+pending migrations on boot, so `pnpm db:up` has to have happened first:
 
 ```bash
 pnpm --filter server dev
 # then:
 curl http://localhost:3000/health
 # {"status":"ok","uptime":...}
+
+TOKEN=...   # from `pnpm -F server token:issue`
+curl -X POST http://localhost:3000/campaigns \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"The Reed Marches","playerCount":4}'
 ```
 
-The server is structured idiomatically with **Effect v4** (currently in beta, pinned to
-exact versions): `Health` is a `Context.Service` class exposing a `Health.layer`, routes are
-`HttpRouter.add` layers that register a handler depending on that service, and `main.ts`
-assembles them with `HttpRouter.serve` and runs on `@effect/platform-node`.
+The API surface is `campaign`, `session`, `character` and `note` CRUD, declared once in
+`packages/api` as an `HttpApi` and implemented in `apps/server/src/handlers.ts`. Every
+campaign-scoped group sits behind a bearer-token `Authorization` middleware that resolves
+the request's actor; every repository read carries that actor as a type-level requirement
+and filters in SQL. `AGENTS.md` records the contract each new endpoint has to follow.
 
-In v4 there is no `@effect/platform` package — the HTTP layer lives in core `effect` under
-`effect/unstable/http`. `AGENTS.md` records the full v3 → v4 mapping, and `.repos/effect`
-vendors the matching upstream source as the authoritative reference.
+The `Server` section of the web gallery calls the live API through the client derived from
+that same declaration — paste a token there to see it list your campaigns.
+
+The server is structured idiomatically with **Effect v4** (currently in beta, pinned to
+exact versions). In v4 there is no `@effect/platform` package — the HTTP layer lives in core
+`effect` under `effect/unstable/http`. `AGENTS.md` records the full v3 → v4 mapping, and
+`.repos/effect` vendors the matching upstream source as the authoritative reference.
 
 ## Testing
 
 Vitest runs in every workspace project. Each has at least one real, passing test:
 
 - `apps/web` — React Testing Library tests that drive the gallery (tabs, dialog, toast,
-  toggles).
-- `apps/server` — an Effect-based test of the `Health` service and the `/health` handler,
-  plus a production-start smoke test that runs the real build output under plain `node`.
+  toggles), plus tests of the derived API client as the browser bundles it.
+- `apps/server` — migrations from empty to current, the visibility seam, a schema-adherence
+  guard, the whole API through the derived client against a real in-process server, and a
+  production-start smoke test that runs the real build output under plain `node`.
+- `packages/api` — guards on the wire contract itself: every campaign-scoped endpoint is
+  behind `Authorization`, every content schema carries visibility and provenance.
 - `packages/ui` — component tests, design-system adherence checks, and a guard that keeps
   the `tailwind-merge` config in step with the theme.
+
+**The server's database tests need `pnpm db:up`.** They run against a real Postgres — the
+schema is Postgres dialect and a stand-in would not exercise it — and each test file creates
+its own throwaway database. If the database is not running they fail with a message saying
+so, rather than skipping: a silently-skipped database test is a green build that proves
+nothing.
 
 No Playwright E2E is included: for boilerplate the value did not justify the extra CI
 weight. Add it later under `apps/web` if an end-to-end smoke test becomes useful.

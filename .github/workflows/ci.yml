@@ -9,6 +9,26 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+
+    # The server's repository and migration tests run against a real Postgres —
+    # the schema is Postgres dialect, and they fail loudly rather than skipping
+    # when it is missing. Port 5433 matches the committed dev default so no
+    # DATABASE_URL is needed here.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: taverns
+          POSTGRES_PASSWORD: taverns
+          POSTGRES_DB: taverns
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U taverns -d taverns"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

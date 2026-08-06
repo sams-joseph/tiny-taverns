@@ -121,9 +121,11 @@ Two v4 shape changes that are easy to get wrong:
   into real requirements, which is why `Layer.provide(Health.layer)` goes _outside_
   `serve`, not inside the route.
 
-Literal types need help: `Layer.succeed` infers through `Types.NoInfer`, so a service
-returning `{ status: "ok" }` widens `status` to `string` unless the producing function is
-annotated (see `Effect.sync((): HealthStatus => ...)` in `apps/server/src/Health.ts`).
+Literal types need help: `Layer.succeed(Tag, value)` infers through `Types.NoInfer`, so a
+service returning `{ status: "ok" }` widens `status` to `string`. Both `Layer.succeed` and
+`Layer.effect` are dual, and the **curried** form — `Layer.succeed(this)({ … })` — does not
+go through `NoInfer`, so it keeps the literal without an annotation. Prefer it; every service
+in `apps/server/src` uses it.
 
 ## Module resolution: `Bundler` for the bundled app, `NodeNext` for the executed one
 
@@ -152,6 +154,104 @@ extensionless specifiers, while `build` and `typecheck` only emit or check and n
 spawns `dist/main.js` under `process.execPath`, and asserts `GET /health`. Keep it executing
 the real build output under real `node`; rewriting it to import `src` through Vitest silently
 restores the blind spot.
+
+## The database, and the migration workflow
+
+Postgres, via `@effect/sql-pg`. Not SQLite — the schema is Postgres dialect and the
+dialects are not portable, so this is settled.
+
+- **`pnpm db:up`** starts the development database (`compose.yaml`, Docker). `db:down`
+  stops it; `db:reset` throws the data away and starts again. It binds **5433**, not 5432,
+  because developer machines commonly already run a Postgres on the default port.
+- `DATABASE_URL` overrides the committed dev default in `apps/server/src/Config.ts`.
+  Nothing secret lives there — same throwaway credentials as `compose.yaml`, loopback only.
+- **Migrations are forward-only.** `effect/unstable/sql/Migrator` has no down-migration
+  concept; do not invent one. A mistake is corrected by a new migration.
+- Add `apps/server/src/migrations/NNNN_name.ts`, default-exporting an
+  `Effect<unknown, unknown, SqlClient>`. They live under `src/` so `tsc` emits them to
+  `dist/migrations/*.js`; `Database.migrationsDirectory` resolves from `import.meta.url`, so
+  the same code finds `.ts` under `tsx`/Vitest and `.js` under plain `node`.
+- One statement per `sql` call. The pg driver uses the extended protocol, which rejects
+  multiple statements in one query.
+- The server migrates on boot, so it refuses to start against a schema it does not know.
+  `pnpm -F server migrate` runs them without holding a port.
+
+**Database tests run against a real Postgres and fail loudly when it is missing** —
+`apps/server/test/support/database.ts` creates a private database per test file and turns a
+connection failure into a message saying `pnpm db:up`. Do not make them skip instead: this
+repo has twice shipped a defect that a green build hid, and a silently-skipped database test
+is that same pattern.
+
+## The actor and visibility contract
+
+Every future endpoint follows this. It is the one ordering constraint the architecture calls
+non-negotiable, because it is free on day one and a retrofit later.
+
+- **`CurrentActor` is a type-level requirement.** Repository methods return
+  `Effect<A, E, CurrentActor>`, so an unscoped read does not compile. A handler obtains the
+  actor only from the group's `.middleware(Authorization)`.
+- **The visibility predicate lives in SQL, never in a handler** — see
+  `apps/server/src/repo/visibility.ts`, which is the only place it is written.
+  Post-filtering in a handler is the leak pattern: the DM-only text is already in memory and
+  one forgotten `.filter` ships it.
+- **Reads and writes use different predicates.** A player may read a `shared` note and must
+  still not edit it, so `rowWritable` is not `rowReadable`.
+- **Visibility is two levels.** `campaign.visibility` is the master toggle; a row's own
+  `visibility` narrows within it. A `shared` note inside an unshared campaign stays invisible.
+- **Denial is `NotFound`, not `Forbidden`.** Saying "it exists but is not yours" is itself a
+  disclosure.
+- **A new table gets `visibility` (default `'dm'`), `origin` (default `'authored'`) and
+  `assistant_turn_id`.** `apps/server/test/schema.test.ts` fails if one does not — the opt-out
+  list is in that file, so skipping it takes a visible edit. Provenance is inert until the
+  assistant ships; it is there because retrofitting it onto a table that already mixes
+  authored and generated rows means guessing which is which.
+
+## `HttpApi`, and the client derived from it
+
+`packages/api` holds the whole wire contract: schemas, errors, the `Authorization` middleware
+declaration, and `TavernsApi`. The server implements it and `apps/web` derives its client from
+it (`apps/web/src/api/client.ts`), so there is no codegen step and no second description of the
+wire format to drift.
+
+It is the one workspace package that builds to `dist/` rather than exporting source: `apps/server`
+is executed by plain `node`, which cannot load `.ts` from `node_modules`.
+
+Four things that cost time to find:
+
+- **Middleware and handler requirements are provided outside `HttpRouter.serve`.** Handler
+  requirements travel as `Request<"Requires", _>` markers that only `serve` unwraps; providing
+  them to the route layer typechecks and then fails at the call site. See `apps/server/src/app.ts`.
+- **`HttpApiEndpoint.delete`, not `.del`** — `del` is the internal name, exported as `delete`.
+- **The derived client takes `params`, not `path`**, for path parameters.
+- **`HttpClient` attaches `b3` and `traceparent` to every request.** That makes even a plain
+  cross-origin `GET /health` preflighted, so the CORS `allowedHeaders` must list them. Leave
+  them out and the browser blocks the call after a successful 204 preflight, with nothing in
+  the server log but the `OPTIONS` — the request that mattered was never sent.
+
+**`Context.Reference` memoises its default value on first read** (`Context.ts`,
+`~effect/Context/defaultValue`). `FetchHttpClient.Fetch` defaults to `() => globalThis.fetch`,
+so whichever `fetch` is installed when the first request runs is the one every later request
+uses. A per-test `vi.stubGlobal("fetch", …)` therefore keeps serving the _first_ test's
+responses, with no error to notice — install one stable dispatcher per file instead
+(`apps/web/src/api/client.test.ts`).
+
+## The assistant: a trap to remember before it ships
+
+Nothing here uses `@effect/ai-anthropic` today — the captain's decision is to target locally
+hosted models first, through `@effect/ai-openai-compat`. Record it now because it fails
+silently, and the day someone points this at hosted Claude is the day it costs an afternoon:
+
+**At `4.0.0-beta.102`, `getModelCapabilities` recognises no model id past `claude-opus-4-8`**
+(`.repos/effect/packages/ai/anthropic/src/AnthropicLanguageModel.ts:2972-3021`). The model
+parameter is typed `(string & {}) | Model`, so `claude-opus-5` compiles and does not error. It
+silently caps `max_tokens` at **4096** and routes structured output through a prompt-based JSON
+tool instead of native structured outputs. Nothing warns; the first symptom is an answer cut off
+mid-sentence.
+
+Mitigation, regardless of provider: always pass `config: { max_tokens: … }` explicitly, and pin
+a test on it. Related, also verified at this version: `@effect/ai-anthropic` ships **no**
+embedding module (Anthropic has no embeddings API); `@effect/ai-openai` and
+`@effect/ai-openai-compat` have `OpenAiEmbeddingModel`.
 
 ## Maintaining this file
 

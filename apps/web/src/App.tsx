@@ -5,6 +5,7 @@ import { Feedback } from "./gallery/Feedback";
 import { Forms } from "./gallery/Forms";
 import { Foundations } from "./gallery/Foundations";
 import { Navigation } from "./gallery/Navigation";
+import { ServerPanel } from "./api/ServerPanel";
 
 const SECTIONS = [
   { id: "foundations", label: "Foundations" },
@@ -12,6 +13,7 @@ const SECTIONS = [
   { id: "forms", label: "Forms" },
   { id: "navigation", label: "Navigation" },
   { id: "feedback", label: "Feedback" },
+  { id: "server", label: "Server" },
 ];
 
 /**
@@ -55,6 +57,7 @@ export function App() {
         <Forms />
         <Navigation />
         <Feedback />
+        <ServerPanel />
       </main>
 
       <footer className="border-t border-hairline bg-surface-sunken">
