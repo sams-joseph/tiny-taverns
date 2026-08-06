@@ -85,8 +85,7 @@ const listen = (options: {
     .events({
       params: { campaignId, sessionId, runId },
       query: options.since === undefined ? {} : { since: options.since },
-      headers:
-        options.lastEventId === undefined ? {} : { "last-event-id": options.lastEventId },
+      headers: options.lastEventId === undefined ? {} : { "last-event-id": options.lastEventId },
     })
     .pipe(
       Effect.flatMap((stream) =>

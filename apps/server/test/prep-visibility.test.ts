@@ -90,7 +90,9 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  const otherTable = yield* as(campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }));
+  const otherTable = yield* as(
+    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+  );
   const encounterElsewhere = yield* as(
     encounters.create(otherTable.id, { name: "Whatever is in the crate", visibility: "shared" }),
   );
@@ -224,7 +226,9 @@ describe("a player actor, on encounters", () => {
   it("cannot create one", async () => {
     const error = await runtime.runPromise(
       Effect.flip(
-        withActor(fixture.player)(encounters.create(fixture.campaign.id, { name: "from a player" })),
+        withActor(fixture.player)(
+          encounters.create(fixture.campaign.id, { name: "from a player" }),
+        ),
       ),
     );
 

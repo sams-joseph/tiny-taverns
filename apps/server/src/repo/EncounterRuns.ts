@@ -270,7 +270,10 @@ export class EncounterRuns extends Context.Service<
                     // The encounter id is a claim like any other. It must be one
                     // this actor can reach *from this campaign* — the same
                     // predicate a read of it would apply.
-                    const encounters = yield* sql<{ readonly id: EncounterId; readonly name: string }>`
+                    const encounters = yield* sql<{
+                      readonly id: EncounterId;
+                      readonly name: string;
+                    }>`
                       select encounter.id, encounter.name from encounter
                       where encounter.id = ${payload.encounterId}
                         and ${rowReadable(sql, "encounter", campaignId, actor)}

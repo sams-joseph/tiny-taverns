@@ -64,7 +64,11 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(
-    campaigns.create({ name: "The Salt Road", partyName: "The Gilded Spoon", visibility: "shared" }),
+    campaigns.create({
+      name: "The Salt Road",
+      partyName: "The Gilded Spoon",
+      visibility: "shared",
+    }),
   );
 
   yield* as(
@@ -195,11 +199,12 @@ describe("starting a fight", () => {
     // rows, not one row that says six — `data.js:18-19` is two `Goblin Archer`
     // combatants with different hit points, which one row cannot represent.
     expect(list).toHaveLength(10);
-    expect(list.filter((c) => c.kind === "pc").map((c) => c.displayName).sort()).toEqual([
-      "Brannoc",
-      "Sister Pell",
-      "Wren",
-    ]);
+    expect(
+      list
+        .filter((c) => c.kind === "pc")
+        .map((c) => c.displayName)
+        .sort(),
+    ).toEqual(["Brannoc", "Sister Pell", "Wren"]);
     expect(list.filter((c) => c.displayName === "Goblin Archer")).toHaveLength(6);
 
     // Instances, not references: every one has its own id, and damaging one
@@ -338,9 +343,7 @@ describe("exactly one encounter is live", () => {
     const session = await freshSession(112);
     const first = await startOn(session.id);
     await runtime.runPromise(
-      withActor(fixture.dm)(runs.end(fixture.campaign.id, session.id, first.id)).pipe(
-        Effect.orDie,
-      ),
+      withActor(fixture.dm)(runs.end(fixture.campaign.id, session.id, first.id)).pipe(Effect.orDie),
     );
 
     const second = await startOn(session.id);
@@ -494,9 +497,9 @@ describe("the turn marker", () => {
     const seen: Array<CombatantId | null> = [current.activeCombatantId];
     for (let index = 0; index < order.length; index += 1) {
       current = await runtime.runPromise(
-        withActor(fixture.dm)(
-          runs.nextTurn(fixture.campaign.id, session.id, current.id, {}),
-        ).pipe(Effect.orDie),
+        withActor(fixture.dm)(runs.nextTurn(fixture.campaign.id, session.id, current.id, {})).pipe(
+          Effect.orDie,
+        ),
       );
       seen.push(current.activeCombatantId);
     }
@@ -607,7 +610,11 @@ describe("the new tables fail closed", () => {
     const rows = await runtime.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        const run = yield* sql<{ readonly id: string; readonly visibility: string; readonly origin: string }>`
+        const run = yield* sql<{
+          readonly id: string;
+          readonly visibility: string;
+          readonly origin: string;
+        }>`
           insert into encounter_run (session_id, encounter_name)
           values (${session.id}, 'inserted behind the repository')
           returning id, visibility, origin
@@ -760,9 +767,7 @@ describe("a campaign-scoped actor", () => {
     );
     const smuggled = await runtime.runPromise(
       Effect.flip(
-        withActor(fixture.player)(
-          runs.findById(fixture.campaign.id, otherSession.id, otherRun.id),
-        ),
+        withActor(fixture.player)(runs.findById(fixture.campaign.id, otherSession.id, otherRun.id)),
       ),
     );
     const smuggledCombatants = await runtime.runPromise(
@@ -801,7 +806,9 @@ describe("a campaign-scoped actor", () => {
     });
 
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(runs.list(fixture.otherTable.id, fixture.sessionElsewhere.id))),
+      Effect.flip(
+        withActor(scopedDm)(runs.list(fixture.otherTable.id, fixture.sessionElsewhere.id)),
+      ),
     );
     const started = await runtime.runPromise(
       Effect.flip(

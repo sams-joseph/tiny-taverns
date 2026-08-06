@@ -268,109 +268,110 @@ const LiveLive = HttpApiBuilder.group(
     // every caller of `ApiLive`, for a value that has a committed default.
     const heartbeat = Duration.seconds(yield* Effect.orDie(liveHeartbeatSeconds));
 
-    return handlers
-      .handle("log", ({ params, query }) =>
-        events.list(params.campaignId, params.sessionId, query),
-      )
-      /**
-       * The live stream, and the only read in the product that is not a
-       * response.
-       *
-       * **The order of the three steps below is the whole reconnect story, and
-       * it is the one thing here that cannot be rearranged.**
-       *
-       *   1. Authorise. Resolving the actor and checking the run *before*
-       *      returning a stream is what makes a denial an ordinary 404 rather
-       *      than a failure event inside a 200 that a client has to be
-       *      listening for.
-       *   2. Subscribe. `LiveEvents.subscribe` acquires the subscription when
-       *      the stream is built, which is *before* step 3 reads the backlog.
-       *      Reversed — read, then subscribe — anything written in the gap
-       *      between the two is in neither, and the client silently loses it.
-       *      That gap is small, which is exactly what would make the bug
-       *      survive testing and show up at a table.
-       *   3. Replay, then tail. Both are the same query with the same cursor
-       *      (`SessionEvents.pollForRun`), so catching up after an hour asleep
-       *      is the path every event already takes rather than a special one
-       *      that only runs when something has gone wrong.
-       *
-       * A doorbell that arrives during step 3 is not lost either: the
-       * subscription buffers it, and the pull it triggers finds nothing new
-       * because the cursor has already moved past it. Notifications are
-       * idempotent by construction — they carry no data, so acting on a
-       * duplicate is a query that returns no rows.
-       */
-      .handle("events", ({ params, query, headers }) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          // The ordinary read of the run, for its ordinary `NotFound` — which
-          // is the endpoint's declared error and so is answered as a status
-          // before a single byte of stream. It also checks the same two claims
-          // every other live endpoint checks: that this session is in this
-          // campaign, and that this run is in that session.
-          yield* runs.findById(params.campaignId, params.sessionId, params.runId);
+    return (
+      handlers
+        .handle("log", ({ params, query }) =>
+          events.list(params.campaignId, params.sessionId, query),
+        )
+        /**
+         * The live stream, and the only read in the product that is not a
+         * response.
+         *
+         * **The order of the three steps below is the whole reconnect story, and
+         * it is the one thing here that cannot be rearranged.**
+         *
+         *   1. Authorise. Resolving the actor and checking the run *before*
+         *      returning a stream is what makes a denial an ordinary 404 rather
+         *      than a failure event inside a 200 that a client has to be
+         *      listening for.
+         *   2. Subscribe. `LiveEvents.subscribe` acquires the subscription when
+         *      the stream is built, which is *before* step 3 reads the backlog.
+         *      Reversed — read, then subscribe — anything written in the gap
+         *      between the two is in neither, and the client silently loses it.
+         *      That gap is small, which is exactly what would make the bug
+         *      survive testing and show up at a table.
+         *   3. Replay, then tail. Both are the same query with the same cursor
+         *      (`SessionEvents.pollForRun`), so catching up after an hour asleep
+         *      is the path every event already takes rather than a special one
+         *      that only runs when something has gone wrong.
+         *
+         * A doorbell that arrives during step 3 is not lost either: the
+         * subscription buffers it, and the pull it triggers finds nothing new
+         * because the cursor has already moved past it. Notifications are
+         * idempotent by construction — they carry no data, so acting on a
+         * duplicate is a query that returns no rows.
+         */
+        .handle("events", ({ params, query, headers }) =>
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            // The ordinary read of the run, for its ordinary `NotFound` — which
+            // is the endpoint's declared error and so is answered as a status
+            // before a single byte of stream. It also checks the same two claims
+            // every other live endpoint checks: that this session is in this
+            // campaign, and that this run is in that session.
+            yield* runs.findById(params.campaignId, params.sessionId, params.runId);
 
-          // `?since=` is what the derived client sends, because `HttpApiClient`
-          // issues a plain `fetch` and a plain `fetch` does not resend
-          // `Last-Event-ID`. The header is what a browser's native
-          // `EventSource` sends by itself when it reconnects, and honouring it
-          // is what makes that reconnect correct rather than silently lossy.
-          const resume = query.since ?? Number(headers["last-event-id"] ?? Number.NaN);
-          let cursor = Number.isSafeInteger(resume) && resume >= 0 ? resume : 0;
+            // `?since=` is what the derived client sends, because `HttpApiClient`
+            // issues a plain `fetch` and a plain `fetch` does not resend
+            // `Last-Event-ID`. The header is what a browser's native
+            // `EventSource` sends by itself when it reconnects, and honouring it
+            // is what makes that reconnect correct rather than silently lossy.
+            const resume = query.since ?? Number(headers["last-event-id"] ?? Number.NaN);
+            let cursor = Number.isSafeInteger(resume) && resume >= 0 ? resume : 0;
 
-          const pull = Effect.gen(function* () {
-            const drained: Array<SessionEvent> = [];
-            for (;;) {
-              const page = yield* events.pollForRun(
-                actor,
-                params.campaignId,
-                params.sessionId,
-                params.runId,
-                cursor,
-                PAGE,
-              );
-              if (page.length === 0) break;
-              cursor = page[page.length - 1]!.seq;
-              drained.push(...page);
-              if (page.length < PAGE) break;
-            }
-            return drained;
-          });
+            const pull = Effect.gen(function* () {
+              const drained: Array<SessionEvent> = [];
+              for (;;) {
+                const page = yield* events.pollForRun(
+                  actor,
+                  params.campaignId,
+                  params.sessionId,
+                  params.runId,
+                  cursor,
+                  PAGE,
+                );
+                if (page.length === 0) break;
+                cursor = page[page.length - 1]!.seq;
+                drained.push(...page);
+                if (page.length < PAGE) break;
+              }
+              return drained;
+            });
 
-          const asEvents = Stream.flatMap((rows: ReadonlyArray<SessionEvent>) =>
-            Stream.fromIterable(
-              rows.map(
-                (row): LiveEvent => ({
+            const asEvents = Stream.flatMap((rows: ReadonlyArray<SessionEvent>) =>
+              Stream.fromIterable(
+                rows.map((row): LiveEvent => ({
                   id: String(row.seq),
                   event: "session-event",
                   data: row,
-                }),
+                })),
               ),
-            ),
-          );
+            );
 
-          const body = Stream.concat(
-            Stream.fromEffect(pull).pipe(asEvents),
-            live.subscribe(params.sessionId).pipe(Stream.mapEffect(() => pull), asEvents),
-          );
+            const body = Stream.concat(
+              Stream.fromEffect(pull).pipe(asEvents),
+              live.subscribe(params.sessionId).pipe(
+                Stream.mapEffect(() => pull),
+                asEvents,
+              ),
+            );
 
-          // No `id` on a heartbeat, deliberately: `Sse.encoder` omits the line
-          // entirely for `undefined`, so a browser keeps the last real `seq` as
-          // its `Last-Event-ID` and a reconnect after a quiet minute still
-          // resumes from the right place rather than from the beginning.
-          const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
-            Stream.map(
-              (): LiveEvent => ({
+            // No `id` on a heartbeat, deliberately: `Sse.encoder` omits the line
+            // entirely for `undefined`, so a browser keeps the last real `seq` as
+            // its `Last-Event-ID` and a reconnect after a quiet minute still
+            // resumes from the right place rather than from the beginning.
+            const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
+              Stream.map((): LiveEvent => ({
                 id: undefined,
                 event: "heartbeat",
                 data: new Heartbeat({ seq: cursor }),
-              }),
-            ),
-          );
+              })),
+            );
 
-          return Stream.merge(body, heartbeats);
-        }),
-      );
+            return Stream.merge(body, heartbeats);
+          }),
+        )
+    );
   }),
 );
 

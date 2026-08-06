@@ -3,6 +3,16 @@
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
 - Layout, commands, and how to run each app are documented in `README.md` — start there.
+- **Formatting is root-only Prettier — `pnpm format` / `pnpm format:check` — and is not a turbo
+  task.** No package has a `format` script, so the root `format:check` is the only thing that
+  checks anything and CI has to name it as its own step. It did not, and six files had drifted
+  by the time anyone looked. `.prettierignore` holds the two read-only trees out
+  (`packages/design-system`, `.repos/`), so a formatting pass never reaches either.
+- **Formatting is root-only Prettier — `pnpm format` / `pnpm format:check` — and is not a turbo
+  task.** No package has a `format` script, so the root `format:check` is the only thing that
+  checks anything and CI has to name it as its own step. It did not, and six files had drifted
+  by the time anyone looked. `.prettierignore` holds the two read-only trees out
+  (`packages/design-system`, `.repos/`), so a formatting pass never reaches either.
 - **Vite/Vitest versions must stay aligned.** Vitest 2 pulls Vite 5 while `@vitejs/plugin-react`
   uses Vite 6; mixing them produces duplicate-`vite` type errors. The workspace pins Vitest 3 +
   Vite 6 together across `apps/web` and `packages/ui`. Keep them in lockstep when bumping.

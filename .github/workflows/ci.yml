@@ -47,3 +47,8 @@ jobs:
 
       - name: Lint, typecheck, test, build
         run: pnpm turbo run lint typecheck test build
+
+      # Prettier is a root-only script, not a turbo task — so it has to be named
+      # here or nothing checks it. It was not, and six files had drifted.
+      - name: Check formatting
+        run: pnpm format:check
