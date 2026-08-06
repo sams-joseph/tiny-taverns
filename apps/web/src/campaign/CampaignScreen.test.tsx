@@ -57,6 +57,11 @@ const encounter = {
   name: "Ambush in the reeds",
   difficulty: "Medium",
   tags: ["Marsh", "Night"],
+  // `sum(encounter_creature.count)`, computed by the server per read — the
+  // prototype's "6 creatures" (`data.js:10`). Required on the wire, so a
+  // fixture that omits it fails decoding rather than rendering `undefined`,
+  // which is the property this file exists for.
+  creatureCount: 6,
   visibility: "dm",
   ...provenance,
   ...stamps,
@@ -68,6 +73,7 @@ const sketch = {
   name: "Whatever is in the crate",
   difficulty: null,
   tags: ["Boss"],
+  creatureCount: 1,
 };
 
 const readAloud = {

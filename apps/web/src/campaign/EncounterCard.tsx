@@ -4,16 +4,18 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from
 /**
  * One authored encounter, as `CampaignHome.jsx` draws it.
  *
- * Two things the prototype's card shows are not on the wire and are not
- * oversights — `Encounter.ts` says why. **"6 creatures"** is
- * `sum(encounter_creature.count)` and arrives with the bestiary; a count that is
- * structurally `0` would be a worse lie than an absent line. **"On the table
- * now"** is a pointer on the session, not a flag per encounter, and arrives with
- * the live-session step. Neither is stubbed here: a card that renders data the
- * product does not have is how a scaffold survives into production.
+ * **"On the table now"** is still not on the wire and is not an oversight —
+ * `Encounter.ts` says why: it is a pointer on the session, not a flag per
+ * encounter, and it arrives with the live-session step. It is not stubbed here,
+ * because a card that renders data the product does not have is how a scaffold
+ * survives into production.
  *
- * What is on the wire and worth the space instead: how many notes hang off this
- * encounter, which the Notes tab already loaded.
+ * The prototype's other line, **"6 creatures"**, *is* on the wire now —
+ * `Encounter.creatureCount`, `sum(encounter_creature.count)` computed per read
+ * — and this card does not yet use it. What it shows instead is how many notes
+ * hang off the encounter, which the Notes tab already loaded. Which of the two
+ * belongs in the one description slot, or whether both do, is a design call and
+ * not a missing field.
  */
 
 /**
