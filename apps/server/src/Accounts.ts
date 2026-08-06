@@ -3,6 +3,15 @@ import { Context, Effect, Layer, Option } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
 import { createHash, randomBytes } from "node:crypto";
+import type { VerifiedIdentity } from "./IdentityProvider.js";
+
+/**
+ * What a provisioned account is called when the identity provider offered no
+ * name. Nothing renders `account.name` yet, and the alternative — a Backend
+ * API call to fetch the real one — buys a secret key on the server and a
+ * vendor outage on the first-ever sign-in for a string nobody reads.
+ */
+export const DEFAULT_ACCOUNT_NAME = "DM";
 
 /** What `token:issue` prints. The plaintext token exists only here and once. */
 export interface IssuedToken {
@@ -22,6 +31,11 @@ export const hashToken = (token: string): string =>
 /**
  * The DM's identity, and the only thing a bearer token can resolve to today.
  *
+ * Two kinds of credential reach an account — a machine token minted by
+ * `issue`, and a session token from a hosted identity provider — and they
+ * converge here, on one `Actor`. Below this service nothing knows there is
+ * more than one kind.
+ *
  * There is deliberately no player credential: the report is explicit that no
  * player-facing surface is built yet, only the seam. The `player` role exists
  * in `Actor` and in every SQL predicate; nothing mints one over HTTP.
@@ -33,6 +47,18 @@ export class Accounts extends Context.Service<
     readonly actorForToken: (
       token: string,
     ) => Effect.Effect<Option.Option<Actor>, SqlError.SqlError>;
+    /**
+     * The account belonging to a verified external identity, creating it on
+     * first sight.
+     *
+     * Returns an `Actor` rather than an `Option`: the identity is already
+     * proven, so there is no "unknown person" case to represent — just-in-time
+     * provisioning means a verified stranger *is* an account. That asymmetry
+     * with `actorForToken` is the point, and the type says so.
+     */
+    readonly actorForIdentity: (
+      identity: VerifiedIdentity,
+    ) => Effect.Effect<Actor, SqlError.SqlError>;
   }
 >()("Accounts") {
   static readonly layer = Layer.effect(this)(
@@ -64,7 +90,68 @@ export class Accounts extends Context.Service<
                 // is minted here yet.
                 Option.some(new Actor({ accountId: row.id, role: "dm", campaignId: null }));
           }),
+
+        actorForIdentity: (identity) =>
+          Effect.gen(function* () {
+            // Steady state: one indexed read, no write.
+            const existing = yield* accountForSubject(sql, identity.subject);
+            if (Option.isSome(existing)) return dmActor(existing.value);
+
+            // First request from this person. `do nothing` plus a re-read
+            // settles the real race — two tabs firing their first request
+            // together — without either of them failing.
+            const inserted = yield* sql<{ readonly id: AccountId }>`
+              insert into account ${sql.insert({
+                clerk_user_id: identity.subject,
+                name: Option.getOrElse(identity.name, () => DEFAULT_ACCOUNT_NAME),
+              })}
+              on conflict (clerk_user_id) do nothing
+              returning id
+            `;
+            const created = inserted[0];
+            if (created !== undefined) return dmActor(created.id);
+
+            const raced = yield* accountForSubject(sql, identity.subject);
+            if (Option.isSome(raced)) return dmActor(raced.value);
+
+            // The insert conflicted, so a row with this subject exists, and
+            // the read that follows cannot miss it. Reaching here means the
+            // unique constraint is gone, not that the request was bad.
+            return yield* Effect.die(
+              new Error(
+                "account row vanished between an `on conflict do nothing` insert and the re-read",
+              ),
+            );
+          }),
       };
     }),
   );
 }
+
+/**
+ * A DM actor for a whole account.
+ *
+ * Both credential kinds land here, and both get `campaignId: null` — the
+ * credential is minted for an account, so it reaches every campaign in it. A
+ * credential scoped to one table would set it; none exists yet.
+ */
+const dmActor = (accountId: AccountId): Actor =>
+  new Actor({ accountId, role: "dm", campaignId: null });
+
+/**
+ * The one place an external identity is looked up.
+ *
+ * `clerk_user_id` is the only vendor-named thing below the seam. It holds a
+ * value only Clerk can mint or interpret, so naming it honestly beats a
+ * generic column that hides which provider wrote each row — and a second
+ * provider is a second column plus a layer, which the internal `uuid` primary
+ * key already makes cheap.
+ */
+const accountForSubject = (
+  sql: SqlClient.SqlClient,
+  subject: string,
+): Effect.Effect<Option.Option<AccountId>, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly id: AccountId }>`select id from account where clerk_user_id = ${subject}`,
+    (rows) => Option.fromUndefinedOr(rows[0]?.id),
+  );

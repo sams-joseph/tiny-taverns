@@ -166,6 +166,41 @@ and filters in SQL. `AGENTS.md` records the contract each new endpoint has to fo
 The `Server` section of the web gallery calls the live API through the client derived from
 that same declaration — paste a token there to see it list your campaigns.
 
+### Hosted sign-in (optional)
+
+The server accepts a second kind of bearer credential: a session token from a hosted
+identity provider, currently Clerk. **It is off unless you configure it**, and everything
+above — `pnpm -F server dev`, `token:issue`, the whole test suite — works with it off. You
+do not need a Clerk account to develop on this repository, and the tests never need one
+ever (they sign tokens with a keypair they generate in-process).
+
+To turn it on, set one variable in the server's environment:
+
+```bash
+CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----…"   # Dashboard → API keys → Show JWT public key → PEM
+CLERK_TELEMETRY_DISABLED=1                    # the SDK phones home on dev instances otherwise
+```
+
+`CLERK_JWT_KEY` is a **public** key and not a secret: verification is the only thing it can
+do. **`CLERK_SECRET_KEY` is not used by this server and must not be added to it** — tokens
+are verified offline, so an attacker holding the whole environment still cannot mint a
+session for anybody. Keeping it that way is a deliberate security property, not an
+oversight.
+
+Two consequences worth knowing before you configure it:
+
+- The key is validated at boot. A PEM Clerk cannot use fails the server loudly with an
+  explanatory message, rather than rejecting every sign-in as a bad signature later.
+- `ALLOWED_ORIGINS` feeds both the CORS allowlist and the token's `azp` audience check, so
+  a token minted for a front end that is not on that list is rejected. Setting
+  `ALLOWED_ORIGINS` for a deployment therefore has to include the origin the browser app is
+  actually served from.
+
+Accounts are provisioned just-in-time: the first authenticated request from a person the
+server has not seen creates their account. Signing in this way always creates a _new_
+account — existing machine-token accounts are never linked to it, and their campaigns stay
+reachable only with their token.
+
 The server is structured idiomatically with **Effect v4** (currently in beta, pinned to
 exact versions). In v4 there is no `@effect/platform` package — the HTTP layer lives in core
 `effect` under `effect/unstable/http`. `AGENTS.md` records the full v3 → v4 mapping, and
@@ -179,7 +214,9 @@ Vitest runs in every workspace project. Each has at least one real, passing test
   toggles), plus tests of the derived API client as the browser bundles it.
 - `apps/server` — migrations from empty to current, the visibility seam, a schema-adherence
   guard, the whole API through the derived client against a real in-process server, and a
-  production-start smoke test that runs the real build output under plain `node`.
+  production-start smoke test that runs the real build output under plain `node`. Both
+  credential kinds are covered, including hosted sign-in — offline, against a keypair the
+  test generates, so the suite needs no vendor account and no network.
 - `packages/api` — guards on the wire contract itself: every campaign-scoped endpoint is
   behind `Authorization`, every content schema carries visibility and provenance.
 - `packages/ui` — component tests, design-system adherence checks, and a guard that keeps

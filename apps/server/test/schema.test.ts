@@ -114,6 +114,45 @@ describe("every content-bearing table", () => {
   });
 });
 
+describe("an account must be reachable by something", () => {
+  it("accepts either credential alone and refuses a row with neither", async () => {
+    const insert = (values: Record<string, string | null>) =>
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`insert into account ${sql.insert({ name: "Jo", ...values })}`;
+        }).pipe(Effect.result),
+      );
+
+    const machineOnly = await insert({ token_hash: "credential-machine" });
+    const hostedOnly = await insert({ clerk_user_id: "user_credential" });
+    const both = await insert({ token_hash: "credential-both", clerk_user_id: "user_both" });
+    // An account nobody can ever authenticate as is a bug, not a state.
+    const neither = await insert({});
+
+    expect(machineOnly._tag).toBe("Success");
+    expect(hostedOnly._tag).toBe("Success");
+    expect(both._tag).toBe("Success");
+    expect(neither._tag).toBe("Failure");
+  });
+
+  it("still requires a token hash to be unique, now that it is nullable", async () => {
+    // Postgres permits many NULLs under a unique constraint, which is what
+    // makes the column nullable safe — but two accounts sharing a hash would
+    // mean one token authenticating as either.
+    const insert = (tokenHash: string) =>
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`insert into account ${sql.insert({ name: "Jo", token_hash: tokenHash })}`;
+        }).pipe(Effect.result),
+      );
+
+    expect((await insert("credential-unique"))._tag).toBe("Success");
+    expect((await insert("credential-unique"))._tag).toBe("Failure");
+  });
+});
+
 describe("provenance is enforced, not just declared", () => {
   it("rejects an assistant row with no turn id, and an authored row with one", async () => {
     const insert = (origin: string, turnId: string | null) =>

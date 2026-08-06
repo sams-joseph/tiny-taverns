@@ -59,8 +59,9 @@ describe("GET /health", () => {
 
 describe("authorization", () => {
   it("rejects a request with no bearer token", async () => {
-    // No handler code produces this: the declared `HttpApiSecurity.bearer`
-    // scheme answers 401 on its own.
+    // `HttpApiSecurity.bearer` answers no 401 of its own — it hands the
+    // middleware an empty credential and runs it anyway. This passes because
+    // `Authorization` rejects the empty credential explicitly.
     const result = await runtime.runPromise(
       Effect.flatMap(anonymous, (client) => client.campaigns.list()).pipe(Effect.result),
     );

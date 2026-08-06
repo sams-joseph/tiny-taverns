@@ -313,6 +313,74 @@ uses. A per-test `vi.stubGlobal("fetch", …)` therefore keeps serving the _firs
 responses, with no error to notice — install one stable dispatcher per file instead
 (`apps/web/src/api/client.test.ts`).
 
+**The same trap applies to configuration, and it is easier to walk into.**
+`ConfigProvider.ConfigProvider` is a `Context.Reference` defaulting to `fromEnv()`, and
+`fromEnv` _copies_ `process.env` into a trie when it is constructed (`ConfigProvider.ts`). So
+the first config read in a process freezes the environment for the whole run. **Writing to
+`process.env` in a test to exercise a config branch does nothing, silently** — the assertion
+just fails, or worse, passes for the wrong reason. Provide a provider explicitly instead:
+`Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env }))`,
+placed _outermost_ so it also covers layer construction. See the environment tests in
+`apps/server/test/identity-disabled.test.ts`.
+
+## Authentication: two credential kinds, one seam
+
+A bearer token is either a **machine token** (`token:issue`, SHA-256 → `account.token_hash`)
+or a **session token from a hosted identity provider** (currently Clerk). They converge on one
+`Actor` in `Authorization.ts`, and nothing below that line knows there is more than one kind —
+no handler, repository or SQL predicate changed to add the second.
+
+**The classification is total, not a heuristic.** A JWS compact serialization is exactly three
+dot-separated segments; a machine token is `randomBytes(32).toString("base64url")` and the
+base64url alphabet contains no dot. So `credential.split(".").length === 3` cannot misfile
+one. Effect v4 _would_ let you declare two `HttpApiSecurity.bearer` schemes and tries them in
+order, but that emits two identical schemes into the OpenAPI document and reports the **last**
+scheme's error for every failure. One scheme, one chain.
+
+**The vendor is confined to `ClerkIdentityProvider.ts` and the interface names no vendor.**
+`IdentityProvider` verifies a credential and returns a local `VerifiedIdentity`
+(`{ subject, name }`); provisioning belongs to `Accounts`, authorization to `Authorization`.
+`apps/server/test/seam.test.ts` fails if a `@clerk/*` import appears anywhere else, and the
+`disabled` layer plus the offline test double are two working non-vendor implementations of
+the same interface. **This is not only taste: a vendor type reached by an exported signature
+does not compile here.** `@clerk/shared` is a transitive dependency under pnpm's isolated
+layout, so its types are not nameable from `apps/server` and TS2742 rejects the inferred
+signature. Map claims to a local shape at the edge — it is the only shape that builds.
+
+**`CLERK_JWT_KEY` is optional by design and must stay that way.** Unset means no hosted
+sign-in: `pnpm -F server dev` runs, the whole suite passes, and a JWT-shaped credential is
+simply unknown. That is what `IdentityProvider.disabled` is for, and
+`apps/server/test/identity-disabled.test.ts` is what stops it rotting. The key is a **public**
+key, not a secret. **`CLERK_SECRET_KEY` is deliberately absent from this server** — tokens are
+verified offline with `verifyToken`, so the whole environment leaking still cannot mint a
+session. Do not add it for convenience; use `verifyToken`, not `authenticateRequest`, which
+needs a publishable key, throws without one, and models a cookie handshake this API never has.
+
+Four things about the SDK that cost real time:
+
+- **`@clerk/react`, not `@clerk/clerk-react`; `@clerk/shared/types`, not `@clerk/types`.** The
+  old names install cleanly and are deprecated — same shape as the `@base-ui-components/react`
+  rename above. `@clerk/clerk-sdk-node` is end-of-life.
+- **The PEM→JWK conversion is cached by `kid`, module-level, and never expires**
+  (`loadClerkJwkFromPem`). On a hit the PEM you passed is _ignored_, and a token with no `kid`
+  caches under `local-undefined`. A test that swaps keys under one `kid` verifies against the
+  first key forever, green. Hence one `kid` per keypair in `test/support/identity.ts`.
+- **The conversion is string surgery on a 2048-bit RSA SPKI PEM** — it strips that key's fixed
+  prefix and treats the rest as the modulus. Any other key silently yields a wrong JWK and
+  every token then fails as "invalid signature", which reads exactly like an attack. The layer
+  validates the key at boot for this reason; keep that.
+- **Passing `authorizedParties` makes `azp` mandatory** (`assertAuthorizedPartiesClaim` rejects
+  a missing `azp` whenever the list is non-empty). It is fed from `ALLOWED_ORIGINS`, the same
+  list CORS uses, so the browser allowlist and the token audience cannot drift apart.
+
+**Provisioning is just-in-time, and there is no deletion path.** An unrecognised subject gets
+an account on its first authenticated request (`insert … on conflict do nothing` plus a
+re-read, which settles two tabs racing). Existing machine accounts are never linked — a Clerk
+sign-in creates a fresh account. And nothing may wire an external event to `delete from
+account`: `campaign.account_id` is `on delete cascade`, so that would let a replayed webhook
+destroy a DM's entire history. Deletion, if ever wanted, is a deliberate product endpoint
+behind `Authorization`. These are written captain's decisions, not defaults.
+
 ## The assistant: a trap to remember before it ships
 
 Nothing here uses `@effect/ai-anthropic` today — the captain's decision is to target locally
