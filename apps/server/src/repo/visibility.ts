@@ -10,9 +10,11 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * leak pattern: the DM-only text is already in memory and one forgotten
  * `.filter` ships it. Filtering here means the bytes never leave Postgres.
  *
- * Three conditions, all required:
+ * Four conditions, all required:
  *
  *   ownership   the campaign belongs to the actor's account
+ *   scope       the campaign is the one this credential was minted for, unless
+ *               the credential covers the whole account
  *   the campaign is itself readable — for a player, `campaign.visibility`
  *               has to be `shared`
  *   the row is itself readable — for a player, `visibility` has to be `shared`
@@ -28,10 +30,30 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * means auditing every read in the product instead of adding a token table.
  */
 
+/**
+ * The campaigns this actor's credential reaches at all, before any question of
+ * what it may then do with them.
+ *
+ * Ownership is not scope. A DM token is minted for an account and carries
+ * `campaignId: null`, so it reaches every campaign in it and this is one
+ * redundant `true` in the plan. A credential minted for a single table carries
+ * that table's id — and without this clause it would reach every `shared`
+ * campaign under the same account, so a DM running two tables would leak table
+ * A's shared rows to table B's players.
+ *
+ * Deliberately not keyed on the role: a scoped credential minted later for
+ * something other than a player must not reach past its campaign either.
+ */
+const campaignInScope = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+  sql.and([
+    sql`campaign.account_id = ${actor.accountId}`,
+    actor.campaignId === null ? sql`true` : sql`campaign.id = ${actor.campaignId}`,
+  ]);
+
 /** Rows of `campaign` this actor may read. */
 export const campaignReadable = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
   sql.and([
-    sql`campaign.account_id = ${actor.accountId}`,
+    campaignInScope(sql, actor),
     actor.seesDmContent ? sql`true` : sql`campaign.visibility = 'shared'`,
   ]);
 
@@ -43,10 +65,7 @@ export const campaignReadable = (sql: SqlClient.SqlClient, actor: Actor): Statem
  * a disclosure, and the caller turns "no rows" into a plain 404.
  */
 export const campaignWritable = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
-  sql.and([
-    sql`campaign.account_id = ${actor.accountId}`,
-    actor.role === "dm" ? sql`true` : sql`false`,
-  ]);
+  sql.and([campaignInScope(sql, actor), actor.role === "dm" ? sql`true` : sql`false`]);
 
 /** Rows of a campaign-scoped table (`session`, `character`, `note`) this actor may read. */
 export const rowReadable = (

@@ -1,6 +1,6 @@
 import { Context, Schema } from "effect";
 import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi";
-import { AccountId } from "./Ids.js";
+import { AccountId, CampaignId } from "./Ids.js";
 
 /**
  * `dm` sees everything in the campaigns they own. `player` sees only rows
@@ -18,6 +18,20 @@ export type Role = typeof Role.Type;
 export class Actor extends Schema.Class<Actor>("Actor")({
   accountId: AccountId,
   role: Role,
+  /**
+   * The one campaign this credential reaches, or `null` for the whole account.
+   *
+   * A DM's token is minted for an account and reads every campaign in it, so it
+   * carries `null`. A credential minted for a single table carries that table's
+   * id, and `campaignReadable` narrows every read to it.
+   *
+   * Without this a `player` actor would be scoped to an *account*: the first
+   * share credential would open every `shared` campaign the DM owns, so a DM
+   * running two tables would leak table A's shared rows to table B's players.
+   * The field is not optional for exactly that reason — minting an actor is a
+   * decision about reach, and the compiler makes you take it.
+   */
+  campaignId: Schema.NullOr(CampaignId),
 }) {
   /** True when this actor may see rows whose visibility is `dm`. */
   get seesDmContent(): boolean {

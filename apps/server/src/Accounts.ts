@@ -59,7 +59,10 @@ export class Accounts extends Context.Service<
             const row = rows[0];
             return row === undefined
               ? Option.none()
-              : Option.some(new Actor({ accountId: row.id, role: "dm" }));
+              : // `campaignId: null` — an account token reaches every campaign in
+                // the account. A credential scoped to one table sets it, and none
+                // is minted here yet.
+                Option.some(new Actor({ accountId: row.id, role: "dm", campaignId: null }));
           }),
       };
     }),

@@ -239,6 +239,16 @@ non-negotiable, because it is free on day one and a retrofit later.
   one forgotten `.filter` ships it.
 - **Reads and writes use different predicates.** A player may read a `shared` note and must
   still not edit it, so `rowWritable` is not `rowReadable`.
+- **Ownership is not scope.** `Actor.campaignId` is the reach of the credential: `null` for an
+  account-wide DM token, a campaign id for a credential minted for one table. `campaignInScope`
+  in `visibility.ts` applies it, and both `campaignReadable` and `campaignWritable` compose it,
+  so it is not keyed on the role. Every read reaches it — `rowReadable` and
+  `ensureCampaignReadable` embed `campaignReadable` in an `exists` subquery rather than
+  restating account ownership. **Do not write a new predicate that filters on `account_id`
+  directly**: account ownership alone would let a credential scoped to one table read every
+  `shared` campaign the same DM owns, which is a cross-table leak between two tables run by the
+  same person. That is exactly the defect the scope closed, and it was invisible for as long as
+  it was because no test minted a scoped actor.
 - **Visibility is two levels.** `campaign.visibility` is the master toggle; a row's own
   `visibility` narrows within it. A `shared` note inside an unshared campaign stays invisible.
 - **Denial is `NotFound`, not `Forbidden`.** Saying "it exists but is not yours" is itself a
@@ -259,8 +269,15 @@ wire format to drift.
 It is the one workspace package that builds to `dist/` rather than exporting source: `apps/server`
 is executed by plain `node`, which cannot load `.ts` from `node_modules`.
 
-Four things that cost time to find:
+Five things that cost time to find:
 
+- **`HttpApiSecurity.bearer` answers no 401 of its own.** A missing or malformed `Authorization`
+  header does not short-circuit: `securityDecode` hands the middleware `Redacted.make("")` and
+  runs it anyway (`.repos/effect/packages/effect/src/unstable/httpapi/HttpApiBuilder.ts`, the
+  `case "Http"` branch). Today's 401 for an absent header comes from our own zero-length check
+  in `Accounts.actorForToken`, not the framework. Any middleware added to a secured group must
+  reject the empty credential explicitly — there is no guarantee to inherit, and the tests pass
+  either way, so nothing catches the omission.
 - **Middleware and handler requirements are provided outside `HttpRouter.serve`.** Handler
   requirements travel as `Request<"Requires", _>` markers that only `serve` unwraps; providing
   them to the route layer typechecks and then fails at the call site. See `apps/server/src/app.ts`.

@@ -20,12 +20,14 @@ const withActor =
     Effect.provideService(effect, CurrentActor, actor);
 
 /**
- * Two campaigns from the same DM:
+ * Three campaigns from the same DM — one DM running more than one table:
  *
- *   `campaign` — shared with players (the master toggle on), holding one `dm`
- *                note and one `shared` note
- *   `closed`   — left at the default, holding a `shared` note that must stay
- *                unreachable anyway
+ *   `campaign`   — shared with players (the master toggle on), holding one `dm`
+ *                  note and one `shared` note
+ *   `closed`     — left at the default, holding a `shared` note that must stay
+ *                  unreachable anyway
+ *   `otherTable` — a second, separately shared campaign. Nothing about
+ *                  `campaign` may reach it, and vice versa.
  */
 const makeFixture = Effect.gen(function* () {
   const accounts = yield* Accounts;
@@ -33,8 +35,7 @@ const makeFixture = Effect.gen(function* () {
   const notes = yield* Notes;
 
   const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm" });
-  const player = new Actor({ accountId: issued.accountId, role: "player" });
+  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
 
   const campaign = yield* withActor(dm)(
     campaigns.create({ name: "The Reed Marches", visibility: "shared" }),
@@ -52,7 +53,32 @@ const makeFixture = Effect.gen(function* () {
     notes.create(closed.id, { title: "Overheard at the ford", visibility: "shared" }),
   );
 
-  return { dm, player, campaign, secret, shared, closed, sharedInClosed };
+  const otherTable = yield* withActor(dm)(
+    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+  );
+  const sharedElsewhere = yield* withActor(dm)(
+    notes.create(otherTable.id, { title: "The harbourmaster's ledger", visibility: "shared" }),
+  );
+
+  // The player at the first table. Scoped to that campaign, which is what a
+  // share credential would mint.
+  const player = new Actor({
+    accountId: issued.accountId,
+    role: "player",
+    campaignId: campaign.id,
+  });
+
+  return {
+    dm,
+    player,
+    campaign,
+    secret,
+    shared,
+    closed,
+    sharedInClosed,
+    otherTable,
+    sharedElsewhere,
+  };
 }).pipe(Effect.orDie);
 
 let fixture: {
@@ -63,6 +89,8 @@ let fixture: {
   shared: Note;
   closed: Campaign;
   sharedInClosed: Note;
+  otherTable: Campaign;
+  sharedElsewhere: Note;
 };
 let notes: (typeof Notes)["Service"];
 let campaigns: (typeof Campaigns)["Service"];
@@ -178,13 +206,101 @@ describe("a player actor", () => {
   });
 });
 
+describe("a campaign-scoped actor", () => {
+  // The DM here owns two separately shared campaigns — one DM, two tables. An
+  // actor scoped to one of them must not reach the other, even though both are
+  // `shared` and both belong to the account the credential was minted under.
+  // Account ownership alone is not scope.
+
+  it("cannot read a second shared campaign under the same account", async () => {
+    const campaign = await runtime.runPromise(
+      Effect.flip(withActor(fixture.player)(campaigns.findById(fixture.otherTable.id))),
+    );
+
+    expect(campaign._tag).toBe("NotFound");
+  });
+
+  it("cannot read a shared note in that second campaign", async () => {
+    const note = await runtime.runPromise(
+      Effect.flip(
+        withActor(fixture.player)(
+          notes.findById(fixture.otherTable.id, fixture.sharedElsewhere.id),
+        ),
+      ),
+    );
+    const listed = await runtime.runPromise(
+      Effect.flip(withActor(fixture.player)(notes.list(fixture.otherTable.id))),
+    );
+
+    expect(note._tag).toBe("NotFound");
+    expect(listed._tag).toBe("NotFound");
+
+    // …and the second table's shared note really is there and really is shared,
+    // so the assertions above are about scope and not about a missing fixture.
+    const asDm = await runtime.runPromise(withActor(fixture.dm)(notes.list(fixture.otherTable.id)));
+    expect(asDm.map((note) => note.id)).toEqual([fixture.sharedElsewhere.id]);
+    expect(asDm[0]!.visibility).toBe("shared");
+  });
+
+  it("lists only the campaign it is scoped to", async () => {
+    const listed = await runtime.runPromise(withActor(fixture.player)(campaigns.list));
+
+    expect(listed.map((c) => c.id)).toEqual([fixture.campaign.id]);
+  });
+
+  it("still reaches everything inside the campaign it is scoped to", async () => {
+    // The scope narrows, it does not replace the rest of the predicate: the
+    // shared note in the scoped campaign is still readable.
+    const note = await runtime.runPromise(
+      withActor(fixture.player)(notes.findById(fixture.campaign.id, fixture.shared.id)),
+    );
+
+    expect(note.id).toBe(fixture.shared.id);
+  });
+
+  it("is a no-op for a null scope: the DM still sees every campaign", async () => {
+    // The invariant the existing credentials rely on. A DM token carries
+    // `campaignId: null` and the new clause must not narrow anything for it.
+    const listed = await runtime.runPromise(withActor(fixture.dm)(campaigns.list));
+
+    expect(listed.map((c) => c.id)).toEqual(
+      expect.arrayContaining([fixture.campaign.id, fixture.closed.id, fixture.otherTable.id]),
+    );
+  });
+
+  it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
+    // Nothing mints this today. The clause sits in the shared campaign predicate
+    // rather than behind `role === "player"` so that a scoped credential minted
+    // later — a co-DM invited to one table, say — cannot reach past it either.
+    const scopedDm = new Actor({
+      accountId: fixture.dm.accountId,
+      role: "dm",
+      campaignId: fixture.campaign.id,
+    });
+
+    const reachable = await runtime.runPromise(withActor(scopedDm)(campaigns.list));
+    const other = await runtime.runPromise(
+      Effect.flip(withActor(scopedDm)(campaigns.findById(fixture.otherTable.id))),
+    );
+    const write = await runtime.runPromise(
+      Effect.flip(
+        withActor(scopedDm)(notes.create(fixture.otherTable.id, { title: "out of scope" })),
+      ),
+    );
+
+    expect(reachable.map((c) => c.id)).toEqual([fixture.campaign.id]);
+    expect(other._tag).toBe("NotFound");
+    expect(write._tag).toBe("NotFound");
+  });
+});
+
 describe("another account", () => {
   it("cannot reach a campaign it does not own", async () => {
     const outsider = await runtime.runPromise(
       Effect.gen(function* () {
         const accounts = yield* Accounts;
         const issued = yield* accounts.issue("Someone else");
-        return new Actor({ accountId: issued.accountId, role: "dm" });
+        return new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
       }).pipe(Effect.orDie),
     );
 
