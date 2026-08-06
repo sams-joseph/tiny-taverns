@@ -65,6 +65,67 @@ Four things about the bridge that are not derivable from reading it:
   with slate body text until it was configured. A test parses `@theme inline` and fails if
   the name lists drift.
 
+## Overlay layering: one scale, and where a new overlay goes on it
+
+**Every z-index in this product comes from the scale in `packages/ui/src/styles.css` §3.**
+Reach for a rung — `z-chrome`, `z-scrim`, `z-dialog`, `z-popup`, `z-toast`, `z-tooltip` —
+never a number. `packages/ui/src/layering.test.ts` fails on a `z-50`, a `z-[9999]` or a
+`z-(--anything)` in any component file or in `apps/web/src`, and compiles the real
+stylesheet to assert the order the browser will compute.
+
+The scale is the **one block in the theme bridge that is not a `var()` into
+`packages/design-system`**, and that is deliberate, not an oversight to correct: the
+delivered system tokenises colour, type, space, radius, elevation and motion and says
+nothing about stacking, because it ships no portalling components. Its "elevation" is
+`--shadow-1..3` — a different question from which of two fixed boxes wins. The design
+system is read-only; the scale belongs to the components that portal, which live in
+`packages/ui`. Do not "fix" this by adding tokens upstream.
+
+Lowest to highest, with the reason each rung is where it is:
+
+| rung      | value | why here                                                                                                                   |
+| --------- | ----- | -------------------------------------------------------------------------------------------------------------------------- |
+| `chrome`  | 10    | sticky page furniture (the app header). Not an overlay; must lose to the scrim.                                            |
+| `scrim`   | 100   | the modal backdrop.                                                                                                        |
+| `dialog`  | 110   | the surface the scrim dims — above **its own backdrop**, by number.                                                        |
+| `popup`   | 200   | select / menu / popover. Anchored to a control that is often _inside_ a dialog, so it is more nested and must be above it. |
+| `toast`   | 300   | an interruption the DM must not miss.                                                                                      |
+| `tooltip` | 400   | labels a control on any layer below, and never takes a pointer.                                                            |
+
+Gaps of 100 so a rung can be inserted without renumbering. Two of the orderings were
+bugs, and both were invisible to the test suite:
+
+- **A select opened at 40, under a dialog at 50.** The backdrop is `fixed inset-0`, so it
+  did not merely hide the popup — it ate the click. Measured in Chromium against the
+  shipped `NoteDialog`: the popup rendered, `elementFromPoint` at its centre returned the
+  dialog body, and clicking an option left the value unchanged. That is the captain's
+  "the select dropdown form inputs do not open".
+- **Toast and dialog were both 50, which left document order to decide — and it always
+  decided against the toast.** The toast viewport mounts with the `Toaster` near the app
+  root, so it is _always_ earlier in the body than a dialog's portal. Measured 6/6 behind
+  the backdrop, not intermittently.
+
+**Equal layers are the bug, not a tie.** Anything that must sit above something else gets
+a strictly greater rung, including a dialog over its own scrim — which worked only
+because `DialogOverlay` is rendered before `DialogPrimitive.Popup`.
+
+**`toast-stack`'s `z-index` is local and is not a rung.** The viewport is a stacking
+context, so `calc(var(--z-index-toast) - var(--toast-index))` only has to descend and the
+base it counts down from is inert. It is written off the token anyway so no layer number
+appears twice; the test insists on it.
+
+Two things about verifying this class of change, both learned the hard way:
+
+- **jsdom computes no stacking, so no component test can see any of it** — the same blind
+  spot `motion.test.ts` exists for. Drive a real browser and assert with
+  `document.elementFromPoint`, then _click an option and check the value changed_: a popup
+  that renders is not a popup that works.
+- **Headless Chromium reports `(hover: none)`, and Base UI's tooltip only opens on hover
+  when the device can hover** — so a tooltip driven headlessly never opens and nothing says
+  why. Launch with
+  `--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4`,
+  or drive the tooltip `open` prop directly.
+
 ## Motion: `translate` and `transform` are separate properties now
 
 **In Tailwind v4 `-translate-x-1/2` does not compile into `transform`.** It compiles into the
@@ -796,7 +857,7 @@ before changing either.
 copy of a fight and no write-behind.** `EncounterRunner.jsx:164` promises the DM their
 initiative order and hit points are saved, and the moment that promise matters is a crash
 mid-combat. The write volume does not justify anything cleverer — a four-hour session is order
-10³ writes. What is genuinely different about the live surface is the *read* pattern, and that
+10³ writes. What is genuinely different about the live surface is the _read_ pattern, and that
 is the stream. Do not add a cache; measure first.
 
 **The fan-out carries no data — it is a doorbell.** `src/live/LiveEvents.ts` publishes
@@ -835,7 +896,7 @@ Modelling decisions that are settled, and that the report or the prototype state
   `turn_index`.** The prototype holds an index (`:88`) and never adds a combatant (`:137`),
   removes one (`:107`) or rerolls initiative (`:138`). All three reorder the list, after which
   an index silently names a different creature while the screen still says whose turn it is.
-- **There is no `player_view_enabled`.** `encounter_run.visibility` *is* the `Share` switch
+- **There is no `player_view_enabled`.** `encounter_run.visibility` _is_ the `Share` switch
   (`:122`) and `combatant.visibility` is `Hide from players` (`:139`); the nested predicate
   already gates every combatant on its run, so a second boolean meaning "shared" beside a
   column called `visibility` would be one question with two answers. Both default to `dm`,
@@ -847,7 +908,7 @@ Modelling decisions that are settled, and that the report or the prototype state
   `player_name`, `ac`, `hp_max`). `character_id`/`creature_id` are `on delete set null` and are
   read by nothing — provenance, not an access path. A name that came from a join goes blank
   mid-fight when someone tidies the bestiary in another tab. `encounter_run.encounter_name` is
-  snapshotted for the same reason and is *not* a duplicate of `encounter.name`: that column is
+  snapshotted for the same reason and is _not_ a duplicate of `encounter.name`: that column is
   what the template is called now, this is what the fight was called that night.
 - **`session_event.seq` comes from one global sequence**, not `max(seq)+1` per session. A
   cursor only has to increase; it does not have to be contiguous, and nothing counts it. Gaps
@@ -871,13 +932,13 @@ levels below the campaign (`combatant → encounter_run → session → campaign
 than anything before it, so `repo/visibility.ts` grew a `Containment` chain that the predicate
 walks recursively rather than a second hand-written predicate. **Checking "the session is
 readable" and "the run is readable" as two separate questions is a hole**, and it shipped in a
-first draft: both are satisfied by a run in a *different* session of the same campaign, and the
+first draft: both are satisfied by a run in a _different_ session of the same campaign, and the
 pair says nothing about whether the parent in the path is the parent of the row. Use
 `ensureNestedRowReadable`/`ensureNestedRowWritable`, which bind the foreign key.
 `apps/server/test/live-session.test.ts` pins all ten reachable paths.
 
 **`created_at` does not order rows inserted by one transaction.** Postgres `now()` is
-transaction *start* time, so every combatant a seed creates shares a timestamp and
+transaction _start_ time, so every combatant a seed creates shares a timestamp and
 `initiativeOrder`'s tiebreak falls through to `id` — the seeded list comes back with the party
 interleaved among the monsters, fixed but arbitrary. Harmless (everything seeds at initiative 0,
 so there is no correct order yet) but do not read `created_at asc` as "the order they were

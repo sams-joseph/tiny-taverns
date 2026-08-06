@@ -94,6 +94,10 @@ function Rail({ route, footer }: { readonly route: Route; readonly footer?: Reac
  *
  * `--fs-display-m` at `--ls-display` — the one display-sized thing on the
  * screen, so the eye lands on the campaign name before the cards.
+ *
+ * `z-chrome` is the bottom rung of the layering scale in `@taverns/ui`'s
+ * `styles.css`: sticky page furniture, deliberately far below the overlay band
+ * so a dialog's scrim covers it. Reach for a rung, never a number.
  */
 export function TopBar({
   title,
@@ -105,7 +109,7 @@ export function TopBar({
   readonly children?: ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-gutter border-b border-hairline bg-surface-card px-page-sm py-3.5 sm:px-page">
+    <header className="sticky top-0 z-chrome flex items-center gap-gutter border-b border-hairline bg-surface-card px-page-sm py-3.5 sm:px-page">
       <div className="min-w-0 flex-1">
         <h1 className="font-display text-display-m leading-tight font-semibold tracking-display text-heading">
           {title}

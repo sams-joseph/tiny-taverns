@@ -9,6 +9,11 @@ import { Icon } from "./icon";
  * Matches `Input` visually: 38px, 6px radius, 1px border. The open list is an
  * 8px-radius popover on `--shadow-3`; the chosen item takes the soft
  * `--accent-soft` / `--accent-ink` selection treatment.
+ *
+ * The list portals to `document.body` on `z-popup`, which is *above* `z-dialog`
+ * because a select is most often opened from a control inside a dialog. It sat
+ * below, and the dialog's `fixed inset-0` backdrop then covered it — which reads
+ * as "the dropdown does not open", because the click never reaches an option.
  */
 const Select = SelectPrimitive.Root;
 
@@ -66,7 +71,7 @@ function SelectContent({
         side={side}
         sideOffset={sideOffset}
         alignItemWithTrigger={alignItemWithTrigger}
-        className="isolate z-40"
+        className="isolate z-popup"
       >
         <SelectPrimitive.Popup
           data-slot="select-content"

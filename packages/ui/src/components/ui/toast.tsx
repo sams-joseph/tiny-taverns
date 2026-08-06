@@ -65,13 +65,19 @@ function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {
  * The stack's positioning context. Every toast inside is absolutely positioned
  * against it, so it is a zero-height anchor at the bottom-right corner rather
  * than a column — `toast-stack` does the layout.
+ *
+ * `z-toast` sits above the dialog rungs on purpose. The viewport mounts with the
+ * `Toaster`, near the app root, so it is *always* earlier in document order than
+ * a dialog's portal: on the layer they used to share, every toast raised while a
+ * dialog was open went behind the backdrop and was never seen. A toast losing
+ * silently is the worse of the two failures — see the scale in `styles.css`.
  */
 function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
   return (
     <ToastPrimitive.Viewport
       data-slot="toast-viewport"
       className={cn(
-        "pointer-events-none fixed right-gutter bottom-gutter z-50 outline-none",
+        "pointer-events-none fixed right-gutter bottom-gutter z-toast outline-none",
         "w-85 max-w-[calc(100vw_-_var(--gutter)_*_2)]",
         className,
       )}

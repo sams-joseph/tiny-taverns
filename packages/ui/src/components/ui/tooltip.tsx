@@ -7,6 +7,10 @@ import { cn } from "../../lib/utils";
  * has a key — this is a keyboard-heavy tool.
  *
  * No arrow, no fade, no delay: it appears and disappears in one frame.
+ *
+ * Top of the layering scale (`z-tooltip`): it can label a control on any layer
+ * below — a dialog's close button, a toast's action, a select item — and it is
+ * the one overlay that never takes a pointer, so being above costs nothing.
  */
 function TooltipProvider({ delay = 0, closeDelay = 0, ...props }: TooltipPrimitive.Provider.Props) {
   return (
@@ -52,7 +56,7 @@ function TooltipContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-60"
+        className="isolate z-tooltip"
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"

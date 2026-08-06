@@ -1,9 +1,11 @@
 /* ==========================================================================
    @taverns/ui — Tailwind v4 theme, bridged onto the Tiny Taverns design system.
 
-   Every value below is a `var()` reference into @taverns/design-system/tokens.
-   No hex, radius, duration or measurement is restated here: those files are the
-   single source of truth, and this file only gives their values Tailwind names.
+   Every design value below is a `var()` reference into @taverns/design-system/
+   tokens. No hex, radius, duration or measurement is restated here: those files
+   are the single source of truth, and this file only gives their values Tailwind
+   names. The one exception is the layering scale in §3, which the delivered
+   system does not describe and could not — see the comment there.
 
    Tiny Taverns is DARK ONLY (readme.md: "A DM runs it at a lit table"). There is
    no light theme and no `.dark` class — the tokens resolve dark at :root, and
@@ -273,7 +275,56 @@
 }
 
 /* --------------------------------------------------------------------------
-   3. Dialog motion. "Fades up 6px from scale(.98)".
+   3. The layering scale — the one place a z-index is chosen in this product.
+
+      NOT `inline`, and not a `var()` into the design system, because there is
+      nothing there to point at: the delivered system tokenises colour, type,
+      space, radius, elevation and motion, and says nothing about stacking. It
+      has no portalling components, so it never had to. Elevation there means
+      *shadow* — `--shadow-1..3` — which is a different question from what wins
+      when two fixed boxes overlap. So this is the theme bridge's own value, and
+      it is the only block in this file that names one. `packages/design-system`
+      is read-only; the scale belongs to the components that portal, and those
+      live here.
+
+      The order comes from how these actually nest, not from convention:
+
+        chrome   sticky page furniture — the app header. Not an overlay at all,
+                 and it must lose to the scrim, so it sits far below the band.
+        scrim    the modal backdrop.
+        dialog   the surface the scrim dims — strictly above its own backdrop.
+                 These were one number until they were split, which meant the
+                 popup only landed on top because `DialogOverlay` is rendered
+                 before `DialogPrimitive.Popup`. Document order is not a rule.
+        popup    select, menu, popover — anything anchored to a control. A
+                 select opens from a control *inside* a dialog, so it is more
+                 nested than the dialog and must be above it. It was below, and
+                 the backdrop swallowed both the popup and the click: the
+                 reported "the select dropdown does not open".
+        toast    an interruption the DM must not miss. Losing one behind a modal
+                 fails silently, which is the worse failure; a popup overlapped
+                 by a toast is visible and dismissible. They rarely meet — a
+                 toast is pinned bottom-right, a popup is anchored to its
+                 trigger — so the ordering only has to pick the recoverable one.
+        tooltip  labels anything on any layer above: a dialog's close button, a
+                 toast's action, a select item. It is also the only overlay that
+                 never takes a pointer, so being top costs nothing.
+
+      Gaps of 100 so a layer can be inserted without renumbering. Every value is
+      reached through a `z-*` utility; `layering.test.ts` fails if a component
+      writes a number instead, and compiles this file to assert the order.
+   -------------------------------------------------------------------------- */
+@theme {
+  --z-index-chrome: 10;
+  --z-index-scrim: 100;
+  --z-index-dialog: 110;
+  --z-index-popup: 200;
+  --z-index-toast: 300;
+  --z-index-tooltip: 400;
+}
+
+/* --------------------------------------------------------------------------
+   4. Dialog motion. "Fades up 6px from scale(.98)".
 
       These keyframes carry ONLY the motion delta — never the centring translate.
       In Tailwind v4 `-translate-x-1/2` no longer compiles into `transform`; it
@@ -319,7 +370,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   4. The one transition every control shares, and the focus ring. Both come
+   5. The one transition every control shares, and the focus ring. Both come
       straight from the tokens so a control never spells out its own timing.
    -------------------------------------------------------------------------- */
 @utility transition-control {
@@ -342,7 +393,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   5. The toast stack.
+   6. The toast stack.
 
       Base UI publishes the stack geometry on every Toast.Root as custom
       properties, and the whole layout is arithmetic on them:
@@ -388,7 +439,13 @@
   width: 100%;
   height: var(--toast-stack-height);
   transform-origin: bottom center;
-  z-index: calc(50 - var(--toast-index));
+
+  /* Ordering *within* the viewport, which is itself a stacking context at
+     `--z-index-toast` — so this only has to descend, and the base it descends
+     from is inert. Written as the toast layer minus the stack depth anyway, so
+     the file names no layer number twice and `layering.test.ts` can insist on
+     it: a second hand-written 50 here is exactly how the scale rots. */
+  z-index: calc(var(--z-index-toast) - var(--toast-index));
 
   /* The --toast-shrink term closes the gap that scaling about the bottom edge
      would otherwise leave between a back toast and the one in front of it. */
@@ -453,7 +510,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   6. Base layer. tokens/base.css already sets the body, headings, links and
+   7. Base layer. tokens/base.css already sets the body, headings, links and
       :focus-visible; this only adds what a bundled app needs on top.
    -------------------------------------------------------------------------- */
 @layer base {

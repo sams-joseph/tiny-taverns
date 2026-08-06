@@ -10,6 +10,12 @@ import { Icon } from "./icon";
  *
  * The scrim is `--scrim` with a 3px blur; the box fades up 6px from `scale(.98)`
  * on `--ease-out`. Keep dialogs ≤520px wide and never nest them.
+ *
+ * Backdrop and popup take two *different* rungs of the layering scale in
+ * `styles.css` (`z-scrim` under `z-dialog`) rather than one. They were one for a
+ * while, and the popup landed on top only because it is rendered second — the
+ * same "document order decides" fragility that lost the toast behind the scrim.
+ * A select opened from inside sits higher still, on `z-popup`.
  */
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -32,7 +38,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-scrim",
+        "fixed inset-0 isolate z-scrim bg-scrim",
         "supports-backdrop-filter:backdrop-blur-scrim",
         "transition-opacity duration-(--dur-base) ease-out",
         "data-starting-style:opacity-0 data-ending-style:opacity-0",
@@ -55,7 +61,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 flex w-full max-w-115 -translate-x-1/2 -translate-y-1/2 flex-col",
+          "fixed top-1/2 left-1/2 z-dialog flex w-full max-w-115 -translate-x-1/2 -translate-y-1/2 flex-col",
           "rounded-dialog border border-strong bg-surface-card text-foreground shadow-3 outline-none",
           "animate-dialog-in data-ending-style:animate-dialog-out",
           className,
