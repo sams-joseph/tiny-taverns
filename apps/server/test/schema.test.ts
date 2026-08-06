@@ -55,7 +55,9 @@ describe("every content-bearing table", () => {
     expect(contentTables).toEqual([
       "campaign",
       "character",
+      "creature",
       "encounter",
+      "encounter_creature",
       "note",
       "prep_item",
       "session",

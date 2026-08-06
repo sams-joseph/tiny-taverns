@@ -32,17 +32,11 @@ const Tag = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
 /**
  * The authored encounter — a reusable template, never mutated by running it.
  *
- * Two fields the fixture's encounter card shows are deliberately absent, and
- * neither is an oversight:
- *
- * - **`count`** (`data.js:10`, rendered as "6 creatures") is
- *   `sum(encounter_creature.count)`. `encounter_creature` and the bestiary are
- *   the next step; until they exist there is no honest number to send, and a
- *   field that is structurally always `0` is worse than an absent one.
- * - **`active`** (`data.js:10`, "On the table now") is not a column here at all.
- *   Exactly one encounter is live, so it is a pointer on the session — the
- *   active `encounter_run` — and a boolean per encounter would let two rows both
- *   claim the table. It arrives with the live-session step.
+ * One field the fixture's encounter card shows is still deliberately absent:
+ * **`active`** (`data.js:10`, "On the table now") is not a column here at all.
+ * Exactly one encounter is live, so it is a pointer on the session — the active
+ * `encounter_run` — and a boolean per encounter would let two rows both claim
+ * the table. It arrives with the live-session step.
  */
 export class Encounter extends Schema.Class<Encounter>("Encounter")({
   id: EncounterId,
@@ -51,6 +45,19 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
   /** Null until the DM has rated it; a sketched encounter has no band yet. */
   difficulty: Schema.NullOr(Difficulty),
   tags: Schema.Array(Schema.String),
+  /**
+   * The card's "6 creatures" (`data.js:10`, `CampaignHome.jsx:15`).
+   *
+   * `sum(encounter_creature.count)`, computed on read — not a column. A stored
+   * total is a second answer to a question the roster already answers, and the
+   * two disagree the first time a roster row is deleted by a cascade rather
+   * than by the endpoint that would have decremented it.
+   *
+   * It counts the roster the *actor* can see, so it is consistent with what a
+   * subsequent read of that roster returns rather than with what the DM would
+   * have got.
+   */
+  creatureCount: Schema.Int,
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,

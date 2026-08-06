@@ -1,4 +1,5 @@
 import {
+  type Actor,
   type CampaignId,
   CurrentActor,
   type Difficulty,
@@ -9,11 +10,13 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, type Statement } from "effect/unstable/sql";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
+  type NestedTable,
+  nestedRowReadableWithin,
   rowReadable,
   rowWritable,
 } from "./visibility.js";
@@ -25,6 +28,7 @@ interface EncounterRow extends ProvenanceColumns {
   readonly difficulty: Difficulty | null;
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly tags: ReadonlyArray<string>;
+  readonly creature_count: number;
 }
 
 const toEncounter = (row: EncounterRow): Encounter =>
@@ -34,8 +38,35 @@ const toEncounter = (row: EncounterRow): Encounter =>
     name: row.name,
     difficulty: row.difficulty,
     tags: row.tags,
+    creatureCount: row.creature_count,
     ...provenanceOf(row),
   });
+
+/** The roster hangs off the encounter. */
+const ROSTER: NestedTable = {
+  table: "encounter_creature",
+  parent: "encounter",
+  foreignKey: "encounter_id",
+};
+
+/**
+ * The card's "6 creatures" (`data.js:10`), computed rather than stored.
+ *
+ * A stored total would be a second answer to a question the roster already
+ * answers, and the two part company the first time a roster row goes away by a
+ * cascade rather than through the endpoint that would have decremented it.
+ *
+ * It counts what *this actor* can see, through the same visibility rule a read
+ * of the roster itself would apply — so the number on the card and the list
+ * behind it always agree. `coalesce(..., 0)` because an empty roster sums to
+ * null, and `::int` because Postgres widens `sum` to a bigint, which the pg
+ * driver would hand back as a string.
+ */
+const creatureCount = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+  sql`coalesce((
+    select sum(encounter_creature.count) from encounter_creature
+    where ${nestedRowReadableWithin(sql, ROSTER, actor)}
+  ), 0)::int as creature_count`;
 
 /**
  * Reads and writes over `encounter`, the authored template.
@@ -81,7 +112,7 @@ export class Encounters extends Context.Service<
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<EncounterRow>`
-                select * from encounter
+                select encounter.*, ${creatureCount(sql, actor)} from encounter
                 where ${rowReadable(sql, "encounter", campaignId, actor)}
                 order by encounter.created_at asc
               `;
@@ -94,7 +125,7 @@ export class Encounters extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<EncounterRow>`
-                select * from encounter
+                select encounter.*, ${creatureCount(sql, actor)} from encounter
                 where encounter.id = ${id}
                   and ${rowReadable(sql, "encounter", campaignId, actor)}
               `;
@@ -119,7 +150,7 @@ export class Encounters extends Context.Service<
                       visibility: payload.visibility,
                     }),
                   )}
-                  returning *
+                  returning *, ${creatureCount(sql, actor)}
                 `;
                 return toEncounter(rows[0]!);
               }),
@@ -140,7 +171,7 @@ export class Encounters extends Context.Service<
                 update encounter set ${setClause(sql, columns)}
                 where encounter.id = ${id}
                   and ${rowWritable(sql, "encounter", campaignId, actor)}
-                returning *
+                returning *, ${creatureCount(sql, actor)}
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
               return toEncounter(rows[0]!);
@@ -150,6 +181,12 @@ export class Encounters extends Context.Service<
         // Notes attached to this encounter are detached, not deleted — the
         // `on delete set null (encounter_id)` on `note_encounter_fkey` does it.
         // The DM wrote that read-aloud; losing the encounter should not lose it.
+        //
+        // The roster *is* deleted with it (`on delete cascade`), and the
+        // difference is not inconsistency: a roster line is "four of these, in
+        // this fight" and means nothing once the fight is gone, whereas the
+        // read-aloud is prose that stands on its own. The creatures themselves
+        // are untouched — the roster row is not the creature.
         remove: (campaignId, id) =>
           dieOnSqlError(
             Effect.gen(function* () {

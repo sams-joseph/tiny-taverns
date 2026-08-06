@@ -25,7 +25,7 @@ const packageJson: { readonly scripts: Record<string, string> } = JSON.parse(
 ) as { readonly scripts: Record<string, string> };
 
 describe("the env file the server reads", () => {
-  it.each(["dev", "start", "migrate", "token:issue"])(
+  it.each(["dev", "start", "migrate", "token:issue", "bestiary:import"])(
     "`%s` loads apps/server/.env.local through Node, tolerating its absence",
     (script) => {
       expect(packageJson.scripts[script]).toContain("--env-file-if-exists=.env.local");

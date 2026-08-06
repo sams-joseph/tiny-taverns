@@ -111,6 +111,7 @@ pnpm --filter web dev   # http://localhost:5173
 pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
+pnpm -F server bestiary:import  # loads the bundled bestiary (optional, idempotent)
 pnpm dev                        # API on :3000, web on :5173
 ```
 
@@ -186,14 +187,27 @@ curl -X POST http://localhost:3000/campaigns \
   -d '{"name":"The Reed Marches","playerCount":4}'
 ```
 
-The API surface is `campaign`, `session`, `character` and `note` CRUD, declared once in
-`packages/api` as an `HttpApi` and implemented in `apps/server/src/handlers.ts`. Every
+The API surface is `campaign`, `session`, `character`, `note`, `encounter`, `prep` and
+`creature` CRUD, declared once in `packages/api` as an `HttpApi` and implemented in
+`apps/server/src/handlers.ts`. Every
 campaign-scoped group sits behind a bearer-token `Authorization` middleware that resolves
 the request's actor; every repository read carries that actor as a type-level requirement
 and filters in SQL. `AGENTS.md` records the contract each new endpoint has to follow.
 
 The `Server` section of the web gallery calls the live API through the client derived from
 that same declaration — paste a token there to see it list your campaigns.
+
+**The bestiary is two corpora in one list.** A campaign's own creatures live under it;
+`system` creatures are global, immutable and shared by every campaign, and the only thing
+that writes them is `pnpm -F server bestiary:import` — a shell command rather than an
+endpoint, because global content has no campaign to scope it to. A DM who wants to change
+a system creature derives a copy instead:
+
+```bash
+curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/derive" \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"Grask, Boss of the Reeds"}'
+```
 
 ### Hosted sign-in (optional)
 

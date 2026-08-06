@@ -311,6 +311,9 @@ non-negotiable, because it is free on day one and a retrofit later.
   list is in that file, so skipping it takes a visible edit. Provenance is inert until the
   assistant ships; it is there because retrofitting it onto a table that already mixes
   authored and generated rows means guessing which is which.
+- **`creature` is the one table whose rows may belong to no campaign** — the global `system`
+  corpus — and it therefore has a predicate of its own, `corpusRowReadable`. Read the bestiary
+  section below before writing anything that looks like it; the obvious spelling leaks.
 
 ## The prep surface: what the fixtures forced
 
@@ -354,6 +357,112 @@ Two report recommendations were **not** followed, both because the fixtures do n
 `encounter.notes` (a free-text column) is absent, since it would duplicate the attached-note
 mechanism above; and `prep_item` carries no `campaign_id`, for the reason in the visibility
 section.
+
+## The bestiary: provenance, and the one table that is not campaign-scoped
+
+`creature` is the first table whose rows can belong to *no* campaign, and that one difference
+is where every non-obvious decision in this area comes from. `encounter_creature` is the
+roster that makes the prep surface's "6 creatures" true.
+
+**A creature has a row form and a document form, and neither derives from the other.** The
+fixtures hold both for the same creature — `data.js:23-33` is `ac: "17 (chain shirt, shield)"`,
+`hp: "21 (6d6)"`, `cr: "1 (200 XP)"`, prose traits; `data.js:36` is `ac: 17, hp: 21, cr: "1"`.
+Filterable values are columns (what `Bestiary.jsx:11-12` searches); the display half is one
+`jsonb` document (`body`, on the wire `statBlock`) that nothing queries into except full text.
+Normalising the document loses the parenthetical the DM reads, and nothing reconstructs it.
+**CR is a string** — `"1/4"` (`data.js:38`) — with `cr_sort` beside it for ordering, derived
+from `cr` on write so the two cannot disagree, overridable for a rating the parser does not
+know. `cr_sort` is `double precision`, not the report's `numeric`: **`pg` hands `numeric` back
+as a string** to protect precision this does not need, and every rating is an integer or one
+of 1/8, 1/4, 1/2 — all exact in binary.
+
+**`origin = 'system'` and `campaign_id is null` are the same statement** (`creature_system_is_global`).
+That is what makes the shared corpus immutable *structurally* rather than by a rule someone has
+to remember: reads use `corpusRowReadable`, writes use the ordinary `rowWritable`, which
+requires `campaign_id` to equal the campaign in the request path — and a null never equals a
+uuid. **There is no `origin = 'system'` check anywhere in `apps/server/src`, and none is
+needed.** Do not add one; add a test if you doubt it.
+
+**`corpusRowReadable` is the leak-shaped one, so read its two rules before writing anything
+like it.** (a) The campaign gate is *outside* the union: a global row is reachable through a
+campaign this actor can read and through nothing else. Written the natural way —
+`campaign_id is null OR <the campaign-scoped test>` — a global row would come back for any
+authenticated request naming any campaign id, including somebody else's, because `findById` is
+reached by path and a path is a claim. (b) The row's own `visibility` still applies, so
+"global" means shared between a DM's campaigns, not shared with their players — a stat block
+is precisely what the product says a player must not have. `apps/server/test/bestiary.test.ts`
+pins both, and pins that a `system` creature named through a stranger's campaign is a 404.
+
+**Editing a system creature means deriving a copy** — `POST …/creatures/:id/derive`, which
+copies a readable creature into the campaign, applies the patch in the same request, and sets
+`derived_from`. The copy is `authored` whatever the original was (the DM wrote the changes),
+and its **visibility is not copied**: it falls to the column default, because a new row fails
+closed and inheriting `shared` would make that depend on what you happened to derive from.
+Nothing is ever *read through* `derived_from`, so it is a provenance pointer and not an access
+path; it survives its ancestor's deletion as `null`.
+
+**The shared corpus is provisioned by `pnpm -F server bestiary:import`, not by an endpoint.**
+Global content has no campaign to scope it to, so there is no actor an endpoint could check it
+against — an endpoint that could mint one would write rows every campaign can read.
+`src/bestiary/import.ts` is therefore **the only code in `src/` that touches campaign content
+without `CurrentActor` in its requirements**, and that exception is why it is confined to one
+file and a bin script. It upserts on `creature_system_name_key` (partial unique index over
+`lower(name)` where `campaign_id is null`), so re-running it updates in place and a DM's
+reskins keep their ancestor. It never writes `visibility`, so a shared system creature is not
+un-shared by an upgrade.
+
+**`encounter_creature` hangs off `encounter` with no `campaign_id`,** like `prep_item` under
+`session` and for the same reason. Two things about it are specific:
+
+- **`creature_id` cannot be a composite foreign key.** The `(id, campaign_id)` trick that makes
+  a cross-campaign `note.encounter_id` unrepresentable does not apply, because half the rows
+  this may legally point at are global and have no campaign to name in such a key. The
+  containment is enforced in `EncounterCreatures` against `corpusRowReadable` — the same
+  predicate a creature read uses, so it is one rule applied twice rather than a second rule
+  that could disagree.
+- **The foreign key is `deferrable initially deferred`, and that was measured.** Deleting a
+  creature that is on a roster must be refused (a 409 — losing it would silently change what an
+  encounter contains), but the check also has to survive `delete from campaign`, which cascades
+  into `creature` and into `encounter_creature` in one statement. `restrict` fires immediately
+  and an *immediate* `no action` fires before the roster rows are gone; both reject a campaign
+  delete that should be fine. Deferring moves the check to the end of the transaction — which,
+  under autocommit, is still the end of that one statement, so a lone `delete from creature` is
+  still refused on the spot.
+
+**`Encounter.creatureCount` is computed, not stored** — `sum(encounter_creature.count)` in a
+correlated subquery, per read. A stored total is a second answer to a question the roster
+already answers, and they part company the first time a roster row goes by a cascade. It counts
+what *this actor* can see, so the card and the list behind it always agree; that needs
+`nestedRowReadableWithin`, which **deliberately omits the parent check** because the enclosing
+query already selected the parent through `rowReadable`. It belongs in a subquery over the
+parent table and nowhere else.
+
+**Search is lexical, and two matchers rather than one.** `ILIKE` on the name reproduces the
+prototype's `name.includes(q)` so "gob" works mid-type; a generated `tsvector` column over the
+name, the size/type line and `jsonb_to_tsvector(body)` finds "nimble escape" by a trait that is
+in no column. Use **`websearch_to_tsquery`**, never `to_tsquery` — the latter raises a syntax
+error on a stray `&` and turns a search box into a 500 — and escape `%`/`_`/`\` before the
+`ILIKE`. No embeddings: the corpus is hundreds of rows per campaign and DMs search for words
+they wrote.
+
+**Deliberately deferred: a read-aloud attached to a creature.** `data.js:33` hangs one off the
+stat block, and it is *not* in the document — read-aloud is a `note` with an attachment (see
+`Note.NoteAttachment`), and putting it in `body` would be the `read_aloud` column on a third
+table that the note model exists to avoid. The reason it is not built yet is worth knowing
+before someone tries: `note.encounter_id` is guarded by a **composite** key naming the
+campaign, and a `note.creature_id` cannot be, because the creature may be global. It needs the
+repository-side check `encounter_creature` uses, and it changes `NoteAttachment` into a union.
+
+Four report recommendations were adjusted, all on fixture evidence: the group is
+`/campaigns/:campaignId/creatures` rather than a top-level `/creatures`, because the same
+report settles that authored and imported creatures are campaign-scoped, and the path is also
+the only thing gating the global rows; the column is `cr`, as the fixtures name it, not
+`cr_display`; `environments` keeps the report's full word over the fixture's `env` shorthand,
+matching the UI's own "Environment" label; and abilities are `{label, score, modifier}` structs
+rather than the fixture's `["STR","10","+0"]` tuples, which are prototype shorthand and not a
+contract. `type` and `size` are **open** strings while `difficulty` is a closed union — the
+difference is that `CampaignHome.jsx:13` *branches* on difficulty, and nothing branches on a
+creature's type.
 
 ## `HttpApi`, and the client derived from it
 

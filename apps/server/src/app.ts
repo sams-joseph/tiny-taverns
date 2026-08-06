@@ -13,6 +13,8 @@ import { Health } from "./Health.js";
 import { IdentityProvider } from "./IdentityProvider.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { Creatures } from "./repo/Creatures.js";
+import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
@@ -76,6 +78,8 @@ export const servicesOver = <E>(
   | Authorization
   | Campaigns
   | Characters
+  | Creatures
+  | EncounterCreatures
   | Encounters
   | Health
   | Notes
@@ -88,6 +92,8 @@ export const servicesOver = <E>(
     AuthorizationLive.pipe(Layer.provide([Accounts.layer, identity])),
     Campaigns.layer,
     Characters.layer,
+    Creatures.layer,
+    EncounterCreatures.layer,
     Encounters.layer,
     Notes.layer,
     PrepItems.layer,
@@ -120,6 +126,8 @@ export const applicationOver = <E>(
     | Authorization
     | Campaigns
     | Characters
+    | Creatures
+    | EncounterCreatures
     | Encounters
     | Health
     | Notes

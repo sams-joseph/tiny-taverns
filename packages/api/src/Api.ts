@@ -3,11 +3,19 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/un
 import { Authorization } from "./Actor.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { Character, CharacterCreate, CharacterUpdate } from "./Character.js";
+import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
+import {
+  EncounterCreature,
+  EncounterCreatureCreate,
+  EncounterCreatureUpdate,
+} from "./EncounterCreature.js";
 import { Conflict, NotFound } from "./Errors.js";
 import {
   CampaignId,
   CharacterId,
+  CreatureId,
+  EncounterCreatureId,
   EncounterId,
   NoteId,
   PrepItemId,
@@ -195,6 +203,115 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
   .middleware(Authorization) {}
 
 /**
+ * The bestiary: the campaign's own creatures *and* the global `system` corpus,
+ * in one list.
+ *
+ * **Campaign-scoped in the path, even though half the rows it returns are
+ * global.** The report sketched a top-level `/creatures`, but the same report
+ * settles that an authored or imported creature belongs to a campaign
+ * (§1.3) — so a top-level list would have to union across every campaign the
+ * credential reaches and then explain what a write to it meant. Hanging the
+ * group off the campaign makes the reachable set exactly "this campaign's
+ * creatures plus the shared corpus", which is what `Bestiary.jsx` renders and
+ * what an encounter roster may point at. The path is also the *only* thing that
+ * gates the global rows: a system creature is reachable through a campaign this
+ * actor can read, and through nothing else.
+ *
+ * `derive` is the reskin. A DM cannot edit a `system` creature — the write
+ * predicate needs `campaign_id` to equal the campaign in the path, and a global
+ * row's is null — so `derive` copies it into this campaign as an `authored` row
+ * with `derivedFrom` set, applying the patch in the same request.
+ */
+class CreaturesGroup extends HttpApiGroup.make("creatures")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: CreatureFilter,
+      success: Schema.Array(Creature),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: CreatureCreate,
+      success: Creature,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:creatureId", {
+      params: { campaignId: CampaignId, creatureId: CreatureId },
+      success: Creature,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:creatureId", {
+      params: { campaignId: CampaignId, creatureId: CreatureId },
+      payload: CreatureUpdate,
+      success: Creature,
+      error: NotFound,
+    }),
+    /**
+     * `Conflict` when the creature is still on an encounter's roster —
+     * deleting it would silently change what that encounter contains.
+     */
+    HttpApiEndpoint.delete("remove", "/:creatureId", {
+      params: { campaignId: CampaignId, creatureId: CreatureId },
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    /** Copy a readable creature into this campaign, edits applied, origin trail kept. */
+    HttpApiEndpoint.post("derive", "/:creatureId/derive", {
+      params: { campaignId: CampaignId, creatureId: CreatureId },
+      payload: CreatureUpdate,
+      success: Creature,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/creatures")
+  .middleware(Authorization) {}
+
+/**
+ * What an encounter contains. The roster, not the running fight.
+ *
+ * Nested under the encounter for the same reason the checklist is nested under
+ * the session: the encounter id arriving from a client is a claim, so the
+ * campaign stays in the path and the read predicate is handed the campaign it
+ * must contain the encounter within.
+ */
+class EncounterCreaturesGroup extends HttpApiGroup.make("encounterCreatures")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      success: Schema.Array(EncounterCreature),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      payload: EncounterCreatureCreate,
+      success: EncounterCreature,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.patch("update", "/:encounterCreatureId", {
+      params: {
+        campaignId: CampaignId,
+        encounterId: EncounterId,
+        encounterCreatureId: EncounterCreatureId,
+      },
+      payload: EncounterCreatureUpdate,
+      success: EncounterCreature,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:encounterCreatureId", {
+      params: {
+        campaignId: CampaignId,
+        encounterId: EncounterId,
+        encounterCreatureId: EncounterCreatureId,
+      },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/encounters/:encounterId/creatures")
+  .middleware(Authorization) {}
+
+/**
  * The "Before you sit down" checklist.
  *
  * Nested under the session in the path because that is where it hangs in the
@@ -247,4 +364,6 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(CharactersGroup)
   .add(NotesGroup)
   .add(EncountersGroup)
+  .add(CreaturesGroup)
+  .add(EncounterCreaturesGroup)
   .add(PrepGroup) {}

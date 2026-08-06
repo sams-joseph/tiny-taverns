@@ -30,6 +30,17 @@ export type EncounterId = typeof EncounterId.Type;
 export const PrepItemId = id("PrepItemId");
 export type PrepItemId = typeof PrepItemId.Type;
 
+export const CreatureId = id("CreatureId");
+export type CreatureId = typeof CreatureId.Type;
+
+/**
+ * A creature's place on one encounter's roster — the join row, not the creature.
+ * It has an id of its own because the roster line is what a client edits: the
+ * count changes, the creature does not.
+ */
+export const EncounterCreatureId = id("EncounterCreatureId");
+export type EncounterCreatureId = typeof EncounterCreatureId.Type;
+
 /**
  * Points at the assistant conversation turn that produced a row. The turn table
  * does not exist yet — see `Provenance.Origin`.

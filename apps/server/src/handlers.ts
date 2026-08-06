@@ -4,6 +4,8 @@ import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { Health } from "./Health.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { Creatures } from "./repo/Creatures.js";
+import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
@@ -113,6 +115,44 @@ const EncountersLive = HttpApiBuilder.group(
   }),
 );
 
+const CreaturesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "creatures",
+  Effect.fnUntraced(function* (handlers) {
+    const creatures = yield* Creatures;
+    return handlers
+      .handle("list", ({ params, query }) => creatures.list(params.campaignId, query))
+      .handle("create", ({ params, payload }) => creatures.create(params.campaignId, payload))
+      .handle("findById", ({ params }) => creatures.findById(params.campaignId, params.creatureId))
+      .handle("update", ({ params, payload }) =>
+        creatures.update(params.campaignId, params.creatureId, payload),
+      )
+      .handle("remove", ({ params }) => creatures.remove(params.campaignId, params.creatureId))
+      .handle("derive", ({ params, payload }) =>
+        creatures.derive(params.campaignId, params.creatureId, payload),
+      );
+  }),
+);
+
+const EncounterCreaturesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "encounterCreatures",
+  Effect.fnUntraced(function* (handlers) {
+    const roster = yield* EncounterCreatures;
+    return handlers
+      .handle("list", ({ params }) => roster.list(params.campaignId, params.encounterId))
+      .handle("create", ({ params, payload }) =>
+        roster.create(params.campaignId, params.encounterId, payload),
+      )
+      .handle("update", ({ params, payload }) =>
+        roster.update(params.campaignId, params.encounterId, params.encounterCreatureId, payload),
+      )
+      .handle("remove", ({ params }) =>
+        roster.remove(params.campaignId, params.encounterId, params.encounterCreatureId),
+      );
+  }),
+);
+
 const PrepLive = HttpApiBuilder.group(
   TavernsApi,
   "prep",
@@ -144,6 +184,8 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CharactersLive,
     NotesLive,
     EncountersLive,
+    CreaturesLive,
+    EncounterCreaturesLive,
     PrepLive,
   ]),
 );

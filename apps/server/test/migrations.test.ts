@@ -46,8 +46,10 @@ describe("migrations", () => {
       "account",
       "campaign",
       "character",
+      "creature",
       "effect_sql_migrations",
       "encounter",
+      "encounter_creature",
       "note",
       "prep_item",
       "session",
@@ -56,6 +58,7 @@ describe("migrations", () => {
       { migration_id: 1, name: "init" },
       { migration_id: 2, name: "clerk_identity" },
       { migration_id: 3, name: "prep_surface" },
+      { migration_id: 4, name: "bestiary" },
     ]);
   }, 60_000);
 
@@ -69,6 +72,7 @@ describe("migrations", () => {
       { migration_id: 1, name: "init" },
       { migration_id: 2, name: "clerk_identity" },
       { migration_id: 3, name: "prep_surface" },
+      { migration_id: 4, name: "bestiary" },
     ]);
   }, 60_000);
 });

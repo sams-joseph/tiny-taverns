@@ -80,6 +80,47 @@ export const rowReadable = (
     actor.seesDmContent ? sql`true` : sql`${sql(table)}.visibility = 'shared'`,
   ]);
 
+/**
+ * Rows of a table whose content is *either* campaign-scoped or global — today
+ * only `creature`, where an `origin = 'system'` row has `campaign_id is null`
+ * and belongs to every campaign at once.
+ *
+ * Two things about this are easy to get wrong, and both are the difference
+ * between a shared corpus and a leak.
+ *
+ * **The campaign gate is not inside the branch.** A global row is reachable
+ * *through a campaign this actor can read*, and through nothing else — the
+ * `exists (…)` clause below applies to both halves of the union. Written the
+ * other way round, as `campaign_id is null or rowReadable(…)`, a global row
+ * would be readable by any authenticated request naming any campaign id at all,
+ * including one belonging to somebody else. There is no separate check to lean
+ * on: `findById` on this table is reached by path, and the path is a claim.
+ *
+ * **The row's own visibility still applies.** System creatures default to `dm`
+ * like everything else, so "global" means shared between a DM's campaigns, not
+ * shared with their players. A stat block is exactly the thing the product says
+ * a player must not have.
+ *
+ * There is deliberately no `corpusRowWritable`. Writes use `rowWritable`
+ * unchanged, which requires `campaign_id` to equal the campaign in the path —
+ * and a null never equals a uuid, so the immutability of the global corpus is a
+ * consequence of the predicate rather than a rule someone has to remember.
+ */
+export const corpusRowReadable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql.or([
+      sql`${sql(table)}.campaign_id = ${campaignId}`,
+      sql`${sql(table)}.campaign_id is null`,
+    ]),
+    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor)})`,
+    actor.seesDmContent ? sql`true` : sql`${sql(table)}.visibility = 'shared'`,
+  ]);
+
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (
   sql: SqlClient.SqlClient,
@@ -144,6 +185,32 @@ export const nestedRowReadable = (
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
     sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${sql(`${nested.table}.${nested.foreignKey}`)} and ${rowReadable(sql, nested.parent, campaignId, actor)})`,
+    actor.seesDmContent ? sql`true` : sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
+  ]);
+
+/**
+ * Rows of a nested table this actor may read, correlated to the parent row of
+ * an *enclosing* query rather than to a parent id a caller supplied.
+ *
+ * This exists for one shape: an aggregate over the children computed alongside
+ * the parent, such as an encounter's creature count. `nestedRowReadable` binds
+ * the parent id as a value, which a correlated subquery cannot do — it has to
+ * join to the outer row.
+ *
+ * **The parent's own readability is the enclosing query's job here, and this
+ * function does not check it.** That is safe only because the enclosing query
+ * is already selecting the parent through `rowReadable`, which is the thing
+ * that carries campaign scope and ownership. Used anywhere else it would be a
+ * child read with no containment at all — so it belongs in a subquery whose
+ * `FROM` is the parent table, and nowhere else.
+ */
+export const nestedRowReadableWithin = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${sql(`${nested.parent}.id`)}`,
     actor.seesDmContent ? sql`true` : sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
   ]);
 

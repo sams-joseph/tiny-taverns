@@ -4,7 +4,9 @@ import { Authorization } from "./Actor.js";
 import { TavernsApi } from "./Api.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterCreate } from "./Character.js";
+import { Creature, CreatureCreate } from "./Creature.js";
 import { Encounter, EncounterCreate } from "./Encounter.js";
+import { EncounterCreature, EncounterCreatureCreate } from "./EncounterCreature.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
@@ -51,6 +53,8 @@ describe("the API declaration", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "campaigns",
       "characters",
+      "creatures",
+      "encounterCreatures",
       "encounters",
       "health",
       "notes",
@@ -61,7 +65,16 @@ describe("the API declaration", () => {
 });
 
 describe("every content schema", () => {
-  const contentSchemas = { Campaign, Session, Character, Note, Encounter, PrepItem };
+  const contentSchemas = {
+    Campaign,
+    Session,
+    Character,
+    Note,
+    Encounter,
+    PrepItem,
+    Creature,
+    EncounterCreature,
+  };
 
   it("carries visibility and provenance", () => {
     for (const [name, schema] of Object.entries(contentSchemas)) {
@@ -83,6 +96,8 @@ describe("every content schema", () => {
       NoteCreate,
       EncounterCreate,
       PrepItemCreate,
+      CreatureCreate,
+      EncounterCreatureCreate,
     };
     // The minimum a create needs, per schema. Spelled out rather than merged
     // into one wide object, so a payload that stopped requiring a field would
@@ -94,6 +109,8 @@ describe("every content schema", () => {
       NoteCreate: { title: "x" },
       EncounterCreate: { name: "x" },
       PrepItemCreate: { label: "x" },
+      CreatureCreate: { name: "x", type: "Humanoid", cr: "1/4", ac: 15, hp: 11 },
+      EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
     };
 
     for (const [name, schema] of Object.entries(creates)) {

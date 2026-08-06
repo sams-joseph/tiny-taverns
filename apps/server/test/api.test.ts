@@ -6,6 +6,7 @@ import { HttpApiClient } from "effect/unstable/httpapi";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
+import { importSystemCreatures } from "../src/bestiary/import.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -17,12 +18,21 @@ import { migratedDatabase } from "./support/database.js";
  * worth testing: if a payload, a param or a response shape drifts, this file
  * stops compiling rather than failing at runtime in the browser.
  */
-const services = servicesOver(migratedDatabase("taverns_test_api"));
+const database = migratedDatabase("taverns_test_api");
+const services = servicesOver(database);
 
+/**
+ * `database` is merged in as well as provided, so this file can load the
+ * bundled bestiary the way an operator does — `importSystemCreatures` is
+ * deliberately not an endpoint, so there is no way to reach it through the
+ * client. `Layer` memoises by identity, so this is still one pool and one
+ * migration run.
+ */
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provideMerge(services),
+    Layer.provideMerge(database),
   ),
 );
 afterAll(() => runtime.dispose());
@@ -44,6 +54,7 @@ beforeAll(async () => {
       Effect.orDie,
     ),
   );
+  await runtime.runPromise(importSystemCreatures().pipe(Effect.orDie));
 }, 60_000);
 
 describe("GET /health", () => {
@@ -306,7 +317,10 @@ describe("the prep surface", () => {
         });
         const note = yield* client.notes.create({
           params: { campaignId },
-          payload: { title: "the prose outlives it", attachedTo: { kind: "encounter", id: encounter.id } },
+          payload: {
+            title: "the prose outlives it",
+            attachedTo: { kind: "encounter", id: encounter.id },
+          },
         });
 
         yield* client.encounters.remove({ params: { campaignId, encounterId: encounter.id } });
@@ -322,6 +336,207 @@ describe("the prep surface", () => {
     expect(seen.gone._tag).toBe("Failure");
     expect(seen.survivor.title).toBe("the prose outlives it");
     expect(seen.survivor.attachedTo).toBeNull();
+  }, 60_000);
+});
+
+describe("the bestiary", () => {
+  it("round-trips an authored creature, document and all", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "The Marsh" } });
+        const campaignId = campaign.id;
+
+        const creature = yield* client.creatures.create({
+          params: { campaignId },
+          payload: {
+            name: "Bullywug Croaker",
+            size: "Medium",
+            type: "Humanoid",
+            cr: "1/4",
+            ac: 15,
+            hp: 11,
+            environments: ["Marsh"],
+            statBlock: {
+              meta: "Medium humanoid (bullywug), neutral evil",
+              ac: "15 (hide armour, shield)",
+              hp: "11 (2d8+2)",
+              speed: "20 ft., swim 40 ft.",
+              cr: "1/4 (50 XP)",
+              abilities: [{ label: "STR", score: "12", modifier: "+1" }],
+              traits: [
+                {
+                  name: "Croak",
+                  text: "It croaks. Everything within 30 feet hears it.",
+                  dice: "1d4",
+                },
+              ],
+            },
+          },
+        });
+        const readBack = yield* client.creatures.findById({
+          params: { campaignId, creatureId: creature.id },
+        });
+
+        return { creature, readBack };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.creature.name).toBe("Bullywug Croaker");
+    // The display half survives the round trip whole — the parenthetical is
+    // exactly what would be lost by normalising it into the numeric columns.
+    expect(seen.readBack.statBlock.ac).toBe("15 (hide armour, shield)");
+    expect(seen.readBack.statBlock.traits[0]?.dice).toBe("1d4");
+    // `"1/4"` is not a number, and the sort key the server derived says 0.25.
+    expect(seen.readBack.cr).toBe("1/4");
+    expect(seen.readBack.crSort).toBe(0.25);
+    // Nothing asked for a visibility, so the column default decided.
+    expect(seen.readBack.visibility).toBe("dm");
+    expect(seen.readBack.origin).toBe("authored");
+    expect(seen.readBack.derivedFrom).toBeNull();
+    expect(seen.readBack.campaignId).toBe(seen.creature.campaignId);
+  }, 60_000);
+
+  it("carries the filters as query parameters, arrays included", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "Filters" } });
+        const campaignId = campaign.id;
+
+        const byName = yield* client.creatures.list({
+          params: { campaignId },
+          query: { q: "gob", scope: "system" },
+        });
+        const byTrait = yield* client.creatures.list({
+          params: { campaignId },
+          query: { q: "nimble escape" },
+        });
+        // Repeated `?environments=` — the one encoding worth proving end to end.
+        const byEnvironment = yield* client.creatures.list({
+          params: { campaignId },
+          query: { environments: ["River", "Cave"], sort: "name" },
+        });
+
+        return { byName, byTrait, byEnvironment };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.byName.map((creature) => creature.name)).toEqual(["Goblin Boss"]);
+    expect(seen.byTrait.map((creature) => creature.name)).toEqual(["Goblin Boss"]);
+    expect(seen.byEnvironment.map((creature) => creature.name)).toEqual([
+      "Ferryman's Shade",
+      "Goblin Boss",
+    ]);
+  }, 60_000);
+
+  it("derives a campaign copy of a system creature, and refuses to edit the original", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "Reskins" } });
+        const campaignId = campaign.id;
+
+        const corpus = yield* client.creatures.list({
+          params: { campaignId },
+          query: { scope: "system", q: "Goblin Boss" },
+        });
+        const original = corpus[0]!;
+
+        const copy = yield* client.creatures.derive({
+          params: { campaignId, creatureId: original.id },
+          payload: { name: "Grask, Boss of the Reeds", environments: ["Marsh"] },
+        });
+        const tampered = yield* Effect.result(
+          client.creatures.update({
+            params: { campaignId, creatureId: original.id },
+            payload: { name: "tampered" },
+          }),
+        );
+        const stillThere = yield* client.creatures.findById({
+          params: { campaignId, creatureId: original.id },
+        });
+
+        return { original, copy, tampered, stillThere };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.original.campaignId).toBeNull();
+    expect(seen.original.origin).toBe("system");
+    expect(seen.copy.derivedFrom).toBe(seen.original.id);
+    expect(seen.copy.campaignId).not.toBeNull();
+    expect(seen.copy.origin).toBe("authored");
+    expect(seen.copy.name).toBe("Grask, Boss of the Reeds");
+    // The document came across with it.
+    expect(seen.copy.statBlock.traits.map((trait) => trait.name)).toContain("Nimble Escape");
+    // The shared corpus is not the DM's to edit — and saying "no such creature"
+    // rather than "not yours" is the same refusal the rest of the surface gives.
+    expect(seen.tampered._tag).toBe("Failure");
+    expect(seen.stillThere.name).toBe("Goblin Boss");
+  }, 60_000);
+
+  it("puts creatures on an encounter and makes its creature count true", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "The Salt Road" } });
+        const campaignId = campaign.id;
+
+        const encounter = yield* client.encounters.create({
+          params: { campaignId },
+          payload: { name: "Ambush in the reeds", difficulty: "Medium", tags: ["Marsh", "Night"] },
+        });
+        const encounterId = encounter.id;
+
+        const corpus = yield* client.creatures.list({
+          params: { campaignId },
+          query: { scope: "system", q: "Goblin Boss" },
+        });
+        const archer = yield* client.creatures.create({
+          params: { campaignId },
+          payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
+        });
+
+        const boss = yield* client.encounterCreatures.create({
+          params: { campaignId, encounterId },
+          payload: { creatureId: corpus[0]!.id },
+        });
+        yield* client.encounterCreatures.create({
+          params: { campaignId, encounterId },
+          payload: { creatureId: archer.id, count: 5 },
+        });
+
+        const listed = yield* client.encounterCreatures.list({
+          params: { campaignId, encounterId },
+        });
+        const counted = yield* client.encounters.findById({ params: { campaignId, encounterId } });
+        const repeated = yield* Effect.result(
+          client.encounterCreatures.create({
+            params: { campaignId, encounterId },
+            payload: { creatureId: archer.id },
+          }),
+        );
+        const stillUsed = yield* Effect.flip(
+          client.creatures.remove({ params: { campaignId, creatureId: archer.id } }),
+        );
+        yield* client.encounterCreatures.remove({
+          params: { campaignId, encounterId, encounterCreatureId: boss.id },
+        });
+        const afterRemove = yield* client.encounters.findById({
+          params: { campaignId, encounterId },
+        });
+
+        return { encounter, listed, counted, repeated, stillUsed, afterRemove };
+      }).pipe(Effect.orDie),
+    );
+
+    // The card said "6 creatures" (`data.js:10`); now it can.
+    expect(seen.encounter.creatureCount).toBe(0);
+    expect(seen.listed).toHaveLength(2);
+    expect(seen.counted.creatureCount).toBe(6);
+    expect(seen.repeated._tag).toBe("Failure");
+    expect(seen.stillUsed._tag).toBe("Conflict");
+    expect(seen.afterRemove.creatureCount).toBe(5);
   }, 60_000);
 });
 
