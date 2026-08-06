@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
+    "dev": "tsx watch --env-file-if-exists=.env.local src/main.ts",
+    "start": "node --env-file-if-exists=.env.local dist/main.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "token:issue": "tsx src/bin/issue-token.ts",
-    "migrate": "tsx src/bin/migrate.ts"
+    "token:issue": "tsx --env-file-if-exists=.env.local src/bin/issue-token.ts",
+    "migrate": "tsx --env-file-if-exists=.env.local src/bin/migrate.ts"
   },
   "dependencies": {
     "@clerk/backend": "3.15.1",

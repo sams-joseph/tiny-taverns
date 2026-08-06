@@ -381,6 +381,38 @@ account`: `campaign.account_id` is `on delete cascade`, so that would let a repl
 destroy a DM's entire history. Deletion, if ever wanted, is a deliberate product endpoint
 behind `Authorization`. These are written captain's decisions, not defaults.
 
+## Env files: two apps, two entirely different loaders
+
+**`.env.local` is a Vite convention, and `apps/server` is not a Vite app.** `apps/web` gets
+its file for free; the server got nothing at all until it was given Node's own flag. A key
+put in `apps/server/.env.local` was therefore read by no one, with no error — which is how
+this got found. Never write an unqualified "`.env.local`" in a doc here; name the package.
+
+- **The server loads its file through Node: `--env-file-if-exists=.env.local`**, in
+  `apps/server/package.json`'s `dev`, `start`, `migrate` and `token:issue` scripts. No
+  `dotenv` dependency and no loader in `src/` — do not add one. `tsx` passes the flag
+  through to Node, but **only after the subcommand**: `tsx watch --env-file-if-exists=… src/main.ts`
+  works and `tsx --env-file-if-exists=… watch …` makes Node try to import a file called
+  `watch`. The path is relative to the package directory, which is where pnpm runs scripts.
+- **The `if-exists` form is required, not tidy.** Every variable the file can carry is
+  optional (`CLERK_JWT_KEY` above, and the rest have committed defaults in `Config.ts`), so
+  a fresh clone with no file must boot. Plain `--env-file` exits non-zero on a missing file.
+- **The test script deliberately loads nothing**, and `apps/server/test/env-file.test.ts`
+  fails if that changes. A suite that picks up a developer's real key says something
+  different on their machine than in CI — the same hazard already recorded for the web
+  app's Vite env loading, where `vite.config.ts` has to pin `VITE_CLERK_PUBLISHABLE_KEY`
+  empty for exactly this reason. Vitest does not read `.env.local` for `apps/server`
+  (no Vite config, no `envDir`), so the property holds by omission; the test is what keeps
+  someone from "helpfully" adding the flag for symmetry.
+- **A real environment variable beats the file.** Node's parser does not overwrite what is
+  already in `process.env`, so `PORT=4000 pnpm -F server dev` still wins and a deployment
+  needs no file. Double-quoted values keep their newlines, which is how a PEM fits.
+- **The boot line is half the fix, and must stay.** `identityFromConfig` in `app.ts` logs
+  `Hosted sign-in is ON` or `OFF` on every start. Loading the file silently would have left
+  the original complaint intact — a variable set, a restart, and nothing saying it was not
+  seen. Both branches log, neither logs key material (not a prefix, not a length), and
+  `env-file.test.ts` asserts all three.
+
 ## The sign-in surface in `apps/web`
 
 **Clerk is opt-in here exactly as it is on the server, and that symmetry is the point.**
@@ -389,8 +421,11 @@ header shows no sign-in chrome, the hosted card in the Server panel is absent ra
 present and dead, and the machine-token path is untouched. `apps/web/src/auth/AuthProvider.tsx`
 mounts `ClerkProvider` only when the key is present — Clerk's quickstart prints a hard
 `throw new Error("Add your Clerk Publishable Key")` there, and that one line is the difference
-between an opt-in dependency and a mandatory one. `.env.example` documents the variable;
-`.gitignore` already covers `.env.*`, so the real key lives only in an ignored `.env.local`.
+between an opt-in dependency and a mandatory one. `apps/web/.env.example` documents the
+variable; `.gitignore` already covers `.env.*`, so the real key lives only in an ignored
+`apps/web/.env.local`. **Say which package's `.env.local`, always** — the two apps load
+theirs by completely different mechanisms (see the env-file section above), and an
+unqualified `.env.local` in a doc is what sent a key to a file the server never read.
 
 **Package names, same trap as the server side.** `@clerk/react`, **not** `@clerk/clerk-react`;
 types from `@clerk/shared/types`, **not** `@clerk/types`. Both old names are deprecated
@@ -400,7 +435,7 @@ rename. Verified at `@clerk/react@6.12.11`, whose React peer range `~19.2.3` the
 
 **Core 3 removed `SignedIn`/`SignedOut`/`Protect`** in favour of one
 `<Show when="signed-in" fallback={…}>`, which renders `null` while auth loads. And
-**`getToken()` now *throws* `ClerkOfflineError` offline** where it used to resolve `null`;
+**`getToken()` now _throws_ `ClerkOfflineError` offline** where it used to resolve `null`;
 `AuthProvider` treats both as "no credential".
 
 **`packages/api`'s client stays free of Clerk, and Clerk stays behind a local seam.**

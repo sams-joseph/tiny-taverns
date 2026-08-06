@@ -22,18 +22,34 @@ import { Sessions } from "./repo/Sessions.js";
  *
  * Unset key means disabled, not broken: this is the default configuration, it
  * is what CI runs, and it is what someone who has never opened the Clerk
- * dashboard gets. The log line exists so that "my session token is rejected"
- * has an answer sitting in the boot output rather than requiring a bisect.
+ * dashboard gets.
+ *
+ * **Both branches log, and that is the point.** One line, always, saying which
+ * mode the process is in. A silent "on" branch is not a saving: the way this
+ * actually goes wrong is a key that was set somewhere the server does not read
+ * — the wrong file, the wrong variable name, a shell that never exported it —
+ * and the only symptom is a sign-in that fails much later, indistinguishably
+ * from a bad key or a misconfigured dashboard. Saying "hosted sign-in is on"
+ * at boot is what turns that into a five-second check.
+ *
+ * Neither line carries key material — not the PEM, not a prefix, not a length.
+ * There is nothing to learn from those that "configured" does not already say,
+ * and boot output ends up in log aggregators.
  */
 export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigError> = Layer.unwrap(
   Effect.gen(function* () {
     const jwtKey = yield* clerkJwtKey;
     if (Option.isNone(jwtKey)) {
       yield* Effect.logInfo(
-        "CLERK_JWT_KEY is unset: hosted sign-in is off and machine tokens are the only credential.",
+        "Hosted sign-in is OFF: CLERK_JWT_KEY is unset, so machine tokens are the only " +
+          "credential. To turn it on, set it in apps/server/.env.local (see .env.example).",
       );
       return IdentityProvider.disabled;
     }
+    yield* Effect.logInfo(
+      "Hosted sign-in is ON: CLERK_JWT_KEY is configured, so session tokens are accepted " +
+        "alongside machine tokens.",
+    );
     // The same origins the CORS allowlist uses, so the `azp` check and the
     // browser allowlist cannot disagree about which front end this is.
     const authorizedParties = yield* allowedOrigins;

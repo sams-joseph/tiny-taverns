@@ -126,12 +126,20 @@ suite behave exactly as above, and a JWT-shaped credential is simply unknown.
 # apps/web/.env.local — gitignored; see apps/web/.env.example
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_…      # Dashboard → API keys → Publishable key
 
-# server environment
+# apps/server/.env.local — gitignored; see apps/server/.env.example
 CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----…"  # Dashboard → API keys → JWT public key (PEM)
 CLERK_TELEMETRY_DISABLED=1                   # the SDK phones home on dev instances otherwise
 ```
 
-Neither value is a secret: one identifies the frontend, the other only *verifies* tokens.
+Both files are per-package, and neither is a Vite thing on the server side:
+`apps/server/.env.local` is read by Node itself, through `--env-file-if-exists` in the
+server's `dev`/`start` scripts. A `.env.local` at the repo root is read by nothing.
+
+The server prints one line at boot saying whether hosted sign-in is **ON** or **OFF**. If
+you set the key and it still says OFF, the file is in the wrong place or the variable is
+misspelled — check that before suspecting the key.
+
+Neither value is a secret: one identifies the frontend, the other only _verifies_ tokens.
 **`CLERK_SECRET_KEY` is deliberately not used anywhere in this repo** — don't add it.
 
 ## Workspace commands
@@ -195,12 +203,28 @@ above — `pnpm -F server dev`, `token:issue`, the whole test suite — works wi
 do not need a Clerk account to develop on this repository, and the tests never need one
 ever (they sign tokens with a keypair they generate in-process).
 
-To turn it on, set one variable in the server's environment:
+To turn it on, set one variable in **`apps/server/.env.local`** — copy
+`apps/server/.env.example`, which documents every variable the server reads:
 
 ```bash
+# apps/server/.env.local (gitignored)
 CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----…"   # Dashboard → API keys → Show JWT public key → PEM
 CLERK_TELEMETRY_DISABLED=1                    # the SDK phones home on dev instances otherwise
 ```
+
+Node reads that file directly — `--env-file-if-exists=.env.local`, in the server's `dev`,
+`start`, `migrate` and `token:issue` scripts. Three things follow:
+
+- **The path is exactly `apps/server/.env.local`.** It is not a Vite convention here; the
+  root of the repo and `apps/web/.env.local` are both read by something else, or nothing.
+- **A real environment variable still wins**, so `PORT=4000 pnpm -F server dev` overrides
+  the file and a deployment needs no file at all.
+- **`pnpm -F server test` deliberately loads no env file.** The suite has to say the same
+  thing on your machine, on a colleague's and in CI, so it never picks up your key.
+
+The server logs one line at boot — `Hosted sign-in is ON` or `Hosted sign-in is OFF` — so
+a key set in the wrong file or under a mistyped name shows up immediately rather than as a
+mysterious failed sign-in later. It never logs the key, or any part of it.
 
 `CLERK_JWT_KEY` is a **public** key and not a secret: verification is the only thing it can
 do. **`CLERK_SECRET_KEY` is not used by this server and must not be added to it** — tokens
