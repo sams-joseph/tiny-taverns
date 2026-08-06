@@ -548,6 +548,60 @@ either a real human or `@clerk/testing`'s Testing Tokens — and those need `CLE
 which this design deliberately does not have. Budget for a human to click through it, or
 expect to bypass it in the dashboard for a development instance.
 
+## Screens in `apps/web`: the shape every new one should copy
+
+The campaign view is the first screen built on the API, and the bestiary and the runner come
+next. Five things are settled by it; follow them rather than re-deriving them.
+
+- **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
+  (two rounds, concurrent within a round, because the checklist hangs off
+  `campaign.currentSessionId`) into one value, and `api/resource.ts`'s `useApiResource` turns
+  that into exactly three states. Six independent hooks would give a screen sixty-four
+  combinations of loading and failed to render. **The callback passed to `useApiResource` must
+  be `useCallback`-stable** — its identity is what says "load again", so an inline closure
+  loads forever.
+- **`runApi` rejects; `runApiResult` does not.** A rejected promise throws away the _typed_
+  error the contract declares and leaves every caller rendering `String(cause)`.
+  `api/resource.ts` runs through `Effect.result` and narrows to four kinds a screen can say
+  something useful about — `unauthorized`, `missing`, `unreachable`, `unknown` — matched on
+  `_tag`, not on status codes. `ui/states.tsx` is the only place their copy lives. Note
+  `unreachable` is `HttpClientError` with `reason._tag === "TransportError"`, plus a bare
+  `TypeError` for the browsers that surface a raw `fetch` rejection.
+- **The credential is resolved per call, by `auth/credential.ts`, and never held.** It prefers
+  a hosted session token and falls back to the machine token in `localStorage` — the same key
+  the Server panel writes, which is what makes that panel the credential source for a
+  developer with no Clerk key. Both are read immediately before the request for the same
+  reason the sign-in section already records. A screen must never assume an authenticated
+  user exists: with no credential at all the load 401s and the notice says where to get one.
+- **Do not render a field the API does not have.** The encounter card shows no creature count
+  and no "on the table now", because `Encounter.ts` says both arrive with later steps; a
+  stubbed `0` is a worse lie than an absent line. Where a fixture field has no column, find
+  the honest equivalent already on the wire — the card shows how many notes hang off the
+  encounter instead.
+- **Layout that depends on a column's width uses a container query, not a breakpoint.** The
+  encounter grid is `@container` + `@lg`/`@3xl`, which is where `auto-fill minmax(250px,1fr)`
+  actually turns over (two cards need 516px, three need 782px) — and it reacts to the aside
+  docking beside it, which a viewport breakpoint cannot see. It also keeps the raw px literal
+  out, which ESLint forbids in TS.
+
+Three smaller facts that cost time:
+
+- **Routing is the hash, and only `#/…` is a route** (`routes.ts`). The gallery's section links
+  are plain `#foundations` anchors, and without that rule every one of them reads as an unknown
+  route and throws the reader back to the campaign list mid-scroll.
+- **`Button` rendering an `<a>` needs `nativeButton={false}`.** Base UI warns and applies
+  button-only semantics otherwise. That is how the rail's nav rows stay real links.
+- **jsdom here has no `localStorage` at all** — not `window.localStorage`, and not the bare
+  global, since Node 26's own is inert without `--localstorage-file`. Anything reading it must
+  tolerate `undefined` (`storage()` in `auth/credential.ts` does); a test that needs it installs
+  one, as `campaign/CampaignScreen.test.tsx` does.
+
+**`SignInSurface` checks `publishableKey()` as well as the context's `configured`.** It hangs in
+the shared `TopBar`, so every screen renders it, and the two conditions are the same question
+`AuthProvider` asks before mounting `ClerkProvider`: the vendor's chrome may only mount where
+the vendor's provider did. Without the second check any screen's test is liable to be the one
+that discovers Clerk is missing above it.
+
 ## The assistant: a trap to remember before it ships
 
 Nothing here uses `@effect/ai-anthropic` today — the captain's decision is to target locally

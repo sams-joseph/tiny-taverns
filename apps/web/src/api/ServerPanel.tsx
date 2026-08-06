@@ -11,18 +11,9 @@ import {
   Label,
 } from "@taverns/ui";
 import { useCallback, useEffect, useState } from "react";
+import { readMachineToken, writeMachineToken } from "../auth/credential";
 import { useHostedSession } from "../auth/hostedSession";
 import { runApi } from "./client";
-
-const TOKEN_KEY = "taverns.token";
-
-/**
- * `window.localStorage`, not the bare global: Node 26 defines its own
- * `localStorage` that is `undefined` unless the process was started with
- * `--localstorage-file`, and under jsdom that global shadows the one the
- * document actually has.
- */
-const storage = (): Storage | undefined => globalThis.window?.localStorage;
 
 /** The decoded campaign rows, rendered the same way for either credential. */
 function CampaignList({ campaigns }: { readonly campaigns: ReadonlyArray<Campaign> }) {
@@ -56,14 +47,16 @@ function CampaignList({ campaigns }: { readonly campaigns: ReadonlyArray<Campaig
  */
 function MachineTokenCampaigns() {
   const [campaigns, setCampaigns] = useState<ReadonlyArray<Campaign> | undefined>();
-  const [token, setToken] = useState(() => storage()?.getItem(TOKEN_KEY) ?? "");
+  const [token, setToken] = useState(readMachineToken);
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   const loadCampaigns = useCallback(() => {
     setBusy(true);
     setError(undefined);
-    storage()?.setItem(TOKEN_KEY, token);
+    // Stored under the key `auth/credential.ts` reads, so a token pasted here is
+    // the credential the campaign screens use — that is what this box is for now.
+    writeMachineToken(token);
     runApi((client) => client.campaigns.list(), token)
       .then((listed) => {
         setCampaigns(listed);

@@ -1,5 +1,6 @@
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import type { ReactNode } from "react";
+import { publishableKey } from "./config";
 import { useHostedSession } from "./hostedSession";
 
 /**
@@ -28,7 +29,14 @@ export function SignInSurface(): ReactNode {
   // offered and broken. Returning before any Clerk component is rendered is
   // what keeps the app runnable with no vendor configured — `Show` and the
   // buttons all require `ClerkProvider` above them, which is not mounted.
-  if (!configured) {
+  //
+  // Both conditions, not just the context flag. `AuthProvider` mounts
+  // `ClerkProvider` on exactly the second one, so this is the same question
+  // asked at the point of use: the vendor's chrome may only mount where the
+  // vendor's provider did. It is what makes this component safe to hang in the
+  // shared `TopBar`, where every screen renders it and any screen's test could
+  // otherwise be the one that discovers Clerk is missing above it.
+  if (!configured || publishableKey() === undefined) {
     return null;
   }
 
