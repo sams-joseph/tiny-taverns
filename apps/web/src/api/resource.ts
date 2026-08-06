@@ -26,6 +26,10 @@ export type ApiFailure =
   | { readonly kind: "unauthorized" }
   /** Gone, or never visible to this actor — the server says the same for both, on purpose. */
   | { readonly kind: "missing"; readonly resource: string }
+  /** A uniqueness rule said no — the declared `Conflict`, with the server's own sentence. */
+  | { readonly kind: "conflict"; readonly message: string }
+  /** The payload does not satisfy the contract. See `classifyFailure` — it never left. */
+  | { readonly kind: "invalid"; readonly detail: string }
   /** Nothing answered: the API is not running, or the browser is offline. */
   | { readonly kind: "unreachable" }
   | { readonly kind: "unknown"; readonly detail: string };
@@ -35,19 +39,48 @@ const tagOf = (error: unknown): string | undefined => {
   return typeof tag === "string" ? tag : undefined;
 };
 
+const stringField = (error: unknown, key: string): string | undefined => {
+  const value: unknown = (error as Record<string, unknown> | null)?.[key];
+  return typeof value === "string" ? value : undefined;
+};
+
 /**
- * Names a failure. Structural rather than status-code sniffing: `Unauthorized`
- * and `NotFound` arrive decoded from `packages/api`, so this reads the same tag
- * the server threw.
+ * `SchemaError(…)` reads as a stack frame. Unwrap it to the sentence inside,
+ * which is the half a DM staring at a form has any use for.
+ */
+const schemaDetail = (error: unknown): string => {
+  const text = String(error);
+  const inner = /^SchemaError\(([\s\S]*)\)$/.exec(text);
+  return (inner?.[1] ?? text).trim();
+};
+
+/**
+ * Names a failure. Structural rather than status-code sniffing: `Unauthorized`,
+ * `NotFound` and `Conflict` arrive decoded from `packages/api`, so this reads
+ * the same tag the server threw.
  */
 export const classifyFailure = (error: unknown): ApiFailure => {
   switch (tagOf(error)) {
     case "Unauthorized":
       return { kind: "unauthorized" };
-    case "NotFound": {
-      const resource: unknown = (error as { readonly resource?: unknown }).resource;
-      return { kind: "missing", resource: typeof resource === "string" ? resource : "row" };
-    }
+    case "NotFound":
+      return { kind: "missing", resource: stringField(error, "resource") ?? "row" };
+    case "Conflict":
+      return {
+        kind: "conflict",
+        message: stringField(error, "message") ?? "That is already there.",
+      };
+    /**
+     * A payload the contract rejects **never reaches the network**: the derived
+     * client encodes through the same schema the handler decodes with, so
+     * `client.encounters.create({ payload: { name: "" } })` fails locally with a
+     * `SchemaError` rather than earning a 400. Which is the good outcome — the
+     * one declaration checks both ends — but it means a validation failure is
+     * *this* tag and not a status code, and a screen that only classified
+     * responses would render it as "unknown".
+     */
+    case "SchemaError":
+      return { kind: "invalid", detail: schemaDetail(error) };
     case "HttpClientError": {
       // A transport error is "the server did not answer" — a different thing to
       // tell a DM than "the server said no".

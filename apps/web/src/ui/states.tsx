@@ -96,6 +96,14 @@ export function FailureNotice({
           title: "Not here",
           body: `That ${failure.resource} is gone, or it belongs to someone else. The server answers the same either way.`,
         };
+      case "conflict":
+        return { icon: "triangle-alert" as const, title: "Already there", body: failure.message };
+      case "invalid":
+        return {
+          icon: "triangle-alert" as const,
+          title: "That will not save as written",
+          body: failure.detail,
+        };
       case "unreachable":
         return {
           icon: "octagon-x" as const,

@@ -300,7 +300,7 @@ non-negotiable, because it is free on day one and a retrofit later.
   than restating it, which is what carries the campaign-scope containment down. **A nested table
   gets no denormalised `campaign_id`** — a child whose copy disagreed with its parent's would be
   readable in a campaign it is not part of, and no `WHERE` clause would notice.
-- **A parent id in a path is a client claim, not a fact.** `PrepItems` takes the campaign *and*
+- **A parent id in a path is a client claim, not a fact.** `PrepItems` takes the campaign _and_
   the session and refuses if the session is not in that campaign. Trusting the session id alone
   would let a credential scoped to one table read another's checklist by naming its session id.
   `apps/server/test/prep-visibility.test.ts` pins both the honest and the smuggled path.
@@ -339,7 +339,7 @@ out of convention, and step 3 (bestiary) and step 4 (live session) should not re
   `attachedTo: { kind: "encounter", id } | null`; adding `creature` in step 3 is a new member of a
   shape the client already branches on, not a second nullable id beside the first.
 - **`note_encounter_fkey` is composite — `(encounter_id, campaign_id) → encounter (id,
-  campaign_id)` — and that is the point.** A plain `references encounter (id)` would let a note in
+campaign_id)` — and that is the point.** A plain `references encounter (id)` would let a note in
   campaign A attach to an encounter in campaign B: both belong to the same DM, so nothing rejects
   it, and the note then reads as part of a campaign it is not in. Postgres matches a composite key
   only when every column is non-null, so an unattached note is simply unconstrained — no partial
@@ -360,7 +360,7 @@ section.
 
 ## The bestiary: provenance, and the one table that is not campaign-scoped
 
-`creature` is the first table whose rows can belong to *no* campaign, and that one difference
+`creature` is the first table whose rows can belong to _no_ campaign, and that one difference
 is where every non-obvious decision in this area comes from. `encounter_creature` is the
 roster that makes the prep surface's "6 creatures" true.
 
@@ -377,14 +377,14 @@ as a string** to protect precision this does not need, and every rating is an in
 of 1/8, 1/4, 1/2 — all exact in binary.
 
 **`origin = 'system'` and `campaign_id is null` are the same statement** (`creature_system_is_global`).
-That is what makes the shared corpus immutable *structurally* rather than by a rule someone has
+That is what makes the shared corpus immutable _structurally_ rather than by a rule someone has
 to remember: reads use `corpusRowReadable`, writes use the ordinary `rowWritable`, which
 requires `campaign_id` to equal the campaign in the request path — and a null never equals a
 uuid. **There is no `origin = 'system'` check anywhere in `apps/server/src`, and none is
 needed.** Do not add one; add a test if you doubt it.
 
 **`corpusRowReadable` is the leak-shaped one, so read its two rules before writing anything
-like it.** (a) The campaign gate is *outside* the union: a global row is reachable through a
+like it.** (a) The campaign gate is _outside_ the union: a global row is reachable through a
 campaign this actor can read and through nothing else. Written the natural way —
 `campaign_id is null OR <the campaign-scoped test>` — a global row would come back for any
 authenticated request naming any campaign id, including somebody else's, because `findById` is
@@ -398,7 +398,7 @@ copies a readable creature into the campaign, applies the patch in the same requ
 `derived_from`. The copy is `authored` whatever the original was (the DM wrote the changes),
 and its **visibility is not copied**: it falls to the column default, because a new row fails
 closed and inheriting `shared` would make that depend on what you happened to derive from.
-Nothing is ever *read through* `derived_from`, so it is a provenance pointer and not an access
+Nothing is ever _read through_ `derived_from`, so it is a provenance pointer and not an access
 path; it survives its ancestor's deletion as `null`.
 
 **The shared corpus is provisioned by `pnpm -F server bestiary:import`, not by an endpoint.**
@@ -424,7 +424,7 @@ un-shared by an upgrade.
   creature that is on a roster must be refused (a 409 — losing it would silently change what an
   encounter contains), but the check also has to survive `delete from campaign`, which cascades
   into `creature` and into `encounter_creature` in one statement. `restrict` fires immediately
-  and an *immediate* `no action` fires before the roster rows are gone; both reject a campaign
+  and an _immediate_ `no action` fires before the roster rows are gone; both reject a campaign
   delete that should be fine. Deferring moves the check to the end of the transaction — which,
   under autocommit, is still the end of that one statement, so a lone `delete from creature` is
   still refused on the spot.
@@ -432,7 +432,7 @@ un-shared by an upgrade.
 **`Encounter.creatureCount` is computed, not stored** — `sum(encounter_creature.count)` in a
 correlated subquery, per read. A stored total is a second answer to a question the roster
 already answers, and they part company the first time a roster row goes by a cascade. It counts
-what *this actor* can see, so the card and the list behind it always agree; that needs
+what _this actor_ can see, so the card and the list behind it always agree; that needs
 `nestedRowReadableWithin`, which **deliberately omits the parent check** because the enclosing
 query already selected the parent through `rowReadable`. It belongs in a subquery over the
 parent table and nowhere else.
@@ -446,7 +446,7 @@ error on a stray `&` and turns a search box into a 500 — and escape `%`/`_`/`\
 they wrote.
 
 **Deliberately deferred: a read-aloud attached to a creature.** `data.js:33` hangs one off the
-stat block, and it is *not* in the document — read-aloud is a `note` with an attachment (see
+stat block, and it is _not_ in the document — read-aloud is a `note` with an attachment (see
 `Note.NoteAttachment`), and putting it in `body` would be the `read_aloud` column on a third
 table that the note model exists to avoid. The reason it is not built yet is worth knowing
 before someone tries: `note.encounter_id` is guarded by a **composite** key naming the
@@ -461,7 +461,7 @@ the only thing gating the global rows; the column is `cr`, as the fixtures name 
 matching the UI's own "Environment" label; and abilities are `{label, score, modifier}` structs
 rather than the fixture's `["STR","10","+0"]` tuples, which are prototype shorthand and not a
 contract. `type` and `size` are **open** strings while `difficulty` is a closed union — the
-difference is that `CampaignHome.jsx:13` *branches* on difficulty, and nothing branches on a
+difference is that `CampaignHome.jsx:13` _branches_ on difficulty, and nothing branches on a
 creature's type.
 
 ## `HttpApi`, and the client derived from it
@@ -710,6 +710,81 @@ the shared `TopBar`, so every screen renders it, and the two conditions are the 
 `AuthProvider` asks before mounting `ClerkProvider`: the vendor's chrome may only mount where
 the vendor's provider did. Without the second check any screen's test is liable to be the one
 that discovers Clerk is missing above it.
+
+## Authoring in `apps/web`: forms, mutations, and the traps in them
+
+The campaign view writes as well as reads, and the runner comes next. These are settled;
+follow them rather than inventing a second style. `api/mutation.ts`, `ui/form.tsx` and
+`campaign/EncounterDialog.tsx` are the worked examples.
+
+- **`useMutation` is the write side of `useApiResource`, and the two are shaped differently
+  on purpose.** A read runs because its inputs changed, so its callback's identity is the
+  trigger and must be `useCallback`-stable; a write runs because the DM clicked, so the Effect
+  is handed over at `submit` time and no memoisation rule applies. Getting that backwards is
+  how a form saves on every render. `submit` resolves a **`Result`**, not `A | undefined`: a
+  `delete` succeeds with `void`, so "the row is gone" and "the call failed" would otherwise be
+  the same value and a dialog would close on a failure it never noticed.
+- **A form that writes two tables composes one `Effect`, exactly as `campaign/load.ts`
+  composes six reads.** The encounter dialog creates the encounter and then its roster lines
+  inside one `submit`; two submits in a row would give the form two busy flags and a
+  half-saved encounter to explain. There is no transaction across requests, so a mid-way
+  failure leaves the encounter saved and the roster short — that is the honest outcome, and
+  rolling back with more requests would fail the same way one call later.
+- **A structural write re-reads the screen; only a single boolean is optimistic.** The prep
+  tick moves before the round trip and reverts on failure, because a checkbox that waits feels
+  broken at a table. Everything that changes the _shape_ of a list waits and then calls the
+  screen's `reload`, because a write here changes things the screen did not send —
+  `Encounter.creatureCount` is computed per read, and a note's attachment moves a count on a
+  different card.
+- **Validate in the form as well as in the contract, and know why both.** The derived client
+  encodes through the same schema the handler decodes with, so a bad payload **never reaches
+  the network** — it fails locally with a `SchemaError`. That is the good outcome, but it
+  means a validation failure is a _tag_ and not a status code (`classifyFailure` has an
+  `invalid` case for it), and `Expected a value with a length of at least 1 at ["name"]` is a
+  sentence for whoever wrote the schema. The form says "Give it a name."; the tag is the
+  backstop.
+- **A failed save renders in the `DialogFooter`, never at the end of the body.** The body
+  scrolls, and a line appended below the fold is one the DM never sees — verified in a real
+  browser, where it was invisible until it moved. `SaveFailure` truncates its detail to one
+  line for the same reason: a transport failure's detail is a whole URL and grew the footer
+  under the buttons.
+- **`VisibilityField` is the only place a `dm`/`shared` control is written.** Off is `dm`, off
+  is where a new row starts, and the payload says `visibility: "dm"` out loud so the form's
+  default and the column default cannot drift. A child row whose visibility the DM is not
+  being asked about — an `encounter_creature` line — **omits the field entirely** rather than
+  guessing; that is the column default applying untouched. Same for a prep item.
+
+Four things that cost real time, all found by driving it rather than by testing it:
+
+- **`Select.Value` renders the _value_, not a label.** With neither an `items` prop nor
+  children it falls through to serialising whatever the value is: a select keyed on `""`
+  renders nothing at all, and one keyed on a uuid renders the uuid. Every `SelectValue` in
+  this app therefore takes a function — `{(value) => …}`. jsdom cannot catch this, because
+  Testing Library queries the trigger by its accessible name and never looks at what it draws.
+- **Base UI's `Switch` puts its `id` on the hidden `<input>`, not on the visible
+  `role="switch"` span** (`nativeButton` moves it, and is wrong here). Clicking the label still
+  toggles it and Chromium resolves the accessible name through the association, so the
+  `<Switch id>` + `<Label htmlFor>` pair is correct — but anything driving it must aim at the
+  span, not the id.
+- **`Select` is keyboard-driven in a headless browser.** A synthesised press-and-release on
+  the trigger opens the popup and a click on an option does not land; ArrowDown to open, walk
+  to the `[data-highlighted]` item, Enter. The scratch driver in this repo's task history used
+  that, and it is the only route that worked.
+- **`render()`'s return type is not nameable from an exported signature.** Testing Library's
+  `RenderResult` reaches into `@testing-library/dom`, which pnpm's isolated layout hides — the
+  same TS2742 the server hits with `@clerk/shared`. Annotate a shared `renderScreen` helper
+  `: void`.
+
+**Fixtures for the campaign view live in `campaign/campaign.fixtures.tsx`, shared by the read
+tests and the write tests.** They are the JSON the server sends, not the decoded classes, so a
+field the contract renames fails the test rather than rendering `undefined` — which is why a
+fixture may not be a `Partial<>` of anything, and why a field added upstream is one edit here
+rather than one per test file. `installStubServer()` must be called once per file at module
+scope, for the `Context.Reference` reason `api/client.test.ts` records.
+
+**Prep-item authoring needs a session to hang off, and creating one is not built.** The
+checklist belongs to `session`, so with `campaign.currentSessionId` null the card says so and
+offers no Add row. Session creation is the live-session step's surface, not this one.
 
 ## The assistant: a trap to remember before it ships
 

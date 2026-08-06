@@ -1,5 +1,5 @@
-import type { CampaignId } from "@taverns/api";
-import { Badge, Icon, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@taverns/ui";
+import type { CampaignId, Encounter, Note } from "@taverns/api";
+import { Badge, Button, Icon, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
@@ -7,7 +7,9 @@ import type { Route } from "../routes";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { EncounterCard } from "./EncounterCard";
+import { EncounterDialog } from "./EncounterDialog";
 import { loadCampaignView, matches, type CampaignView } from "./load";
+import { NoteDialog } from "./NoteDialog";
 import { NotesList } from "./NotesList";
 import { PartyList } from "./PartyList";
 import { PrepChecklist } from "./PrepChecklist";
@@ -21,7 +23,31 @@ import { PrepChecklist } from "./PrepChecklist";
  * not there — the four states a real screen has (loading, failed, empty, and
  * empty-because-you-searched) are the whole difference between this and a
  * scaffold.
+ *
+ * ### Authoring
+ *
+ * The prototype puts `New encounter` in the top bar, so that is where the create
+ * action lives — but there is one slot and three tabs, so **it names whatever
+ * the open tab makes**: an encounter, a note, or nothing on Party, which has no
+ * authoring yet. That is why `Tabs` is controlled here rather than left on
+ * `defaultValue`; the top bar has to know which tab is open.
+ *
+ * Editing is a pencil on the row itself, not a click on the card. The card's
+ * click is the prototype's "run this encounter", and taking it for an editor
+ * would be a decision the live-session step has to undo.
+ *
+ * **A save reloads the whole view rather than patching a row in place.** The
+ * encounter card's creature count is `sum(encounter_creature.count)` computed
+ * per read, and a note's attachment moves a count on a *different* card — so
+ * every write here changes something the screen did not send. One re-read is
+ * one source of truth; the alternative is a local model that is right until the
+ * first thing it forgot about.
  */
+
+/** What the one dialog slot is currently showing. */
+type Editing =
+  | { readonly what: "encounter"; readonly encounter: Encounter | undefined }
+  | { readonly what: "note"; readonly note: Note | undefined };
 
 const subtitleFor = (view: CampaignView): string | undefined => {
   const parts = [
@@ -31,7 +57,21 @@ const subtitleFor = (view: CampaignView): string | undefined => {
   return parts.length === 0 ? undefined : parts.join(" · ");
 };
 
-function CampaignBody({ view, search }: { readonly view: CampaignView; readonly search: string }) {
+function CampaignBody({
+  view,
+  search,
+  tab,
+  onTab,
+  onEdit,
+  onChanged,
+}: {
+  readonly view: CampaignView;
+  readonly search: string;
+  readonly tab: string;
+  readonly onTab: (tab: string) => void;
+  readonly onEdit: (editing: Editing) => void;
+  readonly onChanged: () => void;
+}) {
   const encounters = view.encounters.filter((encounter) =>
     matches(search, encounter.name, ...encounter.tags),
   );
@@ -64,7 +104,7 @@ function CampaignBody({ view, search }: { readonly view: CampaignView; readonly 
           `auto-fill minmax(250px, 1fr)` turns over: two cards need 516px, three
           need 782px. Same result, without a raw px literal. */}
       <div className="@container min-w-0 flex-1">
-        <Tabs defaultValue="encounters">
+        <Tabs value={tab} onValueChange={(value) => onTab(String(value))}>
           <TabsList>
             <TabsTrigger value="encounters">
               <Icon name="swords" size={13} />
@@ -83,8 +123,9 @@ function CampaignBody({ view, search }: { readonly view: CampaignView; readonly 
           <TabsContent value="encounters">
             {view.encounters.length === 0 ? (
               <EmptyState icon="swords" title="No encounters yet">
-                Nothing is waiting for the party. Whatever you write for this campaign lands here,
-                ready to run.
+                Nothing is waiting for the party. Write one with{" "}
+                <span className="text-heading">New encounter</span> above and it lands here, ready
+                to run.
               </EmptyState>
             ) : encounters.length === 0 ? (
               nothingMatches
@@ -95,6 +136,7 @@ function CampaignBody({ view, search }: { readonly view: CampaignView; readonly 
                     key={encounter.id}
                     encounter={encounter}
                     noteCount={noteCounts.get(encounter.id) ?? 0}
+                    onEdit={() => onEdit({ what: "encounter", encounter })}
                   />
                 ))}
               </div>
@@ -105,12 +147,16 @@ function CampaignBody({ view, search }: { readonly view: CampaignView; readonly 
             {view.notes.length === 0 ? (
               <EmptyState icon="scroll-text" title="No notes yet">
                 The thing you meant to remember when the party opens the crate goes here. Read-aloud
-                prose too.
+                prose too — start one with <span className="text-heading">New note</span> above.
               </EmptyState>
             ) : notes.length === 0 ? (
               nothingMatches
             ) : (
-              <NotesList notes={notes} encounters={view.encounters} />
+              <NotesList
+                notes={notes}
+                encounters={view.encounters}
+                onEdit={(note) => onEdit({ what: "note", note })}
+              />
             )}
           </TabsContent>
 
@@ -134,6 +180,7 @@ function CampaignBody({ view, search }: { readonly view: CampaignView; readonly 
           campaignId={view.campaign.id}
           sessionId={view.session?.id}
           items={view.prep}
+          onChanged={onChanged}
         />
       </aside>
     </div>
@@ -155,8 +202,24 @@ export function CampaignScreen({
   );
   const [resource, reload] = useApiResource(load);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState("encounters");
+  const [editing, setEditing] = useState<Editing | undefined>();
 
   const view = resource.state === "ready" ? resource.value : undefined;
+
+  const close = useCallback(() => setEditing(undefined), []);
+  const saved = useCallback(() => {
+    setEditing(undefined);
+    reload();
+  }, [reload]);
+
+  /** The top bar's one create slot, named for whichever tab is open. */
+  const create =
+    tab === "encounters"
+      ? { label: "New encounter", editing: { what: "encounter", encounter: undefined } as const }
+      : tab === "notes"
+        ? { label: "New note", editing: { what: "note", note: undefined } as const }
+        : undefined;
 
   return (
     <AppShell
@@ -179,13 +242,21 @@ export function CampaignScreen({
       topBar={
         <TopBar title={view?.campaign.name ?? "Campaign"} subtitle={view && subtitleFor(view)}>
           {view !== undefined && (
-            <Input
-              aria-label="Search this campaign"
-              placeholder="Search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-control-sm w-44"
-            />
+            <>
+              <Input
+                aria-label="Search this campaign"
+                placeholder="Search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-control-sm w-44"
+              />
+              {create !== undefined && (
+                <Button variant="secondary" size="sm" onClick={() => setEditing(create.editing)}>
+                  <Icon name="plus" size={14} />
+                  {create.label}
+                </Button>
+              )}
+            </>
           )}
         </TopBar>
       }
@@ -196,7 +267,38 @@ export function CampaignScreen({
           <FailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
-      {view !== undefined && <CampaignBody view={view} search={search} />}
+      {view !== undefined && (
+        <CampaignBody
+          view={view}
+          search={search}
+          tab={tab}
+          onTab={setTab}
+          onEdit={setEditing}
+          onChanged={reload}
+        />
+      )}
+
+      {/* Keyed on what is being edited, so opening the dialog on a second row
+          builds a fresh form rather than showing the first row's fields. */}
+      {editing?.what === "encounter" && view !== undefined && (
+        <EncounterDialog
+          key={editing.encounter?.id ?? "new-encounter"}
+          campaignId={campaignId}
+          encounter={editing.encounter}
+          onClose={close}
+          onSaved={saved}
+        />
+      )}
+      {editing?.what === "note" && view !== undefined && (
+        <NoteDialog
+          key={editing.note?.id ?? "new-note"}
+          campaignId={campaignId}
+          note={editing.note}
+          encounters={view.encounters}
+          onClose={close}
+          onSaved={saved}
+        />
+      )}
     </AppShell>
   );
 }

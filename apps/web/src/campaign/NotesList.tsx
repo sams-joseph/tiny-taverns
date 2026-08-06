@@ -1,5 +1,5 @@
 import type { Encounter, Note } from "@taverns/api";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 
 /**
  * The Notes tab.
@@ -16,9 +16,11 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/
 export function NoteCard({
   note,
   encounter,
+  onEdit,
 }: {
   readonly note: Note;
   readonly encounter: Encounter | undefined;
+  readonly onEdit: () => void;
 }) {
   const readAloud = note.kind === "read_aloud";
 
@@ -33,6 +35,15 @@ export function NoteCard({
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">{note.title}</CardTitle>
           {note.visibility === "shared" && <Badge variant="info">Shared</Badge>}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-mt-1 -mr-1 size-7 shrink-0"
+            aria-label={`Edit ${note.title}`}
+            onClick={onEdit}
+          >
+            <Icon name="pencil" size={14} />
+          </Button>
         </div>
         {encounter !== undefined && (
           <span className="flex items-center gap-1.5 text-body-s leading-body text-muted-foreground">
@@ -61,9 +72,11 @@ export function NoteCard({
 export function NotesList({
   notes,
   encounters,
+  onEdit,
 }: {
   readonly notes: ReadonlyArray<Note>;
   readonly encounters: ReadonlyArray<Encounter>;
+  readonly onEdit: (note: Note) => void;
 }) {
   const byId = new Map(encounters.map((encounter) => [encounter.id, encounter]));
 
@@ -74,6 +87,7 @@ export function NotesList({
           key={note.id}
           note={note}
           encounter={note.attachedTo === null ? undefined : byId.get(note.attachedTo.id)}
+          onEdit={() => onEdit(note)}
         />
       ))}
     </div>

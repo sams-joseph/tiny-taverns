@@ -1,5 +1,14 @@
 import type { Difficulty, Encounter } from "@taverns/api";
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Icon,
+} from "@taverns/ui";
 
 /**
  * One authored encounter, as `CampaignHome.jsx` draws it.
@@ -10,12 +19,15 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from
  * because a card that renders data the product does not have is how a scaffold
  * survives into production.
  *
- * The prototype's other line, **"6 creatures"**, *is* on the wire now —
- * `Encounter.creatureCount`, `sum(encounter_creature.count)` computed per read
- * — and this card does not yet use it. What it shows instead is how many notes
- * hang off the encounter, which the Notes tab already loaded. Which of the two
- * belongs in the one description slot, or whether both do, is a design call and
- * not a missing field.
+ * The prototype's other line, **"6 creatures"**, is `Encounter.creatureCount` —
+ * `sum(encounter_creature.count)` computed per read, over the roster *this
+ * actor can see*. It leads the description because it is what the prototype
+ * puts there and what tells a DM whether an encounter is finished. The note
+ * count follows it when there is one, which the Notes tab has already loaded.
+ *
+ * Zero creatures is written out rather than shown as "0 creatures": an
+ * encounter with an empty roster is one the DM has not finished, and the card
+ * saying so is the whole reason the number is on it.
  */
 
 /**
@@ -51,12 +63,25 @@ function DifficultyBadge({ difficulty }: { readonly difficulty: Difficulty | nul
   }
 }
 
+/** "6 creatures · 1 note" — the roster first, because it is what the card is for. */
+const describe = (encounter: Encounter, noteCount: number): string => {
+  const creatures =
+    encounter.creatureCount === 0
+      ? "No creatures yet"
+      : `${encounter.creatureCount} ${encounter.creatureCount === 1 ? "creature" : "creatures"}`;
+  return noteCount === 0
+    ? creatures
+    : `${creatures} · ${noteCount} ${noteCount === 1 ? "note" : "notes"}`;
+};
+
 export function EncounterCard({
   encounter,
   noteCount,
+  onEdit,
 }: {
   readonly encounter: Encounter;
   readonly noteCount: number;
+  readonly onEdit: () => void;
 }) {
   return (
     <Card className="h-full">
@@ -64,12 +89,17 @@ export function EncounterCard({
         <div className="flex items-start gap-2.5">
           <CardTitle className="flex-1">{encounter.name}</CardTitle>
           <DifficultyBadge difficulty={encounter.difficulty} />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-mt-1 -mr-1 size-7 shrink-0"
+            aria-label={`Edit ${encounter.name}`}
+            onClick={onEdit}
+          >
+            <Icon name="pencil" size={14} />
+          </Button>
         </div>
-        {noteCount > 0 && (
-          <CardDescription>
-            {noteCount} {noteCount === 1 ? "note" : "notes"}
-          </CardDescription>
-        )}
+        <CardDescription>{describe(encounter, noteCount)}</CardDescription>
       </CardHeader>
       <CardContent className="mt-auto flex flex-wrap gap-1.5">
         {encounter.tags.map((tag) => (
