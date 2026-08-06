@@ -196,7 +196,25 @@ extensionless specifiers, while `build` and `typecheck` only emit or check and n
 `apps/server/test/start.smoke.test.ts` closes that gap — it runs `tsc -p tsconfig.build.json`,
 spawns `dist/main.js` under `process.execPath`, and asserts `GET /health`. Keep it executing
 the real build output under real `node`; rewriting it to import `src` through Vitest silently
-restores the blind spot.
+restores the blind spot. **The `tsc` call stays inside the test**, which is what makes it
+impossible to pass against a stale or absent `dist/` — hand the compile to the build pipeline
+and the guarantee degrades into a claim about whatever happened to be on disk. It is not the
+slow part either: 1.5–1.8s under full `turbo --force` load, the same as it takes alone.
+
+**The server accepts TCP before it can answer, and a request that lands in that window is
+never answered at all.** `NodeHttpServer.layer` calls `server.listen` while it is being
+constructed, and `main.ts` provides it _to_ the application layer — so the socket is
+listening before the connection pool is open and the migrations have run. Measured on an idle
+machine: accepts at 481ms, request handler attached at 534ms. A request written on a
+connection opened inside that gap is not answered late, it is dropped forever (held one open
+for 30s against a server already logging "Listening" and serving fresh connections 200).
+
+That is what made the smoke test flaky at roughly 1 run in 5 under `turbo --force`: database
+work widens the window from tens of milliseconds to seconds, `fetch` has no response timeout,
+and one unlucky retry hung until the 60s test budget expired — the 65s signature that got
+blamed on the compile. Any client polling this server during boot needs a **bounded per-attempt
+timeout and a fresh connection per retry**, which is what `ATTEMPT_TIMEOUT_MS` in the smoke
+test is for. Raising an outer timeout does not help; the hung attempt never returns.
 
 ## The database, and the migration workflow
 
