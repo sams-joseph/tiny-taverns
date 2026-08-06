@@ -13,7 +13,9 @@ import { Health } from "./Health.js";
 import { IdentityProvider } from "./IdentityProvider.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
+import { PrepItems } from "./repo/PrepItems.js";
 import { Sessions } from "./repo/Sessions.js";
 
 /**
@@ -70,7 +72,15 @@ export const servicesOver = <E>(
   database: Layer.Layer<SqlClient.SqlClient | PgClient.PgClient, E>,
   identity: Layer.Layer<IdentityProvider, E | Config.ConfigError> = identityFromConfig,
 ): Layer.Layer<
-  Accounts | Authorization | Campaigns | Characters | Health | Notes | Sessions,
+  | Accounts
+  | Authorization
+  | Campaigns
+  | Characters
+  | Encounters
+  | Health
+  | Notes
+  | PrepItems
+  | Sessions,
   E | Config.ConfigError
 > =>
   Layer.mergeAll(
@@ -78,7 +88,9 @@ export const servicesOver = <E>(
     AuthorizationLive.pipe(Layer.provide([Accounts.layer, identity])),
     Campaigns.layer,
     Characters.layer,
+    Encounters.layer,
     Notes.layer,
+    PrepItems.layer,
     Sessions.layer,
     Health.layer,
   ).pipe(Layer.provide(database));
@@ -104,7 +116,15 @@ export const services = servicesOver(Database.layer);
  */
 export const applicationOver = <E>(
   serviceLayer: Layer.Layer<
-    Accounts | Authorization | Campaigns | Characters | Health | Notes | Sessions,
+    | Accounts
+    | Authorization
+    | Campaigns
+    | Characters
+    | Encounters
+    | Health
+    | Notes
+    | PrepItems
+    | Sessions,
     E
   >,
   options?: { readonly quiet?: boolean },

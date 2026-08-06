@@ -4,8 +4,10 @@ import { Authorization } from "./Actor.js";
 import { TavernsApi } from "./Api.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterCreate } from "./Character.js";
+import { Encounter, EncounterCreate } from "./Encounter.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
+import { PrepItem, PrepItemCreate } from "./PrepItem.js";
 import { Session, SessionCreate } from "./Session.js";
 
 /**
@@ -49,15 +51,17 @@ describe("the API declaration", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "campaigns",
       "characters",
+      "encounters",
       "health",
       "notes",
+      "prep",
       "sessions",
     ]);
   });
 });
 
 describe("every content schema", () => {
-  const contentSchemas = { Campaign, Session, Character, Note };
+  const contentSchemas = { Campaign, Session, Character, Note, Encounter, PrepItem };
 
   it("carries visibility and provenance", () => {
     for (const [name, schema] of Object.entries(contentSchemas)) {
@@ -72,12 +76,28 @@ describe("every content schema", () => {
   it("leaves visibility optional on create, so the column default decides", () => {
     // The `dm` default is stated once, in the migration. A create payload that
     // required a visibility would move that decision to every caller.
-    const creates = { CampaignCreate, SessionCreate, CharacterCreate, NoteCreate };
+    const creates = {
+      CampaignCreate,
+      SessionCreate,
+      CharacterCreate,
+      NoteCreate,
+      EncounterCreate,
+      PrepItemCreate,
+    };
+    // The minimum a create needs, per schema. Spelled out rather than merged
+    // into one wide object, so a payload that stopped requiring a field would
+    // show up here rather than being silently over-supplied.
+    const minimal: Record<string, Record<string, unknown>> = {
+      CampaignCreate: { name: "x" },
+      SessionCreate: { number: 1, title: "t" },
+      CharacterCreate: { name: "x" },
+      NoteCreate: { title: "x" },
+      EncounterCreate: { name: "x" },
+      PrepItemCreate: { label: "x" },
+    };
 
     for (const [name, schema] of Object.entries(creates)) {
-      const decoded = Schema.decodeUnknownSync(schema)(
-        name === "SessionCreate" ? { number: 1, title: "t" } : { name: "x", title: "x" },
-      ) as Record<string, unknown>;
+      const decoded = Schema.decodeUnknownSync(schema)(minimal[name]!) as Record<string, unknown>;
 
       expect(decoded.visibility, `${name} forces a visibility`).toBeUndefined();
     }

@@ -293,8 +293,17 @@ non-negotiable, because it is free on day one and a retrofit later.
   `shared` campaign the same DM owns, which is a cross-table leak between two tables run by the
   same person. That is exactly the defect the scope closed, and it was invisible for as long as
   it was because no test minted a scoped actor.
-- **Visibility is two levels.** `campaign.visibility` is the master toggle; a row's own
-  `visibility` narrows within it. A `shared` note inside an unshared campaign stays invisible.
+- **Visibility is two levels — or three, for a table that hangs off another row.**
+  `campaign.visibility` is the master toggle; a row's own `visibility` narrows within it, so a
+  `shared` note inside an unshared campaign stays invisible. `prep_item` hangs off `session`, so
+  it adds a level: `nestedRowReadable` in `visibility.ts` composes `rowReadable(parent)` rather
+  than restating it, which is what carries the campaign-scope containment down. **A nested table
+  gets no denormalised `campaign_id`** — a child whose copy disagreed with its parent's would be
+  readable in a campaign it is not part of, and no `WHERE` clause would notice.
+- **A parent id in a path is a client claim, not a fact.** `PrepItems` takes the campaign *and*
+  the session and refuses if the session is not in that campaign. Trusting the session id alone
+  would let a credential scoped to one table read another's checklist by naming its session id.
+  `apps/server/test/prep-visibility.test.ts` pins both the honest and the smuggled path.
 - **Denial is `NotFound`, not `Forbidden`.** Saying "it exists but is not yours" is itself a
   disclosure.
 - **A new table gets `visibility` (default `'dm'`), `origin` (default `'authored'`) and
@@ -302,6 +311,49 @@ non-negotiable, because it is free on day one and a retrofit later.
   list is in that file, so skipping it takes a visible edit. Provenance is inert until the
   assistant ships; it is there because retrofitting it onto a table that already mixes
   authored and generated rows means guessing which is which.
+
+## The prep surface: what the fixtures forced
+
+`packages/design-system/ui_kits/dm-screen/data.js` and `CampaignHome.jsx` are the specification —
+the API exists to feed them. Five modelling decisions came out of reading them closely rather than
+out of convention, and step 3 (bestiary) and step 4 (live session) should not re-derive them.
+
+- **`encounter.difficulty` is the DMG encounter band, not a creature's CR.** The fixture names the
+  field `cr` (`data.js:10-12`) and then fills it with `Easy` / `Medium` / `Deadly` and branches on
+  those strings (`CampaignHome.jsx:13`). It is named for what it holds. **Capitalised**, unlike
+  `visibility` or `kind`: this vocabulary is the DM's and is rendered verbatim on the card's badge,
+  so lower-casing it would mean a display map existing only to undo the change. Nullable — a
+  sketched encounter has not been rated yet.
+- **Two fields on the encounter card are deliberately not columns**, and neither is an oversight.
+  `count` ("6 creatures") is `sum(encounter_creature.count)` and arrives with the bestiary; a
+  field that is structurally always `0` is worse than an absent one. `active` ("On the table now")
+  is a pointer on the session — the live `encounter_run` — because exactly one encounter is live,
+  and a boolean per encounter would let two rows both claim the table.
+- **One `note` table with a `kind` and an optional attachment**, not a `read_aloud` column on
+  three tables each with its own visibility rule to get wrong. The attachment is a **real foreign
+  key** (`note.encounter_id`), not a polymorphic `(kind, id)` pair — a polymorphic column cannot
+  be a foreign key, so there would be no integrity and no cleanup. On the wire it is
+  `attachedTo: { kind: "encounter", id } | null`; adding `creature` in step 3 is a new member of a
+  shape the client already branches on, not a second nullable id beside the first.
+- **`note_encounter_fkey` is composite — `(encounter_id, campaign_id) → encounter (id,
+  campaign_id)` — and that is the point.** A plain `references encounter (id)` would let a note in
+  campaign A attach to an encounter in campaign B: both belong to the same DM, so nothing rejects
+  it, and the note then reads as part of a campaign it is not in. Postgres matches a composite key
+  only when every column is non-null, so an unattached note is simply unconstrained — no partial
+  index, no trigger. The `on delete set null (encounter_id)` column list is **Postgres 15+ and
+  load-bearing**: a bare `set null` would null `campaign_id` too and hit its not-null. Detach
+  rather than cascade, because the DM wrote that read-aloud — deleting an encounter should lose
+  the encounter, not the prose.
+- **`tags` is `text[]`, not a join table.** The vocabulary is genuinely open ("Marsh", "Night",
+  "Boss") and the encounter grid is the first thing `CampaignHome` renders. A bare JS array
+  interpolated into a `sql` template becomes **one bind parameter**, which `pg` serialises to a
+  Postgres array literal — `sql.in(...)` is the thing that expands an array into an `(?, ?, ?)`
+  list, so do not reach for it here.
+
+Two report recommendations were **not** followed, both because the fixtures do not support them:
+`encounter.notes` (a free-text column) is absent, since it would duplicate the attached-note
+mechanism above; and `prep_item` carries no `campaign_id`, for the reason in the visibility
+section.
 
 ## `HttpApi`, and the client derived from it
 

@@ -105,15 +105,81 @@ export const rowWritable = (
     campaignWritableById(sql, campaignId, actor),
   ]);
 
+/**
+ * A table whose rows hang off another campaign-scoped row rather than off the
+ * campaign directly — today only `prep_item` under `session`.
+ *
+ * The alternative is a denormalised `campaign_id` on the child, which would let
+ * the existing `rowReadable` apply unchanged. It is rejected because it stores
+ * the answer to "which campaign is this in" twice: a child whose copy disagrees
+ * with its parent's is then readable in a campaign it is not part of, and
+ * nothing in a `WHERE` clause would notice. Walking the parent means there is
+ * one answer.
+ */
+export interface NestedTable {
+  /** The child table, e.g. `prep_item`. */
+  readonly table: string;
+  /** The parent table, e.g. `session`. */
+  readonly parent: string;
+  /** The child's column pointing at the parent, e.g. `session_id`. */
+  readonly foreignKey: string;
+}
+
+/**
+ * Rows of a nested table this actor may read.
+ *
+ * Three levels now rather than two: the campaign has to be readable, *and* the
+ * parent row, *and* the child. Composing `rowReadable(parent)` rather than
+ * restating it is what carries the campaign-scope containment down — a
+ * credential minted for one table cannot reach a prep item through a session in
+ * another, because the clause it inherits already refused the session.
+ */
+export const nestedRowReadable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
+    sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${sql(`${nested.table}.${nested.foreignKey}`)} and ${rowReadable(sql, nested.parent, campaignId, actor)})`,
+    actor.seesDmContent ? sql`true` : sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
+  ]);
+
+/** Rows of a nested table this actor may write. Not `nestedRowReadable`. */
+export const nestedRowWritable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
+    nestedParentWritable(sql, nested, parentId, campaignId, actor),
+  ]);
+
+/** Whether the named parent row exists and accepts writes from this actor. */
+const nestedParentWritable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${parentId} and ${rowWritable(sql, nested.parent, campaignId, actor)})`;
+
 const ensure = (
   sql: SqlClient.SqlClient,
-  campaignId: CampaignId,
+  resource: string,
+  id: string,
   predicate: Statement.Fragment,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   Effect.gen(function* () {
     const rows = yield* sql<{ readonly allowed: boolean }>`select ${predicate} as allowed`;
     if (rows[0]?.allowed !== true) {
-      return yield* new NotFound({ resource: "campaign", id: campaignId });
+      return yield* new NotFound({ resource, id });
     }
   });
 
@@ -126,7 +192,7 @@ export const ensureCampaignWritable = (
   campaignId: CampaignId,
   actor: Actor,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
-  ensure(sql, campaignId, campaignWritableById(sql, campaignId, actor));
+  ensure(sql, "campaign", campaignId, campaignWritableById(sql, campaignId, actor));
 
 /**
  * Fails with `NotFound` unless the campaign is visible to this actor. Used by
@@ -140,6 +206,48 @@ export const ensureCampaignReadable = (
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   ensure(
     sql,
+    "campaign",
     campaignId,
     sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor)})`,
+  );
+
+/**
+ * Fails with `NotFound` unless the nested table's parent row exists, sits in
+ * this campaign, and accepts writes from this actor. Used before inserting a
+ * child, where there is no row yet to constrain.
+ *
+ * The failure names the *parent* — `NotFound { resource: "session" }` — because
+ * that is the thing the caller asked about and could not have.
+ */
+export const ensureNestedParentWritable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    nested.parent,
+    parentId,
+    nestedParentWritable(sql, nested, parentId, campaignId, actor),
+  );
+
+/**
+ * Fails with `NotFound` unless the nested table's parent row is visible to this
+ * actor. Used by list endpoints, so an unreachable session is a 404 rather than
+ * an empty checklist that reads as "you have nothing to prepare".
+ */
+export const ensureNestedParentReadable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    nested.parent,
+    parentId,
+    sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${parentId} and ${rowReadable(sql, nested.parent, campaignId, actor)})`,
   );

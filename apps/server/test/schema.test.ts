@@ -52,7 +52,14 @@ describe("every content-bearing table", () => {
   it("is the set this file thinks it is", () => {
     // A guard on the guard: if this list changes, the assertions below have
     // started covering something new, and somebody should have noticed.
-    expect(contentTables).toEqual(["campaign", "character", "note", "session"]);
+    expect(contentTables).toEqual([
+      "campaign",
+      "character",
+      "encounter",
+      "note",
+      "prep_item",
+      "session",
+    ]);
   });
 
   it("has a visibility column that is not null and defaults to dm", () => {

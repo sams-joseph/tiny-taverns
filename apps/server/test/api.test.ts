@@ -181,6 +181,150 @@ describe("campaign, session, character and note CRUD", () => {
   }, 60_000);
 });
 
+describe("the prep surface", () => {
+  it("round-trips an encounter, a prep item and an attached read-aloud", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+
+        const campaign = yield* client.campaigns.create({ payload: { name: "The Salt Road" } });
+        const campaignId = campaign.id;
+
+        const encounter = yield* client.encounters.create({
+          params: { campaignId },
+          payload: {
+            name: "Ambush in the reeds",
+            difficulty: "Medium",
+            tags: ["Marsh", "Night"],
+          },
+        });
+        const session = yield* client.sessions.create({
+          params: { campaignId },
+          payload: { number: 12, title: "The ford" },
+        });
+        const item = yield* client.prep.create({
+          params: { campaignId, sessionId: session.id },
+          payload: { label: "Decide what the crate contains" },
+        });
+        const readAloud = yield* client.notes.create({
+          params: { campaignId },
+          payload: {
+            title: "Read aloud at the water",
+            body: "The reeds are taller than you are and they are not moving.",
+            kind: "read_aloud",
+            attachedTo: { kind: "encounter", id: encounter.id },
+          },
+        });
+
+        const encounters = yield* client.encounters.list({ params: { campaignId } });
+        const checklist = yield* client.prep.list({
+          params: { campaignId, sessionId: session.id },
+        });
+        const noteBack = yield* client.notes.findById({
+          params: { campaignId, noteId: readAloud.id },
+        });
+        const ticked = yield* client.prep.update({
+          params: { campaignId, sessionId: session.id, prepItemId: item.id },
+          payload: { done: true },
+        });
+
+        return { encounter, item, readAloud, encounters, checklist, noteBack, ticked };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.encounter.name).toBe("Ambush in the reeds");
+    expect(seen.encounter.difficulty).toBe("Medium");
+    // `text[]` survives the round trip as a real array, not a Postgres literal.
+    expect(seen.encounter.tags).toEqual(["Marsh", "Night"]);
+    // Nothing asked for a visibility, so the column default decided.
+    expect(seen.encounter.visibility).toBe("dm");
+    expect(seen.encounter.origin).toBe("authored");
+    expect(seen.encounter.assistantTurnId).toBeNull();
+
+    expect(seen.item.label).toBe("Decide what the crate contains");
+    expect(seen.item.done).toBe(false);
+    expect(seen.item.visibility).toBe("dm");
+    expect(seen.item.origin).toBe("authored");
+    expect(seen.ticked.done).toBe(true);
+
+    expect(seen.noteBack.attachedTo).toEqual({ kind: "encounter", id: seen.encounter.id });
+    expect(seen.encounters.map((e) => e.id)).toEqual([seen.encounter.id]);
+    expect(seen.checklist.map((i) => i.id)).toEqual([seen.item.id]);
+  }, 60_000);
+
+  it("leaves an encounter with no difficulty as null rather than inventing a band", async () => {
+    const encounter = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "Unrated" } });
+        return yield* client.encounters.create({
+          params: { campaignId: campaign.id },
+          payload: { name: "Whatever is in the crate" },
+        });
+      }).pipe(Effect.orDie),
+    );
+
+    expect(encounter.difficulty).toBeNull();
+    expect(encounter.tags).toEqual([]);
+  }, 60_000);
+
+  it("refuses a prep item under a session in a different campaign", async () => {
+    // The session id is a client claim, not a fact. The read predicate is
+    // handed the campaign it must contain the session within, so naming
+    // another campaign's session is a 404 and not a cross-table write.
+    const error = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const mine = yield* client.campaigns.create({ payload: { name: "Mine" } });
+        const theirs = yield* client.campaigns.create({ payload: { name: "Theirs" } });
+        const elsewhere = yield* client.sessions.create({
+          params: { campaignId: theirs.id },
+          payload: { number: 1 },
+        });
+
+        return yield* Effect.flip(
+          client.prep.create({
+            params: { campaignId: mine.id, sessionId: elsewhere.id },
+            payload: { label: "smuggled" },
+          }),
+        );
+      }).pipe(Effect.orDie),
+    );
+
+    expect(error._tag).toBe("NotFound");
+  }, 60_000);
+
+  it("deletes an encounter and detaches its note instead of deleting it", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "Deletions" } });
+        const campaignId = campaign.id;
+        const encounter = yield* client.encounters.create({
+          params: { campaignId },
+          payload: { name: "temporary" },
+        });
+        const note = yield* client.notes.create({
+          params: { campaignId },
+          payload: { title: "the prose outlives it", attachedTo: { kind: "encounter", id: encounter.id } },
+        });
+
+        yield* client.encounters.remove({ params: { campaignId, encounterId: encounter.id } });
+
+        const gone = yield* Effect.result(
+          client.encounters.findById({ params: { campaignId, encounterId: encounter.id } }),
+        );
+        const survivor = yield* client.notes.findById({ params: { campaignId, noteId: note.id } });
+        return { gone, survivor };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.gone._tag).toBe("Failure");
+    expect(seen.survivor.title).toBe("the prose outlives it");
+    expect(seen.survivor.attachedTo).toBeNull();
+  }, 60_000);
+});
+
 describe("declared errors reach the client as declared errors", () => {
   it("reports a duplicate session number as Conflict", async () => {
     const error = await runtime.runPromise(

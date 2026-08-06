@@ -24,6 +24,12 @@ export type CharacterId = typeof CharacterId.Type;
 export const NoteId = id("NoteId");
 export type NoteId = typeof NoteId.Type;
 
+export const EncounterId = id("EncounterId");
+export type EncounterId = typeof EncounterId.Type;
+
+export const PrepItemId = id("PrepItemId");
+export type PrepItemId = typeof PrepItemId.Type;
+
 /**
  * Points at the assistant conversation turn that produced a row. The turn table
  * does not exist yet — see `Provenance.Origin`.

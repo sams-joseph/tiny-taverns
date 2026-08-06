@@ -4,7 +4,9 @@ import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { Health } from "./Health.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
+import { PrepItems } from "./repo/PrepItems.js";
 import { Sessions } from "./repo/Sessions.js";
 
 /**
@@ -93,7 +95,55 @@ const NotesLive = HttpApiBuilder.group(
   }),
 );
 
+const EncountersLive = HttpApiBuilder.group(
+  TavernsApi,
+  "encounters",
+  Effect.fnUntraced(function* (handlers) {
+    const encounters = yield* Encounters;
+    return handlers
+      .handle("list", ({ params }) => encounters.list(params.campaignId))
+      .handle("create", ({ params, payload }) => encounters.create(params.campaignId, payload))
+      .handle("findById", ({ params }) =>
+        encounters.findById(params.campaignId, params.encounterId),
+      )
+      .handle("update", ({ params, payload }) =>
+        encounters.update(params.campaignId, params.encounterId, payload),
+      )
+      .handle("remove", ({ params }) => encounters.remove(params.campaignId, params.encounterId));
+  }),
+);
+
+const PrepLive = HttpApiBuilder.group(
+  TavernsApi,
+  "prep",
+  Effect.fnUntraced(function* (handlers) {
+    const prep = yield* PrepItems;
+    return handlers
+      .handle("list", ({ params }) => prep.list(params.campaignId, params.sessionId))
+      .handle("create", ({ params, payload }) =>
+        prep.create(params.campaignId, params.sessionId, payload),
+      )
+      .handle("findById", ({ params }) =>
+        prep.findById(params.campaignId, params.sessionId, params.prepItemId),
+      )
+      .handle("update", ({ params, payload }) =>
+        prep.update(params.campaignId, params.sessionId, params.prepItemId, payload),
+      )
+      .handle("remove", ({ params }) =>
+        prep.remove(params.campaignId, params.sessionId, params.prepItemId),
+      );
+  }),
+);
+
 /** The API with every group implemented. Still needs its services provided. */
 export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
-  Layer.provide([HealthLive, CampaignsLive, SessionsLive, CharactersLive, NotesLive]),
+  Layer.provide([
+    HealthLive,
+    CampaignsLive,
+    SessionsLive,
+    CharactersLive,
+    NotesLive,
+    EncountersLive,
+    PrepLive,
+  ]),
 );
