@@ -83,6 +83,16 @@ export const servicesOver = <E>(
     Health.layer,
   ).pipe(Layer.provide(database));
 
+/**
+ * The configured services, over the real database.
+ *
+ * Exported as a named constant rather than inlined because `main.ts` needs
+ * *this object*, not an equivalent one: it provides it to the TCP listener so
+ * the socket binds only after the pool is open and the migrations have run, and
+ * `Layer` memoises by layer identity, so a second `servicesOver(Database.layer)`
+ * would be a second pool and a second migration run. See the comment on
+ * `listener` in `main.ts`.
+ */
 export const services = servicesOver(Database.layer);
 
 /**

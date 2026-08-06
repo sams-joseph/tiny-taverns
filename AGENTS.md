@@ -201,20 +201,46 @@ impossible to pass against a stale or absent `dist/` — hand the compile to the
 and the guarantee degrades into a claim about whatever happened to be on disk. It is not the
 slow part either: 1.5–1.8s under full `turbo --force` load, the same as it takes alone.
 
-**The server accepts TCP before it can answer, and a request that lands in that window is
-never answered at all.** `NodeHttpServer.layer` calls `server.listen` while it is being
-constructed, and `main.ts` provides it _to_ the application layer — so the socket is
-listening before the connection pool is open and the migrations have run. Measured on an idle
-machine: accepts at 481ms, request handler attached at 534ms. A request written on a
-connection opened inside that gap is not answered late, it is dropped forever (held one open
-for 30s against a server already logging "Listening" and serving fresh connections 200).
+**The listener must be built _after_ the application, and `main.ts` is where that is
+arranged.** `NodeHttpServer.layer` calls `server.listen` while it is being _constructed_
+(`NodeHttpServer.make`), and `Layer` builds a layer's dependencies before the layer itself
+(`provideWith` in `Layer.ts` builds `that`, then `self`). So the direction of the
+`Layer.provide` edge between the listener and the app _is_ the order the socket binds in —
+this is a composition constraint, not a runtime detail, and it is the same class of ordering
+trap as "middleware implementations go outside `HttpRouter.serve`".
 
-That is what made the smoke test flaky at roughly 1 run in 5 under `turbo --force`: database
-work widens the window from tens of milliseconds to seconds, `fetch` has no response timeout,
-and one unlucky retry hung until the 60s test budget expired — the 65s signature that got
-blamed on the compile. Any client polling this server during boot needs a **bounded per-attempt
-timeout and a fresh connection per retry**, which is what `ATTEMPT_TIMEOUT_MS` in the smoke
-test is for. Raising an outer timeout does not help; the hung attempt never returns.
+The natural-looking composition gets it backwards. `application.pipe(Layer.provide(listener))`
+with a bare listener binds the socket first and opens the connection pool and runs the
+migrations after, because the application layer is the one that does those. Everything that
+connects in between is accepted by the kernel and then **never answered** — not answered late,
+never at all, because no `request` handler is attached yet. Measured: accepted at 273ms, first
+answered at 307ms, and a request written on a connection opened at 273ms was still unanswered
+30s later while the server logged "Listening" and served fresh connections 200. That is a real
+deployment fault, not a test artifact: an orchestrator's readiness probe is exactly the client
+that connects to a server which has just come up.
+
+The fix is one edge: `main.ts` names `services` as a dependency _of the listener_
+(`listener = …NodeHttpServer.layer(…).pipe(Layer.provide(services))`). `services` must be the
+exported layer object from `app.ts`, not a fresh `servicesOver(Database.layer)` — `Layer`
+memoises by layer identity within one build, which is what keeps this to one pool and one
+migration run. Verified after the change: ~250 `ECONNREFUSED` in the ~290ms before `listen`,
+the first accepted connection answered every time (5/5), accept→serve down from 30–58ms to
+6–8ms with no I/O left in it, and — the crisp check — a server pointed at an unreachable
+database now never binds the port at all, where before it bound, accepted, and then died.
+
+The residual gap is `HttpRouter.serve` building its router between `listen` and the handler
+attaching; it is pure in-memory work. Effect v4 cannot close it entirely, because
+`HttpServer.serve` needs the `HttpServer` service to exist before it can attach anything, and
+constructing that service is what listens.
+
+`apps/server/test/start.smoke.test.ts` guards the ordering with a raw-socket test ("answers the
+first connection it accepts") — `fetch` cannot express it, because the property is about one
+specific connection. **Its `ATTEMPT_TIMEOUT_MS` retry stays even though the server is fixed**: a
+bounded per-attempt timeout on a fresh connection is correct client behaviour, and a test that
+assumes a perfect server is a worse test. That workaround is also the history — the old ordering
+made this file flaky at roughly 1 run in 5 under `turbo --force`, where database work widened the
+window to seconds and one unlucky unbounded `fetch` hung until the 60s budget expired, producing
+a 65s signature that got blamed on the 1.6s compile.
 
 ## The database, and the migration workflow
 
