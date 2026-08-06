@@ -57,6 +57,7 @@ export {
 export {
   Toast,
   ToastAction,
+  ToastBody,
   ToastClose,
   ToastContent,
   ToastDescription,

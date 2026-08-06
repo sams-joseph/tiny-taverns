@@ -65,6 +65,49 @@ Four things about the bridge that are not derivable from reading it:
   with slate body text until it was configured. A test parses `@theme inline` and fails if
   the name lists drift.
 
+## Motion: `translate` and `transform` are separate properties now
+
+**In Tailwind v4 `-translate-x-1/2` does not compile into `transform`.** It compiles into the
+independent `translate` property (`--tw-translate-x: -50%; translate: var(--tw-translate-x)
+var(--tw-translate-y)`), and `translate` _composes_ with `transform` — the individual property
+is applied first, then `transform` on top. In v3 it compiled into `transform`, so an animated
+`transform` replaced it.
+
+Everything animated in `packages/ui` depends on knowing which. The dialog shipped with
+keyframes carrying `translate(-50%, -50%)` and a comment explaining that the animation
+replaces the centring utility. Under v4 both applied: the popup sat a full 50% of its own
+width and height off-centre for the whole 200ms (measured 230px across, 82px up on a 460×328
+dialog) and teleported into place on the frame the animation ended. It read as "no transition,
+then a jerk" — and nothing caught it, because at rest the two states are identical.
+
+Two rules follow, both enforced by `packages/ui/src/motion.test.ts`:
+
+- **Keyframes carry the motion delta only, never layout the utilities already own,** and they
+  end on `transform: none`. That makes "no snap at the end" structural rather than a
+  coincidence of matching percentages.
+- **Never mix `translate-*`/`scale-*` utilities with a hand-written `transform` on the same
+  element** — and never `transition-[transform]` a change made by a `translate-*` utility.
+  The toast did the latter and its 10px slide simply never animated; only the fade did.
+
+`motion.test.ts` compiles the real `styles.css` through Tailwind's Node API and asserts on the
+emitted CSS. That is the only place this class of bug is visible: jsdom computes no animations
+and no layout, so the component tests cannot see it and never will. If a future Tailwind emits
+`transform` for those utilities again, the first test in that file is what tells you.
+
+**The bridge's motion names are self-referential on purpose.** `--ease-out: var(--ease-out)` in
+`@theme inline` looks broken and is not: the Tailwind theme lands in `@layer theme`, the design
+system's real `:root` lands in `@layer base`, and base outranks theme. (Same shape for
+`--font-*` and `--shadow-*`.) It is load-bearing that the tokens keep their `layer(base)`
+import — drop it and every one of these becomes a genuine cycle, invalid at computed-value
+time, which takes the whole `animation` shorthand down and kills the animation with nothing in
+the console. `motion.test.ts` asserts a real `cubic-bezier` survives.
+
+**`prefers-reduced-motion` zeroes every `--dur-*` token upstream** in
+`packages/design-system/tokens/motion.css`, so anything timed from a token flattens correctly
+and anything timed from a literal does not. Before diagnosing "the animations don't run",
+check `matchMedia("(prefers-reduced-motion: reduce)")` — instantaneous is the correct
+behaviour there, not a bug.
+
 ## shadcn on Base UI, not Radix
 
 `packages/ui/components.json` sets `"style": "base-nova"`. In shadcn 4.x the _base_ is

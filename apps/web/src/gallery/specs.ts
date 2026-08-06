@@ -41,6 +41,6 @@ export const NOTES = {
   tabs: "36px triggers · 13px medium · 2px accent underline",
 
   dialog: "14px radius · shadow-3 · scrim + 3px blur · ≤520px wide",
-  toast: "340 wide · a filled glyph strip down the left edge",
+  toast: "340 wide · a filled glyph strip down the left edge · stacks three deep, hover to fan out",
   tooltip: "no arrow, no fade, no delay · always pass a shortcut",
 } as const;

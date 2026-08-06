@@ -273,34 +273,48 @@
 }
 
 /* --------------------------------------------------------------------------
-   3. Dialog motion. "Fades up 6px from scale(.98)" — the keyframes carry the
-      centring translate themselves, because an animated `transform` replaces the
-      utility that centres the popup for as long as it runs.
+   3. Dialog motion. "Fades up 6px from scale(.98)".
 
-      Toasts slide 10px in from the right; that one is a plain transition on Base
-      UI's data-starting-style / data-ending-style, so it needs no keyframes.
+      These keyframes carry ONLY the motion delta — never the centring translate.
+      In Tailwind v4 `-translate-x-1/2` no longer compiles into `transform`; it
+      compiles into the independent `translate` property:
+
+          --tw-translate-x: -50%;
+          translate: var(--tw-translate-x) var(--tw-translate-y);
+
+      `translate` and `transform` are separate properties that COMPOSE (translate
+      is applied first, then transform) — an animated `transform` does not replace
+      the centring the way a v3 `-translate-x-1/2` would have. So a keyframe that
+      also says `translate(-50%, -50%)` centres the popup a second time: it sits a
+      full 50% of its own width and height off-centre for the whole animation and
+      then snaps into place on the frame the animation ends. Measured on a 460×328
+      dialog: 230px left and 82px high, for 200ms, then a one-frame jump.
+
+      Ending on `transform: none` is what makes that structurally impossible — the
+      final keyframe is literally the resting state, so there is nothing to snap
+      to. Keep it that way. `motion.test.ts` fails if the centring comes back.
 
       `prefers-reduced-motion` zeroes the duration tokens upstream, in
-      tokens/motion.css, which flattens both.
+      tokens/motion.css, which flattens these to nothing.
    -------------------------------------------------------------------------- */
 @keyframes tt-dialog-in {
   from {
     opacity: 0;
-    transform: translate(-50%, calc(-50% + var(--s-3))) scale(0.98);
+    transform: translateY(var(--s-3)) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: none;
   }
 }
 @keyframes tt-dialog-out {
   from {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: none;
   }
   to {
     opacity: 0;
-    transform: translate(-50%, calc(-50% + var(--s-3))) scale(0.98);
+    transform: translateY(var(--s-3)) scale(0.98);
   }
 }
 
@@ -312,12 +326,134 @@
   transition: var(--transition-control);
 }
 
+/* The stacked toast moves on three axes at once and they are not the same speed:
+   the slide/scale between collapsed and expanded is the slow one, the fade tracks
+   dialogs, and the height change has to be quick or the stack visibly rubber-bands
+   while it re-measures. Named here so toast.tsx spells out no timing of its own. */
+@utility transition-toast {
+  transition:
+    transform var(--dur-slow) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out),
+    height var(--dur-fast) var(--ease-out);
+}
+
 @utility ring-focus {
   box-shadow: var(--ring);
 }
 
 /* --------------------------------------------------------------------------
-   5. Base layer. tokens/base.css already sets the body, headings, links and
+   5. The toast stack.
+
+      Base UI publishes the stack geometry on every Toast.Root as custom
+      properties, and the whole layout is arithmetic on them:
+
+        --toast-index             0 for the frontmost, counting backwards
+        --toast-offset-y          total height of everything in front of it
+        --toast-height            this toast's own natural height
+        --toast-frontmost-height  the front toast's height
+        --toast-swipe-movement-*  live finger offset, mid-swipe
+
+      Collapsed, the toasts sit on top of one another, each one --toast-peek
+      higher and a step smaller than the one in front. Hovering or focusing the
+      viewport sets data-expanded and fans them out to full size, --toast-gap
+      apart. This is Base UI's own reference geometry, with the delivered tokens
+      substituted for its hard-coded rem values.
+
+      It lives here rather than in toast.tsx for the same reason the dialog
+      keyframes do: this file is the one place allowed to name design values, and
+      what a component gets is a name.
+
+      Note the transform is written out in full in each state rather than reusing
+      Tailwind's translate/scale utilities. Those compile to the independent
+      `translate` and `scale` properties, which would compose with this
+      `transform` instead of replacing it — the same trap documented on the
+      dialog keyframes above.
+   -------------------------------------------------------------------------- */
+@utility toast-stack {
+  --toast-gap: var(--s-5);
+  --toast-peek: var(--s-5);
+  --toast-scale: calc(max(0, 1 - var(--toast-index) * 0.1));
+  --toast-shrink: calc(1 - var(--toast-scale));
+  --toast-stack-height: var(--toast-frontmost-height, var(--toast-height));
+  --toast-enter-x: calc(var(--spacing) * 2.5);
+  --toast-expanded-y: calc(
+    var(--toast-offset-y) * -1 + var(--toast-index) * var(--toast-gap) * -1 +
+      var(--toast-swipe-movement-y)
+  );
+
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: 100%;
+  height: var(--toast-stack-height);
+  transform-origin: bottom center;
+  z-index: calc(50 - var(--toast-index));
+
+  /* The --toast-shrink term closes the gap that scaling about the bottom edge
+     would otherwise leave between a back toast and the one in front of it. */
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - var(--toast-index) * var(--toast-peek) -
+          var(--toast-shrink) * var(--toast-stack-height)
+      )
+    )
+    scale(var(--toast-scale));
+
+  &[data-expanded] {
+    height: var(--toast-height);
+    transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--toast-expanded-y));
+  }
+
+  /* The gap between two expanded toasts belongs to neither of them, so a pointer
+     travelling down the stack would leave the viewport and collapse it halfway.
+     This bridges the gap so the reach stays continuous. */
+  &::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: calc(var(--toast-gap) + var(--s-1));
+  }
+
+  /* Enter and leave under their own steam: the delivered spec's "slides 10px in
+     from the right and fades". Only when it was not swiped and not dropped. */
+  &[data-starting-style],
+  &[data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
+    opacity: 0;
+    transform: translateX(var(--toast-enter-x));
+  }
+
+  /* Pushed off the back of the stack by a newer toast: fade where it stands. */
+  &[data-limited] {
+    opacity: 0;
+  }
+
+  /* Swiped away: continue along the swipe, from wherever the finger left it. */
+  &[data-ending-style] {
+    opacity: 0;
+
+    &[data-swipe-direction="right"] {
+      transform: translateX(calc(var(--toast-swipe-movement-x) + 150%))
+        translateY(var(--toast-expanded-y));
+    }
+    &[data-swipe-direction="left"] {
+      transform: translateX(calc(var(--toast-swipe-movement-x) - 150%))
+        translateY(var(--toast-expanded-y));
+    }
+    &[data-swipe-direction="up"] {
+      transform: translateY(calc(var(--toast-swipe-movement-y) - 150%));
+    }
+    &[data-swipe-direction="down"] {
+      transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6. Base layer. tokens/base.css already sets the body, headings, links and
       :focus-visible; this only adds what a bundled app needs on top.
    -------------------------------------------------------------------------- */
 @layer base {

@@ -24,8 +24,9 @@ import { BLURBS, NOTES } from "./specs";
 
 /**
  * The gallery drives its own toast manager so this page cannot fight an app-level
- * one, and raises the limit to four so every variant can be seen at once. The
- * shipped default is one at a time, bottom-right, as the system specifies.
+ * one. It keeps the shipped limit of three: firing all four variants is the more
+ * useful specimen precisely because the oldest is then dropped from the back of
+ * the stack, which is the behaviour worth being able to look at.
  */
 const galleryToasts = createToastManager();
 
@@ -153,7 +154,7 @@ export function Feedback() {
         </TooltipProvider>
       </Specimen>
 
-      <Toaster toastManager={galleryToasts} limit={4} />
+      <Toaster toastManager={galleryToasts} />
     </Section>
   );
 }
