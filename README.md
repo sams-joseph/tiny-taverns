@@ -111,7 +111,28 @@ pnpm --filter web dev   # http://localhost:5173
 pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
+pnpm dev                        # API on :3000, web on :5173
 ```
+
+That is the whole setup, and it needs no Clerk account. Paste the token into the Server
+panel's **Machine token** box to reach the authenticated endpoints.
+
+### Optional: hosted sign-in
+
+Sign-in through Clerk is opt-in — with neither variable set the app and the whole test
+suite behave exactly as above, and a JWT-shaped credential is simply unknown.
+
+```bash
+# apps/web/.env.local — gitignored; see apps/web/.env.example
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_…      # Dashboard → API keys → Publishable key
+
+# server environment
+CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----…"  # Dashboard → API keys → JWT public key (PEM)
+CLERK_TELEMETRY_DISABLED=1                   # the SDK phones home on dev instances otherwise
+```
+
+Neither value is a secret: one identifies the frontend, the other only *verifies* tokens.
+**`CLERK_SECRET_KEY` is deliberately not used anywhere in this repo** — don't add it.
 
 ## Workspace commands
 

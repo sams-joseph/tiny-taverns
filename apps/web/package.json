@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@clerk/react": "^6.12.11",
     "@taverns/api": "workspace:*",
     "@taverns/design-system": "workspace:*",
     "@taverns/ui": "workspace:*",

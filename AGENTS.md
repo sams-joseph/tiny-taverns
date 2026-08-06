@@ -381,6 +381,60 @@ account`: `campaign.account_id` is `on delete cascade`, so that would let a repl
 destroy a DM's entire history. Deletion, if ever wanted, is a deliberate product endpoint
 behind `Authorization`. These are written captain's decisions, not defaults.
 
+## The sign-in surface in `apps/web`
+
+**Clerk is opt-in here exactly as it is on the server, and that symmetry is the point.**
+`VITE_CLERK_PUBLISHABLE_KEY` unset means no hosted sign-in: `pnpm -F web dev` runs, the
+header shows no sign-in chrome, the hosted card in the Server panel is absent rather than
+present and dead, and the machine-token path is untouched. `apps/web/src/auth/AuthProvider.tsx`
+mounts `ClerkProvider` only when the key is present — Clerk's quickstart prints a hard
+`throw new Error("Add your Clerk Publishable Key")` there, and that one line is the difference
+between an opt-in dependency and a mandatory one. `.env.example` documents the variable;
+`.gitignore` already covers `.env.*`, so the real key lives only in an ignored `.env.local`.
+
+**Package names, same trap as the server side.** `@clerk/react`, **not** `@clerk/clerk-react`;
+types from `@clerk/shared/types`, **not** `@clerk/types`. Both old names are deprecated
+upstream and both still install cleanly — the same shape as the `@base-ui-components/react`
+rename. Verified at `@clerk/react@6.12.11`, whose React peer range `~19.2.3` the workspace's
+19.2.8 already satisfies, so no React bump is needed.
+
+**Core 3 removed `SignedIn`/`SignedOut`/`Protect`** in favour of one
+`<Show when="signed-in" fallback={…}>`, which renders `null` while auth loads. And
+**`getToken()` now *throws* `ClerkOfflineError` offline** where it used to resolve `null`;
+`AuthProvider` treats both as "no credential".
+
+**`packages/api`'s client stays free of Clerk, and Clerk stays behind a local seam.**
+`HostedSession` (`auth/hostedSession.ts`) is the whole vocabulary the app has for a hosted
+sign-in — `configured`, `signedIn`, `fetchToken()` — mirroring the server's `IdentityProvider`.
+`AuthProvider.tsx` and `SignInSurface.tsx` are the only files importing `@clerk/react`.
+`makeClient(token?)` needed no change: a session token is a bearer token like any other.
+
+**The token is fetched immediately before each call, never held in state.** Clerk's session
+tokens live 60 seconds; one read at mount works until the first refresh and then 401s
+silently, which for a page left open at a table is most of the session. The assertion that
+fails if someone hoists the fetch out of the handler is in `ServerPanel.test.tsx`
+("fetches a fresh session token for every call").
+
+**`vite.config.ts` pins `VITE_CLERK_PUBLISHABLE_KEY` empty for the test run.** Vitest loads
+`.env.local` like any other Vite build, so without that line the suite behaves differently on
+a machine that has Clerk configured — `AuthProvider` would mount the real `ClerkProvider` and
+reach for Clerk's script over the network, failing the tests that assert the unconfigured
+path. Pinning it in committed code is what makes the suite say the same thing everywhere.
+
+**The sign-in surface is deliberately unthemed, and that is a decision, not an omission.**
+Clerk's prefabricated components carry Clerk's own styling against a dark-only product whose
+Tailwind theme deletes the default palettes outright, so the first screen a user sees looks
+visibly foreign. The captain accepted that cost explicitly as a "for now" because the
+designers have not drawn a sign-in screen. The upgrade path is Clerk's `appearance` prop
+pointed at the existing design tokens — a bounded styling job. Do not rebuild the flow from
+`@taverns/ui` primitives on Clerk's headless hooks instead.
+
+**Clerk's bot protection blocks headless sign-up.** A scripted browser hits a Cloudflare
+Turnstile challenge in the sign-up modal, so the flow cannot be driven end to end without
+either a real human or `@clerk/testing`'s Testing Tokens — and those need `CLERK_SECRET_KEY`,
+which this design deliberately does not have. Budget for a human to click through it, or
+expect to bypass it in the dashboard for a development instance.
+
 ## The assistant: a trap to remember before it ships
 
 Nothing here uses `@effect/ai-anthropic` today — the captain's decision is to target locally

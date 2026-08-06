@@ -6,6 +6,7 @@ import { Forms } from "./gallery/Forms";
 import { Foundations } from "./gallery/Foundations";
 import { Navigation } from "./gallery/Navigation";
 import { ServerPanel } from "./api/ServerPanel";
+import { SignInSurface } from "./auth/SignInSurface";
 
 const SECTIONS = [
   { id: "foundations", label: "Foundations" },
@@ -26,11 +27,16 @@ export function App() {
     <div className="min-h-screen bg-surface-page">
       <header className="border-b border-hairline bg-surface-card">
         <div className="mx-auto flex max-w-5xl flex-col gap-5 px-page-sm py-page sm:px-page">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <img src={markUrl} alt="" width={40} height={40} aria-hidden="true" />
             <span className="font-display text-display-m leading-tight font-semibold tracking-display text-heading">
               Tiny Taverns
             </span>
+            {/* Clerk's own components, unthemed on purpose — see SignInSurface.
+                Renders nothing when no publishable key is configured. */}
+            <div className="ml-auto">
+              <SignInSurface />
+            </div>
           </div>
           <p className="max-w-measure text-body leading-body text-muted-foreground">
             The component gallery. Every primitive, every variant, every size — real shadcn
