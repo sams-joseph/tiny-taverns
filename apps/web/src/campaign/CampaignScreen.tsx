@@ -1,9 +1,9 @@
-import type { CampaignId, Encounter, Note } from "@taverns/api";
+import type { CampaignId, Encounter, EncounterId, Note } from "@taverns/api";
 import { Badge, Button, Icon, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
-import type { Route } from "../routes";
+import { hrefFor, useRoute, type Route } from "../routes";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { EncounterCard } from "./EncounterCard";
@@ -13,6 +13,7 @@ import { NoteDialog } from "./NoteDialog";
 import { NotesList } from "./NotesList";
 import { PartyList } from "./PartyList";
 import { PrepChecklist } from "./PrepChecklist";
+import { StartRunDialog } from "./StartRunDialog";
 
 /**
  * The campaign view — `ui_kits/dm-screen/CampaignHome.jsx`, against the real API.
@@ -63,6 +64,7 @@ function CampaignBody({
   tab,
   onTab,
   onEdit,
+  onRun,
   onChanged,
 }: {
   readonly view: CampaignView;
@@ -70,6 +72,7 @@ function CampaignBody({
   readonly tab: string;
   readonly onTab: (tab: string) => void;
   readonly onEdit: (editing: Editing) => void;
+  readonly onRun: (encounterId: EncounterId) => void;
   readonly onChanged: () => void;
 }) {
   const encounters = view.encounters.filter((encounter) =>
@@ -136,7 +139,9 @@ function CampaignBody({
                     key={encounter.id}
                     encounter={encounter}
                     noteCount={noteCounts.get(encounter.id) ?? 0}
+                    running={view.run?.encounterId === encounter.id}
                     onEdit={() => onEdit({ what: "encounter", encounter })}
+                    onRun={() => onRun(encounter.id)}
                   />
                 ))}
               </div>
@@ -201,9 +206,12 @@ export function CampaignScreen({
     [campaignId],
   );
   const [resource, reload] = useApiResource(load);
+  const [, navigate] = useRoute();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("encounters");
   const [editing, setEditing] = useState<Editing | undefined>();
+  /** The encounter the DM pressed Run on, while the start dialog is open. */
+  const [starting, setStarting] = useState<{ readonly encounterId: EncounterId | undefined }>();
 
   const view = resource.state === "ready" ? resource.value : undefined;
 
@@ -212,6 +220,34 @@ export function CampaignScreen({
     setEditing(undefined);
     reload();
   }, [reload]);
+
+  /**
+   * Where the runner is, when there is a fight to go back to.
+   *
+   * A fight already on the table is reachable from the top bar *and* from its
+   * own card, because the DM who reopens this screen mid-session is looking for
+   * exactly one thing.
+   */
+  const live =
+    view?.run !== undefined && view.session !== undefined
+      ? hrefFor({
+          screen: "run",
+          campaignId,
+          sessionId: view.session.id,
+          runId: view.run.id,
+        })
+      : undefined;
+
+  const run = useCallback(
+    (encounterId: EncounterId | undefined) => {
+      if (live !== undefined) {
+        globalThis.location.hash = live;
+        return;
+      }
+      setStarting({ encounterId });
+    },
+    [live],
+  );
 
   /** The top bar's one create slot, named for whichever tab is open. */
   const create =
@@ -256,6 +292,12 @@ export function CampaignScreen({
                   {create.label}
                 </Button>
               )}
+              {/* `CampaignHome.jsx:41`. It says which of the two things it is:
+                  starting a night, or walking back into one already running. */}
+              <Button size="sm" onClick={() => run(undefined)}>
+                <Icon name="swords" size={14} />
+                {live === undefined ? "Start session" : "Back to the fight"}
+              </Button>
             </>
           )}
         </TopBar>
@@ -274,6 +316,7 @@ export function CampaignScreen({
           tab={tab}
           onTab={setTab}
           onEdit={setEditing}
+          onRun={run}
           onChanged={reload}
         />
       )}
@@ -297,6 +340,19 @@ export function CampaignScreen({
           encounters={view.encounters}
           onClose={close}
           onSaved={saved}
+        />
+      )}
+      {starting !== undefined && view !== undefined && (
+        <StartRunDialog
+          campaign={view.campaign}
+          session={view.session}
+          encounters={view.encounters}
+          preselected={starting.encounterId}
+          onClose={() => setStarting(undefined)}
+          onStarted={(sessionId, runId) => {
+            setStarting(undefined);
+            navigate({ screen: "run", campaignId, sessionId, runId });
+          }}
         />
       )}
     </AppShell>

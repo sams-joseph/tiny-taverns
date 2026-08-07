@@ -27,6 +27,9 @@ export const noteId = "2b1f2a1e-0000-4000-8000-000000000801";
 export const goblinId = "2b1f2a1e-0000-4000-8000-000000000a01";
 export const hagId = "2b1f2a1e-0000-4000-8000-000000000a02";
 export const rosterRowId = "2b1f2a1e-0000-4000-8000-000000000b01";
+export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
+export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
+export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
 
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
 const provenance = { origin: "authored", assistantTurnId: null };
@@ -121,6 +124,34 @@ export const prepItem = {
 
 const emptyStatBlock = { meta: "", ac: "", hp: "", speed: "", cr: "", abilities: [], traits: [] };
 
+/**
+ * The document half, as `data.js:23-33` writes it — the parenthetical in
+ * `"17 (chain shirt, shield)"` being the whole reason it is not derived from
+ * the `ac` column beside it.
+ */
+const goblinStatBlock = {
+  meta: "Small humanoid (goblinoid), neutral evil",
+  ac: "17 (chain shirt, shield)",
+  hp: "21 (6d6)",
+  speed: "30 ft.",
+  cr: "1 (200 XP)",
+  abilities: [
+    { label: "STR", score: "10", modifier: "+0" },
+    { label: "DEX", score: "14", modifier: "+2" },
+  ],
+  traits: [
+    {
+      name: "Nimble Escape",
+      text: "The boss takes the Disengage or Hide action as a bonus action on each of its turns.",
+    },
+    {
+      name: "Scimitar",
+      text: "Melee weapon attack: +4 to hit, reach 5 ft., one target.",
+      dice: "1d6+2",
+    },
+  ],
+};
+
 /** A global `system` row: `campaignId` null, which is what makes it global. */
 export const goblin = {
   id: goblinId,
@@ -135,21 +166,82 @@ export const goblin = {
   hp: 21,
   environments: ["Marsh"],
   legendary: false,
-  statBlock: emptyStatBlock,
+  statBlock: goblinStatBlock,
   visibility: "dm",
   origin: "system",
   assistantTurnId: null,
   ...stamps,
 };
 
+/** No document at all — the honest "nothing written yet" case. */
 export const hag = {
   ...goblin,
+  statBlock: emptyStatBlock,
   id: hagId,
   name: "Marsh Hag",
   cr: "5",
   crSort: 5,
   ac: 17,
   hp: 82,
+};
+
+/**
+ * A fight on the table: the run, and the two combatants it seeded.
+ *
+ * Shared with the runner's own tests for the reason this file exists — a field
+ * renamed upstream is one edit here rather than one per test file — and the
+ * bodies are the JSON the server sends, so a rename fails decoding rather than
+ * rendering `undefined`.
+ */
+export const liveRun = {
+  id: runId,
+  sessionId,
+  encounterId,
+  encounterName: "Ambush in the reeds",
+  round: 1,
+  activeCombatantId: combatantId,
+  startedAt: "2026-08-04T19:00:00.000Z",
+  endedAt: null,
+  visibility: "dm",
+  ...provenance,
+  ...stamps,
+};
+
+/** A party member, seeded from `character`. */
+export const brannoc = {
+  id: combatantId,
+  encounterRunId: runId,
+  characterId: character.id,
+  creatureId: null,
+  displayName: "Brannoc",
+  subtitle: "Half-orc paladin",
+  playerName: "Ilse",
+  initiative: 21,
+  hpCurrent: 44,
+  hpMax: 52,
+  ac: 18,
+  kind: "pc",
+  conditions: [],
+  visibility: "dm",
+  ...provenance,
+  ...stamps,
+};
+
+/** A monster, seeded from the roster — so it has a stat block to show. */
+export const goblinBoss = {
+  ...brannoc,
+  id: goblinCombatantId,
+  characterId: null,
+  creatureId: goblinId,
+  displayName: "Goblin Boss",
+  subtitle: "Small humanoid",
+  playerName: null,
+  initiative: 19,
+  hpCurrent: 21,
+  hpMax: 21,
+  ac: 17,
+  kind: "npc",
+  conditions: ["Hostile"],
 };
 
 /** A roster line: this creature, this many times. */
@@ -189,7 +281,15 @@ export const fullCampaign = (): Map<string, Answer> =>
       { status: 200, body: [rosterRow] },
     ],
     [`GET /campaigns/${campaignId}/sessions/${sessionId}`, { status: 200, body: session }],
+    [
+      `PATCH /campaigns/${campaignId}/sessions/${sessionId}`,
+      { status: 200, body: { ...session, startedAt: stamps.updatedAt } },
+    ],
     [`GET /campaigns/${campaignId}/sessions/${sessionId}/prep`, { status: 200, body: [prepItem] }],
+    // No fight on the table. A test that wants one re-aims this at `[liveRun]`,
+    // which is what turns the top bar's "Start session" into "Back to the
+    // fight" and lights the encounter card.
+    [`GET /campaigns/${campaignId}/sessions/${sessionId}/runs`, { status: 200, body: [] }],
     [
       `PATCH /campaigns/${campaignId}/sessions/${sessionId}/prep/${prepItemId}`,
       { status: 200, body: { ...prepItem, done: true } },

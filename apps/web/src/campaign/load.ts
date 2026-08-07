@@ -3,6 +3,7 @@ import type {
   CampaignId,
   Character,
   Encounter,
+  EncounterRun,
   Note,
   PrepItem,
   Session,
@@ -20,6 +21,17 @@ export interface CampaignView {
   readonly party: ReadonlyArray<Character>;
   /** The "Before you sit down" checklist. Empty when there is no session. */
   readonly prep: ReadonlyArray<PrepItem>;
+  /**
+   * The fight on the table right now — the fixtures' `active: true`
+   * (`data.js:10`, `CampaignHome.jsx:21-25`) — or `undefined`.
+   *
+   * Found by listing this session's runs and taking the unended one rather than
+   * by following `session.activeEncounterRunId`, which would need a third round
+   * of requests to resolve. `encounter_run_one_live_per_session` is a partial
+   * unique index, so "the unended one" is at most one row and the two routes
+   * cannot disagree.
+   */
+  readonly run: EncounterRun | undefined;
 }
 
 /**
@@ -53,6 +65,7 @@ export const loadCampaignView = (campaignId: CampaignId) => (client: TavernsClie
             [
               client.sessions.findById({ params: { campaignId, sessionId } }),
               client.prep.list({ params: { campaignId, sessionId } }),
+              client.runs.list({ params: { campaignId, sessionId } }),
             ],
             { concurrency: "unbounded" },
           );
@@ -64,6 +77,7 @@ export const loadCampaignView = (campaignId: CampaignId) => (client: TavernsClie
       notes,
       party,
       prep: live?.[1] ?? [],
+      run: live?.[2].find((row) => row.endedAt === null),
     } satisfies CampaignView;
   });
 

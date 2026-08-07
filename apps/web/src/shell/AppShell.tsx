@@ -133,19 +133,42 @@ export function AppShell({
   route,
   railFooter,
   topBar,
+  fill = false,
   children,
 }: {
   readonly route: Route;
   readonly railFooter?: ReactNode;
   readonly topBar: ReactNode;
+  /**
+   * Give the body the viewport's height instead of letting the page scroll.
+   *
+   * The prep screens scroll: they are a document, and the top bar is sticky
+   * over it. The runner does not — it is one screenful with an initiative list
+   * that scrolls *inside* a panel while the stat block stays put beside it, and
+   * a DM who has to scroll to see whose turn it is has the wrong tool. That
+   * needs a bounded height all the way down, which is what this swaps in: the
+   * column stops scrolling, and `main` becomes a `min-h-0` flex child so its
+   * own children can be told how tall they are.
+   */
+  readonly fill?: boolean;
   readonly children: ReactNode;
 }) {
   return (
     <div className="flex h-screen overflow-hidden bg-surface-page">
       <Rail route={route} footer={railFooter} />
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-auto">
+      <div
+        className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
+      >
         {topBar}
-        <main className="flex-1 px-page-sm py-page sm:px-page">{children}</main>
+        <main
+          className={
+            fill
+              ? "flex min-h-0 flex-1 flex-col px-page-sm py-gutter sm:px-page"
+              : "flex-1 px-page-sm py-page sm:px-page"
+          }
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

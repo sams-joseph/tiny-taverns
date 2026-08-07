@@ -2,9 +2,10 @@ import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { Gallery } from "./gallery/Gallery";
 import { useRoute } from "./routes";
+import { RunScreen } from "./run/RunScreen";
 
 /**
- * Three screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Four screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
@@ -21,6 +22,19 @@ export function App() {
       return <Gallery route={route} />;
     case "campaign":
       return <CampaignScreen campaignId={route.campaignId} route={route} />;
+    case "run":
+      return (
+        <RunScreen
+          // A different fight is a different screen, not the same one with new
+          // props: the stream, the log and the optimistic hit points all belong
+          // to one run and none of them should survive into another.
+          key={route.runId}
+          campaignId={route.campaignId}
+          sessionId={route.sessionId}
+          runId={route.runId}
+          route={route}
+        />
+      );
     default:
       return <CampaignsScreen route={route} />;
   }

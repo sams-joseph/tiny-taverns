@@ -13,11 +13,11 @@ import {
 /**
  * One authored encounter, as `CampaignHome.jsx` draws it.
  *
- * **"On the table now"** is still not on the wire and is not an oversight —
- * `Encounter.ts` says why: it is a pointer on the session, not a flag per
- * encounter, and it arrives with the live-session step. It is not stubbed here,
- * because a card that renders data the product does not have is how a scaffold
- * survives into production.
+ * **"On the table now"** is a property of the *session*, not of this row —
+ * `Encounter.ts` says why: one pointer, so two encounters cannot both claim the
+ * table. So it arrives as a prop from the screen, which found the session's one
+ * unended `encounter_run`; there is no field on `Encounter` to read it from and
+ * there should not be.
  *
  * The prototype's other line, **"6 creatures"**, is `Encounter.creatureCount` —
  * `sum(encounter_creature.count)` computed per read, over the roster *this
@@ -77,14 +77,28 @@ const describe = (encounter: Encounter, noteCount: number): string => {
 export function EncounterCard({
   encounter,
   noteCount,
+  running,
   onEdit,
+  onRun,
 }: {
   readonly encounter: Encounter;
   readonly noteCount: number;
+  /** This is the fight on the table right now — `CampaignHome.jsx:21-25`. */
+  readonly running: boolean;
   readonly onEdit: () => void;
+  /**
+   * Put it on the table, or go back to it.
+   *
+   * The prototype makes the whole card clickable for this. It stays a button
+   * here: the card already carries a pencil, and a card that is itself a
+   * control with another control inside it is a keyboard trap and an
+   * accessibility problem — the prototype's inline `onClick` on a `<div>` is
+   * the visual specification, not the interaction.
+   */
+  readonly onRun: () => void;
 }) {
   return (
-    <Card className="h-full">
+    <Card className={running ? "h-full border-accent" : "h-full"}>
       <CardHeader>
         <div className="flex items-start gap-2.5">
           <CardTitle className="flex-1">{encounter.name}</CardTitle>
@@ -101,7 +115,7 @@ export function EncounterCard({
         </div>
         <CardDescription>{describe(encounter, noteCount)}</CardDescription>
       </CardHeader>
-      <CardContent className="mt-auto flex flex-wrap gap-1.5">
+      <CardContent className="mt-auto flex flex-wrap items-center gap-1.5">
         {encounter.tags.map((tag) => (
           <Badge key={tag} variant="outline">
             {tag}
@@ -110,6 +124,15 @@ export function EncounterCard({
         {/* Every row defaults to `dm`, so the exception is what is worth marking:
             this one is visible to players. */}
         {encounter.visibility === "shared" && <Badge variant="info">Shared</Badge>}
+        <Button
+          variant={running ? "default" : "outline"}
+          size="sm"
+          className="ml-auto"
+          onClick={onRun}
+        >
+          <Icon name="swords" size={13} />
+          {running ? "On the table now" : "Run"}
+        </Button>
       </CardContent>
     </Card>
   );

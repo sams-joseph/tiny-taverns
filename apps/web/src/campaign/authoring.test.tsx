@@ -3,18 +3,21 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   bodyOf,
+  campaign,
   campaignId,
   encounter,
   encounterId,
   goblinId,
   installMemoryStorage,
   installStubServer,
+  liveRun,
   mintingSession,
   prepItem,
   prepItemId,
   readAloud,
   renderScreen,
   rosterRowId,
+  session,
   sessionId,
 } from "./campaign.fixtures";
 
@@ -372,5 +375,89 @@ describe("authoring the checklist", () => {
           .length,
       ).toBeGreaterThan(1),
     );
+  });
+});
+
+/**
+ * *Start session* — the only way into the runner, and the one form in the app
+ * that has to make three tables agree in a single submit.
+ */
+describe("starting a session", () => {
+  const runsPath = `/campaigns/${campaignId}/sessions/${sessionId}/runs`;
+
+  it("runs an encounter in the session that already exists", async () => {
+    server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
+    renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
+    await screen.findByText("Put an encounter on the table");
+    // No session is invented: the campaign already names one.
+    expect(screen.getByText(/This runs in session 12/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(await screen.findByRole("option", { name: "Ambush in the reeds" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start the fight" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/sessions/${sessionId}/runs`)).toEqual({
+        encounterId,
+        // `includeParty` is absent because the server's default is yes, and a
+        // fight without the party in initiative is not a fight. Fail-closed
+        // `dm` is said out loud, because that is a boundary.
+        visibility: "dm",
+      }),
+    );
+    expect(
+      server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/sessions")),
+    ).toBe(false);
+  });
+
+  it("creates the session, points the campaign at it, and stamps it started", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
+      status: 200,
+      body: [{ ...session, number: 12 }],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/sessions`, { status: 200, body: session });
+    server.routes.set(`PATCH /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: sessionId },
+    });
+    server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
+    renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
+    // One past the highest that exists, which is the only thing the list is read for.
+    await screen.findByText(/This starts session 13/);
+
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(await screen.findByRole("option", { name: "Ambush in the reeds" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start the fight" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/campaigns/${campaignId}/sessions`)).toEqual({ number: 13 }),
+    );
+    // The prep screen reads the night off the campaign, so the pointer moves
+    // with it or the two screens disagree about which night this is.
+    expect(bodyOf(server, "PATCH", `/campaigns/${campaignId}`)).toEqual({
+      currentSessionId: sessionId,
+    });
+    expect(
+      (bodyOf(server, "PATCH", `/sessions/${sessionId}`) as { startedAt: string }).startedAt,
+    ).toMatch(/^\d{4}-/);
+  });
+
+  it("offers the way back rather than a second fight when one is on the table", async () => {
+    server.routes.set(`GET ${runsPath}`, { status: 200, body: [liveRun] });
+    renderScreen(mintingSession());
+
+    // Exactly one encounter is live, so the campaign says which — the
+    // fixtures' `active: true`.
+    await screen.findByRole("button", { name: "Back to the fight" });
+    expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
+    expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();
   });
 });

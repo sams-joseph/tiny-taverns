@@ -730,8 +730,8 @@ expect to bypass it in the dashboard for a development instance.
 
 ## Screens in `apps/web`: the shape every new one should copy
 
-The campaign view is the first screen built on the API, and the bestiary and the runner come
-next. Five things are settled by it; follow them rather than re-deriving them.
+The campaign view is the first screen built on the API and the runner is the second; the
+bestiary comes next. Five things are settled by them; follow them rather than re-deriving them.
 
 - **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
   (two rounds, concurrent within a round, because the checklist hangs off
@@ -753,11 +753,13 @@ next. Five things are settled by it; follow them rather than re-deriving them.
   developer with no Clerk key. Both are read immediately before the request for the same
   reason the sign-in section already records. A screen must never assume an authenticated
   user exists: with no credential at all the load 401s and the notice says where to get one.
-- **Do not render a field the API does not have.** The encounter card shows no creature count
-  and no "on the table now", because `Encounter.ts` says both arrive with later steps; a
-  stubbed `0` is a worse lie than an absent line. Where a fixture field has no column, find
-  the honest equivalent already on the wire — the card shows how many notes hang off the
-  encounter instead.
+- **Do not render a field the API does not have.** A stubbed `0` is a worse lie than an absent
+  line. Where a fixture field has no column, find the honest equivalent already on the wire, or
+  the row that really answers it: the encounter card's "on the table now" is not a field on
+  `Encounter` and never will be — it is the session's one unended `encounter_run`, which
+  `campaign/load.ts` finds by listing the session's runs and taking the one with no `endedAt`
+  (a third round of requests to follow `session.activeEncounterRunId` buys the same answer, and
+  the partial unique index means they cannot disagree).
 - **Layout that depends on a column's width uses a container query, not a breakpoint.** The
   encounter grid is `@container` + `@lg`/`@3xl`, which is where `auto-fill minmax(250px,1fr)`
   actually turns over (two cards need 516px, three need 782px) — and it reacts to the aside
@@ -846,16 +848,24 @@ Four things that cost real time, all found by driving it rather than by testing 
   same TS2742 the server hits with `@clerk/shared`. Annotate a shared `renderScreen` helper
   `: void`.
 
-**Fixtures for the campaign view live in `campaign/campaign.fixtures.tsx`, shared by the read
-tests and the write tests.** They are the JSON the server sends, not the decoded classes, so a
-field the contract renames fails the test rather than rendering `undefined` — which is why a
-fixture may not be a `Partial<>` of anything, and why a field added upstream is one edit here
-rather than one per test file. `installStubServer()` must be called once per file at module
-scope, for the `Context.Reference` reason `api/client.test.ts` records.
+**Fixtures live in `campaign/campaign.fixtures.tsx`, shared by every screen's tests** — the
+campaign view's reads and writes, and the runner's, which re-exports them through
+`run/run.fixtures.tsx`. They are the JSON the server sends, not the decoded classes, so a field
+the contract renames fails the test rather than rendering `undefined` — which is why a fixture
+may not be a `Partial<>` of anything, and why a field added upstream is one edit here rather
+than one per test file. `installStubServer()` (or the runner's `installRunServer()`, which can
+also hold a stream open) must be called once per file at module scope, for the
+`Context.Reference` reason `api/client.test.ts` records.
 
-**Prep-item authoring needs a session to hang off, and creating one is not built.** The
-checklist belongs to `session`, so with `campaign.currentSessionId` null the card says so and
-offers no Add row. Session creation is the live-session step's surface, not this one.
+**A session is created by _Start session_, in `campaign/StartRunDialog.tsx`, and nowhere else.**
+The prep checklist hangs off `session`, so with `campaign.currentSessionId` null it says so and
+offers no Add row; the dialog is what fills that in. One `submit` makes three tables agree —
+create the session (numbered one past the highest `sessions.list` returns), point
+`campaign.currentSessionId` at it, start the run — and then stamps `session.startedAt` **best
+effort**, with `Effect.ignore`. That last one is deliberate and was found by testing: stamping
+first meant a fight the DM had pressed the button for could be lost to a timestamp that would
+not save, and anything that would genuinely deny the stamp has already denied `runs.start` one
+line above.
 
 ## The live session: what is durable, what is fan-out, and how a stream comes back
 
@@ -953,6 +963,98 @@ transaction _start_ time, so every combatant a seed creates shares a timestamp a
 interleaved among the monsters, fixed but arbitrary. Harmless (everything seeds at initiative 0,
 so there is no correct order yet) but do not read `created_at asc` as "the order they were
 added".
+
+## The runner: how a screen consumes the stream, and what it does when it comes back
+
+`apps/web/src/run/` is the client half of the section above, and the next live surface should
+copy its shape rather than re-derive it. `stream.ts` is the whole reconnect story; `state.ts`
+is the optimistic one.
+
+**The stream is a doorbell on the client too.** The server publishes `{sessionId}` and re-reads
+the log from SQL; this screen receives a `SessionEvent` and re-reads the run and its combatants
+through the ordinary API. It never applies the event's `payload` — that field is documented as
+"the human-legible remainder … not a contract anything branches on", so reconstructing hit
+points from it would be a second implementation of the clamp in `Combatants.damage`. What the
+log panel renders comes from `kind` and the two id columns and nothing else.
+
+**The cursor lives in a `useRef`, and every attempt opens with `?since=<cursor>`.** State is a
+frame behind by design and the cursor is read at the instant a connection is opened. A first
+connection replays this run's log from 0, a reconnect replays only what was missed, and a
+redundant reconnect replays nothing — so the screen can afford to reconnect eagerly. Heartbeats
+carry no `id` and must not move it (`stream.test.ts` pins that). `?since=` and not
+`Last-Event-ID`: the derived client issues a plain `fetch`, which does not resend that header.
+
+**Reconnecting has two halves, and resuming the log is only one of them.** The rows are read
+over a _separate_ request, so a client that received an event and then failed to re-read it
+comes back to a stream with nothing to replay and sits quietly behind the server. Measured in
+Chromium with the network cut mid-fight: the open stream kept delivering the doorbell, a new
+`fetch` could not leave, and the screen stayed stale. Two things fix it and both are load
+bearing — `useLiveStream` calls `onReconnected` on every connection **after the first**, and a
+failed re-read in `useRunState` retries itself with backoff.
+
+**A connection that goes silent is the worst kind, and `Stream.timeout` is the only thing that
+notices.** A sleeping laptop leaves a socket that is "open" at both ends with nothing arriving;
+nothing errors, so the loop would wait forever. `SILENCE_MS` is 45s — over two of the server's
+20s heartbeats — and it is paired with `LIVE_HEARTBEAT_SECONDS`: raise that above 45 and every
+healthy connection reconnects on a timer. Verified by `SIGSTOP`ing the server (see the
+measurement notes below): 43s to give up, then `SIGCONT` and back to live, resuming from the
+cursor.
+
+**The retry loop uses `Effect.result`, never `Effect.exit`.** `result` catches typed failures
+only, so an interrupt — which is what React's cleanup does — unwinds the loop instead of being
+caught and retried forever. Defects are turned into failures with `Effect.catchDefect` for the
+same reason: a defect that killed the loop would leave the screen silently stale, which is
+worse than reconnecting too often. Backoff is `[250ms … 30s]`, and `strikes` only grows for
+attempts that heard **nothing at all**, so a connection that lived an hour and then dropped
+starts again from the top.
+
+**Hit points are optimistic; the turn marker is not.** Damage is the write that happens every
+few seconds while four people watch. Whose turn it is gets read aloud, and a wrong guess means
+saying the wrong name at the table — so it waits. The optimistic rule is three lines and is in
+`state.ts`: a row with an outstanding write of ours renders `pending`, only our own last
+response clears it (a stream refresh underneath changes nothing on screen until then), and a
+failure clears it with nothing to replace it plus a toast. It is an absolute value and not a
+delta on top of the server's row, because a delta double-counts for the moment between the
+server applying the hit and our response landing. **What makes this sound rather than merely
+quick is that the endpoint takes a delta**: a hit computed from a stale row still applies the
+right amount.
+
+**Every write uses its own answer, so the screen works with the stream down.** `nextTurn`, the
+share switch and moving the marker return the run; damage returns the combatant. The doorbell
+is what keeps a _second_ tab honest and what catches up after a drop — it is not how this tab
+learns what it just did. Writes that change the shape of the list (add, remove, roll
+initiative) re-read instead, the same rule the campaign screen follows.
+
+Four smaller things, all of which cost time:
+
+- **The route carries all three ids** (`#/campaigns/:c/sessions/:s/runs/:r`). That is what makes
+  a mid-fight reload land back in the fight with no local state and nothing to look up. A
+  half-typed run link falls back to the _campaign_, not to the list.
+- **`AppShell` takes `fill`.** The prep screens scroll; the runner is one screenful with a list
+  that scrolls inside a panel, which needs a bounded height all the way down.
+- **The initiative order is the server's, unsorted.** It is also what `nextTurn` walks, so a
+  second sort in the client could disagree with the marker. Everything seeds at initiative 0
+  (see `created_at` above), so the roll button exists — d20 for the monsters only, because the
+  app cannot roll for the people at the table and overwriting numbers they just called out
+  would be worse than no button.
+- **Hit points reaching zero renders; it never removes.** Greyed, struck through, in place.
+  Removal is an explicit act inside the edit dialog, and nothing on the row offers it.
+
+### Measuring this class of change
+
+Same blind spot as the dialog motion and the layering scale: jsdom sees none of it. What
+worked, driving Chromium over CDP:
+
+- **`Network.emulateNetworkConditions {offline:true}` does not kill an established socket.** It
+  blocks new requests, so the stream keeps delivering while re-reads fail — which is a real and
+  useful case, but it is _not_ how to test the silence watchdog. For that, `SIGSTOP` the server:
+  the connection stays open and the heartbeats stop, which is exactly a sleeping peer.
+- **Chromium reports the CORS preflight as a second `Network.requestWillBeSent` for the same
+  URL.** Two `/events?since=0` lines in a trace is one connection, not two. Count established
+  sockets (`ss -tn state established '( sport = :3300 )'`) if you need the truth — it stays flat
+  across reloads, which is how the fiber interrupt was confirmed to close the stream.
+- Base UI's `Switch` puts its `id` on the hidden `<input>`; drive the `[role=switch]` span. Its
+  `Select` needs the keyboard route. Both are already recorded above, and both bit again here.
 
 ## The assistant: a trap to remember before it ships
 
