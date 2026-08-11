@@ -20,6 +20,7 @@ describe("hash routes", () => {
       { screen: "campaigns" },
       { screen: "gallery" },
       { screen: "campaign", campaignId: CAMPAIGN_ID },
+      { screen: "bestiary", campaignId: CAMPAIGN_ID },
       { screen: "run", campaignId: CAMPAIGN_ID, sessionId: SESSION_ID, runId: RUN_ID },
     ];
     for (const route of routes) {
@@ -34,6 +35,17 @@ describe("hash routes", () => {
       sessionId: SESSION_ID,
       runId: RUN_ID,
     });
+  });
+
+  it("hangs the bestiary off a campaign, because the API does", () => {
+    // `creatures.list` is `/campaigns/:campaignId/creatures`, and that path is
+    // the only thing gating the global `system` rows it returns beside the
+    // campaign's own — so there is no campaign-less bestiary to route to.
+    expect(parseRoute(`#/campaigns/${CAMPAIGN_ID}/bestiary`)).toEqual({
+      screen: "bestiary",
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(parseRoute("#/campaigns/not-a-uuid/bestiary")).toEqual({ screen: "campaigns" });
   });
 
   it("falls back a level, not all the way, on a half-typed run link", () => {

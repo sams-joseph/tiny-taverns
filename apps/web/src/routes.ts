@@ -21,6 +21,13 @@ import { useCallback, useEffect, useState } from "react";
 export type Route =
   | { readonly screen: "campaigns" }
   | { readonly screen: "campaign"; readonly campaignId: CampaignId }
+  /**
+   * The bestiary names a campaign, because the API does: `creatures.list` hangs
+   * off `/campaigns/:campaignId/creatures`, and that path is the only thing
+   * gating the global `system` rows it returns beside the campaign's own. A
+   * top-level `#/bestiary` would have no campaign to read *through*.
+   */
+  | { readonly screen: "bestiary"; readonly campaignId: CampaignId }
   | {
       readonly screen: "run";
       readonly campaignId: CampaignId;
@@ -53,7 +60,9 @@ const parseSessionId = parser(SessionId);
 const parseRunId = parser(EncounterRunId);
 
 export const parseRoute = (hash: string): Route => {
-  const [head, campaignRaw, sessions, sessionRaw, runs, runRaw] = hash
+  // `section` is whatever follows the campaign's id: `bestiary`, or `sessions`
+  // on the way to a fight.
+  const [head, campaignRaw, section, sessionRaw, runs, runRaw] = hash
     .replace(/^#\/?/, "")
     .split("/");
 
@@ -62,7 +71,8 @@ export const parseRoute = (hash: string): Route => {
   if (head === "campaigns") {
     const campaignId = parseCampaignId(campaignRaw);
     if (campaignId !== undefined) {
-      if (sessions === "sessions" && runs === "runs") {
+      if (section === "bestiary") return { screen: "bestiary", campaignId };
+      if (section === "sessions" && runs === "runs") {
         const sessionId = parseSessionId(sessionRaw);
         const runId = parseRunId(runRaw);
         // A half-typed run link still knows which campaign it meant, so it
@@ -84,6 +94,8 @@ export const hrefFor = (route: Route): string => {
       return "#/gallery";
     case "campaign":
       return `#/campaigns/${route.campaignId}`;
+    case "bestiary":
+      return `#/campaigns/${route.campaignId}/bestiary`;
     case "run":
       return `#/campaigns/${route.campaignId}/sessions/${route.sessionId}/runs/${route.runId}`;
     default:

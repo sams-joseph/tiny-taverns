@@ -829,8 +829,9 @@ expect to bypass it in the dashboard for a development instance.
 
 ## Screens in `apps/web`: the shape every new one should copy
 
-The campaign view is the first screen built on the API and the runner is the second; the
-bestiary comes next. Five things are settled by them; follow them rather than re-deriving them.
+The campaign view is the first screen built on the API, the runner is the second and the
+bestiary is the third. Five things are settled by them; follow them rather than re-deriving
+them.
 
 - **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
   (two rounds, concurrent within a round, because the checklist hangs off
@@ -909,11 +910,14 @@ Three things about it that are decisions, not details:
   UI's own tab sets, which is what makes the shared recipe work on a plain anchor. `-mb-px` in
   that recipe is what lands the underline _on_ the bar's hairline; the item needs `h-auto
 self-stretch` to reach it.
-- **The nav is the screens that exist**, which is why it is shorter than the kit's. The kit draws
-  four as of the third delivery (Campaign, Run, Bestiary, Chronicle); a screen earns its item when
-  it is built, and _Run_ never does, because a fight is reached from the campaign that owns it
-  and a top-level link could not know which. `sectionOf` lights **Campaigns** for the campaign
-  list, a campaign _and_ a run — the underline says which part of the app you are in.
+- **The nav is the screens that exist, and it is a function of the route** — which is why it is
+  shorter than the kit's. The kit draws four as of the third delivery (Campaign, Run, Bestiary,
+  Chronicle); a screen earns its item when it is built, and _Run_ never does, because a fight is
+  reached from the campaign that owns it and a top-level link could not know which. **_Bestiary_
+  is there, but only once a campaign is**, because `creatures.list` hangs off one; `navFor(route)`
+  adds it when the route names a campaign and omits it on the campaign list. `sectionOf` lights
+  **Campaigns** for the campaign list, a campaign _and_ a run, and gives the bestiary its own
+  underline — the underline says which part of the app you are in.
 - **The campaign name is the only elastic thing in the bar, so it is the thing that truncates.**
   The right-hand group is `min-w-0`, not `shrink-0`. Without that the bar overflowed its own
   width at 760px and clipped _Ask Hob_ — invisible to every test, because the shell's
@@ -1300,6 +1304,62 @@ worked, driving Chromium over CDP:
   on an undefined global. Compare against the `.jsx` source and the `guidelines/` specimens, and
   assert on **computed values from the running app** (`getComputedStyle`, `getBoundingClientRect`)
   against the token the kit names. That is what caught the 760px overflow a screenshot did not.
+
+## The bestiary screen: how it consumes the creature contract
+
+`apps/web/src/bestiary/` is `ui_kits/dm-screen/Bestiary.jsx` against the real API — search,
+environment chips, the grid, the stat block and the empty state the designers drew. It is a
+read-only browse screen: **there is no authoring, no importing and no derive**, and nothing on
+it offers one, because a button that opens nothing is the same lie as a stubbed field. The
+endpoints for all three exist (`creatures.create` / `update` / `derive`); the screens do not.
+
+Five things it settled that the next screen over this contract should not re-derive:
+
+- **The route hangs off a campaign — `#/campaigns/:c/bestiary` — and so does the nav item.**
+  `creatures.list` is `/campaigns/:campaignId/creatures`, and that path is the _only_ thing
+  gating the global `system` rows it returns beside the campaign's own, so a campaign-less
+  bestiary has nothing to read through. `navFor(route)` in `shell/AppShell.tsx` therefore adds
+  _Bestiary_ only when the route names a campaign; from the campaign list it is absent rather
+  than disabled. `sectionOf` gives it its own underline, because it is a screen you go _to_ from
+  a campaign rather than a view of one.
+- **The search and the sort are query parameters; the environment chips are not.** The search
+  has to be the server's, because `ILIKE` on the name is only half of it and the other half is
+  full text over the stat block — measured against a running server, `"nimble escape"` returns
+  the Goblin Boss _and_ the reskin derived from it, by a trait that is in no column. The sort
+  goes with it because `cr` orders by `crSort`. The chips do not, and that is not a shortcut:
+  **a one-element array does not survive the wire at `effect@4.0.0-beta.102`.** The derived
+  client encodes `["Cave"]` as one `?environments=Cave`; the server's query decoder reads a
+  single occurrence of a key as a scalar, and `Schema.Array` refuses it — `Expected array |
+undefined, got "Cave"`, a 400. Verified by hand against the running server:
+  `?environments=Cave` is 400 and `?environments=Cave&environments=River` is 200. Applying the
+  any-of in the client loses nothing (every row carries its own `environments`, the two filters
+  are conjunctive, the server's order is untouched) and costs no request — but the _contract_ is
+  still wrong, and a fix belongs in `packages/api`/upstream, not in a second client workaround.
+- **The card is the row half and the panel is the document half, and both are rendered.**
+  `AC 17` / `21 hp` on the card are the integers that filter and sort; `"17 (chain shirt,
+shield)"`, `"21 (6d6)"`, `"1 (200 XP)"` are what the stat block shows.
+  `bestiary/StatBlock.tsx` prefers the document and falls back to the column when the document
+  is empty, so a creature typed in a hurry still shows its numbers. It moved there out of
+  `run/CombatantPanel.tsx`, which now imports it — one block, two screens, because it is one
+  row.
+- **Provenance is rendered, and rendered above the fold.** `provenance.ts` is the only place
+  origin is turned into words. `system` → _Shared corpus_ plus a sentence saying it belongs to
+  no campaign and is not theirs to edit; `authored` earns **no** card badge, because absence is
+  what says "yours" and a badge on every row would say nothing. The dialog's badge sits in the
+  header rather than at the end of the body, for the reason `SaveFailure` sits in the footer:
+  that body scrolls, and a line under it is one a DM never reads.
+- **Two empty states behind one drawn card.** `EmptyState` renders the designers' _"Nothing
+  lives here"_ either way; the second sentence is _"Loosen a filter"_ when the DM narrowed
+  something and names `pnpm -F server bestiary:import` when the campaign's whole reach is empty.
+  Telling them apart needs the screen to remember whether an _unsearched_ answer was empty —
+  which is exact, because the chips never reach the server. The chip vocabulary is accumulated
+  across loads rather than recomputed, so a search cannot take the chips off the row.
+
+The last good list stays on screen while the next one loads (`shown`), so a grid does not blank
+to "Loading…" on every keystroke. Measured in Chromium against a real server and a real corpus:
+3 × 448px columns at 1440 and 2 × 410px at 900 with no horizontal document scroll; the stat
+block dialog at `z-dialog` 110 over a scrim at `z-scrim` 100, `elementFromPoint` inside it
+returning the dialog; a pressed chip at `--accent-soft` on `--accent` with `--accent-ink` text.
 
 ## Hob: the chat surface is built, and nothing is behind it
 

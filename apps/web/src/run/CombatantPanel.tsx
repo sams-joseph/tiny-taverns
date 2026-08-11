@@ -1,16 +1,18 @@
-import type { Ability, Combatant, Creature, CreatureId, Trait } from "@taverns/api";
+import type { Combatant, Creature, CreatureId } from "@taverns/api";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import { StatBlockBody, StatLine } from "../bestiary/StatBlock";
 import { subtitleOf } from "./load";
 
 /**
  * Whoever the DM is looking at: their numbers, and their stat block when there
  * is one to show.
  *
- * `ui_kits/dm-screen/StatBlock.jsx` is the specification for the lower half.
- * The upper half is not in the prototype and has to exist here, because the
- * prototype's stat block is a fixture that always matches: in the real product
- * a combatant is a *snapshot* and its creature is a template that may have been
- * edited, deleted, or never been visible to this credential.
+ * The lower half is `bestiary/StatBlock.tsx` — the same block the bestiary
+ * renders, because it is the same row. The upper half is not in the prototype
+ * and has to exist here, because the prototype's stat block is a fixture that
+ * always matches: in the real product a combatant is a *snapshot* and its
+ * creature is a template that may have been edited, deleted, or never been
+ * visible to this credential.
  *
  * So the panel is layered honestly:
  *
@@ -25,102 +27,6 @@ import { subtitleOf } from "./load";
  *    yet (`AGENTS.md`, the bestiary section). A paragraph invented here would
  *    be the third place read-aloud prose lives.
  */
-
-function StatLine({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <span className="min-w-14 text-label-s leading-body font-medium text-on-dark-muted">
-        {label}
-      </span>
-      <span className="font-mono text-mono leading-snug font-medium text-on-dark">{value}</span>
-    </div>
-  );
-}
-
-function AbilityCell({ ability }: { readonly ability: Ability }) {
-  return (
-    <div className="flex-1 rounded-sm border border-hairline bg-surface-sunken py-1.5 text-center">
-      <div className="text-micro leading-body font-medium tracking-caps text-on-dark-muted">
-        {ability.label}
-      </div>
-      <div className="font-mono text-mono-l leading-snug font-medium text-on-dark">
-        {ability.score}
-      </div>
-      <div className="font-mono text-micro leading-none text-verdigris-300">{ability.modifier}</div>
-    </div>
-  );
-}
-
-function TraitBlock({ trait }: { readonly trait: Trait }) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-body-s leading-snug font-semibold text-heading">{trait.name}</span>
-        {/* The dice notation, shown and not rolled. There is no dice tray here:
-            rolling is local-only, has no endpoint behind it, and is not part of
-            what this screen was asked for — so the notation is rendered as what
-            it is, a thing the DM reads. */}
-        {trait.dice !== undefined && trait.dice !== "" && (
-          <span className="rounded-xs bg-slate-50/10 px-1.5 py-px font-mono text-micro leading-tight text-verdigris-300">
-            {trait.dice}
-          </span>
-        )}
-      </div>
-      <p className="text-caption leading-body text-on-dark-muted">{trait.text}</p>
-    </div>
-  );
-}
-
-function StatBlockBody({ creature }: { readonly creature: Creature }) {
-  const block = creature.statBlock;
-  const lines: ReadonlyArray<readonly [string, string]> = [
-    ["AC", block.ac === "" ? String(creature.ac) : block.ac],
-    ["HP", block.hp === "" ? String(creature.hp) : block.hp],
-    ["SPEED", block.speed],
-    ["CR", block.cr === "" ? creature.cr : block.cr],
-  ];
-
-  return (
-    <div className="flex flex-col gap-4 border-t border-hairline pt-4">
-      {block.meta !== "" && (
-        <p className="font-serif text-body-s leading-body italic text-on-dark-muted">
-          {block.meta}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-0.5">
-        {lines
-          .filter(([, value]) => value !== "")
-          .map(([label, value]) => (
-            <StatLine key={label} label={label} value={value} />
-          ))}
-      </div>
-
-      {block.abilities.length > 0 && (
-        <div className="flex gap-1">
-          {block.abilities.map((ability) => (
-            <AbilityCell key={ability.label} ability={ability} />
-          ))}
-        </div>
-      )}
-
-      {block.traits.length > 0 && (
-        <div className="flex flex-col gap-4 border-t border-hairline pt-4">
-          {block.traits.map((trait) => (
-            <TraitBlock key={trait.name} trait={trait} />
-          ))}
-        </div>
-      )}
-
-      {block.abilities.length === 0 && block.traits.length === 0 && block.meta === "" && (
-        <p className="text-caption leading-body text-muted-foreground">
-          This creature has no stat block written yet. Its numbers above are what the fight is
-          using.
-        </p>
-      )}
-    </div>
-  );
-}
 
 export function CombatantPanel({
   combatant,
@@ -233,7 +139,10 @@ export function CombatantPanel({
         )}
 
         {creature !== undefined ? (
-          <StatBlockBody creature={creature} />
+          <StatBlockBody
+            creature={creature}
+            emptyNote="This creature has no stat block written yet. Its numbers above are what the fight is using."
+          />
         ) : combatant.creatureId === null ? null : (
           <p className="border-t border-hairline pt-4 text-caption leading-body text-muted-foreground">
             The bestiary entry this was seeded from is gone, or belongs to someone else. The numbers

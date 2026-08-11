@@ -31,28 +31,49 @@ interface NavItem {
 }
 
 /**
- * The kit names three sections; the app has two screens to point them at.
+ * The kit names three sections; the app has the screens that exist to point
+ * them at.
  *
- * `Bestiary` is not here because there is no bestiary screen yet, and `Run` is
- * not a destination — a fight is reached from the campaign that owns it, and a
- * top-level link could not know which run it meant. A nav item that goes nowhere
- * is the same lie as a stubbed field, so the row carries what exists.
+ * `Run` is not here because it is not a destination — a fight is reached from
+ * the campaign that owns it, and a top-level link could not know which run it
+ * meant. A nav item that goes nowhere is the same lie as a stubbed field, so the
+ * row carries what exists.
+ *
+ * **`Bestiary` is here only once a campaign is**, for the same reason and one
+ * more: `creatures.list` hangs off `/campaigns/:campaignId/creatures`, so the
+ * bestiary has no meaning without a campaign to read it through — and the path
+ * is the *only* thing gating the global `system` rows it returns. From the
+ * campaign list there is no campaign yet, so the item is absent rather than
+ * disabled.
  */
-const NAV: ReadonlyArray<NavItem> = [
-  { label: "Campaigns", icon: "book-open", route: { screen: "campaigns" } },
-  { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
-];
+const navFor = (route: Route): ReadonlyArray<NavItem> => {
+  const campaignId = "campaignId" in route ? route.campaignId : undefined;
+  return [
+    { label: "Campaigns", icon: "book-open", route: { screen: "campaigns" } },
+    ...(campaignId === undefined
+      ? []
+      : [
+          {
+            label: "Bestiary",
+            icon: "footprints",
+            route: { screen: "bestiary", campaignId },
+          } satisfies NavItem,
+        ]),
+    { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
+  ];
+};
 
 /**
  * Which nav item is lit.
  *
- * A campaign and the fight inside it are both *within* Campaigns, so all three
+ * A campaign and the fight inside it are both *within* Campaigns, so those
  * routes light the same item — the underline says which part of the app you are
  * in, not which URL you are at, and an unlit nav on a campaign page reads as a
- * bug.
+ * bug. The bestiary is its own section: it is a screen you go *to* from a
+ * campaign rather than a view of one.
  */
 const sectionOf = (route: Route): Route["screen"] =>
-  route.screen === "gallery" ? "gallery" : "campaigns";
+  route.screen === "gallery" || route.screen === "bestiary" ? route.screen : "campaigns";
 
 /**
  * A nav item, wearing `Tabs`' own recipe.
@@ -130,7 +151,7 @@ function TopNav({
       </div>
 
       <nav aria-label="Sections" className="flex h-full items-stretch">
-        {NAV.map((item) => (
+        {navFor(route).map((item) => (
           <NavLink key={item.label} item={item} active={item.route.screen === section} />
         ))}
       </nav>

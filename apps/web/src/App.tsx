@@ -1,3 +1,4 @@
+import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { Gallery } from "./gallery/Gallery";
@@ -5,7 +6,7 @@ import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
 
 /**
- * Four screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Five screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
@@ -22,6 +23,13 @@ export function App() {
       return <Gallery route={route} />;
     case "campaign":
       return <CampaignScreen campaignId={route.campaignId} route={route} />;
+    case "bestiary":
+      return (
+        // A different campaign is a different bestiary: the environment chips
+        // and the "is this list empty at all" answer are accumulated from what
+        // has been read, and neither should survive into another campaign's.
+        <BestiaryScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
+      );
     case "run":
       return (
         <RunScreen
