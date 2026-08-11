@@ -3,6 +3,7 @@ import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
+import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Notes } from "../src/repo/Notes.js";
@@ -23,7 +24,11 @@ const runtime = ManagedRuntime.make(
     Encounters.layer,
     Notes.layer,
     PrepItems.layer,
-    Sessions.layer,
+    // Finishing a night now carries a fight still on the table, which
+    // appends to the log and rings the doorbell — so `Sessions` is a live
+    // repository too. `Layer` memoises by identity, so this is the same
+    // `PubSub` the other live layers here take.
+    Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_prep_visibility"))),
 );
 afterAll(() => runtime.dispose());

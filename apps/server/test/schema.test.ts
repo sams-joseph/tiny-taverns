@@ -53,6 +53,7 @@ describe("every content-bearing table", () => {
     // A guard on the guard: if this list changes, the assertions below have
     // started covering something new, and somebody should have noticed.
     expect(contentTables).toEqual([
+      "beat",
       "campaign",
       "character",
       "combatant",

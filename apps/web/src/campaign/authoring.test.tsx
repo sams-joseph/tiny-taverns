@@ -531,33 +531,55 @@ describe("finishing the night", () => {
     );
   });
 
-  it("refuses over a fight on the table, and points at it rather than ending it", async () => {
+  it("carries a fight on the table rather than refusing the night", async () => {
+    // This screen used to refuse outright, and `session/finish.ts` recorded the
+    // refusal as the safe half of a question nobody had answered. The captain
+    // answered it — a fight carries across nights — so the confirmation is
+    // offered, and what changes is that the dialog says which fight is going
+    // with it.
     server.routes.set(`GET ${runsPath}`, { status: 200, body: [liveRun] });
     await openFinish();
 
-    await screen.findByText("There is still a fight on the table");
-    expect(screen.getByText(/Ambush in the reeds is still running/)).toBeInTheDocument();
-    // The way out is the door into the fight, not a confirm that would end it.
-    expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
-    expect(screen.getByRole("button", { name: /Go to the fight/ })).toHaveAttribute(
-      "href",
-      `#/campaigns/${campaignId}/sessions/${sessionId}/runs/${liveRun.id}`,
-    );
-    expect(server.calls.some((call) => call.method === "PATCH")).toBe(false);
-  });
-
-  it("refuses a fight that started after the screen last looked", async () => {
-    // The screen rendered with no fight, so it offers the confirmation — and
-    // another tab starts one before the DM presses it.
-    await openFinish();
     await screen.findByText("Finish session 12?");
-    server.routes.set(`GET ${runsPath}`, { status: 200, body: [liveRun] });
-
+    expect(screen.getByText(/Ambush in the reeds is still on the table/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
 
-    // The re-read happens before the stamp, so nothing was written.
-    await screen.findByText("There is still a fight on the table");
-    expect(server.calls.some((call) => call.method === "PATCH")).toBe(false);
+    await waitFor(() =>
+      expect(
+        (bodyOf(server, "PATCH", `/sessions/${sessionId}`) as { endedAt: string }).endedAt,
+      ).toMatch(/^\d{4}-/),
+    );
+    // Taking the run off the table as `carried` is the server's half of the
+    // same transaction. A client that also ended it would be writing
+    // `resolved` over the answer.
+    expect(server.calls.some((call) => call.pathname.endsWith("/end"))).toBe(false);
+  });
+
+  it("does not re-read the runs before stamping, because there is no race left", async () => {
+    // The old refusal was checked twice — once from the loaded run, once by
+    // re-reading at submit time for a fight started in another tab. Neither
+    // check exists now: the carry is performed inside the server's transaction,
+    // so a fight that appears between the render and the click is carried too,
+    // and there is nothing a stale render could get wrong.
+    await openFinish();
+    await screen.findByText("Finish session 12?");
+    const readsBefore = server.calls.filter(
+      (call) => call.method === "GET" && call.pathname === runsPath,
+    ).length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
+    await waitFor(() => expect(bodyOf(server, "PATCH", `/sessions/${sessionId}`)).toBeDefined());
+
+    // Counted *up to* the stamp: the screen reloads afterwards, which reads the
+    // runs again for an honest reason, and that must not be mistaken for the
+    // check this test says is gone.
+    const stamp = server.calls.findIndex(
+      (call) => call.method === "PATCH" && call.pathname === sessionPath,
+    );
+    const readsAtSubmit = server.calls
+      .slice(0, stamp)
+      .filter((call) => call.method === "GET" && call.pathname === runsPath).length;
+    expect(readsAtSubmit).toBe(readsBefore);
   });
 
   it("says so, in the dialog, when the server refuses the save", async () => {

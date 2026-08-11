@@ -1040,7 +1040,7 @@ line above.
 
 **Ending one is the mirror image and is _not_ written here**: it is `session/finish.ts`, shared
 with the runner's own dialog, reached from the session card in this screen's aside. See
-"Finishing a session: one write, two surfaces, and no carry-over" below.
+"Finishing a session: one write, two surfaces, and a fight that carries" below.
 
 ## The live session: what is durable, what is fan-out, and how a stream comes back
 
@@ -1159,7 +1159,7 @@ Three consequences worth knowing before touching it:
   `apps/server/test/session-lifecycle.test.ts` pins both, and pins the invariant against raw SQL
   as well as against the repositories.
 
-### Finishing a session: one write, two surfaces, and no carry-over
+### Finishing a session: one write, two surfaces, and a fight that carries
 
 **The client half of the transition is `apps/web/src/session/finish.ts`, and every surface that
 ends a night goes through it.** There are two now — `run/EndRunDialog.tsx`'s _"Finish session N
@@ -1173,21 +1173,17 @@ property is checked rather than claimed; a third surface should extend that file
 assert its own behaviour in isolation.
 
 The write itself is one `PATCH … {endedAt}` and deliberately nothing else — clearing
-`campaign.current_session_id` is the server's half of the same transaction (above), so a client
-that "helpfully" also patched the campaign would be writing a second answer to a settled question.
+`campaign.current_session_id` **and taking a live fight off the table** are the server's half of
+the same transaction (below), so a client that "helpfully" also patched the campaign or called
+`runs.end` would be writing a second answer to a settled question. `EndRunDialog`'s `runs.end` is
+not that: it happens one line _earlier_ in the same `Effect` and is the DM choosing the smaller
+ending, which is `resolved` rather than `carried`.
 
-**A live fight is refused, never ended as a side effect**, and the refusal is checked twice: from
-the run the campaign screen already loaded, so the usual case renders as a refusal with nothing to
-click, and again by re-reading the runs _before_ the stamp, for the fight that started in another
-tab after the screen rendered. `EndRunDialog` needs no such check — it takes the fight off the
-table one line earlier in the same `Effect`.
-
-**Carrying a live fight across into the next session is deliberately not supported, and the
-refusal is not the final answer to it.** Whether a fight interrupted at midnight should resume in
-next week's session is a real product question the captain has not answered, and the architecture
-is ambiguous: `encounter_run` hangs off one `session`, so carry-over is either a second run or a
-reparented row, and those differ in what the log says happened. Refusing destroys nothing and
-leaves both doors open. Do not build carry-over on a guess.
+**`liveRunIn` is gone, and so is the tab-race re-read.** This file used to refuse a night with a
+fight on the table, and check that refusal twice. Its own doc said the refusal was standing in for
+a product question nobody had answered. It is answered — see below — so the client now only says
+_which_ fight is being carried, because ending the evening over a live fight should not be a
+surprise even though it is no longer refused.
 
 **The containment trap this area walked into, and the shape of the fix.** `combatant` sits two
 levels below the campaign (`combatant → encounter_run → session → campaign`), which is one more
@@ -1205,6 +1201,93 @@ transaction _start_ time, so every combatant a seed creates shares a timestamp a
 interleaved among the monsters, fixed but arbitrary. Harmless (everything seeds at initiative 0,
 so there is no correct order yet) but do not read `created_at asc` as "the order they were
 added".
+
+### A fight that carries across nights: a second run, and what it did to two constraints
+
+**A night may be finished with a fight still on the table, and the fight continues into the next
+one.** Captain's decision, reversing the placeholder refusal above. **The fight that carries is a
+_second_ `encounter_run` row** — the predecessor keeps its night, gets `ended_at` and the new
+`ended_reason = 'carried'`; the successor is created under the next session and points back
+through `continued_from`. Not a reparented row: `0007_run_carryover.ts` carries the four reasons,
+of which the deciding one is that the log is the assistant's memory and a moved row's own
+`run-started` event stays filed under the night it no longer claims.
+
+The pieces, and which is authoritative for what:
+
+- **`repo/Sessions.ts`'s `carryLiveRun` is the transition**, beside `releaseIfFinished` and for the
+  identical reason: ends the run as `carried`, clears `session.active_encounter_run_id`, appends
+  `run-carried` — in the transaction that stamped `ended_at`. A client that forgets recreates the
+  bug and a second client never sees it happen. **`Sessions` is therefore a live repository now**
+  and takes `LiveEvents`; every composition of `Sessions.layer` provides it.
+- **`repo/EncounterRuns.ts`'s `resume` is the pickup** — `POST …/sessions/:s/runs/resume`
+  `{continuedFrom}`, shaped after `creatures/:id/derive`. It copies the round, the visibility, the
+  provenance and every combatant. **Combatant ids are generated in TypeScript before the insert**,
+  which is the only way the turn marker can carry: `encounter_run_active_combatant_fkey` is
+  composite and refuses a marker naming another run's combatant, so an `insert … select` could not
+  remap it.
+- **Only a `carried` run may be resumed.** A `resolved` one is a `Conflict`, not a 404 — it is not
+  missing, it is over, and reopening it would put "resolved" in one night's recap and "resumed" in
+  the next's. Running that encounter again is `start`, and honestly a new fight.
+- **`continued_from` cannot be a composite key**, unlike almost every other pointer here: both ends
+  are `encounter_run`, and the only column they share is `session_id`, which would force
+  predecessor and successor into the _same_ session. Containment is `EncounterRuns.resume`'s job,
+  against `containedRowReadable` — the same shape as `encounter_creature.creature_id`.
+
+**What it did to the two guarantees it reaches — neither weakened, and both are now pinned against
+a run that outlives its session** (`apps/server/test/carryover.test.ts`):
+
+- **`encounter_run_one_live_per_session` is untouched and still exactly right.** A carried run has
+  `ended_at` set, so it leaves the index the moment it is carried; the night it came from holds no
+  live run, and the successor is the next night's only one. Reparenting _would_ have needed this
+  re-examined — moving a live run into a session that already has one raises a raw unique violation
+  a repository would have to translate.
+- **`campaign_current_session_id_fkey` (`0006`) is untouched and not reopened.** It constrains
+  `campaign ↔ session`; carry-over is a `session ↔ encounter_run` question. A night finished
+  mid-fight is still finished and still cannot be current — asserted through the repository _and_
+  against raw SQL, because a night ending mid-fight is the case nobody could previously produce.
+- The one genuinely new constraint is **`encounter_run_one_successor`**, so two nights cannot both
+  claim to continue the same fight, plus `encounter_run_reason_needs_end` (a live run has no
+  reason).
+
+**The one thing that does not survive a resume is the order of combatants _tied_ on initiative.**
+The copies get fresh ids and one shared `created_at`, so `initiativeOrder`'s tiebreak lands
+somewhere else. The numbers carry exactly and the list reads the same down the initiative column;
+only rows on equal initiative may swap. That is the same arbitrary-but-stable order a fresh seed
+has (see `created_at` above), and `carryover.test.ts` says so rather than pretending otherwise.
+
+### Beats: the DM's own line about what happened
+
+`beat` is one line of prose filed against the night it happened on — no title, no attachment, no
+reuse. It exists because every `session_event` kind is combat, so a record assembled from the
+shipped sources reads as a hit-point transcript. **Captain's decision: its own small table under
+`session`, not a kind of `note`** — `notes.list` has no filters (beats would fill the shipped Notes
+tab), `NoteCreate.title` is non-empty, and `note` would end up with two container columns.
+`0008_beats.ts` and `packages/api/src/Beat.ts` carry the full reasoning.
+
+**The discipline that came with the decision: if a beat ever grows a title or an attachment, merge
+it into `note` at that point, because by then it is one.**
+
+Four things about it that are not derivable:
+
+- **It is not a `session_event` kind, and the reason is decisive**: that table has no update or
+  delete path by design, and a beat jotted in three seconds at a dark table will need correcting.
+  Appending a retraction is a bad answer for the campaign's memory, and relaxing append-only is
+  worse — a client past that `seq` would never see the edit.
+- **Creating one appends `beat-added` and rings the doorbell; correcting one appends nothing.** The
+  marker exists so a recap can order beats against combat from the log alone. **The prose is
+  deliberately not in the payload**, which is what keeps `payload` non-contractual.
+- **`beat_run_fkey` is composite** — `(encounter_run_id, session_id) → encounter_run (id,
+session_id)` — so a beat on one night cannot attach to another night's fight, with
+  `on delete set null (encounter_run_id)` for the same Postgres-15 reason as `note.encounter_id`.
+  Everything else is `PrepItems` with one text column: no `campaign_id`, the existing `NestedTable`
+  machinery, no new predicate.
+- **No `tsvector` yet.** Beats are the prose the searchable record will be built from, and the
+  plan's later step adds the columns to `note` and `beat` together with the repository that queries
+  them. An index nothing reads is worse than none.
+
+**Deleting a session now throws away campaign history, not just a checklist** — `beat` cascades
+from `session` like `prep_item` and `session_event`, which is the right cascade and worth a
+confirmation on whatever client eventually calls `Sessions.remove`.
 
 ## The runner: how a screen consumes the stream, and what it does when it comes back
 

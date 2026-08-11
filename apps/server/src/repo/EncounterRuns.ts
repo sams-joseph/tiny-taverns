@@ -1,19 +1,25 @@
 import {
   type Actor,
+  type AssistantTurnId,
   type CampaignId,
   type CharacterId,
   type CombatantId,
+  type CombatantKind,
   Conflict,
   type CreatureId,
   CurrentActor,
   EncounterRun,
+  type EncounterRunEndedReason,
   type EncounterRunId,
+  type EncounterRunResume,
   type EncounterRunStart,
   type EncounterRunUpdate,
   type EncounterId,
   type NextTurn,
   NotFound,
+  type Origin,
   type SessionId,
+  type Visibility,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
@@ -23,6 +29,7 @@ import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   containedChildWritable,
+  containedRowReadable,
   corpusRowReadable,
   ensureNestedParentReadable,
   ensureNestedParentWritable,
@@ -41,6 +48,8 @@ interface EncounterRunRow extends ProvenanceColumns {
   readonly active_combatant_id: CombatantId | null;
   readonly started_at: Date;
   readonly ended_at: Date | null;
+  readonly ended_reason: EncounterRunEndedReason;
+  readonly continued_from: EncounterRunId | null;
 }
 
 const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
@@ -53,30 +62,78 @@ const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
     activeCombatantId: row.active_combatant_id,
     startedAt: DateTime.fromDateUnsafe(row.started_at),
     endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
+    endedReason: row.ended_reason,
+    continuedFrom: row.continued_from,
     ...provenanceOf(row),
   });
 
 /**
- * The partial unique index `encounter_run_one_live_per_session`, as the 409 it
- * means.
+ * Everything about a combatant that is *not* its identity or its timestamps.
  *
- * Starting a second fight while one is on the table is refused rather than
- * silently switching, because the first one's initiative order is still on
- * screen and its hit points are still the truth about six creatures. The DM
- * ends the first fight, deliberately.
+ * Named as one list because `resume` copies exactly this set, and the rule it
+ * embodies is worth being able to state: **a resumed fight is the same fight,
+ * so everything but identity and when-the-row-was-made carries.** A column
+ * added to `combatant` and forgotten here would be silently dropped by a
+ * carry-over — hit points restored and a condition lost — so
+ * `apps/server/test/carryover.test.ts` sets every one of them and compares the
+ * two rows field by field.
+ *
+ * `origin` and `assistant_turn_id` are in the list on purpose. A combatant Hob
+ * proposed and the DM accepted is still that combatant next week; nothing was
+ * newly authored by continuing the fight. (This is the opposite call from
+ * `Creatures.derive`, and the difference is real: a derive applies the DM's
+ * edits, and a resume applies nothing.)
+ */
+interface CarriedCombatantRow {
+  readonly id: CombatantId;
+  readonly character_id: CharacterId | null;
+  readonly creature_id: CreatureId | null;
+  readonly display_name: string;
+  readonly subtitle: string | null;
+  readonly player_name: string | null;
+  readonly initiative: number;
+  readonly hp_current: number;
+  readonly hp_max: number;
+  readonly ac: number | null;
+  readonly kind: CombatantKind;
+  readonly conditions: ReadonlyArray<string>;
+  readonly visibility: Visibility;
+  readonly origin: Origin;
+  readonly assistant_turn_id: AssistantTurnId | null;
+}
+
+/**
+ * The two partial unique indexes on `encounter_run`, as the 409s they mean.
+ *
+ * `encounter_run_one_live_per_session` — starting a second fight while one is on
+ * the table is refused rather than silently switching, because the first one's
+ * initiative order is still on screen and its hit points are still the truth
+ * about six creatures. The DM ends the first fight, deliberately.
+ *
+ * `encounter_run_one_successor` — two nights both continuing the same carried
+ * fight. Racing clients get here; so does a DM with the campaign open in two
+ * tabs. The index is the arbiter rather than a check-then-insert, which would
+ * lose the race it exists to settle.
  */
 const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | Conflict, R> =>
-  Effect.catch(effect, (error): Effect.Effect<A, E | Conflict> =>
-    SqlError.isSqlError(error) &&
-    error.reason._tag === "UniqueViolation" &&
-    error.reason.constraint.includes("one_live_per_session")
-      ? Effect.fail(
-          new Conflict({
-            message: "this session already has an encounter on the table; end it first",
-          }),
-        )
-      : Effect.fail(error),
-  );
+  Effect.catch(effect, (error): Effect.Effect<A, E | Conflict> => {
+    if (!SqlError.isSqlError(error) || error.reason._tag !== "UniqueViolation") {
+      return Effect.fail(error);
+    }
+    if (error.reason.constraint.includes("one_live_per_session")) {
+      return Effect.fail(
+        new Conflict({
+          message: "this session already has an encounter on the table; end it first",
+        }),
+      );
+    }
+    if (error.reason.constraint.includes("one_successor")) {
+      return Effect.fail(
+        new Conflict({ message: "that fight has already been picked up on another night" }),
+      );
+    }
+    return Effect.fail(error);
+  });
 
 interface PartyRow {
   readonly id: CharacterId;
@@ -137,6 +194,11 @@ export class EncounterRuns extends Context.Service<
       campaignId: CampaignId,
       sessionId: SessionId,
       payload: EncounterRunStart,
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict, CurrentActor>;
+    readonly resume: (
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      payload: EncounterRunResume,
     ) => Effect.Effect<EncounterRun, NotFound | Conflict, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -403,6 +465,162 @@ export class EncounterRuns extends Context.Service<
                     });
 
                     return toEncounterRun(started[0]!);
+                  }),
+                )
+                .pipe(Effect.tap(() => live.touched(sessionId))),
+            ),
+          ),
+
+        /**
+         * Pick a carried fight back up, on a new night.
+         *
+         * The successor is a **second row** — see `0007_run_carryover.ts` for
+         * the four reasons that beats moving the predecessor — seeded by
+         * copying it rather than by rolling the roster again: the party's hit
+         * points, the monsters that are already down, the conditions and the
+         * round are the state the DM was promised is saved.
+         *
+         * Three things about the copy are not obvious:
+         *
+         * - **The combatant ids are generated here, in TypeScript, before the
+         *   insert.** That is what makes the turn marker carryable at all:
+         *   `encounter_run_active_combatant_fkey` is composite, so it refuses a
+         *   marker naming a combatant from another run, and a bulk
+         *   `insert … select` would not know the new ids until afterwards.
+         *   Whose turn it was is part of "initiative order is saved", so it is
+         *   worth one loop.
+         * - **The predecessor is read through the ordinary containment
+         *   predicate**, so a run id smuggled in from another campaign is a 404
+         *   by the same rule everything else is. Write authority comes from
+         *   `ensureNestedParentWritable` on the *destination* session, which is
+         *   also what refuses every non-DM.
+         * - **A `resolved` fight is refused as a `Conflict`, not resumed.** It
+         *   is not missing; it is over, and the DM can see that. Reopening one
+         *   would put "resolved" in one night's recap and "resumed" in the
+         *   next's — which is exactly the contradiction `ended_reason` exists
+         *   to prevent. Running that encounter again is `start`, and it is
+         *   honestly a new fight.
+         */
+        resume: (campaignId, sessionId, payload) =>
+          dieOnSqlError(
+            asConflict(
+              sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    const actor = yield* CurrentActor;
+                    yield* ensureNestedParentWritable(sql, RUNS, sessionId, campaignId, actor);
+
+                    const previous = yield* sql<EncounterRunRow>`
+                      select encounter_run.* from encounter_run
+                      where encounter_run.id = ${payload.continuedFrom}
+                        and ${containedRowReadable(sql, RUN, campaignId, actor)}
+                    `;
+                    if (previous.length === 0) {
+                      return yield* new NotFound({
+                        resource: "encounter_run",
+                        id: payload.continuedFrom,
+                      });
+                    }
+                    const from = previous[0]!;
+                    if (from.ended_reason !== "carried") {
+                      return yield* new Conflict({
+                        message:
+                          from.ended_at === null
+                            ? "that fight is still on the table"
+                            : "that fight was ended rather than carried; start it again instead",
+                      });
+                    }
+
+                    const runs = yield* sql<EncounterRunRow>`
+                      insert into encounter_run ${sql.insert({
+                        session_id: sessionId,
+                        encounter_id: from.encounter_id,
+                        encounter_name: from.encounter_name,
+                        round: from.round,
+                        visibility: from.visibility,
+                        origin: from.origin,
+                        assistant_turn_id: from.assistant_turn_id,
+                        continued_from: from.id,
+                      })}
+                      returning *
+                    `;
+                    const run = runs[0]!;
+
+                    // The writable predicate, not the readable one, for the
+                    // reason `advance` uses it: what carries across must not
+                    // depend on who is watching. A combatant hidden from
+                    // players is still in the fight.
+                    const carried = yield* sql<CarriedCombatantRow>`
+                      select combatant.id, combatant.character_id, combatant.creature_id,
+                             combatant.display_name, combatant.subtitle, combatant.player_name,
+                             combatant.initiative, combatant.hp_current, combatant.hp_max,
+                             combatant.ac, combatant.kind, combatant.conditions,
+                             combatant.visibility, combatant.origin, combatant.assistant_turn_id
+                      from combatant
+                      where ${containedChildWritable(sql, COMBATANT, from.id, campaignId, actor)}
+                      ${initiativeOrder(sql)}
+                    `;
+
+                    const idFor = new Map<CombatantId, CombatantId>();
+                    const copies: Array<Record<string, unknown>> = [];
+                    for (const row of carried) {
+                      const id = crypto.randomUUID() as CombatantId;
+                      idFor.set(row.id, id);
+                      copies.push({
+                        id,
+                        encounter_run_id: run.id,
+                        character_id: row.character_id,
+                        creature_id: row.creature_id,
+                        display_name: row.display_name,
+                        subtitle: row.subtitle,
+                        player_name: row.player_name,
+                        initiative: row.initiative,
+                        hp_current: row.hp_current,
+                        hp_max: row.hp_max,
+                        ac: row.ac,
+                        kind: row.kind,
+                        conditions: row.conditions,
+                        visibility: row.visibility,
+                        origin: row.origin,
+                        assistant_turn_id: row.assistant_turn_id,
+                      });
+                    }
+                    if (copies.length > 0) {
+                      yield* sql`insert into combatant ${sql.insert(copies)}`;
+                    }
+
+                    // The marker, remapped. Null when the predecessor had
+                    // nobody up, or when whoever was up is no longer there —
+                    // which cannot happen through the copy above, but the map
+                    // lookup is the honest way to say "the same combatant".
+                    const active =
+                      from.active_combatant_id === null
+                        ? null
+                        : (idFor.get(from.active_combatant_id) ?? null);
+                    const resumed = yield* sql<EncounterRunRow>`
+                      update encounter_run
+                      set active_combatant_id = ${active}, updated_at = now()
+                      where encounter_run.id = ${run.id}
+                      returning *
+                    `;
+                    yield* sql`
+                      update session set active_encounter_run_id = ${run.id}, updated_at = now()
+                      where session.id = ${sessionId}
+                    `;
+
+                    yield* appendEvent(sql, {
+                      sessionId,
+                      kind: "run-resumed",
+                      encounterRunId: run.id,
+                      payload: {
+                        continuedFrom: from.id,
+                        encounterName: from.encounter_name,
+                        round: from.round,
+                        combatants: copies.length,
+                      },
+                    });
+
+                    return toEncounterRun(resumed[0]!);
                   }),
                 )
                 .pipe(Effect.tap(() => live.touched(sessionId))),

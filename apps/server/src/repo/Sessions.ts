@@ -11,7 +11,9 @@ import {
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import { appendEvent } from "./SessionEvents.js";
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
@@ -83,6 +85,7 @@ export class Sessions extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* LiveEvents;
 
       /**
        * The other half of ending a session.
@@ -111,6 +114,64 @@ export class Sessions extends Context.Service<
               update campaign set current_session_id = null, updated_at = now()
               where campaign.id = ${row.campaign_id} and campaign.current_session_id = ${row.id}
             `);
+
+      /**
+       * The rest of ending a session: the fight still on the table.
+       *
+       * A night may now be finished mid-combat, and the fight carries into the
+       * next one — the captain's decision, replacing the placeholder refusal in
+       * `apps/web/src/session/finish.ts`. Taking it off the table here rather
+       * than in the client is the same call `releaseIfFinished` makes and for
+       * the same two reasons: a client that forgets recreates the bug, and a
+       * second client never sees it happen. It also deletes the tab-race
+       * re-read the campaign view used to do, which is a real simplification
+       * the decision buys.
+       *
+       * Three writes, in the transaction that stamped `ended_at`:
+       *
+       * - the run is ended with `ended_reason = 'carried'`, which is what makes
+       *   it *resumable* — an ended run with no reason looks like a fight the DM
+       *   finished;
+       * - the session stops pointing at it, exactly as `EncounterRuns.end`
+       *   does, because a session must not name a fight that is over;
+       * - `run-carried` goes in the log, so a recap can say "paused at round 4"
+       *   rather than reporting a fight the party is still standing in as
+       *   concluded.
+       *
+       * `encounter_run_one_live_per_session` guarantees there is at most one row
+       * to find, so this is not a loop that could half-finish. Nothing is
+       * deleted and nothing is decided on the DM's behalf: an unresumed carried
+       * run is just an ended run with a marker on it.
+       */
+      const carryLiveRun = (row: SessionRow) =>
+        row.ended_at === null
+          ? Effect.succeed(false)
+          : Effect.gen(function* () {
+              const carried = yield* sql<{
+                readonly id: EncounterRunId;
+                readonly round: number;
+                readonly encounter_name: string;
+              }>`
+                update encounter_run
+                set ended_at = now(), ended_reason = 'carried', updated_at = now()
+                where encounter_run.session_id = ${row.id} and encounter_run.ended_at is null
+                returning encounter_run.id, encounter_run.round, encounter_run.encounter_name
+              `;
+              const run = carried[0];
+              if (run === undefined) return false;
+
+              yield* sql`
+                update session set active_encounter_run_id = null, updated_at = now()
+                where session.id = ${row.id} and session.active_encounter_run_id = ${run.id}
+              `;
+              yield* appendEvent(sql, {
+                sessionId: row.id,
+                kind: "run-carried",
+                encounterRunId: run.id,
+                payload: { round: run.round, encounterName: run.encounter_name },
+              });
+              return true;
+            });
 
       return {
         list: (campaignId) =>
@@ -167,29 +228,55 @@ export class Sessions extends Context.Service<
         update: (campaignId, id, patch) =>
           dieOnSqlError(
             asConflict(
-              sql.withTransaction(
-                Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
-                  const columns = defined({
-                    number: patch.number,
-                    title: patch.title,
-                    started_at: patch.startedAt && DateTime.toDateUtc(patch.startedAt),
-                    ended_at: patch.endedAt && DateTime.toDateUtc(patch.endedAt),
-                    visibility: patch.visibility,
-                  });
-                  const rows = yield* sql<SessionRow>`
-                    update session set ${setClause(sql, columns)}
-                    where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
-                    returning *
-                  `;
-                  if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
-                  yield* releaseIfFinished(rows[0]!);
-                  return toSession(rows[0]!);
-                }),
-              ),
+              sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    const actor = yield* CurrentActor;
+                    const columns = defined({
+                      number: patch.number,
+                      title: patch.title,
+                      started_at: patch.startedAt && DateTime.toDateUtc(patch.startedAt),
+                      ended_at: patch.endedAt && DateTime.toDateUtc(patch.endedAt),
+                      visibility: patch.visibility,
+                    });
+                    const rows = yield* sql<SessionRow>`
+                      update session set ${setClause(sql, columns)}
+                      where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+                      returning *
+                    `;
+                    if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
+                    yield* releaseIfFinished(rows[0]!);
+                    const carried = yield* carryLiveRun(rows[0]!);
+                    // Re-read rather than returning the row from above:
+                    // `carryLiveRun` clears `active_encounter_run_id`, and
+                    // handing back a session that still names a fight which is
+                    // now off the table would be a lie one round trip long.
+                    const settled = carried
+                      ? yield* sql<SessionRow>`select * from session where session.id = ${id}`
+                      : rows;
+                    return { session: toSession(settled[0]!), carried };
+                  }),
+                )
+                .pipe(
+                  // The doorbell, after the commit and only when there was a
+                  // fight to take off the table — a runner open in another tab
+                  // learns the night ended under it the same way it learns
+                  // everything else.
+                  Effect.tap(({ carried }) => (carried ? live.touched(id) : Effect.void)),
+                  Effect.map(({ session }) => session),
+                ),
             ),
           ),
 
+        /**
+         * Delete a session.
+         *
+         * **This now throws away campaign history, not just a checklist.**
+         * `beat` cascades from `session` like `prep_item` and `session_event`,
+         * which is the right cascade — a beat with no night is meaningless —
+         * but the DM's own record of what happened that evening goes with it.
+         * A client reaching this deserves a confirmation that says so.
+         */
         remove: (campaignId, id) =>
           dieOnSqlError(
             sql.withTransaction(

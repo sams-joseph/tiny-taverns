@@ -23,6 +23,11 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   "run-started": () => "The fight went on the table",
   "run-updated": () => "The fight changed",
   "run-ended": () => "The fight came off the table",
+  // The night finished over this fight, so it came off the table and is waiting
+  // for the next one. Distinct from `run-ended` on purpose — a recap that
+  // conflated them would report a fight the party is still standing in as over.
+  "run-carried": () => "The night ended — the fight carries over",
+  "run-resumed": () => "The fight was picked up from last time",
   "combatant-added": (who) => `${who ?? "Someone"} joined the order`,
   "combatant-updated": (who) => `${who ?? "A combatant"} changed`,
   // The foreign key is `on delete set null`, so by the time this row is read
@@ -30,6 +35,9 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   "combatant-removed": () => "Someone left the order",
   "combatant-damaged": (who) => `${who ?? "A combatant"} took a hit`,
   "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
+  // The prose is a `beat` row, not this event's payload — see `Beat`. The log
+  // says only that one was jotted, and at what point in the fight.
+  "beat-added": () => "A beat was jotted down",
 };
 
 /**

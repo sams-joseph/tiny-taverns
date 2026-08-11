@@ -7,13 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Icon,
 } from "@taverns/ui";
-import { Effect, Result } from "effect";
-import { useState } from "react";
+import { Result } from "effect";
 import { useMutation } from "../api/mutation";
-import { hrefFor } from "../routes";
-import { finishSession, liveRunIn } from "../session/finish";
+import { finishSession } from "../session/finish";
 import { SaveFailure } from "../ui/form";
 
 /**
@@ -37,25 +34,22 @@ import { SaveFailure } from "../ui/form";
  * night. So it says all three of those out loud, and the confirm is the only
  * thing that does it.
  *
- * ### A live fight is refused, not ended
+ * ### A live fight is carried, not refused
  *
- * Ending the run as a side effect would throw away the turn marker and round
- * count without being asked, so this refuses and says which fight is in the way
- * — with a link into it, because "end the fight first" is only useful next to
- * the door. `session/finish.ts` records why refusing is the safe half of a
- * question nobody has answered yet.
+ * This screen used to refuse the night outright while a fight was on the table,
+ * and check that refusal twice — once from the run the campaign screen had
+ * loaded, once by re-reading at submit time for a fight started in another tab.
+ * `session/finish.ts` recorded that as the safe half of a question nobody had
+ * answered. **The captain answered it: the fight carries into the next night.**
  *
- * The refusal is checked **twice**, and both are load bearing. The campaign
- * screen already knows the live fight, so the usual case renders as a refusal
- * with nothing to click. The re-read at submit time is for the fight that
- * started in another tab after this screen loaded: it happens *before* the
- * stamp, so a night is never finished over a fight that a stale render did not
- * know about.
+ * So the refusal and both its checks are gone. What is left is a *sentence*: the
+ * dialog says which fight will be carried, because ending the evening over a
+ * live fight should never be a surprise, and the DM who wanted the smaller
+ * ending can still take the fight off the table in the runner first. Nothing on
+ * this side does the carrying — the server ends the run as `carried` in the same
+ * transaction that stamps `endedAt`, which is why there is no second request
+ * here and no tab race left to lose.
  */
-
-/** What the dialog is showing: the confirmation, or the fight in the way. */
-type InTheWay = { readonly run: EncounterRun };
-
 export function FinishSessionDialog({
   campaign,
   session,
@@ -72,76 +66,28 @@ export function FinishSessionDialog({
   readonly onFinished: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
-  const [refused, setRefused] = useState<InTheWay | undefined>(
-    liveRun === undefined ? undefined : { run: liveRun },
-  );
 
   const finish = async () => {
-    const done = await submit((client) =>
-      Effect.gen(function* () {
-        // Read first, write second: a refusal costs a round trip and leaves
-        // nothing written, where a check made after the stamp would be a night
-        // already ended.
-        const runs = yield* client.runs.list({
-          params: { campaignId: campaign.id, sessionId: session.id },
-        });
-        const live = liveRunIn(runs);
-        // Answered as a value rather than a failure — a fight in the way is
-        // not a save that went wrong, and `SaveFailure`'s sentences are all
-        // about the server.
-        if (live !== undefined) return { refused: { run: live } } as const;
-        yield* finishSession(campaign.id, session)(client);
-        return { refused: undefined } as const;
-      }),
-    );
-
-    if (Result.isFailure(done)) return;
-    if (done.success.refused !== undefined) {
-      setRefused(done.success.refused);
-      return;
-    }
-    onFinished();
+    const done = await submit(finishSession(campaign.id, session));
+    if (Result.isSuccess(done)) onFinished();
   };
-
-  const runHref =
-    refused === undefined
-      ? undefined
-      : hrefFor({
-          screen: "run",
-          campaignId: campaign.id,
-          sessionId: session.id,
-          runId: refused.run.id,
-        });
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-label="Finish the night">
         <DialogHeader>
-          <DialogTitle>
-            {refused === undefined
-              ? `Finish session ${String(session.number)}?`
-              : "There is still a fight on the table"}
-          </DialogTitle>
+          <DialogTitle>Finish session {session.number}?</DialogTitle>
           <DialogDescription>
-            {refused === undefined ? (
-              <>
-                This marks the night over. {campaign.name} stops pointing at session{" "}
-                {session.number}, and the next encounter you run starts a new one.
-              </>
-            ) : (
-              <>
-                {refused.run.encounterName} is still running in session {session.number}. End that
-                fight first — nothing here will take it off the table for you.
-              </>
-            )}
+            This marks the night over. {campaign.name} stops pointing at session {session.number},
+            and the next encounter you run starts a new one.
           </DialogDescription>
         </DialogHeader>
 
         <div className="px-gutter py-3">
           <p className="text-body-s leading-body text-muted-foreground">
-            {refused === undefined
+            {liveRun === undefined
               ? "Nothing is deleted. Everything in the session — the fights, the checklist, the notes — stays exactly as it is, and stays readable."
-              : "The fight is untouched. Take it off the table in the runner, then come back and finish the night."}
+              : `${liveRun.encounterName} is still on the table. It comes off it and waits for the next night, with the initiative order, the hit points and the round exactly as they are now.`}
           </p>
         </div>
 
@@ -152,20 +98,11 @@ export function FinishSessionDialog({
             </div>
           )}
           <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>
-            {refused === undefined ? "Keep it open" : "Leave it open"}
+            Keep it open
           </Button>
-          {refused === undefined ? (
-            <Button variant="destructive" size="sm" disabled={busy} onClick={() => void finish()}>
-              {busy ? "Finishing…" : "Finish the night"}
-            </Button>
-          ) : (
-            // `nativeButton={false}` or Base UI applies button-only semantics to
-            // the anchor — the rule the rail's nav rows follow.
-            <Button size="sm" nativeButton={false} render={<a href={runHref} />}>
-              <Icon name="swords" size={14} />
-              Go to the fight
-            </Button>
-          )}
+          <Button variant="destructive" size="sm" disabled={busy} onClick={() => void finish()}>
+            {busy ? "Finishing…" : "Finish the night"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

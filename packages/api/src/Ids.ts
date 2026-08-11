@@ -61,6 +61,14 @@ export const SessionEventId = id("SessionEventId");
 export type SessionEventId = typeof SessionEventId.Type;
 
 /**
+ * One line of prose about what happened at the table. Unlike a `SessionEventId`
+ * this names something the DM can go back and correct — which is the whole
+ * reason beats are not log lines.
+ */
+export const BeatId = id("BeatId");
+export type BeatId = typeof BeatId.Type;
+
+/**
  * Points at the assistant conversation turn that produced a row. The turn table
  * does not exist yet — see `Provenance.Origin`.
  */

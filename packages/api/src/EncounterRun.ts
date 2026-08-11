@@ -3,6 +3,18 @@ import { CombatantId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
+ * Why a fight is off the table.
+ *
+ * `resolved` — the DM ended it, deliberately. `carried` — the night finished
+ * while it was still running, so it is waiting for the next one. A closed
+ * vocabulary because the recap branches on it: "Ambush in the reeds — paused at
+ * round 4" and "Resumed: Ambush in the reeds, from round 4" are only
+ * expressible because this is a value and not a guess.
+ */
+export const EncounterRunEndedReason = Schema.Literals(["resolved", "carried"]);
+export type EncounterRunEndedReason = typeof EncounterRunEndedReason.Type;
+
+/**
  * One playing of an encounter — the live fight, as distinct from the authored
  * template it was started from.
  *
@@ -52,6 +64,27 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
   /** Null while the fight is on the table. */
   endedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   /**
+   * Why the fight came off the table — and therefore whether it is waiting to
+   * be picked up again.
+   *
+   * Not inferable from `endedAt`, which is the whole reason it is a column:
+   * without it every ended run looks resumable, and a recap would report a
+   * fight the party is still standing in as concluded. It is `resolved` while
+   * the fight is live too, because "still running" is not a reason and the
+   * database refuses `carried` on a run with no end time.
+   */
+  endedReason: EncounterRunEndedReason,
+  /**
+   * The fight this one continues, for a run created by `resume`.
+   *
+   * **Provenance, never an access path** — the same status as
+   * `creature.derivedFrom`. Nothing is read *through* it, and it goes `null`
+   * rather than taking this row with it if its ancestor is ever deleted. A
+   * carried fight is a second row precisely so that each row belongs honestly
+   * to one night; this is the only thing that says the two are one fight.
+   */
+  continuedFrom: Schema.NullOr(EncounterRunId),
+  /**
    * The runner's `Share` switch (`EncounterRunner.jsx:122`) — the master toggle
    * over the whole fight, with each combatant's own `visibility` as the
    * per-row override (`:139`, "Hide from players").
@@ -91,6 +124,27 @@ export const EncounterRunStart = Schema.Struct({
   visibility: Schema.optional(Visibility),
 });
 export type EncounterRunStart = typeof EncounterRunStart.Type;
+
+/**
+ * Pick a carried fight back up, on a new night.
+ *
+ * **Its own endpoint rather than a field on `EncounterRunStart`**, because a
+ * resume shares none of that payload: the encounter, the visibility, the
+ * roster, the round and whose turn it was all come from the predecessor, and
+ * the only thing a client supplies is which fight. The precedent is
+ * `POST /campaigns/:c/creatures/:id/derive` — the same operation shape, which is
+ * "copy a readable row into a new context, in one request".
+ *
+ * The successor is a **second row**: it starts tonight, it has its own id and
+ * therefore its own stable runner URL, and its own log lines are filed under
+ * its own night. `continuedFrom` is the only thing that says the two are one
+ * fight. See `0007_run_carryover.ts` for why that beats moving the row.
+ */
+export const EncounterRunResume = Schema.Struct({
+  /** The carried fight to continue. Must be one this campaign can reach. */
+  continuedFrom: EncounterRunId,
+});
+export type EncounterRunResume = typeof EncounterRunResume.Type;
 
 export const EncounterRunUpdate = Schema.Struct({
   round: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10_000 }))),

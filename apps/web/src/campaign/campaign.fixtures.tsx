@@ -202,6 +202,12 @@ export const liveRun = {
   activeCombatantId: combatantId,
   startedAt: "2026-08-04T19:00:00.000Z",
   endedAt: null,
+  // A live fight has no reason yet, and `resolved` is what the column says
+  // until one of the two endings writes it. A test that wants a fight waiting
+  // for the next night sets `endedAt` *and* `endedReason: "carried"` — the
+  // database refuses the second without the first.
+  endedReason: "resolved",
+  continuedFrom: null,
   visibility: "dm",
   ...provenance,
   ...stamps,

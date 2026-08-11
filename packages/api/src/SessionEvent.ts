@@ -10,12 +10,33 @@ import { provenanceFields, Visibility } from "./Provenance.js";
 export const SessionEventKind = Schema.Literals([
   "run-started",
   "run-updated",
+  /** The DM ended this fight, deliberately. */
   "run-ended",
+  /**
+   * The night finished with this fight still on the table, so it was carried.
+   *
+   * A kind of its own rather than a flag inside `run-ended`'s payload, because
+   * `payload` is documented below as the human-legible remainder and not a
+   * contract anything branches on — and a recap that must not report a paused
+   * fight as concluded would be the first thing to branch on it.
+   */
+  "run-carried",
+  /** A successor run was created from a carried one. Carries `{continuedFrom}`. */
+  "run-resumed",
   "combatant-added",
   "combatant-updated",
   "combatant-removed",
   "combatant-damaged",
   "turn-advanced",
+  /**
+   * The DM jotted a line about what just happened — see `Beat`.
+   *
+   * The only kind here that is not combat, and the only one whose *content*
+   * lives in another table. This is a marker at the right `seq` so a recap can
+   * order beats against the fight; the prose is deliberately not in the
+   * payload, and the beat itself stays correctable, which a log row is not.
+   */
+  "beat-added",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 

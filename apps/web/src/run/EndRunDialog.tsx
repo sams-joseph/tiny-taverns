@@ -61,9 +61,10 @@ export function EndRunDialog({
         // roster: two submits in a row would give this dialog two busy flags
         // and a half-ended night to explain.
         const run = yield* client.runs.end({ params: path, payload: {} });
-        // The fight comes off the table first, so the refusal the campaign
-        // view enforces — a night does not end over a live fight — is already
-        // satisfied by the time this runs.
+        // The fight comes off the table first, and that is what makes this the
+        // *smaller* ending even when both switches are on: ending it here is
+        // `resolved`, deliberately, where a night finished over a live fight
+        // carries it. A DM who chose "End the fight" chose the first.
         if (finishNight) yield* finishSession(path.campaignId, session)(client);
         return run;
       }),

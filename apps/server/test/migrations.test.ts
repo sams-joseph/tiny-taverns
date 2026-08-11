@@ -49,6 +49,7 @@ describe("migrations", () => {
 
     expect(await runtime.runPromise(tableNames)).toEqual([
       "account",
+      "beat",
       "campaign",
       "character",
       "combatant",
@@ -69,6 +70,8 @@ describe("migrations", () => {
       { migration_id: 4, name: "bestiary" },
       { migration_id: 5, name: "live_session" },
       { migration_id: 6, name: "session_finished" },
+      { migration_id: 7, name: "run_carryover" },
+      { migration_id: 8, name: "beats" },
     ]);
   }, 60_000);
 
@@ -85,6 +88,8 @@ describe("migrations", () => {
       { migration_id: 4, name: "bestiary" },
       { migration_id: 5, name: "live_session" },
       { migration_id: 6, name: "session_finished" },
+      { migration_id: 7, name: "run_carryover" },
+      { migration_id: 8, name: "beats" },
     ]);
   }, 60_000);
 });

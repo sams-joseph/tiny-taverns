@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { Authorization } from "./Actor.js";
+import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { Character, CharacterCreate, CharacterUpdate } from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
@@ -11,9 +12,16 @@ import {
   EncounterCreatureCreate,
   EncounterCreatureUpdate,
 } from "./EncounterCreature.js";
-import { EncounterRun, EncounterRunStart, EncounterRunUpdate, NextTurn } from "./EncounterRun.js";
+import {
+  EncounterRun,
+  EncounterRunResume,
+  EncounterRunStart,
+  EncounterRunUpdate,
+  NextTurn,
+} from "./EncounterRun.js";
 import { Conflict, NotFound } from "./Errors.js";
 import {
+  BeatId,
   CampaignId,
   CharacterId,
   CombatantId,
@@ -362,6 +370,55 @@ class PrepGroup extends HttpApiGroup.make("prep")
   .middleware(Authorization) {}
 
 /**
+ * What actually happened — the DM's own line of prose about the night.
+ *
+ * The same shape as `PrepGroup` and nested the same way, because a beat hangs
+ * off the session in the model: the campaign stays in the path so the read
+ * predicate is handed the campaign the session must sit inside, rather than
+ * inferring it from an id a client supplied.
+ *
+ * `create` is the only endpoint here with a product requirement attached to its
+ * *shape*: **one field, one keystroke, no dialog round trip.** Typing and
+ * pressing Enter must commit, and the optimistic rule the prep tick already
+ * follows applies — render it immediately, reconcile on the response, toast on
+ * failure. `update` and `remove` exist because a beat jotted in three seconds
+ * at a dark table will contain a typo, and being correctable is precisely what
+ * a `session_event` could not be.
+ */
+class BeatsGroup extends HttpApiGroup.make("beats")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      success: Schema.Array(Beat),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      payload: BeatCreate,
+      success: Beat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:beatId", {
+      params: { campaignId: CampaignId, sessionId: SessionId, beatId: BeatId },
+      success: Beat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:beatId", {
+      params: { campaignId: CampaignId, sessionId: SessionId, beatId: BeatId },
+      payload: BeatUpdate,
+      success: Beat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:beatId", {
+      params: { campaignId: CampaignId, sessionId: SessionId, beatId: BeatId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/sessions/:sessionId/beats")
+  .middleware(Authorization) {}
+
+/**
  * The live session: starting a fight, running it, and ending it.
  *
  * Nested under the session because a run belongs to one night — and, as
@@ -396,6 +453,25 @@ class RunsGroup extends HttpApiGroup.make("runs")
     HttpApiEndpoint.post("start", "/", {
       params: { campaignId: CampaignId, sessionId: SessionId },
       payload: EncounterRunStart,
+      success: EncounterRun,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Pick up a fight the last night was finished over.
+     *
+     * A `POST` to a fixed segment rather than to `/:runId/resume`, because the
+     * run it creates lives under *this* session and the predecessor lives under
+     * another one — the id in the path would name a row that is not in the
+     * path's session, which every other endpoint here refuses on principle.
+     *
+     * `Conflict` covers the two states the DM can see and understand: this
+     * session already has a fight on the table, and that fight has already been
+     * resumed somewhere. A fight that was ended rather than carried is a
+     * `Conflict` too — it is not missing, it is over.
+     */
+    HttpApiEndpoint.post("resume", "/resume", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      payload: EncounterRunResume,
       success: EncounterRun,
       error: [NotFound, Conflict],
     }),
@@ -546,6 +622,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(CreaturesGroup)
   .add(EncounterCreaturesGroup)
   .add(PrepGroup)
+  .add(BeatsGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)
   .add(LiveGroup) {}

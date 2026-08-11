@@ -33,7 +33,11 @@ const runtime = ManagedRuntime.make(
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
     SessionEvents.layer,
-    Sessions.layer,
+    // Finishing a night now carries a fight still on the table, which
+    // appends to the log and rings the doorbell — so `Sessions` is a live
+    // repository too. `Layer` memoises by identity, so this is the same
+    // `PubSub` the other live layers here take.
+    Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_live_session"))),
 );
 afterAll(() => runtime.dispose());

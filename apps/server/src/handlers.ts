@@ -10,6 +10,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { liveHeartbeatSeconds } from "./Config.js";
 import { Health } from "./Health.js";
 import { LiveEvents } from "./live/LiveEvents.js";
+import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Combatants } from "./repo/Combatants.js";
@@ -186,6 +187,28 @@ const PrepLive = HttpApiBuilder.group(
   }),
 );
 
+const BeatsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "beats",
+  Effect.fnUntraced(function* (handlers) {
+    const beats = yield* Beats;
+    return handlers
+      .handle("list", ({ params }) => beats.list(params.campaignId, params.sessionId))
+      .handle("create", ({ params, payload }) =>
+        beats.create(params.campaignId, params.sessionId, payload),
+      )
+      .handle("findById", ({ params }) =>
+        beats.findById(params.campaignId, params.sessionId, params.beatId),
+      )
+      .handle("update", ({ params, payload }) =>
+        beats.update(params.campaignId, params.sessionId, params.beatId, payload),
+      )
+      .handle("remove", ({ params }) =>
+        beats.remove(params.campaignId, params.sessionId, params.beatId),
+      );
+  }),
+);
+
 const RunsLive = HttpApiBuilder.group(
   TavernsApi,
   "runs",
@@ -195,6 +218,9 @@ const RunsLive = HttpApiBuilder.group(
       .handle("list", ({ params }) => runs.list(params.campaignId, params.sessionId))
       .handle("start", ({ params, payload }) =>
         runs.start(params.campaignId, params.sessionId, payload),
+      )
+      .handle("resume", ({ params, payload }) =>
+        runs.resume(params.campaignId, params.sessionId, payload),
       )
       .handle("findById", ({ params }) =>
         runs.findById(params.campaignId, params.sessionId, params.runId),
@@ -387,6 +413,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CreaturesLive,
     EncounterCreaturesLive,
     PrepLive,
+    BeatsLive,
     RunsLive,
     CombatantsLive,
     LiveLive,

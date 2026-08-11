@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { Authorization } from "./Actor.js";
 import { TavernsApi } from "./Api.js";
+import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterCreate } from "./Character.js";
 import { Combatant, CombatantCreate } from "./Combatant.js";
@@ -54,6 +55,7 @@ describe("the API declaration", () => {
 
   it("declares the groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
+      "beats",
       "campaigns",
       "characters",
       "combatants",
@@ -72,6 +74,7 @@ describe("the API declaration", () => {
 
 describe("every content schema", () => {
   const contentSchemas = {
+    Beat,
     Campaign,
     Session,
     Character,
@@ -113,6 +116,7 @@ describe("every content schema", () => {
       EncounterCreatureCreate,
       EncounterRunStart,
       CombatantCreate,
+      BeatCreate,
     };
     // The minimum a create needs, per schema. Spelled out rather than merged
     // into one wide object, so a payload that stopped requiring a field would
@@ -128,6 +132,7 @@ describe("every content schema", () => {
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       CombatantCreate: { displayName: "x" },
+      BeatCreate: { body: "The ferryman is called Cazril." },
     };
 
     for (const [name, schema] of Object.entries(creates)) {

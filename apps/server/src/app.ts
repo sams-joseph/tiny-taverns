@@ -12,6 +12,7 @@ import { ApiLive } from "./handlers.js";
 import { Health } from "./Health.js";
 import { IdentityProvider } from "./IdentityProvider.js";
 import { LiveEvents } from "./live/LiveEvents.js";
+import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Combatants } from "./repo/Combatants.js";
@@ -80,6 +81,7 @@ export const servicesOver = <E>(
 ): Layer.Layer<
   | Accounts
   | Authorization
+  | Beats
   | Campaigns
   | Characters
   | Combatants
@@ -98,6 +100,9 @@ export const servicesOver = <E>(
   Layer.mergeAll(
     Accounts.layer,
     AuthorizationLive.pipe(Layer.provide([Accounts.layer, identity])),
+    // Jotting a beat appends `beat-added` to the log, so it rings the doorbell
+    // like every other live write.
+    Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Characters.layer,
     // The live repositories ring the in-process fan-out after they commit, so
@@ -114,7 +119,10 @@ export const servicesOver = <E>(
     Notes.layer,
     PrepItems.layer,
     SessionEvents.layer,
-    Sessions.layer,
+    // `Sessions` is on the live side too now: finishing a night takes a fight
+    // still on the table off it and carries it, so it appends to the log and
+    // has to ring the same doorbell every other live write rings.
+    Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     Health.layer,
   ).pipe(Layer.provide(database));
 
@@ -141,6 +149,7 @@ export const applicationOver = <E>(
   serviceLayer: Layer.Layer<
     | Accounts
     | Authorization
+    | Beats
     | Campaigns
     | Characters
     | Combatants

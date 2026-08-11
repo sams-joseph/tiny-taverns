@@ -1,4 +1,4 @@
-import type { CampaignId, EncounterRun, Session } from "@taverns/api";
+import type { CampaignId, Session } from "@taverns/api";
 import { DateTime, Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -16,13 +16,23 @@ import type { TavernsClient } from "../api/client";
  * its own way would be a second answer to a question the server already answers,
  * and the place the two would first disagree is a night that half-ended.
  *
- * **The server owns the rest of the transition, and that is the point.**
- * `Sessions.releaseIfFinished` clears `campaign.current_session_id` in the same
- * transaction that stamps the end time, and `campaign_current_session_id_fkey`
- * refuses the two coming apart at all — see `apps/server/src/repo/Sessions.ts`
- * and `migrations/0006_session_finished.ts`. So there is nothing on this side but
- * the stamp, and a third surface added later inherits the whole transition by
- * calling this.
+ * **The server owns the rest of the transition, and that is the point.** In the
+ * same transaction that stamps the end time, `apps/server/src/repo/Sessions.ts`
+ * clears `campaign.current_session_id` (`releaseIfFinished`) *and* takes a fight
+ * still on the table off it, as `carried` (`carryLiveRun`).
+ * `campaign_current_session_id_fkey` refuses the first pair coming apart at all
+ * — see `migrations/0006_session_finished.ts`. So there is nothing on this side
+ * but the stamp, and a third surface added later inherits the whole transition
+ * by calling this.
+ *
+ * **A live fight no longer stops the night, and this file used to be where it
+ * did.** `liveRunIn` lived here and both callers checked it — once from the run
+ * the screen had already loaded, once by re-reading at submit time for a fight
+ * started in another tab. Its own doc said the refusal was standing in for a
+ * product question nobody had answered. The captain answered it: a fight can
+ * carry across nights. So the refusal is gone, and with it the tab-race
+ * re-read — a client cannot forget a step the server performs, and a second
+ * client would never have seen the first one do it.
  *
  * **A session already finished is not written again.** Both callers can reach a
  * night that ended in another tab, and re-stamping it would move the end time to
@@ -39,22 +49,3 @@ export const finishSession =
             payload: { endedAt },
           });
         });
-
-/**
- * The fight still on the table, if there is one — the single thing that stops
- * the night being finished.
- *
- * **Refusing is deliberate, and it is the safe half of an open question.**
- * Ending the run as a side effect would throw away the DM's turn marker and
- * round count without being asked; refusing throws away nothing, and the DM can
- * always end the fight and then the night. Whether a live fight should instead
- * be able to *carry across* into the next session is a real product question
- * nobody has answered — `AGENTS.md` records it as deferred. Nothing here should
- * quietly grow into that.
- *
- * `encounter_run_one_live_per_session` is a partial unique index, so "the
- * unended one" is at most one row — the same rule `campaign/load.ts` reads the
- * live fight by.
- */
-export const liveRunIn = (runs: ReadonlyArray<EncounterRun>): EncounterRun | undefined =>
-  runs.find((run) => run.endedAt === null);

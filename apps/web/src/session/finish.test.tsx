@@ -33,6 +33,13 @@ import { installRunServer, renderRunner } from "../run/run.fixtures";
  * file could not see it. One `installRunServer()` at module scope, for the
  * `Context.Reference` reason `api/client.test.ts` records; its route map is
  * widened to answer the campaign view's reads as well.
+ *
+ * **A live fight no longer stops the night, and the third test below is what
+ * says so.** This file used to prove the opposite: the campaign view re-read the
+ * runs at submit time and refused. The captain settled that a fight carries
+ * across nights, so the refusal and its tab-race re-read are gone, the server
+ * ends the run as `carried` in the same transaction, and the property that
+ * matters here is that finishing over a fight is *still the same single write*.
  */
 
 const server = installRunServer();
@@ -140,5 +147,30 @@ describe("finishing a session", () => {
       expect(server.calls.some((call) => call.pathname.endsWith("/end"))).toBe(true),
     );
     expect(sessionWrites()).toEqual([]);
+  });
+
+  it("finishes a night with a fight still on the table, in one write", async () => {
+    // The refusal this file used to pin, inverted. The campaign view is shown a
+    // live fight, and the night ends anyway — with the *same* single PATCH, and
+    // in particular with no `POST …/end` of its own: taking the run off the
+    // table as `carried` is the server's half of the transaction, and a client
+    // that also ended it would be writing `resolved` over the answer.
+    alsoAnswerTheCampaignView(false);
+    renderCampaign();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Finish the night" }));
+    await screen.findByText("Finish session 12?");
+    // It says which fight is being carried. Ending the evening over a live
+    // fight should never be a surprise, even though it is no longer refused.
+    await screen.findByText(/Ambush in the reeds is still on the table/);
+    await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
+
+    await waitFor(() => expect(sessionWrites()).toHaveLength(1));
+    expect(sessionWrites()[0]).toEqual({
+      method: "PATCH",
+      pathname: sessionPath,
+      body: { endedAt: "<an instant>" },
+    });
+    expect(server.calls.filter((call) => call.pathname.endsWith("/end"))).toEqual([]);
   });
 });
