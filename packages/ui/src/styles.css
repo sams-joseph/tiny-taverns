@@ -5,7 +5,9 @@
    tokens. No hex, radius, duration or measurement is restated here: those files
    are the single source of truth, and this file only gives their values Tailwind
    names. The one exception is the layering scale in §3, which the delivered
-   system does not describe and could not — see the comment there.
+   system does not describe and could not — see the comment there. The two
+   measurements the delivery states only in prose live in `local-tokens.css`,
+   imported below, for the same reason: ours, so not inside their artefact.
 
    Tiny Taverns is DARK ONLY (readme.md: "A DM runs it at a lit table"). There is
    no light theme and no `.dark` class — the tokens resolve dark at :root, and
@@ -35,6 +37,10 @@
 @import "@taverns/design-system/tokens/elevation.css" layer(base);
 @import "@taverns/design-system/tokens/motion.css" layer(base);
 @import "@taverns/design-system/tokens/base.css" layer(base);
+
+/* The handful of values the delivery states in prose and never tokenised. Ours,
+   so it lives here rather than inside the vendored artefact — see the file. */
+@import "./local-tokens.css" layer(base);
 
 /* Explicit source globs: `source(none)` above disables auto-detection, which
    cannot see this package through the consumer's node_modules symlink anyway. */

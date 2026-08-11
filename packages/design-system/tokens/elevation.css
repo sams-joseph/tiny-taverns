@@ -10,10 +10,6 @@
 --shadow-inset-well:none; /* @kind shadow */
 /* Focus: accent ring held off the control by a 2px halo of the page colour. */
 --ring:0 0 0 2px var(--surface-page),0 0 0 4px var(--focus-ring); /* @kind shadow */
-/* Added during the repo port: readme.md specifies the dialog scrim as "--scrim +
-   blur(3px)" in prose but never tokenised the radius. Tokenised here so the value
-   stays in this file and is never restated in component code. */
---scrim-blur:3px; /* @kind other */
 
 /* No texture. */
 --grain:none; /* @kind other */

@@ -16,16 +16,30 @@ else. `packages/ui/src/styles.css` bridges these tokens into Tailwind's theme la
 | `assets/` | App icon exports + `assets/README.md`. |
 | `guidelines/` | The 20 specimen cards — the visual reference the ported components were checked against. |
 | `components/` | `.prompt.md` (intent + measurements), `.d.ts` (API contract), `.jsx` (visual spec), `*.card.html` (state sheets). |
-| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site. Reference for later screen work. |
+| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — now including the Hob chat panel. Reference for later screen work. |
 | `readme.md`, `SKILL.md` | Guidance material. |
 | `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to ESLint in `packages/eslint-config/design-system.js`. |
 
-The only edits made to delivered files:
+**Every other file here is byte-identical to the delivery.** Exactly two are edited, both
+structural rather than visual, and both are re-applied by hand on each update:
 
 - `styles.css` — `@import url("tokens/…")` → `@import url("./tokens/…")`. Bare paths
-  resolve as package specifiers in Vite/Tailwind and would fail. No values changed.
+  resolve as package specifiers in Vite/Tailwind and would fail. No values changed. (The
+  delivered comment on the `fonts.css` line says "documentation only — no @font-face";
+  that file does carry two `@font-face` rules, so the comment is corrected here too.)
 - `SKILL.md` — `README.md` → `readme.md` (the delivered file is lowercase, and this
   filesystem is case-sensitive), plus a pointer to the ported components.
+
+**Nothing else we author may live in this package**, and that is a rule with a cost
+attached rather than a preference. The first port put two values the delivery states only
+in prose — `--fs-label-l`, `--scrim-blur` — inside `tokens/typography.css` and
+`tokens/elevation.css`. When the next delivery arrived, a plain `diff` against it reported
+those two files as changed, and the obvious reading — *the designers revised typography
+and elevation* — was wrong: they had revised neither. Both now live in
+`packages/ui/src/local-tokens.css`, which is the same rule that keeps the layering scale
+in `packages/ui/src/styles.css` §3. `adherence.test.ts` fails if one of them reappears in
+a delivered token file. A `diff -r` against the next delivery should therefore show
+`styles.css`, `SKILL.md`, and nothing else.
 
 ## Deliberately left out
 
@@ -36,6 +50,20 @@ The only edits made to delivered files:
 | `thumbnail.html`, `.thumbnail` | Tile art for the designers' gallery. |
 | `brand/app-icon-*.html` | Icon explorations. The chosen icon is exported in `assets/icon/`; the explorations are process, not product. |
 | `templates/` | `.dc.html` + `ds-base.js` + `support.js` are bound to the authoring tool's `<x-import>` / `_ds/<folder>` mechanism, which does not exist here. `ui_kits/` covers the same two products in plain JSX and was kept instead. |
+
+Re-apply these exclusions on every update — the delivery folder still ships all of them.
+The copy is one command:
+
+```sh
+rsync -a --delete \
+  --exclude=package.json --exclude=PORT-NOTES.md \
+  --exclude=_ds_bundle.js --exclude=_ds_manifest.json \
+  --exclude=/brand/ --exclude=/templates/ \
+  --exclude=thumbnail.html --exclude=.thumbnail \
+  "<delivery>/" packages/design-system/
+```
+
+then re-apply the two edits above and run `pnpm -F @taverns/ui test`.
 
 ## The prototypes are a specification, not shippable code
 

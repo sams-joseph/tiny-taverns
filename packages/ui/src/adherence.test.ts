@@ -16,6 +16,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
 const componentsDir = join(here, "components", "ui");
 const themeCss = join(here, "styles.css");
+const localTokensCss = join(here, "local-tokens.css");
+const deliveredTokensDir = join(repoRoot, "packages", "design-system", "tokens");
 
 const HEX = /#[0-9a-fA-F]{3,8}\b/;
 const PX = /\b\d+px\b/;
@@ -94,5 +96,45 @@ describe("design-system adherence", () => {
 
     expect(delivered.length).toBeGreaterThan(0);
     expect(bridged).toEqual(delivered);
+  });
+
+  /**
+   * `local-tokens.css` is the only place we author a design value, and it exists
+   * because the vendored design system is copied byte for byte from the
+   * designers' delivery. That property is worth guarding: the previous copy
+   * carried two of our additions inside the delivered token files, and the next
+   * delivery's diff then read as *the designers changed typography and
+   * elevation* when they had changed neither.
+   */
+  describe("the values the delivery never tokenised", () => {
+    const declared = () =>
+      [
+        ...readFileSync(localTokensCss, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm),
+      ].map((match) => match[1]);
+
+    it("declares at least one, and nothing the delivery already answers", () => {
+      const deliveredTokens = readdirSync(deliveredTokensDir)
+        .filter((name) => name.endsWith(".css"))
+        .map((name) => readFileSync(join(deliveredTokensDir, name), "utf8"))
+        .join("\n");
+
+      const names = declared();
+      expect(names.length).toBeGreaterThan(0);
+      for (const name of names) {
+        expect(
+          deliveredTokens,
+          `${name} is tokenised by the delivery now — delete it from local-tokens.css`,
+        ).not.toMatch(new RegExp(`^\\s*${name}\\s*:`, "m"));
+      }
+    });
+
+    it("keeps none the bridge has stopped using", () => {
+      const bridge = readFileSync(themeCss, "utf8");
+      for (const name of declared()) {
+        expect(bridge, `${name} is declared but nothing bridges it`).toMatch(`var(${name})`);
+      }
+    });
   });
 });

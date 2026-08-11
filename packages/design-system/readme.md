@@ -162,8 +162,10 @@ load-bearing** — this is deliberately not a 4/8 grid. Fixed layout tokens: `--
 260px, `--aside-w` 340px, `--row-h` 44px (also the minimum hit target), `--control-h`
 38px, `--pad-page` 32px, `--pad-card` 20px, `--measure` 66ch.
 
-The app is a fixed shell: a **persistent dark left rail** (never collapses), a sticky
-`TopBar`, and a scrolling body. The marketing header is sticky. Nothing else is fixed.
+The app is a fixed shell: a **56px top nav** (mark, wordmark, three nav items, then
+campaign + session + Ask Hob pushed right), a per-screen `TopBar` below it, and a
+scrolling body. There is no left rail — navigation is horizontal, and the active
+item uses the same 2px accent underline as `Tabs`. The marketing header is sticky. Nothing else is fixed.
 
 ### Surfaces, cards & borders
 

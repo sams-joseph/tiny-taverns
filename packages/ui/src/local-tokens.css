@@ -1,0 +1,30 @@
+/* ==========================================================================
+   Values the delivery specifies in prose but never tokenised.
+
+   `packages/design-system` is the designers' artefact and is vendored byte for
+   byte, so nothing we author may live inside it — the same rule that puts the
+   layering scale in §3 of `styles.css` rather than upstream. These two are not
+   our design decisions: each is transcribed from a sentence in the delivery
+   that no token file answers, so it stays a value in exactly one place instead
+   of being restated by whichever component happened to need it first.
+
+   This file exists rather than the values sitting in `styles.css` because the
+   theme bridge may only *reference* tokens — `adherence.test.ts` fails on a
+   literal there, and rightly: the moment the bridge holds a value, it stops
+   being obvious which file answers "what is this measurement".
+
+   Each name here is checked by `adherence.test.ts`: it must be absent from the
+   delivered tokens (so it can never shadow one, and a delivery that finally
+   tokenises it fails the test and tells you to delete it from here) and it must
+   be referenced by the bridge (so a dead one cannot linger).
+   ========================================================================== */
+:root {
+  /* components/core/Button.prompt.md specifies "labels are 12–15px" and the `lg`
+     button sets 15px inline, but no 15px sans size is tokenised — `--fs-mono-l`
+     is the mono face at that size. */
+  --fs-label-l: 15px;
+
+  /* readme.md specifies the dialog scrim as "--scrim + blur(3px)" in prose, and
+     tokenises the colour but not the blur. */
+  --scrim-blur: 3px;
+}

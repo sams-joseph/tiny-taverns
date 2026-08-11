@@ -41,8 +41,22 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 value in the product** — no hex, radius, duration or measurement is restated anywhere else,
 and `packages/ui/src/styles.css` bridges those tokens into Tailwind's theme layer by
 `var()` reference only. `PORT-NOTES.md` in that package records exactly what was brought
-across, what was left out, and the two values added during the port (`--scrim-blur`,
-`--fs-label-l` — both transcribed from prose the designers never tokenised).
+across, what was left out, and the one-line `rsync` that does the copy.
+
+**Nothing we author lives inside that package.** Every file in it is byte-identical to the
+delivery except `styles.css` (relative `@import` paths) and `SKILL.md` (a filename case fix
+and a pointer) — so `diff -r` against a new delivery names those two and nothing else, and
+anything more is a real designer change. The two measurements the delivery states only in
+prose, `--fs-label-l` and `--scrim-blur`, therefore live in
+**`packages/ui/src/local-tokens.css`**, the same rule that keeps the layering scale in
+`packages/ui/src/styles.css` §3. `adherence.test.ts` fails if either name reappears in a
+delivered token file (delete it from ours — the delivery answers it now) or stops being
+referenced by the bridge.
+
+That rule was bought, not chosen: for as long as those two sat in the delivered token
+files, the second delivery's diff reported `typography.css` and `elevation.css` as changed
+when the designers had changed neither, and the whole update was scoped around a visual
+change that did not exist.
 
 `.claude/skills/tiny-taverns-design` symlinks to that package, so the delivered `SKILL.md`
 is installed as a Claude Code skill without a second copy of the tokens.
@@ -74,6 +88,40 @@ Four things about the bridge that are not derivable from reading it:
   colour), lumps them in one group and silently drops one — which rendered primary buttons
   with slate body text until it was configured. A test parses `@theme inline` and fails if
   the name lists drift.
+
+### The second delivery: what actually changed, and what it did not
+
+Measured file by file when the delivery was swapped in, so the screen work that follows
+does not re-derive it. **Not one token changed** — `tokens/*.css` is byte-identical across
+both deliveries, all eight files. Nor did any `guidelines/*.html` specimen, any
+`components/**` prompt, `.d.ts` or `.jsx`, `assets/`, `fonts/`, or
+`_adherence.oxlintrc.json`. Proof, not inference: rebuilding `apps/web` across the swap
+emits a stylesheet identical to the previous one apart from a single extra `:root`
+selector — the file our two local tokens moved into. Verified in Chromium against the new
+`guidelines/` pages: all 39 typography and elevation tokens resolve to the same values in
+the running gallery as on the designers' own specimen pages, and the rendered ramp is
+exactly the tokenised one (display-xl 48 / l 34 / m 26 / s 20, title 18, body 16, label 13,
+`shadow-1` = `0 1px 2px rgba(0,0,0,.4)`, control radius 6, card 12, badge 4).
+
+**So the delivery is a screen change, not a system change.** Four files and five additions:
+
+- **`ui_kits/dm-screen/AppShell.jsx` — the 260px left rail is gone, replaced by a 56px top
+  bar** (mark + wordmark, three nav items, then campaign, session badge and _Ask Hob_
+  pushed right), with a per-screen `TopBar` below it. The active nav item uses `Tabs`' own
+  2px accent underline, so navigation reads the same at both levels. `--rail-w` is still
+  `260px` in `tokens/spacing.css` and `apps/web`'s `w-rail` still resolves — **the shipped
+  shell is untouched and still renders the rail**; rebuilding it is a separate task.
+- **`ChatPanel.jsx`, `ChatParts.jsx`, `ChatLayouts.jsx`, `chat-data.js`, `chat-prep.html`**
+  — the Hob assistant surface. `chat-prep.html` is the record of the three layouts that
+  were considered; **Option A (a 400px persistent right panel) is the one that ships**, and
+  `ui_kits/dm-screen/README.md` is where its behaviour, its parts and its open questions
+  are written down. Read that before building it.
+- **`CHAT_INLINE_MIN` fell from 1180 to 1020**, and the two changes are one change: the
+  panel goes inline above that width and becomes a scrimmed overlay below it, and dropping
+  the rail handed 260px back to the content.
+- `readme.md` and `ui_kits/dm-screen/README.md` restate the above in prose. The readme's
+  "light cool mist" two-mode line survives unchanged, and the kit's own JSX still does not
+  follow it — **the system is dark only; that has not moved.**
 
 ## Overlay layering: one scale, and where a new overlay goes on it
 
