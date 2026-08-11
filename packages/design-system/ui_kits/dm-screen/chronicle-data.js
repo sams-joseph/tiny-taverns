@@ -1,0 +1,57 @@
+window.TT_CHRONICLE = [
+  {
+    id: "s11", n: 11, date: "2 August 2026", title: "The reeds that would not move", status: "draft", words: 214,
+    summary: "You came down the Salt Road in the last hour of light and found the ferry gone from its post, the rope cut on the far side. Brannoc waded in to look for the crossing stones and something under the water took hold of his ankle — not hard, he said afterwards. Almost politely. By the time Wren had a light up there were six of them standing in the reeds, and the reeds were not moving, even though there was a wind. You bought your way out of it with the salt barrel, which you now do not have.",
+    quote: { text: "I'm not saying we should trust the ferryman. I'm saying we should owe him.", who: "Kofi, as Wren" },
+    npcs: [
+      { name: "The ferryman", note: "Never gave a name. Wants payment in kind, not coin." },
+      { name: "Old Hettie", note: "Sold you the salt. Watched you leave with it." },
+      { name: "The grinning boss", note: "Wearing three cloaks, none of them his. Escaped east." },
+    ],
+    locations: ["The reed crossing", "Hettie's stall, Cadmer Wharf"],
+    loot: ["A cut ferry rope, 40 ft", "Goblin boss's chain shirt", "Wax-sealed crate — unopened"],
+    xp: { gained: 1450, levelUps: ["Sister Pell reached 5th level"] },
+    decisions: [
+      "Paid the ferryman with the salt barrel instead of fighting him.",
+      "Left the crate sealed. Nobody would say why.",
+      "Took the east bank road rather than waiting for dawn.",
+    ],
+    threads: [
+      "What is in the crate — and who does Ovid think it belongs to?",
+      "The boss went east with a description of the party.",
+      "Hettie knew the ferry was gone before you did.",
+    ],
+    combat: [
+      "Round 2 — Wren's Faerie Fire lit four goblins at once. Turned the fight.",
+      "Round 3 — Brannoc dropped to 6 hp, refused the potion.",
+      "Round 5 — the archers broke and the boss let them.",
+    ],
+  },
+  {
+    id: "s10", n: 10, date: "19 July 2026", title: "A funeral at Cadmer Wharf", status: "edited", words: 186,
+    summary: "Half the session was a funeral and none of you were invited. The harbourmaster's daughter went into the water on the tide before you arrived, and the town had decided among itself whose fault that was. Ovid picked the lock on the salt-house while the rest of you stood in the rain looking sympathetic, which is the most this party has ever cooperated.",
+    quote: { text: "Nobody drowns in a foot of water unless they're helped.", who: "Marta, as Ovid" },
+    npcs: [
+      { name: "Harbourmaster Vell", note: "Grieving, and lying about the ledger." },
+      { name: "Sister Anwen", note: "Ran the rites. Recognised Pell's order and did not like it." },
+    ],
+    locations: ["Cadmer Wharf", "The salt-house", "The tide chapel"],
+    loot: ["Salt-house ledger, pages 8-11 torn out", "62 gp from the collection plate (Ovid says borrowed)"],
+    xp: { gained: 900, levelUps: [] },
+    decisions: ["Did not tell Vell what was in the ledger.", "Let Anwen believe Pell was passing through."],
+    threads: ["Who tore out pages 8-11.", "Anwen's order and Pell's have history."],
+    combat: [],
+  },
+  {
+    id: "s9", n: 9, date: "5 July 2026", title: "Everything the road took", status: "edited", words: 173,
+    summary: "Four days of travel compressed into one evening. You lost the mule at the ford, gained a travelling priest who talked for nine hours, and arrived at the Wharf with less than you set out with in every measurable sense. The priest is still with you.",
+    quote: { text: "The mule made its choice.", who: "Ilse, as Brannoc" },
+    npcs: [{ name: "Brother Idris", note: "Talks. Has not stopped. Knows the marsh roads." }],
+    locations: ["The high ford", "Nine Barrows", "The Salt Road, north stretch"],
+    loot: ["Idris's marsh map, badly drawn"],
+    xp: { gained: 450, levelUps: ["Wren reached 4th level"] },
+    decisions: ["Took the marsh road on Idris's word."],
+    threads: ["Idris has not said where he is going, only where he has been."],
+    combat: [],
+  },
+];

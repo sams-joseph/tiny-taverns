@@ -10,13 +10,17 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ChevronsUp,
   CircleCheck,
+  CircleHelp,
   Clock,
+  Coins,
   Dice5,
   Dice6,
   Dices,
   Droplet,
   EyeOff,
+  Flag,
   Flame,
   Footprints,
   Gem,
@@ -30,6 +34,8 @@ import {
   LoaderCircle,
   Lock,
   Map,
+  MapPin,
+  Megaphone,
   Mic,
   Minus,
   Moon,
@@ -38,6 +44,8 @@ import {
   PanelRightClose,
   Pencil,
   Plus,
+  RefreshCw,
+  Scale,
   ScrollText,
   Search,
   Shield,
@@ -48,6 +56,7 @@ import {
   Star,
   Swords,
   Trash2,
+  TrendingUp,
   TriangleAlert,
   UserRound,
   Users,
@@ -71,8 +80,14 @@ import {
  * substituting a near-enough glyph at the call site: `ui_kits/dm-screen`'s chat
  * parts name `history`, `list-checks`, `wand-sparkles`, `git-branch`, `gem`,
  * `mic`, `user-round`, `arrow-up`, `slash` and `panel-right-close`, so those are
- * here. That is the whole cost of adding one, and it keeps this table the single
- * answer to "which glyphs does Tiny Taverns use".
+ * here. The third delivery's `Chronicle.jsx` adds `chevrons-up`, `coins`, `flag`,
+ * `help-circle`, `map-pin`, `megaphone`, `refresh-cw`, `scale` and `trending-up`;
+ * its nav item names `scroll-text`, which the chat parts already asked for. Note
+ * it passes half of those through a `Facet icon=` prop rather than `Icon name=`,
+ * so a grep for `name="…"` alone undercounts what a surface asks for. That is the
+ * whole cost of adding one, and it keeps this table the single answer to "which
+ * glyphs does Tiny Taverns use" — it tracks the deliveries, so it grows when one
+ * is vendored rather than when a screen is finally built against it.
  */
 export const icons = {
   "arrow-right": ArrowRight,
@@ -85,19 +100,25 @@ export const icons = {
   "chevron-left": ChevronLeft,
   "chevron-right": ChevronRight,
   "chevron-up": ChevronUp,
+  "chevrons-up": ChevronsUp,
   "circle-check": CircleCheck,
   clock: Clock,
+  coins: Coins,
   "dice-5": Dice5,
   "dice-6": Dice6,
   dices: Dices,
   droplet: Droplet,
   "eye-off": EyeOff,
+  flag: Flag,
   flame: Flame,
   footprints: Footprints,
   gem: Gem,
   "git-branch": GitBranch,
   hash: Hash,
   "heart-pulse": HeartPulse,
+  /* The delivery spells this the old Lucide way; the export it binds to is the
+     current one. The key follows the call site, as every key here does. */
+  "help-circle": CircleHelp,
   history: History,
   info: Info,
   keyboard: Keyboard,
@@ -105,6 +126,8 @@ export const icons = {
   "loader-circle": LoaderCircle,
   lock: Lock,
   map: Map,
+  "map-pin": MapPin,
+  megaphone: Megaphone,
   mic: Mic,
   minus: Minus,
   moon: Moon,
@@ -113,6 +136,8 @@ export const icons = {
   "panel-right-close": PanelRightClose,
   pencil: Pencil,
   plus: Plus,
+  "refresh-cw": RefreshCw,
+  scale: Scale,
   "scroll-text": ScrollText,
   search: Search,
   shield: Shield,
@@ -123,6 +148,7 @@ export const icons = {
   star: Star,
   swords: Swords,
   "trash-2": Trash2,
+  "trending-up": TrendingUp,
   "triangle-alert": TriangleAlert,
   "user-round": UserRound,
   users: Users,

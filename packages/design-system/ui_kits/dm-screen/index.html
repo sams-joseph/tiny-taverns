@@ -1,4 +1,4 @@
-<!-- @dsCard group="DM Screen" viewport="1440x900" name="DM screen — live session" subtitle="Campaign home, initiative runner, bestiary and the Hob chat panel" -->
+<!-- @dsCard group="DM Screen" viewport="1440x900" name="DM screen — live session" subtitle="Campaign home, initiative runner, bestiary, session chronicle and the Hob chat panel" -->
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tiny Taverns — DM screen</title>
 <link rel="icon" type="image/png" href="../../assets/icon/favicon-32.png">
 <link rel="stylesheet" href="../../styles.css">
@@ -11,6 +11,7 @@
 </head>
 <body><div id="root"></div>
 <script src="data.js"></script>
+<script src="chronicle-data.js"></script>
 <script src="chat-data.js"></script>
 <script type="text/babel" src="ChatParts.jsx"></script>
 <script type="text/babel" src="ChatPanel.jsx"></script>
@@ -19,6 +20,7 @@
 <script type="text/babel" src="CampaignHome.jsx"></script>
 <script type="text/babel" src="EncounterRunner.jsx"></script>
 <script type="text/babel" src="Bestiary.jsx"></script>
+<script type="text/babel" src="Chronicle.jsx"></script>
 <script type="text/babel">
 function App() {
   const [screen, setScreen] = React.useState("home");
@@ -26,7 +28,8 @@ function App() {
     <AppShell screen={screen} setScreen={setScreen}>
       {screen === "home" ? <CampaignHome onRun={() => setScreen("run")} />
         : screen === "run" ? <EncounterRunner onExit={() => setScreen("home")} />
-        : <Bestiary onRun={() => setScreen("run")} />}
+        : screen === "bestiary" ? <Bestiary onRun={() => setScreen("run")} />
+        : <Chronicle />}
     </AppShell>
   );
 }

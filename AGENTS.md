@@ -124,6 +124,56 @@ exactly the tokenised one (display-xl 48 / l 34 / m 26 / s 20, title 18, body 16
   "light cool mist" two-mode line survives unchanged, and the kit's own JSX still does not
   follow it — **the system is dark only; that has not moved.**
 
+### The third delivery: the Chronicle, and nothing else
+
+**The export overwrote the folder the _first_ delivery came from**, so the path is no evidence
+of which delivery is on disk. Check the content instead: this one carries delivery two's chat
+files byte-identically _and_ the new Chronicle. Taking a stale export from that path would
+regress merged work, and nothing about the folder name would say so.
+
+Measured the same way as the second. **Not one token changed — all eight `tokens/*.css` are
+byte-identical, and so is every file under `components/`**, plus `guidelines/`, `assets/`,
+`fonts/` and `_adherence.oxlintrc.json`. No theme-bridge work was needed or done; if a future
+delivery seems to need some, that is a finding worth reporting rather than a routine step. Test
+counts were identical across the swap (353 in 33 files).
+
+**It is one screen, added.** Four files:
+
+- **`ui_kits/dm-screen/AppShell.jsx` gains exactly one line** — a fourth nav item,
+  `{ id: "chronicle", icon: "scroll-text", label: "Chronicle" }`. Nothing else in the shell
+  moved; the 56px top bar and its underline recipe are the second delivery's and are unchanged.
+- **`Chronicle.jsx` and `chronicle-data.js` are new.** A vertical timeline of session recaps —
+  each an expandable card over a dot-and-rule spine — with a sticky "Threads still open" aside
+  at `--aside-w`, a search box, and a **_Read aloud_ toggle that drops the DM-only half of the
+  page rather than restyling it** (the aside, the still-open/at-the-table facets, the status
+  badge and the whole action row all go; the summary switches to serif at `--fs-body-l`).
+- `index.html` wires both in and extends its `@dsCard` subtitle.
+
+Three things to know before building it, none of which the delivery says out loud:
+
+- **It is the only kit screen with no prose documentation.** The chat panel got a whole
+  `ui_kits/dm-screen/README.md` section in delivery two; the Chronicle got none, and
+  `readme.md` does not mention it either. The `.jsx` and the fixture data are the entire
+  specification — read them, do not look for a README that answers the open questions.
+- **`chronicle-data.js` is `window.TT_CHRONICLE`, a separate global from `data.js`'s
+  `TT_DATA`**, and `Chronicle` reads both (`TT_DATA.campaign.session` names the _Recap
+  session N_ button). Sessions 9–11 only: the screen's own footer says 1–8 "are in the old
+  notebook", so an importer is drawn as a sentence, not built.
+- **Provenance is the whole point of the screen, and the schema already carries it.** A recap
+  is `status: "draft" | "edited"` — a draft wears a `magic` badge reading "Hob's draft" and
+  offers _Redraft / Edit / Keep it_; an edited one reads "Drafted by Hob, edited by you · N
+  words" and offers only _Edit_. That is `origin` + `assistant_turn_id` on a content table (see
+  the actor and visibility contract), not a new mechanism — and "nothing is saved to the
+  chronicle until you keep it" is the draft's own copy, so an unkept draft is not a row.
+
+**`packages/ui`'s icon table grew by nine and that is the only change outside the vendored
+tree** — `chevrons-up`, `coins`, `flag`, `help-circle`, `map-pin`, `megaphone`, `refresh-cw`,
+`scale`, `trending-up`. The table's own rule is that it grows when a delivery names a glyph, so
+it tracks deliveries rather than waiting for the screen. **Scan for both spellings**:
+`Chronicle.jsx` passes half of them through a local `Facet icon=` prop, so a grep for
+`name="…"` alone undercounts by four. `help-circle` is keyed as the delivery spells it and
+bound to Lucide's current `CircleHelp` export.
+
 ## Overlay layering: one scale, and where a new overlay goes on it
 
 **Every z-index in this product comes from the scale in `packages/ui/src/styles.css` §3.**
@@ -859,8 +909,9 @@ Three things about it that are decisions, not details:
   UI's own tab sets, which is what makes the shared recipe work on a plain anchor. `-mb-px` in
   that recipe is what lands the underline _on_ the bar's hairline; the item needs `h-auto
 self-stretch` to reach it.
-- **The nav is the two screens that exist.** The kit draws three; there is no bestiary screen
-  yet, and _Run_ is not a destination, because a fight is reached from the campaign that owns it
+- **The nav is the screens that exist**, which is why it is shorter than the kit's. The kit draws
+  four as of the third delivery (Campaign, Run, Bestiary, Chronicle); a screen earns its item when
+  it is built, and _Run_ never does, because a fight is reached from the campaign that owns it
   and a top-level link could not know which. `sectionOf` lights **Campaigns** for the campaign
   list, a campaign _and_ a run — the underline says which part of the app you are in.
 - **The campaign name is the only elastic thing in the bar, so it is the thing that truncates.**

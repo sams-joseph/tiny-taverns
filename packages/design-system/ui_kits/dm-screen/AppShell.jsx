@@ -4,6 +4,7 @@ const NAV = [
   { id: "home", icon: "book-open", label: "Campaign" },
   { id: "run", icon: "swords", label: "Run" },
   { id: "bestiary", icon: "footprints", label: "Bestiary" },
+  { id: "chronicle", icon: "scroll-text", label: "Chronicle" },
 ];
 
 /* Top nav. Active item carries the 2px accent underline the system already uses
