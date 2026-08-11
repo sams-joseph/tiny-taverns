@@ -108,9 +108,9 @@ exactly the tokenised one (display-xl 48 / l 34 / m 26 / s 20, title 18, body 16
 - **`ui_kits/dm-screen/AppShell.jsx` — the 260px left rail is gone, replaced by a 56px top
   bar** (mark + wordmark, three nav items, then campaign, session badge and _Ask Hob_
   pushed right), with a per-screen `TopBar` below it. The active nav item uses `Tabs`' own
-  2px accent underline, so navigation reads the same at both levels. `--rail-w` is still
-  `260px` in `tokens/spacing.css` and `apps/web`'s `w-rail` still resolves — **the shipped
-  shell is untouched and still renders the rail**; rebuilding it is a separate task.
+  2px accent underline, so navigation reads the same at both levels. **The shipped shell
+  now matches** — see "The shell" below. `--rail-w` is still `260px` in `tokens/spacing.css`
+  and `--spacing-rail` is still bridged, but nothing uses `w-rail` any more.
 - **`ChatPanel.jsx`, `ChatParts.jsx`, `ChatLayouts.jsx`, `chat-data.js`, `chat-prep.html`**
   — the Hob assistant surface. `chat-prep.html` is the record of the three layouts that
   were considered; **Option A (a 400px persistent right panel) is the one that ships**, and
@@ -813,7 +813,10 @@ bestiary comes next. Five things are settled by them; follow them rather than re
   encounter grid is `@container` + `@lg`/`@3xl`, which is where `auto-fill minmax(250px,1fr)`
   actually turns over (two cards need 516px, three need 782px) — and it reacts to the aside
   docking beside it, which a viewport breakpoint cannot see. It also keeps the raw px literal
-  out, which ESLint forbids in TS.
+  out, which ESLint forbids in TS. **`main` in the shell is itself a `@container`**, so this
+  is the rule for a screen's outermost layout too and not only for a nested grid: there is no
+  viewport breakpoint left in `apps/web/src`, and adding one would be measuring the window
+  when the question is how wide the column is.
 
 Three smaller facts that cost time:
 
@@ -821,17 +824,58 @@ Three smaller facts that cost time:
   are plain `#foundations` anchors, and without that rule every one of them reads as an unknown
   route and throws the reader back to the campaign list mid-scroll.
 - **`Button` rendering an `<a>` needs `nativeButton={false}`.** Base UI warns and applies
-  button-only semantics otherwise. That is how the rail's nav rows stay real links.
+  button-only semantics otherwise. That is how a route rendered as a button stays a real link.
 - **jsdom here has no `localStorage` at all** — not `window.localStorage`, and not the bare
   global, since Node 26's own is inert without `--localstorage-file`. Anything reading it must
   tolerate `undefined` (`storage()` in `auth/credential.ts` does); a test that needs it installs
   one, as `campaign/CampaignScreen.test.tsx` does.
 
 **`SignInSurface` checks `publishableKey()` as well as the context's `configured`.** It hangs in
-the shared `TopBar`, so every screen renders it, and the two conditions are the same question
-`AuthProvider` asks before mounting `ClerkProvider`: the vendor's chrome may only mount where
-the vendor's provider did. Without the second check any screen's test is liable to be the one
-that discovers Clerk is missing above it.
+the shell's own top nav — it belongs to the app, not to a page — so every screen renders it, and
+the two conditions are the same question `AuthProvider` asks before mounting `ClerkProvider`: the
+vendor's chrome may only mount where the vendor's provider did. Without the second check any
+screen's test is liable to be the one that discovers Clerk is missing above it.
+
+### The shell: two bars, and the one seam in it
+
+`apps/web/src/shell/AppShell.tsx` is `ui_kits/dm-screen/AppShell.jsx` in shipped components.
+**The 260px rail is gone and the content has its width**, which is the whole point of the second
+delivery's shell change rather than a side effect of it. Structure, outermost in:
+
+- a **56px top nav** (`h-14` = `--s-11`) — mark, wordmark, the nav, then `context`, _Ask Hob_ and
+  `SignInSurface` pushed right. Not sticky and not on the layering scale: it is a flex row
+  _above_ the scrolling column, so it overlaps nothing and never has to win a stacking contest.
+- the **per-screen `TopBar`**, sticky at `z-chrome` inside that column, at `--fs-display-s` (the
+  delivery's size now that the wordmark has a row of its own).
+- **`main`, a `@container`**, so screens size against their column.
+
+Three things about it that are decisions, not details:
+
+- **The nav wears `tabsTriggerVariants`, exported from `@taverns/ui` for exactly this.** The
+  delivery asks for the same 2px accent underline at both levels; a second copy of the class list
+  would be a second thing to change when the designers move it. Verified in Chromium: a nav link
+  and a `TabsTrigger` compute the same four values (2px `rgb(23,121,140)`, `rgb(241,245,248)`,
+  600, 13px). The items are real `<a href="#/…">` carrying `data-active` — the attribute Base
+  UI's own tab sets, which is what makes the shared recipe work on a plain anchor. `-mb-px` in
+  that recipe is what lands the underline _on_ the bar's hairline; the item needs `h-auto
+self-stretch` to reach it.
+- **The nav is the two screens that exist.** The kit draws three; there is no bestiary screen
+  yet, and _Run_ is not a destination, because a fight is reached from the campaign that owns it
+  and a top-level link could not know which. `sectionOf` lights **Campaigns** for the campaign
+  list, a campaign _and_ a run — the underline says which part of the app you are in.
+- **The campaign name is the only elastic thing in the bar, so it is the thing that truncates.**
+  The right-hand group is `min-w-0`, not `shrink-0`. Without that the bar overflowed its own
+  width at 760px and clipped _Ask Hob_ — invisible to every test, because the shell's
+  `overflow-hidden` keeps the document from scrolling.
+
+**The seam for the Hob chat panel is two props and nothing else** — `onAskHob?: () => void` (the
+bar's button; with none passed it still renders, because it is the bar the designers drew) and
+`panel?: ReactNode`, rendered as the last child of the `relative` row under the top nav. A panel
+is inline by taking part in that row, or an overlay by positioning against it and drawing its own
+scrim. **The shell holds no chat state, no ⌘K handler and no breakpoint**; `CHAT_INLINE_MIN`
+(1020) belongs to whatever mounts in `panel`. `NavContext` is exported from the same file for the
+bar's right-hand pair, and takes an `href` for the screen that is _inside_ a campaign — from a
+fight, the campaign's name is the way back to prep, which is what the rail's footer used to be.
 
 ## Authoring in `apps/web`: forms, mutations, and the traps in them
 
@@ -1175,6 +1219,13 @@ worked, driving Chromium over CDP:
   across reloads, which is how the fiber interrupt was confirmed to close the stream.
 - Base UI's `Switch` puts its `id` on the hidden `<input>`; drive the `[role=switch]` span. Its
   `Select` needs the keyboard route. Both are already recorded above, and both bit again here.
+- **The kit prototypes cannot be rendered from this repo, so do not plan a side-by-side against
+  a running `ui_kits/dm-screen/index.html`.** They need `_ds_bundle.js` for `Badge` and `Icon`,
+  and `PORT-NOTES.md` excludes it on purpose — it is a second, drifting copy of components this
+  repo ships for real. Served over HTTP the page loads, React mounts, and every component throws
+  on an undefined global. Compare against the `.jsx` source and the `guidelines/` specimens, and
+  assert on **computed values from the running app** (`getComputedStyle`, `getBoundingClientRect`)
+  against the token the kit names. That is what caught the 760px overflow a screenshot did not.
 
 ## Hob: the chat surface is built, and nothing is behind it
 

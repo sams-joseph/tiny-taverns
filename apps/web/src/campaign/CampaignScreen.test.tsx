@@ -30,9 +30,10 @@ describe("CampaignScreen", () => {
     renderScreen(mintingSession());
 
     expect(await screen.findByRole("heading", { name: "The Salt Road" })).toBeInTheDocument();
-    // The subtitle is assembled from two rows: the session's number and the
-    // campaign's party name.
-    expect(screen.getByText("Session 12 · The Gilded Spoon")).toBeInTheDocument();
+    // The subtitle is assembled from two rows: the session's number, the
+    // campaign's party name, and how many are at the table — that last one moved
+    // here from the rail's footer when the rail became a 56px top bar.
+    expect(screen.getByText("Session 12 · The Gilded Spoon · 4 players")).toBeInTheDocument();
 
     expect(screen.getByText("Ambush in the reeds")).toBeInTheDocument();
     expect(screen.getByText("Medium")).toBeInTheDocument();

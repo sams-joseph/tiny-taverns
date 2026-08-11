@@ -129,7 +129,11 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
         />
       }
     >
-      <div className="flex max-w-3xl flex-col gap-6">
+      {/* No page-wide `max-w`: the rail's 260px came back to this column, and a
+          measure cap would have banked it as empty space on the right. The rows
+          spread into two columns once the column is wide enough for a pair —
+          the same rule, and the same `@3xl` turn-over, as the encounter grid. */}
+      <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your campaigns…" />}
         {resource.state === "failed" && (
           <FailureNotice failure={resource.failure} onRetry={reload} />
@@ -143,7 +147,7 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
                 encounters, the checklist — hangs off it.
               </EmptyState>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="grid gap-4 @3xl:grid-cols-2">
                 {campaigns.map((campaign) => (
                   <CampaignRow key={campaign.id} campaign={campaign} />
                 ))}

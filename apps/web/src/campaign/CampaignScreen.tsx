@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { hrefFor, useRoute, type Route } from "../routes";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
@@ -52,10 +52,17 @@ type Editing =
   | { readonly what: "encounter"; readonly encounter: Encounter | undefined }
   | { readonly what: "note"; readonly note: Note | undefined };
 
+/**
+ * The party count moved here when the rail did: the top nav carries the name and
+ * the session badge the delivery draws, and nothing else, so the one fact the
+ * rail's footer held that has no other home joins the line that already says
+ * which night and whose party.
+ */
 const subtitleFor = (view: CampaignView): string | undefined => {
   const parts = [
     view.session === undefined ? undefined : `Session ${view.session.number}`,
     view.campaign.partyName ?? undefined,
+    `${view.campaign.playerCount} ${view.campaign.playerCount === 1 ? "player" : "players"}`,
   ].filter((part): part is string => part !== undefined && part !== "");
   return parts.length === 0 ? undefined : parts.join(" · ");
 };
@@ -103,7 +110,12 @@ function CampaignBody({
   );
 
   return (
-    <div className="flex flex-col gap-8 xl:flex-row xl:items-start">
+    // `@4xl` (56rem = 896px) is the *content column's* width, not the
+    // viewport's — `main` is the container, and with the rail gone the column is
+    // 260px wider than the `xl:` viewport breakpoint this replaced was written
+    // for. 896 is where the aside earns its place: 340 for it, 32 for the gap,
+    // and 524 left for the tabs, which is the 516 two encounter cards need.
+    <div className="flex flex-col gap-8 @4xl:flex-row @4xl:items-start">
       {/* A container query, not a viewport one: the tab column's width is what
           decides how many encounter cards fit, and it changes when the aside
           docks beside it. `@lg` (32rem) and `@3xl` (48rem) are the *column's*
@@ -183,7 +195,7 @@ function CampaignBody({
         </Tabs>
       </div>
 
-      <aside className="flex flex-col gap-4 xl:w-aside xl:shrink-0">
+      <aside className="flex flex-col gap-4 @4xl:w-aside @4xl:shrink-0">
         <PrepChecklist
           key={view.session?.id ?? view.campaign.id}
           campaignId={view.campaign.id}
@@ -269,19 +281,13 @@ export function CampaignScreen({
   return (
     <AppShell
       route={route}
-      railFooter={
+      context={
         view === undefined ? undefined : (
-          <>
-            <p className="text-body-s leading-body font-semibold text-on-dark">
-              {view.campaign.name}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {view.session !== undefined && <Badge>Session {view.session.number}</Badge>}
-              <span className="text-caption leading-snug text-on-dark-muted">
-                {view.campaign.playerCount} {view.campaign.playerCount === 1 ? "player" : "players"}
-              </span>
-            </div>
-          </>
+          <NavContext name={view.campaign.name}>
+            {view.session !== undefined && (
+              <Badge variant="secondary">Session {view.session.number}</Badge>
+            )}
+          </NavContext>
         )
       }
       topBar={

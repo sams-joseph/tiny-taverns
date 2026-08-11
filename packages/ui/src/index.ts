@@ -40,7 +40,13 @@ export {
 } from "./components/ui/select";
 export { Switch } from "./components/ui/switch";
 
-export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+export {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  tabsTriggerVariants,
+} from "./components/ui/tabs";
 
 export {
   Dialog,

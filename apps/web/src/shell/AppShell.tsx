@@ -1,17 +1,24 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
-import { Button, Icon, type IconName } from "@taverns/ui";
+import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { SignInSurface } from "../auth/SignInSurface";
 import { hrefFor, type Route } from "../routes";
 
 /**
- * The fixed shell: a persistent left rail, a sticky top bar, a scrolling body.
+ * The fixed shell: a 56px top nav, a per-screen bar under it, a scrolling body.
  *
  * This is `ui_kits/dm-screen/AppShell.jsx` built out of the shipped components
  * and the theme's names — the prototype's inline styles and hand-rolled hover
- * state are the visual specification, not code to carry across. The rail never
- * collapses (readme.md, "Spacing & layout"), so it is `w-rail` at every width
- * and the body is what scrolls.
+ * state are the visual specification, not code to carry across.
+ *
+ * **The 260px rail is gone, and the width it took is the point of the change.**
+ * The second delivery replaced it with one 56px row — mark and wordmark, the
+ * nav, then the campaign, its session badge and *Ask Hob* pushed right — and the
+ * content is what got the 260px back. So the screens under this measure
+ * themselves against the column they now have rather than against the viewport:
+ * `main` is a `@container`, and every layout that used to turn over at an `xl:`
+ * or `lg:` viewport breakpoint asks the column instead. A breakpoint chosen when
+ * a rail was eating 260px is a breakpoint that answers the wrong question now.
  *
  * Each screen composes this itself and supplies its own top bar, rather than
  * the shell reaching down for a title it would have to be told about anyway.
@@ -23,77 +30,171 @@ interface NavItem {
   readonly route: Route;
 }
 
+/**
+ * The kit names three sections; the app has two screens to point them at.
+ *
+ * `Bestiary` is not here because there is no bestiary screen yet, and `Run` is
+ * not a destination — a fight is reached from the campaign that owns it, and a
+ * top-level link could not know which run it meant. A nav item that goes nowhere
+ * is the same lie as a stubbed field, so the row carries what exists.
+ */
 const NAV: ReadonlyArray<NavItem> = [
   { label: "Campaigns", icon: "book-open", route: { screen: "campaigns" } },
   { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
 ];
 
 /**
- * The rail's nav rows.
+ * Which nav item is lit.
  *
- * Real `<a href="#/…">` elements behind `Button variant="ghost"`, so a route is
- * middle-clickable and copyable — the shipped Button's `render` prop is exactly
- * for this, and it keeps the hover wash and focus ring the system already
- * defines rather than restating them.
+ * A campaign and the fight inside it are both *within* Campaigns, so all three
+ * routes light the same item — the underline says which part of the app you are
+ * in, not which URL you are at, and an unlit nav on a campaign page reads as a
+ * bug.
  */
-function RailItem({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
+const sectionOf = (route: Route): Route["screen"] =>
+  route.screen === "gallery" ? "gallery" : "campaigns";
+
+/**
+ * A nav item, wearing `Tabs`' own recipe.
+ *
+ * The delivery asks for this in as many words: the active item takes the same
+ * 2px accent underline as a tab strip, "so navigation reads identically at both
+ * levels". `tabsTriggerVariants` is that recipe, exported from `@taverns/ui` for
+ * this — reproducing the class list here would be a second copy to keep in step
+ * with the designers.
+ *
+ * A real `<a href="#/…">`, so a section is middle-clickable and copyable, and
+ * `data-active` rather than a hand-rolled active class: it is the attribute Base
+ * UI's own tab sets, and the same one the recipe's variants key on.
+ */
+function NavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
   return (
-    <Button
-      variant="ghost"
-      size="lg"
+    <a
+      href={hrefFor(item.route)}
       aria-current={active ? "page" : undefined}
-      // The rendered element is an <a>, so Base UI must not assume native button
-      // semantics — without this it warns and applies button-only behaviour.
-      nativeButton={false}
-      className={
-        active
-          ? "w-full justify-start gap-2.5 px-2.5 text-on-dark bg-surface-raised"
-          : "w-full justify-start gap-2.5 px-2.5 text-on-dark-muted"
-      }
-      render={<a href={hrefFor(item.route)} />}
+      data-active={active ? "" : undefined}
+      // `h-auto` so the item stretches to the bar rather than keeping the tab
+      // strip's 36px, which is what puts the underline on the bar's own hairline.
+      className={cn(tabsTriggerVariants(), "h-auto gap-2 self-stretch px-3.5")}
     >
-      <Icon name={item.icon} size={17} className={active ? "text-verdigris-300" : undefined} />
+      <Icon name={item.icon} size={16} className={active ? "text-verdigris-300" : undefined} />
       {item.label}
-    </Button>
-  );
-}
-
-function Rail({ route, footer }: { readonly route: Route; readonly footer?: ReactNode }) {
-  return (
-    <nav
-      aria-label="Sections"
-      className="flex w-rail shrink-0 flex-col border-r border-hairline bg-surface-card"
-    >
-      <div className="px-3.5 pt-4.5 pb-4">
-        <div className="flex items-center gap-2.5">
-          <img src={markUrl} alt="" aria-hidden="true" width={30} height={30} className="block" />
-          <span className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-            Tiny Taverns
-          </span>
-        </div>
-        <p className="mt-1.5 ml-10 text-label-s leading-body text-verdigris-300">
-          The DM&rsquo;s side kick
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-1 px-2.5">
-        {NAV.map((item) => (
-          <RailItem key={item.label} item={item} active={item.route.screen === route.screen} />
-        ))}
-      </div>
-
-      {footer !== undefined && (
-        <div className="mt-auto border-t border-hairline p-3.5">{footer}</div>
-      )}
-    </nav>
+    </a>
   );
 }
 
 /**
- * The sticky header: what you are looking at, and what you can do to it.
+ * *Ask Hob*, part of the specified layout.
  *
- * `--fs-display-m` at `--ls-display` — the one display-sized thing on the
- * screen, so the eye lands on the campaign name before the cards.
+ * The panel it opens is built elsewhere; this is the shell's half of the seam.
+ * With no `onAskHob` handed down it still renders — it is the bar the designers
+ * drew — and does nothing.
+ */
+function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
+  return (
+    <Button variant="secondary" size="sm" className="gap-2" onClick={onClick}>
+      <img src={markUrl} alt="" aria-hidden="true" width={18} height={18} className="rounded-xs" />
+      Ask Hob
+      <kbd className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-micro leading-snug font-medium text-faint">
+        &#8984;K
+      </kbd>
+    </Button>
+  );
+}
+
+/**
+ * The app's own bar: where you are in the product, and who you are.
+ *
+ * Not sticky and not on the layering scale — it is a flex row *above* the
+ * scrolling column rather than something floating over it, so it never overlaps
+ * anything and never has to win.
+ */
+function TopNav({
+  route,
+  context,
+  onAskHob,
+}: {
+  readonly route: Route;
+  readonly context?: ReactNode;
+  readonly onAskHob?: () => void;
+}) {
+  const section = sectionOf(route);
+
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-6 border-b border-hairline bg-surface-card px-page-sm sm:px-page">
+      <div className="flex shrink-0 items-center gap-2">
+        <img src={markUrl} alt="" aria-hidden="true" width={26} height={26} className="block" />
+        <span className="font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading">
+          Tiny Taverns
+        </span>
+      </div>
+
+      <nav aria-label="Sections" className="flex h-full items-stretch">
+        {NAV.map((item) => (
+          <NavLink key={item.label} item={item} active={item.route.screen === section} />
+        ))}
+      </nav>
+
+      {/* `min-w-0` rather than `shrink-0`: everything in this group but the
+          campaign's name is a fixed size and says so itself, so the group is
+          allowed to shrink and the name is what absorbs it. */}
+      <div className="ml-auto flex min-w-0 items-center gap-4">
+        {context}
+        <AskHobButton onClick={onAskHob} />
+        {/* Clerk's own components, unthemed on purpose — see SignInSurface.
+            Renders nothing at all when no publishable key is configured, which
+            is why the bar can carry it unconditionally. It moved here from the
+            per-screen bar with the rail: it belongs to the app, not the page. */}
+        <SignInSurface />
+      </div>
+    </header>
+  );
+}
+
+/**
+ * The top nav's right-hand pair: the campaign you are in, and its badges.
+ *
+ * Shared rather than composed twice, because the campaign view and the runner
+ * both put the same thing there and the delivery draws it once. `href` is for
+ * the screen that is *inside* the campaign — from a fight, the campaign's name
+ * is the way back to prep, which is the one thing the rail used to carry that
+ * this row would otherwise have dropped.
+ */
+export function NavContext({
+  name,
+  href,
+  children,
+}: {
+  readonly name: string;
+  readonly href?: string;
+  readonly children?: ReactNode;
+}) {
+  // `truncate`, not `whitespace-nowrap`: this is the one part of the bar that is
+  // arbitrary length, so it is the one that gives way. A campaign called
+  // something long must not push *Ask Hob* off the end of a narrow window.
+  const label = "truncate text-label leading-snug font-semibold text-foreground";
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {href === undefined ? (
+        <span className={label}>{name}</span>
+      ) : (
+        <a href={href} className={cn(label, "hover:text-link-hover")}>
+          {name}
+        </a>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The sticky per-screen header: what you are looking at, and what you can do to
+ * it.
+ *
+ * `--fs-display-s` at `--ls-display`, which is where the delivery puts it now
+ * that the wordmark sits in its own row above — one step down from the rail-era
+ * `--fs-display-m`, because this is no longer the only display-sized thing on
+ * the screen.
  *
  * `z-chrome` is the bottom rung of the layering scale in `@taverns/ui`'s
  * `styles.css`: sticky page furniture, deliberately far below the overlay band
@@ -111,34 +212,46 @@ export function TopBar({
   return (
     <header className="sticky top-0 z-chrome flex items-center gap-gutter border-b border-hairline bg-surface-card px-page-sm py-3.5 sm:px-page">
       <div className="min-w-0 flex-1">
-        <h1 className="font-display text-display-m leading-tight font-semibold tracking-display text-heading">
+        <h1 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
           {title}
         </h1>
         {subtitle !== undefined && (
           <p className="mt-1 text-body-s leading-body text-muted-foreground">{subtitle}</p>
         )}
       </div>
-      <div className="flex items-center gap-2.5">
-        {children}
-        {/* Clerk's own components, unthemed on purpose — see SignInSurface.
-            Renders nothing at all when no publishable key is configured, which
-            is why every screen can carry it unconditionally. */}
-        <SignInSurface />
-      </div>
+      <div className="flex items-center gap-2.5">{children}</div>
     </header>
   );
 }
 
 export function AppShell({
   route,
-  railFooter,
+  context,
   topBar,
+  onAskHob,
+  panel,
   fill = false,
   children,
 }: {
   readonly route: Route;
-  readonly railFooter?: ReactNode;
+  /**
+   * What you are in, pushed right in the top nav: the campaign's name and its
+   * session badge. The screen supplies it because the shell has no way to know
+   * it — the same reason the screen supplies its own `topBar`.
+   */
+  readonly context?: ReactNode;
   readonly topBar: ReactNode;
+  /**
+   * The seam for the Hob chat panel, and the whole of it.
+   *
+   * `onAskHob` is the top nav's *Ask Hob* button; `panel` is rendered as the
+   * last child of the row under the top nav, which is `relative`. So a panel
+   * can be inline simply by taking part in that row, or an overlay by
+   * positioning itself against it and drawing its own scrim — and the shell
+   * carries no chat state, no shortcut and no breakpoint of its own.
+   */
+  readonly onAskHob?: () => void;
+  readonly panel?: ReactNode;
   /**
    * Give the body the viewport's height instead of letting the page scroll.
    *
@@ -154,21 +267,28 @@ export function AppShell({
   readonly children: ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-page">
-      <Rail route={route} footer={railFooter} />
-      <div
-        className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
-      >
-        {topBar}
-        <main
-          className={
-            fill
-              ? "flex min-h-0 flex-1 flex-col px-page-sm py-gutter sm:px-page"
-              : "flex-1 px-page-sm py-page sm:px-page"
-          }
+    <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
+      <TopNav route={route} context={context} onAskHob={onAskHob} />
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
         >
-          {children}
-        </main>
+          {topBar}
+          {/* `@container`, so a screen's layout turns over on the width of the
+              column it actually has. Every `fixed` overlay in the product is
+              portalled to the body, so the containing block this establishes
+              catches nothing. */}
+          <main
+            className={
+              fill
+                ? "@container flex min-h-0 flex-1 flex-col px-page-sm py-gutter sm:px-page"
+                : "@container flex-1 px-page-sm py-page sm:px-page"
+            }
+          >
+            {children}
+          </main>
+        </div>
+        {panel}
       </div>
     </div>
   );

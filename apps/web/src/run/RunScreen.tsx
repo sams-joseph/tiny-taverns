@@ -25,7 +25,7 @@ import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
 import { hrefFor, type Route } from "../routes";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
@@ -259,22 +259,14 @@ export function RunScreen({
       <AppShell
         route={route}
         fill
-        railFooter={
+        context={
           view === undefined ? undefined : (
-            <>
-              <p className="text-body-s leading-body font-semibold text-on-dark">
-                {view.campaign.name}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge>Session {view.session.number}</Badge>
-                <a
-                  href={backHref}
-                  className="text-caption leading-snug text-link hover:text-link-hover"
-                >
-                  Back to prep
-                </a>
-              </div>
-            </>
+            // The campaign's name is the link back to prep. The rail spelled
+            // that out in a row of its own; a 56px bar has no room for a second
+            // line, and the name is where a DM reaches for it anyway.
+            <NavContext name={view.campaign.name} href={backHref}>
+              <Badge variant="secondary">Session {view.session.number}</Badge>
+            </NavContext>
           )
         }
         topBar={
@@ -370,7 +362,11 @@ export function RunScreen({
               </p>
             )}
 
-            <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_var(--spacing-aside)]">
+            {/* The column's width, not the viewport's — `main` is the container.
+                `@3xl` (48rem = 768px) leaves the initiative list 412px beside a
+                340px stat panel, and with the rail gone the column reaches that
+                256px sooner than the `lg:` breakpoint it replaces did. */}
+            <div className="grid min-h-0 flex-1 gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
               <InitiativeList
                 run={state.run}
                 combatants={state.combatants}
