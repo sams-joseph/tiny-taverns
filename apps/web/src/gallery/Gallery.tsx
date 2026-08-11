@@ -4,6 +4,7 @@ import { AppShell, TopBar } from "../shell/AppShell";
 import { Core } from "./Core";
 import { Feedback } from "./Feedback";
 import { Forms } from "./Forms";
+import { HobSection } from "./Hob";
 import { Foundations } from "./Foundations";
 import { Navigation } from "./Navigation";
 
@@ -13,6 +14,7 @@ const SECTIONS = [
   { id: "forms", label: "Forms" },
   { id: "navigation", label: "Navigation" },
   { id: "feedback", label: "Feedback" },
+  { id: "hob", label: "Hob" },
   { id: "server", label: "Server" },
 ];
 
@@ -55,6 +57,7 @@ export function Gallery({ route }: { readonly route: Route }) {
         <Forms />
         <Navigation />
         <Feedback />
+        <HobSection />
         <ServerPanel />
 
         <p className="border-t border-hairline pt-6 text-caption text-faint">

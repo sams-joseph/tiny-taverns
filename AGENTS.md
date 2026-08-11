@@ -115,7 +115,8 @@ exactly the tokenised one (display-xl 48 / l 34 / m 26 / s 20, title 18, body 16
   — the Hob assistant surface. `chat-prep.html` is the record of the three layouts that
   were considered; **Option A (a 400px persistent right panel) is the one that ships**, and
   `ui_kits/dm-screen/README.md` is where its behaviour, its parts and its open questions
-  are written down. Read that before building it.
+  are written down. Read that before building it. **It is built** — `apps/web/src/hob/`; see
+  "Hob: the chat surface is built, and nothing is behind it" below.
 - **`CHAT_INLINE_MIN` fell from 1180 to 1020**, and the two changes are one change: the
   panel goes inline above that width and becomes a scrimmed overlay below it, and dropping
   the rail handed 260px back to the content.
@@ -1174,6 +1175,62 @@ worked, driving Chromium over CDP:
   across reloads, which is how the fiber interrupt was confirmed to close the stream.
 - Base UI's `Switch` puts its `id` on the hidden `<input>`; drive the `[role=switch]` span. Its
   `Select` needs the keyboard route. Both are already recorded above, and both bit again here.
+
+## Hob: the chat surface is built, and nothing is behind it
+
+`apps/web/src/hob/` is the designers' Option A —
+`packages/design-system/ui_kits/dm-screen/ChatPanel.jsx` and `ChatParts.jsx`, built from the
+shipped components. **The retrieval and model work is unstarted, and the module is written so
+that stays visible rather than papered over.**
+
+- **`conversation.ts` is the whole seam, and the only file that changes when something
+  answers.** It exports `HobConversation` and one implementation, `useHobConversation`, which
+  returns no turns and an **undefined `send`**. `HobPanel` reads that absence directly: no
+  composer, and a plain line saying nothing is behind the panel. Every other handler
+  (`save`, `discard`, `retry`) is optional the same way, and the card disables what it was not
+  given. There is deliberately **no endpoint, no client method and no wire schema** — an
+  assistant endpoint is an `HttpApiEndpoint` in `packages/api` like everything else, and a
+  contract guessed from a panel would be the wrong one.
+- **`transcript.ts` is the useful half of the handover.** `HobArtifact` is a discriminated
+  union over the five card bodies the designers actually drew (encounter, read-aloud, npc,
+  checklist, rules), so it states exactly what an answer has to return. The delivery's
+  `KIND_META` names eight kinds; the four with no drawn body are absent on purpose. Provenance
+  is already waiting on the schema side — `assistant_turn_id` and `origin` on every content
+  table — so _Save to session_ is an ordinary authored write, not a new privilege.
+- **`hob.fixtures.ts` is the delivered data, and the sample thread must not reach a screen.**
+  The gallery's `#hob` section is the one place it renders. A panel that appears to hold a
+  conversation the DM never had is the failure this area is most able to cause.
+- **The mount is three names**: `useHobPanel()` (open state, `inline`, ⌘K/Esc), `HobRegion`
+  (the `relative flex` row the overlay positions against — an overlay without one covers the
+  page instead of the content), and `<Hob hob={…} />` as that region's last child. The gallery's
+  "The mount, and the opener" specimen _is_ that composition, so it fails if the seam rots.
+  **The shell owns the Ask Hob button**; nothing in `hob/` draws one.
+
+**Inline above 1020px, overlay below** — `HOB_INLINE_MIN`, from the second delivery's
+`CHAT_INLINE_MIN`, which fell from 1180 when the 260px rail became a 56px top bar. Measured in
+Chromium against the running app: 1020 → inline, panel `static`, 400px wide, no scrim; 1019 →
+`position: absolute`, `z-index: 110` over a scrim at `100`, and `elementFromPoint` over the
+content returns the scrim. That last check is the point — it is the property the select-under-a-
+dialog bug violated, and rendering above is not the same as _taking the click_. The panel takes
+`z-dialog` and the scrim `z-scrim`; two rungs, never one.
+
+Three things that cost time here:
+
+- **A flex column that scrolls shrinks its children by default.** The thread is
+  `flex flex-col overflow-auto`, and without `shrink-0` every artifact card collapsed to a
+  sliver as soon as the thread was taller than the panel. Invisible to jsdom, obvious in a
+  browser.
+- **Do not auto-scroll an empty thread to the bottom.** The starter grid is taller than a short
+  panel, so "scroll to the newest turn" opened on the last starter with the question scrolled
+  off — the first thing a DM sees, already scrolled past.
+- **`w-100` is the panel's 400px**, a Tailwind spacing step and not a token: the delivery does
+  not tokenise it either, and `--aside-w` is the 340px inspector, a different measurement.
+
+**Driving a browser here: never assume a debug port.** `--remote-debugging-port=9333` was
+already bound by another agent's headless Chromium, and `/json/list` cheerfully returned _their_
+page — a probe that reported a shell nobody in this worktree had written. Launch with
+`--remote-debugging-port=0` and read the real port off the process's own
+`DevTools listening on ws://127.0.0.1:<port>/` stderr line.
 
 ## The assistant: a trap to remember before it ships
 
