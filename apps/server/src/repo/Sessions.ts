@@ -84,6 +84,34 @@ export class Sessions extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
+      /**
+       * The other half of ending a session.
+       *
+       * §1.4 of the architecture describes one transition: `ended` freezes
+       * `ended_at` **and clears `campaign.current_session_id`**. Only the first
+       * half shipped, and the DM was left in a night that was already over —
+       * the campaign screen resolves the session it is preparing from that
+       * pointer, and `StartRunDialog` invents the next session only when the
+       * pointer resolves to nothing.
+       *
+       * It lives here rather than in the dialog that stamped the end time
+       * because it is not a step a client may forget: a second client would
+       * never see the pointer move, and a future endpoint that ends a session
+       * would have to remember the same thing again. The two writes are one
+       * transaction, and `campaign_current_session_id_fkey` refuses the pair
+       * coming apart even if some later path tries.
+       *
+       * Scoped to the row that was just written: an un-end (`endedAt: null`)
+       * clears nothing, and a campaign pointing somewhere else is untouched.
+       */
+      const releaseIfFinished = (row: SessionRow) =>
+        row.ended_at === null
+          ? Effect.void
+          : Effect.asVoid(sql`
+              update campaign set current_session_id = null, updated_at = now()
+              where campaign.id = ${row.campaign_id} and campaign.current_session_id = ${row.id}
+            `);
+
       return {
         list: (campaignId) =>
           dieOnSqlError(
@@ -139,37 +167,53 @@ export class Sessions extends Context.Service<
         update: (campaignId, id, patch) =>
           dieOnSqlError(
             asConflict(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const columns = defined({
-                  number: patch.number,
-                  title: patch.title,
-                  started_at: patch.startedAt && DateTime.toDateUtc(patch.startedAt),
-                  ended_at: patch.endedAt && DateTime.toDateUtc(patch.endedAt),
-                  visibility: patch.visibility,
-                });
-                const rows = yield* sql<SessionRow>`
-                  update session set ${setClause(sql, columns)}
-                  where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
-                  returning *
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
-                return toSession(rows[0]!);
-              }),
+              sql.withTransaction(
+                Effect.gen(function* () {
+                  const actor = yield* CurrentActor;
+                  const columns = defined({
+                    number: patch.number,
+                    title: patch.title,
+                    started_at: patch.startedAt && DateTime.toDateUtc(patch.startedAt),
+                    ended_at: patch.endedAt && DateTime.toDateUtc(patch.endedAt),
+                    visibility: patch.visibility,
+                  });
+                  const rows = yield* sql<SessionRow>`
+                    update session set ${setClause(sql, columns)}
+                    where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+                    returning *
+                  `;
+                  if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
+                  yield* releaseIfFinished(rows[0]!);
+                  return toSession(rows[0]!);
+                }),
+              ),
             ),
           ),
 
         remove: (campaignId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: SessionId }>`
-                delete from session
-                where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
-                returning session.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                // The pointer used to fall away on its own: the foreign key was
+                // `on delete set null`, and it no longer can be — Postgres
+                // refuses that action on a key containing a generated column,
+                // and the key is what makes a finished session unable to be the
+                // current one (`0006_session_finished.ts`). So the detach that
+                // used to be invisible is written down. Rolled back with the
+                // delete if it turns out there was nothing to delete.
+                yield* sql`
+                  update campaign set current_session_id = null, updated_at = now()
+                  where campaign.id = ${campaignId} and campaign.current_session_id = ${id}
+                `;
+                const rows = yield* sql<{ readonly id: SessionId }>`
+                  delete from session
+                  where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+                  returning session.id
+                `;
+                if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
+              }),
+            ),
           ),
       };
     }),

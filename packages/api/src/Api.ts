@@ -52,11 +52,15 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       success: Campaign,
       error: NotFound,
     }),
+    // `Conflict` is `currentSessionId` naming a session that is finished. A
+    // campaign's current session is the night in progress, and §1.4 ends a
+    // session by clearing this pointer — so pointing it back at an ended
+    // session is a state conflict, not a missing row.
     HttpApiEndpoint.patch("update", "/:campaignId", {
       params: { campaignId: CampaignId },
       payload: CampaignUpdate,
       success: Campaign,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     // Soft delete: a campaign is someone's two years of Thursday nights.
     HttpApiEndpoint.delete("archive", "/:campaignId", {

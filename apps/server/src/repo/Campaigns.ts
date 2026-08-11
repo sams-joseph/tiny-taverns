@@ -1,8 +1,10 @@
 import {
+  type Actor,
   Campaign,
   type CampaignCreate,
   type CampaignId,
   type CampaignUpdate,
+  Conflict,
   CurrentActor,
   NotFound,
   type SessionId,
@@ -10,7 +12,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
-import { campaignReadable, campaignWritable } from "./visibility.js";
+import { campaignReadable, campaignWritable, rowWritable } from "./visibility.js";
 
 interface CampaignRow extends ProvenanceColumns {
   readonly id: CampaignId;
@@ -48,13 +50,53 @@ export class Campaigns extends Context.Service<
     readonly update: (
       id: CampaignId,
       patch: CampaignUpdate,
-    ) => Effect.Effect<Campaign, NotFound, CurrentActor>;
+    ) => Effect.Effect<Campaign, NotFound | Conflict, CurrentActor>;
     readonly archive: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
   }
 >()("Campaigns") {
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+
+      /**
+       * Whether a session may become this campaign's current one.
+       *
+       * Two refusals, and they are deliberately different errors. A session
+       * this credential cannot write — someone else's, or another campaign's,
+       * since the id in a payload is a client claim exactly as one in a path is
+       * — is `NotFound`, because saying "it exists but is not yours" is itself
+       * a disclosure. A session of this campaign that is **finished** is a
+       * `Conflict`: the caller can see it perfectly well, and the honest answer
+       * is that the night is over. That is the invariant §1.4 asks for, read
+       * from the other end — `Sessions.update` clears the pointer when a
+       * session ends, and this refuses to point it back.
+       *
+       * Neither is the last word. `campaign_current_session_id_fkey`
+       * (`0006_session_finished.ts`) refuses the same pair structurally, which
+       * is what closes the window between this check and the write: a session
+       * ending concurrently makes the foreign key's own row lock the arbiter,
+       * not this `select`.
+       */
+      const ensureEligible = (
+        id: CampaignId,
+        sessionId: SessionId | null | undefined,
+        actor: Actor,
+      ) =>
+        Effect.gen(function* () {
+          if (sessionId === null || sessionId === undefined) return;
+          const rows = yield* sql<{ readonly ended_at: Date | null }>`
+            select session.ended_at from session
+            where session.id = ${sessionId} and ${rowWritable(sql, "session", id, actor)}
+          `;
+          if (rows.length === 0) {
+            return yield* new NotFound({ resource: "session", id: sessionId });
+          }
+          if (rows[0]!.ended_at !== null) {
+            return yield* new Conflict({
+              message: "that session is finished, so it cannot be the current session",
+            });
+          }
+        });
 
       const one = (rows: ReadonlyArray<CampaignRow>, id: CampaignId) =>
         rows.length === 0
@@ -110,6 +152,7 @@ export class Campaigns extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
+              yield* ensureEligible(id, patch.currentSessionId, actor);
               const columns = defined({
                 name: patch.name,
                 party_name: patch.partyName,

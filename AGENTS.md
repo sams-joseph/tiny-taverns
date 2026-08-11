@@ -947,6 +947,43 @@ Modelling decisions that are settled, and that the report or the prototype state
   applying. This is not offline-first design — it stops a double-tapped damage button taking
   ten hit points instead of five.
 
+### A finished session is never the campaign's current session
+
+§1.4 describes one transition — `ended` freezes `session.ended_at` **and clears
+`campaign.current_session_id`** — and only the first half shipped. The campaign screen resolves
+the night it is preparing from that pointer and `StartRunDialog` invents the next session only
+when the pointer resolves to nothing, so a DM who finished a night was locked in it permanently.
+The fix is in three places and each does something the others cannot:
+
+- **`repo/Sessions.ts` performs the transition.** `releaseIfFinished` clears the pointer in the
+  same transaction that stamps the end time. It is here rather than in the dialog because a
+  client that forgets step two recreates the bug and a second client never sees it happen.
+- **`repo/Campaigns.ts` refuses the other direction.** Pointing a campaign at a finished session
+  is a `Conflict` (409) — the DM can see it, and the honest answer is that the night is over —
+  while a session in someone else's campaign is `NotFound`, because "it exists but is not yours"
+  is a disclosure. The `currentSessionId` in a payload is a client claim exactly as one in a path
+  is.
+- **`0006_session_finished.ts` makes it unrepresentable.** `campaign_current_session_id_fkey` is
+  now composite: `session.is_open` is `ended_at is null`, the campaign's half is a constant `true`
+  whenever it points anywhere, and `(id, true)` has no row to match once the session ends. Same
+  trick as `note_encounter_fkey`, applied to a predicate rather than to a container, and both
+  columns are `generated always as … stored` so there is no second copy to update wrongly. It
+  also closes the window a check-then-write leaves open, since the key's own row lock arbitrates
+  a session ending concurrently.
+
+Three consequences worth knowing before touching it:
+
+- **The key is `deferrable initially deferred`**, for the reason `encounter_creature.creature_id`
+  is: ending and clearing are two statements and neither order is legal if the check fires at
+  once. Under autocommit it still refuses a lone `update session set ended_at` on the spot.
+- **`on delete set null` is gone and could not be kept** — Postgres refuses that action on a key
+  containing a generated column. So `Sessions.remove` clears the pointer itself, and a detach
+  that used to happen invisibly is now written down.
+- **Ending a _fight_ is not finishing the _night_, and the two must not collapse.**
+  `EndRunDialog` defaults to the smaller ending; only its switch stamps `session.endedAt`.
+  `apps/server/test/session-lifecycle.test.ts` pins both, and pins the invariant against raw SQL
+  as well as against the repositories.
+
 **The containment trap this area walked into, and the shape of the fix.** `combatant` sits two
 levels below the campaign (`combatant → encounter_run → session → campaign`), which is one more
 than anything before it, so `repo/visibility.ts` grew a `Containment` chain that the predicate
