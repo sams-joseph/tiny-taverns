@@ -10,9 +10,10 @@ import {
   Label,
   Switch,
 } from "@taverns/ui";
-import { DateTime, Effect, Result } from "effect";
+import { Effect, Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
+import { finishSession } from "../session/finish";
 import { SaveFailure } from "../ui/form";
 import type { RunPath } from "./load";
 
@@ -31,6 +32,11 @@ import type { RunPath } from "./load";
  * here the smaller one is the default and the larger one is a switch that is
  * off, because a DM who meant only to close a fight should not discover
  * afterwards that they closed the evening.
+ *
+ * The larger ending is **not written here**: it is `session/finish.ts`, shared
+ * with the campaign view's own way out of the night. This screen is where a DM
+ * whose fight is ending can also end the evening; it is not the only place an
+ * evening ends.
  */
 export function EndRunDialog({
   path,
@@ -45,7 +51,7 @@ export function EndRunDialog({
   readonly onClose: () => void;
   readonly onEnded: () => void;
 }) {
-  const [finishSession, setFinishSession] = useState(false);
+  const [finishNight, setFinishNight] = useState(false);
   const { busy, failure, submit } = useMutation();
 
   const end = async () => {
@@ -55,13 +61,10 @@ export function EndRunDialog({
         // roster: two submits in a row would give this dialog two busy flags
         // and a half-ended night to explain.
         const run = yield* client.runs.end({ params: path, payload: {} });
-        if (finishSession && session.endedAt === null) {
-          const endedAt = yield* DateTime.now;
-          yield* client.sessions.update({
-            params: { campaignId: path.campaignId, sessionId: path.sessionId },
-            payload: { endedAt },
-          });
-        }
+        // The fight comes off the table first, so the refusal the campaign
+        // view enforces — a night does not end over a live fight — is already
+        // satisfied by the time this runs.
+        if (finishNight) yield* finishSession(path.campaignId, session)(client);
         return run;
       }),
     );
@@ -82,15 +85,11 @@ export function EndRunDialog({
 
         <div className="flex flex-col gap-1.5 px-gutter py-3">
           <div className="flex items-center gap-2.5">
-            <Switch
-              id="finish-session"
-              checked={finishSession}
-              onCheckedChange={setFinishSession}
-            />
+            <Switch id="finish-session" checked={finishNight} onCheckedChange={setFinishNight} />
             <Label htmlFor="finish-session">Finish session {session.number} too</Label>
           </div>
           <span className="text-caption leading-body text-muted-foreground">
-            {finishSession
+            {finishNight
               ? "Marks the night over. Everything in it stays readable."
               : "The session stays open, so you can put the next encounter on the table."}
           </span>

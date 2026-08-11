@@ -8,11 +8,13 @@ import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
+import { FinishSessionDialog } from "./FinishSessionDialog";
 import { loadCampaignView, matches, type CampaignView } from "./load";
 import { NoteDialog } from "./NoteDialog";
 import { NotesList } from "./NotesList";
 import { PartyList } from "./PartyList";
 import { PrepChecklist } from "./PrepChecklist";
+import { SessionCard } from "./SessionCard";
 import { StartRunDialog } from "./StartRunDialog";
 
 /**
@@ -66,6 +68,7 @@ function CampaignBody({
   onEdit,
   onRun,
   onChanged,
+  onFinishSession,
 }: {
   readonly view: CampaignView;
   readonly search: string;
@@ -74,6 +77,7 @@ function CampaignBody({
   readonly onEdit: (editing: Editing) => void;
   readonly onRun: (encounterId: EncounterId) => void;
   readonly onChanged: () => void;
+  readonly onFinishSession: () => void;
 }) {
   const encounters = view.encounters.filter((encounter) =>
     matches(search, encounter.name, ...encounter.tags),
@@ -179,7 +183,7 @@ function CampaignBody({
         </Tabs>
       </div>
 
-      <aside className="xl:w-aside xl:shrink-0">
+      <aside className="flex flex-col gap-4 xl:w-aside xl:shrink-0">
         <PrepChecklist
           key={view.session?.id ?? view.campaign.id}
           campaignId={view.campaign.id}
@@ -187,6 +191,9 @@ function CampaignBody({
           items={view.prep}
           onChanged={onChanged}
         />
+        {view.session !== undefined && (
+          <SessionCard session={view.session} liveRun={view.run} onFinish={onFinishSession} />
+        )}
       </aside>
     </div>
   );
@@ -212,6 +219,8 @@ export function CampaignScreen({
   const [editing, setEditing] = useState<Editing | undefined>();
   /** The encounter the DM pressed Run on, while the start dialog is open. */
   const [starting, setStarting] = useState<{ readonly encounterId: EncounterId | undefined }>();
+  /** Whether the "end the night" confirmation is up. */
+  const [finishing, setFinishing] = useState(false);
 
   const view = resource.state === "ready" ? resource.value : undefined;
 
@@ -318,6 +327,7 @@ export function CampaignScreen({
           onEdit={setEditing}
           onRun={run}
           onChanged={reload}
+          onFinishSession={() => setFinishing(true)}
         />
       )}
 
@@ -340,6 +350,22 @@ export function CampaignScreen({
           encounters={view.encounters}
           onClose={close}
           onSaved={saved}
+        />
+      )}
+      {finishing && view?.session !== undefined && (
+        <FinishSessionDialog
+          campaign={view.campaign}
+          session={view.session}
+          liveRun={view.run}
+          onClose={() => setFinishing(false)}
+          onFinished={() => {
+            setFinishing(false);
+            // The night is gone from under the screen: `campaign.currentSessionId`
+            // is null now, so the checklist, the session card and the top bar's
+            // "Start session" all have a different answer. One re-read, the same
+            // rule every structural write here follows.
+            reload();
+          }}
         />
       )}
       {starting !== undefined && view !== undefined && (

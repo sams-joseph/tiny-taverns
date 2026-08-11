@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -459,5 +459,117 @@ describe("starting a session", () => {
     await screen.findByRole("button", { name: "Back to the fight" });
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
     expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();
+  });
+});
+
+describe("finishing the night", () => {
+  const runsPath = `/campaigns/${campaignId}/sessions/${sessionId}/runs`;
+  const sessionPath = `/campaigns/${campaignId}/sessions/${sessionId}`;
+
+  /** Opens the confirmation from the session card in the aside. */
+  const openFinish = async () => {
+    renderScreen(mintingSession());
+    await userEvent.click(await screen.findByRole("button", { name: "Finish the night" }));
+  };
+
+  it("offers the night's own ending on the screen that shows which night it is", async () => {
+    renderScreen(mintingSession());
+    // In the aside, on a card that names the session and says where it stands —
+    // so the ending is attached to the thing it ends, rather than sitting a
+    // thumb's width from the two buttons a DM presses all evening.
+    const card = (await screen.findByRole("button", { name: "Finish the night" })).closest(
+      "[data-slot='card']",
+    );
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("Session 12")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText(/Not started yet/)).toBeInTheDocument();
+  });
+
+  it("says what will happen, and does nothing until the DM confirms", async () => {
+    await openFinish();
+
+    await screen.findByText("Finish session 12?");
+    // All three halves of the transition, out loud: the night closes, the
+    // campaign stops pointing at it, and the next fight starts a new one.
+    expect(screen.getByText(/stops pointing at session 12/)).toBeInTheDocument();
+    expect(screen.getByText(/next encounter you run starts a new one/)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is deleted/)).toBeInTheDocument();
+    // Opening the dialog is not the ending.
+    expect(server.calls.some((call) => call.method === "PATCH")).toBe(false);
+  });
+
+  it("stamps the end time, and re-reads the campaign the session fell out of", async () => {
+    server.routes.set(`GET ${sessionPath}`, { status: 200, body: session });
+    server.routes.set(`PATCH ${sessionPath}`, {
+      status: 200,
+      body: { ...session, endedAt: "2026-08-04T23:40:00.000Z" },
+    });
+    await openFinish();
+
+    await screen.findByText("Finish session 12?");
+    await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
+
+    await waitFor(() =>
+      expect(
+        (bodyOf(server, "PATCH", `/sessions/${sessionId}`) as { endedAt: string }).endedAt,
+      ).toMatch(/^\d{4}-/),
+    );
+    // Nothing else is written: clearing `campaign.current_session_id` is the
+    // server's half of the same transaction, not a second call from here.
+    expect(
+      server.calls.some(
+        (call) => call.method === "PATCH" && call.pathname.endsWith(`/${campaignId}`),
+      ),
+    ).toBe(false);
+    // The screen re-reads, because the night is gone from under it.
+    await waitFor(() =>
+      expect(
+        server.calls.filter(
+          (call) => call.method === "GET" && call.pathname.endsWith(`/${campaignId}`),
+        ).length,
+      ).toBeGreaterThan(1),
+    );
+  });
+
+  it("refuses over a fight on the table, and points at it rather than ending it", async () => {
+    server.routes.set(`GET ${runsPath}`, { status: 200, body: [liveRun] });
+    await openFinish();
+
+    await screen.findByText("There is still a fight on the table");
+    expect(screen.getByText(/Ambush in the reeds is still running/)).toBeInTheDocument();
+    // The way out is the door into the fight, not a confirm that would end it.
+    expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Go to the fight/ })).toHaveAttribute(
+      "href",
+      `#/campaigns/${campaignId}/sessions/${sessionId}/runs/${liveRun.id}`,
+    );
+    expect(server.calls.some((call) => call.method === "PATCH")).toBe(false);
+  });
+
+  it("refuses a fight that started after the screen last looked", async () => {
+    // The screen rendered with no fight, so it offers the confirmation — and
+    // another tab starts one before the DM presses it.
+    await openFinish();
+    await screen.findByText("Finish session 12?");
+    server.routes.set(`GET ${runsPath}`, { status: 200, body: [liveRun] });
+
+    await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
+
+    // The re-read happens before the stamp, so nothing was written.
+    await screen.findByText("There is still a fight on the table");
+    expect(server.calls.some((call) => call.method === "PATCH")).toBe(false);
+  });
+
+  it("says so, in the dialog, when the server refuses the save", async () => {
+    server.routes.set(`PATCH ${sessionPath}`, {
+      status: 409,
+      body: { _tag: "Conflict", message: "that night is already over" },
+    });
+    await openFinish();
+
+    await screen.findByText("Finish session 12?");
+    await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
+
+    expect(await screen.findByText("that night is already over")).toBeInTheDocument();
   });
 });

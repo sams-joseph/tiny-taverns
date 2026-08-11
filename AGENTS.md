@@ -867,6 +867,10 @@ first meant a fight the DM had pressed the button for could be lost to a timesta
 not save, and anything that would genuinely deny the stamp has already denied `runs.start` one
 line above.
 
+**Ending one is the mirror image and is _not_ written here**: it is `session/finish.ts`, shared
+with the runner's own dialog, reached from the session card in this screen's aside. See
+"Finishing a session: one write, two surfaces, and no carry-over" below.
+
 ## The live session: what is durable, what is fan-out, and how a stream comes back
 
 `packages/design-system/ui_kits/dm-screen/EncounterRunner.jsx` is the specification. Step 4 of
@@ -983,6 +987,36 @@ Three consequences worth knowing before touching it:
   `EndRunDialog` defaults to the smaller ending; only its switch stamps `session.endedAt`.
   `apps/server/test/session-lifecycle.test.ts` pins both, and pins the invariant against raw SQL
   as well as against the repositories.
+
+### Finishing a session: one write, two surfaces, and no carry-over
+
+**The client half of the transition is `apps/web/src/session/finish.ts`, and every surface that
+ends a night goes through it.** There are two now — `run/EndRunDialog.tsx`'s _"Finish session N
+too"_ switch, and `campaign/FinishSessionDialog.tsx` behind the session card in the campaign
+view's aside — and there was one for as long as the only way to end a night was to end a fight,
+which is the wrong shape for the common evening: the fight finishes, the table keeps playing, and
+the night ends an hour later over prep, notes and roleplay. A DM whose fight was already over, or
+who never ran one, could not end the night at all. `apps/web/src/session/finish.test.tsx` drives
+**both screens against one stub server** and compares the requests, which is the only way that
+property is checked rather than claimed; a third surface should extend that file rather than
+assert its own behaviour in isolation.
+
+The write itself is one `PATCH … {endedAt}` and deliberately nothing else — clearing
+`campaign.current_session_id` is the server's half of the same transaction (above), so a client
+that "helpfully" also patched the campaign would be writing a second answer to a settled question.
+
+**A live fight is refused, never ended as a side effect**, and the refusal is checked twice: from
+the run the campaign screen already loaded, so the usual case renders as a refusal with nothing to
+click, and again by re-reading the runs _before_ the stamp, for the fight that started in another
+tab after the screen rendered. `EndRunDialog` needs no such check — it takes the fight off the
+table one line earlier in the same `Effect`.
+
+**Carrying a live fight across into the next session is deliberately not supported, and the
+refusal is not the final answer to it.** Whether a fight interrupted at midnight should resume in
+next week's session is a real product question the captain has not answered, and the architecture
+is ambiguous: `encounter_run` hangs off one `session`, so carry-over is either a second run or a
+reparented row, and those differ in what the log says happened. Refusing destroys nothing and
+leaves both doors open. Do not build carry-over on a guess.
 
 **The containment trap this area walked into, and the shape of the fix.** `combatant` sits two
 levels below the campaign (`combatant → encounter_run → session → campaign`), which is one more
