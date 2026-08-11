@@ -25,6 +25,7 @@ import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
 import { hrefFor, type Route } from "../routes";
+import { Hob, useHobPanel } from "../hob";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { CombatantDialog } from "./CombatantDialog";
@@ -253,12 +254,18 @@ export function RunScreen({
   }, [refresh]);
 
   const backHref = hrefFor({ screen: "campaign", campaignId });
+  // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
+  // Doubly so here: mid-fight is the last moment to hand 400px to a panel that
+  // cannot answer, and Esc already means "close the panel" only while it is open.
+  const hob = useHobPanel({ initialOpen: false });
 
   return (
     <TooltipProvider>
       <AppShell
         route={route}
         fill
+        onAskHob={hob.toggle}
+        panel={<Hob hob={hob} />}
         context={
           view === undefined ? undefined : (
             // The campaign's name is the link back to prep. The rail spelled

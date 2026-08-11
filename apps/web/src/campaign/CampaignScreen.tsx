@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { hrefFor, useRoute, type Route } from "../routes";
+import { Hob, useHobPanel } from "../hob";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { EncounterCard } from "./EncounterCard";
@@ -225,6 +226,8 @@ export function CampaignScreen({
     [campaignId],
   );
   const [resource, reload] = useApiResource(load);
+  // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
+  const hob = useHobPanel({ initialOpen: false });
   const [, navigate] = useRoute();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("encounters");
@@ -281,6 +284,8 @@ export function CampaignScreen({
   return (
     <AppShell
       route={route}
+      onAskHob={hob.toggle}
+      panel={<Hob hob={hob} />}
       context={
         view === undefined ? undefined : (
           <NavContext name={view.campaign.name}>

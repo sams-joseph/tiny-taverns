@@ -6,6 +6,7 @@ import type { TavernsClient } from "../api/client";
 import { runApiResult, useApiResource } from "../api/resource";
 import { useCredential } from "../auth/credential";
 import { hrefFor, type Route } from "../routes";
+import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 
@@ -115,6 +116,10 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
 
 export function CampaignsScreen({ route }: { readonly route: Route }) {
   const [resource, reload] = useApiResource(listCampaigns);
+  // Closed, against the hook's own `true` default, and its doc says why the
+  // choice is the shell's: nothing answers yet. A 400px panel that opens itself
+  // to say so is worse than a button that opens it when you ask.
+  const hob = useHobPanel({ initialOpen: false });
 
   const campaigns =
     resource.state === "ready" ? resource.value.filter((c) => c.archivedAt === null) : undefined;
@@ -122,6 +127,8 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
   return (
     <AppShell
       route={route}
+      onAskHob={hob.toggle}
+      panel={<Hob hob={hob} />}
       topBar={
         <TopBar
           title="Campaigns"

@@ -870,12 +870,35 @@ self-stretch` to reach it.
 
 **The seam for the Hob chat panel is two props and nothing else** — `onAskHob?: () => void` (the
 bar's button; with none passed it still renders, because it is the bar the designers drew) and
-`panel?: ReactNode`, rendered as the last child of the `relative` row under the top nav. A panel
-is inline by taking part in that row, or an overlay by positioning against it and drawing its own
-scrim. **The shell holds no chat state, no ⌘K handler and no breakpoint**; `CHAT_INLINE_MIN`
-(1020) belongs to whatever mounts in `panel`. `NavContext` is exported from the same file for the
-bar's right-hand pair, and takes an `href` for the screen that is _inside_ a campaign — from a
-fight, the campaign's name is the way back to prep, which is what the rail's footer used to be.
+`panel?: ReactNode`, the last child of the row under the top nav. **That row _is_ `HobRegion`**,
+class for class: `relative flex min-h-0 flex-1 overflow-hidden`. The shell and `hob/HobDock.tsx`
+were built concurrently and arrived at the same element, so **`Hob` is passed bare and must never
+be wrapped in a `HobRegion` here** — a second region inside this one is a second positioned
+ancestor, and the overlay would size to it rather than to the content. `HobRegion` stays right
+where there is no shell, which is what the gallery's specimens use. Keep the two class lists in
+step; `overflow-hidden` is what stops an overlaid panel painting outside the row, and `min-h-0`
+is what lets a panel that scrolls inside itself be shorter than its own content.
+
+**The shell holds no chat state, no ⌘K handler and no breakpoint** — `useHobPanel` owns all three,
+including `HOB_INLINE_MIN`. A screen composes it:
+`const hob = useHobPanel({ initialOpen: false })`, then `onAskHob={hob.toggle}` and
+`panel={<Hob hob={hob} />}`. **`initialOpen: false` is deliberate and is the shell's call to
+make** (the hook's own doc says so): nothing answers yet, and a 400px panel that opens itself to
+say so is worse than a button that opens it when asked. Mounted on the three product screens; the
+gallery is left to its specimen, which owns a `useHobPanel` of its own — two on one page would
+both answer the same ⌘K.
+
+Measured in Chromium either side of the threshold, per screen: inline at 1440/1021/**1020** (the
+query is `min-width: 1020px`) is `position: static` in flow, and the _content column_ shrinks by
+the panel's 400px; at 1019/900 the panel is `absolute` at `z-dialog` and the scrim `absolute` at
+`z-scrim` — different rungs, never one — with the scrim's box exactly the row's (`0, 56, vw×844`),
+so it starts below the nav and `elementFromPoint` still returns the _Ask Hob_ button. That is the
+property worth re-checking if either class list moves: **the overlay covers the content, not the
+app.** `document.scrollWidth` stays equal to the viewport in every case.
+
+`NavContext` is exported from the same file for the bar's right-hand pair, and takes an `href` for
+the screen that is _inside_ a campaign — from a fight, the campaign's name is the way back to
+prep, which is what the rail's footer used to be.
 
 ## Authoring in `apps/web`: forms, mutations, and the traps in them
 
