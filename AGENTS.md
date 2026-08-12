@@ -1281,9 +1281,8 @@ session_id)` — so a beat on one night cannot attach to another night's fight, 
   `on delete set null (encounter_run_id)` for the same Postgres-15 reason as `note.encounter_id`.
   Everything else is `PrepItems` with one text column: no `campaign_id`, the existing `NestedTable`
   machinery, no new predicate.
-- **No `tsvector` yet.** Beats are the prose the searchable record will be built from, and the
-  plan's later step adds the columns to `note` and `beat` together with the repository that queries
-  them. An index nothing reads is worse than none.
+- **The `tsvector` arrived in `0009`, not here.** `0008` deliberately shipped without one — an
+  index nothing reads is worse than none — and the search section below is what it was waiting for.
 
 **Deleting a session now throws away campaign history, not just a checklist** — `beat` cascades
 from `session` like `prep_item` and `session_event`, which is the right cascade and worth a
@@ -1348,7 +1347,77 @@ actor rather than getting a path around it.
 
 `Recap.ts` is the only place that imports another repository's row mapper: `toBeat`, `toNote`,
 `toPrepItem`, `toSession`, `toCombatant`, `toEncounterRun` and the `BEATS`/`PREP` nested-table
-constants are exported for it, so there is still exactly one mapper per table.
+constants are exported for it, so there is still exactly one mapper per table. (`BEATS` has a
+second consumer now — `Search.ts` builds its containment from it — which is the same rule
+holding rather than an exception to it.)
+
+### Campaign search: the one path over this corpus, and what is deliberately not in it
+
+`apps/server/src/repo/Search.ts` is **the only place in the product where a `tsvector` is
+queried**, and `GET /campaigns/:campaignId/search` is its only HTTP surface. The assistant's
+eventual `searchCampaign` tool is a `Tool.make` wrapper around `Search.search` — it writes no
+SQL, declares no predicate and gets no privilege of its own. **Anything that needs a read this
+repository does not expose is a new method here, never a query somewhere else**: two search paths
+over one corpus would be permanent, and the second one is where the visibility seam gets
+re-derived slightly wrong.
+
+**What is indexed, and by what:**
+
+| arm        | index                                              | read predicate                                        |
+| ---------- | -------------------------------------------------- | ----------------------------------------------------- |
+| `note`     | `0009` — `title` at weight A, `body` at B          | `rowReadable`                                         |
+| `beat`     | `0009` — `body` at weight **B**, not the default D | the `beat → session` chain via `containedRowReadable` |
+| `creature` | `0004` — name A, size/type B, `jsonb` body C       | `corpusRowReadable`                                   |
+
+Beat body is weighted **B on purpose**: it is the same kind of thing as a note's body, and the
+unweighted default would rank every beat at a quarter of an equally good note for no defensible
+reason. One weighting scheme across all three arms is what makes `ts_rank` comparable enough to
+order the whole union with one `ORDER BY` rather than concatenating three lists.
+
+**`session_event` is deliberately NOT indexed, and this is a settled captain decision that
+reversed the captain's own earlier line.** Do not add a fourth arm without reopening it. The
+evidence: the log's text content is numbers (`jsonb_to_tsvector` over real payloads yields
+`'12':3 '40':5 '82':1`); the only prose in any payload is `run-started.encounterName` and
+`combatant-added.displayName`, both already real columns on `encounter_run` and `combatant`; and
+indexing it would make `payload` load-bearing, which `SessionEvent.ts` states it is not. Combat
+stays reachable by name, by recap, and by reading `GET …/log?since=`. Per-table columns mean a
+fourth arm is about eight lines if a query shape ever appears that those three cannot serve.
+
+Five things that are decisions rather than details:
+
+- **Per-table generated columns, never a denormalised `search_document` table.** The point is not
+  tidiness: **a generated column cannot go stale.** Measured against a running server — a note
+  edited in `psql`, behind every line of TypeScript, changed what the API returned on the next
+  request with no reindex, no restart and no cache flush, and a `beat` row `INSERT`ed the same way
+  was searchable immediately. A denormalised copy needs a trigger or repository discipline that
+  will eventually be forgotten, plus a second copy of every row's visibility.
+- **The campaign gate goes inside every arm of the union, never outside a bare `OR`.** That is the
+  `corpusRowReadable` lesson applied to a union: one arm forgetting its `exists (select 1 from
+campaign …)` returns rows for any authenticated request naming any campaign id. The arms compose
+  the shipped predicates and restate none of them.
+- **Campaign-scoped by path, and cross-campaign search is refused rather than unbuilt.** A
+  top-level `/search` has nothing to hand `campaignInScope`, so a credential minted for one table
+  would reach every other table the same DM runs — and in a search endpoint the extra rows read as
+  a feature. `apps/server/test/search.test.ts` mints a scoped actor and proves both directions.
+- **`SearchHit` is a union discriminated on `source`, not one record with nullable fields.**
+  `sessionId` exists only on a beat hit and `title` only on the two things that have one — the
+  same rule the screens follow: do not render a field the API does not have. A hit is a pointer
+  plus a result line, not a copy of the row; provenance is absent until something writes it.
+- **`source` is a scalar query param, not an array.** A one-element array does not survive the
+  wire at `effect@4.0.0-beta.102` (see the bestiary section), and "only the beats" is exactly the
+  one-element case.
+
+Two smaller traps, both measured:
+
+- **`ts_headline`'s `StartSel=`/`StopSel=` must be the _quoted_ empty string.** Written bare, the
+  option parser swallows the next option and the snippet comes back reading
+  `,StopSel=ferryman</b> is called Cazril`. Quoted, the excerpt is plain text — which is what the
+  wire type promises, because a JSON string carrying HTML is a rendering contract nobody agreed
+  to.
+- **An `ILIKE`-only hit ranks 0, and that is correct rather than a bug.** "ferry" is not a lexeme
+  of "ferryman", so full text cannot score it; the two matchers exist because neither subsumes the
+  other, and ordering falls through to recency. `websearch_to_tsquery`, never `to_tsquery`, and
+  `likeContains` in `repo/rows.ts` is the one escaper both this and the bestiary use.
 
 ## The runner: how a screen consumes the stream, and what it does when it comes back
 

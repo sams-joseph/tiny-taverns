@@ -36,6 +36,7 @@ import {
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
+import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
@@ -453,6 +454,36 @@ class RecapGroup extends HttpApiGroup.make("recap")
   .middleware(Authorization) {}
 
 /**
+ * Searching one campaign's record — its notes, its beats and its bestiary.
+ *
+ * **Campaign-scoped in the path, and that is a security property rather than a
+ * routing preference.** A top-level `/search` would be an account-wide read and
+ * would have nothing to hand `campaignInScope` (`repo/visibility.ts`), so a
+ * credential minted for one table would reach every other table the same DM
+ * runs. That is precisely the leak the auth plan closed, and a search endpoint
+ * is the worst place to reopen it: cross-campaign results look like a feature.
+ *
+ * One endpoint, one union, one set of predicates. The assistant's
+ * `searchCampaign` tool calls the same repository method this handler calls —
+ * see `SearchHit` — so there is exactly one place a `tsvector` is queried and
+ * no second answer to what an actor may read.
+ *
+ * Cross-campaign search is deliberately not offered. It would have to intersect
+ * `campaignInScope` per campaign, and no surface asks for it.
+ */
+class SearchGroup extends HttpApiGroup.make("search")
+  .add(
+    HttpApiEndpoint.get("search", "/", {
+      params: { campaignId: CampaignId },
+      query: SearchFilter,
+      success: Schema.Array(SearchHit),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/search")
+  .middleware(Authorization) {}
+
+/**
  * The live session: starting a fight, running it, and ending it.
  *
  * Nested under the session because a run belongs to one night — and, as
@@ -657,6 +688,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(EncounterCreaturesGroup)
   .add(PrepGroup)
   .add(BeatsGroup)
+  .add(SearchGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)
   .add(LiveGroup)

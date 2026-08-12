@@ -14,7 +14,14 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  defined,
+  dieOnSqlError,
+  likeContains,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   corpusRowReadable,
   ensureCampaignReadable,
@@ -83,10 +90,6 @@ export const crSortFor = (cr: string): number => {
   const whole = Number(trimmed);
   return Number.isFinite(whole) && whole >= 0 ? Math.min(1000, whole) : 0;
 };
-
-/** Escapes the wildcards `ILIKE` would otherwise read out of a DM's search box. */
-const likeContains = (query: string): string =>
-  `%${query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 
 /**
  * The search clause.

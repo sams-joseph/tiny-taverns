@@ -21,6 +21,7 @@ import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Recap } from "./repo/Recap.js";
+import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 
@@ -225,6 +226,17 @@ const RecapLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const recap = yield* Recap;
     return handlers.handle("read", ({ params }) => recap.read(params.campaignId, params.sessionId));
+  }),
+);
+
+const SearchLive = HttpApiBuilder.group(
+  TavernsApi,
+  "search",
+  Effect.fnUntraced(function* (handlers) {
+    const search = yield* Search;
+    return handlers.handle("search", ({ params, query }) =>
+      search.search(params.campaignId, query),
+    );
   }),
 );
 
@@ -433,6 +445,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     EncounterCreaturesLive,
     PrepLive,
     BeatsLive,
+    SearchLive,
     RunsLive,
     CombatantsLive,
     LiveLive,

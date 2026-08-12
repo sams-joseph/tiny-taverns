@@ -47,6 +47,17 @@ export const setClause = (
     : sql`${sql.update(columns)}, updated_at = now()`;
 
 /**
+ * Escapes the wildcards `ILIKE` would otherwise read out of a DM's search box,
+ * and wraps the result for a contains match.
+ *
+ * Shared by the bestiary and by campaign search rather than written twice: two
+ * escapers is two chances for one of them to miss a backslash, and the one that
+ * missed it would turn a search for `100%` into a match on everything.
+ */
+export const likeContains = (query: string): string =>
+  `%${query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+
+/**
  * Turns a `SqlError` into a defect, so a repository declares only the domain
  * errors a caller can do something about.
  *

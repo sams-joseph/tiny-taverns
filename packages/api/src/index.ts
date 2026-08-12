@@ -14,5 +14,6 @@ export * from "./Note.js";
 export * from "./PrepItem.js";
 export * from "./Provenance.js";
 export * from "./Recap.js";
+export * from "./Search.js";
 export * from "./Session.js";
 export * from "./SessionEvent.js";

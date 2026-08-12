@@ -68,6 +68,7 @@ describe("the API declaration", () => {
       "prep",
       "recap",
       "runs",
+      "search",
       "sessions",
     ]);
   });

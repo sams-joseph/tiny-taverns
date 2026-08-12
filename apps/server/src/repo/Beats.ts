@@ -40,7 +40,14 @@ export const toBeat = (row: BeatRow): Beat =>
     ...provenanceOf(row),
   });
 
-/** `beat` hangs off `session`, which hangs off `campaign`. Exactly `prep_item`. */
+/**
+ * `beat` hangs off `session`, which hangs off `campaign`. Exactly `prep_item`.
+ *
+ * Exported because two other repositories need it — `Recap` lists a night's
+ * beats and `Search` needs the same containment in its `Containment` form. One
+ * statement of "a beat is under a session" is the whole point of the chain
+ * being data rather than a predicate written out per caller.
+ */
 export const BEATS: NestedTable = { table: "beat", parent: "session", foreignKey: "session_id" };
 
 /**

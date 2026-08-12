@@ -23,6 +23,7 @@ import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Recap } from "./repo/Recap.js";
+import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 
@@ -95,6 +96,7 @@ export const servicesOver = <E>(
   | Notes
   | PrepItems
   | Recap
+  | Search
   | SessionEvents
   | Sessions,
   E | Config.ConfigError
@@ -123,6 +125,9 @@ export const servicesOver = <E>(
     // A view over five tables and a writer of none. It needs no `LiveEvents`
     // for the same reason: nothing about reading a night changes it.
     Recap.layer,
+    // Read-only, and the only place a `tsvector` is queried. No `LiveEvents`:
+    // searching writes nothing and rings no doorbell.
+    Search.layer,
     SessionEvents.layer,
     // `Sessions` is on the live side too now: finishing a night takes a fight
     // still on the table off it and carries it, so it appends to the log and
@@ -167,6 +172,7 @@ export const applicationOver = <E>(
     | Notes
     | PrepItems
     | Recap
+    | Search
     | SessionEvents
     | Sessions,
     E
