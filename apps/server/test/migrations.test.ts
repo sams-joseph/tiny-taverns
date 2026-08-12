@@ -8,6 +8,15 @@ import clerkIdentity from "../src/migrations/0002_clerk_identity.js";
 import sessionFinished from "../src/migrations/0006_session_finished.js";
 import membership from "../src/migrations/0011_membership.js";
 import characterSheet from "../src/migrations/0012_character_sheet.js";
+import invites from "../src/migrations/0013_invites.js";
+import characterLive from "../src/migrations/0014_character_live.js";
+import prepSurface from "../src/migrations/0003_prep_surface.js";
+import bestiary from "../src/migrations/0004_bestiary.js";
+import liveSession from "../src/migrations/0005_live_session.js";
+import runCarryover from "../src/migrations/0007_run_carryover.js";
+import beats from "../src/migrations/0008_beats.js";
+import searchIndex from "../src/migrations/0009_search_index.js";
+import assistantConversation from "../src/migrations/0010_assistant_conversation.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -29,6 +38,10 @@ afterAll(() => ownedRuntime.dispose());
 /** A fifth, for characters written before they had a sheet. */
 const sheetRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_sheet"));
 afterAll(() => sheetRuntime.dispose());
+
+/** A sixth, for characters written before they were live. */
+const liveRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_live"));
+afterAll(() => liveRuntime.dispose());
 
 const migrate = Effect.scoped(
   Layer.build(Layer.provide(Database.layerMigrator, NodeServices.layer)),
@@ -96,6 +109,7 @@ describe("migrations", () => {
       { migration_id: 11, name: "membership" },
       { migration_id: 12, name: "character_sheet" },
       { migration_id: 13, name: "invites" },
+      { migration_id: 14, name: "character_live" },
     ]);
   }, 60_000);
 
@@ -119,6 +133,7 @@ describe("migrations", () => {
       { migration_id: 11, name: "membership" },
       { migration_id: 12, name: "character_sheet" },
       { migration_id: 13, name: "invites" },
+      { migration_id: 14, name: "character_live" },
     ]);
   }, 60_000);
 });
@@ -400,5 +415,117 @@ describe("upgrading a database whose characters predate the sheet", () => {
       },
     ]);
     expect(refused).toBe("Failure");
+  }, 60_000);
+});
+
+describe("upgrading a database whose characters predate the live columns", () => {
+  it("keeps every row, says nothing about where anybody is, and takes one more event kind", async () => {
+    // The risky half of `0014` is what it does *not* do. A party written before
+    // characters were live has no current hit points, and the tempting
+    // backfill — `hp_current = hp_max` — writes a claim into a column the DM
+    // will trust: that everybody walked in unhurt. Null is the honest answer
+    // and every reader treats it as full, so the absence costs nothing and the
+    // guess would cost a party's health.
+    //
+    // Stepped by hand for the reason the four above are: the property is about
+    // rows written under the old schema, and an empty database cannot show it.
+    const { rows, kindAccepted, kindRefused } = await liveRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* init;
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
+        `)[0]!.id;
+        const campaign = (yield* sql<{ readonly id: string }>`
+          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
+          returning id
+        `)[0]!.id;
+        yield* sql`
+          insert into character ${sql.insert({
+            campaign_id: campaign,
+            name: "Brannoc",
+            player_name: "Ilse",
+            ac: 18,
+            hp_max: 52,
+            visibility: "shared",
+          })}
+        `;
+        yield* sql`
+          insert into character ${sql.insert({ campaign_id: campaign, name: "Sister Pell" })}
+        `;
+
+        // Everything between, because `0014` also widens the session log's
+        // closed `kind` vocabulary and that table arrives in `0005`. Skipped in
+        // the tests above only because `character` does not depend on it.
+        yield* prepSurface;
+        yield* bestiary;
+        yield* liveSession;
+        yield* sessionFinished;
+        yield* runCarryover;
+        yield* beats;
+        yield* searchIndex;
+        yield* assistantConversation;
+        yield* membership;
+        yield* characterSheet;
+        yield* invites;
+        yield* characterLive;
+
+        const rows = yield* sql<{
+          readonly name: string;
+          readonly player_name: string | null;
+          readonly ac: number | null;
+          readonly hp_max: number | null;
+          readonly hp_current: number | null;
+          readonly temp_hp: number;
+          readonly conditions: ReadonlyArray<string>;
+          readonly visibility: string;
+        }>`
+          select name, player_name, ac, hp_max, hp_current, temp_hp, conditions, visibility
+          from character order by name
+        `;
+
+        // The log's vocabulary grew by exactly one, and it is still closed.
+        const session = (yield* sql<{ readonly id: string }>`
+          insert into session ${sql.insert({ campaign_id: campaign, number: 1 })} returning id
+        `)[0]!.id;
+        const kindAccepted = yield* sql`
+          insert into session_event ${sql.insert({ session_id: session, kind: "character-updated" })}
+        `.pipe(Effect.result);
+        const kindRefused = yield* sql`
+          insert into session_event ${sql.insert({ session_id: session, kind: "character-levelled" })}
+        `.pipe(Effect.result);
+
+        return { rows, kindAccepted: kindAccepted._tag, kindRefused: kindRefused._tag };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(rows).toEqual([
+      {
+        name: "Brannoc",
+        player_name: "Ilse",
+        ac: 18,
+        hp_max: 52,
+        visibility: "shared",
+        // Nobody has said. Not zero, and not 52.
+        hp_current: null,
+        // These two are ordinary states rather than unsaid ones, so they have
+        // defaults and no row is left carrying a null nobody meant.
+        temp_hp: 0,
+        conditions: [],
+      },
+      {
+        name: "Sister Pell",
+        player_name: null,
+        ac: null,
+        hp_max: null,
+        visibility: "dm",
+        hp_current: null,
+        temp_hp: 0,
+        conditions: [],
+      },
+    ]);
+    expect(kindAccepted).toBe("Success");
+    expect(kindRefused).toBe("Failure");
   }, 60_000);
 });

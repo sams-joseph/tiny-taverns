@@ -35,6 +35,12 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   "combatant-removed": () => "Someone left the order",
   "combatant-damaged": (who) => `${who ?? "A combatant"} took a hit`,
   "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
+  // A character changed while the night was running — the party list, not the
+  // initiative order. It names a combatant only when the write reached the
+  // fight from outside it, which is why the name resolves here at all; a hit
+  // taken *in* initiative is a `combatant-damaged` line and nothing else, so
+  // this never doubles up with one.
+  "character-updated": (who) => `${who ?? "Someone in the party"} changed`,
   // The prose is a `beat` row, not this event's payload — see `Beat`. The log
   // says only that one was jotted, and at what point in the fight.
   "beat-added": () => "A beat was jotted down",

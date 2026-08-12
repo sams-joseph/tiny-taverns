@@ -43,7 +43,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
-  Characters.layer,
+  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   DmActors.layer,

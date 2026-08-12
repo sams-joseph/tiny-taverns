@@ -90,6 +90,48 @@ export class Character extends Schema.Class<Character>("Character")({
   ac: Schema.NullOr(Schema.Int),
   hpMax: Schema.NullOr(Schema.Int),
   /**
+   * What they are on, right now — **the live half, and the authoritative copy
+   * of a hit point.**
+   *
+   * A character used to be prep data that went stale the moment a fight
+   * started: `hpMax` and nothing else, with `combatant.hpCurrent` the only
+   * current number in the product. It is live state now, in the same territory
+   * as `EncounterRun` and `Combatant`, because the point of the feature is that
+   * a player watches their character change during play.
+   *
+   * **The character owns this number and the combatant holds the fight's copy
+   * of it; one transaction writes both.** Neither is derived from the other and
+   * neither may be read through the other — `apps/server/src/repo/vitals.ts` is
+   * the one place both are written, and it is written in SQL so the clamp is
+   * atomic with the read.
+   *
+   * Null means *nobody has said*, which is not the same as full and not the
+   * same as zero. A character nobody has damaged has never needed a current
+   * number, and inventing one would be claiming the party walked in unhurt.
+   * Every reader treats null as `hpMax` — that is what starting a fight seeds
+   * from, and what a delta counts down from.
+   */
+  hpCurrent: Schema.NullOr(Schema.Int),
+  /**
+   * Temporary hit points, which sit on top and are not part of `hpCurrent`.
+   *
+   * Zero rather than null, because "no temporary hit points" is the ordinary
+   * state of every character and an absent value would read as unknown. There
+   * is deliberately **no** copy of this on `Combatant`: a fight's copy exists
+   * for the two numbers the initiative row draws, and a second column that
+   * nothing renders is a second answer waiting to disagree with this one.
+   */
+  tempHp: Schema.Int,
+  /**
+   * `"Poisoned"`, `"Concentrating"` — the same open vocabulary a combatant's
+   * conditions are, and the same `text[]`.
+   *
+   * The words are the DM's; nothing branches on them. This is the second value
+   * a live fight and a character both hold, so it travels through the same
+   * write-through `hpCurrent` does.
+   */
+  conditions: Schema.Array(Schema.String),
+  /**
    * Where the real sheet lives, for the table that keeps theirs somewhere else.
    *
    * One column, and it works for the player whose character is on graph paper
@@ -114,6 +156,9 @@ const sheetUrl = Schema.String.check(
   Schema.isLengthBetween(1, 2000),
   Schema.isPattern(/^https?:\/\//i),
 );
+/** The bestiary's own bound, so a condition badge is one word and not an essay. */
+const Condition = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+const conditions = Schema.Array(Condition).check(Schema.isLengthBetween(0, 24));
 
 export const CharacterCreate = Schema.Struct({
   name: Schema.NonEmptyString,
@@ -123,6 +168,19 @@ export const CharacterCreate = Schema.Struct({
   className: Schema.optional(shortLabel),
   ac: Schema.optional(ac),
   hpMax: Schema.optional(hp),
+  /**
+   * Where they are already, for the character typed up mid-campaign.
+   *
+   * This is the **only** payload in the product that sets a current hit point
+   * absolutely, and it is safe here for a reason that does not survive the
+   * insert: a row that does not exist yet is in no fight, so there is no second
+   * copy for it to disagree with. Afterwards the number moves by delta only —
+   * `CharacterDamage` below, or the fight — which is what makes "both copies
+   * always agree" a property of two statements rather than of every caller.
+   */
+  hpCurrent: Schema.optional(hp),
+  tempHp: Schema.optional(hp),
+  conditions: Schema.optional(conditions),
   sheetUrl: Schema.optional(sheetUrl),
   /** Omit and the column default — an empty document — decides. */
   sheet: Schema.optional(CharacterSheet),
@@ -138,9 +196,53 @@ export const CharacterUpdate = Schema.Struct({
   className: Schema.optional(Schema.NullOr(shortLabel)),
   ac: Schema.optional(Schema.NullOr(ac)),
   hpMax: Schema.optional(Schema.NullOr(hp)),
+  /**
+   * `tempHp` and `conditions` are here and **`hpCurrent` deliberately is not.**
+   *
+   * A hit point is the one live value two rows both hold, so it gets exactly
+   * one spelling of a write: a signed delta, `CharacterDamage`. That is not
+   * only bookkeeping — it is what `CombatantDamage` already argues for the
+   * fight's copy. "The ogre hits for 12" is true regardless of what anyone's
+   * screen last showed, whereas an absolute write from a screen that has not
+   * caught up silently undoes whatever happened in between; and with two rows
+   * to keep in step, the screen that has not caught up is now the common case.
+   *
+   * The other two are absolutes because there is no arithmetic in them: temp
+   * hit points are granted whole and conditions are a set the DM edits.
+   */
+  tempHp: Schema.optional(hp),
+  conditions: Schema.optional(conditions),
   sheetUrl: Schema.optional(Schema.NullOr(sheetUrl)),
   /** Whole-document, like `CreatureUpdate.statBlock`: send what it should become. */
   sheet: Schema.optional(CharacterSheet),
   visibility: Schema.optional(Visibility),
 });
 export type CharacterUpdate = typeof CharacterUpdate.Type;
+
+/**
+ * Apply damage or healing to a character, outside a fight or inside one.
+ *
+ * `CombatantDamage`'s shape exactly, and for its reasons — a delta rather than
+ * an absolute, and its own endpoint rather than a `PATCH { hpCurrent }`,
+ * because it is the mutation that repeats and therefore the one that has to be
+ * safe to repeat. What is different is only where the number lands: this is the
+ * trap in the corridor, the poison between rounds, the long rest, and the DM
+ * reaching for the party list because the fight is over and someone is still
+ * bleeding.
+ *
+ * When the character is in a fight that is still on the table, the delta is
+ * applied to that fight's combatant and copied back — one clamp, one
+ * transaction, two rows that cannot part company. See
+ * `apps/server/src/repo/vitals.ts`.
+ *
+ * `requestId` is honoured against the session's log, which is where a repeat is
+ * recorded. With no session open there is nothing to record it against and a
+ * repeat applies again; that is the same boundary the doorbell has, and it is
+ * stated here rather than implied.
+ */
+export const CharacterDamage = Schema.Struct({
+  /** Positive damages, negative heals. Zero is legal and does nothing. */
+  amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+});
+export type CharacterDamage = typeof CharacterDamage.Type;

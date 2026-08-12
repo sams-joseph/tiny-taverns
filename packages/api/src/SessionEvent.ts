@@ -29,6 +29,28 @@ export const SessionEventKind = Schema.Literals([
   "combatant-damaged",
   "turn-advanced",
   /**
+   * A character changed while the night was running.
+   *
+   * The one kind that is about a row outside the fight, and the reason it is
+   * here at all is that a character is live state now: the DM and Hob update it
+   * during play and a player watches it change. `combatantId` is set when the
+   * write came through a fight and null when it did not — a hit taken in
+   * initiative is both a combatant event and a character event, because it
+   * really is two rows moving.
+   *
+   * Like every other kind it is a doorbell rather than a description: a
+   * consumer re-reads the character through the ordinary API and never branches
+   * on the payload. So this covers a character being created, edited, damaged,
+   * healed or removed — every one of them is "the party changed, read it
+   * again", and splitting them into four kinds would be four things to keep in
+   * step for a consumer that would treat them identically.
+   *
+   * **A character edited with no session open appends nothing.** Liveness is
+   * tied to the session doorbell by decision, not by omission — see
+   * `apps/server/src/repo/vitals.ts`.
+   */
+  "character-updated",
+  /**
    * The DM jotted a line about what just happened — see `Beat`.
    *
    * The only kind here that is not combat, and the only one whose *content*

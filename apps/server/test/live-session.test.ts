@@ -29,7 +29,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
-    Characters.layer,
+    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
     DmActors.layer,

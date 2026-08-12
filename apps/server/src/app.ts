@@ -206,7 +206,10 @@ export const servicesOver = <E>(
     // like every other live write.
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
-    Characters.layer,
+    // A character is live state since `0014` — damage taken in a fight writes
+    // the character in the same transaction, and a character written during a
+    // session rings the doorbell. So this is a live repository too.
+    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     // The live repositories ring the in-process fan-out after they commit, so
     // they take it as a dependency. It is merged in as well, because the
     // streaming handler subscribes to it — and `Layer` memoises by identity, so

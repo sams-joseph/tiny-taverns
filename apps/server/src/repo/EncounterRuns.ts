@@ -142,6 +142,9 @@ interface PartyRow {
   readonly descriptor: string | null;
   readonly ac: number | null;
   readonly hp_max: number | null;
+  /** Null means nobody has said, which a seed reads as full. See `0014`. */
+  readonly hp_current: number | null;
+  readonly conditions: ReadonlyArray<string>;
 }
 
 interface RosterRow {
@@ -372,7 +375,8 @@ export class EncounterRuns extends Context.Service<
                         ? []
                         : yield* sql<PartyRow>`
                             select character.id, character.name, character.player_name,
-                                   character.descriptor, character.ac, character.hp_max
+                                   character.descriptor, character.ac, character.hp_max,
+                                   character.hp_current, character.conditions
                             from character
                             where ${rowReadable(sql, "character", campaignId, actor)}
                             order by character.created_at asc
@@ -415,9 +419,16 @@ export class EncounterRuns extends Context.Service<
                         subtitle: member.descriptor,
                         player_name: member.player_name,
                         initiative: 0,
-                        hp_current: member.hp_max ?? 0,
+                        // Where they actually are, not where they started the
+                        // campaign. A party that walked in at half health is in
+                        // initiative at half health — a seed from `hp_max`
+                        // would silently heal everyone at the top of every
+                        // fight, which is the stale-prep-data behaviour the
+                        // live columns exist to end.
+                        hp_current: member.hp_current ?? member.hp_max ?? 0,
                         hp_max: member.hp_max ?? 0,
                         ac: member.ac,
+                        conditions: member.conditions,
                         kind: "pc",
                       });
                     }
@@ -434,6 +445,12 @@ export class EncounterRuns extends Context.Service<
                           hp_current: line.hp,
                           hp_max: line.hp,
                           ac: line.ac,
+                          // Present, and empty. `sql.insert` takes its column
+                          // list from the *first* row of the array, so a key on
+                          // the party's rows and not on the monsters' would
+                          // either be dropped or bound as null depending on
+                          // which end the seed started at.
+                          conditions: [],
                           kind: "npc",
                         });
                       }

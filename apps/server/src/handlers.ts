@@ -178,6 +178,9 @@ const CharactersLive = HttpApiBuilder.group(
       .handle("update", ({ params, payload }) =>
         characters.update(params.campaignId, params.characterId, payload),
       )
+      .handle("damage", ({ params, payload }) =>
+        characters.damage(params.campaignId, params.characterId, payload),
+      )
       .handle("remove", ({ params }) => characters.remove(params.campaignId, params.characterId));
   }),
 );

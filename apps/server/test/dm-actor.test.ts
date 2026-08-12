@@ -339,7 +339,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates fifteen methods and leaves the other fifty-eight alone", () => {
+  it("gates fifteen methods and leaves the other fifty-nine alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -363,7 +363,7 @@ describe("the scope, counted", () => {
     );
 
     expect(gated).toBe(15);
-    // 58 remaining service methods, plus `DmActors.of` itself — which requires
+    // 59 remaining service methods, plus `DmActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
     // method's signature. That duplicate is one of the two the plan's 69
@@ -376,7 +376,16 @@ describe("the scope, counted", () => {
     // gated, and none should be: an invitation is a DM's own resource behind
     // `campaignWritable`, and `mine` returns the campaigns this credential
     // already reaches.
-    expect(ungated).toBe(60);
+    //
+    // The sixty-first is `Characters.damage` (`0014`), and it is ungated
+    // deliberately: a character is the row a player is *most* entitled to see
+    // in full, so gating the party would decide the player fight view's shape
+    // by accident — the same reason `Recap.read` is left alone above. What the
+    // live columns do change is the question, and it is worth stating where the
+    // answer will have to be given: a `shared` character now carries exact
+    // current hit points, so step 8's projection has a real decision to make
+    // about somebody else's character. It has none to make about their own.
+    expect(ungated).toBe(61);
   });
 });
 

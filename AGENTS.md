@@ -849,6 +849,56 @@ character at an account through raw SQL grants that account nothing, because rea
 `campaign_member` row. The player-edits-their-own-character predicate is settled and belongs
 with the step that mints a player actor; there is none yet.
 
+### Where a hit point lives, and what the doorbell covers
+
+`0014_character_live.ts` made `character` a **live** table — `hp_current`, `temp_hp`,
+`conditions` — so the live-versus-durable reasoning that governs `encounter_run` and
+`combatant` governs the party now and did not before. The rule, settled and not to be
+re-litigated:
+
+> **A hit point belongs to the character. The combatant holds the fight's copy. One
+> transaction writes both.**
+
+- **`apps/server/src/repo/vitals.ts` is the only place either copy moves**, and every function
+  in it runs inside the caller's `sql.withTransaction`. `Combatants.damage`/`update` write the
+  character through; `Characters.damage` — the delta endpoint, `POST …/characters/:id/damage`
+  — routes _through_ the live combatant when there is one, so there is **one clamp** and the
+  two entry points cannot answer one hit differently.
+- **A write-through that touches no row is a defect and dies.** That is what makes the
+  invariant provable rather than hoped for: `character-live.test.ts` produces the impossible
+  state with raw SQL and asserts that the fight's own update rolls back with it, leaving
+  _neither_ row moved. Nothing else in the product can reach that state — `combatant.character_id`
+  is written only by the seed, from characters read in the same campaign.
+- **`hp_current` is null until somebody says**, which is neither zero nor full; every reader
+  substitutes `hp_max`. `0014` deliberately does **not** backfill: `hp_current = hp_max` is a
+  claim that the party walked in unhurt, and it is the same refusal `0012` made about parsing
+  old descriptors. Starting a fight seeds `combatant.hp_current` from the character's _current_
+  number, which is what stops a fight silently healing everyone at the top of it.
+- **`hpCurrent` is on no update payload**, only on `CharacterCreate` (a row that does not exist
+  is in no fight) and on the delta. One spelling of the write is what keeps the invariant to two
+  statements instead of every caller. `temp_hp` has no copy on `combatant` at all, by design —
+  a column the initiative row does not draw would be a second answer with no reader.
+- **The doorbell is keyed on the session, and that is the decision.** A character write while
+  `campaign.current_session_id` names a night appends `character-updated` and rings; a level-up
+  typed between games appends nothing and rings nothing, and an open page stays stale until it
+  refetches. There is no campaign-keyed fan-out and adding one is a real decision, not a fix.
+- **One write, one line in the log.** `character-updated` is appended only by the character-side
+  writes; `Combatants.damage` writes the character through and appends nothing extra, because it
+  has already recorded the same change naming the same combatant. It carries the run id as well
+  as the combatant id when the write reached a fight from outside — without it the event is
+  invisible to `pollForRun`, which filters the live stream on the run.
+- **The known way the two copies can part company** is a character in _two_ live fights, which
+  the per-session unique index permits (a carried fight plus a fresh one). `liveCombatantOf`
+  takes the most recently seeded and the other keeps its number. Rare, not corrupting, and
+  written down here rather than locked against.
+- `session_event_session_request_id_key` (`0014`) is the run-keyed idempotency index for the
+  half of the space it excludes, so an out-of-combat delta's `requestId` has a backstop too.
+  With no session open there is nothing to record a repeat against, and `CharacterDamage` says so.
+- **`Characters` is not behind the `DmActor` gate**, and `dm-actor.test.ts` says why: a
+  character is the row a player is _most_ entitled to see in full. What the live columns change
+  is that a `shared` character now carries exact current hit points, so step 8's player
+  projection has a real decision to make about somebody _else's_ character.
+
 ## `HttpApi`, and the client derived from it
 
 `packages/api` holds the whole wire contract: schemas, errors, the `Authorization` middleware
@@ -1299,6 +1349,11 @@ initiative order and hit points are saved, and the moment that promise matters i
 mid-combat. The write volume does not justify anything cleverer — a four-hour session is order
 10³ writes. What is genuinely different about the live surface is the _read_ pattern, and that
 is the stream. Do not add a cache; measure first.
+
+**`character` is a live table too since `0014`**, which is the one thing here that is not about
+a fight: the DM updates the party during play and the same doorbell carries it. Where a hit
+point lives, what writes both copies, and what the doorbell does and does not cover are in
+"Where a hit point lives, and what the doorbell covers" above, under the party.
 
 **The fan-out carries no data — it is a doorbell.** `src/live/LiveEvents.ts` publishes
 `{sessionId}` and nothing else; the SSE handler re-reads the log through the ordinary SQL

@@ -115,6 +115,12 @@ export const character = {
   descriptor: "Level 3 Half-orc Paladin",
   ac: 18,
   hpMax: 52,
+  // The live half (`0014`). A character carries where they are now, and null is
+  // "nobody has said" rather than full or nothing — which is why this fixture
+  // has a number and the row below it does not.
+  hpCurrent: 44,
+  tempHp: 0,
+  conditions: [],
   sheetUrl: null,
   sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
   visibility: "dm",

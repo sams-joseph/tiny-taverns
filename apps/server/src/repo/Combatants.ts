@@ -20,6 +20,7 @@ import type { DmActor } from "./DmActor.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
+import { type CharacterVitals, clampedCombatantHp, writeThroughToCharacter } from "./vitals.js";
 import {
   containedChildReadable,
   containedChildWritable,
@@ -138,6 +139,39 @@ export class Combatants extends Context.Service<
         actor: Actor,
       ) => ensureNestedRowWritable(sql, RUNS, runId, sessionId, campaignId, actor);
 
+      /**
+       * The fight's copy, written back to the character it belongs to.
+       *
+       * **In the caller's transaction, always** — that is the whole property:
+       * two rows hold one person's hit points and they move together or not at
+       * all. A failure here rolls the combatant's own update back with it, so
+       * there is no state in which the fight says 14 and the party list says
+       * 26. See `repo/vitals.ts`.
+       *
+       * It fires only for a row seeded from a character — `character_id` is
+       * null for every NPC and for the wolf the druid summoned mid-fight.
+       *
+       * **It appends no `character-updated` event, deliberately.** The plan
+       * proposed one carrying `combatant_id` "when the write came through a
+       * fight"; that case is real and it is `Characters.damage` reaching a live
+       * combatant, which does append one. Here the caller has *already*
+       * appended `combatant-damaged` or `combatant-updated` naming the same
+       * combatant with the same number, so a second line would be one write
+       * with two entries in the campaign's memory, doubling the DM's own log
+       * panel for the most frequent write in the product — for a consumer that
+       * does not exist yet. The doorbell rings from the caller either way, and
+       * every consumer of it re-reads state rather than reading the event.
+       */
+      const writeThrough = (
+        campaignId: CampaignId,
+        actor: Actor,
+        combatant: Combatant,
+        vitals: CharacterVitals,
+      ): Effect.Effect<void, never> =>
+        combatant.characterId === null
+          ? Effect.void
+          : writeThroughToCharacter(sql, combatant.characterId, campaignId, actor, vitals);
+
       const readCombatant = (
         campaignId: CampaignId,
         runId: EncounterRunId,
@@ -243,6 +277,7 @@ export class Combatants extends Context.Service<
                     returning *
                   `;
                   if (rows.length === 0) return yield* new NotFound({ resource: "combatant", id });
+                  const combatant = toCombatant(rows[0]!);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-updated",
@@ -250,7 +285,14 @@ export class Combatants extends Context.Service<
                     combatantId: id,
                     payload: { ...patch },
                   });
-                  return toCombatant(rows[0]!);
+                  // Only what the patch actually named. A PATCH that renamed a
+                  // combatant must not write the fight's hit points back over a
+                  // character somebody healed from the party list a moment ago.
+                  yield* writeThrough(campaignId, actor, combatant, {
+                    hpCurrent: patch.hpCurrent === undefined ? undefined : combatant.hpCurrent,
+                    conditions: patch.conditions === undefined ? undefined : combatant.conditions,
+                  });
+                  return combatant;
                 }),
               )
               .pipe(Effect.tap(() => live.touched(sessionId))),
@@ -289,8 +331,7 @@ export class Combatants extends Context.Service<
 
                   const rows = yield* sql<CombatantRow>`
                     update combatant
-                    set hp_current = greatest(0, least(combatant.hp_max,
-                                       combatant.hp_current - ${payload.amount})),
+                    set hp_current = ${clampedCombatantHp(sql, payload.amount)},
                         updated_at = now()
                     where combatant.id = ${id}
                       and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
@@ -309,6 +350,9 @@ export class Combatants extends Context.Service<
                       hpMax: combatant.hpMax,
                     },
                     requestId: payload.requestId,
+                  });
+                  yield* writeThrough(campaignId, actor, combatant, {
+                    hpCurrent: combatant.hpCurrent,
                   });
                   return combatant;
                 }),

@@ -3,7 +3,7 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/un
 import { Authorization } from "./Actor.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
-import { Character, CharacterCreate, CharacterUpdate } from "./Character.js";
+import { Character, CharacterCreate, CharacterDamage, CharacterUpdate } from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
@@ -269,6 +269,20 @@ class CharactersGroup extends HttpApiGroup.make("characters")
     HttpApiEndpoint.patch("update", "/:characterId", {
       params: { campaignId: CampaignId, characterId: CharacterId },
       payload: CharacterUpdate,
+      success: Character,
+      error: NotFound,
+    }),
+    /**
+     * The delta, and the only way a current hit point moves outside a fight.
+     *
+     * Its own endpoint rather than a field on the PATCH above, for the reason
+     * `combatants.damage` has one: it is the write that repeats, so it carries
+     * a `requestId`, and it is the write whose *meaning* is arithmetic rather
+     * than assignment.
+     */
+    HttpApiEndpoint.post("damage", "/:characterId/damage", {
+      params: { campaignId: CampaignId, characterId: CharacterId },
+      payload: CharacterDamage,
       success: Character,
       error: NotFound,
     }),

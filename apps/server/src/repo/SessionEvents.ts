@@ -139,6 +139,33 @@ export const requestAlreadyApplied = (
       );
 
 /**
+ * The same question for a write that happened outside a fight.
+ *
+ * Damage applied from the party list has no run to key on, so it is recorded
+ * against the session — and `session_event_session_request_id_key` (`0014`) is
+ * the backstop, partial on exactly the rows the run-keyed index excludes. The
+ * `encounter_run_id is null` term is what keeps the two halves disjoint: a
+ * request id reused by a later in-fight write is a different index's problem.
+ */
+export const sessionRequestAlreadyApplied = (
+  sql: SqlClient.SqlClient,
+  sessionId: SessionId,
+  requestId: string | undefined,
+): Effect.Effect<boolean, never, never> =>
+  requestId === undefined
+    ? Effect.succeed(false)
+    : sql<{ readonly id: SessionEventId }>`
+        select session_event.id from session_event
+        where session_event.session_id = ${sessionId}
+          and session_event.encounter_run_id is null
+          and session_event.request_id = ${requestId}
+        limit 1
+      `.pipe(
+        Effect.map((rows) => rows.length > 0),
+        Effect.orDie,
+      );
+
+/**
  * Reads over the append-only log.
  *
  * There is no `create`, `update` or `remove` here and no endpoint that could

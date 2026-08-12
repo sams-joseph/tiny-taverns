@@ -44,7 +44,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
-  Characters.layer,
+  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   Invites.layer,
   Notes.layer,

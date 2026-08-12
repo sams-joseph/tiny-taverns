@@ -3,6 +3,7 @@ import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
+import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
@@ -26,9 +27,12 @@ import { migratedDatabase } from "./support/database.js";
  *   thereby reachable by it.
  */
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Characters.layer, Invites.layer).pipe(
-    Layer.provideMerge(migratedDatabase("taverns_test_characters")),
-  ),
+  Layer.mergeAll(
+    Accounts.layer,
+    Campaigns.layer,
+    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Invites.layer,
+  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_characters"))),
 );
 afterAll(() => runtime.dispose());
 

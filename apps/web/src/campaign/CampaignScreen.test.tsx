@@ -70,6 +70,11 @@ describe("CampaignScreen", () => {
     // player's name here, which is the one part of the line the client assembles.
     expect(screen.getByText("Level 3 Half-orc Paladin · Ilse")).toBeInTheDocument();
     expect(screen.getByText("18")).toBeInTheDocument();
+    // Where they are now, over what they can take — the live half (`0014`).
+    // The party list stopped being prep data the moment a fight could write it:
+    // this is the same number the initiative row shows, written by the same
+    // transaction. A row nobody has said anything about shows only its maximum.
+    expect(screen.getByText("44 / 52")).toBeInTheDocument();
   });
 
   it("ticks a prep item off and saves it", async () => {

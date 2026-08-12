@@ -54,7 +54,7 @@ import { migratedDatabase } from "./support/database.js";
 const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
-  Characters.layer,
+  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   DmActors.layer,

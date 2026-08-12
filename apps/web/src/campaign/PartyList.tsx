@@ -16,7 +16,7 @@ import { Badge, Button, Card, Icon } from "@taverns/ui";
  * the same reason: the row itself is not a link to anywhere, so taking its
  * click for an editor would spend an affordance a later screen wants.
  */
-function Stat({ label, value }: { readonly label: string; readonly value: number }) {
+function Stat({ label, value }: { readonly label: string; readonly value: string | number }) {
   return (
     <span className="flex items-baseline gap-1">
       <span className="text-label-s leading-none font-medium text-faint">{label}</span>
@@ -24,6 +24,24 @@ function Stat({ label, value }: { readonly label: string; readonly value: number
     </span>
   );
 }
+
+/**
+ * `44 / 52`, or `52` when nobody has said where they are.
+ *
+ * `hpCurrent` is null until something writes it, and that is not the same as
+ * full — so the row shows the one number it actually has rather than inventing
+ * the pair. Once a fight has touched them, or the DM has, this is where the
+ * party list stops being prep data: it is the same number the initiative row
+ * is showing, written by the same transaction.
+ */
+const hitPoints = (current: number | null, max: number | null): string | null =>
+  max === null
+    ? current === null
+      ? null
+      : String(current)
+    : current === null
+      ? String(max)
+      : `${String(current)} / ${String(max)}`;
 
 export function PartyList({
   party,
@@ -38,6 +56,7 @@ export function PartyList({
         const detail = [character.descriptor, character.playerName].filter(
           (part): part is string => part !== null && part !== "",
         );
+        const hp = hitPoints(character.hpCurrent, character.hpMax);
         return (
           <div
             key={character.id}
@@ -70,7 +89,15 @@ export function PartyList({
                 </a>
               )}
               {character.ac !== null && <Stat label="AC" value={character.ac} />}
-              {character.hpMax !== null && <Stat label="HP" value={character.hpMax} />}
+              {hp !== null && <Stat label="HP" value={hp} />}
+              {character.tempHp > 0 && <Stat label="TEMP" value={character.tempHp} />}
+              {character.conditions.map((condition) => (
+                // The DM's own words, so the badge takes whatever it is given —
+                // the vocabulary is open here exactly as it is on a combatant.
+                <Badge key={condition} variant="secondary">
+                  {condition}
+                </Badge>
+              ))}
               {character.visibility === "shared" && <Badge variant="info">Shared</Badge>}
               <Button
                 variant="ghost"
