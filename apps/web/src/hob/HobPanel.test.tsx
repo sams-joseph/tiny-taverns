@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HobPanel } from "./HobPanel";
@@ -6,19 +6,24 @@ import { SAMPLE_ENCOUNTER, SAMPLE_RULES, SAMPLE_THREAD } from "./hob.fixtures";
 import type { HobTurn } from "./transcript";
 
 /**
- * The panel's states, and the one property that matters most while there is no
- * assistant behind it: **it never speaks unless it was given something to say.**
+ * The panel's states, and the one property that matters most: **it never
+ * speaks unless it was given something to say.**
  *
  * The first two tests are that property from both sides. Everything else is the
- * designers' states, driven by the delivered fixtures.
+ * designers' states, driven by the delivered fixtures. What is behind the panel
+ * — the status probe, the stream, the thread — is `conversation.test.tsx`; this
+ * file is the surface on its own, which is how it can be driven by fixtures at
+ * all.
  */
 
 describe("HobPanel, with nothing behind it", () => {
-  it("offers no input at all, and says why", () => {
-    render(<HobPanel turns={[]} />);
+  it("offers no input at all, and says why it cannot answer", () => {
+    render(<HobPanel turns={[]} unavailable="No model is configured behind Hob." />);
 
     expect(screen.queryByRole("textbox", { name: "Ask Hob" })).toBeNull();
-    expect(screen.getByText(/Hob cannot answer yet/)).toBeInTheDocument();
+    // The reason is passed in because there are two of them and both are
+    // actionable — `conversation.ts` is where they are written.
+    expect(screen.getByText("No model is configured behind Hob.")).toBeInTheDocument();
   });
 
   it("renders the empty state every DM meets first, with the starters inert", () => {
@@ -30,12 +35,18 @@ describe("HobPanel, with nothing behind it", () => {
     expect(screen.getByRole("button", { name: /Prep tonight's session/ })).toBeDisabled();
   });
 
-  it("shows what Hob knows either way — context is shown, not asked for", () => {
+  it("draws no context strip it was not given chips for", () => {
+    // Context is shown rather than asked for — but only what a caller can
+    // vouch for. The delivered fixture names a party and a fight on the table
+    // that nothing reads, so an unasked strip would be a fabrication on a
+    // surface whose whole claim is that its answers are not.
     render(<HobPanel turns={[]} />);
+    expect(screen.queryByLabelText("What Hob knows")).toBeNull();
 
+    cleanup();
+    render(<HobPanel turns={[]} context={[{ icon: "book-open", label: "The Salt Road" }]} />);
     const context = screen.getByLabelText("What Hob knows");
-    expect(within(context).getByText("The Salt Road · Session 12")).toBeInTheDocument();
-    expect(within(context).getByText("Ambush in the reeds")).toBeInTheDocument();
+    expect(within(context).getByText("The Salt Road")).toBeInTheDocument();
   });
 });
 
@@ -63,10 +74,13 @@ describe("HobPanel, given a thread", () => {
     expect(screen.queryByText("What are we building tonight?")).toBeNull();
   });
 
-  it("renders the thinking state, which nothing in the app can reach yet", () => {
+  it("renders the thinking state, and says what Hob is reaching for when it knows", () => {
     render(<HobPanel turns={SAMPLE_THREAD} thinking />);
-
     expect(screen.getByRole("status")).toHaveTextContent("Hob is checking the ledger");
+
+    cleanup();
+    render(<HobPanel turns={SAMPLE_THREAD} thinking activity="Searching the record — ferryman…" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Searching the record — ferryman");
   });
 });
 

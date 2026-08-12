@@ -3,7 +3,13 @@ import { useCallback, useState, type ReactNode } from "react";
 import { Hob } from "../hob/Hob";
 import { HobDock, HobRegion } from "../hob/HobDock";
 import { HobPanel } from "../hob/HobPanel";
-import { SAMPLE_CHECKLIST, SAMPLE_NPC, SAMPLE_RULES, SAMPLE_THREAD } from "../hob/hob.fixtures";
+import {
+  HOB_CONTEXT,
+  SAMPLE_CHECKLIST,
+  SAMPLE_NPC,
+  SAMPLE_RULES,
+  SAMPLE_THREAD,
+} from "../hob/hob.fixtures";
 import { HOB_INLINE_MIN, useHobPanel } from "../hob/useHobPanel";
 import type { HobArtifact, HobTurn } from "../hob/transcript";
 import { Caption, Section, Specimen } from "./Layout";
@@ -11,11 +17,16 @@ import { Caption, Section, Specimen } from "./Layout";
 /**
  * The Hob panel, as a specimen.
  *
- * It is here and not on a screen because **nothing answers yet**: the panel is
- * built, its states are drawn, and a product screen that offered it would be
- * offering a conversation that cannot happen. A gallery is where a surface goes
- * to be looked at, and it is the only place in this app where the delivered
- * sample thread is allowed to render — see `hob/conversation.ts`.
+ * Hob answers now — on the four campaign screens, where its tools have a
+ * campaign to read. The specimens stay here because a gallery is where a
+ * surface goes to be *looked at*: these are the states the designers drew, held
+ * still, and this is the only place in the app where the delivered sample
+ * thread is allowed to render. A panel that appeared to hold a conversation the
+ * DM never had is the failure this area is most able to cause.
+ *
+ * `SeamSpecimen` below mounts the real thing, with no campaign — so it shows the
+ * honest *there is no campaign in view* state rather than a composer with
+ * nowhere to send. See `hob/conversation.ts`.
  *
  * The specimens are bounded boxes rather than the shell's own layout, so the
  * overlay's `absolute` positions inside the specimen and you can see both modes
@@ -119,6 +130,7 @@ function ThreadSpecimen() {
   return (
     <div className="flex h-150 w-100 max-w-full overflow-hidden rounded-card border border-hairline">
       <HobPanel
+        context={HOB_CONTEXT}
         turns={turns}
         savedArtifactIds={saved}
         onSend={(text) =>
@@ -155,6 +167,7 @@ function KindsSpecimen() {
   return (
     <div className="flex h-150 w-100 max-w-full overflow-hidden rounded-card border border-hairline">
       <HobPanel
+        context={HOB_CONTEXT}
         turns={[
           { id: "k1", who: "hob", text: "He wants a courier, and he won't say who for." },
           { id: "k2", who: "artifact", artifact: SAMPLE_NPC },
@@ -176,7 +189,7 @@ export function HobSection() {
     <Section
       id="hob"
       title="Hob"
-      blurb="The assistant panel — Option A of the designers' three: a fixed-width column that stays open beside the prep UI. Nothing answers yet: these are the surface and its states, driven by the delivered fixtures."
+      blurb="The assistant panel — Option A of the designers' three: a fixed-width column that stays open beside the prep UI. Hob answers on the campaign screens; these specimens are its states held still, driven by the delivered fixtures."
     >
       <Specimen
         label="Empty, and inline"
@@ -184,9 +197,9 @@ export function HobSection() {
       >
         <DockSpecimen inline />
         <Caption>
-          The state every DM meets first. The starter cards are inert because nothing is behind
-          them; the composer is replaced by a line saying so rather than an input that would swallow
-          the question.
+          The state every DM meets first. Here the starter cards are inert and the composer is
+          replaced by a line saying so, because this specimen is given no handlers — the same honest
+          state a screen shows when no model is configured.
         </Caption>
       </Specimen>
 

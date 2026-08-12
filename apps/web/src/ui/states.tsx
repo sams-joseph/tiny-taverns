@@ -98,6 +98,11 @@ export function FailureNotice({
         };
       case "conflict":
         return { icon: "triangle-alert" as const, title: "Already there", body: failure.message };
+      case "unavailable":
+        // The server answered, and it answered that something optional is not
+        // configured. Its own sentence carries the fix, so nothing is composed
+        // here — see `ApiFailure`.
+        return { icon: "info" as const, title: "Not switched on", body: failure.message };
       case "invalid":
         return {
           icon: "triangle-alert" as const,

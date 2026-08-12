@@ -107,17 +107,23 @@ export function HobReply({
 /**
  * An answer on its way.
  *
- * Nothing in this app can put the panel into this state today — see
- * `conversation.ts`. It is here because it is a state the designers drew, and
- * because the first thing a real assistant needs is somewhere to say "working
- * on it". `role="status"` so a screen reader hears it arrive.
+ * The designers drew one line here and `label` is that line, said more
+ * precisely when there is something precise to say: *"Searching the record —
+ * ferryman…"* while a tool call is out. That is not decoration — Hob's whole
+ * claim is that its answers come out of the DM's own record, and the moment it
+ * reaches for one is the only moment that claim is visible. It stays in the
+ * persona's channel (italic Alegreya, `--text-faint`) because it is Hob
+ * narrating itself rather than a control speaking.
+ *
+ * `role="status"` so a screen reader hears it arrive, and the default is the
+ * delivered wording for the gap before the first tool call.
  */
-export function Thinking() {
+export function Thinking({ label }: { readonly label?: string }) {
   return (
     <div role="status" className="flex shrink-0 items-center gap-2.5">
       <HobAvatar />
       <span className="font-serif text-caption leading-body italic text-faint">
-        Hob is checking the ledger&hellip;
+        {label ?? "Hob is checking the ledger…"}
       </span>
     </div>
   );
@@ -214,21 +220,23 @@ export function Composer({
 }
 
 /**
- * What sits where the composer would, while nothing is behind the panel.
+ * What sits where the composer would, when Hob cannot answer from here.
  *
- * This is the whole difference between a surface that is honest about being
- * unfinished and one that is not. An input here would accept a question, drop
- * it, and leave the DM waiting for an answer that was never going to come.
+ * This is the whole difference between a surface that is honest about its
+ * limits and one that is not. An input here would accept a question, drop it,
+ * and leave the DM waiting for an answer that was never going to come.
+ *
+ * The sentence is passed in because the two reasons are different and both are
+ * actionable — no campaign in view, or no model configured on the server — and
+ * "say what to do next, in two short sentences" is the voice guide's rule for
+ * exactly this. `conversation.ts` is where they are written.
  */
-export function NothingListens() {
+export function NothingListens({ reason }: { readonly reason?: string }) {
   return (
     <div className="shrink-0 border-t border-hairline bg-surface-card p-3.5">
       <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
         <Icon name="info" size={14} className="mt-0.5 shrink-0 text-faint" />
-        <span>
-          Hob cannot answer yet &mdash; nothing is behind this panel. It is the surface the
-          assistant will attach to, and the parts above are the designers&rsquo;.
-        </span>
+        <span>{reason ?? "Hob cannot answer from here."}</span>
       </p>
     </div>
   );

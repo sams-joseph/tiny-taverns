@@ -4,11 +4,11 @@ import { BeatId, CreatureId, NoteId, SessionId } from "./Ids.js";
 /**
  * Searching one campaign's record.
  *
- * **One search path over this corpus, and this is it.** The assistant's
- * eventual `searchCampaign` tool is this repository method behind a `Tool.make`
- * wrapper — it writes no SQL and gets no predicate of its own, which is what
- * stops a second, subtly different answer to "what may this actor read"
- * appearing next to the first one.
+ * **One search path over this corpus, and this is it.** Hob's `searchCampaign`
+ * tool is this repository method behind a `Tool.make` wrapper — it writes no SQL
+ * and gets no predicate of its own, which is what stops a second, subtly
+ * different answer to "what may this actor read" appearing next to the first
+ * one. See `apps/server/src/assistant/toolkit.ts`.
  *
  * Lexical, not semantic. A DM searches for the words they wrote — the ferryman,
  * the crate, Cazril — and invented proper nouns are precisely what an embedding

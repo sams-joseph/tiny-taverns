@@ -940,8 +940,8 @@ is what lets a panel that scrolls inside itself be shorter than its own content.
 including `HOB_INLINE_MIN`. A screen composes it:
 `const hob = useHobPanel({ initialOpen: false })`, then `onAskHob={hob.toggle}` and
 `panel={<Hob hob={hob} />}`. **`initialOpen: false` is deliberate and is the shell's call to
-make** (the hook's own doc says so): nothing answers yet, and a 400px panel that opens itself to
-say so is worse than a button that opens it when asked. Mounted on the three product screens; the
+make** (the hook's own doc says so): a 400px panel that opens itself is worse than a button that
+opens it when asked, and nothing is requested until it is opened. Mounted on the three product screens; the
 gallery is left to its specimen, which owns a `useHobPanel` of its own — two on one page would
 both answer the same ⌘K.
 
@@ -1357,7 +1357,7 @@ holding rather than an exception to it.)
 
 `apps/server/src/repo/Search.ts` is **the only place in the product where a `tsvector` is
 queried**, and `GET /campaigns/:campaignId/search` is its only HTTP surface. The assistant's
-eventual `searchCampaign` tool is a `Tool.make` wrapper around `Search.search` — it writes no
+`searchCampaign` tool is a `Tool.make` wrapper around `Search.search` — it writes no
 SQL, declares no predicate and gets no privilege of its own. **Anything that needs a read this
 repository does not expose is a new method here, never a query somewhere else**: two search paths
 over one corpus would be permanent, and the second one is where the visibility seam gets
@@ -1643,21 +1643,36 @@ token. And read-aloud mode **drops** the DM half rather than restyling it (no as
 table_, no _Questions you answered_), leaving beats and read-aloud notes in Alegreya at 18px
 (`--fs-body-l`) on a 671px measure.
 
-## Hob: the chat surface is built, and nothing is behind it
+## Hob: the chat surface, and what it is now attached to
 
 `apps/web/src/hob/` is the designers' Option A —
 `packages/design-system/ui_kits/dm-screen/ChatPanel.jsx` and `ChatParts.jsx`, built from the
-shipped components. **The retrieval and model work is unstarted, and the module is written so
-that stays visible rather than papered over.**
+shipped components. **It answers now**; the server half is the section below, and this one is
+still only the surface.
 
-- **`conversation.ts` is the whole seam, and the only file that changes when something
-  answers.** It exports `HobConversation` and one implementation, `useHobConversation`, which
-  returns no turns and an **undefined `send`**. `HobPanel` reads that absence directly: no
-  composer, and a plain line saying nothing is behind the panel. Every other handler
-  (`save`, `discard`, `retry`) is optional the same way, and the card disables what it was not
-  given. There is deliberately **no endpoint, no client method and no wire schema** — an
-  assistant endpoint is an `HttpApiEndpoint` in `packages/api` like everything else, and a
-  contract guessed from a panel would be the wrong one.
+- **`conversation.ts` is the whole seam, and the only file in `apps/web` that talks to the
+  assistant.** `useHobConversation(campaignId, open)` asks `hob.status` the first time the
+  panel is opened, streams `hob.ask`, and appends the deltas to the reply already in flight.
+  Three absences are load-bearing and all render as absences: **no campaign in view** and **no
+  model configured** both leave `send` undefined (`HobPanel` then shows the exact reason where
+  the composer would be), and `save` / `discard` / `retry` stay undefined because the
+  propose-and-accept half is unbuilt and a card disables what it was not given.
+- **`thinking` is not "a request is in flight".** It is _an answer is coming and there is
+  nothing to read yet_ — so it goes false the moment words start arriving (the growing text is
+  the progress) and true again whenever Hob pauses for a tool. `activity` is the tool step in
+  words, and it is the only moment Hob's whole claim — that answers come out of the DM's own
+  record — is visible on screen.
+- **Nothing is requested until the panel is opened.** It is closed by default on every screen,
+  so a status probe at mount would be a request per page load for a surface nobody opened.
+  Re-asking on each open is the other half: a server restarted with a model configured is one
+  toggle away from working rather than a page reload.
+- **The _"Knows"_ strip draws only what the server vouched for**, which is why `HobStatus`
+  carries the campaign's name at all. The delivered `HOB_CONTEXT` fixture names three chips —
+  campaign and session, the party, the fight on the table — and exactly one of them is
+  something Hob is bound to; the other two would each be a second read for a decoration. Given
+  no chips, `HobPanel` draws no strip. This mattered the moment Hob started answering: a strip
+  naming a campaign the DM is not in, on the one surface whose whole claim is that its answers
+  are not invented, is the worst possible place for a stub.
 - **`transcript.ts` is the useful half of the handover.** `HobArtifact` is a discriminated
   union over the five card bodies the designers actually drew (encounter, read-aloud, npc,
   checklist, rules), so it states exactly what an answer has to return. The delivery's
@@ -1669,7 +1684,10 @@ that stays visible rather than papered over.**
   conversation the DM never had is the failure this area is most able to cause.
 - **The mount is three names**: `useHobPanel()` (open state, `inline`, ⌘K/Esc), `HobRegion`
   (the `relative flex` row the overlay positions against — an overlay without one covers the
-  page instead of the content), and `<Hob hob={…} />` as that region's last child. The gallery's
+  page instead of the content), and `<Hob hob={…} campaignId={…} />` as that region's last
+  child. **`campaignId` is what makes it answer**, and the campaign list passes none on
+  purpose: Hob's tools all hang off a campaign, the same rule that keeps _Bestiary_ out of the
+  nav until the route names one. The gallery's
   "The mount, and the opener" specimen _is_ that composition, so it fails if the seam rots.
   **The shell owns the Ask Hob button**; nothing in `hob/` draws one.
 
@@ -1699,23 +1717,128 @@ page — a probe that reported a shell nobody in this worktree had written. Laun
 `--remote-debugging-port=0` and read the real port off the process's own
 `DevTools listening on ws://127.0.0.1:<port>/` stderr line.
 
-## The assistant: a trap to remember before it ships
+## Hob answers: the toolkit, the loop, and running it locally
 
-Nothing here uses `@effect/ai-anthropic` today — the captain's decision is to target locally
-hosted models first, through `@effect/ai-openai-compat`. Record it now because it fails
-silently, and the day someone points this at hosted Claude is the day it costs an afternoon:
+`apps/server/src/assistant/` is the whole assistant — two files — plus `packages/api/src/Hob.ts`
+for the wire and `apps/web/src/hob/conversation.ts` for the panel. Read `toolkit.ts` first: it is
+where the architectural rule lives.
 
-**At `4.0.0-beta.102`, `getModelCapabilities` recognises no model id past `claude-opus-4-8`**
-(`.repos/effect/packages/ai/anthropic/src/AnthropicLanguageModel.ts:2972-3021`). The model
-parameter is typed `(string & {}) | Model`, so `claude-opus-5` compiles and does not error. It
-silently caps `max_tokens` at **4096** and routes structured output through a prompt-based JSON
-tool instead of native structured outputs. Nothing warns; the first symptom is an answer cut off
-mid-sentence.
+**Hob gets tools, not a context blob.** The prompt carries the DM's thread and the campaign's
+_name_, and nothing else from the campaign; every fact in an answer arrives through a tool call
+that is one shipped repository method — `Search.search`, `Sessions.list`, `Recap.read`,
+`Creatures.findById`, `SessionEvents.list`. Each returns `Effect<…, NotFound, CurrentActor>`, so
+an unscoped read does not compile. A pre-assembled context blob would be a second data path with
+its own filtering, and the day it disagrees with the predicate is the day the assistant leaks.
 
-Mitigation, regardless of provider: always pass `config: { max_tokens: … }` explicitly, and pin
-a test on it. Related, also verified at this version: `@effect/ai-anthropic` ships **no**
-embedding module (Anthropic has no embeddings API); `@effect/ai-openai` and
-`@effect/ai-openai-compat` have `OpenAiEmbeddingModel`.
+**The campaign is not a tool parameter.** No tool takes one; `handlersFor(repositories,
+campaignId, actor)` closes over the path segment the request was routed on and over the actor
+`Authorization` resolved. So a model that hallucinated another campaign's id has nowhere to put
+it — the call is not _expressible_, never mind refused — and the ordinary predicate underneath is
+the second lock rather than the only one. `hob.test.ts` asserts no `campaignid` appears in the
+tool schemas sent to the provider, and drives the leak case that would look like a feature: two
+campaigns of the same DM both containing "ferryman", asked from one. Confirmed live as well —
+the other table's name appeared in **zero** of the bytes ever sent to a model.
+
+**It writes no SQL, and `hob.test.ts` fails if it starts to.** The retrieval index belongs to the
+session-history work and the assistant consumes it. A `sql` template or an `effect/unstable/sql`
+import anywhere under `src/assistant/` fails the seam test (comments stripped first, so the rule
+can be described in the files it governs). A read the repositories do not expose is a new
+repository method, not a query here.
+
+**Re-providing `CurrentActor` inside each handler is deliberate.** The stream is pulled _after_
+the handler effect returns, so the request's context is no longer ambient by the time a tool
+runs; naming the actor makes it a captured value rather than a hope. `Hob.ask` still requires
+`CurrentActor` at the type level, exactly like a repository.
+
+### `LanguageModel.streamText` is one round-trip, not an agent loop
+
+The single most surprising thing about `effect/unstable/ai` at `4.0.0-beta.102`: `streamText`
+resolves the tool calls a step asked for, emits their results, and **stops**. The results are
+never sent back to the model. So a grounded answer needs at least two calls, and `round()` in
+`Hob.ts` is what supplies them — `Chat.fromPrompt` carries the history (tool calls and results
+alike) across rounds, capped at `MAX_ROUNDS = 4`. `Chat.streamText` is one round-trip too; it
+only adds the bookkeeping. Without the loop every grounded question comes back empty, and
+`hob.test.ts` pins the two requests.
+
+`finish` is withheld from a round that asked for a tool — it ends _that_ call, not the answer,
+and a `done` event before the prose closes the turn on a client that trusts it. The framework
+defers finish parts until every tool handler completes, so the flag is accurate by then.
+
+### The wire, and the panel
+
+`GET /campaigns/:c/hob` → `HobStatus`; `POST /campaigns/:c/hob/ask` → `HttpApiSchema.StreamSse`
+of `HobEvent` (`delta` / `tool` / `done` / `failed`). Authorization happens **before** a stream
+exists, so a denial is a real 404 and an unconfigured server a real 503 — same ordering
+`live.events` depends on. **No `id` line and no heartbeats**: an answer is not a resumable log,
+a dropped stream is re-asked rather than resumed, and a tool step is the traffic that proves a
+slow connection is alive.
+
+**Nothing is persisted.** The client sends the thread in every payload; there is no
+`assistant_turn` table. That column exists so a _saved_ row can point at the turn that produced
+it, and nothing writes an `origin: "assistant"` row until the accept path ships — a turn table
+with no reader is not worth a migration. **The accept path is deliberately not built** (captain's
+decision: generate with approval), which is also why `HobArtifact` has no producer and the
+panel's _Save to session_ stays absent rather than disabled-and-lying.
+
+### Configuration: unset is a supported mode
+
+Same shape as `CLERK_JWT_KEY`, and it must stay that way. `HOB_API_URL` + `HOB_MODEL` (both, or
+Hob is off), optional `HOB_API_KEY` (`Redacted`; **the only secret on that page, and no key of
+any kind may be committed**), `HOB_MAX_TOKENS` (default 1024). `assistantFromConfig` in `app.ts`
+logs one line at every boot — `Hob is ON: model … at …` or `Hob is OFF: …` — naming the model and
+endpoint and never the key, for the reason the identity boot line exists. Unset means
+`Hob.unavailable`: the server boots, the whole suite passes, `status` answers
+`available: false`, `ask` is a declared `HobUnavailable`, and the panel prints the fix. It still
+404s a campaign it cannot read, so "the assistant is off" is not a cheaper way to probe which
+campaigns exist.
+
+**Always pass `max_tokens` explicitly, whatever the provider**, and `hob.test.ts` asserts it
+reaches the wire. The habit is what makes this trap impossible: at `4.0.0-beta.102`
+`@effect/ai-anthropic`'s `getModelCapabilities` recognises no model id past `claude-opus-4-8`
+(`.repos/effect/packages/ai/anthropic/src/AnthropicLanguageModel.ts:2972-3021`), the model
+parameter is typed `(string & {}) | Model` so `claude-opus-5` compiles and never errors, and the
+fallback silently caps output at **4096** and routes structured output through a prompt-based
+JSON tool. Nothing warns; the first symptom is an answer cut off mid-sentence. Also verified at
+this version: `@effect/ai-anthropic` ships **no** embedding module; `@effect/ai-openai` and
+`@effect/ai-openai-compat` have `OpenAiEmbeddingModel`. Retrieval here is lexical by decision —
+no embeddings.
+
+### Running it locally, with and without a model
+
+Without: change nothing. `pnpm -F server dev` boots, logs `Hob is OFF`, and the panel says so.
+
+With, using llama.cpp (no GPU needed; a 3B model on CPU answers in ~4s end to end):
+
+```
+llama-server --jinja -m <model>.gguf --port 8080     # --jinja is required for tool calling
+# apps/server/.env.local
+HOB_API_URL=http://127.0.0.1:8080/v1
+HOB_MODEL=qwen2.5-3b-instruct
+```
+
+Ollama (`:11434/v1`) and LM Studio (`:1234/v1`) are the same shape. **The model must support tool
+calling** — Hob answers only from tool results, so one that cannot call a tool has nothing to say.
+
+Measured against a real local Qwen2.5-3B over a seeded campaign, asking a question only the
+record could answer: `searchCampaign` called at 1.5s, answered at 1.5s, first token at 2.8s,
+finished at 4.2s, and the reply quoted the invented proper noun out of the DM's own note. 5/5
+runs called the tool. In the browser the panel went _"Hob is checking the ledger…"_ → _"Searching
+the record — ferryman…"_ → text growing in place. A question the record does not answer came back
+_"There seems to be no recorded beats related to the crossing"_ rather than an invention, which is
+the prompt's one non-negotiable instruction working.
+
+**A small local model is the weak link, and it is worth knowing which part is weak.** The plumbing
+is deterministic and tested; what varies is whether a 3B model picks a good query and a sensible
+`source` filter — it narrowed to `source: "note"` unprompted and missed a beat that answered the
+question. That is a model-tier question (the captain's `model-tier.md` defers it), not an
+architecture one.
+
+**Testing it offline: stub `HttpClient`, not the model.** `apps/server/test/support/model.ts`
+scripts an OpenAI-compatible endpoint by answering `POST /chat/completions` with canned
+`text/event-stream` chunks, which exercises the real provider layer, the real toolkit, the real
+handlers and real Postgres — everything except the model's judgement. It records every request
+body, which is the only way to see **what the assistant was actually shown**; that is how the
+cross-campaign assertion is a measurement rather than an argument.
 
 ## Maintaining this file
 

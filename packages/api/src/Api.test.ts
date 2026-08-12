@@ -63,6 +63,7 @@ describe("the API declaration", () => {
       "encounterCreatures",
       "encounters",
       "health",
+      "hob",
       "live",
       "notes",
       "prep",

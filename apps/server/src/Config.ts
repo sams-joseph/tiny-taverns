@@ -49,6 +49,57 @@ export const liveHeartbeatSeconds = Config.int("LIVE_HEARTBEAT_SECONDS").pipe(
 );
 
 /**
+ * Where Hob's model lives — an OpenAI-compatible `/v1` base URL.
+ *
+ * `Option` rather than a default, for the reason `clerkJwtKey` is: unset is a
+ * *supported mode* and not a missing value. With no endpoint the server boots,
+ * the suite passes, and the panel says nothing is behind it — the assistant is
+ * an opt-in dependency exactly as hosted sign-in is, and there is no sensible
+ * committed default for a machine that may not be running one.
+ *
+ * The captain's decision is locally hosted models, so this is ordinarily a
+ * loopback address: `http://127.0.0.1:8080/v1` for llama.cpp's server,
+ * `http://127.0.0.1:11434/v1` for Ollama, `http://127.0.0.1:1234/v1` for LM
+ * Studio. A hosted provider is the same shape and a different URL.
+ */
+export const hobApiUrl = Config.option(Config.string("HOB_API_URL"));
+
+/**
+ * Which model to ask. No default, and Hob is off unless both this and the URL
+ * are set — an endpoint with the wrong model name fails on the first question
+ * with a provider error, which is a much worse way to find out than a boot line
+ * saying Hob is off.
+ */
+export const hobModel = Config.option(Config.string("HOB_MODEL"));
+
+/**
+ * An API key for the model endpoint, if it wants one.
+ *
+ * `Option` because most local servers ignore it and some (vLLM) insist on a
+ * placeholder. `Redacted` because it is the one genuinely secret thing on this
+ * page, and nothing in this repo may ever commit one — `.env.*` is gitignored
+ * and `.env.example` carries the name only.
+ */
+export const hobApiKey = Config.option(Config.redacted("HOB_API_KEY"));
+
+/**
+ * The output cap sent with every generation request, always and explicitly.
+ *
+ * **Never leave this to the provider package.** At `4.0.0-beta.102`,
+ * `@effect/ai-anthropic`'s `getModelCapabilities` recognises no model id past
+ * `claude-opus-4-8` and its fallback silently caps `max_tokens` at 4096 *and*
+ * disables native structured output — the model parameter is typed
+ * `(string & {}) | Model`, so a newer id compiles and never errors. The first
+ * symptom is an answer that stops mid-sentence. The habit of naming the number
+ * costs one config line and makes the trap impossible; `test/hob.test.ts`
+ * asserts the value reaches the wire.
+ *
+ * 1024 because Hob's replies are a sentence or two by design, and a local model
+ * generating on CPU makes a long cap expensive rather than generous.
+ */
+export const hobMaxTokens = Config.int("HOB_MAX_TOKENS").pipe(Config.withDefault(1024));
+
+/**
  * Clerk's JWT public verification key, in PEM form.
  *
  * **Not a secret** — it is a public key, and verification is the only thing it

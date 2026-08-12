@@ -23,6 +23,9 @@ importers:
       '@clerk/backend':
         specifier: 3.15.1
         version: 3.15.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@effect/ai-openai-compat':
+        specifier: 4.0.0-beta.102
+        version: 4.0.0-beta.102(effect@4.0.0-beta.102)
       '@effect/platform-node':
         specifier: 4.0.0-beta.102
         version: 4.0.0-beta.102(effect@4.0.0-beta.102)(ioredis@5.11.1)
@@ -494,6 +497,11 @@ packages:
 
   '@dotenvx/primitives@0.8.0':
     resolution: {integrity: sha512-VYJy0uhFm9zTJ1TxBaW/pA8bjbOM/OttaNMwZ1RHG4JKyRG7DhSdiqD1ipQoAyoD22olUtxbP78W9xY3Wd11bg==}
+
+  '@effect/ai-openai-compat@4.0.0-beta.102':
+    resolution: {integrity: sha512-/++aEJNKqVrtbWVmNiHZ2t40QwAk1+/rCWtdOxl8iCG0UtyFYxc/vyT5OOot3VBCJIQ/mw11vNlH+K9bLQBXvA==}
+    peerDependencies:
+      effect: ^4.0.0-beta.102
 
   '@effect/platform-node-shared@4.0.0-beta.102':
     resolution: {integrity: sha512-gVd793I72MrkX4dXo7eYtRKfNj0RW4eMRfVEKEJI16h2+mBDCzQ+gqMrog2hSTHQnaIbvbYShNQ4TVGuRCYZeQ==}
@@ -3736,6 +3744,10 @@ snapshots:
       yocto-spinner: 1.2.2
 
   '@dotenvx/primitives@0.8.0': {}
+
+  '@effect/ai-openai-compat@4.0.0-beta.102(effect@4.0.0-beta.102)':
+    dependencies:
+      effect: 4.0.0-beta.102
 
   '@effect/platform-node-shared@4.0.0-beta.102(effect@4.0.0-beta.102)':
     dependencies:

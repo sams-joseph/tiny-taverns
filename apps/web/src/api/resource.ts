@@ -28,6 +28,15 @@ export type ApiFailure =
   | { readonly kind: "missing"; readonly resource: string }
   /** A uniqueness rule said no — the declared `Conflict`, with the server's own sentence. */
   | { readonly kind: "conflict"; readonly message: string }
+  /**
+   * The server is missing a part it needs — today, a model behind Hob.
+   *
+   * Distinct from `unreachable` on purpose: the server answered, and it
+   * answered that an *opt-in* dependency is not configured. Carrying the
+   * server's own sentence rather than composing one here keeps the instructions
+   * ("set HOB_API_URL…") in the process that knows them.
+   */
+  | { readonly kind: "unavailable"; readonly message: string }
   /** The payload does not satisfy the contract. See `classifyFailure` — it never left. */
   | { readonly kind: "invalid"; readonly detail: string }
   /** Nothing answered: the API is not running, or the browser is offline. */
@@ -69,6 +78,11 @@ export const classifyFailure = (error: unknown): ApiFailure => {
       return {
         kind: "conflict",
         message: stringField(error, "message") ?? "That is already there.",
+      };
+    case "HobUnavailable":
+      return {
+        kind: "unavailable",
+        message: stringField(error, "message") ?? "That part of the server is not switched on.",
       };
     /**
      * A payload the contract rejects **never reaches the network**: the derived

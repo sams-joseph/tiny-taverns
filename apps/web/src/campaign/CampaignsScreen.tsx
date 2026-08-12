@@ -117,8 +117,10 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
 export function CampaignsScreen({ route }: { readonly route: Route }) {
   const [resource, reload] = useApiResource(listCampaigns);
   // Closed, against the hook's own `true` default, and its doc says why the
-  // choice is the shell's: nothing answers yet. A 400px panel that opens itself
-  // to say so is worse than a button that opens it when you ask.
+  // choice is the shell's: a 400px panel that opens itself is worse than a
+  // button that opens it when you ask. This screen passes no campaign either —
+  // Hob's tools all hang off one, so here it says so rather than offering a
+  // composer with nowhere to send.
   const hob = useHobPanel({ initialOpen: false });
 
   const campaigns =

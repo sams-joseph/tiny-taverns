@@ -7,6 +7,7 @@ import { Character, CharacterCreate, CharacterUpdate } from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
+import { HobAsk, HobEvent, HobStatus, HobUnavailable } from "./Hob.js";
 import {
   EncounterCreature,
   EncounterCreatureCreate,
@@ -484,6 +485,56 @@ class SearchGroup extends HttpApiGroup.make("search")
   .middleware(Authorization) {}
 
 /**
+ * Hob, the assistant.
+ *
+ * **Campaign-scoped in the path, and for once that is more than a security
+ * property — it is the whole grounding model.** The campaign id is not a
+ * parameter of any tool Hob has; it is closed over by the tool handlers from
+ * this path segment. So the model cannot *express* a call into another
+ * campaign, let alone make one, and the actor-scoped predicate underneath is
+ * the second lock rather than the only one. A top-level `/hob` would have
+ * needed the campaign in the payload, which is a client claim, or in a tool
+ * parameter, which is a model claim.
+ *
+ * Two endpoints and no more:
+ *
+ * - `status` says whether a model endpoint is configured. The panel asks
+ *   before it offers a composer, so an unconfigured server produces the honest
+ *   *nothing is behind this panel* rather than an input that drops questions.
+ *   It is behind `Authorization` like everything else, and reading the
+ *   campaign first means an unreachable one is a 404 rather than a disclosure
+ *   that the assistant is switched on.
+ * - `ask` streams the answer. A `POST` because the thread is a payload, and a
+ *   stream because the designers chose a persistent conversation surface over
+ *   a one-shot palette — a blocking call that returns a finished paragraph is
+ *   a different product. Authorization happens *before* a stream is returned,
+ *   so a denial is a real 404 with a JSON body and not a failure event inside
+ *   a 200 nobody is listening for. Same ordering as `live.events`.
+ *
+ * There is no `POST …/accept` and no `assistant_turn` resource. Generation
+ * with approval is the captain's decision and provenance is already waiting on
+ * every content table (`origin`, `assistant_turn_id`); recall and the
+ * conversation ship first, and an accept endpoint invented ahead of the
+ * artifact schema it would write would be the wrong one.
+ */
+class HobGroup extends HttpApiGroup.make("hob")
+  .add(
+    HttpApiEndpoint.get("status", "/", {
+      params: { campaignId: CampaignId },
+      success: HobStatus,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("ask", "/ask", {
+      params: { campaignId: CampaignId },
+      payload: HobAsk,
+      success: HttpApiSchema.StreamSse({ events: HobEvent }),
+      error: [NotFound, HobUnavailable],
+    }),
+  )
+  .prefix("/campaigns/:campaignId/hob")
+  .middleware(Authorization) {}
+
+/**
  * The live session: starting a fight, running it, and ending it.
  *
  * Nested under the session because a run belongs to one night — and, as
@@ -689,6 +740,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PrepGroup)
   .add(BeatsGroup)
   .add(SearchGroup)
+  .add(HobGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)
   .add(LiveGroup)

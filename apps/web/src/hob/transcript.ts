@@ -3,11 +3,12 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Nothing produces one of these yet.** The retrieval and model work is
- * unstarted, so this file is a description of the surface's input and not of
- * anything's output — see `conversation.ts` for the single seam a real
- * assistant attaches to, and `hob.fixtures.ts` for the delivered sample the
- * gallery and the tests render.
+ * **Nothing produces an `HobArtifact` yet**, though Hob answers: an answer is
+ * prose, and a *proposal* is the propose-and-accept half that the captain's
+ * generation decision names and that is not built. So this file is still a
+ * description of the surface's input rather than of anything's output — see
+ * `conversation.ts` for the seam, and `hob.fixtures.ts` for the delivered
+ * sample the gallery and the tests render.
  *
  * It is written as data rather than as JSX because the delivered prototype
  * hard-codes each artifact body inline (`ChatParts.jsx`'s `EncounterBody`,

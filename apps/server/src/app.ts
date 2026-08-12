@@ -1,12 +1,22 @@
+import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
+import { NodeHttpClient } from "@effect/platform-node";
 import type { PgClient } from "@effect/sql-pg";
 import type { Authorization } from "@taverns/api";
 import { type Config, Effect, Layer, Option } from "effect";
 import { HttpMiddleware, HttpRouter } from "effect/unstable/http";
 import type { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "./Accounts.js";
+import { Hob } from "./assistant/Hob.js";
 import { AuthorizationLive } from "./Authorization.js";
 import { ClerkIdentityProvider } from "./ClerkIdentityProvider.js";
-import { allowedOrigins, clerkJwtKey } from "./Config.js";
+import {
+  allowedOrigins,
+  clerkJwtKey,
+  hobApiKey,
+  hobApiUrl,
+  hobMaxTokens,
+  hobModel,
+} from "./Config.js";
 import * as Database from "./Database.js";
 import { ApiLive } from "./handlers.js";
 import { Health } from "./Health.js";
@@ -69,6 +79,78 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
 );
 
 /**
+ * Whether there is a model behind Hob — the assistant's half of the same
+ * question `identityFromConfig` answers, arranged the same way and for the same
+ * reasons.
+ *
+ * **Unset is the default configuration, and it is what CI runs.** No model
+ * endpoint means `Hob.unavailable`: the server boots, every test passes, the
+ * status endpoint says so, and the panel renders the honest *nothing is behind
+ * this panel* line it already has. Nothing about the product is broken by the
+ * absence, which is the whole definition of an opt-in dependency.
+ *
+ * **Both branches log, one line, every boot** — for the reason the identity
+ * line exists. The way this actually goes wrong is a variable set somewhere the
+ * server does not read (the wrong package's `.env.local`, a shell that never
+ * exported it), and the only symptom would be a panel that quietly refuses to
+ * offer a composer. The ON line names the model and the endpoint because both
+ * are needed to diagnose a wrong answer, and **never the key**: `HOB_API_KEY`
+ * is `Redacted` and does not appear here at all, not as a prefix and not as a
+ * length.
+ *
+ * Both must be set. An endpoint with no model name would fail on the first
+ * question with a provider error from inside a stream, which is a far worse way
+ * to learn about a missing environment variable than a line at boot.
+ */
+export const assistantFromConfig: Layer.Layer<
+  Hob,
+  Config.ConfigError,
+  Campaigns | Creatures | Recap | Search | SessionEvents | Sessions
+> = Layer.unwrap(
+  Effect.gen(function* () {
+    const apiUrl = yield* hobApiUrl;
+    const model = yield* hobModel;
+
+    if (Option.isNone(apiUrl) || Option.isNone(model)) {
+      yield* Effect.logInfo(
+        "Hob is OFF: no model endpoint is configured, so the assistant panel reports " +
+          "itself unavailable. To turn it on, set HOB_API_URL and HOB_MODEL in " +
+          "apps/server/.env.local (see .env.example).",
+      );
+      return Hob.unavailable;
+    }
+
+    const apiKey = yield* hobApiKey;
+    const maxTokens = yield* hobMaxTokens;
+    yield* Effect.logInfo(
+      `Hob is ON: model ${model.value} at ${apiUrl.value}, max_tokens ${maxTokens}.`,
+    );
+
+    return Hob.layer({ model: model.value }).pipe(
+      Layer.provide(
+        OpenAiLanguageModel.layer({
+          model: model.value,
+          // Named explicitly, always. See `hobMaxTokens` — a provider package
+          // that does not recognise a model id caps this silently, and the
+          // first symptom is an answer cut off mid-sentence.
+          config: { max_output_tokens: maxTokens },
+        }).pipe(
+          Layer.provide(
+            OpenAiClient.layer({
+              apiUrl: apiUrl.value,
+              // Absent is the ordinary case: a local server generally wants no
+              // credential, and some want a placeholder. Neither is our
+              // business, so the option is passed through as it arrived.
+              apiKey: Option.getOrUndefined(apiKey),
+            }).pipe(Layer.provide(NodeHttpClient.layerUndici)),
+          ),
+        ),
+      ),
+    );
+  }),
+);
+
+/**
  * Everything the handlers need, over whichever database it is given.
  *
  * Parameterised so the tests can mount the same wiring over a throwaway
@@ -80,6 +162,11 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
 export const servicesOver = <E>(
   database: Layer.Layer<SqlClient.SqlClient | PgClient.PgClient, E>,
   identity: Layer.Layer<IdentityProvider, E | Config.ConfigError> = identityFromConfig,
+  assistant: Layer.Layer<
+    Hob,
+    E | Config.ConfigError,
+    Campaigns | Creatures | Recap | Search | SessionEvents | Sessions
+  > = assistantFromConfig,
 ): Layer.Layer<
   | Accounts
   | Authorization
@@ -92,6 +179,7 @@ export const servicesOver = <E>(
   | EncounterRuns
   | Encounters
   | Health
+  | Hob
   | LiveEvents
   | Notes
   | PrepItems
@@ -134,6 +222,22 @@ export const servicesOver = <E>(
     // has to ring the same doorbell every other live write rings.
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     Health.layer,
+    // Hob reads through the repositories and writes nothing, so its dependency
+    // list *is* the list of reads it may make — there is no `SqlClient` here,
+    // and `test/hob.test.ts` fails if one appears in `src/assistant/`. The
+    // repository layers are named again rather than threaded in, and that costs
+    // nothing: `Layer` memoises by layer identity within a build, so these are
+    // the same six services the handlers already have.
+    assistant.pipe(
+      Layer.provide([
+        Campaigns.layer,
+        Creatures.layer,
+        Recap.layer,
+        Search.layer,
+        SessionEvents.layer,
+        Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+      ]),
+    ),
   ).pipe(Layer.provide(database));
 
 /**
@@ -168,6 +272,7 @@ export const applicationOver = <E>(
     | EncounterRuns
     | Encounters
     | Health
+    | Hob
     | LiveEvents
     | Notes
     | PrepItems

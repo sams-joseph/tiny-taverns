@@ -11,7 +11,7 @@ import {
   Thinking,
   UserTurn,
 } from "./ChatParts";
-import type { HobArtifact, HobTurn } from "./transcript";
+import type { HobArtifact, HobContextChip, HobTurn } from "./transcript";
 
 /**
  * The Hob chat panel — Option A of the designers' three, and the one that ships.
@@ -32,12 +32,22 @@ import type { HobArtifact, HobTurn } from "./transcript";
 export interface HobPanelProps {
   /** Newest last. Empty is the state every DM meets first. */
   readonly turns: ReadonlyArray<HobTurn>;
-  /** An answer on its way. Nothing can set this yet. */
+  /** An answer on its way. */
   readonly thinking?: boolean;
+  /** What Hob is doing while it is doing it, when there is something to say. */
+  readonly activity?: string;
+  /**
+   * The "Knows" strip. **Absent draws no strip**, which is the honest state:
+   * the delivered fixture names a campaign, a party and a fight, and only what
+   * a caller can actually vouch for belongs here.
+   */
+  readonly context?: ReadonlyArray<HobContextChip>;
   /** Which artifacts are already in the session. Ids, so a re-read cannot lose it. */
   readonly savedArtifactIds?: ReadonlyArray<string>;
   /** Absent means nothing is listening, and the panel says so instead of asking. */
   readonly onSend?: (text: string) => void;
+  /** Why, when `onSend` is absent. One or two sentences, ending in what to do. */
+  readonly unavailable?: string;
   readonly onSave?: (artifact: HobArtifact) => void;
   readonly onDiscard?: (artifact: HobArtifact) => void;
   readonly onRetry?: (artifact: HobArtifact) => void;
@@ -52,8 +62,11 @@ export interface HobPanelProps {
 export function HobPanel({
   turns,
   thinking = false,
+  activity,
+  context,
   savedArtifactIds = [],
   onSend,
+  unavailable,
   onSave,
   onDiscard,
   onRetry,
@@ -75,7 +88,7 @@ export function HobPanel({
   useEffect(() => {
     const element = thread.current;
     if (element !== null && turns.length > 0) element.scrollTop = element.scrollHeight;
-  }, [turns, thinking]);
+  }, [turns, thinking, activity]);
 
   return (
     <section
@@ -106,7 +119,7 @@ export function HobPanel({
         )}
       </header>
 
-      <ContextBar />
+      {context !== undefined && context.length > 0 && <ContextBar chips={context} />}
 
       <div ref={thread} className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto p-3.5">
         {turns.length === 0 && !thinking ? (
@@ -139,10 +152,14 @@ export function HobPanel({
             }
           })
         )}
-        {thinking && <Thinking />}
+        {thinking && <Thinking label={activity} />}
       </div>
 
-      {onSend === undefined ? <NothingListens /> : <Composer onSend={onSend} />}
+      {onSend === undefined ? (
+        <NothingListens reason={unavailable} />
+      ) : (
+        <Composer onSend={onSend} />
+      )}
     </section>
   );
 }

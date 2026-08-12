@@ -146,7 +146,7 @@ export function ChronicleScreen({
     <AppShell
       route={route}
       onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
+      panel={<Hob hob={hob} campaignId={campaignId} />}
       context={
         view === undefined ? undefined : (
           <NavContext

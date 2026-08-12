@@ -11,11 +11,10 @@ import type { HobArtifact, HobContextChip, HobStarter, HobTurn } from "./transcr
  * own `exports` map, and ESLint forbids reaching into `ui_kits/`.
  *
  * **Only the first three are wired into the running app.** The thread is a
- * specimen: it is what the gallery renders and what the tests assert against,
- * and it is the closest thing to a real conversation that exists, because
- * nothing answers yet. Do not let it reach a screen — a panel that appears to
- * hold a conversation the DM did not have is the failure this task is most
- * able to cause.
+ * specimen: it is what the gallery renders and what the tests assert against.
+ * Hob answers for real now, which makes this *more* dangerous rather than less
+ * — do not let it reach a screen. A panel that appears to hold a conversation
+ * the DM did not have is the failure this area is most able to cause.
  */
 
 /** "Knows" — what Hob has, shown rather than asked for. `chat-data.js:3-9`. */

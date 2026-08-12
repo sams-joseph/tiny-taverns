@@ -9,6 +9,7 @@ export * from "./Encounter.js";
 export * from "./EncounterCreature.js";
 export * from "./EncounterRun.js";
 export * from "./Errors.js";
+export * from "./Hob.js";
 export * from "./Ids.js";
 export * from "./Note.js";
 export * from "./PrepItem.js";

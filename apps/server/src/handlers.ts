@@ -7,6 +7,7 @@ import {
 } from "@taverns/api";
 import { Duration, Effect, Layer, Schedule, Stream } from "effect";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { Hob } from "./assistant/Hob.js";
 import { liveHeartbeatSeconds } from "./Config.js";
 import { Health } from "./Health.js";
 import { LiveEvents } from "./live/LiveEvents.js";
@@ -240,6 +241,31 @@ const SearchLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * Hob.
+ *
+ * As thin as the rest, which is the point worth noticing here more than
+ * anywhere: an assistant is the endpoint most likely to grow a "gather the
+ * context" block in its handler, and there is none. `Hob.ask` returns the
+ * stream and every fact in it arrives through an actor-scoped repository call
+ * inside the toolkit — see `assistant/toolkit.ts`.
+ *
+ * `ask` is a `POST` that answers with a stream, and the ordering is the same one
+ * `live.events` depends on: `Hob.ask`'s `Effect` half resolves the actor and
+ * reads the campaign, so an unreachable campaign is a real 404 and an
+ * unconfigured server a real 503, both before the response body opens.
+ */
+const HobLive = HttpApiBuilder.group(
+  TavernsApi,
+  "hob",
+  Effect.fnUntraced(function* (handlers) {
+    const hob = yield* Hob;
+    return handlers
+      .handle("status", ({ params }) => hob.status(params.campaignId))
+      .handle("ask", ({ params, payload }) => hob.ask(params.campaignId, payload));
+  }),
+);
+
 const RunsLive = HttpApiBuilder.group(
   TavernsApi,
   "runs",
@@ -446,6 +472,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     PrepLive,
     BeatsLive,
     SearchLive,
+    HobLive,
     RunsLive,
     CombatantsLive,
     LiveLive,

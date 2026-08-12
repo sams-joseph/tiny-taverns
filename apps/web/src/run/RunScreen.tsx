@@ -265,7 +265,7 @@ export function RunScreen({
         route={route}
         fill
         onAskHob={hob.toggle}
-        panel={<Hob hob={hob} />}
+        panel={<Hob hob={hob} campaignId={campaignId} />}
         context={
           view === undefined ? undefined : (
             // The campaign's name is the link back to prep. The rail spelled

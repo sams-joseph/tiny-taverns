@@ -165,7 +165,7 @@ export function BestiaryScreen({
     <AppShell
       route={route}
       onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
+      panel={<Hob hob={hob} campaignId={campaignId} />}
       context={
         shown === undefined ? undefined : (
           // The campaign's name is the way back to prep, exactly as it is from a
