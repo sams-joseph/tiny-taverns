@@ -39,12 +39,16 @@ interface NavItem {
  * meant. A nav item that goes nowhere is the same lie as a stubbed field, so the
  * row carries what exists.
  *
- * **`Bestiary` is here only once a campaign is**, for the same reason and one
- * more: `creatures.list` hangs off `/campaigns/:campaignId/creatures`, so the
- * bestiary has no meaning without a campaign to read it through — and the path
- * is the *only* thing gating the global `system` rows it returns. From the
- * campaign list there is no campaign yet, so the item is absent rather than
- * disabled.
+ * **`Bestiary` and `Chronicle` are here only once a campaign is**, for the same
+ * reason and one more: `creatures.list` hangs off
+ * `/campaigns/:campaignId/creatures` and every source the Chronicle reads hangs
+ * off `/campaigns/:campaignId` too, so neither has a meaning without a campaign
+ * to read it through — and on both the path is the *only* thing scoping what
+ * comes back. From the campaign list there is no campaign yet, so the items are
+ * absent rather than disabled.
+ *
+ * The third delivery adds `Chronicle` with `scroll-text`
+ * (`AppShell.jsx`'s one new line), which is the order kept here.
  */
 const navFor = (route: Route): ReadonlyArray<NavItem> => {
   const campaignId = "campaignId" in route ? route.campaignId : undefined;
@@ -58,6 +62,11 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
             icon: "footprints",
             route: { screen: "bestiary", campaignId },
           } satisfies NavItem,
+          {
+            label: "Chronicle",
+            icon: "scroll-text",
+            route: { screen: "chronicle", campaignId },
+          } satisfies NavItem,
         ]),
     { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
   ];
@@ -69,11 +78,13 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
  * A campaign and the fight inside it are both *within* Campaigns, so those
  * routes light the same item — the underline says which part of the app you are
  * in, not which URL you are at, and an unlit nav on a campaign page reads as a
- * bug. The bestiary is its own section: it is a screen you go *to* from a
- * campaign rather than a view of one.
+ * bug. The bestiary and the Chronicle are their own sections: they are screens
+ * you go *to* from a campaign rather than views of one.
  */
 const sectionOf = (route: Route): Route["screen"] =>
-  route.screen === "gallery" || route.screen === "bestiary" ? route.screen : "campaigns";
+  route.screen === "gallery" || route.screen === "bestiary" || route.screen === "chronicle"
+    ? route.screen
+    : "campaigns";
 
 /**
  * A nav item, wearing `Tabs`' own recipe.

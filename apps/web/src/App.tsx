@@ -1,6 +1,7 @@
 import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
 import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
@@ -29,6 +30,13 @@ export function App() {
         // and the "is this list empty at all" answer are accumulated from what
         // has been read, and neither should survive into another campaign's.
         <BestiaryScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
+      );
+    case "chronicle":
+      return (
+        // A different campaign is a different record: which night is open and
+        // what has been searched for belong to the one being read, and neither
+        // should survive into another.
+        <ChronicleScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
       );
     case "run":
       return (

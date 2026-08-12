@@ -829,9 +829,11 @@ expect to bypass it in the dashboard for a development instance.
 
 ## Screens in `apps/web`: the shape every new one should copy
 
-The campaign view is the first screen built on the API, the runner is the second and the
-bestiary is the third. Five things are settled by them; follow them rather than re-deriving
-them.
+The campaign view is the first screen built on the API, the runner is the second, the bestiary
+the third and the Chronicle the fourth. Five things are settled by them; follow them rather than
+re-deriving them. (The Chronicle keeps all five and adds one qualification to the first — see
+its own section below: the recap of a night is loaded by the card that shows it, because one
+`Effect` per screen would mean one recap per night just to draw a list.)
 
 - **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
   (two rounds, concurrent within a round, because the checklist hangs off
@@ -1573,6 +1575,73 @@ to "Loading…" on every keystroke. Measured in Chromium against a real server a
 3 × 448px columns at 1440 and 2 × 410px at 900 with no horizontal document scroll; the stat
 block dialog at `z-dialog` 110 over a scrim at `z-scrim` 100, `elementFromPoint` inside it
 returning the dialog; a pressed chip at `--accent-soft` on `--accent` with `--accent-ink` text.
+
+## The Chronicle screen: the recap, the record, and the one number that lies
+
+`apps/web/src/chronicle/` is `ui_kits/dm-screen/Chronicle.jsx` against the real API — a spine of
+nights newest first, one card open at a time, a _Read aloud_ toggle, and a search box over the
+whole record. Route `#/campaigns/:c/chronicle`, nav item `scroll-text`, added by `navFor` only
+once the route names a campaign, exactly as _Bestiary_ is.
+
+**The carried-fight round is the thing to get right, and it is invisible when wrong.** A fight
+that crossed a night is two runs, and `RecapRunLink` carries the _other_ run's round at each end
+— two `Int`s on one shape that mean different things, so swapping them compiles, renders and
+reads plausibly:
+
+| rendering                                            | round to use              | why                                                    |
+| ---------------------------------------------------- | ------------------------- | ------------------------------------------------------ |
+| "Paused at round N", on the night it paused          | **`run.round`** — its own | frozen when the night ended; a fact about _this_ night |
+| "Session M picked it up, and it has reached round K" | `continuedInto.round`     | the successor _now_, wherever it has got to since      |
+| "Resumed from round N of session M"                  | `continuedFrom.round`     | the predecessor's frozen round — the pause             |
+
+`chronicle/fight.ts` is the only place any of it is worded, and `fight.test.ts` pins both
+directions against a fixture where the two numbers **differ** (paused at 4, since reached 7) —
+with the numbers equal, the assertion holds whichever the screen picked. Verified in Chromium
+against a real carried fight: session 11's card reads _"Paused at round 4 when the night ended."_
+and _"Session 12 picked it up, and it has reached round 7 there."_, session 12's reads _"Resumed
+from round 4 of session 11."_ and _"On the table now, at round 7."_, and neither names the other's
+number. `"has reached"`, not `"is at"`: the link carries no end time, so the successor may be over.
+The state itself comes from `run.endedReason`, never guessed from `endedAt`.
+
+Five more things this screen settled:
+
+- **The spine loads; the recaps do not.** This is the one screen where "one `Effect`, six calls"
+  would be wrong: a recap reaches five tables, and a twenty-night campaign would fire twenty of
+  them to draw a list. `load.ts` loads the campaign, `sessions.list` and the current night's
+  checklist; `RecapBody` is mounted only while its card is open and reads that one recap. Only one
+  card opens at a time (the delivery's own behaviour), so it is one request, and a collapsed row
+  costs none — pinned by a test. The stated cost: **a collapsed card cannot show a summary**,
+  because a summary _is_ a recap and nothing stores one.
+- **Everything the delivery draws that has no column is absent, not stubbed** — the summary, the
+  quote, who you met, where you went, loot, XP, level-ups, the _Recap session N_ button and the
+  _Redraft / Edit / Keep it_ row. The last two are the assistant's; `RecapBody`'s `Drafted` badge
+  reads `origin` instead, so it will appear by itself the day something writes an `assistant` row.
+  _"Threads still open"_ is the one substitution made rather than dropped: it is the **unticked
+  half of the current night's checklist**, which `Recap.ts` already names as what the next night
+  inherits, and the aside says which night it is reading so the claim stays checkable.
+- **A search answer carries its own query** (`SearchAnswer.q`), and that is not decoration. The box
+  is debounced, so `q` moves before the request that follows it lands; rendering a count beside the
+  _current_ `q` says "0 results for quokka" about a search for `quokk` — measured, in those words,
+  before the field existed. It is also the string the excerpt highlighting is computed against.
+- **`source` is one scalar or absent**, and the control is single-choice for that reason alone —
+  see `Search.ts` and the bestiary's environment chips, the same wire defect met from the other
+  side. Confirmed at the network layer in Chromium: `?q=ferryman` with no `source`, then
+  `?q=ferryman&source=beat`, one occurrence, 3 hits narrowing to 1. Do not widen it to an array.
+- **The excerpt is plain text and is rendered as elements, never as markup.** `search.ts`'s
+  `segments` splits the snippet against the query's terms — minus the operators
+  `websearch_to_tsquery` reads (`-` excludes, `or` joins), because highlighting an excluded word
+  misreports why the row matched — and the pieces are rendered as spans. A snippet containing
+  `<b>` shows those characters. An **empty** snippet renders nothing at all: a creature's snippet
+  is its stat block's meta line and a creature typed in a hurry has none (measured: `"Ferryman's
+Shade"` came back with `snippet: ""`).
+
+Two smaller things, both measured in Chromium at 1440×900 against a real four-night campaign:
+the aside is **not** sticky though the delivery draws it so — the scroll container is the shell's
+column and `TopBar` is already sticky at its top, so an aside pinned to the same edge parks its
+heading underneath the bar, and the offset that would fix it is the bar's height, which is not a
+token. And read-aloud mode **drops** the DM half rather than restyling it (no aside, no _At the
+table_, no _Questions you answered_), leaving beats and read-aloud notes in Alegreya at 18px
+(`--fs-body-l`) on a 671px measure.
 
 ## Hob: the chat surface is built, and nothing is behind it
 

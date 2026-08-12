@@ -21,6 +21,7 @@ describe("hash routes", () => {
       { screen: "gallery" },
       { screen: "campaign", campaignId: CAMPAIGN_ID },
       { screen: "bestiary", campaignId: CAMPAIGN_ID },
+      { screen: "chronicle", campaignId: CAMPAIGN_ID },
       { screen: "run", campaignId: CAMPAIGN_ID, sessionId: SESSION_ID, runId: RUN_ID },
     ];
     for (const route of routes) {
@@ -46,6 +47,22 @@ describe("hash routes", () => {
       campaignId: CAMPAIGN_ID,
     });
     expect(parseRoute("#/campaigns/not-a-uuid/bestiary")).toEqual({ screen: "campaigns" });
+  });
+
+  it("hangs the chronicle off a campaign too, for the same reason", () => {
+    // Every source it reads — `sessions.list`, `recap.read`, `search.search` —
+    // is under `/campaigns/:campaignId`, and on the search endpoint that path is
+    // a security property rather than a routing one.
+    expect(parseRoute(`#/campaigns/${CAMPAIGN_ID}/chronicle`)).toEqual({
+      screen: "chronicle",
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(parseRoute("#/campaigns/not-a-uuid/chronicle")).toEqual({ screen: "campaigns" });
+    // An unknown section under a real campaign is that campaign, not a 404.
+    expect(parseRoute(`#/campaigns/${CAMPAIGN_ID}/chronicles`)).toEqual({
+      screen: "campaign",
+      campaignId: CAMPAIGN_ID,
+    });
   });
 
   it("falls back a level, not all the way, on a half-typed run link", () => {

@@ -28,6 +28,14 @@ export type Route =
    * top-level `#/bestiary` would have no campaign to read *through*.
    */
   | { readonly screen: "bestiary"; readonly campaignId: CampaignId }
+  /**
+   * The Chronicle names a campaign for the same reason the bestiary does: every
+   * source it reads — `sessions.list`, `recap.read`, `search.search` — hangs off
+   * `/campaigns/:campaignId`, and on the search endpoint that path is a security
+   * property rather than a routing one (see `Api.ts`). A top-level
+   * `#/chronicle` would have no campaign whose record to read.
+   */
+  | { readonly screen: "chronicle"; readonly campaignId: CampaignId }
   | {
       readonly screen: "run";
       readonly campaignId: CampaignId;
@@ -72,6 +80,7 @@ export const parseRoute = (hash: string): Route => {
     const campaignId = parseCampaignId(campaignRaw);
     if (campaignId !== undefined) {
       if (section === "bestiary") return { screen: "bestiary", campaignId };
+      if (section === "chronicle") return { screen: "chronicle", campaignId };
       if (section === "sessions" && runs === "runs") {
         const sessionId = parseSessionId(sessionRaw);
         const runId = parseRunId(runRaw);
@@ -96,6 +105,8 @@ export const hrefFor = (route: Route): string => {
       return `#/campaigns/${route.campaignId}`;
     case "bestiary":
       return `#/campaigns/${route.campaignId}/bestiary`;
+    case "chronicle":
+      return `#/campaigns/${route.campaignId}/chronicle`;
     case "run":
       return `#/campaigns/${route.campaignId}/sessions/${route.sessionId}/runs/${route.runId}`;
     default:
