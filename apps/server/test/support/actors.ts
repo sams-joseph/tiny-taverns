@@ -1,8 +1,9 @@
-import { Actor, type CampaignId, CurrentActor, type NotFound } from "@taverns/api";
+import { Actor, type AccountId, type CampaignId, CurrentActor, type NotFound } from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "../../src/Accounts.js";
 import { type DmActor, DmActors } from "../../src/repo/DmActor.js";
+import { Invites } from "../../src/repo/Invites.js";
 
 /**
  * The actors every repository test needs, and what each of them is now that
@@ -46,36 +47,69 @@ export const scopedTo = (actor: Actor, campaignId: CampaignId): Actor =>
   new Actor({ accountId: actor.accountId, campaignId });
 
 /**
- * A player at somebody else's table.
+ * A player at somebody else's table — **minted by the product, through a real
+ * invitation.**
  *
- * **The `campaign_member` row is written here with raw SQL, and that is
- * deliberate rather than a shortcut.** `apps/server/src` has exactly one
- * membership writer (`repo/Memberships.ts`'s `addOwner`) and it cannot express
- * a player: there is no invite yet, and until there is, the honest state of the
- * product is that no player membership can be minted at all. This is a test
- * reaching past the product to build a state the product cannot yet produce,
- * and it should look like one — step 4 replaces it with a redeemed invite, and
- * the diff that does so will be exactly this function.
+ * This function used to insert a `campaign_member` row with raw SQL, and said so
+ * at length: `apps/server/src` had exactly one membership writer, `addOwner`,
+ * which cannot express a player, so the honest state of the product was that no
+ * player membership could be minted at all and a test that needed one had to
+ * reach past it. Its own note predicted that step 4 would replace it with a
+ * redeemed invite and that the diff doing so would be exactly this function. It
+ * is.
  *
- * The credential is scoped to the campaign, because that is what an invite will
- * mint: a player has no business reaching the rest of the account it belongs
- * to, and the tests assert both narrowings separately.
+ * Nothing here is a fixture shortcut any more: the DM mints an invitation
+ * through `Invites.create`, a fresh account redeems it through `Invites.redeem`,
+ * and the membership that results is the same row a person following a link
+ * gets. So every player in this suite — ten files, including the one that pins
+ * the DM gate — now exercises the shipped path rather than a hand-built
+ * approximation of it, and a refusal that stops being true of a *real* player
+ * fails somewhere instead of staying green against a state nobody can reach.
+ *
+ * The DM is looked up rather than passed, so the ten call sites did not have to
+ * change: a campaign's DM is its live `dm` member, which is exactly what
+ * `Invites.create` checks for one line later.
+ *
+ * The credential is scoped to the campaign, because that is what a player's
+ * credential should be: a player has no business reaching the rest of the
+ * account it belongs to, and the tests assert both narrowings separately.
  */
 export const aPlayerAt = (
   campaignId: CampaignId,
   name: string,
-): Effect.Effect<Actor, never, Accounts | SqlClient.SqlClient> =>
+): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const invites = yield* Invites;
+    const dm = yield* dmOf(campaignId);
+    const issued = yield* Effect.provideService(
+      invites.create(campaignId, { label: name }),
+      CurrentActor,
+      dm,
+    );
+    const account = yield* anAccount(name);
+    yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
+    return scopedTo(account, campaignId);
+  }).pipe(Effect.orDie);
+
+/**
+ * The campaign's DM, as an actor — who a test has to be in order to invite
+ * somebody.
+ *
+ * Asked of `campaign_member` rather than of `campaign.account_id`: since `0011`
+ * the DM of a campaign *is* its live `dm` member, and this is the same question
+ * `Invites.create` asks through `campaignWritable` one line later. Naming the
+ * table here is a test reaching for a fact rather than a reach path — the grep
+ * in `membership.test.ts` governs `src`, which is where the rule matters.
+ */
+const dmOf = (campaignId: CampaignId): Effect.Effect<Actor, never, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const account = yield* anAccount(name);
-    yield* sql`
-      insert into campaign_member ${sql.insert({
-        campaign_id: campaignId,
-        account_id: account.accountId,
-        role: "player",
-      })}
+    const rows = yield* sql<{ readonly account_id: AccountId }>`
+      select account_id from campaign_member
+      where campaign_id = ${campaignId} and role = 'dm' and revoked_at is null
+      order by created_at asc limit 1
     `;
-    return scopedTo(account, campaignId);
+    return new Actor({ accountId: rows[0]!.account_id, campaignId: null });
   }).pipe(Effect.orDie);
 
 /**

@@ -12,6 +12,7 @@ import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { Invites } from "../src/repo/Invites.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
@@ -35,6 +36,7 @@ const runtime = ManagedRuntime.make(
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
+    Invites.layer,
     SessionEvents.layer,
     // Finishing a night now carries a fight still on the table, which
     // appends to the log and rings the doorbell — so `Sessions` is a live

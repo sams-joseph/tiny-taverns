@@ -40,10 +40,20 @@ import {
   EncounterCreatureId,
   EncounterId,
   EncounterRunId,
+  InviteId,
   NoteId,
   PrepItemId,
   SessionId,
 } from "./Ids.js";
+import {
+  CampaignInvite,
+  InviteCreate,
+  InvitePreview,
+  InviteRedeemed,
+  InviteToken,
+  IssuedInvite,
+} from "./Invite.js";
+import { CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
@@ -91,6 +101,118 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
     }),
   )
   .prefix("/campaigns")
+  .middleware(Authorization) {}
+
+/**
+ * The tables this account is at, and what it is at them.
+ *
+ * **The one group in the product that names no campaign**, because it is the
+ * question you ask before you have one: a signed-in account with no membership
+ * anywhere is now a legitimate steady state — somebody who signed up and has
+ * not been invited yet — and this is the read whose empty answer says so.
+ *
+ * It is not a second answer to `campaigns.list`. It composes the identical
+ * predicate (see `CampaignMembership`), so the two cannot disagree about reach;
+ * what it adds is the role, which is a fact about the pair and has nowhere on
+ * the campaign row to live. That is what a player screen will branch on.
+ */
+class MeGroup extends HttpApiGroup.make("me")
+  .add(
+    HttpApiEndpoint.get("campaigns", "/campaigns", {
+      success: Schema.Array(CampaignMembership),
+    }),
+  )
+  .prefix("/me")
+  .middleware(Authorization) {}
+
+/**
+ * Inviting a player to the table — the DM's half.
+ *
+ * Campaign-scoped and DM-only, through the ordinary `campaignWritable`
+ * predicate: an invitation is a credential, so listing or minting one is not
+ * something a player at the table may do. See `CampaignInvite` for the four
+ * lifetime rules and why each is the choice that fails safe.
+ *
+ * `create` is the only endpoint in the product that answers with a secret, and
+ * it answers with it exactly once — the server keeps a digest, so a list can
+ * never show it again. `revoke` is a `POST` rather than a `DELETE` because
+ * nothing is deleted: the row survives with `revokedAt` set, which is what makes
+ * a withdrawn invitation legible in the list rather than simply absent from it.
+ */
+class InvitesGroup extends HttpApiGroup.make("invites")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(CampaignInvite),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: InviteCreate,
+      success: IssuedInvite,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("revoke", "/:inviteId/revoke", {
+      params: { campaignId: CampaignId, inviteId: InviteId },
+      payload: Schema.Struct({}),
+      success: CampaignInvite,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/invites")
+  .middleware(Authorization) {}
+
+/**
+ * What the holder of an invitation can ask before they have an account.
+ *
+ * **The only group in the product with no `Authorization` middleware except
+ * `health`**, and the disclosure it makes is deliberate and bounded: the
+ * campaign's name, the DM's name and when the invitation dies, to whoever holds
+ * a live token and nobody else. It exists so the step between a friend at the
+ * table and the read-aloud text is a page that says what signing in gets you,
+ * rather than a vendor's card in front of a stranger.
+ *
+ * It previews **live invitations only**. Expired, withdrawn and already-spent
+ * tokens are the same `NotFound` an unknown one gets — telling the holder of a
+ * dead token which kind of dead it is discloses that it was ever alive.
+ */
+class InvitePreviewGroup extends HttpApiGroup.make("invitePreview").add(
+  HttpApiEndpoint.post("read", "/invites/preview", {
+    payload: InviteToken,
+    success: InvitePreview,
+    error: NotFound,
+  }),
+) {}
+
+/**
+ * Accepting an invitation — the one endpoint that sits outside every campaign
+ * predicate, because the caller has no reach yet.
+ *
+ * That is exactly the shape of thing that becomes a hole, so three properties
+ * make the carve-out safe rather than merely small:
+ *
+ * - **It takes no account id.** The membership written is `CurrentActor`'s, the
+ *   same way the assistant's tool handlers close over the campaign rather than
+ *   taking one. A caller cannot invite somebody else in.
+ * - **It takes no campaign id either.** The campaign is the invitation's, so a
+ *   caller cannot redeem a token *at* a table of their choosing.
+ * - **It grants a `player` membership and has no way to express another.** A
+ *   `dm` membership is a different act, and it does not share this path.
+ *
+ * Behind `Authorization` like everything else, so the account it grants to is
+ * one the identity layer resolved. `NotFound` covers every refusal — unknown,
+ * expired, withdrawn, spent — and redeeming twice from the same account is the
+ * same success rather than an error, because a double-tapped *Join* is one
+ * person joining once.
+ */
+class JoinGroup extends HttpApiGroup.make("join")
+  .add(
+    HttpApiEndpoint.post("redeem", "/invites/redeem", {
+      payload: InviteToken,
+      success: InviteRedeemed,
+      error: NotFound,
+    }),
+  )
   .middleware(Authorization) {}
 
 class SessionsGroup extends HttpApiGroup.make("sessions")
@@ -770,7 +892,11 @@ class LiveGroup extends HttpApiGroup.make("live")
  */
 export class TavernsApi extends HttpApi.make("taverns")
   .add(HealthGroup)
+  .add(MeGroup)
+  .add(InvitePreviewGroup)
+  .add(JoinGroup)
   .add(CampaignsGroup)
+  .add(InvitesGroup)
   .add(SessionsGroup)
   .add(CharactersGroup)
   .add(NotesGroup)

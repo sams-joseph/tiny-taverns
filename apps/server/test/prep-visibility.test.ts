@@ -6,6 +6,7 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Sessions } from "../src/repo/Sessions.js";
@@ -23,6 +24,7 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Encounters.layer,
+    Invites.layer,
     Notes.layer,
     PrepItems.layer,
     // Finishing a night now carries a fight still on the table, which

@@ -12,6 +12,7 @@ import { CharacterDialog } from "./CharacterDialog";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
+import { InviteDialog } from "./InviteDialog";
 import { loadCampaignView, matches, type CampaignView } from "./load";
 import { NoteDialog } from "./NoteDialog";
 import { NotesList } from "./NotesList";
@@ -66,7 +67,17 @@ type Editing =
   | { readonly what: "note"; readonly note: Note | undefined }
   | { readonly what: "character"; readonly character: Character | undefined }
   /** The campaign's own settings — the one that carries the sharing control. */
-  | { readonly what: "campaign" };
+  | { readonly what: "campaign" }
+  /**
+   * Who is invited to this table, and who can be uninvited.
+   *
+   * Beside the sharing control rather than inside it, because they answer
+   * different halves of one question: `visibility` decides what a player may
+   * read, and an invitation decides whether there is a player at all. Sharing a
+   * campaign with nobody at it does nothing, and inviting somebody to a private
+   * campaign lands them on a blank page — so each dialog names the other.
+   */
+  | { readonly what: "invites" };
 
 /**
  * The party count moved here when the rail did: the top nav carries the name and
@@ -338,6 +349,10 @@ export function CampaignScreen({
                 <Icon name={view.campaign.visibility === "shared" ? "users" : "lock"} size={14} />
                 {view.campaign.visibility === "shared" ? "Shared" : "Private"}
               </Button>
+              <Button variant="secondary" size="sm" onClick={() => setEditing({ what: "invites" })}>
+                <Icon name="user-round" size={14} />
+                Invite
+              </Button>
               <Input
                 aria-label="Search this campaign"
                 placeholder="Search"
@@ -411,6 +426,12 @@ export function CampaignScreen({
       )}
       {editing?.what === "campaign" && view !== undefined && (
         <CampaignDialog campaign={view.campaign} onClose={close} onSaved={saved} />
+      )}
+      {editing?.what === "invites" && view !== undefined && (
+        // `onChanged` rather than `onSaved`: this dialog stays open across
+        // several writes — minting a link, then withdrawing another — so it
+        // re-reads the view underneath without closing itself.
+        <InviteDialog campaign={view.campaign} onClose={close} onChanged={reload} />
       )}
       {finishing && view?.session !== undefined && (
         <FinishSessionDialog

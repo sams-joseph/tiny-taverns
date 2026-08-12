@@ -63,6 +63,7 @@ describe("migrations", () => {
       "assistant_turn",
       "beat",
       "campaign",
+      "campaign_invite",
       "campaign_member",
       "character",
       "combatant",
@@ -76,6 +77,11 @@ describe("migrations", () => {
       "session",
       "session_event",
     ]);
+    // Numbering is load-bearing and the failure is silent: `Migrator.run` keeps
+    // only `currentId > latestMigrationId`, so a file numbered below one that
+    // has already been applied is skipped rather than refused. Two people
+    // numbering in parallel is how that happens; a database that applied 13
+    // before 12 existed needs `pnpm db:reset`, and a fresh one is fine.
     expect(await runtime.runPromise(appliedMigrations)).toEqual([
       { migration_id: 1, name: "init" },
       { migration_id: 2, name: "clerk_identity" },
@@ -89,6 +95,7 @@ describe("migrations", () => {
       { migration_id: 10, name: "assistant_conversation" },
       { migration_id: 11, name: "membership" },
       { migration_id: 12, name: "character_sheet" },
+      { migration_id: 13, name: "invites" },
     ]);
   }, 60_000);
 
@@ -111,6 +118,7 @@ describe("migrations", () => {
       { migration_id: 10, name: "assistant_conversation" },
       { migration_id: 11, name: "membership" },
       { migration_id: 12, name: "character_sheet" },
+      { migration_id: 13, name: "invites" },
     ]);
   }, 60_000);
 });

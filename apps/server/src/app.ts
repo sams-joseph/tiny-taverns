@@ -32,6 +32,8 @@ import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { HobThreads } from "./repo/HobThreads.js";
+import { Invites } from "./repo/Invites.js";
+import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -185,7 +187,9 @@ export const servicesOver = <E>(
   | Health
   | Hob
   | HobThreads
+  | Invites
   | LiveEvents
+  | Memberships
   | Notes
   | PrepItems
   | Proposals
@@ -222,7 +226,14 @@ export const servicesOver = <E>(
     // repository — it is here rather than under `assistant` because the panel
     // reads a thread back over HTTP whether or not a model is configured.
     HobThreads.layer,
+    // Invitations, and the membership they grant. `Invites` writes no
+    // `campaign_member` SQL of its own — it calls `repo/Memberships.ts`, which
+    // with `repo/visibility.ts` is still the only pair of modules in `src` that
+    // names the table. `Memberships` is a service now because membership has an
+    // endpoint now: `GET /me/campaigns`.
+    Invites.layer,
     LiveEvents.layer,
+    Memberships.layer,
     Notes.layer,
     PrepItems.layer,
     // The accept path: the only writer of `origin = 'assistant'`. It composes
@@ -304,7 +315,9 @@ export const applicationOver = <E>(
     | Health
     | Hob
     | HobThreads
+    | Invites
     | LiveEvents
+    | Memberships
     | Notes
     | PrepItems
     | Proposals

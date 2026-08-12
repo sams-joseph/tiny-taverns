@@ -50,7 +50,14 @@ describe("the API declaration", () => {
       .filter(({ middlewares }) => !middlewares.has(Authorization))
       .map(({ path }) => path);
 
-    expect(unauthenticated).toEqual(["health.check"]);
+    // **Two, and the second was a deliberate act.** `invitePreview.read` is the
+    // invitation page's read: it answers before its reader has an account,
+    // which is the entire point of it, so there is no actor to put above it. It
+    // is scoped by the token instead — a live invitation and nothing else —
+    // and what it discloses is bounded to the campaign's name, the DM's name
+    // and a deadline. See `Invite.ts` for the trade and `repo/Invites.ts` for
+    // the read. Adding a third name here should be at least as hard.
+    expect(unauthenticated).toEqual(["health.check", "invitePreview.read"]);
   });
 
   it("declares the groups the product has today, and no more", () => {
@@ -64,7 +71,11 @@ describe("the API declaration", () => {
       "encounters",
       "health",
       "hob",
+      "invitePreview",
+      "invites",
+      "join",
       "live",
+      "me",
       "notes",
       "prep",
       "recap",

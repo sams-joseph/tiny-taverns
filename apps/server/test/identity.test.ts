@@ -5,7 +5,7 @@ import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Accounts } from "../src/Accounts.js";
+import { Accounts, DEFAULT_ACCOUNT_NAME } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { ClerkIdentityProvider } from "../src/ClerkIdentityProvider.js";
 import { migratedDatabase } from "./support/database.js";
@@ -120,7 +120,14 @@ describe("a session token from the configured provider", () => {
 
     const accounts = await accountsWithSubject("user_nameless");
     expect(accounts).toHaveLength(1);
-    expect(accounts[0]?.name).toBe("DM");
+    expect(accounts[0]?.name).toBe(DEFAULT_ACCOUNT_NAME);
+    // And it names no role. Just-in-time provisioning runs on the first
+    // authenticated request from anyone, which since the invite landed is as
+    // often a player following a link as it is a DM starting a table — so the
+    // fallback that said "DM" would now be wrong for most accounts, and wrong
+    // in the one place a name is rendered: the invitation page, which says who
+    // is asking.
+    expect(DEFAULT_ACCOUNT_NAME).not.toBe("DM");
   }, 60_000);
 
   it("produces an actor indistinguishable from a machine token's below the seam", async () => {

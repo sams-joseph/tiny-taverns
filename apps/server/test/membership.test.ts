@@ -47,7 +47,12 @@ import { migratedDatabase } from "./support/database.js";
  *   1. the two greps, in the shape of `seam.test.ts` and `hob.test.ts`
  *   2. a campaign cannot exist without a DM — the composite key, driven
  *   3. a stranger reads nothing, from all fourteen content tables
- *   4. no player actor can be minted yet, which is step 4's job
+ *   4. what an account is before anybody invites it
+ *
+ * The fourth block used to be "no player actor can be minted yet". The invite
+ * landed, so it is not that any more; `invites.test.ts` is where the player it
+ * mints is measured, and what is left here is the complement — an account
+ * nobody has invited still reaches only what it created.
  */
 
 const sourceDirectory = fileURLToPath(new URL("../src", import.meta.url));
@@ -129,20 +134,33 @@ describe("the reach seam, enforced rather than asserted", () => {
     ]);
   });
 
-  it("mints no player membership anywhere in the product", () => {
-    // Step 4's job, and until then this is the honest state: the only
-    // membership writer in `src` takes no role, so a player membership is not
-    // something a caller might forget to refuse — it is not expressible.
-    // `test/support/actors.ts` writes one with raw SQL precisely so that
-    // reaching past the product looks like reaching past the product.
+  it("mints exactly two memberships, and neither takes a role", () => {
+    // The old rule here was that **nothing** in `src` writes a `player`
+    // membership, which was the honest state of the product until the invite
+    // landed: `addOwner` took no role, so a player membership was not something
+    // a caller might forget to refuse — it was not expressible. That is spent,
+    // and what replaces it has to be at least as structural, because the thing
+    // it now keeps out is worse than a player: a DM.
     expect(mentioning(/insert into campaign_member/)).toEqual(["repo/Memberships.ts"]);
 
-    // Not a style rule: `dm` is the only role literal the one insert can write.
-    // `MemberRole` still names both values — the column carries both from the
-    // first migration so that co-DMs stay additive — which is why this asks
-    // about the assignment rather than about the word.
-    expect(code("repo/Memberships.ts").match(/role:\s*"[a-z]+"/g)).toEqual(['role: "dm"']);
-    expect(mentioning(/role:\s*"player"/)).toEqual([]);
+    // Two writers, and each spells its role as a **SQL literal** rather than
+    // taking one. So "an invitation cannot become a DM membership" is a fact
+    // about which statements exist rather than a check somebody performs — and
+    // a third role literal, or one interpolated from a variable, fails here.
+    const memberships = code("repo/Memberships.ts");
+    expect(memberships.match(/, '(dm|player)'\)/g)).toEqual([", 'dm')", ", 'player')"]);
+
+    // …and no membership writer accepts a role. `MemberRole` still names both
+    // values — the column carries both from the first migration so that co-DMs
+    // stay additive — and it appears in this file as the *column type of a row a
+    // read maps*, which is `readonly role: MemberRole;`. A parameter is the same
+    // words followed by a comma or a closing bracket, and there is none.
+    expect(memberships).not.toMatch(/\brole: MemberRole[,)]/);
+
+    // The invite repository, which is what mints the first player the product
+    // has ever had, does not mention a role at all: it calls `admitPlayer`,
+    // which has only one.
+    expect(code("repo/Invites.ts")).not.toMatch(/\brole\b/);
   });
 });
 
@@ -457,7 +475,9 @@ describe("a stranger reads nothing", () => {
         const rows = yield* sql<{ readonly table_name: string }>`
           select table_name from information_schema.tables
           where table_schema = 'public'
-            and table_name not in ('account', 'campaign_member', 'effect_sql_migrations')
+            and table_name not in (
+              'account', 'campaign_member', 'campaign_invite', 'effect_sql_migrations'
+            )
           order by table_name
         `;
         return rows.map((row) => row.table_name);
@@ -499,7 +519,7 @@ describe("a stranger reads nothing", () => {
   }
 });
 
-describe("no player actor can be minted yet", () => {
+describe("what an account is before anybody invites it", () => {
   it("gives a machine token an actor with no role on it at all", async () => {
     // The retrofit's load-bearing property, restated as an assertion because it
     // is otherwise only visible as the absence of a compile error. A role on
@@ -520,11 +540,12 @@ describe("no player actor can be minted yet", () => {
     ]);
   });
 
-  it("makes every campaign a fresh account reaches one it is the DM of", async () => {
-    // Which is the same statement from the other end: with no invite, the only
-    // membership an account can acquire is the one `Campaigns.create` writes,
-    // so "an account that is a player somewhere" is a state the product has no
-    // path to. Step 4 is what changes this, and it is meant to.
+  it("makes every campaign an uninvited account reaches one it is the DM of", async () => {
+    // The other membership writer now exists — `Invites.redeem` — but it is the
+    // *only* other one, and it runs when a person accepts an invitation. So an
+    // account nobody has invited is still a DM of everything it reaches, which
+    // is what keeps a campaign's own creation from quietly acquiring players.
+    // `invites.test.ts` is where the redeemed half is pinned.
     const rows = await runtime.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;

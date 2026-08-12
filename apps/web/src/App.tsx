@@ -3,11 +3,12 @@ import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
+import { JoinScreen } from "./join/JoinScreen";
 import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
 
 /**
- * Five screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Six screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
@@ -22,6 +23,13 @@ export function App() {
   switch (route.screen) {
     case "gallery":
       return <Gallery route={route} />;
+    case "join":
+      return (
+        // Keyed on the token: a second invitation opened in the same tab is a
+        // different invitation, and neither its preview nor the "you are in"
+        // panel from the first should survive into it.
+        <JoinScreen key={route.token} token={route.token} route={route} />
+      );
     case "campaign":
       return <CampaignScreen campaignId={route.campaignId} route={route} />;
     case "bestiary":

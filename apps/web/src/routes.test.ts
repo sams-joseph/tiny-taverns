@@ -23,6 +23,7 @@ describe("hash routes", () => {
       { screen: "bestiary", campaignId: CAMPAIGN_ID },
       { screen: "chronicle", campaignId: CAMPAIGN_ID },
       { screen: "run", campaignId: CAMPAIGN_ID, sessionId: SESSION_ID, runId: RUN_ID },
+      { screen: "join", token: "aG93LWRvLXlvdS1kbw" },
     ];
     for (const route of routes) {
       expect(parseRoute(hrefFor(route))).toEqual(route);
@@ -36,6 +37,20 @@ describe("hash routes", () => {
       sessionId: SESSION_ID,
       runId: RUN_ID,
     });
+  });
+
+  it("carries an invitation token in the fragment, and refuses a mangled one", () => {
+    // The fragment is the point: a browser never sends it to a server, so the
+    // token stays out of access logs and out of the `Referer` of anything the
+    // join page links to. base64url is the alphabet `randomBytes(32)` produces,
+    // so a link a chat client wrapped is refused here rather than sent onwards
+    // to be refused there.
+    expect(parseRoute("#/join/aG93LWRvLXlvdS1kbw")).toEqual({
+      screen: "join",
+      token: "aG93LWRvLXlvdS1kbw",
+    });
+    expect(parseRoute("#/join/not a token")).toEqual({ screen: "campaigns" });
+    expect(parseRoute("#/join")).toEqual({ screen: "campaigns" });
   });
 
   it("hangs the bestiary off a campaign, because the API does", () => {

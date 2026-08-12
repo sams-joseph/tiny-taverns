@@ -4,12 +4,13 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Notes.layer).pipe(
+  Layer.mergeAll(Accounts.layer, Campaigns.layer, Invites.layer, Notes.layer).pipe(
     Layer.provideMerge(migratedDatabase("taverns_test_visibility")),
   ),
 );

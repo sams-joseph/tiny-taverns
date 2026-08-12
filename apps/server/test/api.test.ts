@@ -544,6 +544,119 @@ describe("the bestiary", () => {
   }, 60_000);
 });
 
+describe("inviting a player, over the wire", () => {
+  it("mints, previews without a credential, redeems as a second account, and lists both sides", async () => {
+    // The whole invitation, through the derived client rather than through the
+    // repositories — so the payloads, the params and the two response shapes are
+    // the ones a browser actually sees. `preview` is issued by the *anonymous*
+    // client, which is the property that matters most here: the page a stranger
+    // opens has no credential yet, and if that ever starts needing one the join
+    // flow is broken for exactly the people it exists for.
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const dm = yield* clientFor(token);
+        const campaign = yield* dm.campaigns.create({
+          payload: { name: "The Ferry at Dusk", visibility: "shared" },
+        });
+        const campaignId = campaign.id;
+
+        const issued = yield* dm.invites.create({
+          params: { campaignId },
+          payload: { label: "Ilse" },
+        });
+        const preview = yield* Effect.flatMap(anonymous, (client) =>
+          client.invitePreview.read({ payload: { token: issued.token } }),
+        );
+
+        // A second account, with a credential of its own — which is the whole
+        // model: a link is an invitation to *join*, and joining needs an account.
+        const players = yield* Accounts;
+        const playerToken = (yield* players.issue("Ilse")).token;
+        const player = yield* clientFor(playerToken);
+
+        const before = yield* player.me.campaigns();
+        const redeemed = yield* player.join.redeem({ payload: { token: issued.token } });
+        const after = yield* player.me.campaigns();
+
+        const listed = yield* dm.invites.list({ params: { campaignId } });
+        // The player may read the campaign's shared half and may not write it.
+        const refusedWrite = yield* Effect.result(
+          player.notes.create({ params: { campaignId }, payload: { title: "mine now" } }),
+        );
+        // …and the invitation list is a DM's own resource.
+        const refusedList = yield* Effect.result(player.invites.list({ params: { campaignId } }));
+
+        const revoked = yield* dm.invites.revoke({
+          params: { campaignId, inviteId: issued.invite.id },
+          payload: {},
+        });
+        const afterRevoke = yield* player.me.campaigns();
+
+        return {
+          campaign,
+          issued,
+          preview,
+          before,
+          redeemed,
+          after,
+          listed,
+          refusedWrite,
+          refusedList,
+          revoked,
+          afterRevoke,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    // Minted: the row, and the one and only appearance of the token.
+    expect(seen.issued.invite.status).toBe("live");
+    expect(seen.issued.invite.label).toBe("Ilse");
+    expect(seen.issued.token).not.toBe("");
+
+    // Previewed with no `Authorization` header at all.
+    expect(seen.preview.campaignName).toBe("The Ferry at Dusk");
+    expect(seen.preview.dmName).toBe("Jo");
+
+    // Joined. The account went from no tables to exactly this one, as a player.
+    expect(seen.before).toEqual([]);
+    expect(seen.redeemed.campaignName).toBe("The Ferry at Dusk");
+    expect(seen.redeemed.shared).toBe(true);
+    expect(seen.after.map((row) => [row.campaign.name, row.role])).toEqual([
+      ["The Ferry at Dusk", "player"],
+    ]);
+
+    // The DM's list says who took it; the token is not in it.
+    expect(seen.listed.map((invite) => [invite.status, invite.redeemedByName])).toEqual([
+      ["redeemed", "Ilse"],
+    ]);
+    expect(JSON.stringify(seen.listed)).not.toContain(seen.issued.token);
+
+    expect(seen.refusedWrite._tag).toBe("Failure");
+    expect(seen.refusedList._tag).toBe("Failure");
+
+    // Withdrawn after acceptance: reach goes with it.
+    expect(seen.revoked.status).toBe("revoked");
+    expect(seen.afterRevoke).toEqual([]);
+  }, 60_000);
+
+  it("refuses an unknown token the same way it refuses a used one", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* anonymous;
+        return yield* Effect.flip(client.invitePreview.read({ payload: { token: "invented" } }));
+      }).pipe(Effect.orDie),
+    );
+
+    // `NotFound` and nothing else — the declared error, decoded, naming the
+    // invitation rather than the campaign, so nothing about which campaigns
+    // exist leaks either. The flip's type is the endpoint's error channel plus
+    // the client's own transport failures, so the tag is narrowed rather than
+    // read straight off.
+    expect(seen._tag).toBe("NotFound");
+    expect(seen._tag === "NotFound" ? seen.resource : undefined).toBe("invite");
+  }, 60_000);
+});
+
 describe("declared errors reach the client as declared errors", () => {
   it("reports a duplicate session number as Conflict", async () => {
     const error = await runtime.runPromise(

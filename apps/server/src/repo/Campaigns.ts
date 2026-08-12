@@ -15,7 +15,14 @@ import { addOwner } from "./Memberships.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { campaignReadable, campaignWritable, rowWritable } from "./visibility.js";
 
-interface CampaignRow extends ProvenanceColumns {
+/**
+ * Exported for `repo/Memberships.ts`, which selects `campaign.*` beside the
+ * actor's own membership row — the same rule `Recap.ts` follows, and the reason
+ * it is a rule: **one mapper per table**, imported where a second read needs it
+ * rather than restated. A second `toCampaign` is a second answer to what a
+ * campaign is on the wire.
+ */
+export interface CampaignRow extends ProvenanceColumns {
   readonly id: CampaignId;
   readonly name: string;
   readonly party_name: string | null;
@@ -24,7 +31,7 @@ interface CampaignRow extends ProvenanceColumns {
   readonly archived_at: Date | null;
 }
 
-const toCampaign = (row: CampaignRow): Campaign =>
+export const toCampaign = (row: CampaignRow): Campaign =>
   new Campaign({
     id: row.id,
     name: row.name,

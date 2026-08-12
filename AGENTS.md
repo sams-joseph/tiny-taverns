@@ -431,6 +431,12 @@ dialects are not portable, so this is settled.
   Nothing secret lives there — same throwaway credentials as `compose.yaml`, loopback only.
 - **Migrations are forward-only.** `effect/unstable/sql/Migrator` has no down-migration
   concept; do not invent one. A mistake is corrected by a new migration.
+- **A migration whose id is below the highest already applied is _skipped, silently_.**
+  `Migrator.run` keeps only `currentId > latestMigrationId` (see
+  `.repos/effect/packages/effect/src/unstable/sql/Migrator.ts`), so two people numbering in
+  parallel can leave a gap that never fills: whichever lands second is never run on a database
+  that already applied the higher number. Fresh databases are fine. If it happens, renumber the
+  latecomer or `pnpm db:reset` — and do not assume a green boot means every file ran.
 - Add `apps/server/src/migrations/NNNN_name.ts`, default-exporting an
   `Effect<unknown, unknown, SqlClient>`. They live under `src/` so `tsc` emits them to
   `dist/migrations/*.js`; `Database.migrationsDirectory` resolves from `import.meta.url`, so
@@ -474,13 +480,20 @@ non-negotiable, because it is free on day one and a retrofit later.
   another _at the same time, on the same credential_, so "may this actor see `dm` rows" is a
   question about a pair — this account, this campaign — and a pair is a row. `isDm` in
   `visibility.ts` is that question. `Actor` is `{ accountId, campaignId }` and nothing else.
-- **No player membership exists yet, and that is structural rather than a convention.**
-  `repo/Memberships.ts` has one writer, it takes no role, and it writes the owner's `dm` row —
-  so a player membership is not something a caller might forget to refuse, it is not
-  expressible. The invite that mints one is a later step. Tests that need a player therefore
-  reach past the product: `apps/server/test/support/actors.ts`'s `aPlayerAt` is an account plus
-  a raw-SQL `campaign_member` row, written that way so it _looks_ like reaching past the
-  product. `anAccount` and `scopedTo` are the other two; no test constructs an `Actor` by hand.
+- **Two membership writers exist, neither takes a role, and both spell it as a SQL literal.**
+  `repo/Memberships.ts` is still the only module that writes the table: `addOwner` writes `'dm'`
+  inside `Campaigns.create`'s transaction, `admitPlayer` writes `'player'` inside
+  `Invites.redeem`'s. So "an invitation cannot become a DM membership" is a fact about which
+  statements exist rather than a check somebody performs, and `membership.test.ts` greps for a
+  third role literal, for an interpolated one, and for a writer that takes a `MemberRole`
+  argument. `revokePlayerAt` is the third function there and its `where` names `role = 'player'`
+  for the same reason — no bug upstream can turn "withdraw an invitation" into "unseat the DM".
+  Co-DMs stay a settled _no_; when they arrive they must be their own act, not this path with a
+  role argument. `apps/server/test/support/actors.ts`'s `aPlayerAt` **mints its player through a
+  real invitation** now (it used to insert the row with raw SQL and said so at length), so every
+  player in the suite — ten files, including the one that pins the DM gate — exercises the
+  shipped path. `anAccount` and `scopedTo` are the other two; no test constructs an `Actor` by
+  hand.
 - **Membership and credential scope narrow independently, and both apply to every read.**
   `Actor.campaignId` is still the reach of the credential: `null` for an account-wide token, a
   campaign id for one minted for a single table. Membership says which campaigns the account
@@ -556,6 +569,76 @@ non-negotiable, because it is free on day one and a retrofit later.
   tables; it is deliberately left alone because the player Chronicle is a planned screen and
   gating it would settle that screen's shape by accident — so it is a decision to take, not a
   divergence to discover.
+
+### The invitation: a credential, and the four rules that bound it
+
+**A link is an invitation to join, not a way in.** Following one requires signing in or signing
+up; its whole effect is to grant a `campaign_member` row to the account that accepts it. It is
+explicitly **not** a bearer credential over campaign data, not a guest account with no identity,
+and not a second credential kind with an actor shape of its own — the plan calls that last one
+"a second way to be reachable, which is exactly where the next leak lives". So once accepted the
+member is ordinary, and the whole feature needed **no new predicate, no new base case and no
+change to `Authorization`**. If a change here starts to need one, that is the signal it has
+drifted into the shape the plan rejected.
+
+An invitation is still a credential, so it has a lifetime. The four rules, each chosen to fail
+safe, and each a property of the schema or of a statement rather than a habit:
+
+- **Single-use.** One invitation, one membership; `redeemed_at` is set in the transaction that
+  writes the membership, under a `for update` on the invite row, so two clients racing on one
+  link produce exactly one member. **Redeeming twice from the same account is the same success**
+  — a double-tapped _Join_ is one person joining once, and answering "no such invitation" would
+  read as somebody having stolen it.
+- **Expiring, on a fixed server clock.** `expires_at` is `created_at + INVITE_TTL_DAYS` (14) and
+  is never client-supplied, so an eternal invitation is not expressible. The liveness test and
+  the `status` a DM reads are both computed by the **database** (`now() >= expires_at`, selected
+  as `expired`), so a browser clock never decides.
+- **Revocable before acceptance _and_ after it.** `POST …/invites/:id/revoke` withdraws it, and
+  if it has already been taken it revokes the membership it granted **in the same transaction**.
+  A revoke that left a spent invitation alone would do nothing at all, which is worse than no
+  button, and it is the DM's only remedy for a link that reached the wrong person.
+- **Forwarded is granted.** Whoever holds the token and signs in gets the membership; there is no
+  second factor and pretending otherwise would make a capability feel safer than it is. What
+  contains it is the other three rules plus `redeemed_by`: the DM's list names _who_ took each
+  invitation, so the wrong person is visible and one press undoes them.
+
+Five more things that are decisions rather than details:
+
+- **Denial is one `NotFound`, everywhere.** Unknown, expired, withdrawn, spent by somebody else:
+  the same answer, because telling the holder of a dead token which kind of dead it is discloses
+  that it was ever alive. The preview previews **live invitations only** for the same reason.
+- **`campaign_invite` has no `role` column**, and that is the co-DM decision applied to a schema:
+  a column with one legal value is the role dropdown the decision forbids, one migration early.
+  It also has no visibility/origin/`assistant_turn_id` tail — it is not campaign content, and
+  the sharper consequence is that **Hob can never mint an invitation**, because provenance is the
+  only way a row here can be the assistant's and there is nowhere to record one. Naming it in
+  `schema.test.ts`'s `NOT_CONTENT` is the deliberate edit that list exists to demand.
+- **`preview` is the only endpoint outside `health` with no `Authorization`, and the token is
+  what scopes it.** It answers before its reader has an account, which is the entire point:
+  §6.3's "make the invite page work before sign-in". It and `redeem` read two scalar columns of
+  _the campaign the invitation names_ — never one a caller named — which is the one read of
+  campaign content in `src` outside the visibility seam besides `bestiary/import.ts`, and it is
+  confined to `repo/Invites.ts` for the same reason. `packages/api/src/Api.test.ts` fails if a
+  third unauthenticated endpoint appears.
+- **`redeem` takes a token and nothing else** — no account id (it is `CurrentActor`'s, so a
+  caller cannot invite somebody else in) and no campaign id (it is the invitation's, so a caller
+  cannot redeem a token _at_ a table of their choosing). Neither is an omission a handler makes;
+  there is nowhere in the declaration to put one.
+- **The ordinary outcome of joining is a campaign with nothing in it.** `campaignReadable` still
+  requires `campaign.visibility = 'shared'` for a player member, so a DM who has not shared the
+  table has a player who reads nothing — the master toggle working, not a gap. That is why
+  `InviteRedeemed` carries `shared` and why the join page says so at the moment of joining;
+  `GET /me/campaigns` composes the same predicate and is honestly empty until then.
+
+`GET /me/campaigns` is the membership list — the same predicate `campaigns.list` composes, plus
+the role, which is a fact about the pair and has nowhere on the campaign row to live. It is what
+a player screen will branch on, and it is the read whose empty answer covers the two states an
+account can now legitimately be in: invited nowhere, or invited to a table nobody has shared.
+
+**`DEFAULT_ACCOUNT_NAME` is `"Someone"`, not `"DM"`.** Just-in-time provisioning runs on the
+first authenticated request from anyone, which since the invite landed is as often a player
+following a link as it is a DM starting a table; a default that asserts a role would be wrong for most accounts and rendered as a lie on the
+one screen that shows a name — the invitation page, which says who is asking.
 
 ## The prep surface: what the fixtures forced
 
@@ -1007,9 +1090,14 @@ Three smaller facts that cost time:
 
 - **Routing is the hash, and only `#/…` is a route** (`routes.ts`). The gallery's section links
   are plain `#foundations` anchors, and without that rule every one of them reads as an unknown
-  route and throws the reader back to the campaign list mid-scroll.
+  route and throws the reader back to the campaign list mid-scroll. **`#/join/<token>` puts a
+  secret in that hash on purpose**: a browser never sends a fragment to a server, so an
+  invitation token stays out of access logs and out of the `Referer` of anything the join page
+  links to, and `join/JoinScreen.tsx` carries it onward only in a `POST` body.
 - **`Button` rendering an `<a>` needs `nativeButton={false}`.** Base UI warns and applies
-  button-only semantics otherwise. That is how a route rendered as a button stays a real link.
+  button-only semantics otherwise. That is how a route rendered as a button stays a real link —
+  and note the accessible **role stays `button`**, so a test looks for a button and reads its
+  `href`.
 - **jsdom here has no `localStorage` at all** — not `window.localStorage`, and not the bare
   global, since Node 26's own is inert without `--localstorage-file`. Anything reading it must
   tolerate `undefined` (`storage()` in `auth/credential.ts` does); a test that needs it installs
@@ -1502,11 +1590,14 @@ would write a second version and the two would disagree about what happened last
 also why `read` requires `CurrentActor` at the type level from day one — the tool inherits the
 actor rather than getting a path around it.
 
-`Recap.ts` is the only place that imports another repository's row mapper: `toBeat`, `toNote`,
-`toPrepItem`, `toSession`, `toCombatant`, `toEncounterRun` and the `BEATS`/`PREP` nested-table
-constants are exported for it, so there is still exactly one mapper per table. (`BEATS` has a
-second consumer now — `Search.ts` builds its containment from it — which is the same rule
-holding rather than an exception to it.)
+`Recap.ts` imports other repositories' row mappers: `toBeat`, `toNote`, `toPrepItem`,
+`toSession`, `toCombatant`, `toEncounterRun` and the `BEATS`/`PREP` nested-table constants are
+exported for it, so there is still exactly one mapper per table. That is the rule rather than an
+exception to it, and it now has two more instances: `Search.ts` builds its containment from
+`BEATS`, and `Memberships.mine` selects `campaign.*` beside the actor's own membership row and
+maps it with `Campaigns.ts`'s exported `toCampaign`. **One mapper per table, imported where a
+second read needs it** — a second `toCampaign` would be a second answer to what a campaign is on
+the wire.
 
 ### Campaign search: the one path over this corpus, and what is deliberately not in it
 
@@ -1799,6 +1890,40 @@ heading underneath the bar, and the offset that would fix it is the bar's height
 token. And read-aloud mode **drops** the DM half rather than restyling it (no aside, no _At the
 table_, no _Questions you answered_), leaving beats and read-aloud notes in Alegreya at 18px
 (`--fs-body-l`) on a 671px measure.
+
+## The invitation surfaces: the DM's link, and a stranger's first screen
+
+Two screens, and between them they are the client half of the invitation contract above.
+
+**`apps/web/src/join/JoinScreen.tsx` is the first screen a stranger sees of this product**, and
+it is the only one that renders before anybody is signed in. It reads `invitePreview.read` with
+no credential, names the campaign and the DM, says what taking the seat gets you, and only then
+shows Clerk's card — which is §6.3's one concrete answer to the friction the account model adds.
+Three things it settles:
+
+- **Every dead link gets one sentence**, because the server gives one answer for all four kinds
+  of dead. It is deliberately not `FailureNotice`'s `missing` copy, which is about a row.
+- **A signed-out reader gets no button.** The campaign is still named — that is the point of
+  previewing first — but there is nothing to press until there is an account to keep the seat
+  under. Both credential kinds count: a hosted session, or the machine token the Server panel
+  wrote, so a developer with no Clerk key can follow a link.
+- **Joining an unshared campaign says so, at the moment of joining.** That is the ordinary
+  outcome and the only moment anybody is looking; the alternative is a blank page and no
+  explanation anywhere.
+
+**`apps/web/src/campaign/InviteDialog.tsx` is the DM's half** — mint, list, revoke — hung off the
+campaign screen's top bar beside the sharing control, because the two answer halves of one
+question. The link is shown **once** and the dialog says so, since the server keeps a digest. Two
+things measured in Chromium rather than reasoned about: the dialog is `z-dialog` 110 over a
+`z-scrim` 100 with the link wrapping inside its 460px, and — the one that was wrong — the line
+under each invitation asks **withdrawn before taken**, in the server's own precedence. Asked the
+other way a revoked-after-accepted row reads _"Removing it takes their seat back"_ about a seat
+that is already gone, which is the one sentence here that could make a DM think a revoke had not
+worked.
+
+**The campaign list reads `GET /me/campaigns`, not `GET /campaigns`.** Both compose the same
+predicate, so the switch cannot change which campaigns appear; what it adds is the role, which
+earns a `Player` badge and, for a DM, no badge at all — absence is what says "yours".
 
 ## Hob: the chat surface, and what it is now attached to
 

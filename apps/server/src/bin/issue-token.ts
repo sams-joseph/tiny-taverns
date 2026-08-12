@@ -1,6 +1,6 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, Layer } from "effect";
-import { Accounts } from "../Accounts.js";
+import { Accounts, DEFAULT_ACCOUNT_NAME } from "../Accounts.js";
 import * as Database from "../Database.js";
 
 /**
@@ -12,7 +12,10 @@ import * as Database from "../Database.js";
  * is reissued, not recovered.
  */
 const program = Effect.gen(function* () {
-  const name = process.argv[2] ?? "DM";
+  // Not "DM": a machine token is a credential for whoever holds it, and since
+  // the invite landed that is as likely to be somebody at the table as the
+  // person running it. One answer to "we were not told a name", in `Accounts`.
+  const name = process.argv[2] ?? DEFAULT_ACCOUNT_NAME;
   const accounts = yield* Accounts;
   const issued = yield* accounts.issue(name);
   yield* Console.log(`account ${issued.accountId} (${issued.name})`);

@@ -7,11 +7,22 @@ import type { VerifiedIdentity } from "./IdentityProvider.js";
 
 /**
  * What a provisioned account is called when the identity provider offered no
- * name. Nothing renders `account.name` yet, and the alternative — a Backend
- * API call to fetch the real one — buys a secret key on the server and a
- * vendor outage on the first-ever sign-in for a string nobody reads.
+ * name.
+ *
+ * **It was `"DM"`, and it stopped being right the moment players existed.**
+ * Just-in-time provisioning runs on the first authenticated request from anyone,
+ * and from this release most of those are people following an invitation to
+ * somebody else's table. A default that asserted a role was harmless only while
+ * every account was a DM by construction; now it would be wrong for the majority
+ * of accounts and would be rendered as a lie on the one screen that shows a
+ * name — the invitation page, which says who is asking.
+ *
+ * Role-neutral and honest: we do not know this person's name yet. The
+ * alternative — a Backend API call to fetch the real one — buys a secret key on
+ * the server and a vendor outage on the first-ever sign-in, and `identity.name`
+ * already carries the real name whenever the provider offers one.
  */
-export const DEFAULT_ACCOUNT_NAME = "DM";
+export const DEFAULT_ACCOUNT_NAME = "Someone";
 
 /** What `token:issue` prints. The plaintext token exists only here and once. */
 export interface IssuedToken {

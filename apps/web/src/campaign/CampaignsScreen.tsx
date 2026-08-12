@@ -1,4 +1,4 @@
-import type { Campaign } from "@taverns/api";
+import type { CampaignMembership } from "@taverns/api";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
@@ -11,18 +11,27 @@ import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 
 /**
- * The way in: every campaign this credential reaches.
+ * The way in: every table this credential reaches, and what you are at each.
  *
  * The designers drew no picker — their kit starts inside one campaign — so this
  * is the smallest shell that reaches `CampaignHome` and no more. It carries the
  * one write on the way in, because a picker that cannot create is a dead end on
  * a fresh database, and dropping to `curl` to see your own first screen is not a
  * product.
+ *
+ * **It reads `GET /me/campaigns` rather than `GET /campaigns`, and the
+ * difference is one field.** Since the invite landed, an account can be at a
+ * table it does not run, and this is the screen where that first shows: the
+ * membership carries the role, which the campaign row cannot, because a role is
+ * a fact about the pair. Both reads compose the same predicate (see
+ * `CampaignMembership`), so the switch cannot change *which* campaigns appear —
+ * only what the screen can say about them.
  */
 
-const listCampaigns = (client: TavernsClient) => client.campaigns.list();
+const listMemberships = (client: TavernsClient) => client.me.campaigns();
 
-function CampaignRow({ campaign }: { readonly campaign: Campaign }) {
+function CampaignRow({ membership }: { readonly membership: CampaignMembership }) {
+  const campaign = membership.campaign;
   return (
     <Card>
       <CardHeader>
@@ -35,6 +44,10 @@ function CampaignRow({ campaign }: { readonly campaign: Campaign }) {
               {campaign.name}
             </a>
           </CardTitle>
+          {/* A player earns a badge and a DM does not, for the reason a
+              creature's `authored` origin earns none: absence is what says
+              "yours", and a badge on every row would say nothing. */}
+          {membership.role === "player" && <Badge variant="secondary">Player</Badge>}
           {campaign.visibility === "shared" && <Badge variant="info">Shared</Badge>}
         </div>
       </CardHeader>
@@ -115,7 +128,7 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
 }
 
 export function CampaignsScreen({ route }: { readonly route: Route }) {
-  const [resource, reload] = useApiResource(listCampaigns);
+  const [resource, reload] = useApiResource(listMemberships);
   // Closed, against the hook's own `true` default, and its doc says why the
   // choice is the shell's: a 400px panel that opens itself is worse than a
   // button that opens it when you ask. This screen passes no campaign either —
@@ -123,8 +136,10 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
   // composer with nowhere to send.
   const hob = useHobPanel({ initialOpen: false });
 
-  const campaigns =
-    resource.state === "ready" ? resource.value.filter((c) => c.archivedAt === null) : undefined;
+  const memberships =
+    resource.state === "ready"
+      ? resource.value.filter((row) => row.campaign.archivedAt === null)
+      : undefined;
 
   return (
     <AppShell
@@ -134,7 +149,7 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
       topBar={
         <TopBar
           title="Campaigns"
-          subtitle="Every table this credential reaches. Pick the one you are running."
+          subtitle="Every table this credential reaches — the ones you run, and the ones you sit at."
         />
       }
     >
@@ -147,18 +162,25 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
         {resource.state === "failed" && (
           <FailureNotice failure={resource.failure} onRetry={reload} />
         )}
-        {campaigns !== undefined && (
+        {memberships !== undefined && (
           <>
             <NewCampaign onCreated={reload} />
-            {campaigns.length === 0 ? (
-              <EmptyState icon="book-open" title="No campaigns yet">
-                Name the one you are running and it opens above. Everything else — the party, the
-                encounters, the checklist — hangs off it.
+            {memberships.length === 0 ? (
+              // Two states behind one card, and the second is new: an account
+              // that has been invited nowhere is a legitimate steady state now,
+              // and so is one whose DM has not shared the table yet — a player
+              // member of an unshared campaign reads nothing, which is the
+              // master toggle working rather than a gap. Neither can be told
+              // apart from here without a second read, so the copy covers both
+              // rather than guessing at one.
+              <EmptyState icon="book-open" title="No tables yet">
+                Name the one you are running and it opens above. If you have followed an invitation,
+                the table appears here once its DM shares it.
               </EmptyState>
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
-                {campaigns.map((campaign) => (
-                  <CampaignRow key={campaign.id} campaign={campaign} />
+                {memberships.map((membership) => (
+                  <CampaignRow key={membership.campaign.id} membership={membership} />
                 ))}
               </div>
             )}

@@ -68,6 +68,15 @@ export type SessionEventId = typeof SessionEventId.Type;
 export const BeatId = id("BeatId");
 export type BeatId = typeof BeatId.Type;
 
+/**
+ * One invitation to join a campaign.
+ *
+ * Names the *row*, never the token — the token is a secret the server only ever
+ * stores as a digest, and it is what a person holds. This is what a DM revokes.
+ */
+export const InviteId = id("InviteId");
+export type InviteId = typeof InviteId.Type;
+
 /** One conversation with Hob — a thread of turns, scoped to one campaign. */
 export const AssistantThreadId = id("AssistantThreadId");
 export type AssistantThreadId = typeof AssistantThreadId.Type;

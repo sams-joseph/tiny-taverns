@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
+import { Invites } from "../src/repo/Invites.js";
 import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
@@ -25,7 +26,7 @@ import { migratedDatabase } from "./support/database.js";
  *   thereby reachable by it.
  */
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Characters.layer).pipe(
+  Layer.mergeAll(Accounts.layer, Campaigns.layer, Characters.layer, Invites.layer).pipe(
     Layer.provideMerge(migratedDatabase("taverns_test_characters")),
   ),
 );

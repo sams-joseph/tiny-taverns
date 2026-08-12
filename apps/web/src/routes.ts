@@ -42,6 +42,19 @@ export type Route =
       readonly sessionId: SessionId;
       readonly runId: EncounterRunId;
     }
+  /**
+   * Following an invitation, before there is anybody to follow it as.
+   *
+   * **The token lives in the fragment and nowhere else**, which is the whole
+   * reason this route exists rather than a query string: a browser never sends
+   * the fragment to a server, so the secret stays out of access logs and out of
+   * the `Referer` of anything this page links to. The page reads it here and
+   * puts it in a `POST` body.
+   *
+   * It names no campaign, because the holder does not know which one it is yet
+   * — that is what the page is for.
+   */
+  | { readonly screen: "join"; readonly token: string }
   | { readonly screen: "gallery" };
 
 /**
@@ -63,6 +76,18 @@ const parser = <A>(schema: Schema.Codec<A, string>) => {
   };
 };
 
+/**
+ * An invitation token, as it may appear in a hash.
+ *
+ * 32 bytes of `randomBytes` in base64url, whose alphabet is exactly this — so a
+ * link that lost characters to a chat client's line wrapping is refused here
+ * rather than sent to the server to be refused there. The length is not checked:
+ * the server's answer is the authority on whether a token is real, and a rule
+ * restated in two places is a rule that can disagree with itself.
+ */
+const parseToken = (raw: string | undefined): string | undefined =>
+  raw !== undefined && /^[A-Za-z0-9_-]+$/.test(raw) ? raw : undefined;
+
 const parseCampaignId = parser(CampaignId);
 const parseSessionId = parser(SessionId);
 const parseRunId = parser(EncounterRunId);
@@ -75,6 +100,14 @@ export const parseRoute = (hash: string): Route => {
     .split("/");
 
   if (head === "gallery") return { screen: "gallery" };
+
+  if (head === "join") {
+    // `campaignRaw` is the second segment whatever it holds; here it is the
+    // token. A malformed one falls through to the campaign list, which is the
+    // same thing a half-typed run link does.
+    const token = parseToken(campaignRaw);
+    if (token !== undefined) return { screen: "join", token };
+  }
 
   if (head === "campaigns") {
     const campaignId = parseCampaignId(campaignRaw);
@@ -107,6 +140,8 @@ export const hrefFor = (route: Route): string => {
       return `#/campaigns/${route.campaignId}/bestiary`;
     case "chronicle":
       return `#/campaigns/${route.campaignId}/chronicle`;
+    case "join":
+      return `#/join/${route.token}`;
     case "run":
       return `#/campaigns/${route.campaignId}/sessions/${route.sessionId}/runs/${route.runId}`;
     default:

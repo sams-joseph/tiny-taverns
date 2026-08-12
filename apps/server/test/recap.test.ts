@@ -12,6 +12,7 @@ import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -49,6 +50,7 @@ const services = Layer.mergeAll(
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
+  Invites.layer,
   Notes.layer,
   PrepItems.layer,
   Recap.layer,

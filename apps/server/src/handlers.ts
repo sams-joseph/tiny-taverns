@@ -23,6 +23,8 @@ import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { HobThreads } from "./repo/HobThreads.js";
+import { Invites } from "./repo/Invites.js";
+import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -87,6 +89,62 @@ const CampaignsLive = HttpApiBuilder.group(
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
       .handle("archive", ({ params }) => campaigns.archive(params.campaignId));
+  }),
+);
+
+const MeLive = HttpApiBuilder.group(
+  TavernsApi,
+  "me",
+  Effect.fnUntraced(function* (handlers) {
+    const memberships = yield* Memberships;
+    return handlers.handle("campaigns", () => memberships.mine);
+  }),
+);
+
+const InvitesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "invites",
+  Effect.fnUntraced(function* (handlers) {
+    const invites = yield* Invites;
+    return handlers
+      .handle("list", ({ params }) => invites.list(params.campaignId))
+      .handle("create", ({ params, payload }) => invites.create(params.campaignId, payload))
+      .handle("revoke", ({ params }) => invites.revoke(params.campaignId, params.inviteId));
+  }),
+);
+
+/**
+ * The invitation page's read, and the only handler in the product outside
+ * `health` with no actor above it.
+ *
+ * As thin as the rest, which matters more here than anywhere: an unauthenticated
+ * endpoint is where a "just look up the campaign while we are here" block would
+ * do real damage. There is nothing to look up with — the token is the only thing
+ * this handler has, and what it discloses is decided in `repo/Invites.ts`.
+ */
+const InvitePreviewLive = HttpApiBuilder.group(
+  TavernsApi,
+  "invitePreview",
+  Effect.fnUntraced(function* (handlers) {
+    const invites = yield* Invites;
+    return handlers.handle("read", ({ payload }) => invites.preview(payload.token));
+  }),
+);
+
+/**
+ * Accepting an invitation — the one write in the product that reaches a campaign
+ * the caller is not yet a member of.
+ *
+ * It takes no campaign id and no account id, and neither is an omission the
+ * handler makes: there is nowhere in the declaration to put one. The campaign is
+ * the invitation's and the account is `CurrentActor`'s.
+ */
+const JoinLive = HttpApiBuilder.group(
+  TavernsApi,
+  "join",
+  Effect.fnUntraced(function* (handlers) {
+    const invites = yield* Invites;
+    return handlers.handle("redeem", ({ payload }) => invites.redeem(payload.token));
   }),
 );
 
@@ -516,7 +574,11 @@ const LiveLive = HttpApiBuilder.group(
 export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
   Layer.provide([
     HealthLive,
+    MeLive,
+    InvitePreviewLive,
+    JoinLive,
     CampaignsLive,
+    InvitesLive,
     SessionsLive,
     CharactersLive,
     NotesLive,

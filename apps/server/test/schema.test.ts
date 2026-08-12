@@ -18,8 +18,13 @@ afterAll(() => runtime.dispose());
  * `visibility` column to dodge this list would be the wrong answer to the right
  * question. Adding it was a deliberate act, which is exactly what this list is
  * for.
+ *
+ * `campaign_invite` is here for the same reason and one sharper one: the
+ * provenance tail is how a row in this product can be the assistant's, and an
+ * invitation must never be. Hob has no way to record itself as the author of a
+ * credential because there is nowhere on the row to record it.
  */
-const NOT_CONTENT = ["account", "campaign_member", "effect_sql_migrations"];
+const NOT_CONTENT = ["account", "campaign_invite", "campaign_member", "effect_sql_migrations"];
 
 interface Column {
   readonly table_name: string;

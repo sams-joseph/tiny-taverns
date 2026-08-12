@@ -12,6 +12,7 @@ import { type DmActor, DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { Invites } from "../src/repo/Invites.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
@@ -47,6 +48,7 @@ const services = Layer.mergeAll(
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
+  Invites.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_dm_actor")));
@@ -337,7 +339,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates fifteen methods and leaves the other fifty-three alone", () => {
+  it("gates fifteen methods and leaves the other fifty-eight alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -361,12 +363,20 @@ describe("the scope, counted", () => {
     );
 
     expect(gated).toBe(15);
-    // 53 remaining service methods, plus `DmActors.of` itself — which requires
+    // 58 remaining service methods, plus `DmActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
     // method's signature. That duplicate is one of the two the plan's 69
     // counted as methods.
-    expect(ungated).toBe(55);
+    //
+    // It was 55 before the invite: `Invites` adds four (`list`, `create`,
+    // `revoke`, `redeem` — `preview` is the one read in the product that
+    // requires no actor at all, deliberately, because it answers before its
+    // reader has an account) and `Memberships.mine` adds the fifth. None is
+    // gated, and none should be: an invitation is a DM's own resource behind
+    // `campaignWritable`, and `mine` returns the campaigns this credential
+    // already reaches.
+    expect(ungated).toBe(60);
   });
 });
 

@@ -8,6 +8,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { crSortFor, Creatures } from "../src/repo/Creatures.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { Invites } from "../src/repo/Invites.js";
 import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
@@ -28,6 +29,7 @@ const runtime = ManagedRuntime.make(
     Creatures.layer,
     EncounterCreatures.layer,
     Encounters.layer,
+    Invites.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_bestiary"))),
 );
 afterAll(() => runtime.dispose());
