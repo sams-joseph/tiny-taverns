@@ -402,6 +402,9 @@ describe("authoring a character", () => {
 
     await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
     await userEvent.type(screen.getByRole("textbox", { name: "Player" }), "Ilse");
+    await userEvent.type(screen.getByRole("spinbutton", { name: "Level" }), "3");
+    await userEvent.type(screen.getByRole("textbox", { name: "Species" }), "Half-orc");
+    await userEvent.type(screen.getByRole("textbox", { name: "Class" }), "Paladin");
     await userEvent.type(screen.getByRole("spinbutton", { name: "AC" }), "18");
 
     await userEvent.click(screen.getByRole("button", { name: "Add character" }));
@@ -410,10 +413,16 @@ describe("authoring a character", () => {
       expect(bodyOf(server, "POST", "/characters")).toEqual({
         name: "Brannoc",
         playerName: "Ilse",
+        // The three that replaced the typed descriptor. **No `descriptor` is
+        // sent and none could be** — it is derived by a generated column, and
+        // `CharacterCreate` has no such field.
+        level: 3,
+        species: "Half-orc",
+        className: "Paladin",
         ac: 18,
-        // `descriptor` and `hpMax` are absent rather than null: `CharacterCreate`
-        // takes no null, and an unfilled number is not a zero — `PartyList`
-        // renders each stat only when there is one.
+        // `hpMax`, `sheetUrl` and `sheet` are absent rather than null:
+        // `CharacterCreate` takes no null, and an unfilled number is not a
+        // zero — `PartyList` renders each stat only when there is one.
         visibility: "dm",
       }),
     );
@@ -438,7 +447,7 @@ describe("authoring a character", () => {
   it("opens on what is already there, and clears a field with a null", async () => {
     server.routes.set(`PATCH ${charactersPath}/${character.id}`, {
       status: 200,
-      body: { ...character, descriptor: null },
+      body: { ...character, level: null, descriptor: "Half-orc Paladin" },
     });
     await openParty();
 
@@ -447,19 +456,32 @@ describe("authoring a character", () => {
     expect(await screen.findByRole("textbox", { name: "Character" })).toHaveValue("Brannoc");
     expect(screen.getByRole("textbox", { name: "Player" })).toHaveValue("Ilse");
     expect(screen.getByRole("spinbutton", { name: "Hit points" })).toHaveValue(52);
+    expect(screen.getByRole("spinbutton", { name: "Level" })).toHaveValue(3);
+    expect(screen.getByRole("textbox", { name: "Species" })).toHaveValue("Half-orc");
+    expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("Owes the ferryman a name.");
+    // And there is no descriptor field, at all: the half-line is derived from
+    // the three boxes above, and a form that offered to type it would be the
+    // second answer this shape exists to prevent.
+    expect(screen.queryByRole("textbox", { name: "Descriptor" })).toBeNull();
 
-    await userEvent.clear(screen.getByRole("textbox", { name: "Descriptor" }));
+    await userEvent.clear(screen.getByRole("spinbutton", { name: "Level" }));
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     // A null on update where create omits the field: emptying a box means
-    // "there is no answer", and omitting it would leave the old one.
+    // "there is no answer", and omitting it would leave the old one. The sheet
+    // goes back whole, so the abilities and features this form never showed
+    // survive an edit made through it.
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/characters/${character.id}`)).toEqual({
         name: "Brannoc",
         playerName: "Ilse",
-        descriptor: null,
+        level: null,
+        species: "Half-orc",
+        className: "Paladin",
         ac: 18,
         hpMax: 52,
+        sheetUrl: null,
+        sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
         visibility: "dm",
       }),
     );

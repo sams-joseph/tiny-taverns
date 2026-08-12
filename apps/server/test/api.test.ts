@@ -115,7 +115,9 @@ describe("campaign, session, character and note CRUD", () => {
           payload: {
             name: "Ilse",
             playerName: "Sam",
-            descriptor: "Half-orc paladin",
+            level: 3,
+            species: "Half-orc",
+            className: "Paladin",
             ac: 17,
             hpMax: 21,
           },
@@ -135,7 +137,9 @@ describe("campaign, session, character and note CRUD", () => {
     expect(seen.note.visibility).toBe("dm");
     expect(seen.note.kind).toBe("note");
     expect(seen.session.number).toBe(12);
-    expect(seen.character.descriptor).toBe("Half-orc paladin");
+    // Derived by the generated column from the three that were sent, and
+    // writable through none of them — see `0012_character_sheet.ts`.
+    expect(seen.character.descriptor).toBe("Level 3 Half-orc Paladin");
     expect(seen.readBack.body).toBe("Decide what the crate contains");
     expect(seen.listed.map((campaign) => campaign.id)).toContain(seen.campaign.id);
 

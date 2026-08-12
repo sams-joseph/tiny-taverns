@@ -64,6 +64,7 @@ const SCOPES: ReadonlyArray<{ readonly value: SearchScope; readonly label: strin
   { value: "beat", label: "Beats" },
   { value: "note", label: "Notes" },
   { value: "creature", label: "Bestiary" },
+  { value: "character", label: "Party" },
 ];
 
 export function ChronicleScreen({

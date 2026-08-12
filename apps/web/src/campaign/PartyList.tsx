@@ -55,6 +55,20 @@ export function PartyList({
               </span>
             )}
             <span className="ml-auto flex items-center gap-4">
+              {character.sheetUrl !== null && (
+                // A stored link nobody can reach is the same lie as a stubbed
+                // field, so the one column that names somewhere else is a real
+                // one. Words rather than a glyph: the icon table grows when a
+                // delivery names a glyph, and none has named this one.
+                <a
+                  href={character.sheetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-label-s leading-none font-medium text-muted-foreground underline decoration-hairline underline-offset-2 hover:text-foreground"
+                >
+                  Sheet
+                </a>
+              )}
               {character.ac !== null && <Stat label="AC" value={character.ac} />}
               {character.hpMax !== null && <Stat label="HP" value={character.hpMax} />}
               {character.visibility === "shared" && <Badge variant="info">Shared</Badge>}

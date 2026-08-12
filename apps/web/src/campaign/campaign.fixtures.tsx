@@ -102,11 +102,21 @@ export const readAloud = {
 export const character = {
   id: "2b1f2a1e-0000-4000-8000-000000000901",
   campaignId,
+  // Null on every row the product can write — nothing mints a player
+  // credential yet, and no payload accepts one.
+  accountId: null,
   name: "Brannoc",
   playerName: "Ilse",
-  descriptor: "Half-orc paladin",
+  level: 3,
+  species: "Half-orc",
+  className: "Paladin",
+  // Derived by a generated column from the three above, never sent by a client
+  // — so it is here as the server would send it and in neither payload.
+  descriptor: "Level 3 Half-orc Paladin",
   ac: 18,
   hpMax: 52,
+  sheetUrl: null,
+  sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
   visibility: "dm",
   ...provenance,
   ...stamps,

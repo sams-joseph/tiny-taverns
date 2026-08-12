@@ -118,7 +118,13 @@ beforeAll(async () => {
     });
     yield* api.characters.create({
       params: { campaignId: campaign.id },
-      payload: { name: "Brannoc", playerName: "Ilse", descriptor: "Half-orc paladin", hpMax: 52 },
+      payload: {
+        name: "Brannoc",
+        playerName: "Ilse",
+        species: "Half-orc",
+        className: "Paladin",
+        hpMax: 52,
+      },
     });
     const goblin = yield* api.creatures.create({
       params: { campaignId: campaign.id },

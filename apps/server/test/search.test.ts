@@ -14,6 +14,7 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Search } from "../src/repo/Search.js";
@@ -36,12 +37,13 @@ import { migratedDatabase } from "./support/database.js";
  * - **two matchers**, because full text alone does not find a half-typed word
  *   and `ILIKE` alone does not find a creature trait that is in no column.
  * - **`session_event` is not in the corpus**, deliberately, and nothing here
- *   quietly grows a fourth arm.
+ *   quietly grows a fifth arm.
  */
 const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Characters.layer,
   Creatures.layer,
   Notes.layer,
   Search.layer,
@@ -73,6 +75,7 @@ const makeFixture = Effect.gen(function* () {
   const beats = yield* Beats;
   const sessions = yield* Sessions;
   const creatures = yield* Creatures;
+  const characters = yield* Characters;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
@@ -146,6 +149,58 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
+  // The party. `0012_character_sheet.ts` gave a character a document, which is
+  // what makes the people the campaign is about findable at all — before it,
+  // this was the one part of the record with no arm over it.
+  const brannoc = yield* as(
+    characters.create(campaign.id, {
+      name: "Brannoc",
+      playerName: "Ilse",
+      level: 3,
+      species: "Half-orc",
+      className: "Paladin",
+      ac: 18,
+      hpMax: 52,
+      sheet: {
+        notes: "Owes the ferryman a name and has not decided which one.",
+        abilities: [],
+        traits: [{ name: "Lay on Hands", text: "A pool of fifteen hit points." }],
+      },
+      visibility: "shared",
+    }),
+  );
+  const pell = yield* as(
+    characters.create(campaign.id, {
+      name: "Sister Pell",
+      playerName: "Dara",
+      species: "Human",
+      className: "Cleric",
+      sheet: { notes: "Knows what is in the crate and will not say.", abilities: [], traits: [] },
+    }),
+  );
+  // Written in a hurry: two columns and no sheet at all, which is the case the
+  // snippet fallback exists for.
+  const wren = yield* as(
+    characters.create(campaign.id, {
+      name: "Wren",
+      playerName: "Kofi",
+      species: "Tiefling",
+      className: "Bard",
+      visibility: "shared",
+    }),
+  );
+  // The same word again, at the other table, so a character that comes back
+  // through campaign A is a leak rather than a coincidence.
+  yield* as(
+    characters.create(otherTable.id, {
+      name: "Sixpence Brannoc",
+      species: "Half-orc",
+      className: "Paladin",
+      sheet: { notes: "A different ferryman entirely.", abilities: [], traits: [] },
+      visibility: "shared",
+    }),
+  );
+
   const outsider = yield* anAccount("Someone else");
   const outsiderCampaign = yield* withActor(outsider)(
     campaigns.create({ name: "A different table", visibility: "shared" }),
@@ -169,6 +224,9 @@ const makeFixture = Effect.gen(function* () {
     ferrymanBeat,
     crateBeat,
     shade,
+    brannoc,
+    pell,
+    wren,
   };
 }).pipe(Effect.orDie);
 
@@ -199,13 +257,16 @@ const keys = (hits: ReadonlyArray<SearchHit>): ReadonlyArray<string> =>
   hits.map((hit) => `${hit.source}:${hit.id}`);
 
 describe("the corpus", () => {
-  it("finds the DM's own words across notes, beats and the bestiary at once", async () => {
+  it("finds the DM's own words across notes, beats, the bestiary and the party at once", async () => {
     const hits = await found(fixture.dm, fixture.campaign.id, "ferryman");
 
-    expect(new Set(hits.map((hit) => hit.source))).toEqual(new Set(["note", "beat", "creature"]));
+    expect(new Set(hits.map((hit) => hit.source))).toEqual(
+      new Set(["note", "beat", "creature", "character"]),
+    );
     expect(keys(hits)).toContain(`note:${fixture.ferrymanNote.id}`);
     expect(keys(hits)).toContain(`beat:${fixture.ferrymanBeat.id}`);
     expect(keys(hits)).toContain(`creature:${fixture.shade.id}`);
+    expect(keys(hits)).toContain(`character:${fixture.brannoc.id}`);
   });
 
   it("returns an excerpt with no markup in it", async () => {
@@ -231,7 +292,7 @@ describe("the corpus", () => {
     expect(beat).not.toHaveProperty("title");
   });
 
-  it("narrows to one arm when asked, and to all three when not", async () => {
+  it("narrows to one arm when asked, and to all four when not", async () => {
     const everything = await found(fixture.dm, fixture.campaign.id, "ferryman");
     const onlyBeats = await found(fixture.dm, fixture.campaign.id, "ferryman", "beat");
 
@@ -260,6 +321,37 @@ describe("two matchers, because one is not enough", () => {
     // Full text, not `ILIKE`: "nimble escape" is inside the `jsonb` document.
     const hits = await found(fixture.dm, fixture.campaign.id, "nimble escape");
     expect(keys(hits)).toEqual([`creature:${fixture.shade.id}`]);
+  });
+
+  it("finds a character by a feature that is only on their sheet", async () => {
+    // The same property one table over: "lay on hands" is in the document and
+    // in no column, which is the whole reason the sheet is indexed rather than
+    // merely stored.
+    const hits = await found(fixture.dm, fixture.campaign.id, "lay on hands");
+    expect(keys(hits)).toEqual([`character:${fixture.brannoc.id}`]);
+  });
+
+  it("finds a character by the player running them", async () => {
+    // "Who is Dara running" is a question a DM asks out loud, so `player_name`
+    // is a matcher and is indexed at weight B beside the species and the class.
+    const hits = await found(fixture.dm, fixture.campaign.id, "Dara");
+    expect(keys(hits)).toEqual([`character:${fixture.pell.id}`]);
+  });
+
+  it("gives a character with an unwritten sheet its derived line as the excerpt", async () => {
+    // `ts_headline` over an empty document is an empty string, and an empty
+    // snippet renders as nothing at all on the screen. The fallback is the
+    // generated descriptor — the same substitution the creature arm makes to
+    // its meta line, and for the same reason.
+    const hits = await found(fixture.dm, fixture.campaign.id, "Brannoc");
+    const character = hits.find((hit) => hit.source === "character");
+
+    expect(character?.snippet).toContain("ferryman");
+
+    // Wren was written in a hurry and has no sheet, so the excerpt is the line
+    // the three columns derive — not an empty string, which renders as nothing.
+    const bare = await found(fixture.dm, fixture.campaign.id, "Wren");
+    expect(bare.find((hit) => hit.source === "character")?.snippet).toBe("Tiefling Bard");
   });
 
   it("survives whatever is in the search box", async () => {
@@ -308,6 +400,7 @@ describe("scoping — proven, not reasoned about", () => {
     expect(hits.length).toBeGreaterThan(0);
     for (const hit of hits) {
       expect(hit.snippet).not.toContain("Sixpence");
+      expect(hit.source === "character" && hit.title).not.toBe("Sixpence Brannoc");
       if (hit.source === "beat") expect(hit.sessionId).toBe(fixture.night.id);
     }
   });
@@ -324,6 +417,12 @@ describe("scoping — proven, not reasoned about", () => {
     expect(keys(here)).toContain(`beat:${fixture.ferrymanBeat.id}`);
     expect(keys(crate)).not.toContain(`note:${fixture.crateNote.id}`);
     expect(keys(crate)).not.toContain(`beat:${fixture.crateBeat.id}`);
+
+    // The party arm obeys the same rule with no clause of its own: `Brannoc` is
+    // `shared` and Sister Pell is not, so a player finds one of them and the
+    // crate line on the other's sheet is not a way to reach her.
+    expect(keys(here)).toContain(`character:${fixture.brannoc.id}`);
+    expect(keys(crate)).not.toContain(`character:${fixture.pell.id}`);
 
     // And the other table is a 404, not a shorter list.
     expect(elsewhere._tag).toBe("Failure");

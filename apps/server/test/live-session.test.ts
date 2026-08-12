@@ -80,7 +80,8 @@ const makeFixture = Effect.gen(function* () {
     characters.create(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
-      descriptor: "Half-orc paladin",
+      species: "Half-orc",
+      className: "Paladin",
       ac: 18,
       hpMax: 52,
     }),
@@ -89,7 +90,8 @@ const makeFixture = Effect.gen(function* () {
     characters.create(campaign.id, {
       name: "Wren",
       playerName: "Kofi",
-      descriptor: "Tiefling bard",
+      species: "Tiefling",
+      className: "Bard",
       ac: 14,
       hpMax: 31,
     }),
@@ -98,7 +100,8 @@ const makeFixture = Effect.gen(function* () {
     characters.create(campaign.id, {
       name: "Sister Pell",
       playerName: "Dara",
-      descriptor: "Human cleric",
+      species: "Human",
+      className: "Cleric",
       ac: 16,
       hpMax: 33,
     }),
@@ -237,8 +240,10 @@ describe("starting a fight", () => {
     const hag = list.find((c) => c.displayName === "Marsh Hag")!;
 
     // `data.js:15` — "Half-orc paladin · Ilse", stored as its two parts so the
-    // separator stays a rendering decision.
-    expect(brannoc.subtitle).toBe("Half-orc paladin");
+    // separator stays a rendering decision. The subtitle is the character's
+    // `descriptor` at seed time, which since `0012` is derived from `species`
+    // and `class_name` rather than typed.
+    expect(brannoc.subtitle).toBe("Half-orc Paladin");
     expect(brannoc.playerName).toBe("Ilse");
     expect(brannoc.hpMax).toBe(52);
     expect(brannoc.hpCurrent).toBe(52);

@@ -706,6 +706,66 @@ contract. `type` and `size` are **open** strings while `difficulty` is a closed 
 difference is that `CampaignHome.jsx:13` _branches_ on difficulty, and nothing branches on a
 creature's type.
 
+## The party: what earns a column on `character`, and what lives in the document
+
+`0012_character_sheet.ts` made `character` the same shape as `creature`, and the rule it
+applied is the one the bestiary already follows and the one every later step should:
+
+> **A field earns a column when something in the product _reads_ it** — a screen filters or
+> sorts on it, the seed copies it, a predicate uses it, search indexes it. Everything else the
+> DM or the player wants to keep is display, and display lives in one `jsonb` document.
+
+Taverns holding a character does not make it a character builder — that is a different product
+and the first thing it owes anyone is errata. So:
+
+- **Columns**: `name`, `player_name`, `level`, `species`, `class_name`, `ac`, `hp_max`,
+  `sheet_url`, `account_id`, plus the usual visibility/provenance tail.
+- **Document**: `body` (on the wire `sheet`) — `notes`, `abilities`, `traits`. `Ability` and
+  `Trait` are imported from `Creature.ts` rather than restated: an ability cell and a named
+  block of prose are one question whether the row is a monster or a person, and
+  `bestiary/StatBlock.tsx` already draws them.
+
+**`level`, `species` and `class_name` are columns by the captain's decision, against the
+report's own recommendation**, and the reason is that players edit their own characters and
+levelling is what they will do — an increment as a number, four people editing prose and hoping
+they agree as part of a string. It also makes the party sortable and gives Hob something to
+reason about.
+
+**Therefore `descriptor` is derived, and it is a Postgres generated column** —
+`"Level 3 Half-orc Paladin"`, `nullif`/`btrim`/`coalesce` over the three. Four things follow,
+and the first is the one to know before touching it:
+
+- **Nothing stores a second copy and nothing can**: Postgres refuses an `INSERT` or `UPDATE`
+  naming it, so this is a property of the schema rather than a rule to remember. Neither
+  `CharacterCreate` nor `CharacterUpdate` has the field, and `CharacterDialog.tsx` deliberately
+  does **not** compute a local preview of the line — that would be the second implementation
+  the decision exists to prevent.
+- `concat_ws` reads better and cannot be used: it is `stable`, not `immutable`, so a generation
+  expression refuses it. And **a generated column may not reference another**, which is why
+  `search` composes the three columns again rather than reusing `descriptor`.
+- **Every reader kept working unchanged**, which is half of why it is done in SQL:
+  `repo/EncounterRuns.ts` still seeds `combatant.subtitle` from `character.descriptor`, and
+  `PartyList` still renders one column.
+- The upgrade **does not parse the descriptors already there**. Splitting `"Half-orc paladin"`
+  into a species and a class is guessing, and a guess written into a column the DM trusts is
+  worse than an absence — so the old text is kept verbatim as the sheet's `notes` and the
+  derived line is null until somebody fills the two boxes. `migrations.test.ts` pins that,
+  column by column.
+
+**`character` is the search index's fourth arm** (`repo/Search.ts`), `rowReadable` like `note`,
+with the `creature` weighting exactly — name A, `player_name`/`species`/`class_name` B,
+`jsonb_to_tsvector(body)` C — so `ts_rank` stays comparable across one union. `player_name` is
+also an `ILIKE` matcher, because "who is Dara running" is asked mid-type. The snippet is
+`ts_headline` over `body ->> 'notes'` falling back to the derived descriptor, the same
+substitution the creature arm makes to its meta line.
+
+**`account_id` is a column and not a credential, and step 4 owns making it mean something.**
+Nullable, `on delete set null`, named by **no predicate** — `membership.test.ts`'s grep lists
+`repo/Characters.ts` deliberately, and `characters.test.ts` proves the behaviour: pointing a
+character at an account through raw SQL grants that account nothing, because reach is a
+`campaign_member` row. The player-edits-their-own-character predicate is settled and belongs
+with the step that mints a player actor; there is none yet.
+
 ## `HttpApi`, and the client derived from it
 
 `packages/api` holds the whole wire contract: schemas, errors, the `Authorization` middleware
@@ -1460,25 +1520,27 @@ re-derived slightly wrong.
 
 **What is indexed, and by what:**
 
-| arm        | index                                              | read predicate                                        |
-| ---------- | -------------------------------------------------- | ----------------------------------------------------- |
-| `note`     | `0009` — `title` at weight A, `body` at B          | `rowReadable`                                         |
-| `beat`     | `0009` — `body` at weight **B**, not the default D | the `beat → session` chain via `containedRowReadable` |
-| `creature` | `0004` — name A, size/type B, `jsonb` body C       | `corpusRowReadable`                                   |
+| arm         | index                                                   | read predicate                                        |
+| ----------- | ------------------------------------------------------- | ----------------------------------------------------- |
+| `note`      | `0009` — `title` at weight A, `body` at B               | `rowReadable`                                         |
+| `beat`      | `0009` — `body` at weight **B**, not the default D      | the `beat → session` chain via `containedRowReadable` |
+| `creature`  | `0004` — name A, size/type B, `jsonb` body C            | `corpusRowReadable`                                   |
+| `character` | `0012` — name A, player/species/class B, `jsonb` body C | `rowReadable`                                         |
 
 Beat body is weighted **B on purpose**: it is the same kind of thing as a note's body, and the
 unweighted default would rank every beat at a quarter of an equally good note for no defensible
-reason. One weighting scheme across all three arms is what makes `ts_rank` comparable enough to
-order the whole union with one `ORDER BY` rather than concatenating three lists.
+reason. One weighting scheme across all four arms is what makes `ts_rank` comparable enough to
+order the whole union with one `ORDER BY` rather than concatenating four lists.
 
 **`session_event` is deliberately NOT indexed, and this is a settled captain decision that
-reversed the captain's own earlier line.** Do not add a fourth arm without reopening it. The
+reversed the captain's own earlier line.** Do not add an arm over it without reopening it. The
 evidence: the log's text content is numbers (`jsonb_to_tsvector` over real payloads yields
 `'12':3 '40':5 '82':1`); the only prose in any payload is `run-started.encounterName` and
 `combatant-added.displayName`, both already real columns on `encounter_run` and `combatant`; and
 indexing it would make `payload` load-bearing, which `SessionEvent.ts` states it is not. Combat
 stays reachable by name, by recap, and by reading `GET …/log?since=`. Per-table columns mean a
-fourth arm is about eight lines if a query shape ever appears that those three cannot serve.
+further arm is about eight lines if a query shape ever appears that these cannot serve — which
+is the cost `character` actually paid in `0012`.
 
 Five things that are decisions rather than details:
 

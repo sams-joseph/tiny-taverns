@@ -7,6 +7,7 @@ import init from "../src/migrations/0001_init.js";
 import clerkIdentity from "../src/migrations/0002_clerk_identity.js";
 import sessionFinished from "../src/migrations/0006_session_finished.js";
 import membership from "../src/migrations/0011_membership.js";
+import characterSheet from "../src/migrations/0012_character_sheet.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -24,6 +25,10 @@ afterAll(() => stuckRuntime.dispose());
 /** A fourth, for campaigns written before membership existed. */
 const ownedRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_owned"));
 afterAll(() => ownedRuntime.dispose());
+
+/** A fifth, for characters written before they had a sheet. */
+const sheetRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_sheet"));
+afterAll(() => sheetRuntime.dispose());
 
 const migrate = Effect.scoped(
   Layer.build(Layer.provide(Database.layerMigrator, NodeServices.layer)),
@@ -83,6 +88,7 @@ describe("migrations", () => {
       { migration_id: 9, name: "search_index" },
       { migration_id: 10, name: "assistant_conversation" },
       { migration_id: 11, name: "membership" },
+      { migration_id: 12, name: "character_sheet" },
     ]);
   }, 60_000);
 
@@ -104,6 +110,7 @@ describe("migrations", () => {
       { migration_id: 9, name: "search_index" },
       { migration_id: 10, name: "assistant_conversation" },
       { migration_id: 11, name: "membership" },
+      { migration_id: 12, name: "character_sheet" },
     ]);
   }, 60_000);
 });
@@ -260,6 +267,130 @@ describe("upgrading a database whose campaigns predate membership", () => {
       { name: "The Salt Road", owner: "Ada", role: "dm", is_dm: true, revoked_at: null },
     ]);
     expect(orphans).toBe(0);
+    expect(refused).toBe("Failure");
+  }, 60_000);
+});
+
+describe("upgrading a database whose characters predate the sheet", () => {
+  it("keeps every column's data, derives the descriptor, and takes the old one at its word", async () => {
+    // The risky half of `0012`. `descriptor` was a column the DM typed and is
+    // now generated from three others, so the migration has to drop and re-add
+    // it — and a drop is where a party quietly loses what somebody wrote.
+    //
+    // Stepped by hand for the reason the three above are: the property is about
+    // rows written under the old schema, and an empty database cannot show it.
+    // Three characters: one with every column filled, one with the numbers left
+    // blank, and one with no descriptor at all.
+    const { rows, refused } = await sheetRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* init;
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
+        `)[0]!.id;
+        const campaign = (yield* sql<{ readonly id: string }>`
+          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
+          returning id
+        `)[0]!.id;
+        const character = (values: Record<string, unknown>) =>
+          sql`insert into character ${sql.insert({ campaign_id: campaign, ...values })}`;
+
+        yield* character({
+          name: "Brannoc",
+          player_name: "Ilse",
+          descriptor: "Half-orc paladin",
+          ac: 18,
+          hp_max: 52,
+          visibility: "shared",
+        });
+        yield* character({ name: "Wren", player_name: "Kofi", descriptor: "Tiefling bard" });
+        yield* character({ name: "Sister Pell", ac: 16 });
+
+        yield* membership;
+        yield* characterSheet;
+
+        const rows = yield* sql<{
+          readonly name: string;
+          readonly player_name: string | null;
+          readonly ac: number | null;
+          readonly hp_max: number | null;
+          readonly visibility: string;
+          readonly descriptor: string | null;
+          readonly level: number | null;
+          readonly species: string | null;
+          readonly class_name: string | null;
+          readonly account_id: string | null;
+          readonly sheet_url: string | null;
+          readonly body: { readonly notes: string };
+        }>`
+          select name, player_name, ac, hp_max, visibility, descriptor,
+                 level, species, class_name, account_id, sheet_url, body
+          from character order by name
+        `;
+
+        // And the new descriptor really is generated, not merely computed by
+        // whatever wrote the row: Postgres refuses to be told what it says.
+        const refused = yield* sql`
+          update character set descriptor = 'Something else' where name = 'Wren'
+        `.pipe(Effect.result);
+
+        return { rows, refused: refused._tag };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(rows).toEqual([
+      {
+        name: "Brannoc",
+        // The four columns that did not move still hold exactly what they held.
+        player_name: "Ilse",
+        ac: 18,
+        hp_max: 52,
+        visibility: "shared",
+        // The fifth is prose, and the migration does not parse prose: the text
+        // is kept verbatim as the sheet's opening note, and the derived
+        // descriptor is null until somebody fills in the two columns that make
+        // it. Guessing that "Half-orc paladin" is a species and a class is the
+        // thing these columns exist to stop.
+        body: { notes: "Half-orc paladin", abilities: [], traits: [] },
+        descriptor: null,
+        level: null,
+        species: null,
+        class_name: null,
+        // The hook, inert. Nothing mints a player credential yet.
+        account_id: null,
+        sheet_url: null,
+      },
+      {
+        name: "Sister Pell",
+        player_name: null,
+        ac: 16,
+        hp_max: null,
+        visibility: "dm",
+        // No descriptor to keep, so the empty document the column defaults to.
+        body: { notes: "", abilities: [], traits: [] },
+        descriptor: null,
+        level: null,
+        species: null,
+        class_name: null,
+        account_id: null,
+        sheet_url: null,
+      },
+      {
+        name: "Wren",
+        player_name: "Kofi",
+        ac: null,
+        hp_max: null,
+        visibility: "dm",
+        body: { notes: "Tiefling bard", abilities: [], traits: [] },
+        descriptor: null,
+        level: null,
+        species: null,
+        class_name: null,
+        account_id: null,
+        sheet_url: null,
+      },
+    ]);
     expect(refused).toBe("Failure");
   }, 60_000);
 });

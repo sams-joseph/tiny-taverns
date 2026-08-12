@@ -65,7 +65,10 @@ describe("CampaignScreen", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Party" }));
 
     expect(await screen.findByText("Brannoc")).toBeInTheDocument();
-    expect(screen.getByText("Half-orc paladin · Ilse")).toBeInTheDocument();
+    // The half-line is the server's derived `descriptor` — `0012` made it a
+    // generated column over `level`, `species` and `class_name` — joined to the
+    // player's name here, which is the one part of the line the client assembles.
+    expect(screen.getByText("Level 3 Half-orc Paladin · Ilse")).toBeInTheDocument();
     expect(screen.getByText("18")).toBeInTheDocument();
   });
 

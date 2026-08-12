@@ -100,12 +100,20 @@ describe("the reach seam, enforced rather than asserted", () => {
     // `src` may qualify the column that way again.
     expect(mentioning(/\bcampaign\.account_id\b/)).toEqual([]);
 
-    // The column itself is still named twice, and both are `campaign_member`'s
-    // own column rather than the campaign's. `Campaigns.create` is the third
-    // and the only writer of the campaign's: whose account this is, which is
-    // the cascade parent and the billing owner and no longer a way in.
+    // The column name itself is legal on other tables, and the list is how a
+    // new one gets looked at. `repo/Memberships.ts` and `repo/visibility.ts`
+    // are `campaign_member`'s own column; `repo/Campaigns.ts` is the only
+    // writer of the campaign's — whose account this is, the cascade parent and
+    // the billing owner and no longer a way in.
+    //
+    // `repo/Characters.ts` is `character.account_id`, added by
+    // `0012_character_sheet.ts`: whose character it is. It is selected and
+    // mapped and **named by no predicate**, which is the property this file
+    // exists to keep. The write predicate it is a hook for belongs with the
+    // step that mints a player actor, and there is no player actor yet.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "repo/Campaigns.ts",
+      "repo/Characters.ts",
       "repo/Memberships.ts",
       "repo/visibility.ts",
     ]);

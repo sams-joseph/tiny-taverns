@@ -1,4 +1,5 @@
-import type { CampaignId, Character, Visibility } from "@taverns/api";
+import type { CampaignId, Character, CharacterSheet, Visibility } from "@taverns/api";
+import { emptyCharacterSheet } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -12,44 +13,54 @@ import {
 import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
-import { Field, SaveFailure, VisibilityField } from "../ui/form";
+import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 
 /**
  * Writing down who is at the table.
  *
- * The Party tab has been read-only since it shipped and the endpoints have been
- * complete the whole time, so the only reason a campaign had no party was that
- * nothing could type one. This is that form, and it is deliberately the
- * `character` row **as it exists today** — five fields and a visibility. The
- * table is going to grow `level`, `species` and `class_name` as real columns
- * (the captain settled that separately), at which point `descriptor` stops
- * being a free-text line; building against the future shape now would mean
- * either a column that does not exist or a display string parsed into fields,
- * and the second is the thing that decision exists to stop.
+ * The form is the `character` row, and since `0012_character_sheet.ts` that row
+ * is shaped like a creature: **a field earns a control when it is a column, and
+ * everything else goes into the sheet.** So there is a box for the level, the
+ * species and the class — the three the captain settled on, because players
+ * edit their own characters and levelling is the main thing they will do — and
+ * one free area for whatever the table actually keeps about them.
  *
- * ### `descriptor` is prose, and stays prose here
+ * ### There is no descriptor field, and there is no preview of one either
  *
- * `Character.ts`: the display line is assembled from `descriptor` and
- * `playerName` rather than stored, which is why `PartyList` renders
- * `"Half-orc paladin · Ilse"` from two columns. The form asks for the two
- * columns, never the assembled line — a single "Ilse — Brannoc, half-orc
- * paladin" field is exactly the prototype's shape the model refused.
+ * The `"Level 3 Half-orc Paladin"` half-line `PartyList` renders is **derived**
+ * — a generated column over those three, so that a label and the fields it
+ * summarises cannot come to disagree. Neither payload has the field, and this
+ * form deliberately does not compute it locally to show the DM what it will
+ * say: a second implementation of the derivation is exactly the thing the
+ * decision exists to prevent, and it would be the copy that drifts. The line
+ * appears on the row the moment the save lands.
+ *
+ * ### The sheet is a document, and this writes one field of it
+ *
+ * `sheet.notes` is the prose; `abilities` and `traits` are the same shapes a
+ * stat block uses and no screen has been drawn for typing them yet. So the save
+ * sends the **whole document** with `notes` replaced, which is what keeps a
+ * sheet imported or typed elsewhere from being erased by an edit here.
  *
  * ### The numbers are optional, and blank is not zero
  *
- * `ac` and `hpMax` are nullable, and a character the DM has not looked up yet
- * genuinely has neither. So blank sends nothing on create and `null` on update
- * — `PartyList` already renders each stat only when it is there, so an
- * unfilled AC is an absent stat rather than an `AC 0` nobody believes.
+ * `level`, `ac` and `hpMax` are nullable, and a character the DM has not looked
+ * up yet genuinely has none. Blank sends nothing on create and `null` on update
+ * — `PartyList` renders each stat only when it is there, so an unfilled AC is
+ * an absent stat rather than an `AC 0` nobody believes.
  */
 
-/** Both match `Character.ts`'s own checks, so the sentence beats the schema to it. */
+/** All three match `Character.ts`'s own checks, so the sentence beats the schema to it. */
 const MAX_AC = 40;
 const MAX_HP = 10_000;
+const MAX_LEVEL = 100;
 
 /** `""` ⇄ absent. A blank number field is "I have not filled this in". */
 const parseOptional = (raw: string): number | null | undefined =>
   raw.trim() === "" ? null : Number.isInteger(Number(raw)) ? Number(raw) : undefined;
+
+/** The same rule the schema applies, said in a sentence first. */
+const isWebUrl = (raw: string): boolean => /^https?:\/\//i.test(raw);
 
 export function CharacterDialog({
   campaignId,
@@ -65,11 +76,17 @@ export function CharacterDialog({
 }) {
   const [name, setName] = useState(character?.name ?? "");
   const [playerName, setPlayerName] = useState(character?.playerName ?? "");
-  const [descriptor, setDescriptor] = useState(character?.descriptor ?? "");
+  const [levelText, setLevelText] = useState(
+    character?.level === null ? "" : String(character?.level ?? ""),
+  );
+  const [species, setSpecies] = useState(character?.species ?? "");
+  const [className, setClassName] = useState(character?.className ?? "");
   const [acText, setAcText] = useState(character?.ac === null ? "" : String(character?.ac ?? ""));
   const [hpText, setHpText] = useState(
     character?.hpMax === null ? "" : String(character?.hpMax ?? ""),
   );
+  const [sheetUrl, setSheetUrl] = useState(character?.sheetUrl ?? "");
+  const [notes, setNotes] = useState(character?.sheet.notes ?? "");
   // `dm` for a new character: the column default, and the only safe one to fail
   // to. Sharing the party is the campaign's own switch plus this one, in that
   // order — `campaign.visibility` is the gate this narrows within.
@@ -78,6 +95,7 @@ export function CharacterDialog({
 
   const { busy, failure, submit } = useMutation();
 
+  const level = parseOptional(levelText);
   const ac = parseOptional(acText);
   const hpMax = parseOptional(hpText);
 
@@ -90,13 +108,23 @@ export function CharacterDialog({
    * 40 at ["ac"]` is a sentence for whoever wrote the schema. `SaveFailure` is
    * the backstop if one of these is ever missed.
    */
-  const problems: { name?: string; ac?: string; hpMax?: string } = {};
+  const problems: { name?: string; level?: string; ac?: string; hpMax?: string; url?: string } = {};
   if (name.trim() === "") problems.name = "Give them a name.";
+  if (level === undefined) problems.level = "A level is a whole number.";
+  else if (level !== null && (level < 1 || level > MAX_LEVEL)) {
+    problems.level = `Between 1 and ${String(MAX_LEVEL)}.`;
+  }
   if (ac === undefined) problems.ac = "An armour class is a whole number.";
   else if (ac !== null && (ac < 0 || ac > MAX_AC)) problems.ac = `Between 0 and ${MAX_AC}.`;
   if (hpMax === undefined) problems.hpMax = "Hit points are a whole number.";
   else if (hpMax !== null && (hpMax < 0 || hpMax > MAX_HP)) {
     problems.hpMax = `Between 0 and ${MAX_HP.toLocaleString("en")}.`;
+  }
+  if (sheetUrl.trim() !== "" && !isWebUrl(sheetUrl.trim())) {
+    // The schema refuses anything else, and this is why: the link is rendered
+    // as an `href`, and a `javascript:` URL in one is how a text column becomes
+    // an exploit.
+    problems.url = "A link starting http:// or https://.";
   }
   const refused = Object.keys(problems).length > 0;
 
@@ -105,7 +133,14 @@ export function CharacterDialog({
     if (refused) return;
 
     const trimmedPlayer = playerName.trim();
-    const trimmedDescriptor = descriptor.trim();
+    const trimmedSpecies = species.trim();
+    const trimmedClass = className.trim();
+    const trimmedUrl = sheetUrl.trim();
+    // The whole document, with the one field this form writes replaced. The
+    // rest is what the character already had — a form that sent only `notes`
+    // would delete every ability and feature it was never shown.
+    const base: CharacterSheet = character?.sheet ?? emptyCharacterSheet;
+    const sheet: CharacterSheet = { ...base, notes: notes.trim() };
 
     const saved = await submit((client) =>
       character === undefined
@@ -117,9 +152,13 @@ export function CharacterDialog({
             payload: {
               name: name.trim(),
               ...(trimmedPlayer === "" ? {} : { playerName: trimmedPlayer }),
-              ...(trimmedDescriptor === "" ? {} : { descriptor: trimmedDescriptor }),
+              ...(level === null ? {} : { level }),
+              ...(trimmedSpecies === "" ? {} : { species: trimmedSpecies }),
+              ...(trimmedClass === "" ? {} : { className: trimmedClass }),
               ...(ac === null ? {} : { ac }),
               ...(hpMax === null ? {} : { hpMax }),
+              ...(trimmedUrl === "" ? {} : { sheetUrl: trimmedUrl }),
+              ...(sheet.notes === "" ? {} : { sheet }),
               visibility,
             },
           })
@@ -131,9 +170,13 @@ export function CharacterDialog({
             payload: {
               name: name.trim(),
               playerName: trimmedPlayer === "" ? null : trimmedPlayer,
-              descriptor: trimmedDescriptor === "" ? null : trimmedDescriptor,
+              level,
+              species: trimmedSpecies === "" ? null : trimmedSpecies,
+              className: trimmedClass === "" ? null : trimmedClass,
               ac,
               hpMax,
+              sheetUrl: trimmedUrl === "" ? null : trimmedUrl,
+              sheet,
               visibility,
             },
           }),
@@ -183,18 +226,47 @@ export function CharacterDialog({
             />
           </Field>
 
-          <Field
-            label="Descriptor"
-            htmlFor="character-descriptor"
-            hint="The half-line under the name — species and class, as you would say it aloud."
-          >
-            <Input
-              id="character-descriptor"
-              placeholder="Half-orc paladin"
-              value={descriptor}
-              onChange={(event) => setDescriptor(event.target.value)}
-            />
-          </Field>
+          <div className="flex flex-wrap gap-5">
+            <Field
+              label="Level"
+              htmlFor="character-level"
+              error={showProblems ? problems.level : undefined}
+            >
+              <Input
+                id="character-level"
+                mono
+                type="number"
+                min={1}
+                max={MAX_LEVEL}
+                value={levelText}
+                aria-invalid={showProblems && problems.level !== undefined}
+                onChange={(event) => setLevelText(event.target.value)}
+                className="w-20"
+              />
+            </Field>
+            <Field label="Species" htmlFor="character-species">
+              <Input
+                id="character-species"
+                placeholder="Half-orc"
+                value={species}
+                onChange={(event) => setSpecies(event.target.value)}
+                className="w-40"
+              />
+            </Field>
+            <Field
+              label="Class"
+              htmlFor="character-class"
+              hint="Three fields, not one line — the half-line under their name is written from them."
+            >
+              <Input
+                id="character-class"
+                placeholder="Paladin"
+                value={className}
+                onChange={(event) => setClassName(event.target.value)}
+                className="w-40"
+              />
+            </Field>
+          </div>
 
           <div className="flex flex-wrap gap-5">
             <Field label="AC" htmlFor="character-ac" error={showProblems ? problems.ac : undefined}>
@@ -229,6 +301,36 @@ export function CharacterDialog({
               />
             </Field>
           </div>
+
+          <Field
+            label="Sheet"
+            htmlFor="character-sheet-url"
+            hint="Where the real sheet lives, if it lives somewhere else."
+            error={showProblems ? problems.url : undefined}
+          >
+            <Input
+              id="character-sheet-url"
+              type="url"
+              inputMode="url"
+              placeholder="https://…"
+              value={sheetUrl}
+              aria-invalid={showProblems && problems.url !== undefined}
+              onChange={(event) => setSheetUrl(event.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Notes"
+            htmlFor="character-notes"
+            hint="Background, appearance, what they are afraid of. Searchable with the rest of the record."
+          >
+            <Textarea
+              id="character-notes"
+              placeholder="Owes the ferryman a name and has not decided which one."
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </Field>
 
           <VisibilityField
             id="character-visibility"

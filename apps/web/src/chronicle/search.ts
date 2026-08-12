@@ -8,10 +8,10 @@ import type { TavernsClient } from "../api/client";
  * The prototype searches its own fixture array (`Chronicle.jsx:149`). The real
  * corpus is not on the client: `GET /campaigns/:c/search` is the one path over
  * it (`repo/Search.ts`), it reaches a note's body and a beat's prose and a
- * creature's stat block through three `tsvector`s, and it applies the visibility
- * predicate that a substring match over an already-loaded list could not. So the
- * box in the top bar asks the server, and what comes back spans three sources
- * rather than the recap titles the prototype could see.
+ * creature's stat block and a character's sheet through four `tsvector`s, and it
+ * applies the visibility predicate that a substring match over an already-loaded
+ * list could not. So the box in the top bar asks the server, and what comes back
+ * spans four sources rather than the recap titles the prototype could see.
  */
 
 /**
@@ -22,7 +22,7 @@ import type { TavernsClient } from "../api/client";
  * client encodes `["beat"]` as a single `?source=beat` and `Schema.Array` then
  * refuses the scalar the server decodes. The realistic narrowing is *"only the
  * beats"*, which a scalar expresses exactly, so the control is a single-choice
- * one and `"all"` is the absence of the parameter rather than a fourth value on
+ * one and `"all"` is the absence of the parameter rather than a fifth value on
  * the wire. Do not widen this into an array; see the bestiary's environment
  * chips for the same defect met from the other side.
  */

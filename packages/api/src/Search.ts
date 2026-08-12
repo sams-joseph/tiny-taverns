@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { BeatId, CreatureId, NoteId, SessionId } from "./Ids.js";
+import { BeatId, CharacterId, CreatureId, NoteId, SessionId } from "./Ids.js";
 
 /**
  * Searching one campaign's record.
@@ -19,19 +19,23 @@ import { BeatId, CreatureId, NoteId, SessionId } from "./Ids.js";
 /**
  * Which table a hit came from.
  *
- * Three arms, and the reason each is here rather than a fourth:
+ * Four arms, and the reason each is here rather than a fifth:
  *
  * - `note` — the DM's prep prose, written before the night.
  * - `beat` — the DM's own line about what happened during it.
  * - `creature` — the bestiary, which already had a `tsvector` before this
  *   existed. It is in the union so that "find the hag" is *one* question with
  *   one answer, rather than a prose search beside `creatures.list?q=`.
+ * - `character` — the party. It arrived with `0012_character_sheet.ts`, which
+ *   gave a character a document to search: until then the people the campaign
+ *   is about were the one part of the record that could not be found at all,
+ *   and "what is Ilse's AC" had no answer here.
  *
  * `session_event` is deliberately absent — see `0009_search_index.ts`, which
  * carries the captain's reasoning. Combat is reached by name, by recap, or by
  * reading the log.
  */
-export const SearchSource = Schema.Literals(["note", "beat", "creature"]);
+export const SearchSource = Schema.Literals(["note", "beat", "creature", "character"]);
 export type SearchSource = typeof SearchSource.Type;
 
 /**
@@ -114,13 +118,34 @@ export const CreatureHit = Schema.Struct({
 });
 
 /**
+ * Somebody at the table.
+ *
+ * `title` is the character's own name and the snippet is their sheet's opening
+ * prose, or — when the sheet has none — the derived `"Level 3 Half-orc
+ * Paladin"` line, which is the same fallback the creature arm makes to its meta
+ * line and for the same reason: a document with no paragraph has nothing for
+ * `ts_headline` to centre on, and the subtitle is the honest result line.
+ *
+ * There is no `playerName` here. A hit is a pointer plus enough to render a
+ * line, not a copy of the row — and the player's real name is the one field on
+ * this table that a player surface will have to think hardest about.
+ */
+export const CharacterHit = Schema.Struct({
+  source: Schema.Literal("character"),
+  id: CharacterId,
+  /** The character's name. */
+  title: Schema.String,
+  ...hitFields,
+});
+
+/**
  * One result.
  *
  * Discriminated on `source`, the same shape `NoteAttachment` and `LiveEvent`
  * use, so a client branches once and gets the branded id and the fields that
  * actually exist for that arm.
  */
-export const SearchHit = Schema.Union([NoteHit, BeatHit, CreatureHit]);
+export const SearchHit = Schema.Union([NoteHit, BeatHit, CreatureHit, CharacterHit]);
 export type SearchHit = typeof SearchHit.Type;
 
 /**

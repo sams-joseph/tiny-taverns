@@ -2,6 +2,7 @@ import {
   type Actor,
   type BeatId,
   type CampaignId,
+  type CharacterId,
   type CreatureId,
   CurrentActor,
   type NoteId,
@@ -35,16 +36,21 @@ import {
  * without an actor to scope it. Two search paths over one corpus would become
  * permanent; there is one.
  *
- * ### Three arms, each carrying its own predicate
+ * ### Four arms, each carrying its own predicate
  *
  * The arms are unioned in SQL rather than merged in TypeScript, so the ordering
  * and the limit are applied once, over the whole result, by the database.
  *
- * | arm        | predicate                     | why that one            |
- * | ---------- | ----------------------------- | ----------------------- |
- * | `note`     | `rowReadable`                 | campaign-scoped rows    |
- * | `beat`     | the `beat → session` chain    | nested, no `campaign_id`|
- * | `creature` | `corpusRowReadable`           | half the rows are global|
+ * | arm         | predicate                     | why that one            |
+ * | ----------- | ----------------------------- | ----------------------- |
+ * | `note`      | `rowReadable`                 | campaign-scoped rows    |
+ * | `beat`      | the `beat → session` chain    | nested, no `campaign_id`|
+ * | `creature`  | `corpusRowReadable`           | half the rows are global|
+ * | `character` | `rowReadable`                 | campaign-scoped rows    |
+ *
+ * The fourth arm is what `0009_search_index.ts` advertised as "about eight
+ * lines", spent — and it is the arm that makes the people the campaign is about
+ * findable at all.
  *
  * **The campaign gate is inside every arm, never outside a bare `OR`.** That is
  * the `corpusRowReadable` lesson (`visibility.ts`) applied to a union: written
@@ -106,6 +112,8 @@ const toHit = (row: HitRow): SearchHit => {
       return { source: "beat", id: row.id as BeatId, sessionId: row.session_id!, ...common };
     case "creature":
       return { source: "creature", id: row.id as CreatureId, title: row.title ?? "", ...common };
+    case "character":
+      return { source: "character", id: row.id as CharacterId, title: row.title ?? "", ...common };
   }
 };
 
@@ -243,6 +251,48 @@ const creatureArm = (
     query,
   );
 
+const characterArm = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+  query: string,
+): Statement.Fragment =>
+  arm(
+    sql,
+    {
+      source: "character",
+      table: "character",
+      title: sql`character.name`,
+      sessionId: sql`null::uuid`,
+      // The sheet's opening prose is the one paragraph a character has, so it
+      // is what gets excerpted — and when there is none, the derived
+      // `"Level 3 Half-orc Paladin"` line stands in, exactly as a creature's
+      // meta line does. `ts_headline` over an empty string is an empty string,
+      // which is why the fallback is a `nullif` rather than a `coalesce` on the
+      // column alone.
+      snippet: sql`coalesce(
+        nullif(
+          ts_headline('english', coalesce(character.body ->> 'notes', ''),
+                      websearch_to_tsquery('english', ${query}), ${HEADLINE}),
+          ''),
+        character.descriptor,
+        '')`,
+      // The ordinary campaign-scoped predicate. A character is not a corpus
+      // row: there is no global party, so nothing here needs the null branch
+      // that makes `corpusRowReadable` the delicate one.
+      readable: rowReadable(sql, "character", campaignId, actor),
+      matches: sql.or([
+        sql`character.name ilike ${likeContains(query)}`,
+        // The player's own name, because "who is Ilse running" is a question a
+        // DM asks out loud. It is indexed at weight B as well; the `ILIKE` is
+        // what makes it work halfway through typing.
+        sql`character.player_name ilike ${likeContains(query)}`,
+        sql`character.search @@ websearch_to_tsquery('english', ${query})`,
+      ]),
+    },
+    query,
+  );
+
 /** Enough for a results panel; a DM refines rather than scrolls. */
 const DEFAULT_LIMIT = 50;
 
@@ -281,6 +331,9 @@ export class Search extends Context.Service<
                   : undefined,
                 filter.source === undefined || filter.source === "creature"
                   ? creatureArm(sql, campaignId, actor, query)
+                  : undefined,
+                filter.source === undefined || filter.source === "character"
+                  ? characterArm(sql, campaignId, actor, query)
                   : undefined,
               ].filter((fragment) => fragment !== undefined);
 

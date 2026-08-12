@@ -91,7 +91,8 @@ const makeFixture = Effect.gen(function* () {
     characters.create(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
-      descriptor: "Half-orc paladin",
+      species: "Half-orc",
+      className: "Paladin",
       ac: 18,
       hpMax: 52,
     }),
