@@ -1059,6 +1059,15 @@ follow them rather than inventing a second style. `api/mutation.ts`, `ui/form.ts
   default and the column default cannot drift. A child row whose visibility the DM is not
   being asked about — an `encounter_creature` line — **omits the field entirely** rather than
   guessing; that is the column default applying untouched. Same for a prep item.
+- **`campaign/CampaignDialog.tsx` is the only thing in the product that sets
+  `campaign.visibility`, and that column is the master toggle every one of those row-level
+  switches narrows within.** Until it existed each of them was inert: a `shared` note inside a
+  `dm` campaign is invisible, so nothing a DM shared reached anybody and no player-facing
+  surface could render anything but a blank page. It is reached from the campaign screen's top
+  bar, and **the button reads `Private` or `Shared` in words rather than being a gear** —
+  fail-closed is only useful if the DM can read the current answer without opening anything,
+  and an absent badge is not that. (There is no `settings` glyph: the icon table grows when a
+  delivery names one, so it wears `lock` / `users`, which are already in it.)
 
 Four things that cost real time, all found by driving it rather than by testing it:
 
@@ -1089,6 +1098,13 @@ may not be a `Partial<>` of anything, and why a field added upstream is one edit
 than one per test file. `installStubServer()` (or the runner's `installRunServer()`, which can
 also hold a stream open) must be called once per file at module scope, for the
 `Context.Reference` reason `api/client.test.ts` records.
+
+**The Party tab authors now, so the top bar's one create slot names all three tabs** — there is no
+"nothing on Party" branch left. `campaign/CharacterDialog.tsx` is deliberately the `character` row
+**as it stands today** (name, player, descriptor, AC, max HP, visibility): the table is due to gain
+`level`, `species` and `class_name` as real columns, at which point `descriptor` stops being a free
+line, and building for that shape early would mean either a column that does not exist or a display
+string parsed back into fields — which is the thing that decision exists to prevent.
 
 **A session is created by _Start session_, in `campaign/StartRunDialog.tsx`, and nowhere else.**
 The prep checklist hangs off `session`, so with `campaign.currentSessionId` null it says so and

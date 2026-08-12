@@ -1,5 +1,5 @@
 import type { Character } from "@taverns/api";
-import { Card, Icon } from "@taverns/ui";
+import { Badge, Button, Card, Icon } from "@taverns/ui";
 
 /**
  * The Party tab: one `--row-h` row per character, hairline-separated.
@@ -11,6 +11,10 @@ import { Card, Icon } from "@taverns/ui";
  *
  * `shield` is the documented glyph for a player character, and AC/HP set in the
  * mono face because numbers must column up.
+ *
+ * Editing is a pencil on the row, exactly as it is on a note's card, and for
+ * the same reason: the row itself is not a link to anywhere, so taking its
+ * click for an editor would spend an affordance a later screen wants.
  */
 function Stat({ label, value }: { readonly label: string; readonly value: number }) {
   return (
@@ -21,7 +25,13 @@ function Stat({ label, value }: { readonly label: string; readonly value: number
   );
 }
 
-export function PartyList({ party }: { readonly party: ReadonlyArray<Character> }) {
+export function PartyList({
+  party,
+  onEdit,
+}: {
+  readonly party: ReadonlyArray<Character>;
+  readonly onEdit: (character: Character) => void;
+}) {
   return (
     <Card>
       {party.map((character, index) => {
@@ -47,6 +57,16 @@ export function PartyList({ party }: { readonly party: ReadonlyArray<Character> 
             <span className="ml-auto flex items-center gap-4">
               {character.ac !== null && <Stat label="AC" value={character.ac} />}
               {character.hpMax !== null && <Stat label="HP" value={character.hpMax} />}
+              {character.visibility === "shared" && <Badge variant="info">Shared</Badge>}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="-my-1 -mr-1 size-7 shrink-0"
+                aria-label={`Edit ${character.name}`}
+                onClick={() => onEdit(character)}
+              >
+                <Icon name="pencil" size={14} />
+              </Button>
             </span>
           </div>
         );

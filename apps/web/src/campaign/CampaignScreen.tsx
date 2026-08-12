@@ -1,4 +1,4 @@
-import type { CampaignId, Encounter, EncounterId, Note } from "@taverns/api";
+import type { CampaignId, Character, Encounter, EncounterId, Note } from "@taverns/api";
 import { Badge, Button, Icon, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
@@ -7,6 +7,8 @@ import { hrefFor, useRoute, type Route } from "../routes";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { CampaignDialog } from "./CampaignDialog";
+import { CharacterDialog } from "./CharacterDialog";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
@@ -32,13 +34,23 @@ import { StartRunDialog } from "./StartRunDialog";
  *
  * The prototype puts `New encounter` in the top bar, so that is where the create
  * action lives — but there is one slot and three tabs, so **it names whatever
- * the open tab makes**: an encounter, a note, or nothing on Party, which has no
- * authoring yet. That is why `Tabs` is controlled here rather than left on
- * `defaultValue`; the top bar has to know which tab is open.
+ * the open tab makes**: an encounter, a note, or a character. That is why `Tabs`
+ * is controlled here rather than left on `defaultValue`; the top bar has to know
+ * which tab is open.
  *
  * Editing is a pencil on the row itself, not a click on the card. The card's
  * click is the prototype's "run this encounter", and taking it for an editor
  * would be a decision the live-session step has to undo.
+ *
+ * ### The campaign itself is editable, and says whether it is shared
+ *
+ * The bar's leftmost control reads **Private** or **Shared** and opens
+ * `CampaignDialog`. It is a word rather than a gear on purpose:
+ * `campaign.visibility` is the master toggle every per-row share narrows within
+ * (`CampaignDialog` says why at length), so the current answer has to be legible
+ * without opening anything — a campaign that has never been shared should say so
+ * on its own screen rather than leave it to be inferred from a badge that is
+ * absent.
  *
  * **A save reloads the whole view rather than patching a row in place.** The
  * encounter card's creature count is `sum(encounter_creature.count)` computed
@@ -51,7 +63,10 @@ import { StartRunDialog } from "./StartRunDialog";
 /** What the one dialog slot is currently showing. */
 type Editing =
   | { readonly what: "encounter"; readonly encounter: Encounter | undefined }
-  | { readonly what: "note"; readonly note: Note | undefined };
+  | { readonly what: "note"; readonly note: Note | undefined }
+  | { readonly what: "character"; readonly character: Character | undefined }
+  /** The campaign's own settings — the one that carries the sharing control. */
+  | { readonly what: "campaign" };
 
 /**
  * The party count moved here when the rail did: the top nav carries the name and
@@ -186,11 +201,16 @@ function CampaignBody({
             {view.party.length === 0 ? (
               <EmptyState icon="users" title="Nobody at the table yet">
                 The characters your players are running show up here, with their AC and hit points.
+                Write the first one down with <span className="text-heading">Add character</span>{" "}
+                above.
               </EmptyState>
             ) : party.length === 0 ? (
               nothingMatches
             ) : (
-              <PartyList party={party} />
+              <PartyList
+                party={party}
+                onEdit={(character) => onEdit({ what: "character", character })}
+              />
             )}
           </TabsContent>
         </Tabs>
@@ -279,7 +299,7 @@ export function CampaignScreen({
       ? { label: "New encounter", editing: { what: "encounter", encounter: undefined } as const }
       : tab === "notes"
         ? { label: "New note", editing: { what: "note", note: undefined } as const }
-        : undefined;
+        : { label: "Add character", editing: { what: "character", character: undefined } as const };
 
   return (
     <AppShell
@@ -299,6 +319,25 @@ export function CampaignScreen({
         <TopBar title={view?.campaign.name ?? "Campaign"} subtitle={view && subtitleFor(view)}>
           {view !== undefined && (
             <>
+              {/* The sharing control, worn as its own answer. `lock` and `users`
+                  are both already in the glyph table, and the word beside them
+                  is what keeps the fail-closed default from being something the
+                  DM has to infer from an absent badge. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                /* The visible word leads, verbatim, so the accessible name
+                   contains the label a voice-control user would say. */
+                aria-label={
+                  view.campaign.visibility === "shared"
+                    ? "Shared with your players — campaign settings"
+                    : "Private to you — campaign settings"
+                }
+                onClick={() => setEditing({ what: "campaign" })}
+              >
+                <Icon name={view.campaign.visibility === "shared" ? "users" : "lock"} size={14} />
+                {view.campaign.visibility === "shared" ? "Shared" : "Private"}
+              </Button>
               <Input
                 aria-label="Search this campaign"
                 placeholder="Search"
@@ -306,12 +345,10 @@ export function CampaignScreen({
                 onChange={(event) => setSearch(event.target.value)}
                 className="h-control-sm w-44"
               />
-              {create !== undefined && (
-                <Button variant="secondary" size="sm" onClick={() => setEditing(create.editing)}>
-                  <Icon name="plus" size={14} />
-                  {create.label}
-                </Button>
-              )}
+              <Button variant="secondary" size="sm" onClick={() => setEditing(create.editing)}>
+                <Icon name="plus" size={14} />
+                {create.label}
+              </Button>
               {/* `CampaignHome.jsx:41`. It says which of the two things it is:
                   starting a night, or walking back into one already running. */}
               <Button size="sm" onClick={() => run(undefined)}>
@@ -362,6 +399,18 @@ export function CampaignScreen({
           onClose={close}
           onSaved={saved}
         />
+      )}
+      {editing?.what === "character" && view !== undefined && (
+        <CharacterDialog
+          key={editing.character?.id ?? "new-character"}
+          campaignId={campaignId}
+          character={editing.character}
+          onClose={close}
+          onSaved={saved}
+        />
+      )}
+      {editing?.what === "campaign" && view !== undefined && (
+        <CampaignDialog campaign={view.campaign} onClose={close} onSaved={saved} />
       )}
       {finishing && view?.session !== undefined && (
         <FinishSessionDialog

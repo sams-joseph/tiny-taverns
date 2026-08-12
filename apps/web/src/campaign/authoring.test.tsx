@@ -5,6 +5,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
+  character,
   encounter,
   encounterId,
   goblinId,
@@ -33,8 +34,10 @@ import {
 const server = installStubServer();
 installMemoryStorage();
 
+const campaignPath = `/campaigns/${campaignId}`;
 const encountersPath = `/campaigns/${campaignId}/encounters`;
 const notesPath = `/campaigns/${campaignId}/notes`;
+const charactersPath = `/campaigns/${campaignId}/characters`;
 const prepPath = `/campaigns/${campaignId}/sessions/${sessionId}/prep`;
 
 const created = (name: string) => ({
@@ -277,6 +280,218 @@ describe("authoring a note", () => {
 
     expect(await screen.findByText("Give it a title.")).toBeInTheDocument();
     expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+  });
+});
+
+/**
+ * The master toggle. `campaign.visibility` gates every per-row share in the
+ * product, and until this dialog existed nothing in `apps/web` could set it —
+ * so the four tests here are about the one field, not about the three beside it.
+ */
+describe("sharing a campaign", () => {
+  const openSettings = async () => {
+    renderScreen(mintingSession());
+    await screen.findByRole("heading", { name: "The Salt Road" });
+    await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
+  };
+
+  it("says on the screen itself which answer the campaign currently gives", async () => {
+    renderScreen(mintingSession());
+
+    // The fixture campaign is `dm`, and a DM should not have to open anything
+    // — or infer it from an absent badge — to know that.
+    const button = await screen.findByRole("button", { name: /campaign settings/ });
+    expect(button).toHaveAccessibleName("Private to you — campaign settings");
+    expect(button).toHaveTextContent("Private");
+  });
+
+  it("shares it, and says what sharing does before the DM commits", async () => {
+    server.routes.set(`PATCH ${campaignPath}`, {
+      status: 200,
+      body: { ...campaign, visibility: "shared" },
+    });
+    await openSettings();
+
+    expect(await screen.findByText(/This campaign is yours alone/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Players can see this" }));
+    expect(screen.getByText(/Your players can reach this campaign/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", campaignPath)).toEqual({
+        name: "The Salt Road",
+        partyName: "The Gilded Spoon",
+        playerCount: 4,
+        visibility: "shared",
+      }),
+    );
+  });
+
+  it("re-reads, so the bar stops saying Private the moment it is not", async () => {
+    const shared = { status: 200, body: { ...campaign, visibility: "shared" } };
+    server.routes.set(`PATCH ${campaignPath}`, shared);
+    await openSettings();
+    await userEvent.click(screen.getByRole("switch", { name: "Players can see this" }));
+
+    // Re-aimed while the save is still the DM's to make: the write changes what
+    // the *read* answers, and it is the read the screen believes.
+    server.routes.set(`GET ${campaignPath}`, shared);
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /campaign settings/ })).toHaveTextContent("Shared"),
+    );
+    // And it got there by asking again, not by patching its own copy — which is
+    // the rule every structural write on this screen follows, because a write
+    // moves things the screen did not send.
+    const patched = server.calls.findIndex(
+      (call) => call.method === "PATCH" && call.pathname === campaignPath,
+    );
+    expect(
+      server.calls
+        .slice(patched + 1)
+        .some((call) => call.method === "GET" && call.pathname === campaignPath),
+    ).toBe(true);
+  });
+
+  it("refuses an unnamed campaign, and a player count that is not one", async () => {
+    await openSettings();
+
+    const name = await screen.findByRole("textbox", { name: "Name" });
+    await userEvent.clear(name);
+    const players = screen.getByRole("spinbutton", { name: "Players" });
+    await userEvent.clear(players);
+    await userEvent.type(players, "99");
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByText("Give it a name.")).toBeInTheDocument();
+    expect(screen.getByText("Somewhere between none and 64.")).toBeInTheDocument();
+    expect(server.calls.some((call) => call.method === "PATCH")).toBe(false);
+  });
+
+  it("says so, in the dialog, when the server refuses the save", async () => {
+    // No PATCH route: the stub answers 404, which is a campaign that has gone
+    // away under an open dialog.
+    await openSettings();
+    await userEvent.click(await screen.findByRole("switch", { name: "Players can see this" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That campaign is gone, or it belongs to someone else.",
+    );
+    // Still open, and still holding the DM's answer.
+    expect(screen.getByRole("switch", { name: "Players can see this" })).toBeChecked();
+  });
+});
+
+describe("authoring a character", () => {
+  const openParty = async () => {
+    renderScreen(mintingSession());
+    await screen.findByRole("heading", { name: "The Salt Road" });
+    await userEvent.click(screen.getByRole("tab", { name: "Party" }));
+  };
+
+  it("writes one down, omitting what the DM left blank", async () => {
+    server.routes.set(`POST ${charactersPath}`, { status: 200, body: character });
+    await openParty();
+
+    // The one create slot, named for the open tab — Party had none until now.
+    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
+    await userEvent.type(screen.getByRole("textbox", { name: "Player" }), "Ilse");
+    await userEvent.type(screen.getByRole("spinbutton", { name: "AC" }), "18");
+
+    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/characters")).toEqual({
+        name: "Brannoc",
+        playerName: "Ilse",
+        ac: 18,
+        // `descriptor` and `hpMax` are absent rather than null: `CharacterCreate`
+        // takes no null, and an unfilled number is not a zero — `PartyList`
+        // renders each stat only when there is one.
+        visibility: "dm",
+      }),
+    );
+  });
+
+  it("sends shared only when the DM says so", async () => {
+    server.routes.set(`POST ${charactersPath}`, { status: 200, body: character });
+    await openParty();
+    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
+    expect(screen.getByText("Only you can see this character.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Players can see this" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/characters")).toMatchObject({ visibility: "shared" }),
+    );
+  });
+
+  it("opens on what is already there, and clears a field with a null", async () => {
+    server.routes.set(`PATCH ${charactersPath}/${character.id}`, {
+      status: 200,
+      body: { ...character, descriptor: null },
+    });
+    await openParty();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit Brannoc" }));
+
+    expect(await screen.findByRole("textbox", { name: "Character" })).toHaveValue("Brannoc");
+    expect(screen.getByRole("textbox", { name: "Player" })).toHaveValue("Ilse");
+    expect(screen.getByRole("spinbutton", { name: "Hit points" })).toHaveValue(52);
+
+    await userEvent.clear(screen.getByRole("textbox", { name: "Descriptor" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    // A null on update where create omits the field: emptying a box means
+    // "there is no answer", and omitting it would leave the old one.
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/characters/${character.id}`)).toEqual({
+        name: "Brannoc",
+        playerName: "Ilse",
+        descriptor: null,
+        ac: 18,
+        hpMax: 52,
+        visibility: "dm",
+      }),
+    );
+  });
+
+  it("refuses a nameless character, and a number out of range, before anything is sent", async () => {
+    await openParty();
+    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
+
+    await userEvent.type(await screen.findByRole("spinbutton", { name: "AC" }), "99");
+    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
+
+    expect(await screen.findByText("Give them a name.")).toBeInTheDocument();
+    expect(screen.getByText("Between 0 and 40.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Character" })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+  });
+
+  it("says so, in the form, when the server refuses the save", async () => {
+    await openParty();
+    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Too late");
+    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That campaign is gone, or it belongs to someone else.",
+    );
+    expect(screen.getByRole("textbox", { name: "Character" })).toHaveValue("Too late");
   });
 });
 
