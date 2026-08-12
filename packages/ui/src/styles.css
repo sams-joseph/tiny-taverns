@@ -277,6 +277,7 @@
   --spacing-page-sm: var(--pad-page-sm);
   --spacing-rail: var(--rail-w);
   --spacing-aside: var(--aside-w);
+  --spacing-chat-panel: var(--panel-chat-w);
   --container-measure: var(--measure);
 }
 
@@ -530,5 +531,17 @@
   select,
   textarea {
     font-family: inherit;
+  }
+
+  /* `prefers-reduced-motion` is answered upstream, in tokens/motion.css, by
+     zeroing every --dur-* token — which flattens everything in this product that
+     is timed from one, and that is everything except Tailwind's own
+     `animate-pulse`. A loading placeholder has no start and no end, so there is
+     no design duration for it to take and nothing upstream to zero. Skeleton is
+     the only component that reaches for it; this is where it stops. */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse {
+      animation: none;
+    }
   }
 }

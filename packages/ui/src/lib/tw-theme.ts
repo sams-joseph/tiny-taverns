@@ -178,4 +178,5 @@ export const twSpacing = [
   "page-sm",
   "rail",
   "aside",
+  "chat-panel",
 ] as const;

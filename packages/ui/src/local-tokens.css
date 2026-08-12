@@ -27,4 +27,11 @@
   /* readme.md specifies the dialog scrim as "--scrim + blur(3px)" in prose, and
      tokenises the colour but not the blur. */
   --scrim-blur: 3px;
+
+  /* ui_kits/dm-screen/README.md decides Option A — "A 400px right panel" — and
+     ChatLayouts.jsx sets `width: 400` inline; no token answers it. It is a
+     measurement rather than a spacing step now that the panel is a shadcn
+     sidebar, whose width reaches a gap element, a positioned container and an
+     overlaid sheet through one custom property. */
+  --panel-chat-w: 400px;
 }

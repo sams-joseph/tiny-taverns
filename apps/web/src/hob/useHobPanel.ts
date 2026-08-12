@@ -1,3 +1,4 @@
+import { useIsMobile } from "@taverns/ui";
 import { useCallback, useEffect, useState } from "react";
 
 /**
@@ -12,11 +13,15 @@ import { useCallback, useEffect, useState } from "react";
  * is not room for content plus 400px, so it becomes an overlay rather than
  * squeezing the prep UI into a column nobody can use.
  *
- * It is a `matchMedia` query rather than a `resize` listener on `innerWidth`:
+ * The measurement itself is `@taverns/ui`'s `useIsMobile`, which is shadcn's own
+ * hook with the breakpoint made a parameter — one media query in the product
+ * rather than two spellings of the same question, and the same one
+ * `SidebarProvider` would use if it were not told. Inline is simply *not*
+ * mobile. It is a media query rather than a `resize` listener on `innerWidth`:
  * the browser evaluates it, so there is one event when the answer changes
- * instead of one per frame of a drag. `matchMedia` is guarded because jsdom
- * ships one that never matches anything — a test that cares which side it is on
- * passes `inline` to `HobDock` directly.
+ * instead of one per frame of a drag. `matchMedia` is guarded inside that hook
+ * because jsdom ships one that never matches anything — a test that cares which
+ * side it is on passes `inline` to `HobDock` directly.
  *
  * ### The keys
  *
@@ -38,11 +43,6 @@ export interface HobPanelState {
   readonly show: () => void;
 }
 
-const inlineQuery = `(min-width: ${HOB_INLINE_MIN}px)`;
-
-const measure = (): boolean =>
-  typeof globalThis.matchMedia === "function" && globalThis.matchMedia(inlineQuery).matches;
-
 export function useHobPanel({
   /** The kit's README: "Open by default, because a DM who opened the app to prep
    * is going to talk to Hob." The shell decides — while nothing answers, a
@@ -50,17 +50,7 @@ export function useHobPanel({
   initialOpen = true,
 }: { readonly initialOpen?: boolean } = {}): HobPanelState {
   const [open, setOpen] = useState(initialOpen);
-  const [inline, setInline] = useState(measure);
-
-  useEffect(() => {
-    if (typeof globalThis.matchMedia !== "function") return;
-    const query = globalThis.matchMedia(inlineQuery);
-    const onChange = () => setInline(query.matches);
-    // The viewport may have moved between first render and this effect.
-    onChange();
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
+  const inline = !useIsMobile(HOB_INLINE_MIN);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

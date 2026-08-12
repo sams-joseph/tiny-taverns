@@ -2,6 +2,7 @@ import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
 import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { SignInSurface } from "../auth/SignInSurface";
+import { HobRegion } from "../hob/HobDock";
 import { hrefFor, type Route } from "../routes";
 
 /**
@@ -277,15 +278,21 @@ export function AppShell({
    * The seam for the Hob chat panel, and the whole of it.
    *
    * `onAskHob` is the top nav's *Ask Hob* button; `panel` is rendered as the
-   * last child of the row under the top nav. That row **is** `hob/HobDock.tsx`'s
-   * `HobRegion`, class for class — `relative flex min-h-0 flex-1
-   * overflow-hidden` — which is why `Hob` is passed here bare and never wrapped
-   * in one: a second region inside this one would be a second positioned
-   * ancestor, and the overlay would size to it instead of to the content.
-   * `HobRegion` is still the right thing where there is no shell, which is what
-   * the gallery's specimens use.
+   * last child of the row under the top nav, and that row **is**
+   * `hob/HobDock.tsx`'s `HobRegion` — the component itself now, rather than a
+   * second copy of its class list kept in step by hand. It has to be: the region
+   * publishes its own element through a context, and the panel's overlaid form
+   * is portalled into that element and measured against it. A row restated here
+   * would be `relative` and look right and portal to `<body>`, where the scrim
+   * would cover the whole app including this bar.
    *
-   * So a panel is inline simply by taking part in the row, or an overlay by
+   * So `Hob` is passed here bare and never wrapped in a region of its own — a
+   * second region inside this one is a second positioned ancestor, and the
+   * overlay would size to it instead of to the content. `HobRegion` used
+   * directly is still the right thing where there is no shell, which is what the
+   * gallery's specimens do.
+   *
+   * A panel is inline simply by taking part in the row, or an overlay by
    * positioning against it — and the shell carries no chat state, no shortcut
    * and no breakpoint of its own. `useHobPanel` owns all three.
    */
@@ -308,10 +315,7 @@ export function AppShell({
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
       <TopNav route={route} context={context} onAskHob={onAskHob} />
-      {/* Keep this in step with `HobRegion`: `overflow-hidden` is what stops an
-          overlaid panel painting outside the row, and `min-h-0` is what lets a
-          panel that scrolls inside itself be shorter than its own content. */}
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
         >
@@ -331,7 +335,7 @@ export function AppShell({
           </main>
         </div>
         {panel}
-      </div>
+      </HobRegion>
     </div>
   );
 }

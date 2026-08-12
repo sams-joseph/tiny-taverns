@@ -194,7 +194,7 @@ Lowest to highest, with the reason each rung is where it is:
 
 | rung      | value | why here                                                                                                                   |
 | --------- | ----- | -------------------------------------------------------------------------------------------------------------------------- |
-| `chrome`  | 10    | sticky page furniture (the app header). Not an overlay; must lose to the scrim.                                            |
+| `chrome`  | 10    | sticky page furniture — the app header, and the Hob panel while it is inline. Not an overlay; must lose to the scrim.      |
 | `scrim`   | 100   | the modal backdrop.                                                                                                        |
 | `dialog`  | 110   | the surface the scrim dims — above **its own backdrop**, by number.                                                        |
 | `popup`   | 200   | select / menu / popover. Anchored to a control that is often _inside_ a dialog, so it is more nested and must be above it. |
@@ -287,7 +287,14 @@ chosen through that style/preset name (`shadcn init --base base|radix|aria`, pre
 package is in the tree, and `adherence.test.ts` asserts that against the lockfile.
 
 `shadcn add <name>` emits `@/` imports; rewrite them to relative ones. `packages/ui` is
-consumed as source by another app's Vite, which resolves `@` to _its own_ `src`.
+consumed as source by another app's Vite, which resolves `@` to _its own_ `src`. A registry
+component also emits an `IconPlaceholder` for whichever icon set you have not chosen — swap it
+for `Icon` from this package, whose table is the one place a glyph is named.
+
+The ported set is the list in `adherence.test.ts`, which fails if a file appears in
+`components/ui` without being named there. The four newest — `separator`, `sheet`, `skeleton`,
+`sidebar` — came in together as `sidebar`'s registry dependencies; see "The panel is shadcn's
+`sidebar`" below for what each is for and where the vendored copies diverge.
 
 Two Base UI deltas worth knowing: `Checkbox` takes a separate `indeterminate` prop rather
 than `checked="indeterminate"`, and jsdom ships no `PointerEvent`, which Base UI's controls
@@ -929,14 +936,19 @@ self-stretch` to reach it.
 
 **The seam for the Hob chat panel is two props and nothing else** — `onAskHob?: () => void` (the
 bar's button; with none passed it still renders, because it is the bar the designers drew) and
-`panel?: ReactNode`, the last child of the row under the top nav. **That row _is_ `HobRegion`**,
-class for class: `relative flex min-h-0 flex-1 overflow-hidden`. The shell and `hob/HobDock.tsx`
-were built concurrently and arrived at the same element, so **`Hob` is passed bare and must never
-be wrapped in a `HobRegion` here** — a second region inside this one is a second positioned
-ancestor, and the overlay would size to it rather than to the content. `HobRegion` stays right
-where there is no shell, which is what the gallery's specimens use. Keep the two class lists in
-step; `overflow-hidden` is what stops an overlaid panel painting outside the row, and `min-h-0`
-is what lets a panel that scrolls inside itself be shorter than its own content.
+`panel?: ReactNode`, the last child of the row under the top nav. **That row _is_ `HobRegion`** —
+the component imported from `hob/HobDock.tsx`, not a second copy of its class list. It was a copy
+(`relative flex min-h-0 flex-1 overflow-hidden`, kept in step by hand) for as long as the region
+was only a positioned box; the sidebar rebuild made it also **publish its own element through a
+context, which the overlaid panel is portalled into**, and a row restated here would be
+`relative`, look right, and portal to `<body>` — where the scrim covers the whole app including
+this bar. So the duplication is gone and could not have survived. **`Hob` is still passed bare and
+must never be wrapped in a second `HobRegion`**: that would be a second positioned ancestor, and
+the overlay would size to it rather than to the content. `HobRegion` used directly is right where
+there is no shell, which is what the gallery's specimens do. `overflow-hidden` is what stops an
+overlaid panel painting outside the row — and what clips the inline one while it slides
+off-canvas — and `min-h-0` is what lets a panel that scrolls inside itself be shorter than its
+own content.
 
 **The shell holds no chat state, no ⌘K handler and no breakpoint** — `useHobPanel` owns all three,
 including `HOB_INLINE_MIN`. A screen composes it:
@@ -947,13 +959,15 @@ opens it when asked, and nothing is requested until it is opened. Mounted on the
 gallery is left to its specimen, which owns a `useHobPanel` of its own — two on one page would
 both answer the same ⌘K.
 
-Measured in Chromium either side of the threshold, per screen: inline at 1440/1021/**1020** (the
-query is `min-width: 1020px`) is `position: static` in flow, and the _content column_ shrinks by
-the panel's 400px; at 1019/900 the panel is `absolute` at `z-dialog` and the scrim `absolute` at
-`z-scrim` — different rungs, never one — with the scrim's box exactly the row's (`0, 56, vw×844`),
-so it starts below the nav and `elementFromPoint` still returns the _Ask Hob_ button. That is the
-property worth re-checking if either class list moves: **the overlay covers the content, not the
-app.** `document.scrollWidth` stays equal to the viewport in every case.
+Measured in Chromium either side of the threshold, per screen: inline at 1440/1021/**1020** the
+panel is `absolute` at `z-chrome` over a 400px gap element, so the _content column_ shrinks by
+exactly 400 (1040 at 1440, 620 at 1020); at 1019/900 the panel is `absolute` at `z-dialog` and
+the scrim `absolute` at `z-scrim` — different rungs, never one — with the scrim's box exactly the
+row's (`0, 56, vw×844`), so it starts below the nav and `elementFromPoint` still returns the
+_Ask Hob_ button. That is the property worth re-checking if either class list moves: **the overlay
+covers the content, not the app.** `document.scrollWidth` stays equal to the viewport in every
+case. (Inline was `position: static` before the sidebar; it is the gap that keeps the content
+narrower now, and that is the number to assert — see the sidebar section below.)
 
 `NavContext` is exported from the same file for the bar's right-hand pair, and takes an `href` for
 the screen that is _inside_ a campaign — from a fight, the campaign's name is the way back to
@@ -1687,9 +1701,9 @@ still only the surface.
   The gallery's `#hob` section is the one place it renders. A panel that appears to hold a
   conversation the DM never had is the failure this area is most able to cause.
 - **The mount is three names**: `useHobPanel()` (open state, `inline`, ⌘K/Esc), `HobRegion`
-  (the `relative flex` row the overlay positions against — an overlay without one covers the
-  page instead of the content), and `<Hob hob={…} campaignId={…} />` as that region's last
-  child. **`campaignId` is what makes it answer**, and the campaign list passes none on
+  (the `relative flex` row the overlay positions against **and portals into** — an overlay
+  without one covers the page instead of the content), and `<Hob hob={…} campaignId={…} />` as
+  that region's last child. **`campaignId` is what makes it answer**, and the campaign list passes none on
   purpose: Hob's tools all hang off a campaign, the same rule that keeps _Bestiary_ out of the
   nav until the route names one. The gallery's
   "The mount, and the opener" specimen _is_ that composition, so it fails if the seam rots.
@@ -1710,12 +1724,16 @@ question of every conversation. Build the object without the key instead. (Only 
 caller writes the key explicitly, which is exactly what a `const threadId = …` variable invites.)
 
 **Inline above 1020px, overlay below** — `HOB_INLINE_MIN`, from the second delivery's
-`CHAT_INLINE_MIN`, which fell from 1180 when the 260px rail became a 56px top bar. Measured in
-Chromium against the running app: 1020 → inline, panel `static`, 400px wide, no scrim; 1019 →
-`position: absolute`, `z-index: 110` over a scrim at `100`, and `elementFromPoint` over the
-content returns the scrim. That last check is the point — it is the property the select-under-a-
-dialog bug violated, and rendering above is not the same as _taking the click_. The panel takes
-`z-dialog` and the scrim `z-scrim`; two rungs, never one.
+`CHAT_INLINE_MIN`, which fell from 1180 when the 260px rail became a 56px top bar. Re-measured
+in Chromium after the panel became a sidebar (see the section below), at 1440 / 1021 / **1020** /
+1019 / 900: above the threshold the panel is 400px with a gap element beside the content
+reserving exactly that width, so the content column is 1040 at 1440 and 620 at 1020, and there
+is no scrim; at 1019 and below the scrim's box is the region's exactly (`0, 56, vw × 844`) at
+`z-index: 100` with the panel at `110`, and `elementFromPoint` over the content returns the
+scrim while over _Ask Hob_ it still returns the button. That pair is the point — it is the
+property the select-under-a-dialog bug violated, and rendering above is not the same as _taking
+the click_; and the scrim starting at y=56 is what keeps the overlay over the **content** rather
+than over the app. `document.scrollWidth` equals the viewport at every width.
 
 Three things that cost time here:
 
@@ -1726,14 +1744,73 @@ Three things that cost time here:
 - **Do not auto-scroll an empty thread to the bottom.** The starter grid is taller than a short
   panel, so "scroll to the newest turn" opened on the last starter with the question scrolled
   off — the first thing a DM sees, already scrolled past.
-- **`w-100` is the panel's 400px**, a Tailwind spacing step and not a token: the delivery does
-  not tokenise it either, and `--aside-w` is the 340px inspector, a different measurement.
+- **The panel's 400px is `--panel-chat-w`** in `packages/ui/src/local-tokens.css`, bridged as
+  `--spacing-chat-panel`. It was `w-100` — a bare Tailwind step — until the sidebar needed the
+  same measurement as a custom property in three places at once (the gap, the positioned
+  container, the portalled sheet). The delivery states it in prose and never tokenised it, which
+  is exactly what that file is for. `--aside-w` is the 340px inspector, a different measurement.
 
 **Driving a browser here: never assume a debug port.** `--remote-debugging-port=9333` was
 already bound by another agent's headless Chromium, and `/json/list` cheerfully returned _their_
 page — a probe that reported a shell nobody in this worktree had written. Launch with
 `--remote-debugging-port=0` and read the real port off the process's own
 `DevTools listening on ws://127.0.0.1:<port>/` stderr line.
+
+### The panel is shadcn's `sidebar`, and what that brought in with it
+
+Captain's decision: the bespoke dock was replaced by the registry component. `shadcn add sidebar`
+for this project's style is `https://ui.shadcn.com/r/styles/base-nova/sidebar.json`, and its
+registry dependencies are `button`, `input`, `separator`, `sheet`, `skeleton`, `tooltip` and
+`use-mobile` — **no Radix is named and none entered the tree**; `pnpm-lock.yaml` and
+`node_modules` both grep clean, which `adherence.test.ts` also asserts against the lockfile.
+
+**Four are new and each is a full port, tokenised like the rest:**
+`packages/ui/src/components/ui/{separator,sheet,skeleton,sidebar}.tsx` and
+`packages/ui/src/hooks/use-mobile.ts` (the first file under `hooks/`). `sheet` and `sidebar` are
+the two worth reading before touching anything here; `separator` and `skeleton` are a hairline and
+a placeholder. `skeleton` is the one component whose animation is **not** timed from a `--dur-*`
+token — `animate-pulse` has no start and no end — so `styles.css` §7 stops it under
+`prefers-reduced-motion` by hand, which is the only reduced-motion rule this product writes
+itself.
+
+**`sheet` is a dialog underneath, so it is on the layering scale**: backdrop `z-scrim`, popup
+`z-dialog`, two rungs and never one. It also carries the one prop this whole change turns on —
+**`container`**. Upstream's sheet is `fixed` and portals to `<body>`; given a container it portals
+into that element _and_ switches the backdrop and the popup to `absolute`, because a portal into a
+region with the geometry still measured from the viewport is incoherent. That is what makes the
+overlaid panel cover the content column and leave the app's own top bar lit.
+
+**The vendored `sidebar.tsx` diverges from upstream in eight places, each numbered in its own
+doc comment** so a future `sidebar.json` can be diffed and the differences read off: it sizes to
+its container rather than the window; it takes `z-chrome` instead of `z-10`/`z-20`; the mobile
+breakpoint is a parameter and `isMobile` may be supplied outright; the `sidebar_state` cookie is
+gone (nothing read it); the `⌘B` shortcut is opt-out; a _controlled_ sidebar has one open state
+rather than a second uncontrolled one for the drawer; the overlaid form is `modal={false}` with
+`disablePointerDismissal` and an explicit backdrop `onClick`; and `className` reaches both forms.
+The two that are easy to get wrong: an outside-press dismissal **races the opener that lives
+outside the sheet** (the press closes it, the trigger's click reopens it, and the button looks
+dead), and a collapsed sidebar **stays mounted off-canvas**, so it is `inert` or a keyboard walks
+into a panel nobody can see.
+
+**How the panel now mounts.** `HobDock` is a `SidebarProvider` rendered `display: contents` —
+so the gap element becomes a flex item of `HobRegion` and the positioned container measures
+against the region — wrapping one `<Sidebar side="right" collapsible="offcanvas">` whose only
+child is `HobPanel`. The provider is controlled from `useHobPanel` (`open`, `onOpenChange`,
+`isMobile={!inline}`, `mobileBreakpoint={HOB_INLINE_MIN}`, `keyboardShortcut={null}` because ⌘K
+is already the hook's) and is handed `container={region}` from `HobRegionContext`. `HobPanel`'s
+three rows are `SidebarHeader` / `SidebarContent` / `SidebarFooter` with the delivery's padding,
+hairlines and gaps overriding theirs — including `[scrollbar-width:auto]`, because
+`SidebarContent` hides its scrollbar and a chat thread shows one. **`useHobPanel.inline` is now
+`!useIsMobile(HOB_INLINE_MIN)`**, so there is one media query in the product rather than two
+spellings of the same threshold; the query it asks for is `(max-width: 1019px)`.
+
+Nothing else moved. Verified in Chromium against a real server, a real Postgres and a scripted
+OpenAI-compatible endpoint: a question streamed back with the tool step visible in words
+(_"Writing a note — Cazril, at the crossing…"_), the proposal card drew with _Save to session /
+Discard / Try again_, accepting it flipped the card to _Saved · Open it_ and wrote a real
+`note` row with `origin: assistant` and `assistant_turn_id` pointing at the turn that proposed
+it, and a reload read the whole evening back. The two honest absences still render as absences —
+no campaign in view, and no model configured.
 
 ## Hob answers: the toolkit, the loop, the conversation, and the accept path
 

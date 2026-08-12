@@ -8,8 +8,8 @@
  * loud. `HobPanel`, `HobDock` and the parts are exported for the gallery and
  * the tests; a screen should not reach for them.
  *
- * There is no assistant behind any of it. `conversation.ts` is the seam, and
- * the only file that has to change when there is.
+ * `conversation.ts` is the one seam to whatever answers; `HobDock` is the one
+ * place the panel's container is chosen, and it is shadcn's `sidebar`.
  */
 
 export { Hob } from "./Hob";

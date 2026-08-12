@@ -1,4 +1,4 @@
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, SidebarContent, SidebarFooter, SidebarHeader } from "@taverns/ui";
 import { useEffect, useRef } from "react";
 import { ArtifactCard } from "./ArtifactCard";
 import {
@@ -27,6 +27,12 @@ import type { HobArtifact, HobContextChip, HobTurn } from "./transcript";
  * replaces what it is not given. That is what lets it be honest today: with
  * nothing behind it, `onSend` is absent and the composer is replaced by a line
  * saying so, rather than an input that accepts a question and drops it.
+ *
+ * The three rows are shadcn's `SidebarHeader` / `SidebarContent` /
+ * `SidebarFooter`, which is what `HobDock` puts them inside. They contribute the
+ * flex column and the scroll containment; every value on top of that — the
+ * padding, the hairline, the gaps — is the delivery's and overrides theirs, so
+ * the panel looks like `ChatPanel.jsx` and not like a navigation drawer.
  */
 
 export interface HobPanelProps {
@@ -95,7 +101,7 @@ export function HobPanel({
       aria-label="Hob"
       className="flex h-full min-h-0 flex-col bg-surface-card text-foreground"
     >
-      <header className="flex shrink-0 items-center gap-2.5 border-b border-hairline p-3.5">
+      <SidebarHeader className="shrink-0 flex-row items-center gap-2.5 border-b border-hairline p-3.5">
         <HobAvatar size={26} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-body-s leading-tight font-medium text-heading">Hob</span>
@@ -117,11 +123,16 @@ export function HobPanel({
             <Icon name="panel-right-close" size={14} />
           </Button>
         )}
-      </header>
+      </SidebarHeader>
 
       {context !== undefined && context.length > 0 && <ContextBar chips={context} />}
 
-      <div ref={thread} className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto p-3.5">
+      {/* `SidebarContent` hides its own scrollbar; a chat thread the DM scrolls
+          through shows one, as the delivery's `overflow: auto` does. */}
+      <SidebarContent
+        ref={thread}
+        className="gap-3.5 p-3.5 [scrollbar-width:auto] [&::-webkit-scrollbar]:block"
+      >
         {turns.length === 0 && !thinking ? (
           <EmptyThread onPick={onSend} />
         ) : (
@@ -153,13 +164,15 @@ export function HobPanel({
           })
         )}
         {thinking && <Thinking label={activity} />}
-      </div>
+      </SidebarContent>
 
-      {onSend === undefined ? (
-        <NothingListens reason={unavailable} />
-      ) : (
-        <Composer onSend={onSend} />
-      )}
+      <SidebarFooter className="shrink-0 gap-0 p-0">
+        {onSend === undefined ? (
+          <NothingListens reason={unavailable} />
+        ) : (
+          <Composer onSend={onSend} />
+        )}
+      </SidebarFooter>
     </section>
   );
 }
