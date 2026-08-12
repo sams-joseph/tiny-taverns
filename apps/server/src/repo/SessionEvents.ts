@@ -2,7 +2,6 @@ import {
   type Actor,
   type CampaignId,
   type CombatantId,
-  CurrentActor,
   type EncounterRunId,
   NotFound,
   SessionEvent,
@@ -14,6 +13,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
+import type { DmActor } from "./DmActor.js";
 import { RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
 import {
@@ -150,33 +150,42 @@ export const requestAlreadyApplied = (
  * a dropped connection is the ordinary read with the ordinary cursor, not a
  * replay path that only executes when something has already gone wrong and
  * therefore only rots when nobody is looking.
+ *
+ * **All three reads take a `DmActor`.** The log is the DM's own record of a
+ * fight — `session_event.visibility` defaults to `dm` and nothing sets it, so
+ * "what a player is told about a fight" is an undecided product question rather
+ * than a narrower version of this. Note that `pollForRun` is gated too: it is
+ * the *streaming* spelling of `listForRun` and a grep for `CurrentActor>`
+ * misses it, which would have left the gate on the other two decorative.
  */
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
     readonly list: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       filter: SessionLogFilterValues,
-    ) => Effect.Effect<ReadonlyArray<SessionEvent>, NotFound, CurrentActor>;
+    ) => Effect.Effect<ReadonlyArray<SessionEvent>, NotFound>;
     readonly listForRun: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       since: number,
       limit: number,
-    ) => Effect.Effect<ReadonlyArray<SessionEvent>, NotFound, CurrentActor>;
+    ) => Effect.Effect<ReadonlyArray<SessionEvent>, NotFound>;
     /**
-     * The same read as `listForRun`, with the actor already resolved.
+     * The same read as `listForRun`, for the lifetime of one connection.
      *
-     * The live stream pulls repeatedly for the lifetime of a connection and
-     * must not re-resolve `CurrentActor` on each pull: the actor was decided
-     * when the request was authorised, and a stream whose permissions could
-     * change under it mid-fight is a stream nobody can reason about.
+     * It always took its actor as an argument rather than as a requirement,
+     * because the live stream pulls repeatedly after the handler effect has
+     * returned: the actor was decided when the request was authorised, and a
+     * stream whose permissions could change under it mid-fight is a stream
+     * nobody can reason about. That is also why the `DmActor` gate has to reach
+     * this method by hand — a grep for `CurrentActor>` does not see it, and a
+     * stream is exactly where a wide projection would go unnoticed.
      */
     readonly pollForRun: (
-      actor: Actor,
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       since: number,
@@ -215,10 +224,9 @@ export class SessionEvents extends Context.Service<
         );
 
       return {
-        list: (campaignId, sessionId, filter) =>
+        list: ({ actor, campaign: campaignId }, sessionId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               yield* ensureNestedParentReadable(sql, LOG, sessionId, campaignId, actor);
               const rows = yield* sql<SessionEventRow>`
                 select session_event.* from session_event
@@ -231,10 +239,9 @@ export class SessionEvents extends Context.Service<
             }),
           ),
 
-        listForRun: (campaignId, sessionId, runId, since, limit) =>
+        listForRun: ({ actor, campaign: campaignId }, sessionId, runId, since, limit) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               yield* ensureNestedParentReadable(sql, LOG, sessionId, campaignId, actor);
               // One check, not two. "This session is readable" and "this run is
               // readable" are both true of a run in a *different* session of the
@@ -245,7 +252,7 @@ export class SessionEvents extends Context.Service<
             }),
           ),
 
-        pollForRun: (actor, campaignId, _sessionId, runId, since, limit) =>
+        pollForRun: ({ actor, campaign: campaignId }, _sessionId, runId, since, limit) =>
           runPage(actor, campaignId, runId, since, limit),
       };
     }),

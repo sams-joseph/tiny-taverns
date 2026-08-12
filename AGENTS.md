@@ -537,6 +537,25 @@ non-negotiable, because it is free on day one and a retrofit later.
 - **`creature` is the one table whose rows may belong to no campaign** — the global `system`
   corpus — and it therefore has a predicate of its own, `corpusRowReadable`. Read the bestiary
   section below before writing anything that looks like it; the obvious spelling leaks.
+- **When a table's player projection diverges from its DM projection, its DM repository takes a
+  `DmActor` in the same change.** This is the one rule here that has to be remembered rather than
+  compiled, and it is why `apps/server/src/repo/DmActor.ts` exists. A `DmActor` is a branded
+  proof of the pair (this account is a `dm` member of this campaign, and this credential reaches
+  it), minted only by `DmActors.of` — one read through `campaignWritableById` — and it **carries
+  the campaign**, so the gated methods take it _in place of_ a campaign id and a proof for one
+  table cannot be spent on another. Fifteen methods have it today: `Combatants` (5),
+  `EncounterRuns` (7) and `SessionEvents` (3, including the streaming `pollForRun`, which a grep
+  for `CurrentActor>` cannot see). The other fifty-three actor-scoped methods do not, and should
+  not: they return a `shared` row a player is entitled to see in full, so `GET …/notes` answering
+  the ordinary `Note` discloses nothing. **The gate is a precondition on the seam, not a
+  replacement for it** — every gated method still composes `visibility.ts` unchanged, so a bug in
+  the gate degrades to today's behaviour rather than to an open door. `apps/server/test/dm-actor.test.ts`
+  pins all of it, including six `@ts-expect-error` lines that fail the _build_ if a campaign id,
+  a plain `Actor` or a hand-built object ever becomes acceptable. **The next candidate is
+  `Recap.read`**, which assembles whole `Combatant` and `EncounterRun` values out of the same two
+  tables; it is deliberately left alone because the player Chronicle is a planned screen and
+  gating it would settle that screen's shape by accident — so it is a decision to take, not a
+  divergence to discover.
 
 ## The prep surface: what the fixtures forced
 

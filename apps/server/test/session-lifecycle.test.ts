@@ -6,11 +6,12 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount } from "./support/actors.js";
+import { anAccount, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -34,6 +35,7 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Creatures.layer,
+    DmActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -71,6 +73,8 @@ const makeFixture = Effect.gen(function* () {
     as,
     campaigns,
     sessions,
+    /** The DM proof the live repositories take in place of a campaign id. */
+    dm: yield* as(asDm(dm, campaign.id)),
     campaignId: campaign.id,
     encounterId: encounter.id,
     sessionId: session.id,
@@ -172,11 +176,11 @@ describe("ending a fight is not finishing the night", () => {
     // to the dialog that documents it.
     await runtime.runPromise(
       Effect.gen(function* () {
-        const { as, sessions, campaignId, encounterId, sessionId } = yield* makeFixture;
+        const { as, dm, sessions, campaignId, encounterId, sessionId } = yield* makeFixture;
         const runs = yield* EncounterRuns;
 
-        const first = yield* as(runs.start(campaignId, sessionId, { encounterId }));
-        yield* as(runs.end(campaignId, sessionId, first.id));
+        const first = yield* runs.start(dm, sessionId, { encounterId });
+        yield* runs.end(dm, sessionId, first.id);
 
         const session = yield* as(sessions.findById(campaignId, sessionId));
         expect(session.endedAt).toBeNull();
@@ -184,7 +188,7 @@ describe("ending a fight is not finishing the night", () => {
 
         // And the next fight goes on the same night: the partial unique index
         // allows it precisely because the first run has ended.
-        const second = yield* as(runs.start(campaignId, sessionId, { encounterId }));
+        const second = yield* runs.start(dm, sessionId, { encounterId });
         expect(second.id).not.toEqual(first.id);
         expect(second.endedAt).toBeNull();
       }).pipe(Effect.orDie),

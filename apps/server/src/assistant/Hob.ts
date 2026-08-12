@@ -38,6 +38,7 @@ import {
 } from "effect/unstable/ai";
 import { Campaigns } from "../repo/Campaigns.js";
 import { Creatures } from "../repo/Creatures.js";
+import { DmActors } from "../repo/DmActor.js";
 import { HobThreads } from "../repo/HobThreads.js";
 import { Recap } from "../repo/Recap.js";
 import { Search } from "../repo/Search.js";
@@ -161,6 +162,7 @@ export class Hob extends Context.Service<
     never,
     | Campaigns
     | Creatures
+    | DmActors
     | HobThreads
     | LanguageModel.LanguageModel
     | Recap
@@ -172,6 +174,7 @@ export class Hob extends Context.Service<
       Effect.gen(function* () {
         const languageModel = yield* LanguageModel.LanguageModel;
         const campaigns = yield* Campaigns;
+        const dmActors = yield* DmActors;
         const threads = yield* HobThreads;
         const repositories = {
           search: yield* Search,
@@ -201,6 +204,11 @@ export class Hob extends Context.Service<
               // answered as a 404 before the response body opens.
               const campaign = yield* campaigns.findById(campaignId);
 
+              // Asking is a write — a conversation is a row in the campaign —
+              // so the DM check below refuses exactly whom `threads.start`
+              // would, one line earlier and with the proof the toolkit needs.
+              const dm = yield* dmActors.of(campaignId);
+
               // The conversation, resolved before a byte of stream exists — so
               // a thread this credential may not reach is a 404 exactly as an
               // unreachable campaign is, and the model is never called.
@@ -228,9 +236,11 @@ export class Hob extends Context.Service<
 
               // Bound to *this* campaign and *this* actor, now — the stream
               // below is pulled after this effect has returned, so nothing may
-              // be left to the ambient context.
+              // be left to the ambient context. The proof is resolved here
+              // rather than passed in because it is the pair, and one of the
+              // tools reads the combat log.
               const handlers = yield* HobToolkit.toHandlers(
-                handlersFor(repositories, campaignId, actor, proposal),
+                handlersFor(repositories, dm, proposal),
               );
               const toolkit = yield* Effect.provideContext(HobToolkit, handlers);
 

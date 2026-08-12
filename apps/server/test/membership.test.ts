@@ -1,4 +1,10 @@
-import { type Actor, type AssistantTurnId, CurrentActor } from "@taverns/api";
+import {
+  type Actor,
+  type AssistantTurnId,
+  type CampaignId,
+  CurrentActor,
+  type NotFound,
+} from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { randomUUID } from "node:crypto";
@@ -12,6 +18,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { type DmActor, DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
@@ -139,6 +146,7 @@ const runtime = ManagedRuntime.make(
     Characters.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
+    DmActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -155,6 +163,10 @@ const withActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
+
+/** The DM proof, for whichever actor the enclosing `withActor` provided. */
+const dmOf = (campaignId: CampaignId): Effect.Effect<DmActor, NotFound, CurrentActor | DmActors> =>
+  Effect.flatMap(DmActors, (dmActors) => dmActors.of(campaignId));
 
 /**
  * One campaign with a row in every content table, and one stranger who is a DM
@@ -204,8 +216,9 @@ const makeFixture = Effect.gen(function* () {
   const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: creature.id, count: 6 }));
 
-  const run = yield* as(runs.start(campaign.id, session.id, { encounterId: encounter.id }));
-  yield* as(combatants.create(campaign.id, session.id, run.id, { displayName: "Croaker 1" }));
+  const asDm = yield* as(dmOf(campaign.id));
+  const run = yield* as(runs.start(asDm, session.id, { encounterId: encounter.id }));
+  yield* as(combatants.create(asDm, session.id, run.id, { displayName: "Croaker 1" }));
 
   const thread = yield* as(hob.start(campaign.id, "Who is the ferryman?"));
   yield* as(
@@ -252,6 +265,7 @@ const READS: Record<
     | Combatants
     | Creatures
     | CurrentActor
+    | DmActors
     | EncounterCreatures
     | EncounterRuns
     | Encounters
@@ -272,11 +286,21 @@ const READS: Record<
   encounter: (f) => Effect.flatMap(Encounters, (r) => r.list(f.campaign.id)),
   encounter_creature: (f) =>
     Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),
-  encounter_run: (f) => Effect.flatMap(EncounterRuns, (r) => r.list(f.campaign.id, f.session.id)),
+  // The three DM-gated tables. The proof is obtained the same way `src` obtains
+  // it — from the ambient actor — so a stranger fails at the gate rather than
+  // at the read, which is the `NotFound` branch this file already allows for.
+  encounter_run: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(EncounterRuns, (r) => r.list(dm, f.session.id)),
+    ),
   combatant: (f) =>
-    Effect.flatMap(Combatants, (r) => r.list(f.campaign.id, f.session.id, f.run.id)),
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(Combatants, (r) => r.list(dm, f.session.id, f.run.id)),
+    ),
   session_event: (f) =>
-    Effect.flatMap(SessionEvents, (r) => r.list(f.campaign.id, f.session.id, {})),
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(SessionEvents, (r) => r.list(dm, f.session.id, {})),
+    ),
   assistant_thread: (f) => Effect.flatMap(HobThreads, (r) => r.list(f.campaign.id)),
   assistant_turn: (f) => Effect.flatMap(HobThreads, (r) => r.turns(f.campaign.id, f.thread.id)),
 };

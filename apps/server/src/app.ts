@@ -27,6 +27,7 @@ import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
+import { DmActors } from "./repo/DmActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
@@ -107,7 +108,7 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
 export const assistantFromConfig: Layer.Layer<
   Hob,
   Config.ConfigError,
-  Campaigns | Creatures | HobThreads | Recap | Search | SessionEvents | Sessions
+  Campaigns | Creatures | DmActors | HobThreads | Recap | Search | SessionEvents | Sessions
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -167,7 +168,7 @@ export const servicesOver = <E>(
   assistant: Layer.Layer<
     Hob,
     E | Config.ConfigError,
-    Campaigns | Creatures | HobThreads | Recap | Search | SessionEvents | Sessions
+    Campaigns | Creatures | DmActors | HobThreads | Recap | Search | SessionEvents | Sessions
   > = assistantFromConfig,
 ): Layer.Layer<
   | Accounts
@@ -177,6 +178,7 @@ export const servicesOver = <E>(
   | Characters
   | Combatants
   | Creatures
+  | DmActors
   | EncounterCreatures
   | EncounterRuns
   | Encounters
@@ -208,6 +210,11 @@ export const servicesOver = <E>(
     // point of a doorbell.
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
+    // The DM gate the three live groups spend. It is a repository like any
+    // other — one read of `campaign_member` through the shipped predicate —
+    // and it is here rather than inside them because a repository that could
+    // mint its own proof would be proving nothing.
+    DmActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -252,6 +259,7 @@ export const servicesOver = <E>(
       Layer.provide([
         Campaigns.layer,
         Creatures.layer,
+        DmActors.layer,
         HobThreads.layer,
         Recap.layer,
         Search.layer,
@@ -289,6 +297,7 @@ export const applicationOver = <E>(
     | Characters
     | Combatants
     | Creatures
+    | DmActors
     | EncounterCreatures
     | EncounterRuns
     | Encounters

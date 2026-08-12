@@ -1,7 +1,9 @@
 import {
-  CurrentActor,
+  type CampaignId,
+  type CurrentActor,
   Heartbeat,
   type LiveEvent,
+  type NotFound,
   type SessionEvent,
   TavernsApi,
 } from "@taverns/api";
@@ -16,6 +18,7 @@ import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
+import { type DmActor, DmActors } from "./repo/DmActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
@@ -40,6 +43,29 @@ import { Sessions } from "./repo/Sessions.js";
  * which keeps the service a plain layer requirement instead of a request-level
  * one.
  */
+
+/**
+ * The DM gate for the three live groups, resolved once per group build.
+ *
+ * `runs`, `combatants` and `live` are the endpoints whose rows differ for a
+ * player, and their repositories take a `DmActor` rather than a campaign id —
+ * so this is the only expression in `handlers.ts` that turns a path segment
+ * into one, and a handler that tried to skip it would have no campaign to pass.
+ * See `repo/DmActor.ts`.
+ *
+ * The campaign id is named once per handler, which is what keeps the proof and
+ * the read talking about the same table: there is no second id for it to
+ * disagree with.
+ */
+const asDmOf = Effect.map(
+  DmActors,
+  (dmActors) =>
+    <A, E, R>(
+      campaignId: CampaignId,
+      read: (dm: DmActor) => Effect.Effect<A, E, R>,
+    ): Effect.Effect<A, E | NotFound, R | CurrentActor> =>
+      Effect.flatMap(dmActors.of(campaignId), read),
+);
 
 const HealthLive = HttpApiBuilder.group(
   TavernsApi,
@@ -287,24 +313,29 @@ const RunsLive = HttpApiBuilder.group(
   "runs",
   Effect.fnUntraced(function* (handlers) {
     const runs = yield* EncounterRuns;
+    const dm = yield* asDmOf;
     return handlers
-      .handle("list", ({ params }) => runs.list(params.campaignId, params.sessionId))
+      .handle("list", ({ params }) =>
+        dm(params.campaignId, (as) => runs.list(as, params.sessionId)),
+      )
       .handle("start", ({ params, payload }) =>
-        runs.start(params.campaignId, params.sessionId, payload),
+        dm(params.campaignId, (as) => runs.start(as, params.sessionId, payload)),
       )
       .handle("resume", ({ params, payload }) =>
-        runs.resume(params.campaignId, params.sessionId, payload),
+        dm(params.campaignId, (as) => runs.resume(as, params.sessionId, payload)),
       )
       .handle("findById", ({ params }) =>
-        runs.findById(params.campaignId, params.sessionId, params.runId),
+        dm(params.campaignId, (as) => runs.findById(as, params.sessionId, params.runId)),
       )
       .handle("update", ({ params, payload }) =>
-        runs.update(params.campaignId, params.sessionId, params.runId, payload),
+        dm(params.campaignId, (as) => runs.update(as, params.sessionId, params.runId, payload)),
       )
       .handle("nextTurn", ({ params, payload }) =>
-        runs.nextTurn(params.campaignId, params.sessionId, params.runId, payload),
+        dm(params.campaignId, (as) => runs.nextTurn(as, params.sessionId, params.runId, payload)),
       )
-      .handle("end", ({ params }) => runs.end(params.campaignId, params.sessionId, params.runId));
+      .handle("end", ({ params }) =>
+        dm(params.campaignId, (as) => runs.end(as, params.sessionId, params.runId)),
+      );
   }),
 );
 
@@ -313,33 +344,30 @@ const CombatantsLive = HttpApiBuilder.group(
   "combatants",
   Effect.fnUntraced(function* (handlers) {
     const combatants = yield* Combatants;
+    const dm = yield* asDmOf;
     return handlers
       .handle("list", ({ params }) =>
-        combatants.list(params.campaignId, params.sessionId, params.runId),
+        dm(params.campaignId, (as) => combatants.list(as, params.sessionId, params.runId)),
       )
       .handle("create", ({ params, payload }) =>
-        combatants.create(params.campaignId, params.sessionId, params.runId, payload),
+        dm(params.campaignId, (as) =>
+          combatants.create(as, params.sessionId, params.runId, payload),
+        ),
       )
       .handle("update", ({ params, payload }) =>
-        combatants.update(
-          params.campaignId,
-          params.sessionId,
-          params.runId,
-          params.combatantId,
-          payload,
+        dm(params.campaignId, (as) =>
+          combatants.update(as, params.sessionId, params.runId, params.combatantId, payload),
         ),
       )
       .handle("damage", ({ params, payload }) =>
-        combatants.damage(
-          params.campaignId,
-          params.sessionId,
-          params.runId,
-          params.combatantId,
-          payload,
+        dm(params.campaignId, (as) =>
+          combatants.damage(as, params.sessionId, params.runId, params.combatantId, payload),
         ),
       )
       .handle("remove", ({ params }) =>
-        combatants.remove(params.campaignId, params.sessionId, params.runId, params.combatantId),
+        dm(params.campaignId, (as) =>
+          combatants.remove(as, params.sessionId, params.runId, params.combatantId),
+        ),
       );
   }),
 );
@@ -360,6 +388,10 @@ const LiveLive = HttpApiBuilder.group(
     const events = yield* SessionEvents;
     const runs = yield* EncounterRuns;
     const live = yield* LiveEvents;
+    // Directly, not through `asDmOf`: the streaming handler needs the proof as
+    // a value it can hold for the life of the connection, not as a wrapper
+    // around one call.
+    const dmActors = yield* DmActors;
     // Read once, when the group is built, not per request. `orDie` because a
     // `LIVE_HEARTBEAT_SECONDS` that is not a number is a misconfigured
     // deployment and should stop the boot loudly — and because letting a
@@ -370,7 +402,9 @@ const LiveLive = HttpApiBuilder.group(
     return (
       handlers
         .handle("log", ({ params, query }) =>
-          events.list(params.campaignId, params.sessionId, query),
+          Effect.flatMap(dmActors.of(params.campaignId), (as) =>
+            events.list(as, params.sessionId, query),
+          ),
         )
         /**
          * The live stream, and the only read in the product that is not a
@@ -402,13 +436,18 @@ const LiveLive = HttpApiBuilder.group(
          */
         .handle("events", ({ params, query, headers }) =>
           Effect.gen(function* () {
-            const actor = yield* CurrentActor;
+            // The DM gate, resolved once for the whole connection rather than
+            // per pull — for the reason `pollForRun` has always taken its actor
+            // as an argument: the stream is consumed long after this effect has
+            // returned, and permissions that could change under a fight are not
+            // something anyone can reason about.
+            const as = yield* dmActors.of(params.campaignId);
             // The ordinary read of the run, for its ordinary `NotFound` — which
             // is the endpoint's declared error and so is answered as a status
             // before a single byte of stream. It also checks the same two claims
             // every other live endpoint checks: that this session is in this
             // campaign, and that this run is in that session.
-            yield* runs.findById(params.campaignId, params.sessionId, params.runId);
+            yield* runs.findById(as, params.sessionId, params.runId);
 
             // `?since=` is what the derived client sends, because `HttpApiClient`
             // issues a plain `fetch` and a plain `fetch` does not resend
@@ -422,8 +461,7 @@ const LiveLive = HttpApiBuilder.group(
               const drained: Array<SessionEvent> = [];
               for (;;) {
                 const page = yield* events.pollForRun(
-                  actor,
-                  params.campaignId,
+                  as,
                   params.sessionId,
                   params.runId,
                   cursor,

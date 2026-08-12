@@ -7,7 +7,6 @@ import {
   type CombatantKind,
   Conflict,
   type CreatureId,
-  CurrentActor,
   EncounterRun,
   type EncounterRunEndedReason,
   type EncounterRunId,
@@ -24,6 +23,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
+import type { DmActor } from "./DmActor.js";
 import { COMBATANT, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -177,46 +177,52 @@ const npcSubtitle = (size: string | null, type: string): string =>
  * a crash mid-combat. §3.4 measured the cost of keeping it: a four-hour session
  * is order 10³ writes, which is a rounding error for Postgres. What actually
  * differs about the live surface is the *read* pattern, and that is the stream.
+ *
+ * **Every method here takes a `DmActor` in place of a campaign id.** A run is
+ * the whole fight — the round, the turn marker, whether it is shared at all —
+ * and what a player is eventually shown of one is a narrower thing than this.
+ * See `repo/DmActor.ts` for why the proof carries the campaign rather than
+ * sitting beside it.
  */
 export class EncounterRuns extends Context.Service<
   EncounterRuns,
   {
     readonly list: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
-    ) => Effect.Effect<ReadonlyArray<EncounterRun>, NotFound, CurrentActor>;
+    ) => Effect.Effect<ReadonlyArray<EncounterRun>, NotFound>;
     readonly findById: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       id: EncounterRunId,
-    ) => Effect.Effect<EncounterRun, NotFound, CurrentActor>;
+    ) => Effect.Effect<EncounterRun, NotFound>;
     readonly start: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       payload: EncounterRunStart,
-    ) => Effect.Effect<EncounterRun, NotFound | Conflict, CurrentActor>;
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly resume: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       payload: EncounterRunResume,
-    ) => Effect.Effect<EncounterRun, NotFound | Conflict, CurrentActor>;
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly update: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       id: EncounterRunId,
       patch: EncounterRunUpdate,
-    ) => Effect.Effect<EncounterRun, NotFound, CurrentActor>;
+    ) => Effect.Effect<EncounterRun, NotFound>;
     readonly nextTurn: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       id: EncounterRunId,
       payload: NextTurn,
-    ) => Effect.Effect<EncounterRun, NotFound, CurrentActor>;
+    ) => Effect.Effect<EncounterRun, NotFound>;
     readonly end: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       id: EncounterRunId,
-    ) => Effect.Effect<EncounterRun, NotFound, CurrentActor>;
+    ) => Effect.Effect<EncounterRun, NotFound>;
   }
 >()("EncounterRuns") {
   static readonly layer = Layer.effect(this)(
@@ -280,10 +286,9 @@ export class EncounterRuns extends Context.Service<
         });
 
       return {
-        list: (campaignId, sessionId) =>
+        list: ({ actor, campaign: campaignId }, sessionId) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               yield* ensureNestedParentReadable(sql, RUNS, sessionId, campaignId, actor);
               const rows = yield* sql<EncounterRunRow>`
                 select encounter_run.* from encounter_run
@@ -294,10 +299,9 @@ export class EncounterRuns extends Context.Service<
             }),
           ),
 
-        findById: (campaignId, sessionId, id) =>
+        findById: ({ actor, campaign: campaignId }, sessionId, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               // The session in the path is a claim about which session contains
               // this run, so it is checked rather than trusted — naming another
               // table's session id must not reach this run.
@@ -320,13 +324,12 @@ export class EncounterRuns extends Context.Service<
          * begun, and the DM would have to notice. Six statements commit or none
          * do.
          */
-        start: (campaignId, sessionId, payload) =>
+        start: ({ actor, campaign: campaignId }, sessionId, payload) =>
           dieOnSqlError(
             asConflict(
               sql
                 .withTransaction(
                   Effect.gen(function* () {
-                    const actor = yield* CurrentActor;
                     yield* ensureNestedParentWritable(sql, RUNS, sessionId, campaignId, actor);
 
                     // The encounter id is a claim like any other. It must be one
@@ -501,13 +504,12 @@ export class EncounterRuns extends Context.Service<
          *   to prevent. Running that encounter again is `start`, and it is
          *   honestly a new fight.
          */
-        resume: (campaignId, sessionId, payload) =>
+        resume: ({ actor, campaign: campaignId }, sessionId, payload) =>
           dieOnSqlError(
             asConflict(
               sql
                 .withTransaction(
                   Effect.gen(function* () {
-                    const actor = yield* CurrentActor;
                     yield* ensureNestedParentWritable(sql, RUNS, sessionId, campaignId, actor);
 
                     const previous = yield* sql<EncounterRunRow>`
@@ -627,12 +629,11 @@ export class EncounterRuns extends Context.Service<
             ),
           ),
 
-        update: (campaignId, sessionId, id, patch) =>
+        update: ({ actor, campaign: campaignId }, sessionId, id, patch) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   yield* ensureNestedParentWritable(sql, RUNS, sessionId, campaignId, actor);
                   const columns = defined({
                     round: patch.round,
@@ -682,12 +683,11 @@ export class EncounterRuns extends Context.Service<
          * and to a button, and a repeat of one already applied returns the run
          * unchanged rather than skipping a creature's turn.
          */
-        nextTurn: (campaignId, sessionId, id, payload) =>
+        nextTurn: ({ actor, campaign: campaignId }, sessionId, id, payload) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   yield* ensureNestedRowWritable(sql, RUNS, id, sessionId, campaignId, actor);
 
                   if (yield* requestAlreadyApplied(sql, id, payload.requestId)) {
@@ -729,9 +729,7 @@ export class EncounterRuns extends Context.Service<
                 // the honest answer is the state the first one produced.
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
-                    ? Effect.flatMap(CurrentActor, (actor) =>
-                        readRun(campaignId, sessionId, id, actor),
-                      )
+                    ? readRun(campaignId, sessionId, id, actor)
                     : Effect.fail(error),
                 ),
                 Effect.tap(() => live.touched(sessionId)),
@@ -749,12 +747,11 @@ export class EncounterRuns extends Context.Service<
          * Idempotent: ending an ended run is a no-op that appends no second
          * event, so a retried request cannot put two endings in the log.
          */
-        end: (campaignId, sessionId, id) =>
+        end: ({ actor, campaign: campaignId }, sessionId, id) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   const current = yield* readRun(campaignId, sessionId, id, actor);
                   if (current.endedAt !== null) return current;
 

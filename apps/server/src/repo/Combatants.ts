@@ -9,7 +9,6 @@ import {
   type CombatantKind,
   type CombatantUpdate,
   type CreatureId,
-  CurrentActor,
   type EncounterRunId,
   NotFound,
   type SessionId,
@@ -17,6 +16,7 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
+import type { DmActor } from "./DmActor.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -72,41 +72,48 @@ export const toCombatant = (row: CombatantRow): Combatant =>
  * session id is a claim about which campaign — trusting either would let a
  * credential minted for one table reach another table's fight by naming its run
  * id, which is the same hole `PrepItems` closes for the checklist.
+ *
+ * **The campaign arrives as a `DmActor` rather than as an id**, because this is
+ * one of the three tables whose player projection differs from its DM one: a
+ * `Combatant` carries exact hit points, and a `shared` combatant would hand
+ * them to a player through the ordinary predicate. See `repo/DmActor.ts` —
+ * there is nothing to remember here, a method that read `CurrentActor` instead
+ * would have no campaign to run its predicates against.
  */
 export class Combatants extends Context.Service<
   Combatants,
   {
     readonly list: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
-    ) => Effect.Effect<ReadonlyArray<Combatant>, NotFound, CurrentActor>;
+    ) => Effect.Effect<ReadonlyArray<Combatant>, NotFound>;
     readonly create: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       payload: CombatantCreate,
-    ) => Effect.Effect<Combatant, NotFound, CurrentActor>;
+    ) => Effect.Effect<Combatant, NotFound>;
     readonly update: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       id: CombatantId,
       patch: CombatantUpdate,
-    ) => Effect.Effect<Combatant, NotFound, CurrentActor>;
+    ) => Effect.Effect<Combatant, NotFound>;
     readonly damage: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       id: CombatantId,
       payload: CombatantDamage,
-    ) => Effect.Effect<Combatant, NotFound, CurrentActor>;
+    ) => Effect.Effect<Combatant, NotFound>;
     readonly remove: (
-      campaignId: CampaignId,
+      dm: DmActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       id: CombatantId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
+    ) => Effect.Effect<void, NotFound>;
   }
 >()("Combatants") {
   static readonly layer = Layer.effect(this)(
@@ -151,10 +158,9 @@ export class Combatants extends Context.Service<
         );
 
       return {
-        list: (campaignId, sessionId, runId) =>
+        list: ({ actor, campaign: campaignId }, sessionId, runId) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               yield* ensureNestedParentReadable(sql, RUNS, sessionId, campaignId, actor);
               yield* ensureNestedRowReadable(sql, RUNS, runId, sessionId, campaignId, actor);
               const rows = yield* sql<CombatantRow>`
@@ -174,12 +180,11 @@ export class Combatants extends Context.Service<
          * did not seed from would be one more id in a payload to have to
          * contain. What this is for is the wolf the druid just summoned.
          */
-        create: (campaignId, sessionId, runId, payload) =>
+        create: ({ actor, campaign: campaignId }, sessionId, runId, payload) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
                   const hpMax = payload.hpMax ?? 0;
                   const rows = yield* sql<CombatantRow>`
@@ -214,12 +219,11 @@ export class Combatants extends Context.Service<
               .pipe(Effect.tap(() => live.touched(sessionId))),
           ),
 
-        update: (campaignId, sessionId, runId, id, patch) =>
+        update: ({ actor, campaign: campaignId }, sessionId, runId, id, patch) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
                   const columns = defined({
                     display_name: patch.displayName,
@@ -272,12 +276,11 @@ export class Combatants extends Context.Service<
          * atomic with the read: two hits landing together must total both, and
          * a read-modify-write here would lose one.
          */
-        damage: (campaignId, sessionId, runId, id, payload) =>
+        damage: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
 
                   if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
@@ -316,9 +319,7 @@ export class Combatants extends Context.Service<
                 // state the first one produced.
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
-                    ? Effect.flatMap(CurrentActor, (actor) =>
-                        readCombatant(campaignId, runId, id, actor),
-                      )
+                    ? readCombatant(campaignId, runId, id, actor)
                     : Effect.fail(error),
                 ),
                 Effect.tap(() => live.touched(sessionId)),
@@ -333,12 +334,11 @@ export class Combatants extends Context.Service<
          * is a correct database state and a bad one to hand a DM mid-fight —
          * "nobody is up" is not a turn anyone can take.
          */
-        remove: (campaignId, sessionId, runId, id) =>
+        remove: ({ actor, campaign: campaignId }, sessionId, runId, id) =>
           dieOnSqlError(
             sql
               .withTransaction(
                 Effect.gen(function* () {
-                  const actor = yield* CurrentActor;
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
 
                   const order = yield* sql<{ readonly id: CombatantId }>`

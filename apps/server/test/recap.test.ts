@@ -8,6 +8,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
@@ -15,7 +16,7 @@ import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -44,6 +45,7 @@ const services = Layer.mergeAll(
   Characters.layer,
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
+  DmActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -138,17 +140,16 @@ const makeFixture = Effect.gen(function* () {
   );
   yield* as(prep.create(campaign.id, session.id, { label: "Decide what the crate contains" }));
 
+  const dmOf = yield* as(asDm(dm, campaign.id));
   const run = yield* as(
-    runs.start(campaign.id, session.id, { encounterId: encounter.id, visibility: "shared" }),
+    runs.start(dmOf, session.id, { encounterId: encounter.id, visibility: "shared" }),
   );
-  const roll = yield* as(runs.nextTurn(campaign.id, session.id, run.id, {}));
-  const inTheFight = yield* as(combatantsOf(campaign.id, session.id, run.id));
+  const roll = yield* as(runs.nextTurn(dmOf, session.id, run.id, {}));
+  const inTheFight = yield* as(combatantsOf(dmOf, session.id, run.id));
   // Somebody goes down, and stays in initiative — hit points reaching zero is
   // not a removal (`EncounterRunner.jsx:107`).
   const down = inTheFight.find((row) => row.kind === "npc")!;
-  yield* as(
-    (yield* Combatants).damage(campaign.id, session.id, run.id, down.id, { amount: down.hpMax }),
-  );
+  yield* as((yield* Combatants).damage(dmOf, session.id, run.id, down.id, { amount: down.hpMax }));
 
   const ferryman = yield* as(
     beats.create(campaign.id, session.id, {
@@ -179,6 +180,8 @@ const makeFixture = Effect.gen(function* () {
 
   return {
     dm,
+    /** The proof the live repositories take in place of a campaign id. */
+    asDm: dmOf,
     /** A credential minted for the first table only. */
     scoped: scopedTo(dm, campaign.id),
     /** A player of the first table, who may have only its `shared` rows. */
@@ -297,9 +300,9 @@ describe("a fight that paused and was picked up the following week", () => {
   it("says so from both ends", async () => {
     const first = await as(sessions.create(fixture.campaign.id, { number: 20 }));
     const paused = await as(
-      runs.start(fixture.campaign.id, first.id, { encounterId: fixture.encounter.id }),
+      runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }),
     );
-    await as(runs.nextTurn(fixture.campaign.id, first.id, paused.id, {}));
+    await as(runs.nextTurn(fixture.asDm, first.id, paused.id, {}));
     // The night ends over the top of it: `Sessions.update` carries the live
     // fight in the same transaction that stamps `endedAt`.
     await as(
@@ -309,9 +312,7 @@ describe("a fight that paused and was picked up the following week", () => {
     );
 
     const second = await as(sessions.create(fixture.campaign.id, { number: 21 }));
-    const resumed = await as(
-      runs.resume(fixture.campaign.id, second.id, { continuedFrom: paused.id }),
-    );
+    const resumed = await as(runs.resume(fixture.asDm, second.id, { continuedFrom: paused.id }));
 
     // Looking back from the night it paused on: "paused at round N, and picked
     // up on session 21".
@@ -346,9 +347,9 @@ describe("a fight that paused and was picked up the following week", () => {
   it("distinguishes a fight the DM finished from one the night finished around", async () => {
     const night = await as(sessions.create(fixture.campaign.id, { number: 30 }));
     const fight = await as(
-      runs.start(fixture.campaign.id, night.id, { encounterId: fixture.encounter.id }),
+      runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }),
     );
-    await as(runs.end(fixture.campaign.id, night.id, fight.id));
+    await as(runs.end(fixture.asDm, night.id, fight.id));
 
     const read = await as(recap.read(fixture.campaign.id, night.id));
     const ended = read.fights.find((one) => one.run.id === fight.id)!;
@@ -423,7 +424,7 @@ describe("scoping", () => {
     // fight they may not have.
     const first = await as(sessions.create(fixture.campaign.id, { number: 50 }));
     const paused = await as(
-      runs.start(fixture.campaign.id, first.id, { encounterId: fixture.encounter.id }),
+      runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }),
     );
     await as(
       Effect.flatMap(DateTime.now, (endedAt) =>
@@ -433,11 +434,9 @@ describe("scoping", () => {
     const second = await as(
       sessions.create(fixture.campaign.id, { number: 51, visibility: "shared" }),
     );
-    const resumed = await as(
-      runs.resume(fixture.campaign.id, second.id, { continuedFrom: paused.id }),
-    );
+    const resumed = await as(runs.resume(fixture.asDm, second.id, { continuedFrom: paused.id }));
     // Share the successor but not its predecessor's night.
-    await as(runs.update(fixture.campaign.id, second.id, resumed.id, { visibility: "shared" }));
+    await as(runs.update(fixture.asDm, second.id, resumed.id, { visibility: "shared" }));
 
     const seen = await asPlayer(recap.read(fixture.campaign.id, second.id));
     const fight = seen.fights.find((one) => one.run.id === resumed.id)!;

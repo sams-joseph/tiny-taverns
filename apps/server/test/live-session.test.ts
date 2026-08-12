@@ -1,4 +1,4 @@
-import { Actor, type CombatantId, CurrentActor, type SessionId } from "@taverns/api";
+import { Actor, type CombatantId, CurrentActor, NotFound, type SessionId } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -8,12 +8,13 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -30,6 +31,7 @@ const runtime = ManagedRuntime.make(
     Characters.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
+    DmActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -150,6 +152,13 @@ const makeFixture = Effect.gen(function* () {
 
   return {
     dm,
+    /**
+     * The proof the three live repositories take in place of a campaign id —
+     * one per table, because a proof is about a pair and is not portable
+     * between two campaigns of the same DM.
+     */
+    asDm: yield* as(asDm(dm, campaign.id)),
+    asDmElsewhere: yield* as(asDm(dm, otherTable.id)),
     /** A credential minted for the first table only. */
     player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
@@ -186,7 +195,7 @@ const freshSession = (number: number) =>
 const startOn = (sessionId: SessionId) =>
   runtime.runPromise(
     withActor(fixture.dm)(
-      runs.start(fixture.campaign.id, sessionId, { encounterId: fixture.encounter.id }),
+      runs.start(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }),
     ).pipe(Effect.orDie),
   );
 
@@ -195,7 +204,7 @@ describe("starting a fight", () => {
     const session = await freshSession(100);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
 
     // Three PCs, six archers, one hag. The roster's `count: 6` becomes six
@@ -221,7 +230,7 @@ describe("starting a fight", () => {
     const session = await freshSession(101);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
 
     const brannoc = list.find((c) => c.displayName === "Brannoc")!;
@@ -248,12 +257,12 @@ describe("starting a fight", () => {
     const run = await runtime.runPromise(
       Effect.gen(function* () {
         const doomed = yield* encounters.create(fixture.campaign.id, { name: "to be deleted" });
-        const started = yield* runs.start(fixture.campaign.id, session.id, {
+        const started = yield* runs.start(fixture.asDm, session.id, {
           encounterId: doomed.id,
         });
-        yield* runs.end(fixture.campaign.id, session.id, started.id);
+        yield* runs.end(fixture.asDm, session.id, started.id);
         yield* encounters.remove(fixture.campaign.id, doomed.id);
-        return yield* runs.findById(fixture.campaign.id, session.id, started.id);
+        return yield* runs.findById(fixture.asDm, session.id, started.id);
       }).pipe(withActor(fixture.dm), Effect.orDie),
     );
 
@@ -267,7 +276,7 @@ describe("starting a fight", () => {
     const session = await freshSession(103);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const reread = await runtime.runPromise(
       withActor(fixture.dm)(sessions.findById(fixture.campaign.id, session.id)),
@@ -283,7 +292,7 @@ describe("starting a fight", () => {
     const honest = await runtime.runPromise(
       Effect.flip(
         withActor(fixture.dm)(
-          runs.start(fixture.campaign.id, session.id, {
+          runs.start(fixture.asDm, session.id, {
             encounterId: fixture.encounterElsewhere.id,
           }),
         ),
@@ -303,7 +312,7 @@ describe("exactly one encounter is live", () => {
     const second = await runtime.runPromise(
       Effect.flip(
         withActor(fixture.dm)(
-          runs.start(fixture.campaign.id, session.id, { encounterId: fixture.encounter.id }),
+          runs.start(fixture.asDm, session.id, { encounterId: fixture.encounter.id }),
         ),
       ),
     );
@@ -317,7 +326,7 @@ describe("exactly one encounter is live", () => {
     );
     expect(reread.activeEncounterRunId).toBe(first.id);
     const live = await runtime.runPromise(
-      withActor(fixture.dm)(runs.list(fixture.campaign.id, session.id)),
+      withActor(fixture.dm)(runs.list(fixture.asDm, session.id)),
     );
     expect(live.filter((r) => r.endedAt === null)).toHaveLength(1);
   });
@@ -346,14 +355,14 @@ describe("exactly one encounter is live", () => {
     const session = await freshSession(112);
     const first = await startOn(session.id);
     await runtime.runPromise(
-      withActor(fixture.dm)(runs.end(fixture.campaign.id, session.id, first.id)).pipe(Effect.orDie),
+      withActor(fixture.dm)(runs.end(fixture.asDm, session.id, first.id)).pipe(Effect.orDie),
     );
 
     const second = await startOn(session.id);
     expect(second.id).not.toBe(first.id);
 
     const all = await runtime.runPromise(
-      withActor(fixture.dm)(runs.list(fixture.campaign.id, session.id)),
+      withActor(fixture.dm)(runs.list(fixture.asDm, session.id)),
     );
     // Both runs are still there. §1.4's "a fight interrupted and resumed" is a
     // second row, never a reset of the first.
@@ -365,10 +374,10 @@ describe("exactly one encounter is live", () => {
     const run = await startOn(session.id);
 
     const ended = await runtime.runPromise(
-      withActor(fixture.dm)(runs.end(fixture.campaign.id, session.id, run.id)).pipe(Effect.orDie),
+      withActor(fixture.dm)(runs.end(fixture.asDm, session.id, run.id)).pipe(Effect.orDie),
     );
     const again = await runtime.runPromise(
-      withActor(fixture.dm)(runs.end(fixture.campaign.id, session.id, run.id)).pipe(Effect.orDie),
+      withActor(fixture.dm)(runs.end(fixture.asDm, session.id, run.id)).pipe(Effect.orDie),
     );
     const reread = await runtime.runPromise(
       withActor(fixture.dm)(sessions.findById(fixture.campaign.id, session.id)),
@@ -381,7 +390,7 @@ describe("exactly one encounter is live", () => {
     // One ending in the log, not two — a retried request must not write a
     // second one.
     const log = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, {})),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
     expect(log.filter((e) => e.kind === "run-ended")).toHaveLength(1);
   });
@@ -392,14 +401,14 @@ describe("hit points", () => {
     const session = await freshSession(120);
     const run = await startOn(session.id);
     const before = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const archer = before.find((c) => c.displayName === "Goblin Archer")!;
 
     // Seven hit points, ninety-nine damage. `Math.max(0, c.hp - 5)`.
     const damaged = await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.damage(fixture.campaign.id, session.id, run.id, archer.id, { amount: 99 }),
+        combatants.damage(fixture.asDm, session.id, run.id, archer.id, { amount: 99 }),
       ).pipe(Effect.orDie),
     );
     expect(damaged.hpCurrent).toBe(0);
@@ -408,14 +417,14 @@ describe("hit points", () => {
     // remove them when you're ready." Nothing about reaching zero removes a
     // row, changes the turn marker, or adds a condition the DM did not ask for.
     const after = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     expect(after).toHaveLength(before.length);
     expect(after.map((c) => c.id)).toContain(archer.id);
     expect(after.find((c) => c.id === archer.id)!.conditions).toEqual([]);
 
     const stillRunning = await runtime.runPromise(
-      withActor(fixture.dm)(runs.findById(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(runs.findById(fixture.asDm, session.id, run.id)),
     );
     expect(stillRunning.activeCombatantId).toBe(run.activeCombatantId);
   });
@@ -424,18 +433,18 @@ describe("hit points", () => {
     const session = await freshSession(121);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const brannoc = list.find((c) => c.displayName === "Brannoc")!;
 
     const hurt = await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.damage(fixture.campaign.id, session.id, run.id, brannoc.id, { amount: 8 }),
+        combatants.damage(fixture.asDm, session.id, run.id, brannoc.id, { amount: 8 }),
       ).pipe(Effect.orDie),
     );
     const healed = await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.damage(fixture.campaign.id, session.id, run.id, brannoc.id, { amount: -99 }),
+        combatants.damage(fixture.asDm, session.id, run.id, brannoc.id, { amount: -99 }),
       ).pipe(Effect.orDie),
     );
 
@@ -449,14 +458,14 @@ describe("hit points", () => {
     const session = await freshSession(122);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const hag = list.find((c) => c.displayName === "Marsh Hag")!;
 
     const hit = () =>
       runtime.runPromise(
         withActor(fixture.dm)(
-          combatants.damage(fixture.campaign.id, session.id, run.id, hag.id, {
+          combatants.damage(fixture.asDm, session.id, run.id, hag.id, {
             amount: 12,
             requestId: "tap-1",
           }),
@@ -472,7 +481,7 @@ describe("hit points", () => {
     // A different id is a different hit, and does apply.
     const third = await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.damage(fixture.campaign.id, session.id, run.id, hag.id, {
+        combatants.damage(fixture.asDm, session.id, run.id, hag.id, {
           amount: 12,
           requestId: "tap-2",
         }),
@@ -482,7 +491,7 @@ describe("hit points", () => {
 
     // One log line per applied hit, so the recap does not double-count either.
     const log = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, {})),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
     expect(log.filter((e) => e.kind === "combatant-damaged")).toHaveLength(2);
   });
@@ -493,14 +502,14 @@ describe("the turn marker", () => {
     const session = await freshSession(130);
     const run = await startOn(session.id);
     const order = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
 
     let current = run;
     const seen: Array<CombatantId | null> = [current.activeCombatantId];
     for (let index = 0; index < order.length; index += 1) {
       current = await runtime.runPromise(
-        withActor(fixture.dm)(runs.nextTurn(fixture.campaign.id, session.id, current.id, {})).pipe(
+        withActor(fixture.dm)(runs.nextTurn(fixture.asDm, session.id, current.id, {})).pipe(
           Effect.orDie,
         ),
       );
@@ -520,14 +529,12 @@ describe("the turn marker", () => {
     const session = await freshSession(131);
     const run = await startOn(session.id);
     const advanced = await runtime.runPromise(
-      withActor(fixture.dm)(runs.nextTurn(fixture.campaign.id, session.id, run.id, {})).pipe(
-        Effect.orDie,
-      ),
+      withActor(fixture.dm)(runs.nextTurn(fixture.asDm, session.id, run.id, {})).pipe(Effect.orDie),
     );
 
     await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.create(fixture.campaign.id, session.id, run.id, {
+        combatants.create(fixture.asDm, session.id, run.id, {
           displayName: "Summoned wolf",
           initiative: 99,
           hpMax: 11,
@@ -536,10 +543,10 @@ describe("the turn marker", () => {
     );
 
     const after = await runtime.runPromise(
-      withActor(fixture.dm)(runs.findById(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(runs.findById(fixture.asDm, session.id, run.id)),
     );
     const order = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
 
     expect(after.activeCombatantId).toBe(advanced.activeCombatantId);
@@ -551,17 +558,17 @@ describe("the turn marker", () => {
     const session = await freshSession(132);
     const run = await startOn(session.id);
     const order = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
 
     await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.remove(fixture.campaign.id, session.id, run.id, run.activeCombatantId!),
+        combatants.remove(fixture.asDm, session.id, run.id, run.activeCombatantId!),
       ).pipe(Effect.orDie),
     );
 
     const after = await runtime.runPromise(
-      withActor(fixture.dm)(runs.findById(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(runs.findById(fixture.asDm, session.id, run.id)),
     );
     // "Nobody is up" is a valid database state and a useless one to hand a DM
     // mid-fight, so the marker advances rather than being nulled by the
@@ -574,12 +581,12 @@ describe("the turn marker", () => {
     const run = await startOn(session.id);
     const first = await runtime.runPromise(
       withActor(fixture.dm)(
-        runs.nextTurn(fixture.campaign.id, session.id, run.id, { requestId: "space-1" }),
+        runs.nextTurn(fixture.asDm, session.id, run.id, { requestId: "space-1" }),
       ).pipe(Effect.orDie),
     );
     const second = await runtime.runPromise(
       withActor(fixture.dm)(
-        runs.nextTurn(fixture.campaign.id, session.id, run.id, { requestId: "space-1" }),
+        runs.nextTurn(fixture.asDm, session.id, run.id, { requestId: "space-1" }),
       ).pipe(Effect.orDie),
     );
 
@@ -594,10 +601,10 @@ describe("the new tables fail closed", () => {
     const session = await freshSession(140);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const log = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, {})),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
 
     expect(run.visibility).toBe("dm");
@@ -641,11 +648,13 @@ describe("the new tables fail closed", () => {
     expect(rows.event).toEqual({ visibility: "dm", origin: "authored" });
   });
 
-  it("keeps a shared combatant invisible inside an unshared run", async () => {
-    // The two levels the fixtures ask for: the runner's `Share` switch over the
-    // whole fight (`:122`) and `Hide from players` on one row (`:139`). A row
-    // marked shared under a fight that is not stays invisible, exactly as a
-    // shared note inside an unshared campaign does.
+  it("marks the two levels the fixtures ask for, on the run and on the row", async () => {
+    // The runner's `Share` switch over the whole fight (`:122`) and `Hide from
+    // players` on one row (`:139`) are two independent columns, and both
+    // default to `dm`. What a *player* then sees through them is no longer
+    // observable here — see the next test — but the predicate that reads them
+    // is `containedRowReadable`, and `recap.test.ts` still drives it with a
+    // real player over the same two tables.
     const session = await freshSession(142);
     const shared = await runtime.runPromise(
       withActor(fixture.dm)(
@@ -655,39 +664,44 @@ describe("the new tables fail closed", () => {
     expect(shared.visibility).toBe("shared");
 
     const run = await startOn(session.id);
+    expect(run.visibility).toBe("dm");
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
-    await runtime.runPromise(
+    expect(list.every((row) => row.visibility === "dm")).toBe(true);
+
+    const row = await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.update(fixture.campaign.id, session.id, run.id, list[0]!.id, {
+        combatants.update(fixture.asDm, session.id, run.id, list[0]!.id, {
           visibility: "shared",
         }),
       ).pipe(Effect.orDie),
     );
-
-    const asPlayer = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(combatants.list(fixture.campaign.id, session.id, run.id)),
-      ),
-    );
-    // The *run* is what could not be had, so that is what the 404 names.
-    expect(asPlayer._tag).toBe("NotFound");
-    expect(asPlayer._tag === "NotFound" && asPlayer.resource).toBe("encounter_run");
-
-    // Share the fight, and the one shared row — and only it — becomes visible.
-    await runtime.runPromise(
+    const fight = await runtime.runPromise(
       withActor(fixture.dm)(
-        runs.update(fixture.campaign.id, session.id, run.id, { visibility: "shared" }),
+        runs.update(fixture.asDm, session.id, run.id, { visibility: "shared" }),
       ).pipe(Effect.orDie),
     );
-    const nowVisible = await runtime.runPromise(
-      withActor(fixture.player)(combatants.list(fixture.campaign.id, session.id, run.id)),
+
+    expect(row.visibility).toBe("shared");
+    expect(fight.visibility).toBe("shared");
+    // The whole fight is still the DM's, whatever those two say: sharing is
+    // what a *narrow* player projection will read, not a second door onto this
+    // one.
+    const stillAll = await runtime.runPromise(
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
-    expect(nowVisible.map((c) => c.id)).toEqual([list[0]!.id]);
+    expect(stillAll).toHaveLength(list.length);
   });
 
-  it("lets a player read a shared fight and still not write it", async () => {
+  it("gives a player no way to reach the fight at all, shared or not", async () => {
+    // This is the gate, and it replaced something weaker. A player used to be
+    // able to call these methods and receive the `shared` rows the predicate
+    // allowed — which meant the wide `Combatant`, with exact hit points on a
+    // creature the DM had merely chosen to show them. There is no read to
+    // filter now: the methods take a `DmActor` and a player cannot obtain one,
+    // so the refusal is one step earlier than the `WHERE` clause and applies
+    // to every method on all three live repositories at once.
     const session = await freshSession(143);
     await runtime.runPromise(
       withActor(fixture.dm)(
@@ -696,51 +710,35 @@ describe("the new tables fail closed", () => {
     );
     const run = await runtime.runPromise(
       withActor(fixture.dm)(
-        runs.start(fixture.campaign.id, session.id, {
+        runs.start(fixture.asDm, session.id, {
           encounterId: fixture.encounter.id,
           visibility: "shared",
         }),
       ).pipe(Effect.orDie),
     );
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     await runtime.runPromise(
       withActor(fixture.dm)(
-        combatants.update(fixture.campaign.id, session.id, run.id, list[0]!.id, {
+        combatants.update(fixture.asDm, session.id, run.id, list[0]!.id, {
           visibility: "shared",
         }),
       ).pipe(Effect.orDie),
     );
 
-    const read = await runtime.runPromise(
-      withActor(fixture.player)(runs.findById(fixture.campaign.id, session.id, run.id)),
+    // Everything above is shared — the campaign, the night, the fight and one
+    // row of it — so the refusal below is about the projection and not about a
+    // row that was never there.
+    const refused = await runtime.runPromise(
+      Effect.flip(asDm(fixture.player, fixture.campaign.id)).pipe(Effect.orDie),
     );
-    expect(read.id).toBe(run.id);
+    expect(refused).toBeInstanceOf(NotFound);
+    expect(refused.resource).toBe("campaign");
 
-    const damaged = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          combatants.damage(fixture.campaign.id, session.id, run.id, list[0]!.id, { amount: 5 }),
-        ),
-      ),
-    );
-    const advanced = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(runs.nextTurn(fixture.campaign.id, session.id, run.id, {})),
-      ),
-    );
-    const ended = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(runs.end(fixture.campaign.id, session.id, run.id))),
-    );
-
-    expect(damaged._tag).toBe("NotFound");
-    expect(advanced._tag).toBe("NotFound");
-    expect(ended._tag).toBe("NotFound");
-
-    // …and the fight really is untouched.
+    // …and the fight really is untouched, because there was no call to make.
     const stillFull = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     expect(stillFull.find((c) => c.id === list[0]!.id)!.hpCurrent).toBe(list[0]!.hpCurrent);
   });
@@ -754,38 +752,31 @@ describe("a campaign-scoped actor", () => {
     const otherSession = fixture.sessionElsewhere;
     const otherRun = await runtime.runPromise(
       withActor(fixture.dm)(
-        runs.start(fixture.otherTable.id, otherSession.id, {
+        runs.start(fixture.asDmElsewhere, otherSession.id, {
           encounterId: fixture.encounterElsewhere.id,
           visibility: "shared",
         }),
       ).pipe(Effect.orDie),
     );
 
+    // The credential under test is a DM's, narrowed to the first table. That is
+    // the only actor for whom both paths are still *expressible*: it can obtain
+    // a proof for its own campaign and none for the other, so the smuggled path
+    // is a real call with a real proof rather than a call nobody can make.
+    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
+    const mine = await runtime.runPromise(asDm(scopedDm, fixture.campaign.id).pipe(Effect.orDie));
+
     const honest = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          runs.findById(fixture.otherTable.id, otherSession.id, otherRun.id),
-        ),
-      ),
+      Effect.flip(asDm(scopedDm, fixture.otherTable.id)).pipe(Effect.orDie),
     );
     const smuggled = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(runs.findById(fixture.campaign.id, otherSession.id, otherRun.id)),
-      ),
+      Effect.flip(runs.findById(mine, otherSession.id, otherRun.id)),
     );
     const smuggledCombatants = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          combatants.list(fixture.campaign.id, otherSession.id, otherRun.id),
-        ),
-      ),
+      Effect.flip(combatants.list(mine, otherSession.id, otherRun.id)),
     );
     const smuggledLog = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          events.listForRun(fixture.campaign.id, otherSession.id, otherRun.id, 0, 100),
-        ),
-      ),
+      Effect.flip(events.listForRun(mine, otherSession.id, otherRun.id, 0, 100)),
     );
 
     expect(honest._tag).toBe("NotFound");
@@ -793,34 +784,46 @@ describe("a campaign-scoped actor", () => {
     expect(smuggledCombatants._tag).toBe("NotFound");
     expect(smuggledLog._tag).toBe("NotFound");
 
+    // A player of the first table gets no proof for either, which is the newer
+    // and blunter half of the same refusal.
+    const asPlayerHere = await runtime.runPromise(
+      Effect.flip(asDm(fixture.player, fixture.campaign.id)).pipe(Effect.orDie),
+    );
+    const asPlayerThere = await runtime.runPromise(
+      Effect.flip(asDm(fixture.player, fixture.otherTable.id)).pipe(Effect.orDie),
+    );
+    expect(asPlayerHere._tag).toBe("NotFound");
+    expect(asPlayerThere._tag).toBe("NotFound");
+
     // …and it really is there and really is shared, so the assertions above are
     // about scope rather than about a missing row.
-    const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(runs.findById(fixture.otherTable.id, otherSession.id, otherRun.id)),
+    const unscoped = await runtime.runPromise(
+      withActor(fixture.dm)(runs.findById(fixture.asDmElsewhere, otherSession.id, otherRun.id)),
     );
-    expect(asDm.visibility).toBe("shared");
+    expect(unscoped.visibility).toBe("shared");
   });
 
   it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
+    // The narrowing moved to the gate and did not weaken: `campaignWritable`
+    // composes `campaignInScope`, so a credential minted for one table cannot
+    // produce a proof for another even where the same account is that table's
+    // DM. There is nothing left to call with, which is the point.
     const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
-    const listed = await runtime.runPromise(
-      Effect.flip(
-        withActor(scopedDm)(runs.list(fixture.otherTable.id, fixture.sessionElsewhere.id)),
-      ),
+    const elsewhere = await runtime.runPromise(
+      Effect.flip(asDm(scopedDm, fixture.otherTable.id)).pipe(Effect.orDie),
     );
-    const started = await runtime.runPromise(
-      Effect.flip(
-        withActor(scopedDm)(
-          runs.start(fixture.otherTable.id, fixture.sessionElsewhere.id, {
-            encounterId: fixture.encounterElsewhere.id,
-          }),
-        ),
-      ),
-    );
+    expect(elsewhere._tag).toBe("NotFound");
 
-    expect(listed._tag).toBe("NotFound");
-    expect(started._tag).toBe("NotFound");
+    // …while the account it belongs to is that other table's DM on an
+    // account-wide credential, so this is scope and not membership.
+    const unscoped = await runtime.runPromise(
+      asDm(fixture.dm, fixture.otherTable.id).pipe(Effect.orDie),
+    );
+    const listed = await runtime.runPromise(
+      runs.list(unscoped, fixture.sessionElsewhere.id).pipe(Effect.orDie),
+    );
+    expect(listed.length).toBeGreaterThan(0);
   });
 
   it("refuses a run smuggled in through the wrong session, on every path", async () => {
@@ -835,22 +838,22 @@ describe("a campaign-scoped actor", () => {
     const session = await freshSession(150);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const wrong = await freshSession(151);
 
     const attempts = await Promise.all(
       [
-        runs.findById(fixture.campaign.id, wrong.id, run.id),
-        runs.update(fixture.campaign.id, wrong.id, run.id, { round: 9 }),
-        runs.nextTurn(fixture.campaign.id, wrong.id, run.id, {}),
-        runs.end(fixture.campaign.id, wrong.id, run.id),
-        combatants.list(fixture.campaign.id, wrong.id, run.id),
-        combatants.create(fixture.campaign.id, wrong.id, run.id, { displayName: "smuggled" }),
-        combatants.update(fixture.campaign.id, wrong.id, run.id, list[0]!.id, { initiative: 30 }),
-        combatants.damage(fixture.campaign.id, wrong.id, run.id, list[0]!.id, { amount: 5 }),
-        combatants.remove(fixture.campaign.id, wrong.id, run.id, list[0]!.id),
-        events.listForRun(fixture.campaign.id, wrong.id, run.id, 0, 100),
+        runs.findById(fixture.asDm, wrong.id, run.id),
+        runs.update(fixture.asDm, wrong.id, run.id, { round: 9 }),
+        runs.nextTurn(fixture.asDm, wrong.id, run.id, {}),
+        runs.end(fixture.asDm, wrong.id, run.id),
+        combatants.list(fixture.asDm, wrong.id, run.id),
+        combatants.create(fixture.asDm, wrong.id, run.id, { displayName: "smuggled" }),
+        combatants.update(fixture.asDm, wrong.id, run.id, list[0]!.id, { initiative: 30 }),
+        combatants.damage(fixture.asDm, wrong.id, run.id, list[0]!.id, { amount: 5 }),
+        combatants.remove(fixture.asDm, wrong.id, run.id, list[0]!.id),
+        events.listForRun(fixture.asDm, wrong.id, run.id, 0, 100),
       ].map((effect) => runtime.runPromise(Effect.flip(withActor(fixture.dm)(effect)))),
     );
 
@@ -858,10 +861,10 @@ describe("a campaign-scoped actor", () => {
 
     // …and nothing in the fight moved, so none of those half-applied.
     const after = await runtime.runPromise(
-      withActor(fixture.dm)(runs.findById(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(runs.findById(fixture.asDm, session.id, run.id)),
     );
     const stillThere = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     expect(after.round).toBe(1);
     expect(after.endedAt).toBeNull();
@@ -876,21 +879,21 @@ describe("the log", () => {
     const session = await freshSession(160);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
 
     await runtime.runPromise(
       Effect.gen(function* () {
-        yield* combatants.damage(fixture.campaign.id, session.id, run.id, list[0]!.id, {
+        yield* combatants.damage(fixture.asDm, session.id, run.id, list[0]!.id, {
           amount: 3,
         });
-        yield* runs.nextTurn(fixture.campaign.id, session.id, run.id, {});
-        yield* runs.end(fixture.campaign.id, session.id, run.id);
+        yield* runs.nextTurn(fixture.asDm, session.id, run.id, {});
+        yield* runs.end(fixture.asDm, session.id, run.id);
       }).pipe(withActor(fixture.dm), Effect.orDie),
     );
 
     const log = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, {})),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
 
     expect(log.map((e) => e.kind)).toEqual([
@@ -910,16 +913,14 @@ describe("the log", () => {
     const session = await freshSession(161);
     const run = await startOn(session.id);
     await runtime.runPromise(
-      withActor(fixture.dm)(runs.nextTurn(fixture.campaign.id, session.id, run.id, {})).pipe(
-        Effect.orDie,
-      ),
+      withActor(fixture.dm)(runs.nextTurn(fixture.asDm, session.id, run.id, {})).pipe(Effect.orDie),
     );
 
     const all = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, {})),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
     const after = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, { since: all[0]!.seq })),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, { since: all[0]!.seq })),
     );
 
     expect(all).toHaveLength(2);
@@ -930,18 +931,18 @@ describe("the log", () => {
     const session = await freshSession(162);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, session.id, run.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
     const victim = list.at(-1)!;
 
     await runtime.runPromise(
-      withActor(fixture.dm)(
-        combatants.remove(fixture.campaign.id, session.id, run.id, victim.id),
-      ).pipe(Effect.orDie),
+      withActor(fixture.dm)(combatants.remove(fixture.asDm, session.id, run.id, victim.id)).pipe(
+        Effect.orDie,
+      ),
     );
 
     const log = await runtime.runPromise(
-      withActor(fixture.dm)(events.list(fixture.campaign.id, session.id, {})),
+      withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
     const removal = log.find((e) => e.kind === "combatant-removed")!;
 
@@ -1000,13 +1001,13 @@ describe("the turn marker cannot point outside its own fight", () => {
     const runA = await startOn(sessionA.id);
     const runB = await startOn(sessionB.id);
     const inB = await runtime.runPromise(
-      withActor(fixture.dm)(combatants.list(fixture.campaign.id, sessionB.id, runB.id)),
+      withActor(fixture.dm)(combatants.list(fixture.asDm, sessionB.id, runB.id)),
     );
 
     const error = await runtime.runPromise(
       Effect.flip(
         withActor(fixture.dm)(
-          runs.update(fixture.campaign.id, sessionA.id, runA.id, {
+          runs.update(fixture.asDm, sessionA.id, runA.id, {
             activeCombatantId: inB[0]!.id,
           }),
         ),
@@ -1020,7 +1021,7 @@ describe("the turn marker cannot point outside its own fight", () => {
     expect(error._tag === "NotFound" && error.resource).toBe("combatant");
 
     const unchanged = await runtime.runPromise(
-      withActor(fixture.dm)(runs.findById(fixture.campaign.id, sessionA.id, runA.id)),
+      withActor(fixture.dm)(runs.findById(fixture.asDm, sessionA.id, runA.id)),
     );
     expect(unchanged.activeCombatantId).toBe(runA.activeCombatantId);
   });

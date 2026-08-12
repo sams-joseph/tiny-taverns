@@ -5,27 +5,27 @@ import {
   type CampaignId,
   CurrentActor,
   type HobEvent,
-  type HobProposal,
   HobUnavailable,
   NotFound,
 } from "@taverns/api";
-import { ConfigProvider, Effect, Layer, ManagedRuntime, Ref, Stream } from "effect";
+import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
-import { handlersFor, HobToolkit, type ProposalSlot } from "../src/assistant/toolkit.js";
+import { HobToolkit } from "../src/assistant/toolkit.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 
@@ -53,6 +53,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Creatures.layer,
+  DmActors.layer,
   HobThreads.layer,
   Notes.layer,
   Recap.layer,
@@ -362,26 +363,28 @@ describe("the boundary — proven, not argued", () => {
     expect(shown).not.toContain("took the coin after all");
   }, 60_000);
 
-  it("never shows a player the DM-only rows", async () => {
-    // Driven through the toolkit rather than through `ask`, because asking is
-    // now a *write* — it appends to a thread — and a player cannot start one
-    // (the test below). The property under test is unchanged and is the one
-    // that matters: a tool handler's read is the repository's read with this
-    // actor, so the row's own visibility applies inside the tool exactly as it
-    // does inside the HTTP handler, because it is the same `WHERE` clause.
+  it("cannot be built for a player at all, and would show them nothing anyway", async () => {
+    // Two halves, and the first is newer than the second.
+    //
+    // `handlersFor` takes the `DmActor` — asking is a write and one of the
+    // tools reads the combat log — so a tool surface for a player is not
+    // something to refuse, it is something that cannot be constructed. That is
+    // the same shape as the campaign not being a tool parameter, one level up.
+    const refused = await runtime.runPromise(
+      Effect.flip(asDm(fixture.player, fixture.campaign.id)).pipe(Effect.orDie),
+    );
+    expect(refused).toBeInstanceOf(NotFound);
+
+    // And underneath it, unchanged: a tool handler's read is the repository's
+    // read with this actor, so the row's own visibility applies inside the tool
+    // exactly as it does inside the HTTP handler, because it is the same
+    // `WHERE` clause. Driven straight at `Search` with the player's actor,
+    // which is what the tool would have called.
     const hits = await runtime.runPromise(
-      Effect.gen(function* () {
-        const repositories = {
-          search: yield* Search,
-          sessions: yield* Sessions,
-          recap: yield* Recap,
-          creatures: yield* Creatures,
-          events: yield* SessionEvents,
-        };
-        const slot: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
-        const handlers = handlersFor(repositories, fixture.campaign.id, fixture.player, slot);
-        return yield* handlers.searchCampaign({ query: "crate" });
-      }).pipe(Effect.orDie),
+      Effect.flatMap(Search, (search) => search.search(fixture.campaign.id, { q: "crate" })).pipe(
+        withActor(fixture.player),
+        Effect.orDie,
+      ),
     );
 
     const shown = JSON.stringify(hits);
@@ -459,6 +462,7 @@ describe("with no model configured", () => {
             Layer.provide([
               Campaigns.layer,
               Creatures.layer,
+              DmActors.layer,
               HobThreads.layer,
               Recap.layer,
               Search.layer,

@@ -17,6 +17,7 @@ import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
@@ -53,6 +54,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Creatures.layer,
+  DmActors.layer,
   EncounterCreatures.layer,
   Encounters.layer,
   HobThreads.layer,

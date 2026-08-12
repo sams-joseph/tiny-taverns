@@ -1,7 +1,8 @@
-import { Actor, type CampaignId } from "@taverns/api";
+import { Actor, type CampaignId, CurrentActor, type NotFound } from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "../../src/Accounts.js";
+import { type DmActor, DmActors } from "../../src/repo/DmActor.js";
 
 /**
  * The actors every repository test needs, and what each of them is now that
@@ -76,3 +77,21 @@ export const aPlayerAt = (
     `;
     return scopedTo(account, campaignId);
   }).pipe(Effect.orDie);
+
+/**
+ * The proof `Combatants`, `EncounterRuns` and `SessionEvents` require.
+ *
+ * There is deliberately no way to build one here by hand, unlike the
+ * `campaign_member` row above: `aPlayerAt` reaches past the product because the
+ * product cannot yet mint a player, whereas this is a check the product *does*
+ * perform and a test that forged it would be testing nothing. So it goes
+ * through `DmActors.of` like every caller in `src`, and a test that expects a
+ * refusal asserts on this failing rather than on the read that follows it.
+ */
+export const asDm = (
+  actor: Actor,
+  campaignId: CampaignId,
+): Effect.Effect<DmActor, NotFound, DmActors> =>
+  Effect.flatMap(DmActors, (dmActors) =>
+    Effect.provideService(dmActors.of(campaignId), CurrentActor, actor),
+  );

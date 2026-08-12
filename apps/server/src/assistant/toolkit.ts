@@ -1,6 +1,4 @@
 import {
-  type Actor,
-  type CampaignId,
   Conflict,
   Creature,
   CreatureId,
@@ -19,6 +17,7 @@ import {
 import { Effect, Ref, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
+import type { DmActor } from "../repo/DmActor.js";
 import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
 import type { SessionEvents } from "../repo/SessionEvents.js";
@@ -262,22 +261,28 @@ const alreadyProposed = new Conflict({
 });
 
 /**
- * Bind the toolkit to one campaign and one actor.
+ * Bind the toolkit to one campaign and one actor — as one proof of the pair.
  *
- * The two arguments are the whole security story, and neither comes from the
- * model: `campaignId` is the path segment the request was routed on, and
- * `actor` is what `Authorization` resolved from the bearer token. Re-providing
- * the actor here rather than letting it be inherited is deliberate — the stream
- * this feeds is consumed after the handler effect has returned, so the request's
- * context is no longer ambient by the time a tool runs. Naming it explicitly is
- * what makes the actor a captured value rather than a hope.
+ * **The `DmActor` is the whole security story, and no part of it comes from the
+ * model.** It is a pair the server proved: the campaign is the path segment the
+ * request was routed on, and the actor is what `Authorization` resolved from
+ * the bearer token. Re-providing that actor here rather than letting it be
+ * inherited is deliberate — the stream this feeds is consumed after the handler
+ * effect has returned, so the request's context is no longer ambient by the
+ * time a tool runs. Naming it explicitly is what makes the actor a captured
+ * value rather than a hope.
+ *
+ * It arrives as one proof rather than as two loose arguments for two reasons.
+ * `sessionLog` reads the combat log, which is one of the three DM-only
+ * projections and needs one anyway; and asking Hob is already a DM-only act —
+ * a conversation is a row in the campaign, so `HobThreads.start` needs
+ * `campaignWritable`. Taking the proof here means a tool surface cannot be
+ * built for an actor whose DM-ness was never checked, which is the same idea as
+ * the campaign not being a tool parameter, one level up.
  */
-export const handlersFor = (
-  repositories: HobRepositories,
-  campaignId: CampaignId,
-  actor: Actor,
-  proposal: ProposalSlot,
-) => {
+export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal: ProposalSlot) => {
+  const { actor, campaign: campaignId } = dm;
+
   const as = <A, E>(effect: Effect.Effect<A, E, CurrentActor>): Effect.Effect<A, E> =>
     Effect.provideService(effect, CurrentActor, actor);
 
@@ -338,7 +343,7 @@ export const handlersFor = (
     sessionRecap: ({ sessionId }) => as(repositories.recap.read(campaignId, sessionId)),
     getCreature: ({ creatureId }) => as(repositories.creatures.findById(campaignId, creatureId)),
     sessionLog: ({ sessionId, since }) =>
-      as(repositories.events.list(campaignId, sessionId, { since, limit: LOG_LIMIT })),
+      repositories.events.list(dm, sessionId, { since, limit: LOG_LIMIT }),
 
     proposeNote: ({ title, body, readAloud }) =>
       offer(

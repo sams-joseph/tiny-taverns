@@ -16,12 +16,13 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount } from "./support/actors.js";
+import { anAccount, aPlayerAt, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -55,6 +56,7 @@ const services = Layer.mergeAll(
   Characters.layer,
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
+  DmActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -109,7 +111,15 @@ const makeFixture = Effect.gen(function* () {
   );
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: hag.id, count: 2 }));
 
-  return { dm, campaigns, sessions, campaign, encounter };
+  return {
+    dm,
+    /** The proof the live repositories take in place of a campaign id. */
+    asDm: yield* as(asDm(dm, campaign.id)),
+    campaigns,
+    sessions,
+    campaign,
+    encounter,
+  };
 }).pipe(Effect.orDie);
 
 let fixture: Effect.Success<typeof makeFixture>;
@@ -152,14 +162,12 @@ const finish = (sessionId: SessionId) =>
  * and a copy of it could be wrong in ways nothing would show.
  */
 const aFightInProgress = async (sessionId: SessionId) => {
-  const run = await as(
-    runs.start(fixture.campaign.id, sessionId, { encounterId: fixture.encounter.id }),
-  );
-  const order = await as(combatants.list(fixture.campaign.id, sessionId, run.id));
+  const run = await as(runs.start(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }));
+  const order = await as(combatants.list(fixture.asDm, sessionId, run.id));
   const hag = order.find((row) => row.kind === "npc")!;
-  await as(combatants.damage(fixture.campaign.id, sessionId, run.id, hag.id, { amount: 41 }));
+  await as(combatants.damage(fixture.asDm, sessionId, run.id, hag.id, { amount: 41 }));
   await as(
-    combatants.update(fixture.campaign.id, sessionId, run.id, hag.id, {
+    combatants.update(fixture.asDm, sessionId, run.id, hag.id, {
       conditions: ["Frightened"],
       initiative: 17,
       visibility: "shared",
@@ -168,9 +176,9 @@ const aFightInProgress = async (sessionId: SessionId) => {
   // Walk the whole order once so the round rolls over and the marker is
   // somewhere other than where a seed leaves it.
   for (let step = 0; step <= order.length; step += 1) {
-    await as(runs.nextTurn(fixture.campaign.id, sessionId, run.id, {}));
+    await as(runs.nextTurn(fixture.asDm, sessionId, run.id, {}));
   }
-  const current = await as(runs.findById(fixture.campaign.id, sessionId, run.id));
+  const current = await as(runs.findById(fixture.asDm, sessionId, run.id));
   return { run: current, order };
 };
 
@@ -211,13 +219,13 @@ describe("finishing a night with a fight on the table", () => {
     expect(finished.endedAt).not.toBeNull();
     // The fight is off the table and marked as waiting — not `resolved`, which
     // is what an ended run means when the DM ended it on purpose.
-    const carried = await as(runs.findById(fixture.campaign.id, night.id, run.id));
+    const carried = await as(runs.findById(fixture.asDm, night.id, run.id));
     expect(carried.endedAt).not.toBeNull();
     expect(carried.endedReason).toBe("carried");
     // …and the session no longer names a fight that is over.
     expect(finished.activeEncounterRunId).toBeNull();
 
-    const log = await as(events.list(fixture.campaign.id, night.id, {}));
+    const log = await as(events.list(fixture.asDm, night.id, {}));
     const kinds = log.map((row) => row.kind);
     expect(kinds).toContain("run-carried");
     expect(kinds).not.toContain("run-ended");
@@ -248,20 +256,20 @@ describe("finishing a night with a fight on the table", () => {
     expect(finished.endedAt).not.toBeNull();
     expect(finished.activeEncounterRunId).toBeNull();
 
-    const log = await as(events.list(fixture.campaign.id, night.id, {}));
+    const log = await as(events.list(fixture.asDm, night.id, {}));
     expect(log.map((row) => row.kind)).not.toContain("run-carried");
   }, 60_000);
 
   it("does not touch a fight that was already ended on purpose", async () => {
     const night = await freshSession();
     const { run } = await aFightInProgress(night.id);
-    await as(runs.end(fixture.campaign.id, night.id, run.id));
+    await as(runs.end(fixture.asDm, night.id, run.id));
 
     await finish(night.id);
 
-    const ended = await as(runs.findById(fixture.campaign.id, night.id, run.id));
+    const ended = await as(runs.findById(fixture.asDm, night.id, run.id));
     expect(ended.endedReason).toBe("resolved");
-    const log = await as(events.list(fixture.campaign.id, night.id, {}));
+    const log = await as(events.list(fixture.asDm, night.id, {}));
     expect(log.map((row) => row.kind)).toContain("run-ended");
     expect(log.map((row) => row.kind)).not.toContain("run-carried");
   }, 60_000);
@@ -274,9 +282,7 @@ describe("resuming a carried fight", () => {
     await finish(first.id);
 
     const second = await freshSession();
-    const resumed = await as(
-      runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id }),
-    );
+    const resumed = await as(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id }));
 
     expect(resumed.id).not.toEqual(run.id);
     expect(resumed.continuedFrom).toEqual(run.id);
@@ -295,7 +301,7 @@ describe("resuming a carried fight", () => {
     const session = await as(sessions.findById(fixture.campaign.id, second.id));
     expect(session.activeEncounterRunId).toEqual(resumed.id);
 
-    const log = await as(events.list(fixture.campaign.id, second.id, {}));
+    const log = await as(events.list(fixture.asDm, second.id, {}));
     const resumedEvent = log.find((row) => row.kind === "run-resumed");
     expect(resumedEvent?.encounterRunId).toEqual(resumed.id);
     expect((resumedEvent?.payload as { readonly continuedFrom?: string }).continuedFrom).toEqual(
@@ -310,14 +316,12 @@ describe("resuming a carried fight", () => {
     // fails here.
     const first = await freshSession();
     const { run } = await aFightInProgress(first.id);
-    const before = await as(combatants.list(fixture.campaign.id, first.id, run.id));
+    const before = await as(combatants.list(fixture.asDm, first.id, run.id));
     await finish(first.id);
 
     const second = await freshSession();
-    const resumed = await as(
-      runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id }),
-    );
-    const after = await as(combatants.list(fixture.campaign.id, second.id, resumed.id));
+    const resumed = await as(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id }));
+    const after = await as(combatants.list(fixture.asDm, second.id, resumed.id));
 
     /** Everything but identity and when the row was made. */
     const carried = (row: (typeof before)[number]) => ({
@@ -374,15 +378,13 @@ describe("resuming a carried fight", () => {
     // generated before the insert rather than by `insert … select`.
     const first = await freshSession();
     const { run } = await aFightInProgress(first.id);
-    const before = await as(combatants.list(fixture.campaign.id, first.id, run.id));
+    const before = await as(combatants.list(fixture.asDm, first.id, run.id));
     const wasUp = before.find((row) => row.id === run.activeCombatantId)!;
     await finish(first.id);
 
     const second = await freshSession();
-    const resumed = await as(
-      runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id }),
-    );
-    const after = await as(combatants.list(fixture.campaign.id, second.id, resumed.id));
+    const resumed = await as(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id }));
+    const after = await as(combatants.list(fixture.asDm, second.id, resumed.id));
     const isUp = after.find((row) => row.id === resumed.activeCombatantId);
 
     expect(resumed.activeCombatantId).not.toBeNull();
@@ -397,11 +399,11 @@ describe("resuming a carried fight", () => {
     await finish(first.id);
 
     const second = await freshSession();
-    await as(runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id }));
+    await as(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id }));
 
     const third = await freshSession();
     const failure = await as(
-      Effect.flip(runs.resume(fixture.campaign.id, third.id, { continuedFrom: run.id })),
+      Effect.flip(runs.resume(fixture.asDm, third.id, { continuedFrom: run.id })),
     );
     expect(failure).toBeInstanceOf(Conflict);
   }, 60_000);
@@ -412,11 +414,11 @@ describe("resuming a carried fight", () => {
     // recap and "resumed" in the next's.
     const first = await freshSession();
     const { run } = await aFightInProgress(first.id);
-    await as(runs.end(fixture.campaign.id, first.id, run.id));
+    await as(runs.end(fixture.asDm, first.id, run.id));
 
     const second = await freshSession();
     const failure = await as(
-      Effect.flip(runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id })),
+      Effect.flip(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id })),
     );
     expect(failure).toBeInstanceOf(Conflict);
     expect((failure as Conflict).message).toContain("ended rather than carried");
@@ -428,7 +430,7 @@ describe("resuming a carried fight", () => {
 
     const second = await freshSession();
     const failure = await as(
-      Effect.flip(runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id })),
+      Effect.flip(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id })),
     );
     expect(failure).toBeInstanceOf(Conflict);
     expect((failure as Conflict).message).toContain("still on the table");
@@ -447,7 +449,7 @@ describe("resuming a carried fight", () => {
     );
     const theirRun = await runtime.runPromise(
       withActor(theirs.dm)(
-        runs.start(theirs.campaign.id, theirNight.id, { encounterId: theirs.encounter.id }),
+        runs.start(theirs.asDm, theirNight.id, { encounterId: theirs.encounter.id }),
       ).pipe(Effect.orDie),
     );
     await runtime.runPromise(
@@ -460,7 +462,7 @@ describe("resuming a carried fight", () => {
 
     const mine = await freshSession();
     const failure = await as(
-      Effect.flip(runs.resume(fixture.campaign.id, mine.id, { continuedFrom: theirRun.id })),
+      Effect.flip(runs.resume(fixture.asDm, mine.id, { continuedFrom: theirRun.id })),
     );
     expect(failure).toBeInstanceOf(NotFound);
     expect((failure as NotFound).resource).toBe("encounter_run");
@@ -468,15 +470,16 @@ describe("resuming a carried fight", () => {
 
   it("is refused to a campaign-scoped player, who cannot write the night", async () => {
     const first = await freshSession();
-    const { run } = await aFightInProgress(first.id);
+    await aFightInProgress(first.id);
     await finish(first.id);
-    const second = await freshSession();
 
+    // The refusal moved one step earlier and got stronger with it. It used to
+    // be `ensureNestedParentWritable` inside `resume`; a player now cannot
+    // obtain the `DmActor` the method takes, so there is no call to refuse —
+    // and this assertion is on the gate rather than on the read behind it.
     const player = await runtime.runPromise(aPlayerAt(fixture.campaign.id, "Pim"));
     const failure = await runtime.runPromise(
-      withActor(player)(
-        Effect.flip(runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id })),
-      ).pipe(Effect.orDie),
+      Effect.flip(asDm(player, fixture.campaign.id)).pipe(Effect.orDie),
     );
     expect(failure).toBeInstanceOf(NotFound);
   }, 60_000);
@@ -494,7 +497,7 @@ describe("the guarantees a carried run had to be re-examined against", () => {
     const second = await freshSession();
     await aFightInProgress(second.id);
     const failure = await as(
-      Effect.flip(runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id })),
+      Effect.flip(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id })),
     );
     expect(failure).toBeInstanceOf(Conflict);
   }, 60_000);

@@ -7,12 +7,13 @@ import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -33,6 +34,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Creatures.layer,
+  DmActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -87,6 +89,8 @@ const makeFixture = Effect.gen(function* () {
 
   return {
     dm,
+    /** The proof `EncounterRuns` and `SessionEvents` take in place of a campaign id. */
+    asDm: yield* as(asDm(dm, campaign.id)),
     /** A credential minted for the first table only. */
     player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
@@ -187,9 +191,7 @@ describe("jotting one down", () => {
 
   it("puts a marker in the log, with the prose left out of the payload", async () => {
     const night = await freshSession();
-    const run = await as(
-      runs.start(fixture.campaign.id, night.id, { encounterId: fixture.encounter.id }),
-    );
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     await as(
       beats.create(fixture.campaign.id, night.id, {
         body: "The hag begged. Wren let her go.",
@@ -197,7 +199,7 @@ describe("jotting one down", () => {
       }),
     );
 
-    const log = await as(events.list(fixture.campaign.id, night.id, {}));
+    const log = await as(events.list(fixture.asDm, night.id, {}));
     const marker = log.find((row) => row.kind === "beat-added");
     expect(marker).toBeDefined();
     // Which fight it happened in, so a recap can order it against combat.
@@ -214,9 +216,7 @@ describe("jotting one down", () => {
     // rather than letting a constraint violation become a 500.
     const first = await freshSession();
     const second = await freshSession();
-    const run = await as(
-      runs.start(fixture.campaign.id, first.id, { encounterId: fixture.encounter.id }),
-    );
+    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }));
 
     const failure = await as(
       Effect.flip(
@@ -233,9 +233,7 @@ describe("jotting one down", () => {
   it("is unrepresentable across nights in the schema, not only in the repository", async () => {
     const first = await freshSession();
     const second = await freshSession();
-    const run = await as(
-      runs.start(fixture.campaign.id, first.id, { encounterId: fixture.encounter.id }),
-    );
+    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }));
 
     const error = await as(
       Effect.gen(function* () {
@@ -259,14 +257,14 @@ describe("correcting one — the reason beats are not log lines", () => {
     const beat = await as(
       beats.create(fixture.campaign.id, night.id, { body: "The ferrymen is called Cazril." }),
     );
-    const before = await as(events.list(fixture.campaign.id, night.id, {}));
+    const before = await as(events.list(fixture.asDm, night.id, {}));
 
     const fixed = await as(
       beats.update(fixture.campaign.id, night.id, beat.id, {
         body: "The ferryman is called Cazril.",
       }),
     );
-    const after = await as(events.list(fixture.campaign.id, night.id, {}));
+    const after = await as(events.list(fixture.asDm, night.id, {}));
 
     expect(fixed.id).toEqual(beat.id);
     expect(fixed.body).toBe("The ferryman is called Cazril.");
@@ -295,9 +293,7 @@ describe("correcting one — the reason beats are not log lines", () => {
     // `on delete set null (encounter_run_id)` — the Postgres 15+ column list.
     // A bare `set null` would null `session_id` too and hit its not-null.
     const night = await freshSession();
-    const run = await as(
-      runs.start(fixture.campaign.id, night.id, { encounterId: fixture.encounter.id }),
-    );
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const beat = await as(
       beats.create(fixture.campaign.id, night.id, {
         body: "The hag begged. Wren let her go.",
