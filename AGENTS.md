@@ -1741,6 +1741,12 @@ Three things that cost time here:
   `flex flex-col overflow-auto`, and without `shrink-0` every artifact card collapsed to a
   sliver as soon as the thread was taller than the panel. Invisible to jsdom, obvious in a
   browser.
+- **A fixed-size `<img>` in a flex row stretches, and `shrink-0` does not stop it.** Preflight's
+  `img { height: auto }` outranks the presentational `height` attribute, so the cross size is
+  `auto` and the row's default `align-items: stretch` grows the image — `shrink-0` is a main-axis
+  rule and answers a different question. Hob's mark measured 28 × 159.5 beside a long reply until
+  `HobAvatar` stated its height in CSS. An `Icon` cannot suffer it: that reset covers `img`, not
+  `svg`. jsdom sees none of this, the same blind spot as the motion and layering scales.
 - **Do not auto-scroll an empty thread to the bottom.** The starter grid is taller than a short
   panel, so "scroll to the newest turn" opened on the last starter with the question scrolled
   off — the first thing a DM sees, already scrolled past.
