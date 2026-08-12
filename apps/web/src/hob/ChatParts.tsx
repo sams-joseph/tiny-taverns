@@ -14,7 +14,19 @@ import type { HobContextChip, HobStarter } from "./transcript";
  * scale, and the panel's own width is the one measurement it introduces.
  */
 
-/** Hob's face is the app's mark. `size` is the square edge, as `Icon` takes it. */
+/**
+ * Hob's face is the app's mark. `size` is the square edge, as `Icon` takes it.
+ *
+ * The height is set in CSS as well as in the attribute, and that is the whole
+ * defect this component shipped with: preflight's `img { height: auto }` beats
+ * the presentational `height` attribute, so in a flex row the cross size is
+ * `auto` and `align-items: stretch` — the default — grows the mark to whatever
+ * height the row became. `shrink-0` reads like it prevents that and does not:
+ * it is a main-axis rule. Measured before the fix, the same 28px mark rendered
+ * 28 × 45.4 beside a two-line reply and 28 × 159.5 beside a long one. A square
+ * that states its height cannot stretch in any row, which is a stronger
+ * guarantee than every caller remembering to align its own.
+ */
 export function HobAvatar({ size = 28 }: { readonly size?: number }) {
   return (
     <img
@@ -23,6 +35,7 @@ export function HobAvatar({ size = 28 }: { readonly size?: number }) {
       aria-hidden="true"
       width={size}
       height={size}
+      style={{ height: size }}
       className="shrink-0 rounded-sm border border-hairline"
     />
   );
@@ -90,7 +103,10 @@ export function HobReply({
   readonly aside?: string;
 }) {
   return (
-    <div className="flex shrink-0 gap-2.5">
+    // `items-start`: the mark belongs beside the first line of a reply, not
+    // centred against a tall block — which is what the delivery draws and what
+    // `Thinking` below says out loud with its own `items-center`.
+    <div className="flex shrink-0 items-start gap-2.5">
       <HobAvatar />
       <div className="flex min-w-0 flex-1 flex-col gap-2 pt-0.5">
         {children !== undefined && (

@@ -162,3 +162,38 @@ describe("the composer, once something is listening", () => {
     expect(onSend).toHaveBeenCalledWith("Name an NPC");
   });
 });
+
+describe("Hob's mark, beside a reply that grew", () => {
+  /**
+   * **This proves the mechanism, not the layout.** jsdom computes no layout, so
+   * no test in this environment can see an avatar stretch — the same blind spot
+   * `motion.test.ts` and `layering.test.ts` exist for, and the reason this
+   * shipped green. The measurement is in the task record: 28 × 45.4 beside a
+   * two-line reply and 28 × 159.5 beside a long one, because preflight's
+   * `img { height: auto }` beats the `height` attribute and the row's default
+   * `align-items: stretch` then grows the mark. What is checkable here is the
+   * one line that closes it: the mark states its height in CSS, so its cross
+   * size is never `auto` and no row can stretch it.
+   */
+  it("states its height in CSS as well as in the attribute", () => {
+    const { container } = render(<HobPanel turns={SAMPLE_THREAD} />);
+    const marks = [...container.querySelectorAll("img")];
+
+    expect(marks.length).toBeGreaterThan(0);
+    for (const mark of marks) {
+      expect(mark.style.height).toBe(`${mark.getAttribute("height") ?? ""}px`);
+    }
+  });
+
+  it("never sits in a row that states no alignment", () => {
+    const { container } = render(<HobPanel turns={SAMPLE_THREAD} thinking />);
+    const rows = [...container.querySelectorAll("img")].map((mark) => mark.parentElement);
+
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) {
+      // A reply aligns to the first line, a one-line row centres — and a row
+      // that says neither is the row that stretches.
+      expect(row?.className).toMatch(/items-(start|center)/);
+    }
+  });
+});
