@@ -24,14 +24,14 @@ import {
   nestedRowWritable,
 } from "./visibility.js";
 
-interface BeatRow extends ProvenanceColumns {
+export interface BeatRow extends ProvenanceColumns {
   readonly id: BeatId;
   readonly session_id: SessionId;
   readonly encounter_run_id: EncounterRunId | null;
   readonly body: string;
 }
 
-const toBeat = (row: BeatRow): Beat =>
+export const toBeat = (row: BeatRow): Beat =>
   new Beat({
     id: row.id,
     sessionId: row.session_id,
@@ -41,7 +41,7 @@ const toBeat = (row: BeatRow): Beat =>
   });
 
 /** `beat` hangs off `session`, which hangs off `campaign`. Exactly `prep_item`. */
-const BEATS: NestedTable = { table: "beat", parent: "session", foreignKey: "session_id" };
+export const BEATS: NestedTable = { table: "beat", parent: "session", foreignKey: "session_id" };
 
 /**
  * Fails with `NotFound` unless the named fight exists in *this* session and

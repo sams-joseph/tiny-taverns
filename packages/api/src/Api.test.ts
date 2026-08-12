@@ -66,6 +66,7 @@ describe("the API declaration", () => {
       "live",
       "notes",
       "prep",
+      "recap",
       "runs",
       "sessions",
     ]);

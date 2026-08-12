@@ -20,6 +20,7 @@ import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
+import { Recap } from "./repo/Recap.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 
@@ -206,6 +207,24 @@ const BeatsLive = HttpApiBuilder.group(
       .handle("remove", ({ params }) =>
         beats.remove(params.campaignId, params.sessionId, params.beatId),
       );
+  }),
+);
+
+/**
+ * The recap: what happened on the night.
+ *
+ * As thin as every other handler here, and that is worth noticing rather than
+ * assuming — a recap is the read most likely to grow assembly logic in the
+ * handler, because it is the one that reaches five tables. It does not: the
+ * assembly is a repository read, so the assistant's `sessionRecap` tool will
+ * call exactly what this calls.
+ */
+const RecapLive = HttpApiBuilder.group(
+  TavernsApi,
+  "recap",
+  Effect.fnUntraced(function* (handlers) {
+    const recap = yield* Recap;
+    return handlers.handle("read", ({ params }) => recap.read(params.campaignId, params.sessionId));
   }),
 );
 
@@ -417,5 +436,6 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     RunsLive,
     CombatantsLive,
     LiveLive,
+    RecapLive,
   ]),
 );

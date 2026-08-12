@@ -35,6 +35,7 @@ import {
 } from "./Ids.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
+import { SessionRecap } from "./Recap.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
@@ -419,6 +420,39 @@ class BeatsGroup extends HttpApiGroup.make("beats")
   .middleware(Authorization) {}
 
 /**
+ * What happened on the night — the thing a DM reads before the next game.
+ *
+ * One endpoint, and it is a **read of a session** rather than a table of its
+ * own: nothing is stored, and there is no `POST`, `PATCH` or `DELETE` here
+ * because there is nothing to write. See `SessionRecap` for what it assembles
+ * and from where.
+ *
+ * Its own group rather than a sixth endpoint on `sessions`, because it is not
+ * a session — it reaches five tables, and a client asking for one is asking a
+ * different question from a client asking for the row. It shares `live`'s
+ * prefix for the same reason `live` has it: both hang off one night.
+ *
+ * **The recap has two consumers and only one implementation.** The Chronicle
+ * screen is one; the assistant's `sessionRecap` tool is the other, and it runs
+ * on the server. That is why this is assembled here rather than composed in
+ * the client the way `campaign/load.ts` composes a screen — composed there, the
+ * assistant would write a second version, and the two would come to disagree
+ * about what happened last session. It is also why it is behind `Authorization`
+ * like everything else: the tool inherits the actor rather than being given a
+ * path around it.
+ */
+class RecapGroup extends HttpApiGroup.make("recap")
+  .add(
+    HttpApiEndpoint.get("read", "/recap", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      success: SessionRecap,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/sessions/:sessionId")
+  .middleware(Authorization) {}
+
+/**
  * The live session: starting a fight, running it, and ending it.
  *
  * Nested under the session because a run belongs to one night — and, as
@@ -625,4 +659,5 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(BeatsGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)
-  .add(LiveGroup) {}
+  .add(LiveGroup)
+  .add(RecapGroup) {}

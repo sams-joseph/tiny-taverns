@@ -29,7 +29,7 @@ import {
   ensureNestedRowWritable,
 } from "./visibility.js";
 
-interface CombatantRow extends ProvenanceColumns {
+export interface CombatantRow extends ProvenanceColumns {
   readonly id: CombatantId;
   readonly encounter_run_id: EncounterRunId;
   readonly character_id: CharacterId | null;
@@ -46,7 +46,7 @@ interface CombatantRow extends ProvenanceColumns {
   readonly conditions: ReadonlyArray<string>;
 }
 
-const toCombatant = (row: CombatantRow): Combatant =>
+export const toCombatant = (row: CombatantRow): Combatant =>
   new Combatant({
     id: row.id,
     encounterRunId: row.encounter_run_id,

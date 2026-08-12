@@ -1289,6 +1289,67 @@ session_id)` — so a beat on one night cannot attach to another night's fight, 
 from `session` like `prep_item` and `session_event`, which is the right cascade and worth a
 confirmation on whatever client eventually calls `Sessions.remove`.
 
+### The recap: what it draws from, and the shape the Chronicle screen will get
+
+`packages/api/src/Recap.ts` is the contract and `apps/server/src/repo/Recap.ts` the one
+implementation; `GET /campaigns/:c/sessions/:s/recap` is the only endpoint. **It is a view,
+assembled per read, and nothing about it is stored** — no summary column, no model call in the
+read path. That is the captain's standing constraint and it is the point of the feature: detail
+is retained rather than summarised at write time, so the recap never becomes the only thing
+anyone reads.
+
+**Five sources, five existing predicates, no new SQL rule.** `SessionRecap` is:
+
+| field      | source                                   | selection                                            |
+| ---------- | ---------------------------------------- | ---------------------------------------------------- |
+| `session`  | `session`                                | the night itself; an unreachable one is a `NotFound` |
+| `fights`   | `encounter_run` + `combatant`            | every run of the night, oldest first, with its list  |
+| `beats`    | `beat`                                   | all of them, oldest first, **verbatim**              |
+| `prepDone` | `prep_item where done`                   | ticked only — an unticked line is the _next_ night's |
+| `notes`    | `note` attached to an encounter that ran | the read-aloud that was actually read out            |
+
+The three sources the captain's decision names are `notes`, combat and `beats`. **Beats are the
+reason the recap is about the story**: every `session_event` kind is combat, so a recap without
+them reads as a hit-point transcript and answers neither "who is the ferryman" nor "what did the
+party decide about the crate".
+
+Four things that are decisions rather than details:
+
+- **A `RecapFight` is `run` plus two links, and restates nothing.** The round reached is
+  `run.round`, and _"paused"_ vs _"the DM finished it"_ is `run.endedReason` — never a guess from
+  `endedAt`. `continuedFrom` / `continuedInto` are `RecapRunLink`s carrying the **other** run's
+  session number and round, which is what makes "paused at round 3, picked up on session 13" and
+  "resumed from round 3 of session 12" expressible from either end. Neither is on the row that
+  holds the pointer, which is why the link exists at all.
+- **Following `continued_from` does not grant reach.** It stays provenance, not an access path:
+  the run at the far end goes through `containedRowReadable` like any other, so a link into
+  something the actor cannot see comes back `null` rather than leaking that there is something to
+  say. `recap.test.ts` pins that with a player who can see the successor and not its predecessor.
+- **There is no duration and no round count beside `run.round`.** `session.startedAt`/`endedAt`
+  already answer the first; a third number that has to agree with two others is the second-answer
+  shape this schema refuses everywhere else.
+- **"Who was removed mid-fight" is deliberately absent**, though the plan sketched it. `combatant`
+  rows are really deleted and `session_event.combatant_id` is `on delete set null`, so no shipped
+  source still holds the name — reconstructing it would mean branching on `payload`, which is
+  documented as non-contractual. `GET …/log` still shows that somebody left.
+
+**Which notes count is settled and is structural, not a timestamp heuristic**: a note attached to
+an encounter one of tonight's fights was started from. A read-aloud improvised from an unattached
+note is missing, and if recaps read thin the answer is a second, _differently labelled_ set — not
+widening this one into "every note touched between `startedAt` and `endedAt`", which is wrong
+every time the DM preps at lunchtime.
+
+**It is a server-side repository even though `AGENTS.md` says one `Effect` per screen**, and the
+reason is sufficient: the recap has **two** consumers. The Chronicle screen is one, the
+assistant's `sessionRecap` tool is the other, and it runs here. Composed client-side the assistant
+would write a second version and the two would disagree about what happened last session. That is
+also why `read` requires `CurrentActor` at the type level from day one — the tool inherits the
+actor rather than getting a path around it.
+
+`Recap.ts` is the only place that imports another repository's row mapper: `toBeat`, `toNote`,
+`toPrepItem`, `toSession`, `toCombatant`, `toEncounterRun` and the `BEATS`/`PREP` nested-table
+constants are exported for it, so there is still exactly one mapper per table.
+
 ## The runner: how a screen consumes the stream, and what it does when it comes back
 
 `apps/web/src/run/` is the client half of the section above, and the next live surface should

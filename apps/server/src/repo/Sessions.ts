@@ -21,7 +21,7 @@ import {
   rowWritable,
 } from "./visibility.js";
 
-interface SessionRow extends ProvenanceColumns {
+export interface SessionRow extends ProvenanceColumns {
   readonly id: SessionId;
   readonly campaign_id: CampaignId;
   readonly number: number;
@@ -31,7 +31,7 @@ interface SessionRow extends ProvenanceColumns {
   readonly active_encounter_run_id: EncounterRunId | null;
 }
 
-const toSession = (row: SessionRow): Session =>
+export const toSession = (row: SessionRow): Session =>
   new Session({
     id: row.id,
     campaignId: row.campaign_id,

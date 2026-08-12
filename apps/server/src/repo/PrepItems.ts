@@ -19,14 +19,14 @@ import {
   nestedRowWritable,
 } from "./visibility.js";
 
-interface PrepItemRow extends ProvenanceColumns {
+export interface PrepItemRow extends ProvenanceColumns {
   readonly id: PrepItemId;
   readonly session_id: SessionId;
   readonly label: string;
   readonly done: boolean;
 }
 
-const toPrepItem = (row: PrepItemRow): PrepItem =>
+export const toPrepItem = (row: PrepItemRow): PrepItem =>
   new PrepItem({
     id: row.id,
     sessionId: row.session_id,
@@ -36,7 +36,11 @@ const toPrepItem = (row: PrepItemRow): PrepItem =>
   });
 
 /** `prep_item` hangs off `session`, which hangs off `campaign`. */
-const PREP: NestedTable = { table: "prep_item", parent: "session", foreignKey: "session_id" };
+export const PREP: NestedTable = {
+  table: "prep_item",
+  parent: "session",
+  foreignKey: "session_id",
+};
 
 /**
  * The per-session "Before you sit down" checklist.

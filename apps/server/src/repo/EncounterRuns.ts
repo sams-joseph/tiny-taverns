@@ -39,7 +39,7 @@ import {
   rowReadable,
 } from "./visibility.js";
 
-interface EncounterRunRow extends ProvenanceColumns {
+export interface EncounterRunRow extends ProvenanceColumns {
   readonly id: EncounterRunId;
   readonly session_id: SessionId;
   readonly encounter_id: EncounterId | null;
@@ -52,7 +52,7 @@ interface EncounterRunRow extends ProvenanceColumns {
   readonly continued_from: EncounterRunId | null;
 }
 
-const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
+export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
   new EncounterRun({
     id: row.id,
     sessionId: row.session_id,

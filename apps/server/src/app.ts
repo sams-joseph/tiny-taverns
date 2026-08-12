@@ -22,6 +22,7 @@ import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
+import { Recap } from "./repo/Recap.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 
@@ -93,6 +94,7 @@ export const servicesOver = <E>(
   | LiveEvents
   | Notes
   | PrepItems
+  | Recap
   | SessionEvents
   | Sessions,
   E | Config.ConfigError
@@ -118,6 +120,9 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     Notes.layer,
     PrepItems.layer,
+    // A view over five tables and a writer of none. It needs no `LiveEvents`
+    // for the same reason: nothing about reading a night changes it.
+    Recap.layer,
     SessionEvents.layer,
     // `Sessions` is on the live side too now: finishing a night takes a fight
     // still on the table off it and carries it, so it appends to the log and
@@ -161,6 +166,7 @@ export const applicationOver = <E>(
     | LiveEvents
     | Notes
     | PrepItems
+    | Recap
     | SessionEvents
     | Sessions,
     E

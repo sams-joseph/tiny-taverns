@@ -20,7 +20,7 @@ import {
   rowWritable,
 } from "./visibility.js";
 
-interface NoteRow extends ProvenanceColumns {
+export interface NoteRow extends ProvenanceColumns {
   readonly id: NoteId;
   readonly campaign_id: CampaignId;
   readonly title: string;
@@ -29,7 +29,7 @@ interface NoteRow extends ProvenanceColumns {
   readonly encounter_id: EncounterId | null;
 }
 
-const toNote = (row: NoteRow): Note =>
+export const toNote = (row: NoteRow): Note =>
   new Note({
     id: row.id,
     campaignId: row.campaign_id,
