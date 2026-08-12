@@ -62,6 +62,41 @@ export const textChunks = (...pieces: ReadonlyArray<string>): ReadonlyArray<Chun
   "[DONE]",
 ];
 
+/**
+ * A round that spends its whole budget thinking, which is what a reasoning
+ * model does when `HOB_MAX_TOKENS` is too small for it.
+ *
+ * `reasoning_content` and a `length` finish are the exact shape a real Qwen3
+ * puts on the wire — measured, and the reason `Config.hobMaxTokens` is 4096
+ * rather than 1024. The parts are dropped by `toHobEvent`, so without a
+ * deliberate report this round reaches the panel as `began` … `done` and
+ * nothing else: an answer that never happened, presented as one that did.
+ *
+ * @param inline For an endpoint that leaves the thinking in `content` rather
+ *   than splitting it out — plain `llama-server`, among others. Then the same
+ *   run reads on the panel as nothing but text deltas, which is exactly the
+ *   report this test file exists to keep answered.
+ */
+export const reasoningChunks = (
+  text: string,
+  options?: { readonly inline?: boolean },
+): ReadonlyArray<Chunk> => [
+  {
+    ...CHUNK,
+    choices: [
+      {
+        index: 0,
+        delta:
+          options?.inline === true
+            ? { role: "assistant", content: `<think>${text}` }
+            : { role: "assistant", reasoning_content: text },
+      },
+    ],
+  },
+  { ...CHUNK, choices: [{ index: 0, delta: {}, finish_reason: "length" }] },
+  "[DONE]",
+];
+
 /** A round that asks for one tool and says nothing else. */
 export const toolCallChunks = (
   name: string,

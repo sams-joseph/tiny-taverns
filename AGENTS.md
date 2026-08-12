@@ -2097,7 +2097,8 @@ accepted row pins the turn that produced it, and `schema.test.ts` proves it.
 
 Same shape as `CLERK_JWT_KEY`, and it must stay that way. `HOB_API_URL` + `HOB_MODEL` (both, or
 Hob is off), optional `HOB_API_KEY` (`Redacted`; **the only secret on that page, and no key of
-any kind may be committed**), `HOB_MAX_TOKENS` (default 1024). `assistantFromConfig` in `app.ts`
+any kind may be committed**), `HOB_MAX_TOKENS` (default 4096 — see "Hob never calls a tool"
+below, which is why it is not 1024). `assistantFromConfig` in `app.ts`
 logs one line at every boot — `Hob is ON: model … at …` or `Hob is OFF: …` — naming the model and
 endpoint and never the key, for the reason the identity boot line exists. Unset means
 `Hob.unavailable`: the server boots, the whole suite passes, `status` answers
@@ -2116,6 +2117,55 @@ this version: `@effect/ai-anthropic` ships **no** embedding module; `@effect/ai-
 `@effect/ai-openai-compat` have `OpenAiEmbeddingModel`. Retrieval here is lexical by decision —
 no embeddings.
 
+### "Hob never calls a tool": what it is not, and the two things it is
+
+Reported twice, against a 1B and then against a tool-capable 8B, and the diagnosis was wrong
+both times before anyone looked at the wire. **Look at the wire first — the request body is one
+`HttpClient.tapRequest` away** (`test/support/model.ts` already records it), and it settles in
+one step which of three links failed. Measured against a real Qwen3-8B through LM Studio:
+
+- **The tools are in the request.** Eight `function` entries, `tool_choice: "auto"`, on every
+  round including the second and third. The toolkit → provider → wire path has never been the
+  bug, and `hob.test.ts` asserts it by name.
+- **The model calls them.** Replaying that exact captured body with `curl` came back
+  `finish_reason: "tool_calls"` and a well-formed `searchCampaign`.
+- So the failures are downstream, and there were two, **both of which report as "no tool call"
+  and neither of which said anything at all**:
+
+**1. `Schema.optional` on a tool parameter is a bug, and it is invisible until a model obeys the
+schema.** The provider rewrites parameters through OpenAI strict mode (`toCodecOpenAI`): every
+property lands in `required` and an optional one gains a `null` member, because strict mode has
+no way to spell "may be absent". The **decode** side then validates against the _untransformed_
+schema, which refuses `null` — so the two halves of one round trip disagree, and an endpoint that
+compiles the published schema into a grammar (llama.cpp does) leaves the model no other way to say
+"no filter". One `"source": null` kills the whole answer with `Expected "note" | "beat" |
+"creature" | undefined, got null`, one round in, with no tool step ever drawn. Use
+`toolkit.ts`'s `optional` helper — `Schema.optionalKey(Schema.NullOr(…))`, which publishes the
+identical JSON schema and accepts what it asks for — and `absent()` at the handler.
+`Schema.optional` on a `Tool.make` parameter is the thing to grep for.
+
+**2. `HOB_MAX_TOKENS` covers reasoning tokens, and 1024 was not enough for a thinking model.**
+That is the captain's report. A capable local 8B in 2026 is a reasoning model: it deliberates
+before it calls anything, out of the same budget. Reasoning parts are dropped on purpose
+(`toHobEvent` — a chain of thought is not an answer), so a model that spends the budget thinking
+reached the panel as `began` … `done`: **an answer that never happened, reported as a finished
+one.** Measured: a trivial question cost 120 reasoning tokens before its tool call, and two of six
+ordinary questions used the whole 1024 without reaching one. On an endpoint that leaves `<think>`
+in `content` rather than splitting it into `reasoning_content` — `llama-server
+--reasoning-format none`, and `auto` resolves to that for a template it does not recognise — the
+same run reads as **nothing but text deltas and no tool call, ever**, which is the report
+verbatim. Whether thinking is split out is the endpoint's setting and not ours:
+`--reasoning-format deepseek` puts it in `reasoning_content` (LM Studio's server already does),
+and `--reasoning-budget N` caps it at the source. Raising `HOB_MAX_TOKENS` fixes both spellings;
+the endpoint flags only change what the DM sees while it happens.
+
+Both silences are now sentences: `truncated` and `silence` in `Hob.ts` turn a `length` finish and
+an empty answer into `failed` events naming the knob, and a `length` round ends the loop rather
+than spending three more calls re-truncating. `hob.test.ts` pins all four cases, and
+`test/support/model.ts`'s `reasoningChunks` is the wire shape a reasoning model actually produces
+(both spellings). **A `done` that follows nothing is the shape to distrust here** — the panel has
+no other way to tell "it answered briefly" from "it never started".
+
 ### Running it locally, with and without a model
 
 Without: change nothing. `pnpm -F server dev` boots, logs `Hob is OFF`, and the panel says so.
@@ -2131,6 +2181,8 @@ HOB_MODEL=qwen2.5-3b-instruct
 
 Ollama (`:11434/v1`) and LM Studio (`:1234/v1`) are the same shape. **The model must support tool
 calling** — Hob answers only from tool results, so one that cannot call a tool has nothing to say.
+**A reasoning model additionally needs room to reason** — see the section above; `HOB_MAX_TOKENS`
+is the number, and the panel now says so when it runs out rather than pretending it finished.
 
 Measured against a real local Qwen2.5-3B over a seeded campaign, asking a question only the
 record could answer: `searchCampaign` called at 1.5s, answered at 1.5s, first token at 2.8s,
@@ -2157,6 +2209,11 @@ working rather than defects — but note the second one can burn the round budge
 end `failed` with a good proposal already made and emitted. That is a model-tier question (the
 captain's `model-tier.md` defers it), not an architecture one. A **1B** model is below the floor
 entirely: llama-3.2-1B emitted `proposeEncounter:` as prose and never made a tool call at all.
+
+**Do not reach for "the model is the limit" second, though — reach for it last.** That conclusion
+was drawn from a 1B, was right about the 1B, and was then wrong about everything after it: the
+same symptom on an 8B was two defects of ours (see "Hob never calls a tool" above). The evidence
+that tells them apart is the captured request body, and it costs one `tapRequest`.
 
 **"Hob suggested something and there was no card to accept it with" is that same model-tier
 symptom, and the row says so — check it before touching `apps/web/src/hob/`.** Re-measured against

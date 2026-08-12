@@ -282,11 +282,25 @@ export class Hob extends Context.Service<
                * a model that offered something good and then burned the round
                * budget looking for more really did offer it, and dropping the
                * card would leave the DM with a row on reload they never saw.
+               *
+               * **An answer that produced nothing at all is a failure too**, and
+               * is the other half of the state `truncated` describes: a model
+               * that reasoned, stopped, and emitted no word, no tool call and no
+               * offer. Nothing is written to the thread in that case (`save`
+               * refuses an empty turn), so a bare `done` leaves the DM with a
+               * spinner that stopped and a transcript that will not remember it
+               * happened. It is not diagnosable from the outside and it is one
+               * sentence to say.
                */
               const tail = Stream.unwrap(
                 Effect.map(
-                  Effect.all([Ref.get(proposal), Ref.get(finished), Ref.get(broke)]),
-                  ([offered, reason, failed]) =>
+                  Effect.all([
+                    Ref.get(proposal),
+                    Ref.get(finished),
+                    Ref.get(broke),
+                    Ref.get(written),
+                  ]),
+                  ([offered, reason, failed, text]) =>
                     Stream.fromIterable<HobEvent>([
                       ...(offered === undefined
                         ? []
@@ -298,7 +312,9 @@ export class Hob extends Context.Service<
                           ]),
                       ...(failed
                         ? []
-                        : [{ event: "done" as const, data: new HobDone({ reason }) }]),
+                        : text === "" && offered === undefined
+                          ? [silence]
+                          : [{ event: "done" as const, data: new HobDone({ reason }) }]),
                     ]),
                 ),
               );
@@ -366,6 +382,8 @@ type HobTools = Toolkit.Tools<typeof HobToolkit>;
  * turn on a client that trusts it. The framework defers finish parts until
  * every tool handler has completed, so by the time one arrives here the flag
  * below is already accurate.
+ *
+ * The one reason that is *not* withheld is `length`. See `truncated`.
  */
 const round = (
   chat: Chat.Service,
@@ -382,8 +400,10 @@ const round = (
             if (part.type === "finish") {
               // The provider's reason for stopping is recorded rather than
               // emitted: `ask` puts `done` at the very end so the proposal
-              // cannot land after it.
+              // cannot land after it. `length` is the exception — it is not a
+              // reason to record and move on, it is the end of the answer.
               yield* Ref.set(finished, part.reason);
+              if (part.reason === "length") return Result.succeed(truncated);
               if (yield* Ref.get(calledTool)) {
                 return budget > 1
                   ? Result.fail(part)
@@ -401,14 +421,62 @@ const round = (
         ),
         Stream.concat(
           Stream.unwrap(
-            Effect.map(Ref.get(calledTool), (used) =>
-              used && budget > 1 ? round(chat, toolkit, budget - 1, finished) : Stream.empty,
+            Effect.map(
+              Effect.all([Ref.get(calledTool), Ref.get(finished)]),
+              // A round the model was cut off in the middle of has no next
+              // round: whatever it was going to ask for, it never finished
+              // asking. Spending the rest of the budget re-truncating the same
+              // answer costs the DM four provider calls to reach the same place.
+              ([used, reason]) =>
+                used && budget > 1 && reason !== "length"
+                  ? round(chat, toolkit, budget - 1, finished)
+                  : Stream.empty,
             ),
           ),
         ),
       ),
     ),
   );
+
+/**
+ * The model ran out of room, said in the one place the DM is looking.
+ *
+ * **This is the single most misdiagnosable state the assistant has, and it used
+ * to be silent.** `HOB_MAX_TOKENS` caps *everything the model emits*, and on a
+ * reasoning model — which is what a capable local 8B is in 2026 — most of that
+ * is thinking the DM never sees. Reasoning parts are dropped on purpose
+ * (`toHobEvent`), so a model that spends its whole budget deliberating and
+ * never reaches its tool call produced, from the panel's point of view,
+ * `began` … `done`: a spinner that stopped, reported as a completed answer.
+ * Where the endpoint does not split reasoning out of `content` —
+ * `llama-server --reasoning-format none`, and `auto` for a template it does not
+ * recognise — the same run reads as *nothing but text deltas*, forever, with no
+ * tool call ever. Both were measured against a real Qwen3-8B; see AGENTS.md.
+ *
+ * So the honest report is a failure, not a `done`. It costs the DM one sentence
+ * and it names the knob, because the fix is a number in `apps/server/.env.local`
+ * and nothing about the question they asked.
+ */
+const truncated: HobEvent = {
+  event: "failed",
+  data: new HobFailure({
+    message:
+      "The model ran out of room before it finished — on a model that reasons, the " +
+      "thinking is spent out of the same budget and can use all of it before a tool " +
+      "call. Raise HOB_MAX_TOKENS in apps/server/.env.local and ask again.",
+  }),
+};
+
+/** The model stopped without saying anything. See `tail`. */
+const silence: HobEvent = {
+  event: "failed",
+  data: new HobFailure({
+    message:
+      "The model stopped without saying anything — on a model that reasons, that " +
+      "usually means it spent the whole answer thinking. Ask again, or raise " +
+      "HOB_MAX_TOKENS in apps/server/.env.local.",
+  }),
+};
 
 /** A turn id, minted before the row that carries it. See `HobThreads`. */
 const freshTurnId: Effect.Effect<AssistantTurnId> = Effect.sync(

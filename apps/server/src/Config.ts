@@ -94,10 +94,23 @@ export const hobApiKey = Config.option(Config.redacted("HOB_API_KEY"));
  * costs one config line and makes the trap impossible; `test/hob.test.ts`
  * asserts the value reaches the wire.
  *
- * 1024 because Hob's replies are a sentence or two by design, and a local model
- * generating on CPU makes a long cap expensive rather than generous.
+ * **4096, not 1024, and the difference is reasoning tokens.** The old number
+ * was reasoned from the length of a reply — "a sentence or two by design" — and
+ * that is the wrong quantity: this caps everything the model *emits*, and on a
+ * reasoning model most of that is thinking nobody ever sees. Measured against a
+ * real Qwen3-8B, the trivial question "Who is the ferryman?" spent 120 reasoning
+ * tokens before its first tool call, and two of six ordinary questions used the
+ * whole 1024 without reaching one — which the panel then showed as an empty
+ * answer, or (on an endpoint that leaves `<think>` in `content`) as nothing but
+ * text deltas and no tool call, ever. That is the captain's "Hob never calls a
+ * tool". See `assistant/Hob.ts`'s `truncated`, which is what says so out loud
+ * now, and AGENTS.md for the measurements.
+ *
+ * A cap is not an allocation: raising it costs nothing on an answer that stays
+ * short, and it is the one number that turns a capable local model from mute
+ * into useful.
  */
-export const hobMaxTokens = Config.int("HOB_MAX_TOKENS").pipe(Config.withDefault(1024));
+export const hobMaxTokens = Config.int("HOB_MAX_TOKENS").pipe(Config.withDefault(4096));
 
 /**
  * Clerk's JWT public verification key, in PEM form.

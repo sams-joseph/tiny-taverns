@@ -27,7 +27,13 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
-import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import {
+  type ChatRequest,
+  reasoningChunks,
+  scriptedModel,
+  textChunks,
+  toolCallChunks,
+} from "./support/model.js";
 
 /**
  * Hob: what it can reach, what it cannot, and what happens when nothing is
@@ -304,6 +310,77 @@ describe("answering", () => {
 
     expect(events.at(-1)).toMatchObject({ event: "failed" });
     expect(texts(events)).toEqual([]);
+  }, 60_000);
+
+  it("takes the nulls its own tool schema asks the model for", async () => {
+    // **The bug this pins killed every answer that used an optional
+    // parameter, and looked like the model refusing to call a tool.** What we
+    // publish is not what `Schema.optional` says: the provider rewrites
+    // optionals into OpenAI strict mode, so `source` and `limit` go out as
+    // *required* with a `null` member — asserted below, because it is the
+    // premise — and an endpoint that turns that schema into a grammar leaves
+    // the model no other way to say "no filter". It sends `null`, the decode
+    // side used the untransformed schema, refused it, and the whole stream
+    // died one round in with a schema error and no tool step on screen.
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("searchCampaign", { query: "ferryman", source: null, limit: null }),
+        textChunks("The ferryman is called Cazril."),
+      ] as never,
+    });
+
+    const search = (requests[0]?.tools ?? []).find(
+      (tool) => (tool.function as { name?: string } | undefined)?.name === "searchCampaign",
+    )?.function as { parameters?: { required?: ReadonlyArray<string> } } | undefined;
+    expect(search?.parameters?.required).toContain("source");
+    expect(JSON.stringify(search?.parameters)).toContain(`"null"`);
+
+    expect(
+      events.flatMap((event) =>
+        event.event === "tool" ? [`${event.data.name}:${event.data.phase}`] : [],
+      ),
+    ).toEqual(["searchCampaign:called", "searchCampaign:answered"]);
+    expect(texts(events)).toEqual(["The ferryman is called Cazril."]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("says so when the model ran out of room, instead of reporting a finished answer", async () => {
+    // A reasoning model spends `HOB_MAX_TOKENS` on thinking nobody sees, and
+    // `toHobEvent` drops reasoning parts on purpose. Without this report the
+    // DM gets `began` … `done` and an empty panel — measured against a real
+    // Qwen3-8B, twice in six ordinary questions.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [reasoningChunks("Hmm, the DM is asking about the ferryman.")] as never,
+    });
+
+    expect(events.map((event) => event.event)).toEqual(["began", "failed"]);
+    expect(events.at(-1)).toMatchObject({ event: "failed" });
+    expect(JSON.stringify(events.at(-1)?.data)).toContain("HOB_MAX_TOKENS");
+  }, 60_000);
+
+  it("says so when the thinking arrived as prose, which is the report itself", async () => {
+    // The same run against an endpoint that does not split reasoning out of
+    // `content`: the panel fills with the model's chain of thought and no tool
+    // is ever called. "All I ever get back are text deltas" — and the answer is
+    // a number, not a broken toolkit.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        reasoningChunks("Hmm, the DM is asking about the ferryman.", { inline: true }),
+      ] as never,
+    });
+
+    expect(texts(events)).toEqual(["<think>Hmm, the DM is asking about the ferryman."]);
+    expect(events.at(-1)?.event).toBe("failed");
+  }, 60_000);
+
+  it("says so when the model stopped without saying anything at all", async () => {
+    // Nothing is written to the thread for an empty answer, so a bare `done`
+    // leaves a spinner that stopped and a transcript that will not remember it.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [textChunks()] as never,
+    });
+
+    expect(events.map((event) => event.event)).toEqual(["began", "failed"]);
   }, 60_000);
 
   it("tells the model when a tool refused, rather than tearing the answer down", async () => {

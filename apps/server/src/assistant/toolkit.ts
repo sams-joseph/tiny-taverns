@@ -77,6 +77,30 @@ const SEARCH_LIMIT = 8;
 /** One page of the log. Enough to answer "what happened", short of a transcript. */
 const LOG_LIMIT = 100;
 
+/**
+ * An optional tool parameter — which on the wire means *nullable and required*.
+ *
+ * **`Schema.optional` alone is a bug here, and it is invisible until a model
+ * takes the schema at its word.** The provider publishes a tool's parameters
+ * through OpenAI's strict-mode convention: every property goes in `required`
+ * and an optional one gains a `null` member, because strict mode has no way to
+ * say "may be absent". So the schema we send says `source` *must* be present
+ * and may be `null` — and an endpoint that compiles that schema into a grammar
+ * (llama.cpp does) leaves the model no other way to say "no filter". It then
+ * dutifully sends `"source": null`, and the *decode* side uses the untransformed
+ * schema, which refuses a null. The tool call is thrown away and the whole
+ * answer dies with `Expected "note" | "beat" | "creature" | undefined, got
+ * null`, one round in, with nothing on screen to say a tool was ever involved.
+ *
+ * Accepting the null is the fix rather than fighting the transform: the two
+ * halves of the round trip have to agree, and only this half is ours. `absent`
+ * below is what turns it back into "not given" for a handler.
+ */
+const optional = <S extends Schema.Top>(schema: S) => Schema.optionalKey(Schema.NullOr(schema));
+
+/** `null` and absent are the same answer, and repositories take the latter. */
+const absent = <A>(value: A | null | undefined): A | undefined => value ?? undefined;
+
 export const SearchCampaign = Tool.make("searchCampaign", {
   description:
     "Search this campaign's record — the DM's prep notes, the beats they jotted " +
@@ -86,8 +110,8 @@ export const SearchCampaign = Tool.make("searchCampaign", {
   parameters: Schema.Struct({
     query: Schema.String.check(Schema.isLengthBetween(1, 200)),
     /** Absent searches everything. */
-    source: Schema.optional(SearchSource),
-    limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 25 }))),
+    source: optional(SearchSource),
+    limit: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 25 }))),
   }),
   success: Schema.Array(SearchHit),
   failure: NotFound,
@@ -132,9 +156,7 @@ export const ReadSessionLog = Tool.make("sessionLog", {
   parameters: Schema.Struct({
     sessionId: SessionId,
     /** Exclusive cursor, for reading on past a first page. */
-    since: Schema.optional(
-      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2 ** 53 - 1 })),
-    ),
+    since: optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2 ** 53 - 1 }))),
   }),
   success: Schema.Array(SessionEvent),
   failure: NotFound,
@@ -168,7 +190,7 @@ export const ProposeNote = Tool.make("proposeNote", {
     title: Schema.String.check(Schema.isLengthBetween(1, 120)),
     body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
     /** Read-aloud is a kind of note, not a table — see `NoteKind`. */
-    readAloud: Schema.optional(Schema.Boolean),
+    readAloud: optional(Schema.Boolean),
   }),
   success: Schema.String,
   failure: proposalFailure,
@@ -198,8 +220,8 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
     /** The DMG band for the whole fight, not a creature's rating. */
-    difficulty: Schema.optional(Difficulty),
-    tags: Schema.optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
+    difficulty: optional(Difficulty),
+    tags: optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
     creatures: Schema.Array(
       Schema.Struct({
         creatureId: CreatureId,
@@ -335,7 +357,7 @@ export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal
       as(
         repositories.search.search(campaignId, {
           q: query,
-          source,
+          source: absent(source),
           limit: limit ?? SEARCH_LIMIT,
         }),
       ),
@@ -343,7 +365,7 @@ export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal
     sessionRecap: ({ sessionId }) => as(repositories.recap.read(campaignId, sessionId)),
     getCreature: ({ creatureId }) => as(repositories.creatures.findById(campaignId, creatureId)),
     sessionLog: ({ sessionId, since }) =>
-      repositories.events.list(dm, sessionId, { since, limit: LOG_LIMIT }),
+      repositories.events.list(dm, sessionId, { since: absent(since), limit: LOG_LIMIT }),
 
     proposeNote: ({ title, body, readAloud }) =>
       offer(
