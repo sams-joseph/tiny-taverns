@@ -26,6 +26,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 
@@ -83,13 +84,11 @@ const MAX_TOKENS = 512;
 
 /** One DM, two tables, and a marsh creature to build a fight out of. */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road" }));
@@ -120,7 +119,7 @@ const makeFixture = Effect.gen(function* () {
 
   return {
     dm,
-    scopedDm: new Actor({ accountId: issued.accountId, role: "dm", campaignId: campaign.id }),
+    scopedDm: scopedTo(dm, campaign.id),
     campaign,
     otherTable,
     croaker,

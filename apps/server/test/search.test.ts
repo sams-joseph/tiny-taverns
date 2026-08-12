@@ -18,6 +18,7 @@ import { Creatures } from "../src/repo/Creatures.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Search } from "../src/repo/Search.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -67,15 +68,13 @@ const CRATE = "They left the crate unopened and buried it under the reeds.";
  * test minted a scoped actor.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const notes = yield* Notes;
   const beats = yield* Beats;
   const sessions = yield* Sessions;
   const creatures = yield* Creatures;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
@@ -147,27 +146,14 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  const outsiderIssued = yield* accounts.issue("Someone else");
-  const outsider = new Actor({
-    accountId: outsiderIssued.accountId,
-    role: "dm",
-    campaignId: null,
-  });
+  const outsider = yield* anAccount("Someone else");
   const outsiderCampaign = yield* withActor(outsider)(
     campaigns.create({ name: "A different table", visibility: "shared" }),
   );
 
   /** A credential minted for one table: `campaignId` set, not null. */
-  const scopedDm = new Actor({
-    accountId: issued.accountId,
-    role: "dm",
-    campaignId: campaign.id,
-  });
-  const player = new Actor({
-    accountId: issued.accountId,
-    role: "player",
-    campaignId: campaign.id,
-  });
+  const scopedDm = scopedTo(dm, campaign.id);
+  const player = yield* aPlayerAt(campaign.id, "Pim");
 
   return {
     dm,

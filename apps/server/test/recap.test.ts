@@ -15,6 +15,7 @@ import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -71,7 +72,6 @@ const withActor =
  * closed was invisible for exactly as long as no test minted a scoped actor.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const beats = yield* Beats;
   const campaigns = yield* Campaigns;
   const characters = yield* Characters;
@@ -83,8 +83,7 @@ const makeFixture = Effect.gen(function* () {
   const runs = yield* EncounterRuns;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
@@ -181,9 +180,9 @@ const makeFixture = Effect.gen(function* () {
   return {
     dm,
     /** A credential minted for the first table only. */
-    scoped: new Actor({ accountId: issued.accountId, role: "dm", campaignId: campaign.id }),
+    scoped: scopedTo(dm, campaign.id),
     /** A player of the first table, who may have only its `shared` rows. */
-    player: new Actor({ accountId: issued.accountId, role: "player", campaignId: campaign.id }),
+    player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
     encounter,
     session,

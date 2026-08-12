@@ -25,6 +25,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 
@@ -77,14 +78,12 @@ const withActor =
  * closed and the one an assistant is most likely to reopen.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const notes = yield* Notes;
   const beats = yield* Beats;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
@@ -134,12 +133,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  const strangerIssued = yield* accounts.issue("Someone else");
-  const stranger = new Actor({
-    accountId: strangerIssued.accountId,
-    role: "dm",
-    campaignId: null,
-  });
+  const stranger = yield* anAccount("Someone else");
   const strangerCampaign = yield* withActor(stranger)(
     campaigns.create({ name: "A different table", visibility: "shared" }),
   );
@@ -147,8 +141,8 @@ const makeFixture = Effect.gen(function* () {
   return {
     dm,
     /** A credential minted for the Salt Road and nothing else. */
-    scopedDm: new Actor({ accountId: issued.accountId, role: "dm", campaignId: campaign.id }),
-    player: new Actor({ accountId: issued.accountId, role: "player", campaignId: campaign.id }),
+    scopedDm: scopedTo(dm, campaign.id),
+    player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
     otherTable,
     strangerCampaign,

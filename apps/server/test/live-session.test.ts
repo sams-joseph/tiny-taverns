@@ -13,6 +13,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -55,7 +56,6 @@ const withActor =
  * somewhere to fail to reach.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const creatures = yield* Creatures;
@@ -63,8 +63,7 @@ const makeFixture = Effect.gen(function* () {
   const roster = yield* EncounterCreatures;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(
@@ -152,7 +151,7 @@ const makeFixture = Effect.gen(function* () {
   return {
     dm,
     /** A credential minted for the first table only. */
-    player: new Actor({ accountId: issued.accountId, role: "player", campaignId: campaign.id }),
+    player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
     archer,
     hag,
@@ -803,11 +802,7 @@ describe("a campaign-scoped actor", () => {
   });
 
   it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
-    const scopedDm = new Actor({
-      accountId: fixture.dm.accountId,
-      role: "dm",
-      campaignId: fixture.campaign.id,
-    });
+    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const listed = await runtime.runPromise(
       Effect.flip(

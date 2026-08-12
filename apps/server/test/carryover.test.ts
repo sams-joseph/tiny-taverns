@@ -21,6 +21,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -73,7 +74,6 @@ const withActor =
 
 /** One DM, one campaign, one encounter with a party and a roster behind it. */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const creatures = yield* Creatures;
@@ -81,8 +81,7 @@ const makeFixture = Effect.gen(function* () {
   const roster = yield* EncounterCreatures;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road" }));
@@ -473,11 +472,7 @@ describe("resuming a carried fight", () => {
     await finish(first.id);
     const second = await freshSession();
 
-    const player = new Actor({
-      accountId: fixture.dm.accountId,
-      role: "player",
-      campaignId: fixture.campaign.id,
-    });
+    const player = await runtime.runPromise(aPlayerAt(fixture.campaign.id, "Pim"));
     const failure = await runtime.runPromise(
       withActor(player)(
         Effect.flip(runs.resume(fixture.campaign.id, second.id, { continuedFrom: run.id })),

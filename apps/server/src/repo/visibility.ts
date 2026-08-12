@@ -12,49 +12,134 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  *
  * Four conditions, all required:
  *
- *   ownership   the campaign belongs to the actor's account
+ *   membership  the actor's account holds a live `campaign_member` row for the
+ *               campaign
  *   scope       the campaign is the one this credential was minted for, unless
  *               the credential covers the whole account
- *   the campaign is itself readable — for a player, `campaign.visibility`
+ *   the campaign is itself readable — for a player member, `campaign.visibility`
  *               has to be `shared`
- *   the row is itself readable — for a player, `visibility` has to be `shared`
+ *   the row is itself readable — for a player member, `visibility` has to be
+ *               `shared`
  *
- * The middle one is the master toggle, and it is why a `shared` note inside an
+ * The third is the master toggle, and it is why a `shared` note inside an
  * unshared campaign stays invisible. The fixtures show the same two levels for
  * a live encounter: a `Share` switch over the whole run plus a per-combatant
  * `Hide from players` override. Sharing one note must not open the campaign,
  * and closing the campaign must close everything under it.
  *
- * There is no player credential yet, so nothing produces a `player` actor over
- * HTTP today. The branch exists from the first query because adding it later
- * means auditing every read in the product instead of adding a token table.
+ * **The role is not on the actor, and cannot be.** A person is the DM of one
+ * table and a player at another *on the same credential*, so "may this actor
+ * see `dm` rows" is a question about a pair — this account, this campaign — and
+ * a pair is a row. `isDm` is that question, and it is the only thing in this
+ * file that changed shape when membership arrived: the four branches that used
+ * to read `actor.seesDmContent` read it instead.
+ *
+ * There is still no player credential. Nothing in `src` writes a `player`
+ * membership (`repo/Memberships.ts` has one writer and it writes the owner's
+ * `dm` row), so over HTTP every actor is a DM of everything it reaches. The
+ * branches exist from the first query because adding them later means auditing
+ * every read in the product instead of adding an invite table.
  */
+
+/**
+ * The campaign a membership question is asked about.
+ *
+ * Almost always a `CampaignId` bound as a parameter, because almost every read
+ * names its campaign in the path — and that is what makes the answer a constant
+ * for the whole query rather than a test repeated per row. Postgres hoists it
+ * to an `InitPlan` and evaluates it once even where the containment chain
+ * mentions it four times, which is why these fragments take the campaign
+ * explicitly instead of reaching for the correlated `campaign.id` by default.
+ *
+ * The correlated form is for the one read with no campaign in its path: the
+ * campaign list, where the role genuinely is per row.
+ *
+ * **A caller may only pass an id the enclosing query has already bound the
+ * `campaign` row to.** Every one below does — `rowReadable` constrains
+ * `<table>.campaign_id` to the same value in a sibling clause — which is what
+ * makes the bound and correlated forms two spellings of one question rather
+ * than two questions.
+ */
+type CampaignRef = CampaignId | Statement.Identifier;
+
+/** The `campaign` row of the query this fragment lands in. */
+const correlatedCampaign = (sql: SqlClient.SqlClient): Statement.Identifier => sql("campaign.id");
+
+/**
+ * Whether this actor's account holds a live membership of the campaign.
+ *
+ * This replaced `campaign.account_id = <the actor's account>`, and the
+ * replacement is the whole of the change. `campaign.account_id` still exists —
+ * it is the cascade parent and the answer to "whose account is this" — but it
+ * is no longer a reach path, and `apps/server/test/membership.test.ts` greps
+ * `src` to keep a future predicate from quietly making it one again.
+ */
+const isMember = (
+  sql: SqlClient.SqlClient,
+  campaign: CampaignRef,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from campaign_member
+              where campaign_member.campaign_id = ${campaign}
+                and campaign_member.account_id = ${actor.accountId}
+                and campaign_member.revoked_at is null)`;
+
+/**
+ * Whether this actor is a DM of the campaign — the thing `actor.seesDmContent`
+ * used to answer for free, and the one part of this file that a row now decides.
+ *
+ * That is the real cost of membership and it is worth stating plainly: a
+ * player's write refusal used to compile to the literal `false` and never reach
+ * a row. What buys it back is `campaign_owner_is_dm_member`
+ * (`0011_membership.ts`), which makes "a campaign whose owner is not its DM"
+ * unrepresentable rather than merely unwritten — so there is no state in which
+ * this returns false for the person who created the campaign.
+ */
+const isDm = (sql: SqlClient.SqlClient, campaign: CampaignRef, actor: Actor): Statement.Fragment =>
+  sql`exists (select 1 from campaign_member
+              where campaign_member.campaign_id = ${campaign}
+                and campaign_member.account_id = ${actor.accountId}
+                and campaign_member.role = 'dm'
+                and campaign_member.revoked_at is null)`;
 
 /**
  * The campaigns this actor's credential reaches at all, before any question of
  * what it may then do with them.
  *
- * Ownership is not scope. A DM token is minted for an account and carries
- * `campaignId: null`, so it reaches every campaign in it and this is one
- * redundant `true` in the plan. A credential minted for a single table carries
- * that table's id — and without this clause it would reach every `shared`
- * campaign under the same account, so a DM running two tables would leak table
- * A's shared rows to table B's players.
+ * Membership is not scope, and the two narrow independently. A DM token is
+ * minted for an account and carries `campaignId: null`, so it reaches every
+ * campaign that account is a member of and the second clause is one redundant
+ * `true` in the plan. A credential minted for a single table carries that
+ * table's id — and without that clause it would reach every campaign the same
+ * account belongs to, so a DM running two tables would leak table A's shared
+ * rows to table B's players.
  *
  * Deliberately not keyed on the role: a scoped credential minted later for
  * something other than a player must not reach past its campaign either.
+ *
+ * The scope clause stays on the correlated `campaign.id` rather than on the
+ * ref, because it is a statement about the row being returned and is right
+ * however a future caller composes it.
  */
-const campaignInScope = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+const campaignInScope = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  campaign: CampaignRef,
+): Statement.Fragment =>
   sql.and([
-    sql`campaign.account_id = ${actor.accountId}`,
+    isMember(sql, campaign, actor),
     actor.campaignId === null ? sql`true` : sql`campaign.id = ${actor.campaignId}`,
   ]);
 
 /** Rows of `campaign` this actor may read. */
-export const campaignReadable = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+export const campaignReadable = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  campaign: CampaignRef = correlatedCampaign(sql),
+): Statement.Fragment =>
   sql.and([
-    campaignInScope(sql, actor),
-    actor.seesDmContent ? sql`true` : sql`campaign.visibility = 'shared'`,
+    campaignInScope(sql, actor, campaign),
+    sql.or([isDm(sql, campaign, actor), sql`campaign.visibility = 'shared'`]),
   ]);
 
 /**
@@ -63,9 +148,17 @@ export const campaignReadable = (sql: SqlClient.SqlClient, actor: Actor): Statem
  * A player matches nothing rather than being rejected with a distinct error:
  * telling a reader that a campaign exists but is not theirs to edit is itself
  * a disclosure, and the caller turns "no rows" into a plain 404.
+ *
+ * `isDm` implies membership, so the first clause looks redundant and is not:
+ * it carries the credential-scope narrowing, which is a different question and
+ * applies to a DM too.
  */
-export const campaignWritable = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
-  sql.and([campaignInScope(sql, actor), actor.role === "dm" ? sql`true` : sql`false`]);
+export const campaignWritable = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  campaign: CampaignRef = correlatedCampaign(sql),
+): Statement.Fragment =>
+  sql.and([campaignInScope(sql, actor, campaign), isDm(sql, campaign, actor)]);
 
 /** Rows of a campaign-scoped table (`session`, `character`, `note`) this actor may read. */
 export const rowReadable = (
@@ -76,8 +169,8 @@ export const rowReadable = (
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(table)}.campaign_id = ${campaignId}`,
-    sql`exists (select 1 from campaign where campaign.id = ${sql(table)}.campaign_id and ${campaignReadable(sql, actor)})`,
-    actor.seesDmContent ? sql`true` : sql`${sql(table)}.visibility = 'shared'`,
+    sql`exists (select 1 from campaign where campaign.id = ${sql(table)}.campaign_id and ${campaignReadable(sql, actor, campaignId)})`,
+    sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
   ]);
 
 /**
@@ -117,8 +210,8 @@ export const corpusRowReadable = (
       sql`${sql(table)}.campaign_id = ${campaignId}`,
       sql`${sql(table)}.campaign_id is null`,
     ]),
-    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor)})`,
-    actor.seesDmContent ? sql`true` : sql`${sql(table)}.visibility = 'shared'`,
+    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
+    sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
   ]);
 
 /** Whether the named campaign accepts writes from this actor. */
@@ -127,7 +220,7 @@ export const campaignWritableById = (
   campaignId: CampaignId,
   actor: Actor,
 ): Statement.Fragment =>
-  sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignWritable(sql, actor)})`;
+  sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignWritable(sql, actor, campaignId)})`;
 
 /**
  * Rows of a campaign-scoped table this actor may write.
@@ -204,7 +297,7 @@ export const under = (table: string, foreignKey: string, parent: Containment): C
  * Correlated, meaning no id is bound: the row comes from the query this is
  * dropped into, or from the `exists (…)` one level up. That is what lets the
  * chain recurse — each link asks the same question of its parent, and the base
- * case is `rowReadable`, which is where campaign ownership, credential scope and
+ * case is `rowReadable`, which is where membership, credential scope and
  * the campaign's own visibility are actually checked.
  *
  * Every level applies its own row's `visibility` on the way down, so the two
@@ -224,7 +317,7 @@ export const containedRowReadable = (
   const { table, foreignKey, parent } = containment;
   return sql.and([
     sql`exists (select 1 from ${sql(parent.table)} where ${sql(`${parent.table}.id`)} = ${sql(`${table}.${foreignKey}`)} and ${containedRowReadable(sql, parent, campaignId, actor)})`,
-    actor.seesDmContent ? sql`true` : sql`${sql(`${table}.visibility`)} = 'shared'`,
+    sql.or([isDm(sql, campaignId, actor), sql`${sql(`${table}.visibility`)} = 'shared'`]),
   ]);
 };
 
@@ -287,18 +380,22 @@ export const nestedRowReadable = (
  * **The parent's own readability is the enclosing query's job here, and this
  * function does not check it.** That is safe only because the enclosing query
  * is already selecting the parent through `rowReadable`, which is the thing
- * that carries campaign scope and ownership. Used anywhere else it would be a
+ * that carries campaign scope and membership. Used anywhere else it would be a
  * child read with no containment at all — so it belongs in a subquery whose
  * `FROM` is the parent table, and nowhere else.
+ *
+ * It takes the campaign for the same reason: the role test is a question about
+ * this actor and this campaign, and the enclosing query has the id bound.
  */
 export const nestedRowReadableWithin = (
   sql: SqlClient.SqlClient,
   nested: NestedTable,
+  campaignId: CampaignId,
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${sql(`${nested.parent}.id`)}`,
-    actor.seesDmContent ? sql`true` : sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
+    sql.or([isDm(sql, campaignId, actor), sql`${sql(`${nested.table}.visibility`)} = 'shared'`]),
   ]);
 
 /** Rows of a nested table this actor may write. Not `nestedRowReadable`. */
@@ -362,7 +459,7 @@ export const ensureCampaignReadable = (
     sql,
     "campaign",
     campaignId,
-    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor)})`,
+    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
   );
 
 /**

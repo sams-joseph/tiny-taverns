@@ -9,6 +9,7 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -44,15 +45,13 @@ const withActor =
  * must reach nothing in the second.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const encounters = yield* Encounters;
   const notes = yield* Notes;
   const prep = yield* PrepItems;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
@@ -111,11 +110,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  const player = new Actor({
-    accountId: issued.accountId,
-    role: "player",
-    campaignId: campaign.id,
-  });
+  const player = yield* aPlayerAt(campaign.id, "Pim");
 
   return {
     dm,
@@ -396,11 +391,7 @@ describe("a campaign-scoped actor", () => {
   });
 
   it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
-    const scopedDm = new Actor({
-      accountId: fixture.dm.accountId,
-      role: "dm",
-      campaignId: fixture.campaign.id,
-    });
+    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const listed = await runtime.runPromise(
       Effect.flip(withActor(scopedDm)(encounters.list(fixture.otherTable.id))),
@@ -424,9 +415,7 @@ describe("another account", () => {
   it("reaches neither table", async () => {
     const outsider = await runtime.runPromise(
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const issued = yield* accounts.issue("Someone else");
-        return new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+        return yield* anAccount("Someone else");
       }).pipe(Effect.orDie),
     );
 

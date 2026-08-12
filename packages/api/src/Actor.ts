@@ -3,41 +3,37 @@ import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi";
 import { AccountId, CampaignId } from "./Ids.js";
 
 /**
- * `dm` sees everything in the campaigns they own. `player` sees only rows
- * marked `shared`.
+ * Who is making the current request. Resolved once, at the edge.
  *
- * No player-facing surface exists yet, and no credential resolves to a player
- * actor. The role is here so the read predicate has always had two branches:
- * adding the player surface later is a share-token table and a second set of
- * endpoints, not a retrofit of every query in the product.
+ * **It carries no role, and cannot.** A person is the DM of one table and a
+ * player at another *at the same time, on the same credential*, so "may this
+ * actor see `dm` rows" is not a property of the credential — it is a property
+ * of the pair (account, campaign), which is a `campaign_member` row. The
+ * question is asked in SQL, by `isDm` in `apps/server/src/repo/visibility.ts`,
+ * and there is nowhere on this class it could honestly live.
+ *
+ * What remains is two independent narrowings, and both apply to every read:
+ * *which account is asking*, and *how far its credential reaches*.
  */
-export const Role = Schema.Literals(["dm", "player"]);
-export type Role = typeof Role.Type;
-
-/** Who is making the current request. Resolved once, at the edge. */
 export class Actor extends Schema.Class<Actor>("Actor")({
   accountId: AccountId,
-  role: Role,
   /**
    * The one campaign this credential reaches, or `null` for the whole account.
    *
-   * A DM's token is minted for an account and reads every campaign in it, so it
-   * carries `null`. A credential minted for a single table carries that table's
-   * id, and `campaignReadable` narrows every read to it.
+   * A DM's token is minted for an account and reads every campaign that account
+   * is a member of, so it carries `null`. A credential minted for a single
+   * table carries that table's id, and `campaignInScope` narrows every read to
+   * it.
    *
-   * Without this a `player` actor would be scoped to an *account*: the first
-   * share credential would open every `shared` campaign the DM owns, so a DM
-   * running two tables would leak table A's shared rows to table B's players.
-   * The field is not optional for exactly that reason — minting an actor is a
-   * decision about reach, and the compiler makes you take it.
+   * This is *scope*, not reach: membership decides which campaigns the account
+   * touches at all, and this narrows that set further. Without it a credential
+   * minted for one table would reach every campaign the same account belongs
+   * to, so a DM running two tables would leak table A's shared rows to table
+   * B's players. The field is not optional for exactly that reason — minting an
+   * actor is a decision about reach, and the compiler makes you take it.
    */
   campaignId: Schema.NullOr(CampaignId),
-}) {
-  /** True when this actor may see rows whose visibility is `dm`. */
-  get seesDmContent(): boolean {
-    return this.role === "dm";
-  }
-}
+}) {}
 
 /**
  * The actor for the request in flight.

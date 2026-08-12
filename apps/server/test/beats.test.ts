@@ -12,6 +12,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -55,14 +56,12 @@ const withActor =
  * long as it was precisely because no test minted a scoped actor.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const encounters = yield* Encounters;
   const sessions = yield* Sessions;
   const beats = yield* Beats;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
@@ -89,7 +88,7 @@ const makeFixture = Effect.gen(function* () {
   return {
     dm,
     /** A credential minted for the first table only. */
-    player: new Actor({ accountId: issued.accountId, role: "player", campaignId: campaign.id }),
+    player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
     encounter,
     session,
@@ -424,11 +423,7 @@ describe("a campaign-scoped actor", () => {
   }, 60_000);
 
   it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
-    const scopedDm = new Actor({
-      accountId: fixture.dm.accountId,
-      role: "dm",
-      campaignId: fixture.campaign.id,
-    });
+    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
     const written = await runtime.runPromise(
       withActor(scopedDm)(
         Effect.flip(
@@ -451,9 +446,7 @@ describe("a campaign-scoped actor", () => {
   it("reaches nothing from another account at all", async () => {
     const outsider = await runtime.runPromise(
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const issued = yield* accounts.issue("Someone else");
-        return new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+        return yield* anAccount("Someone else");
       }).pipe(Effect.orDie),
     );
     const failure = await runtime.runPromise(

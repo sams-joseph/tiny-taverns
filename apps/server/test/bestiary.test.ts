@@ -8,6 +8,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { crSortFor, Creatures } from "../src/repo/Creatures.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -41,15 +42,13 @@ const withActor =
  * exactly as `pnpm -F server bestiary:import` loads it.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
 
   yield* importSystemCreatures();
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
@@ -102,21 +101,12 @@ const makeFixture = Effect.gen(function* () {
   const corpus = yield* as(creatures.list(campaign.id, { scope: "system" }));
   const goblinBoss = corpus.find((creature) => creature.name === "Goblin Boss")!;
 
-  const outsiderIssued = yield* accounts.issue("Someone else");
-  const outsider = new Actor({
-    accountId: outsiderIssued.accountId,
-    role: "dm",
-    campaignId: null,
-  });
+  const outsider = yield* anAccount("Someone else");
   const outsiderCampaign = yield* withActor(outsider)(
     campaigns.create({ name: "A different table", visibility: "shared" }),
   );
 
-  const player = new Actor({
-    accountId: issued.accountId,
-    role: "player",
-    campaignId: campaign.id,
-  });
+  const player = yield* aPlayerAt(campaign.id, "Pim");
 
   return {
     dm,
@@ -325,6 +315,45 @@ describe("the global system corpus", () => {
     expect(listed.map((creature) => creature.id)).toEqual([fixture.sharedCreature.id]);
   });
 
+  it("reaches a shared global row through a membership, which is what changed under it", async () => {
+    // `corpusRowReadable` composes `campaignReadable`, so when reach stopped
+    // meaning ownership this predicate quietly changed too and nothing in its
+    // own text says so: a global row is now reachable through a **membership**
+    // rather than through account ownership. The test above proves the default
+    // still fails closed; this one proves the other half is really the row's own
+    // visibility and not the campaign gate accidentally refusing everything.
+    //
+    // Written with raw SQL because nothing ships a way to share a system
+    // creature — `bestiary/import.ts` never writes `visibility`, deliberately,
+    // so an upgrade cannot un-share one. The point here is what the predicate
+    // permits, not what a path does.
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          update creature set visibility = 'shared' where id = ${fixture.goblinBoss.id}
+        `;
+        const found = yield* Effect.provideService(
+          creatures.findById(fixture.campaign.id, fixture.goblinBoss.id),
+          CurrentActor,
+          fixture.player,
+        );
+        // A stranger's membership reaches nothing, however global the row is:
+        // the campaign gate sits outside the union, not inside a bare `OR`.
+        const throughAnother = yield* Effect.provideService(
+          creatures.findById(fixture.outsiderCampaign.id, fixture.goblinBoss.id),
+          CurrentActor,
+          fixture.player,
+        ).pipe(Effect.flip);
+        yield* sql`update creature set visibility = 'dm' where id = ${fixture.goblinBoss.id}`;
+        return { found, throughAnother };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.found.name).toBe("Goblin Boss");
+    expect(seen.throughAnother._tag).toBe("NotFound");
+  });
+
   it("is immutable, even to the DM whose campaign reaches it", async () => {
     // No `origin = 'system'` check anywhere in the repository. The write
     // predicate needs `campaign_id` to equal the campaign in the path, and a
@@ -454,11 +483,7 @@ describe("a campaign-scoped actor", () => {
   });
 
   it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
-    const scopedDm = new Actor({
-      accountId: fixture.dm.accountId,
-      role: "dm",
-      campaignId: fixture.campaign.id,
-    });
+    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const listed = await runtime.runPromise(
       Effect.flip(withActor(scopedDm)(creatures.list(fixture.otherTable.id, {}))),

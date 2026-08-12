@@ -11,6 +11,7 @@ import {
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { addOwner } from "./Memberships.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { campaignReadable, campaignWritable, rowWritable } from "./visibility.js";
 
@@ -122,30 +123,49 @@ export class Campaigns extends Context.Service<
               const actor = yield* CurrentActor;
               const rows = yield* sql<CampaignRow>`
                 select * from campaign
-                where campaign.id = ${id} and ${campaignReadable(sql, actor)}
+                where campaign.id = ${id} and ${campaignReadable(sql, actor, id)}
               `;
               return yield* one(rows, id);
             }),
           ),
 
+        /**
+         * `account_id` and the owner's membership are two answers to two
+         * different questions and both are written here.
+         *
+         * `campaign.account_id` is whose account this is — the cascade parent,
+         * and the only place in `src` outside `repo/visibility.ts` that names
+         * it. The `campaign_member` row is who *reaches* it, which since
+         * `0011_membership.ts` is a different thing entirely: no predicate
+         * consults the column any more.
+         *
+         * One transaction, because it has to be. `campaign_owner_is_dm_member`
+         * is deferred to COMMIT exactly so these can be two statements, and a
+         * campaign inserted without its owner's row is refused at the end of
+         * its own transaction rather than left as a campaign nobody can write
+         * to.
+         */
         create: (payload) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<CampaignRow>`
-                insert into campaign ${sql.insert(
-                  defined({
-                    account_id: actor.accountId,
-                    name: payload.name,
-                    party_name: payload.partyName,
-                    player_count: payload.playerCount,
-                    visibility: payload.visibility,
-                  }),
-                )}
-                returning *
-              `;
-              return toCampaign(rows[0]!);
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const rows = yield* sql<CampaignRow>`
+                  insert into campaign ${sql.insert(
+                    defined({
+                      account_id: actor.accountId,
+                      name: payload.name,
+                      party_name: payload.partyName,
+                      player_count: payload.playerCount,
+                      visibility: payload.visibility,
+                    }),
+                  )}
+                  returning *
+                `;
+                yield* addOwner(sql, rows[0]!.id, actor.accountId);
+                return toCampaign(rows[0]!);
+              }),
+            ),
           ),
 
         update: (id, patch) =>
@@ -162,7 +182,7 @@ export class Campaigns extends Context.Service<
               });
               const rows = yield* sql<CampaignRow>`
                 update campaign set ${setClause(sql, columns)}
-                where campaign.id = ${id} and ${campaignWritable(sql, actor)}
+                where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
                 returning *
               `;
               return yield* one(rows, id);
@@ -175,7 +195,7 @@ export class Campaigns extends Context.Service<
               const actor = yield* CurrentActor;
               const rows = yield* sql<CampaignRow>`
                 update campaign set archived_at = now(), updated_at = now()
-                where campaign.id = ${id} and ${campaignWritable(sql, actor)}
+                where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
                 returning *
               `;
               return yield* one(rows, id);

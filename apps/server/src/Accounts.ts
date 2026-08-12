@@ -29,16 +29,19 @@ export const hashToken = (token: string): string =>
   createHash("sha256").update(token, "utf8").digest("hex");
 
 /**
- * The DM's identity, and the only thing a bearer token can resolve to today.
+ * An account's identity, and the only thing a bearer token can resolve to.
  *
  * Two kinds of credential reach an account — a machine token minted by
  * `issue`, and a session token from a hosted identity provider — and they
  * converge here, on one `Actor`. Below this service nothing knows there is
  * more than one kind.
  *
- * There is deliberately no player credential: the report is explicit that no
- * player-facing surface is built yet, only the seam. The `player` role exists
- * in `Actor` and in every SQL predicate; nothing mints one over HTTP.
+ * **An actor is no longer a role.** It says which account is asking and how far
+ * its credential reaches; whether it may see `dm` rows is decided per campaign,
+ * by a `campaign_member` row, in `repo/visibility.ts`. So there is nothing here
+ * for a player credential to be *different* about — what does not exist yet is
+ * the invite that would give an account a `player` membership at somebody
+ * else's table. Nothing in `src` writes one.
  */
 export class Accounts extends Context.Service<
   Accounts,
@@ -85,17 +88,17 @@ export class Accounts extends Context.Service<
             const row = rows[0];
             return row === undefined
               ? Option.none()
-              : // `campaignId: null` — an account token reaches every campaign in
-                // the account. A credential scoped to one table sets it, and none
-                // is minted here yet.
-                Option.some(new Actor({ accountId: row.id, role: "dm", campaignId: null }));
+              : // `campaignId: null` — an account token reaches every campaign
+                // the account is a member of. A credential scoped to one table
+                // sets it, and none is minted here yet.
+                Option.some(accountActor(row.id));
           }),
 
         actorForIdentity: (identity) =>
           Effect.gen(function* () {
             // Steady state: one indexed read, no write.
             const existing = yield* accountForSubject(sql, identity.subject);
-            if (Option.isSome(existing)) return dmActor(existing.value);
+            if (Option.isSome(existing)) return accountActor(existing.value);
 
             // First request from this person. `do nothing` plus a re-read
             // settles the real race — two tabs firing their first request
@@ -109,10 +112,10 @@ export class Accounts extends Context.Service<
               returning id
             `;
             const created = inserted[0];
-            if (created !== undefined) return dmActor(created.id);
+            if (created !== undefined) return accountActor(created.id);
 
             const raced = yield* accountForSubject(sql, identity.subject);
-            if (Option.isSome(raced)) return dmActor(raced.value);
+            if (Option.isSome(raced)) return accountActor(raced.value);
 
             // The insert conflicted, so a row with this subject exists, and
             // the read that follows cannot miss it. Reaching here means the
@@ -129,14 +132,14 @@ export class Accounts extends Context.Service<
 }
 
 /**
- * A DM actor for a whole account.
+ * An actor for a whole account.
  *
  * Both credential kinds land here, and both get `campaignId: null` — the
- * credential is minted for an account, so it reaches every campaign in it. A
- * credential scoped to one table would set it; none exists yet.
+ * credential is minted for an account, so it reaches every campaign that
+ * account is a member of. A credential scoped to one table would set it; none
+ * exists yet.
  */
-const dmActor = (accountId: AccountId): Actor =>
-  new Actor({ accountId, role: "dm", campaignId: null });
+const accountActor = (accountId: AccountId): Actor => new Actor({ accountId, campaignId: null });
 
 /**
  * The one place an external identity is looked up.

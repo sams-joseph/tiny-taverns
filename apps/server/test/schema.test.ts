@@ -12,8 +12,14 @@ afterAll(() => runtime.dispose());
  * Adding a name here is the only way to opt a table out, which is the point:
  * it takes a deliberate edit and shows up in review. A table added without one
  * fails this file.
+ *
+ * `campaign_member` is here because a membership is not campaign content — it
+ * is the thing that decides who reaches the content — and giving it a
+ * `visibility` column to dodge this list would be the wrong answer to the right
+ * question. Adding it was a deliberate act, which is exactly what this list is
+ * for.
  */
-const NOT_CONTENT = ["account", "effect_sql_migrations"];
+const NOT_CONTENT = ["account", "campaign_member", "effect_sql_migrations"];
 
 interface Column {
   readonly table_name: string;
@@ -169,6 +175,50 @@ describe("an account must be reachable by something", () => {
   });
 });
 
+/**
+ * A campaign written straight into the table, with the owner's membership row
+ * beside it.
+ *
+ * The two statements are one transaction because they have to be:
+ * `campaign_owner_is_dm_member` (`0011_membership.ts`) refuses a campaign whose
+ * owner holds no live `dm` membership, deferred to COMMIT so the pair can be
+ * written in either order. A raw `insert into campaign` on its own is rejected
+ * at the end of its own statement — which is the constraint doing its job, and
+ * why every hand-written campaign in the suite now looks like this.
+ * `membership.test.ts` is where that refusal is asserted rather than merely
+ * worked around.
+ *
+ * **A transaction changes how a violation arrives, and the callers below have
+ * to know it.** `sql.withTransaction` wraps the COMMIT in `Effect.orDie`
+ * (`SqlClient.makeWithTransaction`), so anything a *deferred* constraint
+ * catches — `campaign_assistant_turn_fkey` and `campaign_owner_is_dm_member`
+ * are both deferred — arrives as a **defect** rather than a typed `SqlError`.
+ * `Effect.result` does not catch it; `Effect.exit` does. An immediate
+ * constraint still fails the statement inside the transaction and stays a typed
+ * failure, which is why the two are mixed below and why every one of them uses
+ * `Effect.exit`.
+ */
+const aCampaign = (accountId: string, name: string, extra: Record<string, unknown> = {}) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const rows = yield* sql<{ readonly id: string }>`
+          insert into campaign ${sql.insert({ account_id: accountId, name, ...extra })}
+          returning id
+        `;
+        yield* sql`
+          insert into campaign_member ${sql.insert({
+            campaign_id: rows[0]!.id,
+            account_id: accountId,
+            role: "dm",
+          })}
+        `;
+        return rows;
+      }),
+    );
+  });
+
 describe("provenance is enforced, not just declared", () => {
   /**
    * A conversation to point at.
@@ -186,10 +236,7 @@ describe("provenance is enforced, not just declared", () => {
         insert into account ${sql.insert({ name: "Jo", token_hash: `provenance-${label}` })}
         returning id
       `;
-      const campaign = yield* sql<{ readonly id: string }>`
-        insert into campaign ${sql.insert({ account_id: account[0]!.id, name: `provenance ${label}` })}
-        returning id
-      `;
+      const campaign = yield* aCampaign(account[0]!.id, `provenance ${label}`);
       const thread = yield* sql<{ readonly id: string }>`
         insert into assistant_thread ${sql.insert({
           campaign_id: campaign[0]!.id,
@@ -213,17 +260,10 @@ describe("provenance is enforced, not just declared", () => {
 
     const insert = (origin: string, turn: string | null) =>
       runtime.runPromise(
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          yield* sql`
-            insert into campaign ${sql.insert({
-              account_id: accountId,
-              name: `provenance ${origin} ${String(turn)}`,
-              origin,
-              assistant_turn_id: turn,
-            })}
-          `;
-        }).pipe(Effect.result),
+        aCampaign(accountId, `provenance ${origin} ${String(turn)}`, {
+          origin,
+          assistant_turn_id: turn,
+        }).pipe(Effect.exit),
       );
 
     const assistantWithoutTurn = await insert("assistant", null);
@@ -241,17 +281,10 @@ describe("provenance is enforced, not just declared", () => {
     // because it reads as an answer.
     const { accountId } = await runtime.runPromise(aRealTurn("invented"));
     const invented = await runtime.runPromise(
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
-          insert into campaign ${sql.insert({
-            account_id: accountId,
-            name: "provenance invented",
-            origin: "assistant",
-            assistant_turn_id: "00000000-0000-4000-8000-000000000001",
-          })}
-        `;
-      }).pipe(Effect.result),
+      aCampaign(accountId, "provenance invented", {
+        origin: "assistant",
+        assistant_turn_id: "00000000-0000-4000-8000-000000000001",
+      }).pipe(Effect.exit),
     );
 
     expect(invented._tag).toBe("Failure");
@@ -264,16 +297,12 @@ describe("provenance is enforced, not just declared", () => {
     const deleted = await runtime.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        yield* sql`
-          insert into campaign ${sql.insert({
-            account_id: accountId,
-            name: "provenance pinned",
-            origin: "assistant",
-            assistant_turn_id: turnId,
-          })}
-        `;
+        yield* aCampaign(accountId, "provenance pinned", {
+          origin: "assistant",
+          assistant_turn_id: turnId,
+        });
         yield* sql`delete from assistant_turn where id = ${turnId}`;
-      }).pipe(Effect.result),
+      }).pipe(Effect.exit),
     );
 
     expect(deleted._tag).toBe("Failure");

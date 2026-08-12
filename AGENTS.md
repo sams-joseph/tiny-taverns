@@ -460,16 +460,60 @@ non-negotiable, because it is free on day one and a retrofit later.
   one forgotten `.filter` ships it.
 - **Reads and writes use different predicates.** A player may read a `shared` note and must
   still not edit it, so `rowWritable` is not `rowReadable`.
-- **Ownership is not scope.** `Actor.campaignId` is the reach of the credential: `null` for an
-  account-wide DM token, a campaign id for a credential minted for one table. `campaignInScope`
-  in `visibility.ts` applies it, and both `campaignReadable` and `campaignWritable` compose it,
-  so it is not keyed on the role. Every read reaches it — `rowReadable` and
-  `ensureCampaignReadable` embed `campaignReadable` in an `exists` subquery rather than
-  restating account ownership. **Do not write a new predicate that filters on `account_id`
-  directly**: account ownership alone would let a credential scoped to one table read every
-  `shared` campaign the same DM owns, which is a cross-table leak between two tables run by the
-  same person. That is exactly the defect the scope closed, and it was invisible for as long as
-  it was because no test minted a scoped actor.
+- **`campaignInScope` is membership, not ownership, and it is the base case of every predicate
+  in the product.** A `campaign_member` row `(campaign_id, account_id, role, revoked_at)`
+  decides who reaches a campaign; `campaign.account_id` is the cascade parent and the answer to
+  "whose account is this" and **is not a reach path**. `apps/server/test/membership.test.ts`
+  greps `apps/server/src` and fails if `campaign.account_id` reappears in any predicate, if a
+  third module names `campaign_member`, or if anything but `repo/Memberships.ts`'s `addOwner`
+  writes one. Everything composes it: `campaignReadable` / `campaignWritable` call it,
+  `rowReadable` and `corpusRowReadable` embed `campaignReadable` in an `exists`, and the
+  `contained*` / `nested*` / `ensure*` families recurse to those. There is no predicate in
+  `visibility.ts` that does not reach it. See `0011_membership.ts`.
+- **`Actor` carries no role, and cannot.** A person is the DM of one table and a player at
+  another _at the same time, on the same credential_, so "may this actor see `dm` rows" is a
+  question about a pair — this account, this campaign — and a pair is a row. `isDm` in
+  `visibility.ts` is that question. `Actor` is `{ accountId, campaignId }` and nothing else.
+- **No player membership exists yet, and that is structural rather than a convention.**
+  `repo/Memberships.ts` has one writer, it takes no role, and it writes the owner's `dm` row —
+  so a player membership is not something a caller might forget to refuse, it is not
+  expressible. The invite that mints one is a later step. Tests that need a player therefore
+  reach past the product: `apps/server/test/support/actors.ts`'s `aPlayerAt` is an account plus
+  a raw-SQL `campaign_member` row, written that way so it _looks_ like reaching past the
+  product. `anAccount` and `scopedTo` are the other two; no test constructs an `Actor` by hand.
+- **Membership and credential scope narrow independently, and both apply to every read.**
+  `Actor.campaignId` is still the reach of the credential: `null` for an account-wide token, a
+  campaign id for one minted for a single table. Membership says which campaigns the account
+  touches at all; the scope clause narrows that further, and is deliberately not keyed on the
+  role, so a scoped credential minted later for something other than a player cannot reach past
+  its campaign either. Without it a credential minted for one table would reach every campaign
+  the same account belongs to — a cross-table leak between two tables run by the same person,
+  which is exactly the defect the scope closed and which was invisible for as long as it was
+  because no test minted a scoped actor.
+- **Write `isDm` so it takes the campaign explicitly.** Every campaign-scoped read has the id
+  bound from the path, which makes the role test a constant for the whole query: measured on
+  Postgres 18 against `combatants.list`, all five membership tests hoist to `InitPlan`s on
+  `campaign_member_pkey` and are evaluated once, not per row, even though the
+  `combatant → encounter_run → session → campaign` chain mentions them at four levels. A version
+  that correlated to the row instead would lose the hoist and pay per row. The correlated form
+  (`campaign.id`) is for the one read with no campaign in its path: the campaign list, where the
+  role genuinely is per row — index scan → Memoize → PK probes, 0.23ms at 62 campaigns and 20k
+  memberships, against 0.06ms for the ownership version. That is the only read that got slower.
+- **The one thing membership genuinely weakened, and what buys it back.** A player's write
+  refusal used to compile to the literal `false`; it is now a row. So
+  `campaign_owner_is_dm_member` makes "a campaign whose owner is not its DM" _unrepresentable_ —
+  the `0006_session_finished.ts` trick applied to a role: `campaign_member.is_dm` is
+  `role = 'dm' and revoked_at is null`, the campaign's side is a constant `true`, and the key is
+  `deferrable initially deferred` so a campaign and its owner row can be two statements.
+  `Campaigns.create` therefore writes both in **one transaction**, and every hand-written
+  campaign in the test suite has to as well. Demoting, revoking or deleting the owner's own
+  membership is refused on the spot; a player member leaving is not.
+- **A failed COMMIT is a defect, not a typed failure.** `sql.withTransaction` wraps the commit
+  in `Effect.orDie` (`SqlClient.makeWithTransaction`), so a _deferred_ constraint —
+  `campaign_owner_is_dm_member`, `campaign_assistant_turn_fkey`, `encounter_creature.creature_id`
+  — arrives as a defect. `Effect.result` does not catch it and `Effect.exit` does; an immediate
+  constraint still fails the statement inside the transaction and stays a typed `SqlError`. A
+  test that asserts on a refusal has to know which.
 - **Visibility is two levels — or three, for a table that hangs off another row.**
   `campaign.visibility` is the master toggle; a row's own `visibility` narrows within it, so a
   `shared` note inside an unshared campaign stays invisible. `prep_item` hangs off `session`, so

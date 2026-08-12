@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Notes } from "../src/repo/Notes.js";
+import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const runtime = ManagedRuntime.make(
@@ -30,12 +31,10 @@ const withActor =
  *                  `campaign` may reach it, and vice versa.
  */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const notes = yield* Notes;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
 
   const campaign = yield* withActor(dm)(
     campaigns.create({ name: "The Reed Marches", visibility: "shared" }),
@@ -60,13 +59,15 @@ const makeFixture = Effect.gen(function* () {
     notes.create(otherTable.id, { title: "The harbourmaster's ledger", visibility: "shared" }),
   );
 
-  // The player at the first table. Scoped to that campaign, which is what a
-  // share credential would mint.
-  const player = new Actor({
-    accountId: issued.accountId,
-    role: "player",
-    campaignId: campaign.id,
-  });
+  // The player at the first table: their own account, a `player` membership
+  // there, and a credential scoped to it — which is what an invite will mint.
+  //
+  // Their own account, and no longer the DM's, because a role stopped being a
+  // property of the credential. It could not stay one: a person is the DM of
+  // one table and a player at another on the same credential, and
+  // `(campaign_id, account_id)` is a primary key, so the same account cannot be
+  // both here.
+  const player = yield* aPlayerAt(campaign.id, "Pim");
 
   return {
     dm,
@@ -206,21 +207,22 @@ describe("a player actor", () => {
   });
 });
 
-describe("a campaign-scoped actor", () => {
-  // The DM here owns two separately shared campaigns — one DM, two tables. An
-  // actor scoped to one of them must not reach the other, even though both are
-  // `shared` and both belong to the account the credential was minted under.
-  // Account ownership alone is not scope.
+describe("membership and credential scope narrow independently, and both apply", () => {
+  // The two halves of `campaignInScope`, and the reason each needs its own
+  // actor now. A player is a *different account* with a `campaign_member` row —
+  // so what stops them reaching the DM's second table is membership, not scope,
+  // and a test that used a player to prove scope would be passing for the wrong
+  // reason. The scoped DM is a member of all three campaigns and reaches one;
+  // the player is a member of one and reaches one. Only together do they say
+  // that both clauses are live.
 
-  it("cannot read a second shared campaign under the same account", async () => {
+  it("keeps a member out of a campaign they are not a member of", async () => {
+    // The DM here owns three campaigns, two of them separately shared. The
+    // player belongs to one, so the other two are not theirs — including the
+    // `shared` one, which is what makes this membership rather than visibility.
     const campaign = await runtime.runPromise(
       Effect.flip(withActor(fixture.player)(campaigns.findById(fixture.otherTable.id))),
     );
-
-    expect(campaign._tag).toBe("NotFound");
-  });
-
-  it("cannot read a shared note in that second campaign", async () => {
     const note = await runtime.runPromise(
       Effect.flip(
         withActor(fixture.player)(
@@ -232,25 +234,26 @@ describe("a campaign-scoped actor", () => {
       Effect.flip(withActor(fixture.player)(notes.list(fixture.otherTable.id))),
     );
 
+    expect(campaign._tag).toBe("NotFound");
     expect(note._tag).toBe("NotFound");
     expect(listed._tag).toBe("NotFound");
 
     // …and the second table's shared note really is there and really is shared,
-    // so the assertions above are about scope and not about a missing fixture.
+    // so the assertions above are about reach and not about a missing fixture.
     const asDm = await runtime.runPromise(withActor(fixture.dm)(notes.list(fixture.otherTable.id)));
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
   });
 
-  it("lists only the campaign it is scoped to", async () => {
-    const listed = await runtime.runPromise(withActor(fixture.player)(campaigns.list));
+  it("lists exactly the campaigns an account is a member of", async () => {
+    const asPlayer = await runtime.runPromise(withActor(fixture.player)(campaigns.list));
 
-    expect(listed.map((c) => c.id)).toEqual([fixture.campaign.id]);
+    expect(asPlayer.map((c) => c.id)).toEqual([fixture.campaign.id]);
   });
 
-  it("still reaches everything inside the campaign it is scoped to", async () => {
-    // The scope narrows, it does not replace the rest of the predicate: the
-    // shared note in the scoped campaign is still readable.
+  it("still reaches everything inside the campaign the membership is for", async () => {
+    // Membership narrows, it does not replace the rest of the predicate: the
+    // shared note in the member's own campaign is still readable.
     const note = await runtime.runPromise(
       withActor(fixture.player)(notes.findById(fixture.campaign.id, fixture.shared.id)),
     );
@@ -258,9 +261,10 @@ describe("a campaign-scoped actor", () => {
     expect(note.id).toBe(fixture.shared.id);
   });
 
-  it("is a no-op for a null scope: the DM still sees every campaign", async () => {
+  it("is a no-op for a null scope: the DM still sees every campaign they run", async () => {
     // The invariant the existing credentials rely on. A DM token carries
-    // `campaignId: null` and the new clause must not narrow anything for it.
+    // `campaignId: null` and the scope clause must not narrow anything for it —
+    // membership is what decides, and `Campaigns.create` wrote all three rows.
     const listed = await runtime.runPromise(withActor(fixture.dm)(campaigns.list));
 
     expect(listed.map((c) => c.id)).toEqual(
@@ -268,15 +272,13 @@ describe("a campaign-scoped actor", () => {
     );
   });
 
-  it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
-    // Nothing mints this today. The clause sits in the shared campaign predicate
-    // rather than behind `role === "player"` so that a scoped credential minted
-    // later — a co-DM invited to one table, say — cannot reach past it either.
-    const scopedDm = new Actor({
-      accountId: fixture.dm.accountId,
-      role: "dm",
-      campaignId: fixture.campaign.id,
-    });
+  it("narrows a DM's own credential too, so scope does not depend on the role", async () => {
+    // The clause that matters here, and the one a membership predicate could
+    // silently absorb: this actor is a `dm` member of all three campaigns and
+    // must still reach only the one its credential names. Nothing mints such a
+    // credential today; the clause exists so that whatever mints one first
+    // inherits it rather than needing an audit of every read.
+    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const reachable = await runtime.runPromise(withActor(scopedDm)(campaigns.list));
     const other = await runtime.runPromise(
@@ -291,16 +293,19 @@ describe("a campaign-scoped actor", () => {
     expect(reachable.map((c) => c.id)).toEqual([fixture.campaign.id]);
     expect(other._tag).toBe("NotFound");
     expect(write._tag).toBe("NotFound");
+
+    // …and it is really scope doing that, not membership: unscoped, the same
+    // account reaches all three.
+    const unscoped = await runtime.runPromise(withActor(fixture.dm)(campaigns.list));
+    expect(unscoped.length).toBeGreaterThan(1);
   });
 });
 
 describe("another account", () => {
-  it("cannot reach a campaign it does not own", async () => {
+  it("cannot reach a campaign it is not a member of", async () => {
     const outsider = await runtime.runPromise(
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const issued = yield* accounts.issue("Someone else");
-        return new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+        return yield* anAccount("Someone else");
       }).pipe(Effect.orDie),
     );
 

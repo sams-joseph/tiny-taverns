@@ -70,10 +70,14 @@ const ROSTER: NestedTable = {
  * null, and `::int` because Postgres widens `sum` to a bigint, which the pg
  * driver would hand back as a string.
  */
-const creatureCount = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+const creatureCount = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
   sql`coalesce((
     select sum(encounter_creature.count) from encounter_creature
-    where ${nestedRowReadableWithin(sql, ROSTER, actor)}
+    where ${nestedRowReadableWithin(sql, ROSTER, campaignId, actor)}
   ), 0)::int as creature_count`;
 
 /**
@@ -122,7 +126,7 @@ export class Encounters extends Context.Service<
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<EncounterRow>`
-                select encounter.*, ${creatureCount(sql, actor)} from encounter
+                select encounter.*, ${creatureCount(sql, campaignId, actor)} from encounter
                 where ${rowReadable(sql, "encounter", campaignId, actor)}
                 order by encounter.created_at asc
               `;
@@ -135,7 +139,7 @@ export class Encounters extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<EncounterRow>`
-                select encounter.*, ${creatureCount(sql, actor)} from encounter
+                select encounter.*, ${creatureCount(sql, campaignId, actor)} from encounter
                 where encounter.id = ${id}
                   and ${rowReadable(sql, "encounter", campaignId, actor)}
               `;
@@ -161,7 +165,7 @@ export class Encounters extends Context.Service<
                       ...assistantColumns(from),
                     }),
                   )}
-                  returning *, ${creatureCount(sql, actor)}
+                  returning *, ${creatureCount(sql, campaignId, actor)}
                 `;
                 return toEncounter(rows[0]!);
               }),
@@ -182,7 +186,7 @@ export class Encounters extends Context.Service<
                 update encounter set ${setClause(sql, columns)}
                 where encounter.id = ${id}
                   and ${rowWritable(sql, "encounter", campaignId, actor)}
-                returning *, ${creatureCount(sql, actor)}
+                returning *, ${creatureCount(sql, campaignId, actor)}
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
               return toEncounter(rows[0]!);

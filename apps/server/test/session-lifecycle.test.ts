@@ -10,6 +10,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { anAccount } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -52,13 +53,11 @@ const withActor =
 
 /** A campaign with one encounter and session 12 on the table, as the DM. */
 const makeFixture = Effect.gen(function* () {
-  const accounts = yield* Accounts;
   const campaigns = yield* Campaigns;
   const encounters = yield* Encounters;
   const sessions = yield* Sessions;
 
-  const issued = yield* accounts.issue("Jo");
-  const dm = new Actor({ accountId: issued.accountId, role: "dm", campaignId: null });
+  const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road" }));
