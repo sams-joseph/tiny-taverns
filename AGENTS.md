@@ -623,19 +623,25 @@ non-negotiable, because it is free on day one and a retrofit later.
   proof of the pair (this account is a `dm` member of this campaign, and this credential reaches
   it), minted only by `DmActors.of` — one read through `campaignWritableById` — and it **carries
   the campaign**, so the gated methods take it _in place of_ a campaign id and a proof for one
-  table cannot be spent on another. Fifteen methods have it today: `Combatants` (5),
-  `EncounterRuns` (7) and `SessionEvents` (3, including the streaming `pollForRun`, which a grep
-  for `CurrentActor>` cannot see). The other fifty-three actor-scoped methods do not, and should
-  not: they return a `shared` row a player is entitled to see in full, so `GET …/notes` answering
-  the ordinary `Note` discloses nothing. **The gate is a precondition on the seam, not a
-  replacement for it** — every gated method still composes `visibility.ts` unchanged, so a bug in
-  the gate degrades to today's behaviour rather than to an open door. `apps/server/test/dm-actor.test.ts`
-  pins all of it, including six `@ts-expect-error` lines that fail the _build_ if a campaign id,
-  a plain `Actor` or a hand-built object ever becomes acceptable. **The next candidate is
-  `Recap.read`**, which assembles whole `Combatant` and `EncounterRun` values out of the same two
-  tables; it is deliberately left alone because the player Chronicle is a planned screen and
-  gating it would settle that screen's shape by accident — so it is a decision to take, not a
-  divergence to discover.
+  table cannot be spent on another. Sixteen methods have it today: `Combatants` (5),
+  `EncounterRuns` (7), `SessionEvents` (3, including the streaming `pollForRun`, which a grep
+  for `CurrentActor>` cannot see) and `Recap.read`. The other fifty-nine actor-scoped methods do
+  not, and should not: they return a `shared` row a player is entitled to see in full, so
+  `GET …/notes` answering the ordinary `Note` discloses nothing. **The gate is a precondition on
+  the seam, not a replacement for it** — every gated method still composes `visibility.ts`
+  unchanged, so a bug in the gate degrades to today's behaviour rather than to an open door.
+  `apps/server/test/dm-actor.test.ts` pins all of it, including six `@ts-expect-error` lines that
+  fail the _build_ if a campaign id, a plain `Actor` or a hand-built object ever becomes
+  acceptable.
+- **Gate first, project later — a boundary that waits for the screen behind it is not a
+  boundary.** `Recap.read` was left ungated on the reasoning that the player Chronicle was a
+  planned screen and gating it would settle that screen's shape by accident. That reasoning
+  conflated two decisions, and only one of them was cheap: deferring the _projection_ costs
+  nothing, leaving the _wide read reachable_ costs a disclosure the moment a player actor exists.
+  Player accounts and invitations shipped, and the recap then handed a player of a `shared`
+  campaign a monster's exact `hpCurrent`, `hpMax` and `ac` — measured against real Postgres, 41 of
+  82 at armour class 17. The gate could have gone on the day the other three did, costing a 404
+  for a screen nobody had built. See "The recap has a player projection" below.
 
 ### The invitation: a credential, and the four rules that bound it
 
@@ -1709,8 +1715,48 @@ every time the DM preps at lunchtime.
 reason is sufficient: the recap has **two** consumers. The Chronicle screen is one, the
 assistant's `sessionRecap` tool is the other, and it runs here. Composed client-side the assistant
 would write a second version and the two would disagree about what happened last session. That is
-also why `read` requires `CurrentActor` at the type level from day one — the tool inherits the
-actor rather than getting a path around it.
+also why it is actor-scoped at the type level from day one — the tool inherits the actor rather
+than getting a path around it.
+
+#### The recap has a player projection, and it is a second schema on a second path
+
+**`GET …/recap` is the DM's and is behind the `DmActor` gate; `GET …/recap/player` answers
+`PlayerSessionRecap` to any member.** `Recap.read` takes the proof, `Recap.readAsPlayer` takes an
+ordinary actor, and both assemble from one set of queries so the two cannot disagree about what a
+night contains — only about how much of a combatant each is allowed to say.
+
+It exists because the wide one was a live disclosure: a player member of a `shared` campaign read
+the recap and got a shared monster's exact hit points and armour class. **Measured, in shipped
+code, twice** — 41 of 82 at armour class 17 before, `hpBand: "bloodied"` and no `ac` field after.
+
+Four things about it that are decisions rather than details:
+
+- **Distinct schemas on distinct paths, never a field filter over the DM's type.** The captain's
+  decision of 2026-08-12, and the shape is as load-bearing as the rule: a leak has to be
+  _written_ rather than caused by a forgotten flag. So do not add an `if (isPlayer)`, a
+  strip-fields helper, or a nullable `ac` that handlers are trusted to blank — a schema that _can_
+  carry the number is a schema that eventually will.
+- **`PlayerCombatant` is a union discriminated on `kind`**, so a monster arm has no field for an
+  exact total and a `pc` arm has no band. **A player character keeps exact hit points**: that is
+  the one number the whole table says out loud, and banding it would break an agreement rather
+  than protect anything the party does not already know. `hpBand` is `healthy | bloodied | down`.
+- **The band is computed in SQL and the wide columns are never selected**
+  (`apps/server/src/repo/playerCombatant.ts`, the only place the narrow projection is spelled).
+  Selecting the row and banding it in TypeScript is the post-filtering pattern `visibility.ts`
+  exists to prevent, one level down: the number would be in memory, one forgotten line from the
+  wire.
+- **Conditions come through whole, and not one at a time.** The vocabulary is an open `text[]`, so
+  a per-condition rule would be a visibility judgement made outside the predicate. A condition the
+  DM does not want shared belongs on a row the DM does not share.
+
+**What is deliberately _not_ narrowed**: `run`, and the four non-combat sources. A run's name,
+round and ending are what a player who was there lived through, and the beats, notes and ticked
+prep are already the `shared` ones by row-level predicate. Narrowing either without a decision
+would settle the player fight view's shape by accident — which is the mistake that left this
+endpoint open in the first place.
+
+The player Chronicle screen is **not** built and nothing in `apps/web` calls the new endpoint yet;
+that is a separate task with its own design.
 
 `Recap.ts` imports other repositories' row mappers: `toBeat`, `toNote`, `toPrepItem`,
 `toSession`, `toCombatant`, `toEncounterRun` and the `BEATS`/`PREP` nested-table constants are

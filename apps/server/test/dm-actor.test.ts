@@ -13,14 +13,20 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Recap } from "../src/repo/Recap.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * The DM gate: **the three live repositories cannot be reached without a proof,
- * and the proof cannot be made without the membership check.**
+ * The DM gate: **the wide reads cannot be reached without a proof, and the
+ * proof cannot be made without the membership check.**
+ *
+ * Four repositories now. The three live ones came first; `Recap.read` joined
+ * them when the player projection landed, which is the standing rule working —
+ * *when a table's player projection diverges from its DM projection, its DM
+ * repository takes a `DmActor` in the same change.*
  *
  * This lands before the invite that mints the first player actor, deliberately.
  * A boundary put in afterwards would leave one release in which player actors
@@ -146,9 +152,9 @@ describe("the compiler carries it", () => {
     expect(typeof refusedByTheCompiler).toBe("function");
   });
 
-  it("takes the proof on every method of all three repositories", () => {
+  it("takes the proof on every method of all three repositories, and on the wide recap", () => {
     // A method added to one of these and given a campaign id instead makes this
-    // fail to compile, which is what stops the fifteenth being the leak. The
+    // fail to compile, which is what stops the next one being the leak. The
     // keys are named rather than derived, so a new method is a visible edit
     // here as well — the same rule `adherence.test.ts` uses for components.
     const combatants: GatedOn<(typeof Combatants)["Service"]> = {
@@ -176,11 +182,24 @@ describe("the compiler carries it", () => {
       pollForRun: true,
     };
 
+    // `Recap` is the fourth, and the only one that is gated in part: `read`
+    // assembles whole `Combatant` values and takes the proof, `readAsPlayer`
+    // answers the narrow `PlayerSessionRecap` and takes an ordinary actor. So
+    // it cannot be a `GatedOn<…>` — a partial gate is exactly the shape that
+    // needs saying out loud rather than deriving.
+    const recap: {
+      readonly read: ExactlyDmActor<Parameters<(typeof Recap)["Service"]["read"]>[0]>;
+      readonly readAsPlayer: ExactlyDmActor<
+        Parameters<(typeof Recap)["Service"]["readAsPlayer"]>[0]
+      >;
+    } = { read: true, readAsPlayer: false };
+
     expect([
       Object.keys(combatants).length,
       Object.keys(runs).length,
       Object.keys(events).length,
-    ]).toEqual([5, 7, 3]);
+      Object.keys(recap).length,
+    ]).toEqual([5, 7, 3, 2]);
   });
 });
 
@@ -339,7 +358,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates fifteen methods and leaves the other fifty-nine alone", () => {
+  it("gates sixteen methods and leaves the other fifty-nine alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -349,6 +368,13 @@ describe("the scope, counted", () => {
     // - `SessionEvents.pollForRun` is a 68th actor-scoped method the grep
     //   cannot see, because it takes its actor as an argument. It is the live
     //   stream, so it is gated too — hence fifteen, not fourteen.
+    //
+    // The sixteenth is `Recap.read`, which the doc comment on `DmActor.ts` used
+    // to name as "the next candidate" and leave alone. It was not a candidate,
+    // it was a live disclosure: it assembles whole `Combatant` values, and a
+    // player of a `shared` campaign could read a monster's exact hit points and
+    // armour class out of it. The gate closed the wide read and
+    // `Recap.readAsPlayer` is what a player gets instead.
     //
     // What is left alone is left alone on purpose: every one of those returns a
     // `shared` row a player is entitled to see in full, so a player calling
@@ -362,7 +388,7 @@ describe("the scope, counted", () => {
       0,
     );
 
-    expect(gated).toBe(15);
+    expect(gated).toBe(16);
     // 59 remaining service methods, plus `DmActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -380,11 +406,16 @@ describe("the scope, counted", () => {
     // The sixty-first is `Characters.damage` (`0014`), and it is ungated
     // deliberately: a character is the row a player is *most* entitled to see
     // in full, so gating the party would decide the player fight view's shape
-    // by accident — the same reason `Recap.read` is left alone above. What the
-    // live columns do change is the question, and it is worth stating where the
-    // answer will have to be given: a `shared` character now carries exact
-    // current hit points, so step 8's projection has a real decision to make
-    // about somebody else's character. It has none to make about their own.
+    // by accident. What the live columns do change is the question, and it is
+    // worth stating where the answer will have to be given: a `shared`
+    // character now carries exact current hit points, so step 8's projection
+    // has a real decision to make about somebody else's character. It has none
+    // to make about their own.
+    //
+    // The count did not move when `Recap` was split, which is the arithmetic
+    // worth noticing: `read` gave one up to the gate and `readAsPlayer` took
+    // one back. A narrowed projection is an ordinary actor-scoped read — it is
+    // the *type* that keeps it narrow, not the proof.
     expect(ungated).toBe(61);
   });
 });

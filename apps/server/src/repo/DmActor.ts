@@ -8,17 +8,18 @@ import { ensureCampaignWritable } from "./visibility.js";
  * A proof that this actor is a DM of *this* campaign, carried in the type.
  *
  * `CurrentActor` makes an unscoped read impossible; this is the same idea one
- * level down. Three repositories — `Combatants`, `EncounterRuns` and
- * `SessionEvents` — return rows whose **player projection differs from their DM
- * projection**: exact hit points on a `shared` combatant, the whole initiative
- * order, the combat log. Every other actor-scoped read in the product returns a
- * `shared` row a player is entitled to see in full, so a player calling
- * `GET …/notes` and receiving the ordinary `Note` discloses nothing.
+ * level down. Four repositories — `Combatants`, `EncounterRuns`,
+ * `SessionEvents` and `Recap` — return rows whose **player projection differs
+ * from their DM projection**: exact hit points on a `shared` combatant, the
+ * whole initiative order, the combat log, and the night assembled out of all
+ * three. Every other actor-scoped read in the product returns a `shared` row a
+ * player is entitled to see in full, so a player calling `GET …/notes` and
+ * receiving the ordinary `Note` discloses nothing.
  *
- * Those three take a `DmActor` instead of reading `CurrentActor`, so a method
+ * Those four take a `DmActor` instead of reading `CurrentActor`, so a method
  * that skipped the check has no way to obtain one and does not compile. The
- * alternative — an `ensureDm(…)` at the top of each — is the same fourteen
- * sites with none of them enforced, and the fifteenth is the leak.
+ * alternative — an `ensureDm(…)` at the top of each — is the same fifteen
+ * sites with none of them enforced, and the sixteenth is the leak.
  *
  * **This lands before the first player actor exists, deliberately.** The invite
  * that mints a credential reaching a campaign it does not own is a later step;
@@ -49,11 +50,32 @@ import { ensureCampaignWritable } from "./visibility.js";
  * *When a table's player projection diverges from its DM projection, its DM
  * repository takes a `DmActor` in the same change.* That is written down in
  * `AGENTS.md` because it is the only part of this that has to be remembered
- * rather than compiled, and the set will grow: `Recap.read` is the next
- * candidate — it returns whole `Combatant` and `EncounterRun` values assembled
- * from the same two tables — and it is left alone here only because the player
- * Chronicle is a planned screen and gating it would decide that screen's shape
- * by accident.
+ * rather than compiled, and the set does grow.
+ *
+ * ### `Recap.read` was the fourth, and it is why "in the same change" is the
+ * ### whole rule
+ *
+ * This comment used to name `Recap.read` as *the next candidate* and say it was
+ * being left alone because the player Chronicle was a planned screen and gating
+ * it would decide that screen's shape by accident. **That reasoning was wrong
+ * the moment player accounts and invitations shipped, and the cost was a live
+ * disclosure**: a player member of a `shared` campaign read the recap and got a
+ * shared monster's exact `hpCurrent`, `hpMax` and `ac` back. Measured against
+ * real Postgres, not inferred — 41 of 82, armour class 17.
+ *
+ * The mistake worth learning from is not the omission but its shape. Deferring
+ * a projection *and* leaving the wide read reachable are two decisions, and
+ * only the first one is cheap. The gate could have gone on unconditionally the
+ * day the other three did, costing nothing but a 404 for a screen that did not
+ * exist yet; instead the wide read stayed open across the release that minted
+ * the first player. So: **gate first, project later.** A boundary that waits
+ * for the screen behind it is not a boundary.
+ *
+ * `Recap.read` now takes the proof and `Recap.readAsPlayer` answers the narrow
+ * `PlayerSessionRecap` — the captain's decision of 2026-08-12, which is that a
+ * player projection is a distinct schema on a distinct path rather than a
+ * filter over the DM's type. Which screen consumes it is still undecided, and
+ * that is fine; the disclosure did not wait for it.
  */
 
 /**

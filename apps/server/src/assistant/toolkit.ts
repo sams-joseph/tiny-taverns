@@ -362,7 +362,10 @@ export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal
         }),
       ),
     listSessions: () => as(repositories.sessions.list(campaignId)),
-    sessionRecap: ({ sessionId }) => as(repositories.recap.read(campaignId, sessionId)),
+    // The DM's recap, through the same proof `sessionLog` needs: Hob is the
+    // DM's sidekick, and its answers may quote a monster's exact hit points
+    // because the person reading them is the person who set them.
+    sessionRecap: ({ sessionId }) => repositories.recap.read(dm, sessionId),
     getCreature: ({ creatureId }) => as(repositories.creatures.findById(campaignId, creatureId)),
     sessionLog: ({ sessionId, since }) =>
       repositories.events.list(dm, sessionId, { since: absent(since), limit: LOG_LIMIT }),

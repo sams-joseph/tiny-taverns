@@ -14,6 +14,7 @@ export * from "./Ids.js";
 export * from "./Invite.js";
 export * from "./Membership.js";
 export * from "./Note.js";
+export * from "./PlayerRecap.js";
 export * from "./PrepItem.js";
 export * from "./Provenance.js";
 export * from "./Recap.js";

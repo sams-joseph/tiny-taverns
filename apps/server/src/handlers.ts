@@ -309,13 +309,27 @@ const BeatsLive = HttpApiBuilder.group(
  * handler, because it is the one that reaches five tables. It does not: the
  * assembly is a repository read, so the assistant's `sessionRecap` tool will
  * call exactly what this calls.
+ *
+ * **Two paths, and the DM's is the gated one.** `read` goes through `asDmOf`
+ * like the three live groups, because a `SessionRecap` carries whole
+ * `Combatant` values; `readAsPlayer` answers the narrower `PlayerSessionRecap`
+ * to any member. Which one a caller reaches is decided by the route they asked
+ * for and the proof they can produce — there is no branch here, and nothing in
+ * this file that could forget one.
  */
 const RecapLive = HttpApiBuilder.group(
   TavernsApi,
   "recap",
   Effect.fnUntraced(function* (handlers) {
     const recap = yield* Recap;
-    return handlers.handle("read", ({ params }) => recap.read(params.campaignId, params.sessionId));
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("read", ({ params }) =>
+        asDm(params.campaignId, (dm) => recap.read(dm, params.sessionId)),
+      )
+      .handle("readAsPlayer", ({ params }) =>
+        recap.readAsPlayer(params.campaignId, params.sessionId),
+      );
   }),
 );
 

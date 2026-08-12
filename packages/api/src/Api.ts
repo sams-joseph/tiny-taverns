@@ -55,6 +55,7 @@ import {
 } from "./Invite.js";
 import { CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
+import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
 import { SearchFilter, SearchHit } from "./Search.js";
@@ -568,12 +569,21 @@ class BeatsGroup extends HttpApiGroup.make("beats")
   .middleware(Authorization) {}
 
 /**
- * What happened on the night — the thing a DM reads before the next game.
+ * What happened on the night — the thing a DM reads before the next game, and
+ * the thing a player reads afterwards.
  *
- * One endpoint, and it is a **read of a session** rather than a table of its
- * own: nothing is stored, and there is no `POST`, `PATCH` or `DELETE` here
- * because there is nothing to write. See `SessionRecap` for what it assembles
- * and from where.
+ * **Two endpoints, because there are two audiences and they are told different
+ * amounts.** `/recap` is the DM's and is behind the `DmActor` gate, so a player
+ * asking for it gets the ordinary 404; `/recap/player` answers the narrower
+ * `PlayerSessionRecap`, in which a monster carries a band and no armour class.
+ * Distinct paths and distinct response schemas rather than one path that
+ * filters — the captain's decision of 2026-08-12 — because a filter discloses
+ * everything the day somebody forgets it, and a separate schema has to be
+ * *written* before it can leak. See `PlayerSessionRecap`.
+ *
+ * Neither is stored, and there is no `POST`, `PATCH` or `DELETE` here because
+ * there is nothing to write. See `SessionRecap` for what is assembled and from
+ * where.
  *
  * Its own group rather than a sixth endpoint on `sessions`, because it is not
  * a session — it reaches five tables, and a client asking for one is asking a
@@ -594,6 +604,13 @@ class RecapGroup extends HttpApiGroup.make("recap")
     HttpApiEndpoint.get("read", "/recap", {
       params: { campaignId: CampaignId, sessionId: SessionId },
       success: SessionRecap,
+      error: NotFound,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("readAsPlayer", "/recap/player", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      success: PlayerSessionRecap,
       error: NotFound,
     }),
   )

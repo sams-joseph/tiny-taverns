@@ -27,7 +27,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, scopedTo } from "./support/actors.js";
+import { anAccount, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 
@@ -492,10 +492,11 @@ describe("accepting one", () => {
     expect(accepted.success.beat.assistantTurnId).toBe(turnId);
 
     const recap = await runtime.runPromise(
-      Effect.flatMap(Recap, (repo) => repo.read(fixture.campaign.id, fixture.night.id)).pipe(
-        withActor(fixture.dm),
-        Effect.orDie,
-      ),
+      Effect.flatMap(Recap, (repo) =>
+        Effect.flatMap(asDm(fixture.dm, fixture.campaign.id), (dm) =>
+          repo.read(dm, fixture.night.id),
+        ),
+      ).pipe(withActor(fixture.dm), Effect.orDie),
     );
     expect(recap.beats.map((beat) => beat.id)).toContain(accepted.success.beat.id);
 
