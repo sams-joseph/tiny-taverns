@@ -7,7 +7,15 @@ import { Character, CharacterCreate, CharacterUpdate } from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
-import { HobAsk, HobEvent, HobStatus, HobUnavailable } from "./Hob.js";
+import {
+  HobAccepted,
+  HobAsk,
+  HobEvent,
+  HobStatus,
+  HobThread,
+  HobTurn,
+  HobUnavailable,
+} from "./Hob.js";
 import {
   EncounterCreature,
   EncounterCreatureCreate,
@@ -22,6 +30,8 @@ import {
 } from "./EncounterRun.js";
 import { Conflict, NotFound } from "./Errors.js";
 import {
+  AssistantThreadId,
+  AssistantTurnId,
   BeatId,
   CampaignId,
   CharacterId,
@@ -511,11 +521,21 @@ class SearchGroup extends HttpApiGroup.make("search")
  *   so a denial is a real 404 with a JSON body and not a failure event inside
  *   a 200 nobody is listening for. Same ordering as `live.events`.
  *
- * There is no `POST …/accept` and no `assistant_turn` resource. Generation
- * with approval is the captain's decision and provenance is already waiting on
- * every content table (`origin`, `assistant_turn_id`); recall and the
- * conversation ship first, and an accept endpoint invented ahead of the
- * artifact schema it would write would be the wrong one.
+ * - `threads` and `turns` are the conversation, read back. The panel resumes
+ *   the newest thread on open, which is the whole of "it is still there after a
+ *   reload"; a picker over the rest is a surface the designers have not drawn.
+ * - `accept` is the **only** thing in the product that writes
+ *   `origin = 'assistant'`. It takes no content payload at all, and that is the
+ *   point: the row is materialised from the proposal the *server* stored on
+ *   that turn, so a client cannot mint assistant provenance for prose it wrote
+ *   itself. `Conflict` is a proposal already accepted, or a beat with no
+ *   session in progress to file it against; `NotFound` is everything else,
+ *   including a turn that proposed nothing.
+ *
+ * The accept path names campaign, thread *and* turn for the reason every nested
+ * endpoint here does: a parent id is a client claim, and binding the foreign key
+ * is what makes "is this turn in this thread, and is this thread in this
+ * campaign" one question rather than three that are each satisfiable apart.
  */
 class HobGroup extends HttpApiGroup.make("hob")
   .add(
@@ -529,6 +549,26 @@ class HobGroup extends HttpApiGroup.make("hob")
       payload: HobAsk,
       success: HttpApiSchema.StreamSse({ events: HobEvent }),
       error: [NotFound, HobUnavailable],
+    }),
+    HttpApiEndpoint.get("threads", "/threads", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(HobThread),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("turns", "/threads/:threadId/turns", {
+      params: { campaignId: CampaignId, threadId: AssistantThreadId },
+      success: Schema.Array(HobTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("accept", "/threads/:threadId/turns/:turnId/accept", {
+      params: {
+        campaignId: CampaignId,
+        threadId: AssistantThreadId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: HobAccepted,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/hob")

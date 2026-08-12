@@ -49,6 +49,8 @@ describe("migrations", () => {
 
     expect(await runtime.runPromise(tableNames)).toEqual([
       "account",
+      "assistant_thread",
+      "assistant_turn",
       "beat",
       "campaign",
       "character",
@@ -73,6 +75,7 @@ describe("migrations", () => {
       { migration_id: 7, name: "run_carryover" },
       { migration_id: 8, name: "beats" },
       { migration_id: 9, name: "search_index" },
+      { migration_id: 10, name: "assistant_conversation" },
     ]);
   }, 60_000);
 
@@ -92,6 +95,7 @@ describe("migrations", () => {
       { migration_id: 7, name: "run_carryover" },
       { migration_id: 8, name: "beats" },
       { migration_id: 9, name: "search_index" },
+      { migration_id: 10, name: "assistant_conversation" },
     ]);
   }, 60_000);
 });

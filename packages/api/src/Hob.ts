@@ -1,4 +1,8 @@
 import { Schema } from "effect";
+import { Beat } from "./Beat.js";
+import { Difficulty, Encounter } from "./Encounter.js";
+import { AssistantThreadId, AssistantTurnId, CampaignId, CreatureId } from "./Ids.js";
+import { Note, NoteKind } from "./Note.js";
 
 /**
  * Hob: the assistant, on the wire.
@@ -15,6 +19,23 @@ import { Schema } from "effect";
  * A pre-assembled context blob would be a *second* data path with its own
  * filtering, which is precisely the retrofit every decision in this repo has
  * been avoiding. See `apps/server/src/assistant/` for the toolkit.
+ *
+ * ### The conversation is the server's, and so is the proposal
+ *
+ * A thread and its turns are rows (`assistant_thread`, `assistant_turn`),
+ * campaign-scoped through the ordinary predicates. So `HobAsk` carries **one
+ * question and a thread id**, not a transcript: a client cannot forge what was
+ * said, a reload does not lose the conversation, and `assistant_turn_id` — inert
+ * on every content table since the first migration — finally points at a row.
+ *
+ * A **proposal is not a row in the campaign.** It is stored on the turn that
+ * produced it and rendered for review; `accept` is the only thing that
+ * materialises a note, a beat or an encounter, and it writes `origin:
+ * "assistant"` with that turn's id. Nothing else in the server ever writes that
+ * origin — Hob has no write tool and no `SqlClient`, so "nothing enters the
+ * campaign without an explicit human accept" is a property of the wiring rather
+ * than a rule someone has to keep. See the captain's decision in
+ * `decisions/assistant-generation.md` (option C, *generate with approval*).
  *
  * ### Unconfigured is a supported mode, not a broken one
  *
@@ -61,40 +82,143 @@ export class HobStatus extends Schema.Class<HobStatus>("HobStatus")({
 export const HobWho = Schema.Literals(["user", "hob"]);
 export type HobWho = typeof HobWho.Type;
 
-/**
- * One line of the thread. Plain text; artifacts are not built yet.
- *
- * A `Schema.Struct` rather than a `Schema.Class`, like every other request
- * payload here — a class's `Type` is the *instance*, so a client passing a
- * plain object would fail the declaration check locally and never reach the
- * network. Response schemas are classes; payload schemas are structs.
- */
-export const HobMessage = Schema.Struct({
-  who: HobWho,
-  text: Schema.String.check(Schema.isLengthBetween(1, 4000)),
-});
-export type HobMessage = typeof HobMessage.Type;
+/** One line of a thread, whoever said it. Bounded so a paste is a 400, not a row. */
+const turnText = Schema.String.check(Schema.isLengthBetween(1, 4000));
 
 /**
- * A question, with the thread it belongs to.
+ * One creature on a proposed roster, resolved.
  *
- * **The client sends the thread; the server stores none of it.** There is no
- * `assistant_turn` table yet and this is why: that column exists so a *saved*
- * row can point at the turn that produced it, and nothing writes an
- * `origin: "assistant"` row until the accept path ships. A turn table with no
- * row pointing at it is a table with no reader, and the captain's decision is
- * that nothing enters the campaign without an explicit accept — so an unkept
- * answer is not a row, exactly as an unkept Chronicle draft is not one.
+ * `creatureId` is the half that matters — accepting inserts an
+ * `encounter_creature` row pointing at it, through the same reachability check
+ * `EncounterCreatures.create` applies to a DM's own roster edit. The other three
+ * are the *display* half, resolved out of the bestiary when the proposal was
+ * made so the card can be drawn without a second read per line. They are a
+ * snapshot in exactly the sense `combatant.display_name` is: a creature renamed
+ * between proposing and accepting leaves the card reading what Hob showed, and
+ * the accepted roster still points at the row.
+ */
+export const HobRosterLine = Schema.Struct({
+  creatureId: CreatureId,
+  count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
+  name: Schema.String,
+  /** As the DM says it — `"1/4"`. See the bestiary notes on `Creature.cr`. */
+  cr: Schema.String,
+  hp: Schema.Int,
+});
+export type HobRosterLine = typeof HobRosterLine.Type;
+
+/**
+ * What Hob is offering to add to the campaign, if the DM says yes.
  *
- * The bound on `messages` is a real limit rather than a formality: a local
- * model has a context window measured in thousands of tokens, and forty turns
- * of prose plus a tool result already crowds it.
+ * **Three members, because there are three accept targets**, and each is one
+ * shipped table: a `note` (prep prose or read-aloud), a `beat` (the DM's line
+ * about what happened), an `encounter` (a template and its roster). The union
+ * is discriminated on `target` for the reason `SearchHit` is discriminated on
+ * `source` — `roster` exists only on an encounter and `title` only on the thing
+ * that has one, and a nullable field the client renders anyway is the failure
+ * this schema style exists to prevent.
+ *
+ * It is deliberately **not** a general artifact framework. The delivered
+ * `ChatParts.jsx` draws eight kinds; the ones that are not one of these three
+ * have nowhere to go, so proposing one would be a card whose *Save to session*
+ * button could only lie.
+ */
+export const HobProposal = Schema.Union([
+  Schema.Struct({
+    target: Schema.Literal("note"),
+    title: Schema.String,
+    body: Schema.String,
+    kind: NoteKind,
+  }),
+  Schema.Struct({
+    target: Schema.Literal("beat"),
+    body: Schema.String,
+  }),
+  Schema.Struct({
+    target: Schema.Literal("encounter"),
+    name: Schema.String,
+    difficulty: Schema.NullOr(Difficulty),
+    tags: Schema.Array(Schema.String),
+    roster: Schema.Array(HobRosterLine),
+  }),
+]);
+export type HobProposal = typeof HobProposal.Type;
+
+/**
+ * One conversation, as a row.
+ *
+ * `title` is the first question, shortened. It is not decoration: a thread is
+ * the unit the panel resumes and the unit a future picker would list, and a
+ * conversation with no name is one nobody can choose between. There is no
+ * picker drawn yet — the panel resumes the newest thread — so this is the one
+ * field here that is ahead of a surface, and it costs a `substring`.
+ */
+export class HobThread extends Schema.Class<HobThread>("HobThread")({
+  id: AssistantThreadId,
+  campaignId: CampaignId,
+  title: Schema.String,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+/**
+ * One line of a persisted conversation.
+ *
+ * `proposal` is null on every user turn and on most of Hob's — it is set only
+ * when Hob offered something, and **its presence is not its acceptance**.
+ * `acceptedAt` is the difference between a card the DM is looking at and a row
+ * in their campaign, which is the whole safety property: an unkept proposal is
+ * a turn with a `proposal` and no `acceptedAt`, and no note, beat or encounter
+ * anywhere.
+ *
+ * There is no `origin` or `visibility` on the wire though the columns exist. A
+ * turn's origin is `who` said it, and a conversation is DM-only by the column
+ * default; restating either here would be two answers to one question.
+ */
+export class HobTurn extends Schema.Class<HobTurn>("HobTurn")({
+  id: AssistantTurnId,
+  threadId: AssistantThreadId,
+  who: HobWho,
+  text: Schema.String,
+  proposal: Schema.NullOr(HobProposal),
+  /** When the DM accepted it into the campaign, or null. */
+  acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  createdAt: Schema.DateTimeUtcFromString,
+}) {}
+
+/**
+ * A question, and the conversation it belongs to.
+ *
+ * **The thread is a row, so the client sends an id rather than a transcript.**
+ * That is the fix for the gap this replaced: the old payload carried every
+ * message, which meant a reload lost the conversation, a client could rewrite
+ * what it had been told, and there was nothing for `assistant_turn_id` to point
+ * at. The server reads the thread it owns, appends the question, and appends the
+ * answer when it has one.
+ *
+ * `threadId` absent starts a new thread — which is what the panel's *New thread*
+ * button does, and what a first question does.
  */
 export const HobAsk = Schema.Struct({
-  /** Oldest first, ending with the question just asked. */
-  messages: Schema.Array(HobMessage).check(Schema.isLengthBetween(1, 40)),
+  threadId: Schema.optional(AssistantThreadId),
+  text: turnText,
 });
 export type HobAsk = typeof HobAsk.Type;
+
+/**
+ * The thread and the turn this answer is being written into, said first.
+ *
+ * Emitted before the model is called at all, because the client needs both ids
+ * before it needs a word of the answer: the thread id is what the *next*
+ * question continues, and the turn id is what an accept names. Sending them at
+ * the end would mean a dropped connection loses the thread the question was
+ * already saved to.
+ */
+export class HobBegun extends Schema.Class<HobBegun>("HobBegun")({
+  threadId: AssistantThreadId,
+  /** The turn Hob's answer will be saved as, and the one an accept names. */
+  turnId: AssistantTurnId,
+}) {}
 
 /** A slice of the answer, as it is generated. */
 export class HobDelta extends Schema.Class<HobDelta>("HobDelta")({
@@ -124,6 +248,18 @@ export class HobToolStep extends Schema.Class<HobToolStep>("HobToolStep")({
   name: Schema.String,
   phase: HobToolPhase,
   detail: Schema.String,
+}) {}
+
+/**
+ * Hob has proposed something, and it is saved on the turn named here.
+ *
+ * The turn id is repeated rather than assumed from `began`, because it is the
+ * id an accept has to name and a client should not have to remember which of
+ * two events carried it.
+ */
+export class HobProposed extends Schema.Class<HobProposed>("HobProposed")({
+  turnId: AssistantTurnId,
+  proposal: HobProposal,
 }) {}
 
 /** The answer is complete. `reason` is the provider's finish reason. */
@@ -157,12 +293,24 @@ export class HobFailure extends Schema.Class<HobFailure>("HobFailure")({
  */
 export const HobEvent = Schema.Union([
   Schema.Struct({
+    event: Schema.Literal("began"),
+    data: Schema.fromJsonString(HobBegun),
+  }),
+  Schema.Struct({
     event: Schema.Literal("delta"),
     data: Schema.fromJsonString(HobDelta),
   }),
   Schema.Struct({
     event: Schema.Literal("tool"),
     data: Schema.fromJsonString(HobToolStep),
+  }),
+  /**
+   * Hob has something to offer. Sent once the answer is written, so the card
+   * arrives with the sentence that introduces it rather than ahead of it.
+   */
+  Schema.Struct({
+    event: Schema.Literal("proposal"),
+    data: Schema.fromJsonString(HobProposed),
   }),
   Schema.Struct({
     event: Schema.Literal("done"),
@@ -174,6 +322,22 @@ export const HobEvent = Schema.Union([
   }),
 ]);
 export type HobEvent = typeof HobEvent.Type;
+
+/**
+ * What accepting a proposal produced.
+ *
+ * The whole row, not an id: the client has just changed the campaign and the
+ * cheapest honest thing to hand back is the thing it made — carrying its
+ * `origin: "assistant"` and the `assistantTurnId` that answers where it came
+ * from. Discriminated on `accepted` for the same reason `HobProposal` is on
+ * `target`.
+ */
+export const HobAccepted = Schema.Union([
+  Schema.Struct({ accepted: Schema.Literal("note"), note: Note }),
+  Schema.Struct({ accepted: Schema.Literal("beat"), beat: Beat }),
+  Schema.Struct({ accepted: Schema.Literal("encounter"), encounter: Encounter }),
+]);
+export type HobAccepted = typeof HobAccepted.Type;
 
 /**
  * No model endpoint is configured, so there is nothing to ask.

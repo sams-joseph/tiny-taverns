@@ -1,11 +1,18 @@
-import type { CampaignId, HobEvent, HobMessage, HobStatus } from "@taverns/api";
+import type {
+  AssistantThreadId,
+  AssistantTurnId,
+  CampaignId,
+  HobEvent,
+  HobStatus,
+  HobTurn as RecordedTurn,
+} from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { makeClient } from "../api/client";
 import { type ApiFailure, classifyFailure, runApiResult } from "../api/resource";
 import { useCredential } from "../auth/credential";
-import type { HobArtifact, HobContextChip, HobTurn } from "./transcript";
+import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } from "./transcript";
 
 /**
  * The one seam a real assistant attaches to — and one is attached.
@@ -13,27 +20,41 @@ import type { HobArtifact, HobContextChip, HobTurn } from "./transcript";
  * `HobPanel` renders the turns it is handed, `HobDock` decides where the panel
  * sits, and neither has an opinion about where an answer comes from. This file
  * is the whole of the client-side attachment: it asks whether a model is
- * configured, streams an answer, and appends it to the thread a piece at a
- * time.
+ * configured, resumes the conversation, streams an answer, and accepts what Hob
+ * offers.
  *
- * ### Three things it deliberately does not do
+ * ### The conversation lives on the server
  *
- * **It holds no conversation on the server.** The thread is React state and it
- * travels in the payload of every question, because nothing about an answer is
- * saved: there is no `assistant_turn` row, and the captain's decision is that
- * nothing enters the campaign without an explicit accept. An unkept answer is
- * not a row, exactly as an unkept Chronicle draft is not one.
+ * A thread and its turns are rows, so this holds a **thread id**, not a
+ * transcript: opening the panel reads the newest thread back, and asking sends
+ * one question. A reload no longer loses the evening — which was the gap — and
+ * a client can no longer rewrite what it was told.
  *
- * **It produces no artifacts.** `HobArtifact` describes the five card bodies
- * the designers drew and nothing generates one yet — that is the *propose and
- * accept* half of the assistant, and the `save` / `discard` / `retry` handlers
- * stay undefined until it exists. The card disables what it was not given, so
- * the absence renders as an absence.
+ * The panel resumes the *newest* thread and offers no picker over the rest.
+ * That is a drawn-surface limit rather than a data one: `hob.threads` returns
+ * them all, newest first, and the designers have not drawn a list. *New thread*
+ * starts one, which is now exactly what it says.
  *
- * **It refuses to pretend outside a campaign.** Hob's tools all hang off one —
- * the same reason `navFor` shows *Bestiary* only inside a campaign — so on the
- * campaign list `send` is undefined and the panel says nothing is behind it.
- * That is the honest state, not a degraded one.
+ * ### A card is an offer, and Save is the only thing that writes
+ *
+ * An artifact turn is a proposal Hob made, saved on its turn and nothing else.
+ * `save` calls `POST …/accept`, which materialises a real note, beat or
+ * encounter with `origin: "assistant"` — that is the captain's
+ * *generate with approval* decision, and this is the only button in the app
+ * that reaches it.
+ *
+ * `discard` and `retry` stay undefined, so the card disables them. Discarding
+ * would be a second write with a column of its own (an unaccepted proposal is
+ * simply a line of transcript, and harmless), and *Try again* is a re-ask whose
+ * wording is the designers' to choose. A disabled control is this surface's
+ * shipped way of saying "not given", and it is honest where a handler that
+ * silently did nothing would not be.
+ *
+ * ### It still refuses to pretend outside a campaign
+ *
+ * Hob's tools all hang off one — the same reason `navFor` shows *Bestiary* only
+ * inside a campaign — so on the campaign list `send` is undefined and the panel
+ * says nothing is behind it. That is the honest state, not a degraded one.
  */
 export interface HobConversation {
   /** Newest last. Empty renders the starter grid. */
@@ -55,6 +76,7 @@ export interface HobConversation {
    * nothing here, a grounded question looks like a hang.
    */
   readonly activity: string | undefined;
+  /** Turn ids of the proposals that are already rows in the campaign. */
   readonly savedArtifactIds: ReadonlyArray<string>;
   /**
    * The *"Knows"* strip, and every chip in it is true or absent.
@@ -70,6 +92,7 @@ export interface HobConversation {
   readonly send: ((text: string) => void) | undefined;
   /** Why `send` is undefined, said in the panel where the composer would be. */
   readonly unavailable: string | undefined;
+  /** Accepts a proposal into the campaign. The only write on this surface. */
   readonly save: ((artifact: HobArtifact) => void) | undefined;
   readonly discard: ((artifact: HobArtifact) => void) | undefined;
   readonly retry: ((artifact: HobArtifact) => void) | undefined;
@@ -83,6 +106,9 @@ const ACTIVITY: Record<string, string> = {
   sessionRecap: "Reading back a night",
   getCreature: "Reading a stat block",
   sessionLog: "Reading the log",
+  proposeEncounter: "Building an encounter",
+  proposeNote: "Writing a note",
+  proposeBeat: "Writing down what happened",
 };
 
 const activityFor = (name: string, detail: string): string => {
@@ -114,6 +140,35 @@ const sentenceFor = (failure: ApiFailure): string => {
   }
 };
 
+/** And when the accept failed. A `Conflict` here is the server's own sentence. */
+const saveFailureFor = (failure: ApiFailure): string =>
+  failure.kind === "conflict"
+    ? `Nothing was saved: ${failure.message}.`
+    : `Nothing was saved: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
+
+/**
+ * A saved conversation, as the rows the panel draws.
+ *
+ * A turn becomes up to two: the words, and the card. Both are skippable — a
+ * turn Hob answered with a proposal and no prose has no bubble, and most turns
+ * have no card — which is why this is a `flatMap` and not a `map`.
+ */
+const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> =>
+  recorded.flatMap((turn) => {
+    const said: ReadonlyArray<HobTurn> =
+      turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }];
+    return turn.proposal === null
+      ? said
+      : [
+          ...said,
+          {
+            id: `${turn.id}:card`,
+            who: "artifact" as const,
+            artifact: artifactFrom(turn.id, turn.proposal),
+          },
+        ];
+  });
+
 /**
  * Attach the panel to the server.
  *
@@ -134,6 +189,7 @@ export function useHobConversation(
 ): HobConversation {
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<HobTurn>>([]);
+  const [saved, setSaved] = useState<ReadonlyArray<string>>([]);
   const [asking, setAsking] = useState(false);
   /**
    * Whether words are currently arriving.
@@ -152,10 +208,20 @@ export function useHobConversation(
   const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
   const credentialRef = useRef(fetchCredential);
   credentialRef.current = fetchCredential;
+  /**
+   * The conversation being continued.
+   *
+   * A ref rather than state because `send` reads it at the instant it fires and
+   * the `began` event writes it mid-answer — a re-render in between would give
+   * the second question a stale thread and split one evening into two.
+   */
+  const thread = useRef<AssistantThreadId | undefined>(undefined);
 
-  // The only reason the composer appears. The server answers
-  // `available: false` rather than failing when no model is configured, so an
-  // unconfigured deployment is a quiet panel and not a broken one.
+  // Two reads on open, and neither is optional. `status` is the only reason the
+  // composer appears — the server answers `available: false` rather than
+  // failing when no model is configured, so an unconfigured deployment is a
+  // quiet panel and not a broken one. The thread is what makes the panel worth
+  // reopening: the evening is still there.
   useEffect(() => {
     if (campaignId === undefined) {
       setStatus(undefined);
@@ -166,10 +232,49 @@ export function useHobConversation(
     void (async () => {
       const token = await credentialRef.current();
       const result = await runApiResult(
-        (client) => client.hob.status({ params: { campaignId } }),
+        (client) =>
+          Effect.all(
+            {
+              status: client.hob.status({ params: { campaignId } }),
+              threads: client.hob.threads({ params: { campaignId } }),
+            },
+            { concurrency: 2 },
+          ).pipe(
+            Effect.flatMap(({ status: current, threads }) => {
+              const newest = threads[0];
+              return newest === undefined
+                ? Effect.succeed({ status: current, threadId: undefined, recorded: [] })
+                : Effect.map(
+                    client.hob.turns({ params: { campaignId, threadId: newest.id } }),
+                    (recorded) => ({
+                      status: current,
+                      threadId: newest.id as AssistantThreadId | undefined,
+                      recorded,
+                    }),
+                  );
+            }),
+          ),
         token,
       );
-      if (live) setStatus(Result.isSuccess(result) ? result.success : undefined);
+      if (!live || Result.isFailure(result)) {
+        // A failed read leaves the panel exactly as it was: `status` undefined
+        // renders the *nothing is behind this* line, which is the honest thing
+        // to say when the server did not answer.
+        return;
+      }
+      setStatus(result.success.status);
+      // Only adopt the saved thread when there is nothing on screen. A DM who
+      // asked something while this was in flight is mid-conversation, and
+      // replacing their turns with the ones the server had a moment ago would
+      // lose the question they are watching.
+      setTurns((current) => {
+        if (current.length > 0) return current;
+        thread.current = result.success.threadId;
+        setSaved(
+          result.success.recorded.filter((turn) => turn.acceptedAt !== null).map((turn) => turn.id),
+        );
+        return shownAs(result.success.recorded);
+      });
     })();
     return () => {
       live = false;
@@ -202,18 +307,18 @@ export function useHobConversation(
     (text: string) => {
       if (campaignId === undefined || asking) return;
 
-      const question: HobTurn = { id: `you-${nextId.current++}`, who: "user", text };
-      const thread: ReadonlyArray<HobMessage> = [...turns, question].flatMap((turn) =>
-        turn.who === "artifact" ? [] : [{ who: turn.who, text: turn.text }],
-      );
-
-      append(question);
+      append({ id: `you-${nextId.current++}`, who: "user", text });
       setAsking(true);
       setWriting(false);
       setActivity(undefined);
 
       const receive = (event: HobEvent) => {
         switch (event.event) {
+          case "began":
+            // The thread this evening belongs to, learnt before a word of the
+            // answer. The next question continues it.
+            thread.current = event.data.threadId;
+            return;
           case "delta":
             setActivity(undefined);
             say(event.data.text);
@@ -225,6 +330,14 @@ export function useHobConversation(
               setWriting(false);
               setActivity(activityFor(event.data.name, event.data.detail));
             }
+            return;
+          case "proposal":
+            setActivity(undefined);
+            append({
+              id: `${event.data.turnId}:card`,
+              who: "artifact",
+              artifact: artifactFrom(event.data.turnId, event.data.proposal),
+            });
             return;
           case "failed":
             setActivity(undefined);
@@ -241,9 +354,14 @@ export function useHobConversation(
         // call in this app; `auth/credential.ts` says why.
         const token = yield* Effect.promise(() => credentialRef.current());
         const client = yield* makeClient(token);
+        const continuing = thread.current;
         const stream = yield* client.hob.ask({
           params: { campaignId },
-          payload: { messages: thread },
+          // The key is *omitted* when there is no thread, not sent as
+          // `undefined`: the derived client encodes an absent optional as
+          // `null`, and `Schema.optional` refuses a null on the way back in —
+          // a 400 on the first question of every conversation.
+          payload: continuing === undefined ? { text } : { threadId: continuing, text },
         });
         yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
       }).pipe(
@@ -267,14 +385,59 @@ export function useHobConversation(
 
       answering.current = Effect.runFork(answer);
     },
-    [append, asking, campaignId, say, turns],
+    [append, asking, campaignId, say],
+  );
+
+  /**
+   * Accept a proposal into the campaign — the one write on this surface.
+   *
+   * It sends no content, only the ids: the note, the beat or the encounter is
+   * materialised from the proposal the *server* stored on that turn. That is
+   * what makes the `origin: "assistant"` it records worth having, and it is why
+   * this takes an artifact and reads nothing off it but its id.
+   *
+   * The screen behind the panel is not reloaded, because the panel does not
+   * know what is behind it — a DM who accepts an encounter while looking at the
+   * campaign screen sees it on their next visit. Wiring a reload through the
+   * shell is a bigger seam than this feature earns.
+   */
+  const save = useCallback(
+    (artifact: HobArtifact) => {
+      const threadId = thread.current;
+      if (campaignId === undefined || threadId === undefined) return;
+      const turnId = artifact.id as AssistantTurnId;
+
+      void (async () => {
+        const token = await credentialRef.current();
+        const result = await runApiResult(
+          (client) => client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
+          token,
+        );
+        if (Result.isSuccess(result)) {
+          setSaved((current) => [...current, turnId]);
+          return;
+        }
+        // In the thread, where the card is, for the reason `SaveFailure` sits
+        // in a dialog's footer: a line somewhere else is a line nobody reads.
+        append({
+          id: `hob-${nextId.current++}`,
+          who: "hob",
+          text: saveFailureFor(result.failure),
+        });
+      })();
+    },
+    [append, campaignId],
   );
 
   const reset = useCallback(() => {
     const fiber = answering.current;
     if (fiber !== undefined) Effect.runFork(Fiber.interrupt(fiber));
     answering.current = undefined;
+    // Forgetting the thread is the whole of *New thread*: the next question
+    // starts one, and the old one stays on the server.
+    thread.current = undefined;
     setTurns([]);
+    setSaved([]);
     setAsking(false);
     setWriting(false);
     setActivity(undefined);
@@ -284,7 +447,7 @@ export function useHobConversation(
     turns,
     thinking: asking && !writing,
     activity,
-    savedArtifactIds: [],
+    savedArtifactIds: saved,
     context:
       status === undefined
         ? []
@@ -300,10 +463,7 @@ export function useHobConversation(
         : campaignId === undefined
           ? "Hob reads one campaign's record, and there is no campaign in view. Open one and ask again."
           : "No model is configured behind Hob. Set HOB_API_URL and HOB_MODEL in apps/server/.env.local, then restart the server.",
-    // The propose-and-accept half of the assistant is unbuilt, and these stay
-    // undefined until it is. A handler that swallowed a *Save to session* would
-    // be worse than a disabled button.
-    save: undefined,
+    save: campaignId === undefined ? undefined : save,
     discard: undefined,
     retry: undefined,
     reset: turns.length > 0 ? reset : undefined,

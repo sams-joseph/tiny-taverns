@@ -5,7 +5,9 @@ import { HobDock, HobRegion } from "../hob/HobDock";
 import { HobPanel } from "../hob/HobPanel";
 import {
   HOB_CONTEXT,
+  SAMPLE_BEAT,
   SAMPLE_CHECKLIST,
+  SAMPLE_NOTE,
   SAMPLE_NPC,
   SAMPLE_RULES,
   SAMPLE_THREAD,
@@ -181,6 +183,32 @@ function KindsSpecimen() {
   );
 }
 
+/**
+ * The two bodies that are ours rather than the delivery's, and the two Hob
+ * really offers besides an encounter.
+ *
+ * Held here for the reason every other specimen is: a card body with nowhere to
+ * be looked at is one that goes wrong on a screen first. A beat has no title —
+ * the header is its badge alone, which is the schema saying so rather than an
+ * empty heading.
+ */
+function OffersSpecimen() {
+  return (
+    <div className="flex h-150 w-100 max-w-full overflow-hidden rounded-card border border-hairline">
+      <HobPanel
+        context={HOB_CONTEXT}
+        turns={[
+          { id: "o1", who: "user", text: "Who keeps the lanterns on the quay?" },
+          { id: "o2", who: "hob", text: "Nobody has written that down. Here is one." },
+          { id: "o3", who: "artifact", artifact: SAMPLE_NOTE },
+          { id: "o4", who: "user", text: "Note what just happened." },
+          { id: "o5", who: "artifact", artifact: SAMPLE_BEAT },
+        ]}
+      />
+    </div>
+  );
+}
+
 export function HobSection() {
   // Open by default, as the kit specifies and as `useHobPanel` defaults.
   const hob = useHobPanel();
@@ -221,6 +249,16 @@ export function HobSection() {
           Messages, the aside in italic Alegreya, and the artifact card: click the title to rename
           it, Save to session for the saved state. Sending appends your own message and nothing
           else.
+        </Caption>
+      </Specimen>
+
+      <Specimen label="What Hob offers to save" note="note · beat · no Save handler given">
+        <OffersSpecimen />
+        <Caption>
+          The two bodies the delivery does not draw. Prose in the app&rsquo;s own voice rather than
+          read-aloud&rsquo;s serif blockquote &mdash; a note and a beat are the DM&rsquo;s record,
+          not something spoken at the table. Save is disabled here because this specimen is given no
+          handler; on a screen it accepts the proposal into the campaign.
         </Caption>
       </Specimen>
 

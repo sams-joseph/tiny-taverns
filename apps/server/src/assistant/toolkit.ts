@@ -1,9 +1,13 @@
 import {
   type Actor,
   type CampaignId,
+  Conflict,
   Creature,
   CreatureId,
   CurrentActor,
+  Difficulty,
+  type HobProposal,
+  type HobRosterLine,
   NotFound,
   SearchHit,
   SearchSource,
@@ -12,7 +16,7 @@ import {
   SessionId,
   SessionRecap,
 } from "@taverns/api";
-import { Effect, Schema } from "effect";
+import { Effect, Ref, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
 import type { Recap } from "../repo/Recap.js";
@@ -23,7 +27,7 @@ import type { Sessions } from "../repo/Sessions.js";
 /**
  * What Hob can reach, and the only way it reaches anything.
  *
- * **The repository interface *is* the tool interface.** Every handler below is
+ * **The repository interface *is* the tool interface.** Every read below is
  * one call to a shipped repository method — the same method the HTTP group
  * next to it calls — and there is no SQL, no predicate and no privilege
  * anywhere in this directory. `apps/server/test/hob.test.ts` fails if a
@@ -33,6 +37,13 @@ import type { Sessions } from "../repo/Sessions.js";
  * query in this file: two search paths over one corpus would become permanent,
  * and the second one is where the visibility seam gets re-derived slightly
  * wrong.
+ *
+ * **Nothing here writes to the campaign, including the three `propose*`
+ * tools.** A proposal is stashed in a `Ref` and saved on the conversation turn;
+ * a note, a beat or an encounter appears only when a human accepts it, in
+ * `repo/Proposals.ts`. There is no write repository in this directory to reach
+ * for — which is the captain's *generate with approval* decision made
+ * structural rather than remembered.
  *
  * ### The campaign is not a parameter, and that is the point
  *
@@ -132,13 +143,87 @@ export const ReadSessionLog = Tool.make("sessionLog", {
 });
 
 /**
- * The five reads the assistant plan named, and no sixth.
+ * The three things Hob may offer to add to the campaign — and *offer* is the
+ * whole of what these do.
  *
- * They are the five the reconciliation between this task and the session
+ * **A propose tool writes nothing.** It stashes what Hob drafted on the turn in
+ * flight (`repo/HobThreads.ts` persists it) and hands the model back one
+ * sentence, so the model can say something to the DM about it. The row is made
+ * later, by `repo/Proposals.ts`, when a human presses *Save to session* — which
+ * is the captain's *generate with approval* decision expressed as wiring rather
+ * than as a rule: there is no write repository in this directory to misuse.
+ *
+ * One per accept target, rather than one tool over a tagged union, because a
+ * flat parameter object is what a small local model can actually fill in. It is
+ * also the honest count: these are three tables, not a proposal framework.
+ */
+const proposalFailure = Schema.Union([NotFound, Conflict]);
+
+export const ProposeNote = Tool.make("proposeNote", {
+  description:
+    "Offer the DM a prep note to save — a description, an NPC, a scene, or " +
+    "read-aloud text to read out at the table. It is only a suggestion: nothing " +
+    "is saved unless the DM accepts it. Write the whole note in `body`; do not " +
+    "repeat it in your reply.",
+  parameters: Schema.Struct({
+    title: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    /** Read-aloud is a kind of note, not a table — see `NoteKind`. */
+    readAloud: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+export const ProposeBeat = Tool.make("proposeBeat", {
+  description:
+    "Offer the DM one line recording what just happened at the table, to file " +
+    "against tonight's session. Only a suggestion; nothing is saved unless the " +
+    "DM accepts it.",
+  parameters: Schema.Struct({
+    body: Schema.String.check(Schema.isLengthBetween(1, 1000)),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+export const ProposeEncounter = Tool.make("proposeEncounter", {
+  description:
+    "Offer the DM an encounter to save, built from creatures that are already " +
+    "in this campaign or in the shared bestiary. Find each creature with " +
+    "searchCampaign (source 'creature') and use the id from the hit — do not " +
+    "invent one, and do not propose a creature you have not found. Only a " +
+    "suggestion; nothing is saved unless the DM accepts it.",
+  parameters: Schema.Struct({
+    name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    /** The DMG band for the whole fight, not a creature's rating. */
+    difficulty: Schema.optional(Difficulty),
+    tags: Schema.optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
+    creatures: Schema.Array(
+      Schema.Struct({
+        creatureId: CreatureId,
+        count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
+      }),
+    ).check(Schema.isLengthBetween(1, 12)),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+/**
+ * Five reads and three proposals.
+ *
+ * The reads are the five the reconciliation between this task and the session
  * history work settled on — search, the session list, the recap, a creature and
  * the log — because each is a shipped repository method that already carries
- * the visibility seam. A capability that would need new SQL is a decision for
- * whoever owns the repositories.
+ * the visibility seam. A read that would need new SQL is a decision for whoever
+ * owns the repositories.
+ *
+ * The proposals are the three accept targets and nothing else. Both halves are
+ * listed in `apps/server/test/hob.test.ts`, so a ninth tool is a visible edit.
  */
 export const HobToolkit = Toolkit.make(
   SearchCampaign,
@@ -146,9 +231,12 @@ export const HobToolkit = Toolkit.make(
   ReadRecap,
   GetCreature,
   ReadSessionLog,
+  ProposeNote,
+  ProposeBeat,
+  ProposeEncounter,
 );
 
-/** The repositories a Hob tool call may reach. Read-only, every one. */
+/** The repositories a Hob tool call may reach. **Read-only, every one.** */
 export interface HobRepositories {
   readonly search: (typeof Search)["Service"];
   readonly sessions: (typeof Sessions)["Service"];
@@ -156,6 +244,22 @@ export interface HobRepositories {
   readonly creatures: (typeof Creatures)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
 }
+
+/**
+ * Where a proposal waits until the turn is written down.
+ *
+ * One per question, and **at most one proposal in it**: a turn produces one
+ * thing to accept, because an accept names a turn. A second `propose*` in the
+ * same answer is refused rather than silently replacing the first — losing a
+ * roster the DM was about to read is worse than telling the model to wait.
+ */
+export type ProposalSlot = Ref.Ref<HobProposal | undefined>;
+
+const alreadyProposed = new Conflict({
+  message:
+    "you have already offered the DM something this turn — let them look at it " +
+    "before offering anything else",
+});
 
 /**
  * Bind the toolkit to one campaign and one actor.
@@ -172,9 +276,54 @@ export const handlersFor = (
   repositories: HobRepositories,
   campaignId: CampaignId,
   actor: Actor,
+  proposal: ProposalSlot,
 ) => {
   const as = <A, E>(effect: Effect.Effect<A, E, CurrentActor>): Effect.Effect<A, E> =>
     Effect.provideService(effect, CurrentActor, actor);
+
+  /** Takes the slot if it is free, and tells the model what it now has. */
+  const offer = (made: HobProposal, said: string) =>
+    Effect.gen(function* () {
+      if ((yield* Ref.get(proposal)) !== undefined) return yield* alreadyProposed;
+      yield* Ref.set(proposal, made);
+      return said;
+    });
+
+  /**
+   * Every creature on a proposed roster, read through the same predicate a
+   * bestiary read uses.
+   *
+   * Two things at once, and both matter. It **validates**: a model that invented
+   * an id, or named one from a campaign this credential cannot reach, gets a
+   * `NotFound` it can read and correct rather than a card the DM cannot accept.
+   * And it **resolves** the display half — the name, the rating and the hit
+   * points the card draws — so a proposal is renderable without a read per line
+   * at accept time.
+   *
+   * Duplicates are merged rather than refused: a model naming the same goblin
+   * twice means six goblins, and `encounter_creature` is unique per creature.
+   */
+  const roster = (
+    lines: ReadonlyArray<{ readonly creatureId: CreatureId; readonly count: number }>,
+  ): Effect.Effect<ReadonlyArray<HobRosterLine>, NotFound> =>
+    Effect.gen(function* () {
+      const merged = new Map<CreatureId, number>();
+      for (const line of lines) {
+        merged.set(line.creatureId, (merged.get(line.creatureId) ?? 0) + line.count);
+      }
+      const resolved: Array<HobRosterLine> = [];
+      for (const [creatureId, count] of merged) {
+        const creature = yield* as(repositories.creatures.findById(campaignId, creatureId));
+        resolved.push({
+          creatureId,
+          count: Math.min(count, 99),
+          name: creature.name,
+          cr: creature.cr,
+          hp: creature.hp,
+        });
+      }
+      return resolved;
+    });
 
   return HobToolkit.of({
     searchCampaign: ({ query, source, limit }) =>
@@ -190,5 +339,36 @@ export const handlersFor = (
     getCreature: ({ creatureId }) => as(repositories.creatures.findById(campaignId, creatureId)),
     sessionLog: ({ sessionId, since }) =>
       as(repositories.events.list(campaignId, sessionId, { since, limit: LOG_LIMIT })),
+
+    proposeNote: ({ title, body, readAloud }) =>
+      offer(
+        { target: "note", title, body, kind: readAloud === true ? "read_aloud" : "note" },
+        `Offered the DM a note called "${title}". They can save it or discard it; ` +
+          "say one short line about it and stop.",
+      ),
+
+    proposeBeat: ({ body }) =>
+      offer(
+        { target: "beat", body },
+        "Offered the DM a beat for tonight's session. They can save it or discard " +
+          "it; say one short line about it and stop.",
+      ),
+
+    proposeEncounter: ({ name, difficulty, tags, creatures }) =>
+      Effect.flatMap(roster(creatures), (lines) =>
+        offer(
+          {
+            target: "encounter",
+            name,
+            difficulty: difficulty ?? null,
+            tags: tags ?? [],
+            roster: lines,
+          },
+          `Offered the DM an encounter called "${name}", with ` +
+            `${lines.reduce((total, line) => total + line.count, 0)} creatures. They can ` +
+            "save it or discard it; say one short line about it and stop — the roster " +
+            "is already on their screen.",
+        ),
+      ),
   });
 };

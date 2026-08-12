@@ -19,8 +19,10 @@ import { Creatures } from "./repo/Creatures.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
+import { HobThreads } from "./repo/HobThreads.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
+import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
@@ -254,15 +256,29 @@ const SearchLive = HttpApiBuilder.group(
  * `live.events` depends on: `Hob.ask`'s `Effect` half resolves the actor and
  * reads the campaign, so an unreachable campaign is a real 404 and an
  * unconfigured server a real 503, both before the response body opens.
+ *
+ * `accept` is the one endpoint in the product that produces an
+ * `origin = 'assistant'` row, and it is as thin as everything else here for the
+ * same reason: the proposal it materialises is on the turn, not in the request.
+ * Note it is `Proposals` and not `Hob` — accepting is not asking, it works with
+ * no model configured at all, and giving the assistant service a write path
+ * would be the wrong shape to leave behind.
  */
 const HobLive = HttpApiBuilder.group(
   TavernsApi,
   "hob",
   Effect.fnUntraced(function* (handlers) {
     const hob = yield* Hob;
+    const threads = yield* HobThreads;
+    const proposals = yield* Proposals;
     return handlers
       .handle("status", ({ params }) => hob.status(params.campaignId))
-      .handle("ask", ({ params, payload }) => hob.ask(params.campaignId, payload));
+      .handle("ask", ({ params, payload }) => hob.ask(params.campaignId, payload))
+      .handle("threads", ({ params }) => threads.list(params.campaignId))
+      .handle("turns", ({ params }) => threads.turns(params.campaignId, params.threadId))
+      .handle("accept", ({ params }) =>
+        proposals.accept(params.campaignId, params.threadId, params.turnId),
+      );
   }),
 );
 

@@ -12,7 +12,15 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   corpusRowReadable,
   ensureNestedParentReadable,
@@ -85,10 +93,12 @@ export class EncounterCreatures extends Context.Service<
       campaignId: CampaignId,
       encounterId: EncounterId,
     ) => Effect.Effect<ReadonlyArray<EncounterCreature>, NotFound, CurrentActor>;
+    /** `from` is the accept path's, and only its — see `Notes.create`. */
     readonly create: (
       campaignId: CampaignId,
       encounterId: EncounterId,
       payload: EncounterCreatureCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<EncounterCreature, NotFound | Conflict, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -142,7 +152,7 @@ export class EncounterCreatures extends Context.Service<
             }),
           ),
 
-        create: (campaignId, encounterId, payload) =>
+        create: (campaignId, encounterId, payload, from) =>
           dieOnSqlError(
             asConflict(
               sql.withTransaction(
@@ -157,6 +167,7 @@ export class EncounterCreatures extends Context.Service<
                         creature_id: payload.creatureId,
                         count: payload.count,
                         visibility: payload.visibility,
+                        ...assistantColumns(from),
                       }),
                     )}
                     returning *

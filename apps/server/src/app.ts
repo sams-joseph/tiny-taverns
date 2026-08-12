@@ -30,8 +30,10 @@ import { Creatures } from "./repo/Creatures.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
+import { HobThreads } from "./repo/HobThreads.js";
 import { Notes } from "./repo/Notes.js";
 import { PrepItems } from "./repo/PrepItems.js";
+import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
@@ -105,7 +107,7 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
 export const assistantFromConfig: Layer.Layer<
   Hob,
   Config.ConfigError,
-  Campaigns | Creatures | Recap | Search | SessionEvents | Sessions
+  Campaigns | Creatures | HobThreads | Recap | Search | SessionEvents | Sessions
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -165,7 +167,7 @@ export const servicesOver = <E>(
   assistant: Layer.Layer<
     Hob,
     E | Config.ConfigError,
-    Campaigns | Creatures | Recap | Search | SessionEvents | Sessions
+    Campaigns | Creatures | HobThreads | Recap | Search | SessionEvents | Sessions
   > = assistantFromConfig,
 ): Layer.Layer<
   | Accounts
@@ -180,9 +182,11 @@ export const servicesOver = <E>(
   | Encounters
   | Health
   | Hob
+  | HobThreads
   | LiveEvents
   | Notes
   | PrepItems
+  | Proposals
   | Recap
   | Search
   | SessionEvents
@@ -207,9 +211,25 @@ export const servicesOver = <E>(
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
+    // The conversation with Hob, as rows. An ordinary campaign-scoped
+    // repository — it is here rather than under `assistant` because the panel
+    // reads a thread back over HTTP whether or not a model is configured.
+    HobThreads.layer,
     LiveEvents.layer,
     Notes.layer,
     PrepItems.layer,
+    // The accept path: the only writer of `origin = 'assistant'`. It composes
+    // the ordinary create methods, so an accepted row is made by the same
+    // statement an authored one is.
+    Proposals.layer.pipe(
+      Layer.provide([
+        Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+        Campaigns.layer,
+        EncounterCreatures.layer,
+        Encounters.layer,
+        Notes.layer,
+      ]),
+    ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
     // for the same reason: nothing about reading a night changes it.
     Recap.layer,
@@ -232,6 +252,7 @@ export const servicesOver = <E>(
       Layer.provide([
         Campaigns.layer,
         Creatures.layer,
+        HobThreads.layer,
         Recap.layer,
         Search.layer,
         SessionEvents.layer,
@@ -273,9 +294,11 @@ export const applicationOver = <E>(
     | Encounters
     | Health
     | Hob
+    | HobThreads
     | LiveEvents
     | Notes
     | PrepItems
+    | Proposals
     | Recap
     | Search
     | SessionEvents

@@ -25,6 +25,13 @@ interface Frame {
 interface HobStub {
   /** What `GET …/hob` answers. */
   available: boolean;
+  /** What `GET …/hob/threads` answers, newest first. */
+  threads: Array<Record<string, unknown>>;
+  /** What `GET …/hob/threads/:id/turns` answers, oldest first. */
+  turns: Array<Record<string, unknown>>;
+  /** Set to answer `accept` with a declared failure instead of the row. */
+  acceptStatus: number | undefined;
+  acceptBody: unknown;
   /** What `POST …/hob/ask` streams, in order, before closing. */
   frames: Array<Frame>;
   /**
@@ -42,6 +49,8 @@ interface HobStub {
   readonly paths: Array<string>;
   /** The JSON body of every `ask`, in order. */
   readonly bodies: Array<string>;
+  /** Every `accept` path, in order. */
+  readonly accepts: Array<string>;
   /** Send one more frame down a held-open answer. */
   readonly push: (frame: Frame) => void;
   /** Finish a held-open answer. */
@@ -57,6 +66,29 @@ interface HobStub {
  * would keep serving the first test's answers with nothing to notice. Same
  * reason `api/client.test.ts` and `run.fixtures.tsx` say so.
  */
+const json = (body: unknown): Response =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
+const stamp = "2026-08-12T20:00:00.000Z";
+
+/** What `accept` answers with. The JSON the server sends, not a decoded class. */
+const aNoteRow = {
+  id: "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a60",
+  campaignId: "0c8b0f5b-6c2e-4c5d-9f5a-8e5f9a2b3c4d",
+  title: "The lantern-keeper",
+  body: "She trims the wicks at dusk.",
+  kind: "note",
+  attachedTo: null,
+  visibility: "dm",
+  origin: "assistant",
+  assistantTurnId: "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60",
+  createdAt: stamp,
+  updatedAt: stamp,
+};
+
 const installHobServer = (): HobStub => {
   const encoder = new TextEncoder();
   const frameOf = (frame: Frame): Uint8Array =>
@@ -65,12 +97,17 @@ const installHobServer = (): HobStub => {
 
   const stub: HobStub = {
     available: true,
+    threads: [],
+    turns: [],
+    acceptStatus: undefined,
+    acceptBody: undefined,
     frames: [],
     hold: false,
     askStatus: undefined,
     askBody: undefined,
     paths: [],
     bodies: [],
+    accepts: [],
     push: (frame) => {
       for (const controller of controllers) controller.enqueue(frameOf(frame));
     },
@@ -87,12 +124,17 @@ const installHobServer = (): HobStub => {
     reset: () => {
       stub.close();
       stub.available = true;
+      stub.threads = [];
+      stub.turns = [];
+      stub.acceptStatus = undefined;
+      stub.acceptBody = undefined;
       stub.frames = [];
       stub.hold = false;
       stub.askStatus = undefined;
       stub.askBody = undefined;
       stub.paths.length = 0;
       stub.bodies.length = 0;
+      stub.accepts.length = 0;
     },
   };
 
@@ -124,16 +166,29 @@ const installHobServer = (): HobStub => {
       );
     }
 
+    if (pathname.endsWith("/accept")) {
+      stub.accepts.push(pathname);
+      return Promise.resolve(
+        stub.acceptStatus === undefined
+          ? json({ accepted: "note", note: aNoteRow })
+          : new Response(JSON.stringify(stub.acceptBody), {
+              status: stub.acceptStatus,
+              headers: { "content-type": "application/json" },
+            }),
+      );
+    }
+
+    if (pathname.endsWith("/turns")) return Promise.resolve(json(stub.turns));
+
+    if (pathname.endsWith("/hob/threads")) return Promise.resolve(json(stub.threads));
+
     if (pathname.endsWith("/hob"))
       return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            available: stub.available,
-            model: stub.available ? "local" : null,
-            campaign: "The Salt Road",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
+        json({
+          available: stub.available,
+          model: stub.available ? "local" : null,
+          campaign: "The Salt Road",
+        }),
       );
 
     return Promise.resolve(new Response("{}", { status: 404 }));
@@ -175,6 +230,51 @@ const tool = (name: string, phase: string, detail: string): Frame => ({
   event: "tool",
   data: { name, phase, detail },
 });
+const began = (thread: string, turn: string): Frame => ({
+  event: "began",
+  data: { threadId: thread, turnId: turn },
+});
+const proposed = (turn: string, proposal: unknown): Frame => ({
+  event: "proposal",
+  data: { turnId: turn, proposal },
+});
+
+const threadId = "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d";
+const turnId = "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60";
+
+/**
+ * A saved thread, as the server sends it.
+ *
+ * The whole row and not a `Partial<>`, for the reason `campaign.fixtures.tsx`
+ * gives: a field the contract renames has to fail the decode here rather than
+ * render as `undefined` somewhere later. It is also load-bearing in a way that
+ * is easy to miss — a thread missing `campaignId` fails to decode, the read
+ * reports a failure, and the panel correctly shows nothing at all.
+ */
+const aThread = (title: string) => ({
+  id: threadId,
+  campaignId,
+  title,
+  createdAt: stamp,
+  updatedAt: stamp,
+});
+
+/** The encounter Hob offers, as the server sends it: resolved, with real ids. */
+const anEncounter = {
+  target: "encounter",
+  name: "Song in the reeds",
+  difficulty: "Hard",
+  tags: ["Marsh"],
+  roster: [
+    {
+      creatureId: "aa11bb22-cc33-4d44-8e55-ff6677889900",
+      count: 3,
+      name: "Bullywug Croaker",
+      cr: "1/4",
+      hp: 11,
+    },
+  ],
+};
 
 beforeEach(() => server.reset());
 
@@ -270,26 +370,33 @@ describe("an answer", () => {
     server.close();
   });
 
-  it("sends the whole thread, and nothing about the campaign", async () => {
-    server.frames = [delta("Cazril."), { event: "done", data: { reason: "stop" } }];
+  it("sends one question and the thread it belongs to, and nothing else", async () => {
+    server.frames = [
+      began(threadId, "5f0c3a2b-1d4e-4a6f-8b9c-0d1e2f3a4b5c"),
+      delta("Cazril."),
+      { event: "done", data: { reason: "stop" } },
+    ];
     renderHob();
     await waitFor(() => expect(composer()).not.toBeNull());
     await userEvent.type(composer()!, "Who is the ferryman?{Enter}");
     await waitFor(() => expect(screen.getByText("Cazril.")).toBeInTheDocument());
 
-    server.frames = [delta("A ledger."), { event: "done", data: { reason: "stop" } }];
+    server.frames = [
+      began(threadId, "6a1d4b3c-2e5f-4b7a-9c0d-1e2f3a4b5c6d"),
+      delta("A ledger."),
+      { event: "done", data: { reason: "stop" } },
+    ];
     await userEvent.type(composer()!, "And the crate?{Enter}");
     await waitFor(() => expect(server.bodies).toHaveLength(2));
 
-    // The thread travels in the payload because nothing is stored server-side:
-    // there is no `assistant_turn` row until something writes an assistant row.
-    // The campaign is in the path and in nothing else.
+    // The conversation is the server's, so a question carries a thread id
+    // rather than a transcript the client kept — which is what stops a client
+    // rewriting what it was told, and what makes a reload lossless. The first
+    // question names no thread because there was none.
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "Who is the ferryman?" });
     expect(JSON.parse(server.bodies[1]!)).toEqual({
-      messages: [
-        { who: "user", text: "Who is the ferryman?" },
-        { who: "hob", text: "Cazril." },
-        { who: "user", text: "And the crate?" },
-      ],
+      threadId,
+      text: "And the crate?",
     });
   });
 
@@ -328,16 +435,184 @@ describe("an answer", () => {
     );
   });
 
-  it("offers no Save, because nothing may be saved yet", async () => {
+  it("offers no Save for a plain answer, because prose is not an artifact", async () => {
     server.frames = [delta("Cazril."), { event: "done", data: { reason: "stop" } }];
     renderHob();
     await waitFor(() => expect(composer()).not.toBeNull());
     await userEvent.type(composer()!, "Who is the ferryman?{Enter}");
     await waitFor(() => expect(screen.getByText("Cazril.")).toBeInTheDocument());
 
-    // Generation-with-approval is the captain's decision and the accept path is
-    // unbuilt. An answer is prose, not an artifact, so there is no card and no
-    // Save to disable.
+    // A card appears when Hob *proposes* something, and only then.
     expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
+  });
+});
+
+describe("the conversation is still there", () => {
+  it("reads the newest thread back when the panel is opened", async () => {
+    server.threads = [aThread("Who is the ferryman?")];
+    server.turns = [
+      {
+        id: "aaaaaaa1-0000-4000-8000-000000000001",
+        threadId,
+        who: "user",
+        text: "Who is the ferryman?",
+        proposal: null,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Cazril, and he takes only a name.",
+        proposal: null,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+
+    renderHob();
+
+    // The gap this closed: an evening's conversation used to be React state and
+    // nothing else, so a reload was an empty panel.
+    await waitFor(() =>
+      expect(screen.getByText("Cazril, and he takes only a name.")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Who is the ferryman?")).toBeInTheDocument();
+  });
+
+  it("continues that thread rather than starting a new one", async () => {
+    server.threads = [aThread("Who is the ferryman?")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Cazril.",
+        proposal: null,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+    renderHob();
+    await waitFor(() => expect(screen.getByText("Cazril.")).toBeInTheDocument());
+
+    server.frames = [delta("A ledger."), { event: "done", data: { reason: "stop" } }];
+    await userEvent.type(composer()!, "And the crate?{Enter}");
+    await waitFor(() => expect(server.bodies).toHaveLength(1));
+
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ threadId, text: "And the crate?" });
+  });
+
+  it("draws a proposal it was told about, and marks one already accepted", async () => {
+    server.threads = [aThread("Build me an ambush")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Six of them, in the reeds.",
+        proposal: anEncounter,
+        acceptedAt: stamp,
+        createdAt: stamp,
+      },
+    ];
+
+    renderHob();
+
+    await waitFor(() => expect(screen.getByText("Song in the reeds")).toBeInTheDocument());
+    expect(screen.getByText("Bullywug Croaker")).toBeInTheDocument();
+    // Already a row in the campaign, so the card says so instead of offering to
+    // save it again.
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
+  });
+
+  it("starts a new thread when the DM asks for one", async () => {
+    server.threads = [aThread("Who is the ferryman?")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Cazril.",
+        proposal: null,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+    renderHob();
+    await waitFor(() => expect(screen.getByText("Cazril.")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "New thread" }));
+    expect(screen.queryByText("Cazril.")).toBeNull();
+
+    server.frames = [delta("Right.")];
+    server.hold = true;
+    await userEvent.type(composer()!, "Something else.{Enter}");
+    await waitFor(() => expect(server.bodies).toHaveLength(1));
+
+    // No thread named: the server starts one. The old evening is untouched.
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "Something else." });
+    server.close();
+  });
+});
+
+describe("what Hob offers, and the one thing that writes", () => {
+  const askForAnAmbush = async () => {
+    server.frames = [
+      began(threadId, turnId),
+      delta("Six of them."),
+      proposed(turnId, anEncounter),
+      { event: "done", data: { reason: "stop" } },
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Build me an ambush.{Enter}");
+    await waitFor(() => expect(screen.getByText("Song in the reeds")).toBeInTheDocument());
+  };
+
+  it("draws the card, with the roster the server resolved", async () => {
+    await askForAnAmbush();
+
+    expect(screen.getByText("Bullywug Croaker")).toBeInTheDocument();
+    expect(screen.getByText("×3")).toBeInTheDocument();
+    expect(screen.getByText("CR 1/4")).toBeInTheDocument();
+    // The DMG band, verbatim. No adjusted XP: no shipped column holds one.
+    expect(screen.getByText("Hard")).toBeInTheDocument();
+    expect(screen.getByText("3 creatures")).toBeInTheDocument();
+  });
+
+  it("writes nothing until Save is pressed, and then names only ids", async () => {
+    await askForAnAmbush();
+
+    // Nothing has been accepted: the card is an offer, and the campaign is as
+    // it was. This is the client half of the captain's rule.
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Save to session" }));
+
+    await waitFor(() => expect(server.accepts).toHaveLength(1));
+    // The path is the whole request — campaign, thread and turn. No content:
+    // the row is built from the proposal the server stored, which is what makes
+    // the provenance it records worth having.
+    expect(server.accepts[0]).toBe(
+      `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+    );
+    await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+  });
+
+  it("says so in the thread when the accept was refused", async () => {
+    await askForAnAmbush();
+    server.acceptStatus = 409;
+    server.acceptBody = { _tag: "Conflict", message: "that is already in the campaign" };
+
+    await userEvent.click(screen.getByRole("button", { name: "Save to session" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/that is already in the campaign/)).toBeInTheDocument(),
+    );
+    // And the card does not claim to be saved.
+    expect(screen.queryByText("Saved")).toBeNull();
   });
 });

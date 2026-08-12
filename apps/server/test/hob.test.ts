@@ -5,19 +5,21 @@ import {
   type CampaignId,
   CurrentActor,
   type HobEvent,
+  type HobProposal,
   HobUnavailable,
   NotFound,
 } from "@taverns/api";
-import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect";
+import { ConfigProvider, Effect, Layer, ManagedRuntime, Ref, Stream } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
-import { HobToolkit } from "../src/assistant/toolkit.js";
+import { handlersFor, HobToolkit, type ProposalSlot } from "../src/assistant/toolkit.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { HobThreads } from "../src/repo/HobThreads.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
@@ -50,6 +52,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Creatures.layer,
+  HobThreads.layer,
   Notes.layer,
   Recap.layer,
   Search.layer,
@@ -196,9 +199,7 @@ const ask = (
   return runtime.runPromise(
     Effect.gen(function* () {
       const hob = yield* Hob;
-      const stream = yield* hob.ask(campaignId, {
-        messages: [{ who: "user", text: ASKED }],
-      });
+      const stream = yield* hob.ask(campaignId, { text: ASKED });
       const events = yield* Stream.runCollect(stream);
       return { events: Array.from(events), requests: model.requests() };
     }).pipe(
@@ -221,6 +222,9 @@ describe("answering", () => {
     // Three deltas, not one — the panel is a conversation surface and the
     // designers chose it over a one-shot palette deliberately.
     expect(texts(events)).toEqual(["The ferryman ", "is called ", "Cazril."]);
+    // The thread and the turn come first, before a word of the answer: the
+    // client needs both before it needs any of it.
+    expect(events[0]?.event).toBe("began");
     expect(events.at(-1)?.event).toBe("done");
   }, 60_000);
 
@@ -277,7 +281,16 @@ describe("answering", () => {
 
     expect(
       tools.map((tool) => (tool.function as { name: string } | undefined)?.name).sort(),
-    ).toEqual(["getCreature", "listSessions", "searchCampaign", "sessionLog", "sessionRecap"]);
+    ).toEqual([
+      "getCreature",
+      "listSessions",
+      "proposeBeat",
+      "proposeEncounter",
+      "proposeNote",
+      "searchCampaign",
+      "sessionLog",
+      "sessionRecap",
+    ]);
     // The structural half of the boundary: the campaign is closed over from the
     // request path, so a model that hallucinated another campaign's id has
     // nowhere to put it. Not refused — unrepresentable.
@@ -323,9 +336,7 @@ describe("the boundary — proven, not argued", () => {
       .runPromise(
         Effect.gen(function* () {
           const hob = yield* Hob;
-          return yield* hob.ask(fixture.otherTable.id, {
-            messages: [{ who: "user", text: ASKED }],
-          });
+          return yield* hob.ask(fixture.otherTable.id, { text: ASKED });
         }).pipe(
           withActor(fixture.scopedDm),
           Effect.provide(
@@ -358,22 +369,64 @@ describe("the boundary — proven, not argued", () => {
   }, 60_000);
 
   it("never shows a player the DM-only rows", async () => {
-    const { requests } = await ask(fixture.player, fixture.campaign.id, { query: "crate" });
-    const shown = shownTo(requests);
+    // Driven through the toolkit rather than through `ask`, because asking is
+    // now a *write* — it appends to a thread — and a player cannot start one
+    // (the test below). The property under test is unchanged and is the one
+    // that matters: a tool handler's read is the repository's read with this
+    // actor, so the row's own visibility applies inside the tool exactly as it
+    // does inside the HTTP handler, because it is the same `WHERE` clause.
+    const hits = await runtime.runPromise(
+      Effect.gen(function* () {
+        const repositories = {
+          search: yield* Search,
+          sessions: yield* Sessions,
+          recap: yield* Recap,
+          creatures: yield* Creatures,
+          events: yield* SessionEvents,
+        };
+        const slot: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
+        const handlers = handlersFor(repositories, fixture.campaign.id, fixture.player, slot);
+        return yield* handlers.searchCampaign({ query: "crate" });
+      }).pipe(Effect.orDie),
+    );
 
-    // The row's own visibility applies inside the tool exactly as it does
-    // inside the HTTP handler, because it is the same `WHERE` clause.
+    const shown = JSON.stringify(hits);
     expect(shown).not.toContain("three teeth");
     expect(shown).not.toContain(fixture.crateNote.id);
+  }, 60_000);
+
+  it("refuses a player outright, because asking writes to the record", async () => {
+    // A conversation is a row in the campaign, so `HobThreads.start` needs
+    // `campaignWritable` — the same predicate creating a note needs. Hob is the
+    // DM's sidekick and there is no player surface; a player asking gets the
+    // ordinary `NotFound`, not a conversation nobody could read back.
+    const result = await runtime.runPromise(
+      Effect.gen(function* () {
+        const hob = yield* Hob;
+        const stream = yield* hob.ask(fixture.campaign.id, { text: ASKED });
+        return yield* Stream.runCollect(stream);
+      }).pipe(
+        withActor(fixture.player),
+        Effect.provide(
+          Hob.layer({ model: "scripted-local" }).pipe(
+            Layer.provide(
+              scriptedModel({ model: "scripted-local", maxTokens: MAX_TOKENS, rounds: [] }).layer,
+            ),
+          ),
+        ),
+        Effect.result,
+      ),
+    );
+
+    expect(result._tag).toBe("Failure");
+    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
   }, 60_000);
 
   it("refuses a stranger's campaign", async () => {
     const result = await runtime.runPromise(
       Effect.gen(function* () {
         const hob = yield* Hob;
-        return yield* hob.ask(fixture.strangerCampaign.id, {
-          messages: [{ who: "user", text: ASKED }],
-        });
+        return yield* hob.ask(fixture.strangerCampaign.id, { text: ASKED });
       }).pipe(
         withActor(fixture.dm),
         Effect.provide(
@@ -412,6 +465,7 @@ describe("with no model configured", () => {
             Layer.provide([
               Campaigns.layer,
               Creatures.layer,
+              HobThreads.layer,
               Recap.layer,
               Search.layer,
               SessionEvents.layer,
@@ -448,9 +502,7 @@ describe("with no model configured", () => {
   }, 60_000);
 
   it("answers a question with a declared unavailability, not a crash", async () => {
-    const result = await hobThroughEnv({}, (hob) =>
-      hob.ask(fixture.campaign.id, { messages: [{ who: "user", text: ASKED }] }),
-    );
+    const result = await hobThroughEnv({}, (hob) => hob.ask(fixture.campaign.id, { text: ASKED }));
 
     expect(result._tag).toBe("Failure");
     expect(result._tag === "Failure" && result.failure).toBeInstanceOf(HobUnavailable);
@@ -460,7 +512,7 @@ describe("with no model configured", () => {
     // "The assistant is switched off" must not be a cheaper way to learn which
     // campaigns exist than asking it a question.
     const result = await hobThroughEnv({}, (hob) =>
-      hob.ask(fixture.strangerCampaign.id, { messages: [{ who: "user", text: ASKED }] }),
+      hob.ask(fixture.strangerCampaign.id, { text: ASKED }),
     );
 
     expect(result._tag).toBe("Failure");
@@ -540,6 +592,9 @@ describe("the assistant seam", () => {
     expect(Object.keys(HobToolkit.tools).sort()).toEqual([
       "getCreature",
       "listSessions",
+      "proposeBeat",
+      "proposeEncounter",
+      "proposeNote",
       "searchCampaign",
       "sessionLog",
       "sessionRecap",

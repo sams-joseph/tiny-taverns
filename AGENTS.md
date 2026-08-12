@@ -477,10 +477,12 @@ non-negotiable, because it is free on day one and a retrofit later.
 - **Denial is `NotFound`, not `Forbidden`.** Saying "it exists but is not yours" is itself a
   disclosure.
 - **A new table gets `visibility` (default `'dm'`), `origin` (default `'authored'`) and
-  `assistant_turn_id`.** `apps/server/test/schema.test.ts` fails if one does not — the opt-out
-  list is in that file, so skipping it takes a visible edit. Provenance is inert until the
-  assistant ships; it is there because retrofitting it onto a table that already mixes
-  authored and generated rows means guessing which is which.
+  `assistant_turn_id` — the last one a real foreign key into `assistant_turn`, deferrable.**
+  `apps/server/test/schema.test.ts` fails if one does not, and `0010_assistant_conversation.ts`
+  is the pattern to copy. The opt-out list is in that test file, so skipping it takes a visible
+  edit. The columns went in at `0001` because retrofitting provenance onto a table that already
+  mixes authored and generated rows means guessing which is which; only `repo/Proposals.ts`
+  ever writes `origin = 'assistant'`.
 - **`creature` is the one table whose rows may belong to no campaign** — the global `system`
   corpus — and it therefore has a predicate of its own, `corpusRowReadable`. Read the bestiary
   section below before writing anything that looks like it; the obvious spelling leaks.
@@ -1651,12 +1653,13 @@ shipped components. **It answers now**; the server half is the section below, an
 still only the surface.
 
 - **`conversation.ts` is the whole seam, and the only file in `apps/web` that talks to the
-  assistant.** `useHobConversation(campaignId, open)` asks `hob.status` the first time the
-  panel is opened, streams `hob.ask`, and appends the deltas to the reply already in flight.
-  Three absences are load-bearing and all render as absences: **no campaign in view** and **no
-  model configured** both leave `send` undefined (`HobPanel` then shows the exact reason where
-  the composer would be), and `save` / `discard` / `retry` stay undefined because the
-  propose-and-accept half is unbuilt and a card disables what it was not given.
+  assistant.** `useHobConversation(campaignId, open)` asks `hob.status` **and reads the newest
+  thread back** the first time the panel is opened, streams `hob.ask`, appends the deltas to
+  the reply already in flight, and accepts what Hob offers. Two absences are load-bearing and
+  both render as absences: **no campaign in view** and **no model configured** each leave
+  `send` undefined (`HobPanel` then shows the exact reason where the composer would be).
+  `discard` and `retry` stay undefined and the card disables them — see the accept section
+  below for why neither is faked.
 - **`thinking` is not "a request is in flight".** It is _an answer is coming and there is
   nothing to read yet_ — so it goes false the moment words start arriving (the growing text is
   the progress) and true again whenever Hob pauses for a tool. `activity` is the tool step in
@@ -1673,12 +1676,13 @@ still only the surface.
   no chips, `HobPanel` draws no strip. This mattered the moment Hob started answering: a strip
   naming a campaign the DM is not in, on the one surface whose whole claim is that its answers
   are not invented, is the worst possible place for a stub.
-- **`transcript.ts` is the useful half of the handover.** `HobArtifact` is a discriminated
-  union over the five card bodies the designers actually drew (encounter, read-aloud, npc,
-  checklist, rules), so it states exactly what an answer has to return. The delivery's
-  `KIND_META` names eight kinds; the four with no drawn body are absent on purpose. Provenance
-  is already waiting on the schema side — `assistant_turn_id` and `origin` on every content
-  table — so _Save to session_ is an ordinary authored write, not a new privilege.
+- **`transcript.ts` maps the wire to the drawn cards, and `artifactFrom` is the only place it
+  happens.** `HobArtifact` is a discriminated union over the bodies the designers drew plus two
+  of ours (`note`, `beat`) that Hob can actually offer to save; the delivery's `KIND_META`
+  names eight kinds and the four with no drawn body stay absent. **Three of the union are
+  produced and the rest are gallery specimens** — nothing makes an `npc`, a `checklist` or a
+  `rules` card, because there is no table for one to be saved into. `chips` is `[]` and
+  `adjustedXp` absent for the same reason a screen never renders a stubbed field.
 - **`hob.fixtures.ts` is the delivered data, and the sample thread must not reach a screen.**
   The gallery's `#hob` section is the one place it renders. A panel that appears to hold a
   conversation the DM never had is the failure this area is most able to cause.
@@ -1690,6 +1694,20 @@ still only the surface.
   nav until the route names one. The gallery's
   "The mount, and the opener" specimen _is_ that composition, so it fails if the seam rots.
   **The shell owns the Ask Hob button**; nothing in `hob/` draws one.
+
+**The conversation is the server's, and the panel resumes the newest thread.** Opening it reads
+`hob.status` and `hob.threads` together and then that thread's turns; a question carries a
+thread id and its own text, never a transcript. Three consequences worth knowing: the thread id
+lives in a **ref**, because `began` writes it mid-answer and a re-render in between would split
+one evening into two; a saved thread is adopted **only when nothing is on screen**, so a read
+that lands late cannot replace a question the DM is watching; and _New thread_ now means what it
+says — it forgets the id, and the next question starts one. There is no thread picker, which is
+a drawn-surface limit and not a data one.
+
+**Omit an optional key; do not send it as `undefined`.** `payload: { threadId: undefined, text }`
+reaches the server as `threadId: null`, and `Schema.optional` refuses a null — a 400 on the first
+question of every conversation. Build the object without the key instead. (Only bites when a
+caller writes the key explicitly, which is exactly what a `const threadId = …` variable invites.)
 
 **Inline above 1020px, overlay below** — `HOB_INLINE_MIN`, from the second delivery's
 `CHAT_INLINE_MIN`, which fell from 1180 when the 260px rail became a 56px top bar. Measured in
@@ -1717,21 +1735,30 @@ page — a probe that reported a shell nobody in this worktree had written. Laun
 `--remote-debugging-port=0` and read the real port off the process's own
 `DevTools listening on ws://127.0.0.1:<port>/` stderr line.
 
-## Hob answers: the toolkit, the loop, and running it locally
+## Hob answers: the toolkit, the loop, the conversation, and the accept path
 
 `apps/server/src/assistant/` is the whole assistant — two files — plus `packages/api/src/Hob.ts`
-for the wire and `apps/web/src/hob/conversation.ts` for the panel. Read `toolkit.ts` first: it is
-where the architectural rule lives.
+for the wire, `repo/HobThreads.ts` and `repo/Proposals.ts` for the conversation and the accept,
+and `apps/web/src/hob/conversation.ts` for the panel. Read `toolkit.ts` first: it is where the
+architectural rule lives.
 
-**Hob gets tools, not a context blob.** The prompt carries the DM's thread and the campaign's
+**Hob gets tools, not a context blob.** The prompt carries the saved thread and the campaign's
 _name_, and nothing else from the campaign; every fact in an answer arrives through a tool call
 that is one shipped repository method — `Search.search`, `Sessions.list`, `Recap.read`,
 `Creatures.findById`, `SessionEvents.list`. Each returns `Effect<…, NotFound, CurrentActor>`, so
 an unscoped read does not compile. A pre-assembled context blob would be a second data path with
 its own filtering, and the day it disagrees with the predicate is the day the assistant leaks.
 
+**Eight tools now: those five reads and three `propose*`.** A propose tool still writes nothing —
+it stashes what Hob drafted in a `Ref` that becomes the turn's `proposal` column. There is no
+write repository anywhere under `src/assistant/`, which is what makes "nothing enters the
+campaign without an accept" a property of the wiring. `proposeEncounter` resolves each
+`creatureId` through `Creatures.findById`, so a model that invented one gets a `NotFound` it can
+read rather than a card the DM cannot accept — and the name, rating and hit points on the card
+come out of the row rather than out of the model.
+
 **The campaign is not a tool parameter.** No tool takes one; `handlersFor(repositories,
-campaignId, actor)` closes over the path segment the request was routed on and over the actor
+campaignId, actor, proposal)` closes over the path segment the request was routed on and over the actor
 `Authorization` resolved. So a model that hallucinated another campaign's id has nowhere to put
 it — the call is not _expressible_, never mind refused — and the ordinary predicate underneath is
 the second lock rather than the only one. `hob.test.ts` asserts no `campaignid` appears in the
@@ -1760,25 +1787,87 @@ alike) across rounds, capped at `MAX_ROUNDS = 4`. `Chat.streamText` is one round
 only adds the bookkeeping. Without the loop every grounded question comes back empty, and
 `hob.test.ts` pins the two requests.
 
-`finish` is withheld from a round that asked for a tool — it ends _that_ call, not the answer,
-and a `done` event before the prose closes the turn on a client that trusts it. The framework
-defers finish parts until every tool handler completes, so the flag is accurate by then.
+`finish` is **never** emitted as `done` from inside a round — it is recorded in a `Ref` and `ask`
+emits one `done` at the very end. Two reasons: a round that asked for a tool has not finished the
+answer, and a `proposal` event must not land after a `done` a client trusts. An answer that
+already said `failed` gets no `done` at all — exactly one of the two, ever — though a `proposal`
+may still follow a `failed`, because a model that offered something and _then_ burned the round
+budget really did offer it.
 
 ### The wire, and the panel
 
 `GET /campaigns/:c/hob` → `HobStatus`; `POST /campaigns/:c/hob/ask` → `HttpApiSchema.StreamSse`
-of `HobEvent` (`delta` / `tool` / `done` / `failed`). Authorization happens **before** a stream
-exists, so a denial is a real 404 and an unconfigured server a real 503 — same ordering
-`live.events` depends on. **No `id` line and no heartbeats**: an answer is not a resumable log,
-a dropped stream is re-asked rather than resumed, and a tool step is the traffic that proves a
-slow connection is alive.
+of `HobEvent` (`began` / `delta` / `tool` / `proposal` / `done` / `failed`). Authorization
+happens **before** a stream exists, so a denial is a real 404 and an unconfigured server a real
+503 — same ordering `live.events` depends on. **No `id` line and no heartbeats**: an answer is not
+a resumable log, a dropped stream is re-asked rather than resumed, and a tool step is the traffic
+that proves a slow connection is alive.
 
-**Nothing is persisted.** The client sends the thread in every payload; there is no
-`assistant_turn` table. That column exists so a _saved_ row can point at the turn that produced
-it, and nothing writes an `origin: "assistant"` row until the accept path ships — a turn table
-with no reader is not worth a migration. **The accept path is deliberately not built** (captain's
-decision: generate with approval), which is also why `HobArtifact` has no producer and the
-panel's _Save to session_ stays absent rather than disabled-and-lying.
+`began` carries the thread id and the id of the turn the answer will be saved as, **first, before
+the model is called** — the client needs both before it needs a word, and a dropped connection
+must not lose the thread the question was already saved to. It is why turn ids are minted in
+TypeScript (`HobThreads`) rather than by the column default.
+
+### The conversation, and how a proposal becomes a row
+
+**Both halves are one piece of work, and `0010_assistant_conversation.ts` says why.** Every
+content table has carried `origin` and `assistant_turn_id` since `0001` with a check tying them
+together; the check was _unenforceable_ until there was a turn to point at, so a row could claim
+`origin = 'assistant'` and name any uuid. `0010` adds `assistant_thread` / `assistant_turn` and
+makes `assistant_turn_id` a real foreign key on all fourteen content tables.
+
+- **A thread is campaign-scoped and a turn hangs off a thread**, so `repo/HobThreads.ts` writes
+  **no predicate of its own** — `rowReadable`/`rowWritable` plus the existing `NestedTable`
+  machinery, exactly as `prep_item` sits under `session`.
+- **Asking is a write.** `HobThreads.start` needs `campaignWritable`, so a player gets the
+  ordinary `NotFound` — Hob is the DM's sidekick and a conversation nobody could read back is
+  not worth writing. `hob.test.ts` pins it, and pins the player's _tool reads_ separately.
+- **A hob turn is `origin = 'assistant'` with `assistant_turn_id = id`** — the turn that produced
+  this text is itself. `who` says who spoke; `origin` says where the content came from, and a hob
+  turn claiming `authored` would be a lie in the one table whose whole purpose is provenance.
+- **The turn's answer is written in a `Stream.ensuring` finalizer**, so a DM who closes the tab
+  mid-answer keeps the half they read. Best effort — a turn that cannot be saved must not turn a
+  delivered answer into a failure — and nothing at all is written when neither words nor a
+  proposal arrived, which reads correctly on reload as a question that went unanswered. A
+  `failed` sentence is deliberately **not** saved: it is the product apologising, not something
+  Hob said.
+- **The record is complete and the prompt is its recent end** (`RECENT_TURNS = 40`). Same
+  distinction the recap makes between what is retained and what is read back.
+
+### The accept path: the only writer of `origin = 'assistant'`
+
+`POST /campaigns/:c/hob/threads/:threadId/turns/:turnId/accept`, implemented by
+`repo/Proposals.ts`. **It takes no content payload**, and that is the whole reason the provenance
+is worth having: the note, beat or encounter is materialised from the `proposal` column the
+_server_ wrote when Hob proposed it. If accept took the prose, any client could post its own and
+have it recorded as the assistant's.
+
+- **A proposal is not a row.** `assistant_turn.proposal` is the offer, `accepted_at` is the human
+  saying yes, and until it is set there is no note, no beat and no encounter anywhere. An
+  abandoned proposal decays into a line of transcript. `hob-proposals.test.ts` measures that
+  rather than asserting it — it counts the three tables either side of a proposal.
+- **It writes through the ordinary `create` methods**, with one extra argument
+  (`AssistantOrigin`, `repo/rows.ts`). No create payload has an `origin` field, so a client
+  cannot claim assistant provenance; only `Proposals` constructs one. An accepted row is made by
+  _literally the same statement_ an authored one is — which is what makes it indistinguishable in
+  usefulness (search finds it, the recap includes it, `creatureCount` counts its roster) and
+  completely distinguishable in origin.
+- **One transaction, and the turn is locked first.** `for update` on the turn is the whole
+  idempotency story — a double-tapped _Save to session_ is one row and one 409. A second accept
+  is a `Conflict` ("it is already there"), a turn that proposed nothing is a `NotFound`.
+- **Three targets, chosen because they are three tables**: `note`, `beat`, `encounter` (with its
+  roster). A beat's session is resolved at accept time from `campaign.current_session_id` — the
+  DM may have finished the night since — and no session is a `Conflict`, not a 404. Accepted rows
+  take the column default for `visibility`, so a draft lands DM-only whatever it is about.
+- **Discard is not built and is not faked.** An unaccepted proposal is harmless transcript;
+  hiding it would need a `dismissed_at` and an endpoint. The card disables the button, which is
+  this surface's shipped way of saying "not given".
+
+**The foreign keys are `deferrable initially deferred`**, for the reason
+`encounter_creature.creature_id` is: `delete from campaign` cascades into `note` and into
+`assistant_turn` in one statement, and an immediate `no action` fires before the referencing rows
+are gone. Under autocommit a lone `delete from assistant_turn` is still refused on the spot — an
+accepted row pins the turn that produced it, and `schema.test.ts` proves it.
 
 ### Configuration: unset is a supported mode
 
@@ -1827,11 +1916,23 @@ the record — ferryman…"_ → text growing in place. A question the record do
 _"There seems to be no recorded beats related to the crossing"_ rather than an invention, which is
 the prompt's one non-negotiable instruction working.
 
+Re-measured over the same model when the conversation and the accept path landed: two questions in
+one thread, a page reload, and the whole evening read back from `hob.threads` + `.../turns`; then
+_"Search the bestiary for Bullywug, then propose an encounter…"_ → `searchCampaign` → an
+`proposeEncounter` whose roster came back resolved (`Bullywug Croaker`, `CR 1/4`, `11 hp`) → _Save
+to session_ → a real `encounter` row with `creatureCount: 6`, `origin: "assistant"` and the
+turn id on both it and its `encounter_creature` line. Five proposals were made across the
+session and only the accepted ones became rows; a second accept was a 409.
+
 **A small local model is the weak link, and it is worth knowing which part is weak.** The plumbing
-is deterministic and tested; what varies is whether a 3B model picks a good query and a sensible
-`source` filter — it narrowed to `source: "note"` unprompted and missed a beat that answered the
-question. That is a model-tier question (the captain's `model-tier.md` defers it), not an
-architecture one.
+is deterministic and tested; what varies is judgement. A 3B model narrowed to `source: "note"`
+unprompted and missed a beat; it also called `proposeEncounter` with an **invented** creature id
+before searching (refused with a `NotFound` it then read and recovered from), and twice tried to
+propose a second thing in one turn (refused with the `Conflict`). Both refusals are the guardrails
+working rather than defects — but note the second one can burn the round budget, so an answer can
+end `failed` with a good proposal already made and emitted. That is a model-tier question (the
+captain's `model-tier.md` defers it), not an architecture one. A **1B** model is below the floor
+entirely: llama-3.2-1B emitted `proposeEncounter:` as prose and never made a tool call at all.
 
 **Testing it offline: stub `HttpClient`, not the model.** `apps/server/test/support/model.ts`
 scripts an OpenAI-compatible endpoint by answering `POST /chat/completions` with canned

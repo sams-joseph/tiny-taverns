@@ -63,6 +63,21 @@ function ReadAloudBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
   );
 }
 
+/**
+ * A note or a beat: prose Hob wrote, in the app's own voice.
+ *
+ * Not the read-aloud blockquote, and the difference is the point of having two.
+ * Read-aloud is serif and italic because it is meant to be *spoken at the
+ * table*; a prep note and a beat are the DM's record and are set like every
+ * other body of text in the product. The delivery has no body for either — it
+ * draws neither kind — so this is the smallest thing that could be right.
+ */
+function ProseBody({ artifact }: { readonly artifact: HobArtifact & { kind: "note" | "beat" } }) {
+  return (
+    <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">{artifact.text}</p>
+  );
+}
+
 function NpcBody({ artifact }: { readonly artifact: HobArtifact & { kind: "npc" } }) {
   return (
     <div className="flex flex-col gap-2">
@@ -125,6 +140,9 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <EncounterBody artifact={artifact} />;
     case "readaloud":
       return <ReadAloudBody artifact={artifact} />;
+    case "note":
+    case "beat":
+      return <ProseBody artifact={artifact} />;
     case "npc":
       return <NpcBody artifact={artifact} />;
     case "checklist":
@@ -156,13 +174,13 @@ export function ArtifactCard({
 }) {
   const meta = ARTIFACT_KINDS[artifact.kind];
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(artifact.title);
+  const [draft, setDraft] = useState(artifact.title ?? "");
 
   const commit = () => {
     setEditing(false);
     const title = draft.trim();
     if (title !== "" && title !== artifact.title) onRename?.(artifact, title);
-    else setDraft(artifact.title);
+    else setDraft(artifact.title ?? "");
   };
 
   return (
@@ -176,7 +194,9 @@ export function ArtifactCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            {editing ? (
+            {/* A beat has no title, and the badge alone is the whole header —
+                an empty heading would be a field the API does not have. */}
+            {artifact.title === undefined ? null : editing ? (
               <Input
                 autoFocus
                 aria-label="Title"
@@ -186,7 +206,7 @@ export function ArtifactCard({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commit();
                   if (event.key === "Escape") {
-                    setDraft(artifact.title);
+                    setDraft(artifact.title ?? "");
                     setEditing(false);
                   }
                 }}

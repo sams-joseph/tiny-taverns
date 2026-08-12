@@ -96,6 +96,29 @@ export const SAMPLE_CHECKLIST: HobArtifact = {
   ],
 };
 
+/**
+ * The two kinds the delivery does not draw, and Hob really produces.
+ *
+ * Not transcribed from anything — there is nothing to transcribe. They are here
+ * so the gallery can hold the two card bodies still, exactly as it holds the
+ * delivered ones, and because a body with no specimen is a body nobody looks at
+ * until it is wrong on a screen. See `ARTIFACT_KINDS` in `transcript.ts`.
+ */
+export const SAMPLE_NOTE: HobArtifact = {
+  id: "sample-note",
+  kind: "note",
+  title: "The lantern-keeper",
+  chips: [],
+  text: "She trims the wicks at dusk and will not say who pays her. Ask her about the ferryman and she changes the subject to the weather.",
+};
+
+export const SAMPLE_BEAT: HobArtifact = {
+  id: "sample-beat",
+  kind: "beat",
+  chips: [],
+  text: "They gave the ferryman a name that was not theirs, and he wrote it down.",
+};
+
 export const SAMPLE_RULES: HobArtifact = {
   id: "sample-rules",
   kind: "rules",

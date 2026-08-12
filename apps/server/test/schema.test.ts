@@ -53,6 +53,8 @@ describe("every content-bearing table", () => {
     // A guard on the guard: if this list changes, the assertions below have
     // started covering something new, and somebody should have noticed.
     expect(contentTables).toEqual([
+      "assistant_thread",
+      "assistant_turn",
       "beat",
       "campaign",
       "character",
@@ -81,9 +83,10 @@ describe("every content-bearing table", () => {
   });
 
   it("carries provenance from the first migration", () => {
-    // Inert until the assistant ships. They are here now because retrofitting
+    // Added in `0001` and inert for nine migrations, because retrofitting
     // provenance onto a table that already mixes authored and generated rows
-    // means guessing which is which.
+    // means guessing which is which. `0010` gave the pointer a referent; the
+    // block at the bottom of this file is where it is now exercised.
     for (const table of contentTables) {
       const origin = columnFor(table, "origin");
       const turn = columnFor(table, "assistant_turn_id");
@@ -167,32 +170,112 @@ describe("an account must be reachable by something", () => {
 });
 
 describe("provenance is enforced, not just declared", () => {
+  /**
+   * A conversation to point at.
+   *
+   * The check has been on every content table since `0001_init.ts` and was
+   * vacuously satisfiable until `0010`: `assistant_turn_id` had no referent, so
+   * a row could claim `origin = 'assistant'` and name any uuid it liked. Now
+   * there is a table, and the assertions below are about a real turn — which is
+   * also what makes the last one, a turn id that names nothing, worth writing.
+   */
+  const aRealTurn = (label: string) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const account = yield* sql<{ readonly id: string }>`
+        insert into account ${sql.insert({ name: "Jo", token_hash: `provenance-${label}` })}
+        returning id
+      `;
+      const campaign = yield* sql<{ readonly id: string }>`
+        insert into campaign ${sql.insert({ account_id: account[0]!.id, name: `provenance ${label}` })}
+        returning id
+      `;
+      const thread = yield* sql<{ readonly id: string }>`
+        insert into assistant_thread ${sql.insert({
+          campaign_id: campaign[0]!.id,
+          title: "Who is the ferryman?",
+        })}
+        returning id
+      `;
+      const turn = yield* sql<{ readonly id: string }>`
+        insert into assistant_turn ${sql.insert({
+          thread_id: thread[0]!.id,
+          who: "user",
+          body: "hi",
+        })}
+        returning id
+      `;
+      return { accountId: account[0]!.id, turnId: turn[0]!.id };
+    }).pipe(Effect.orDie);
+
   it("rejects an assistant row with no turn id, and an authored row with one", async () => {
-    const insert = (origin: string, turnId: string | null) =>
+    const { accountId, turnId } = await runtime.runPromise(aRealTurn("pair"));
+
+    const insert = (origin: string, turn: string | null) =>
       runtime.runPromise(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
-          const account = yield* sql<{ readonly id: string }>`
-            insert into account ${sql.insert({ name: "Jo", token_hash: `${origin}-${turnId}` })}
-            returning id
-          `;
           yield* sql`
             insert into campaign ${sql.insert({
-              account_id: account[0]!.id,
-              name: "provenance",
+              account_id: accountId,
+              name: `provenance ${origin} ${String(turn)}`,
               origin,
-              assistant_turn_id: turnId,
+              assistant_turn_id: turn,
             })}
           `;
         }).pipe(Effect.result),
       );
 
     const assistantWithoutTurn = await insert("assistant", null);
-    const authoredWithTurn = await insert("authored", "00000000-0000-4000-8000-000000000000");
-    const assistantWithTurn = await insert("assistant", "00000000-0000-4000-8000-000000000001");
+    const authoredWithTurn = await insert("authored", turnId);
+    const assistantWithTurn = await insert("assistant", turnId);
 
     expect(assistantWithoutTurn._tag).toBe("Failure");
     expect(authoredWithTurn._tag).toBe("Failure");
     expect(assistantWithTurn._tag).toBe("Success");
+  });
+
+  it("refuses a turn id that names no turn", async () => {
+    // What `0010` bought. Before it, this row was accepted and the campaign
+    // carried a provenance trail leading nowhere — which is worse than none,
+    // because it reads as an answer.
+    const { accountId } = await runtime.runPromise(aRealTurn("invented"));
+    const invented = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          insert into campaign ${sql.insert({
+            account_id: accountId,
+            name: "provenance invented",
+            origin: "assistant",
+            assistant_turn_id: "00000000-0000-4000-8000-000000000001",
+          })}
+        `;
+      }).pipe(Effect.result),
+    );
+
+    expect(invented._tag).toBe("Failure");
+  });
+
+  it("keeps an accepted row's turn from being deleted out from under it", async () => {
+    // The provenance trail has to survive, so the reference is `no action`
+    // rather than `set null` — which the check constraint would reject anyway.
+    const { accountId, turnId } = await runtime.runPromise(aRealTurn("pinned"));
+    const deleted = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          insert into campaign ${sql.insert({
+            account_id: accountId,
+            name: "provenance pinned",
+            origin: "assistant",
+            assistant_turn_id: turnId,
+          })}
+        `;
+        yield* sql`delete from assistant_turn where id = ${turnId}`;
+      }).pipe(Effect.result),
+    );
+
+    expect(deleted._tag).toBe("Failure");
   });
 });

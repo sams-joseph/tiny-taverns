@@ -14,7 +14,15 @@ import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { RUNS } from "./liveTables.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
   ensureNestedParentReadable,
@@ -111,10 +119,12 @@ export class Beats extends Context.Service<
       sessionId: SessionId,
       id: BeatId,
     ) => Effect.Effect<Beat, NotFound, CurrentActor>;
+    /** `from` is the accept path's, and only its — see `Notes.create`. */
     readonly create: (
       campaignId: CampaignId,
       sessionId: SessionId,
       payload: BeatCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Beat, NotFound, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -165,7 +175,7 @@ export class Beats extends Context.Service<
             }),
           ),
 
-        create: (campaignId, sessionId, payload) =>
+        create: (campaignId, sessionId, payload, from) =>
           dieOnSqlError(
             sql
               .withTransaction(
@@ -186,6 +196,7 @@ export class Beats extends Context.Service<
                         encounter_run_id: payload.encounterRunId,
                         body: payload.body,
                         visibility: payload.visibility,
+                        ...assistantColumns(from),
                       }),
                     )}
                     returning *

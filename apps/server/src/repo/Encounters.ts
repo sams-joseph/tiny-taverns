@@ -11,7 +11,15 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
@@ -86,9 +94,11 @@ export class Encounters extends Context.Service<
       campaignId: CampaignId,
       id: EncounterId,
     ) => Effect.Effect<Encounter, NotFound, CurrentActor>;
+    /** `from` is the accept path's, and only its — see `Notes.create`. */
     readonly create: (
       campaignId: CampaignId,
       payload: EncounterCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Encounter, NotFound, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -134,7 +144,7 @@ export class Encounters extends Context.Service<
             }),
           ),
 
-        create: (campaignId, payload) =>
+        create: (campaignId, payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -148,6 +158,7 @@ export class Encounters extends Context.Service<
                       difficulty: payload.difficulty,
                       tags: payload.tags,
                       visibility: payload.visibility,
+                      ...assistantColumns(from),
                     }),
                   )}
                   returning *, ${creatureCount(sql, actor)}

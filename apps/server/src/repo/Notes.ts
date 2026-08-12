@@ -12,7 +12,15 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
@@ -88,9 +96,15 @@ export class Notes extends Context.Service<
       campaignId: CampaignId,
       id: NoteId,
     ) => Effect.Effect<Note, NotFound, CurrentActor>;
+    /**
+     * `from` is set by `repo/Proposals.ts` and by nothing else — it is the
+     * accept path saying which assistant turn produced this row. There is no
+     * `origin` on `NoteCreate`, so it cannot arrive from a client.
+     */
     readonly create: (
       campaignId: CampaignId,
       payload: NoteCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Note, NotFound, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -135,7 +149,7 @@ export class Notes extends Context.Service<
             }),
           ),
 
-        create: (campaignId, payload) =>
+        create: (campaignId, payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -151,6 +165,7 @@ export class Notes extends Context.Service<
                       kind: payload.kind,
                       encounter_id: attachmentColumn(payload.attachedTo),
                       visibility: payload.visibility,
+                      ...assistantColumns(from),
                     }),
                   )}
                   returning *

@@ -68,9 +68,16 @@ export type SessionEventId = typeof SessionEventId.Type;
 export const BeatId = id("BeatId");
 export type BeatId = typeof BeatId.Type;
 
+/** One conversation with Hob — a thread of turns, scoped to one campaign. */
+export const AssistantThreadId = id("AssistantThreadId");
+export type AssistantThreadId = typeof AssistantThreadId.Type;
+
 /**
- * Points at the assistant conversation turn that produced a row. The turn table
- * does not exist yet — see `Provenance.Origin`.
+ * Points at the assistant conversation turn that produced a row.
+ *
+ * `assistant_turn` is a real table now, and every content table's
+ * `assistant_turn_id` is a real foreign key into it — so "where did this NPC
+ * name come from?" is a join rather than a guess. See `HobTurn`.
  */
 export const AssistantTurnId = id("AssistantTurnId");
 export type AssistantTurnId = typeof AssistantTurnId.Type;

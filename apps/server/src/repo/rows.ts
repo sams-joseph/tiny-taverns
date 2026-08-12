@@ -25,6 +25,26 @@ export const provenanceOf = (row: ProvenanceColumns) => ({
 });
 
 /**
+ * Where an accepted proposal came from — the one thing that may set
+ * `origin = 'assistant'`.
+ *
+ * Passed as an extra argument to an ordinary `create`, never as a field on a
+ * payload, and that distinction is the safety property. A `NoteCreate` has no
+ * `origin`, so a client cannot claim the assistant wrote its prose; only
+ * `repo/Proposals.ts` constructs one of these, out of a turn the *server*
+ * stored. Everything else about the insert is unchanged, which is what makes an
+ * accepted row indistinguishable in usefulness from an authored one and
+ * completely distinguishable in origin.
+ */
+export interface AssistantOrigin {
+  readonly assistantTurnId: AssistantTurnId;
+}
+
+/** The two provenance columns an accept sets, or nothing at all. */
+export const assistantColumns = (from: AssistantOrigin | undefined): Record<string, unknown> =>
+  from === undefined ? {} : { origin: "assistant", assistant_turn_id: from.assistantTurnId };
+
+/**
  * Drops `undefined` entries so an omitted field falls through to the column
  * default instead of being bound as SQL `NULL`. This is what makes a create
  * payload without a `visibility` land as `dm` rather than as nothing at all.
