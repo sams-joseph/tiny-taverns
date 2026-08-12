@@ -2061,6 +2061,29 @@ end `failed` with a good proposal already made and emitted. That is a model-tier
 captain's `model-tier.md` defers it), not an architecture one. A **1B** model is below the floor
 entirely: llama-3.2-1B emitted `proposeEncounter:` as prose and never made a tool call at all.
 
+**"Hob suggested something and there was no card to accept it with" is that same model-tier
+symptom, and the row says so — check it before touching `apps/web/src/hob/`.** Re-measured against
+LM Studio serving llama-3.2-1b-instruct: the panel drew
+_`proposeEncounter "The Marsh Encounter: Swamp Stompers": A Bullywug mob on the prowl.`_ as
+ordinary reply text, and the turn it was saved as has `proposal IS NULL` — there was no proposal to
+draw a card from. It is not the endpoint dropping the tool schema either: posted straight to
+`/v1/chat/completions` with one tool and `tool_choice: "auto"`, that model answers `tool_calls: []`
+and invents an answer instead. So the diagnosis is one query —
+`select who, proposal is null, left(body,60) from assistant_turn order by created_at desc` — and a
+null `proposal` on a turn that reads like an offer means the model never called the tool. The
+proposal → card → accept path itself is verified end to end in a real browser against a live
+endpoint, and `conversation.test.tsx` pins it from both directions (the streamed `proposal` and a
+read-back turn): a card is drawn because the turn **carries a proposal**, never because of who
+spoke, which is why one recorded turn can become two rows.
+
+**With no capable model on the machine, script a real endpoint rather than stubbing `HttpClient`.**
+The offline route below is for the suite; to watch a _browser_ draw the card you need something
+listening, and a short Node server answering `POST /v1/chat/completions` with the `toolCallChunks`
+/ `textChunks` shapes from `test/support/model.ts` is enough — round 1 a `searchCampaign` call,
+round 2 a `propose*` call, round 3 prose. Everything downstream of the provider is then real.
+Count the assistant tool-call messages already in the prompt to know which round you are in: the
+loop sends the whole history back each time (`MAX_ROUNDS`, above).
+
 **Testing it offline: stub `HttpClient`, not the model.** `apps/server/test/support/model.ts`
 scripts an OpenAI-compatible endpoint by answering `POST /chat/completions` with canned
 `text/event-stream` chunks, which exercises the real provider layer, the real toolkit, the real

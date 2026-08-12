@@ -528,6 +528,69 @@ describe("the conversation is still there", () => {
     expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
   });
 
+  /**
+   * The one property the whole feature rests on, pinned from the read-back path
+   * as well as from the live one.
+   *
+   * A recorded turn is a row with a `who` *and* a `proposal`, and those two are
+   * independent: what decides whether a card is drawn is the proposal, never who
+   * spoke. Both these turns are `who: "hob"` and both carry the same prose — the
+   * only difference between them is the column — so a panel that branched on the
+   * speaker would render them identically and this is what would say so.
+   *
+   * It is also the difference between a suggestion the DM can act on and one
+   * they can only read: without the card there is no accept, and without an
+   * accept nothing Hob offers can ever enter the campaign.
+   */
+  it("draws a card for the turn that proposed, and none for the turn that only spoke", async () => {
+    server.threads = [aThread("Build me an ambush")];
+    server.turns = [
+      // Same speaker, same shape, no proposal: prose and nothing else.
+      {
+        id: "0a9b8c7d-6e5f-4a3b-8c1d-0e9f8a7b6c5d",
+        threadId,
+        who: "hob",
+        text: "The crossing is watched.",
+        proposal: null,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Six of them, in the reeds.",
+        proposal: anEncounter,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+
+    renderHob();
+
+    // One turn became two rows — the words, and the card — which is why
+    // `shownAs` is a `flatMap`. Both halves are the DM's to read.
+    await waitFor(() => expect(screen.getByText("Song in the reeds")).toBeInTheDocument());
+    expect(screen.getByText("Six of them, in the reeds.")).toBeInTheDocument();
+    expect(screen.getByText("The crossing is watched.")).toBeInTheDocument();
+
+    // Exactly one accept, and it is offered rather than disabled: an unaccepted
+    // proposal is the whole point of the card.
+    const save = screen.getAllByRole("button", { name: "Save to session" });
+    expect(save).toHaveLength(1);
+    expect(save[0]).toBeEnabled();
+    expect(screen.queryByText("Saved")).toBeNull();
+
+    // And it reaches the endpoint that materialises the row, naming the turn
+    // that proposed it and nothing else.
+    await userEvent.click(save[0]!);
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+  });
+
   it("starts a new thread when the DM asks for one", async () => {
     server.threads = [aThread("Who is the ferryman?")];
     server.turns = [
