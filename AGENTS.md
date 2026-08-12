@@ -174,6 +174,73 @@ it tracks deliveries rather than waiting for the screen. **Scan for both spellin
 `name="…"` alone undercounts by four. `help-circle` is keyed as the delivery spells it and
 bound to Lucide's current `CircleHelp` export.
 
+### The fourth delivery: the player side, and a role switch nothing implements
+
+Measured the same way as the second and third, and the same result: **not one token changed —
+all eight `tokens/*.css` are byte-identical**, and so is every file under `components/`,
+`guidelines/`, `assets/`, `fonts/` and `_adherence.oxlintrc.json`. No theme-bridge work was
+needed or done. Test counts were identical across the swap (52 files, 647 tests). The whole
+delivery is `ui_kits/dm-screen`: **seven new files and three changed**, nothing else.
+
+- **`AppShell.jsx` gains a role switch**, and it is the change with the widest blast radius.
+  `NAV` is now `{ dm, player }`; the DM nav gains a fifth item (**Party**, `users`) and the
+  player nav is three (`Characters`, `At the table`, `Chronicle`). A pill toggle sits in the
+  top bar left of _Ask Hob_, and in player mode an initials avatar appears beside it.
+  `AppShell` takes `role = "dm"` and an optional `setRole`; **the switch renders only when
+  `setRole` is passed**, so the DM-only shell is the default and is unchanged.
+- **`Party.jsx` is the DM's seat screen** — the roster, the join link, and a "Needs you" aside.
+- **`MyCharacters.jsx`, `CharacterSheet.jsx`, `CharacterCreate.jsx`, `PlayerTable.jsx`** are the
+  player's four screens, on `PlayerParts.jsx`'s primitives (`SheetSection`, `AbilityBlock`,
+  `StatPill`, `HpTrack`, `DeathSaves`, `Portrait`, `Seat`, `KeyVal`, `sign`). **`Party.jsx`
+  imports `SheetSection` and `Seat` from there too**, so the DM screen depends on the player
+  parts file — it is shared primitives, not a player-only module.
+- `player-data.js` is `window.TT_PLAYER`, a **fourth** global beside `TT_DATA`, `TT_CHRONICLE`
+  and `TT_CHAT`. `index.html` and `README.md` wire and describe it.
+
+**None of the shipped screens account for the role switch, and `shell/AppShell.tsx` has no
+concept of a role at all.** Its nav is `navFor(route)` — a function of the route, not of who is
+looking. Adding a role means the nav becomes a function of both, and `sectionOf` gains a second
+axis. Nothing about that is decided; it is a real design decision the first player screen has to
+take, not a mechanical port.
+
+**Three places where the delivery contradicts something already shipped and reasoned about.**
+Read the relevant section before building against the fixture, because in each case the fixture
+is the newer drawing and the written rule is the older decision:
+
+- **The join link is drawn as multi-use and reusable** — `invite: { uses: 2, max: 6 }`, a "Link
+  accepts new players" switch, "Share the link to fill it". **The shipped invitation is
+  single-use by decision**, one invitation → one membership, with the reasoning in "The
+  invitation: a credential, and the four rules that bound it". These cannot both be true.
+- **A "seat" is drawn as a first-class row that exists before a player** — an _open_ seat with
+  nobody in it, an "Add seat" button, a seat count in the subtitle, and the four statuses
+  `playing` / `no-character` / `invited` / `open`. **There is no seat table**; membership is a
+  `campaign_member` row, which cannot exist before an account. The delivery's own README argues
+  the split ("a seat can be invited, accepted-but-empty, playing, or open") and it is a
+  coherent model — it is simply not the one in the schema.
+- **"I approve characters before they play" is a switch with nothing behind it**, and the
+  delivery's own "Open questions" says so: there is no approval queue screen and no column.
+
+Two smaller things the follow-on work will need:
+
+- **The drawn character sheet is far richer than the `character` table** — skills, spell slots,
+  features, inventory, currency, death saves, level-ups, a journal. The rule that decides what
+  becomes a column is already written and unchanged: see "The party: what earns a column on
+  `character`". Most of this is display and belongs in `body`.
+- **`PlayerTable.jsx` is the player projection of a fight**, which the server has never built —
+  its own header comment states the contract (no monster hit points, no initiative editing, only
+  what the DM shares plus your own turn). That is the projection the `DmActor` gate exists to
+  make possible; see "The actor and visibility contract".
+
+**`packages/ui`'s icon table grew by sixteen and that is again the only change outside the
+vendored tree** — `arrow-big-up-dash`, `backpack`, `copy`, `corner-down-right`, `crown`,
+`hand-helping`, `hexagon`, `image-plus`, `link`, `mail`, `package`, `shield-half`, `unlink`,
+`user`, `user-plus`, `user-round-x`. **This delivery spells icon names a third way**: bare tuple
+elements (`["Dodge", "shield-half"]`, `["dm", "crown", "DM"]`), which neither `name="…"` nor
+`icon: "…"` finds. The sweep that works is to intersect every kebab string literal in the kit
+against `lucide-react`'s own export list and read the survivors in context — which is also the
+only way to reject the false positives, since `grid`, `baseline`, `pointer`, `text` and `table`
+are all real Lucide glyph names and none of them is an icon here.
+
 ## Overlay layering: one scale, and where a new overlay goes on it
 
 **Every z-index in this product comes from the scale in `packages/ui/src/styles.css` §3.**

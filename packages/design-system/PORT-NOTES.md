@@ -16,7 +16,7 @@ else. `packages/ui/src/styles.css` bridges these tokens into Tailwind's theme la
 | `assets/` | App icon exports + `assets/README.md`. |
 | `guidelines/` | The 20 specimen cards — the visual reference the ported components were checked against. |
 | `components/` | `.prompt.md` (intent + measurements), `.d.ts` (API contract), `.jsx` (visual spec), `*.card.html` (state sheets). |
-| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — now including the Hob chat panel and the Chronicle. Reference for later screen work. |
+| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — now including the Hob chat panel, the Chronicle, and the fourth delivery's player side (seats, characters, sheet, table view) with the shell's role switch. Reference for later screen work. |
 | `readme.md`, `SKILL.md` | Guidance material. |
 | `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to ESLint in `packages/eslint-config/design-system.js`. |
 
@@ -39,9 +39,10 @@ and elevation* — was wrong: they had revised neither. Both now live in
 `packages/ui/src/local-tokens.css`, which is the same rule that keeps the layering scale
 in `packages/ui/src/styles.css` §3. `adherence.test.ts` fails if one of them reappears in
 a delivered token file. A `diff -r` against the next delivery should therefore show
-`styles.css`, `SKILL.md`, and nothing else. **It did, on the third** — the rule paid for
-itself the first time it was tested, and the whole update was four kit files with no
-theme-bridge work.
+`styles.css`, `SKILL.md`, and nothing else. **It did on the third, and again on the
+fourth** — the rule paid for itself the first time it was tested, and both updates were
+kit files only, with no theme-bridge work. The fourth's check was 117 files byte-identical,
+2 differing (these two), 2 workspace-only (`package.json`, this file).
 
 **The delivery folder is reused, so its path proves nothing about which delivery is in
 it.** The third export overwrote the folder the first arrived in. Diff the content before

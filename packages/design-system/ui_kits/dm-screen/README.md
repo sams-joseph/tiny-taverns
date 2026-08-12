@@ -5,26 +5,79 @@ Three surfaces, wired click-through in `index.html`.
 
 | File | Surface |
 | --- | --- |
-| `AppShell.jsx` | 56px top nav (mark, wordmark, nav, campaign, Ask Hob) + per-screen `TopBar` |
+| `AppShell.jsx` | 56px top nav (mark, wordmark, nav, campaign, **role switch**, Ask Hob) + per-screen `TopBar` |
 | `CampaignHome.jsx` | Light prep view: encounter cards, notes, party, prep checklist |
+| `Party.jsx` | **DM.** Seats, statuses, the join link and what needs the DM's attention |
 | `EncounterRunner.jsx` | Dark live view: initiative list, dice tray, toast, end-session dialog |
 | `StatBlock.jsx` | Dark stat-block panel with rollable damage lines |
 | `Bestiary.jsx` | Browse view: search, environment filter tags, empty state |
+| `MyCharacters.jsx` | **Player.** Character roster, live-session banner, join-by-link card |
+| `CharacterSheet.jsx` | **Player.** The full sheet — stats, actions, gear, story, log |
+| `CharacterCreate.jsx` | **Player.** Hob-assisted creation: describe → correct the draft → find a table |
+| `PlayerTable.jsx` | **Player.** Dark live turn view: order, your attacks, roll, end turn |
+| `PlayerParts.jsx` | Sheet primitives — `SheetSection`, `AbilityBlock`, `StatPill`, `HpTrack`, `DeathSaves`, `Portrait`, `Seat` |
 | `ChatPanel.jsx` | **The Hob chat panel (Option A).** 400px, persistent, mounted by `AppShell`. |
 | `ChatParts.jsx` | Chat building blocks — messages, artifact cards, composer, context bar |
 | `chat-data.js` | Chat fixtures on `window.TT_CHAT` |
+| `player-data.js` | Player, seat, character and table fixtures on `window.TT_PLAYER` |
 | `data.js` | All fixture content on `window.TT_DATA` |
 
 **Try:** Campaign → *Start session* → hover an initiative row and hit the minus to
 apply 5 damage (watch the HP bar and toast) → *Next turn* → *End* → dialog → back home.
+Then flip the top-bar switch to **Player** → *Open sheet* → click an ability to roll →
+*Go to the table* → attack.
 
-**Navigation is a top bar, not a rail.** One 56px row: mark + wordmark, three nav
-items, then campaign name, session badge and the Ask Hob button pushed right. The
-active item uses the same 2px accent underline as `Tabs`, so navigation reads
-identically at both levels. A per-screen `TopBar` sits below it with the page
-title and its actions. Dropping the 260px rail gave that width back to the
-content, which is why the chat panel's inline threshold is now 1020px rather than
-1180px.
+---
+
+## The player side
+
+**One app, one switch.** Most DMs also play in somebody else's game, so role is a
+toggle in the top bar rather than a separate account or a separate product. It
+swaps the nav (five items → three) and the content area. Nothing else moves: same
+shell, same chat panel, same underline.
+
+**A seat is the unit of membership, not a character.** A campaign has seats. A DM
+shares one join link; a player claims a seat from it and *then* attaches a
+character. Splitting those two steps is what makes `Party.jsx` legible — a seat can
+be *invited* (link not opened), *no character* (accepted, nothing brought yet),
+*playing*, or *open*. Marta having a chair but no character is a state the DM can
+see and act on four days before session 13, which is the whole point.
+
+**Hob drafts, the player corrects.** Creation is three steps: describe the person
+in prose, correct the draft, find a table. Hob never asks for a class — he infers
+it and shows his reasoning in a *What Hob did* panel, because a generated sheet
+you can't interrogate is a sheet you don't trust. Every drafted field is editable
+in place, and the panel takes a plain-language change ("make her a ranger") or a
+quick chip. The whole flow is skippable: *Fill it in myself* goes straight to the
+draft screen with the fields blank.
+
+**The player's table view is the DM's runner with less in it.** Same dark field,
+same initiative order — but no enemy hit points, no editing, and a footer that
+says so out loud. What a player *does* get is the half the DM's runner never had:
+their own attacks as buttons, an action list, and death saves they mark
+themselves. Rolls report to the DM's dice tray; that's the contract, and every
+roll toast says where it went.
+
+**Rules language is 5e-shaped but unbranded** — ancestry rather than race,
+proficiency bonus, ability modifiers, spell slots. Nothing in the UI names a
+system.
+
+### Open questions on the player side
+
+- **Approval.** The DM has an "I approve characters before they play" switch, but
+  there's no approval queue screen yet — accepted characters just appear.
+- **Levelling.** Sorrel is level 1 in a level 5 party. Three surfaces flag it;
+  none of them fix it. Who levels a character up, and where?
+- **Mobile.** The table view is the one screen a player will genuinely use on a
+  phone at the table, and it's currently a three-column desktop layout.
+
+**Navigation is a top bar, not a rail.** One 56px row: mark + wordmark, the nav
+items for the current role, then campaign name, session badge, the role switch and
+the Ask Hob button pushed right. The active item uses the same 2px accent underline
+as `Tabs`, so navigation reads identically at both levels. A per-screen `TopBar`
+sits below it with the page title and its actions. Dropping the 260px rail gave
+that width back to the content, which is why the chat panel's inline threshold is
+now 1020px rather than 1180px.
 
 **The two-mode rule.** Prep and browsing are light cool mist; the live session is
 dark (`--slate-950` field, `--surface-panel` cards) so a lit screen doesn't blind the
