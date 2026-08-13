@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -45,8 +45,10 @@ describe("the roster", () => {
   it("names the DM, and says what is true instead of counting seats", async () => {
     renderParty();
 
-    expect(await screen.findByText("Wren Alderby")).toBeInTheDocument();
-    expect(screen.getByText("DM")).toBeInTheDocument();
+    const dm = await screen.findByText("Wren Alderby");
+    // Scoped to the roster row: the shell's role switch carries a *DM* of its
+    // own on every screen now, and the badge under test is this person's.
+    expect(within(dm.parentElement ?? dm).getByText("DM")).toBeInTheDocument();
     expect(screen.getByText("2 players, 1 invitation outstanding")).toBeInTheDocument();
 
     // The three the decision removed, none of which has anything behind it.

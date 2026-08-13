@@ -172,7 +172,13 @@ function NavLink({ item, active }: { readonly item: NavItem; readonly active: bo
  *
  * It lands on the *list* on each side rather than trying to carry the campaign
  * across, because a campaign does not exist on both: role is a fact about a
- * pair, and the table you DM has no player screen to be shown.
+ * pair, and the table you DM has no player screen to be shown. That is also
+ * what lets it hang here rather than only on the two lists — from a fight or a
+ * bestiary, *Player* means "the tables I sit at", which is a sentence that is
+ * true wherever it is read.
+ *
+ * **It takes no prop and cannot be switched off**, and that is the fix rather
+ * than a detail: see `TopNav`.
  *
  * `aria-pressed` as the delivery has it, and a real `<a>`: this is navigation
  * wearing a toggle's clothes, so it must behave like navigation.
@@ -223,7 +229,10 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
     <Button variant="secondary" size="sm" className="gap-2" onClick={onClick}>
       <img src={markUrl} alt="" aria-hidden="true" width={18} height={18} className="rounded-xs" />
       Ask Hob
-      <kbd className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-micro leading-snug font-medium text-faint">
+      {/* The hint, not the shortcut — ⌘K is `useHobPanel`'s and works whether
+          or not this chip is drawn. So on a bar with no room to spare it goes
+          the way the wordmark does, and the button keeps its words. */}
+      <kbd className="hidden rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-micro leading-snug font-medium text-faint @5xl:inline-block">
         &#8984;K
       </kbd>
     </Button>
@@ -231,31 +240,63 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
 }
 
 /**
- * The app's own bar: where you are in the product, and who you are.
+ * The app's own bar: where you are in the product, who you are, and **which of
+ * the two apps you are in**.
  *
  * Not sticky and not on the layering scale — it is a flex row *above* the
  * scrolling column rather than something floating over it, so it never overlaps
  * anything and never has to win.
+ *
+ * ### The role switch is part of the bar, not a favour a screen does
+ *
+ * It was a `roleSwitch` prop defaulting to `false`, offered by the two campaign
+ * lists and by nothing else, and on the DM's list only once the account already
+ * held a `player` membership. Both halves failed the same way: the pill
+ * vanished the moment you went anywhere, and the one place it could appear was
+ * hidden from exactly the account that needed it — **you could not reach player
+ * mode until you were a player, and the control that takes you there was hidden
+ * until you were one.** Every account that predates the invitation is in that
+ * state, which is why the captain saw no toggle at all.
+ *
+ * So it is drawn from `modeOf(route)` like the nav is, with no prop to pass and
+ * nothing to opt into. **A control every screen must remember is one every new
+ * screen will forget**, and there is no shape of forgetting left: a screen that
+ * renders this shell has the switch, and a screen that does not render this
+ * shell has no bar to put it in.
+ *
+ * That settles the single-role account too, and the answer is the honest empty
+ * state rather than a hidden control: *Player* on an account that sits at no
+ * table lands on `#/play`, which says nobody has invited you yet and that a
+ * table appears once its DM shares it. A DM who has been handed a link to
+ * somebody else's table can therefore find it — the actual need underneath —
+ * without being told a URL.
  */
 function TopNav({
   route,
   context,
   onAskHob,
-  roleSwitch = false,
 }: {
   readonly route: Route;
   readonly context?: ReactNode;
   readonly onAskHob?: () => void;
-  readonly roleSwitch?: boolean;
 }) {
   const section = sectionOf(route);
   const mode = modeOf(route);
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-6 border-b border-hairline bg-surface-card px-page-sm sm:px-page">
+    <header className="@container flex h-14 shrink-0 items-center gap-6 border-b border-hairline bg-surface-card px-page-sm sm:px-page">
       <div className="flex shrink-0 items-center gap-2">
         <img src={markUrl} alt="" aria-hidden="true" width={26} height={26} className="block" />
-        <span className="font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading">
+        {/* The one thing on this bar that is decoration rather than a control,
+            so it is the one that gives way when the bar runs out of room —
+            measured at 118px, which is most of what the role switch costs. The
+            mark stays, so the corner still says where you are.
+
+            A container query rather than a breakpoint, and the container is the
+            bar itself: the question is whether *this row* fits its contents,
+            which is exactly what the window is not (a narrow window with a
+            short nav has room to spare). Same rule as `main`'s `@container`. */}
+        <span className="hidden font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading @5xl:inline">
           Tiny Taverns
         </span>
       </div>
@@ -271,7 +312,10 @@ function TopNav({
           allowed to shrink and the name is what absorbs it. */}
       <div className="ml-auto flex min-w-0 items-center gap-4">
         {context}
-        {roleSwitch && <RoleSwitch mode={mode} />}
+        {/* Unconditional, and that is the point — see this component's own
+            note. It is the bar's, like the nav, rather than something each
+            screen remembers to ask for. */}
+        <RoleSwitch mode={mode} />
         {/* Absent in player mode rather than present and failing. Asking Hob is
             a write — `HobThreads.start` needs `campaignWritable` — so a player
             gets the ordinary `NotFound`, and the captain settled that players do
@@ -367,7 +411,6 @@ export function AppShell({
   topBar,
   onAskHob,
   panel,
-  roleSwitch = false,
   fill = false,
   children,
 }: {
@@ -404,27 +447,6 @@ export function AppShell({
   readonly onAskHob?: () => void;
   readonly panel?: ReactNode;
   /**
-   * Offer the role switch here.
-   *
-   * **The screen decides, because the shell cannot know.** Whether there is a
-   * player side at all is a fact about this account's memberships, and only a
-   * screen that has read `GET /me/campaigns` holds it — the same reason the
-   * shell is handed `context` rather than reaching for a campaign's name.
-   *
-   * So the two campaign lists pass it and nothing else does, which is also the
-   * honest place for it: the DM's list offers it only once a `player`
-   * membership exists (an account that is a DM everywhere and a player nowhere
-   * — which is every account that predates the invitation — is not offered a
-   * mode it has nothing in), and the player's list offers it unconditionally,
-   * because that is the way back.
-   *
-   * Inside a campaign there is no switch, and that is not an omission. Role is
-   * a fact about a pair, so on a table you are already at the question is
-   * settled by the table; a pill there could only be inert or wrong, and the
-   * nav's own first item is the way out of the mode.
-   */
-  readonly roleSwitch?: boolean;
-  /**
    * Give the body the viewport's height instead of letting the page scroll.
    *
    * The prep screens scroll: they are a document, and the top bar is sticky
@@ -440,7 +462,7 @@ export function AppShell({
 }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav route={route} context={context} onAskHob={onAskHob} roleSwitch={roleSwitch} />
+      <TopNav route={route} context={context} onAskHob={onAskHob} />
       <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}

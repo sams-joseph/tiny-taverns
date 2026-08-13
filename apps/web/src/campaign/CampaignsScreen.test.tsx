@@ -10,10 +10,13 @@ import { CampaignsScreen } from "./CampaignsScreen";
  *
  * One endpoint answers both sides — `GET /me/campaigns` carries the role — so
  * what is under test is the branch: which rows each side shows, where a row
- * goes, which affordances belong to which side, and when the pill is offered at
- * all. The last one matters most for the account that predates the invitation:
- * a DM everywhere and a player nowhere must not be shown a mode with nothing in
- * it.
+ * goes, and which affordances belong to which side.
+ *
+ * The pill itself is no longer this screen's to offer — it is the shell's, for
+ * every screen, drawn off the route (see `shell/AppShell.test.tsx`). What is
+ * pinned here is that it reaches the account that needs it most: a DM
+ * everywhere and a player nowhere, which is every account that predates the
+ * invitation and the state the captain was in when the switch was invisible.
  */
 
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
@@ -117,10 +120,13 @@ describe("the campaign list", () => {
     );
   });
 
-  it("offers the switch only when there is a side to switch to", async () => {
-    // Every account that predates the invitation is a DM everywhere and a
-    // player nowhere. A pill leading to an empty list is chrome that says
-    // nothing, so it is absent until a `player` membership exists.
+  it("offers the switch to an account that is a DM everywhere and a player nowhere", async () => {
+    // The old rule hid it until a `player` membership existed, which is the
+    // state every account that predates the invitation is in — and it was
+    // circular: you could not reach player mode until you were a player, and
+    // the control that takes you there was hidden until you were one. The way
+    // in for a DM handed somebody else's link is this pill, so it is here
+    // whatever the memberships say, and `#/play` says its own empty state.
     routes.set("GET /me/campaigns", {
       status: 200,
       body: [{ campaign: mine, role: "dm", joinedAt: stamps.createdAt }],
@@ -129,8 +135,19 @@ describe("the campaign list", () => {
     renderList();
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Player" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "DM" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Player" }).getAttribute("href")).toBe("#/play");
+    expect(screen.getByRole("link", { name: "DM" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("offers it before the memberships have even loaded", async () => {
+    // It is the shell's, drawn from the route, so it does not wait on a read —
+    // which is also why no future screen has to remember to ask for it.
+    renderList();
+
+    expect(screen.getByText("Looking for your campaigns…")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Player" }).getAttribute("href")).toBe("#/play");
+    // Let the read land, so the pending update belongs to this test.
+    expect(await screen.findByText("No campaigns yet")).toBeTruthy();
   });
 
   it("offers the switch as two links once one exists, and never as state", async () => {

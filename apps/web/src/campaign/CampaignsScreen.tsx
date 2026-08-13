@@ -42,8 +42,14 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
  * screen**, so it happens here — at the only place that knows the role — rather
  * than being discovered by the screen underneath.
  *
- * This is also where the switch is offered, because this is where the answer to
- * "is there a player side at all" is in hand. See `AppShell`'s `roleSwitch`.
+ * This screen used to *offer* the switch too, on the reasoning that only a
+ * reader of `GET /me/campaigns` knows whether there is a player side at all.
+ * The reasoning was sound and the conclusion was the bug: it made the pill
+ * per-screen (so it vanished everywhere else) and conditional on already
+ * holding a `player` membership (so the account that most needs it — a DM
+ * handed a link to somebody else's table — never saw it). The switch is the
+ * shell's now, unconditionally; what this screen owes the player side is the
+ * honest empty state below. See `TopNav` in `shell/AppShell.tsx`.
  */
 
 const listMemberships = (client: TavernsClient) => client.me.campaigns();
@@ -167,18 +173,11 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
       : undefined;
   const memberships = live?.filter((row) => (player ? row.role === "player" : row.role === "dm"));
 
-  // Offered when there is a side to switch *to*, and always in player mode,
-  // which is what keeps a bookmark into `#/play` from being a dead end. An
-  // account that is a DM everywhere and a player nowhere — every account that
-  // predates the invitation — is not shown a pill leading to an empty list.
-  const roleSwitch = player || (live?.some((row) => row.role === "player") ?? false);
-
   return (
     <AppShell
       route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} />}
-      roleSwitch={roleSwitch}
       topBar={
         <TopBar
           title={player ? "Tables" : "Campaigns"}

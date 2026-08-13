@@ -1569,7 +1569,7 @@ reload, a bookmark or a shared link would land on a screen the pill says you are
 bar cannot light a section the URL is not in. It also settles what a global pill leaves open:
 _Player_ at a table you DM has no meaning, and there is no such route to be in.
 
-Five things that are decisions rather than layout:
+Six things that are decisions rather than layout:
 
 - **The player nav is the screens that exist**, which today is _Tables_ and the gallery — the same
   rule that keeps _Run_ out of the DM's row. The delivery draws _Characters_, _At the table_ and
@@ -1579,15 +1579,35 @@ Five things that are decisions rather than layout:
 - **_Ask Hob_ is absent in player mode, in the shell.** Asking is a write (`HobThreads.start` needs
   `campaignWritable`) and the captain settled that players do not talk to Hob, so the button would
   open a panel that can only apologise.
-- **The pill is offered by the screen, not by the shell** — `AppShell`'s `roleSwitch` prop — because
-  whether there _is_ a player side is a fact about this account's memberships and only a screen that
-  has read `GET /me/campaigns` holds it. The two campaign lists pass it and nothing else does. The
-  DM's list passes it **only once a `player` membership exists**, so an account that is a DM
-  everywhere and a player nowhere — every account that predates the invitation — is not shown a mode
-  with nothing in it; the player's list passes it unconditionally, which is the way back and what
-  keeps a bookmark into `#/play` from being a dead end. **Inside a campaign there is no pill**, and
-  that is not an omission: role is a fact about a pair, so at a table you are already at the question
-  is settled by the table, and the nav's first item is the way out of the mode.
+- **The pill belongs to the shell and takes no prop, and that is the fix for the bug where nobody
+  could find it.** It was `AppShell`'s `roleSwitch`, defaulting to `false`, offered by the two
+  campaign lists and by nothing else, and on the DM's list only once a `player` membership already
+  existed. Both halves failed the same way. Measured in a real browser against an account that is a
+  DM at one table and a player nowhere — **which is every account that predates the invitation** —
+  the pill was absent on all eight DM screens _including the campaign list_, and present only at
+  `#/play`, a URL you have to be told. It was also circular: you could not reach player mode until
+  you were a player, and the control that takes you there was hidden until you were one. So it is
+  drawn from `modeOf(route)` exactly as the nav is, on every screen, with **nothing to pass and
+  nothing to opt into** — a control every screen must remember is one every new screen will forget.
+  The single-role account gets the honest empty state rather than a hidden control: _Player_ lands
+  on `#/play`, which says nobody has invited you yet and that a table appears once its DM shares it.
+  That is what lets a DM handed a link to somebody else's table find it, which is the need
+  underneath. **Inside a campaign the pill is there too**, and it lands on the _list_ on each side
+  (`listFor`) rather than trying to carry the campaign across — role is a fact about a pair, so
+  there is no player screen for the table you DM, and _"the tables I sit at"_ is a sentence that is
+  true wherever it is read. The guard against a regression is the shape rather than a habit: with no
+  prop there is nothing to forget, and `shell/AppShell.test.tsx` enumerates the `Route` union as a
+  `Record<Route["screen"], Route>`, so a new screen does not compile until somebody has decided
+  which mode it is in.
+- **The bar's contents are wider than its box below about 1024px, and the wordmark and the ⌘K chip
+  are what give way.** Adding the pill cost 143px + a gap, which pushed the intrinsic width of the
+  DM campaign screen's bar from 904px to 1063px — enough to clip _Ask Hob_ on a 1024 laptop window.
+  Both are decoration (the mark stays; the shortcut is `useHobPanel`'s and works either way), so
+  they are `hidden … @5xl:inline` against a `@container` on the `header` itself — the container is
+  the bar, because the question is whether _this row_ fits, which the window does not answer.
+  Measured after: exact fit at 1440 and 1024 on every route, the pill clickable by
+  `elementFromPoint` down to 760, and 930/900 at 900px — a hair over, as it was before (904/900),
+  and the residual is the five-item DM nav rather than anything new.
 - **The `Player` badge on a campaign row is gone with the mixed list.** Under a mode every row has
   the same role, so a badge on all of them would say nothing — the same rule that gave a DM's row no
   badge in the first place.
