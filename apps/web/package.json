@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@clerk/react": "^6.12.11",
+    "@tanstack/react-router": "^1.170.27",
     "@taverns/api": "workspace:*",
     "@taverns/design-system": "workspace:*",
     "@taverns/ui": "workspace:*",

@@ -1,4 +1,5 @@
-import type { CampaignId, Creature, CreatureId, CreatureSort } from "@taverns/api";
+import type { Creature, CreatureId, CreatureSort } from "@taverns/api";
+import { useParams } from "@tanstack/react-router";
 import {
   Button,
   Input,
@@ -14,7 +15,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
-import { hrefFor, type Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CreatureCard } from "./CreatureCard";
@@ -72,13 +72,8 @@ const countOf = (n: number, narrowed: boolean): string => {
     : `${creatures} — this campaign's own, and the shared corpus`;
 };
 
-export function BestiaryScreen({
-  campaignId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly route: Route;
-}) {
+export function BestiaryScreen() {
+  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [term, setTerm] = useState("");
   const [q, setQ] = useState("");
   const [environments, setEnvironments] = useState<ReadonlyArray<string>>([]);
@@ -163,7 +158,6 @@ export function BestiaryScreen({
 
   return (
     <AppShell
-      route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
       context={
@@ -173,7 +167,7 @@ export function BestiaryScreen({
           // that is said.
           <NavContext
             name={shown.campaign.name}
-            href={hrefFor({ screen: "campaign", campaignId })}
+            link={{ to: "/campaigns/$campaignId", params: { campaignId } }}
           />
         )
       }

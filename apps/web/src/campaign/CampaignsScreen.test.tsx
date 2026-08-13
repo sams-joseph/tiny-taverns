@@ -1,8 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
+import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
-import type { Route } from "../routes";
-import { CampaignsScreen } from "./CampaignsScreen";
 
 /**
  * The way in, now that an account can be at a table it does not run **and the
@@ -65,12 +64,11 @@ const session: HostedSession = {
   fetchToken: () => Promise.resolve("session-token"),
 };
 
-const renderList = (route: Route = { screen: "campaigns" }): void => {
-  render(
-    <HostedSessionContext value={session}>
-      <CampaignsScreen route={route} />
-    </HostedSessionContext>,
-  );
+/** The DM's list by default; `/play` is the same screen answering the other question. */
+const renderList = async (path = "/campaigns"): Promise<void> => {
+  await renderAt(path, (screen) => (
+    <HostedSessionContext value={session}>{screen}</HostedSessionContext>
+  ));
 };
 
 const bothSides = [
@@ -87,7 +85,7 @@ describe("the campaign list", () => {
   it("reads the membership list, and shows only the tables you run", async () => {
     routes.set("GET /me/campaigns", { status: 200, body: bothSides });
 
-    renderList();
+    await renderList();
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     // A mode, not a filter: the table you only sit at is not this list's
@@ -99,7 +97,7 @@ describe("the campaign list", () => {
     // mixed list: under a mode every row has the same role, so a badge on all
     // of them would say nothing.
     expect(screen.getAllByText("Player")).toHaveLength(1);
-    expect(screen.getByText("Player").closest("a")?.getAttribute("href")).toBe("#/play");
+    expect(screen.getByText("Player").closest("a")?.getAttribute("href")).toBe("/#/play");
     expect(calls).toContain("GET /me/campaigns");
     expect(calls).not.toContain("GET /campaigns");
   });
@@ -110,13 +108,13 @@ describe("the campaign list", () => {
     // be answered a 404 by the first screen they ever saw.
     routes.set("GET /me/campaigns", { status: 200, body: bothSides });
 
-    renderList({ screen: "play" });
+    await renderList("/play");
 
     expect((await screen.findByText("The Hag's Bargain")).getAttribute("href")).toBe(
-      `#/play/campaigns/${theirs.id}`,
+      `/#/play/campaigns/${theirs.id}`,
     );
     expect(screen.getByRole("button", { name: /Open/ }).getAttribute("href")).toBe(
-      `#/play/campaigns/${theirs.id}`,
+      `/#/play/campaigns/${theirs.id}`,
     );
   });
 
@@ -132,20 +130,20 @@ describe("the campaign list", () => {
       body: [{ campaign: mine, role: "dm", joinedAt: stamps.createdAt }],
     });
 
-    renderList();
+    await renderList();
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Player" }).getAttribute("href")).toBe("#/play");
+    expect(screen.getByRole("link", { name: "Player" }).getAttribute("href")).toBe("/#/play");
     expect(screen.getByRole("link", { name: "DM" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("offers it before the memberships have even loaded", async () => {
     // It is the shell's, drawn from the route, so it does not wait on a read —
     // which is also why no future screen has to remember to ask for it.
-    renderList();
+    await renderList();
 
     expect(screen.getByText("Looking for your campaigns…")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Player" }).getAttribute("href")).toBe("#/play");
+    expect(screen.getByRole("link", { name: "Player" }).getAttribute("href")).toBe("/#/play");
     // Let the read land, so the pending update belongs to this test.
     expect(await screen.findByText("No campaigns yet")).toBeTruthy();
   });
@@ -153,25 +151,25 @@ describe("the campaign list", () => {
   it("offers the switch as two links once one exists, and never as state", async () => {
     routes.set("GET /me/campaigns", { status: 200, body: bothSides });
 
-    renderList();
+    await renderList();
 
     // Two links and no state: that is how a mode survives a reload, a bookmark
     // and a middle click, and how it cannot disagree with the URL.
     expect((await screen.findByRole("link", { name: "Player" })).getAttribute("href")).toBe(
-      "#/play",
+      "/#/play",
     );
     const dm = screen.getByRole("link", { name: "DM" });
-    expect(dm.getAttribute("href")).toBe("#/campaigns");
+    expect(dm.getAttribute("href")).toBe("/#/campaigns");
     expect(dm.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("keeps the switch on the player side even with nothing there, so it is not a dead end", async () => {
     routes.set("GET /me/campaigns", { status: 200, body: [] });
 
-    renderList({ screen: "play" });
+    await renderList("/play");
 
     expect((await screen.findByRole("link", { name: "DM" })).getAttribute("href")).toBe(
-      "#/campaigns",
+      "/#/campaigns",
     );
   });
 
@@ -182,7 +180,7 @@ describe("the campaign list", () => {
     // present and failing.
     routes.set("GET /me/campaigns", { status: 200, body: bothSides });
 
-    renderList({ screen: "play" });
+    await renderList("/play");
 
     expect(await screen.findByText("The Hag's Bargain")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Start a campaign" })).toBeNull();
@@ -195,7 +193,7 @@ describe("the campaign list", () => {
     // not shared it — so the copy covers both rather than guessing.
     routes.set("GET /me/campaigns", { status: 200, body: [] });
 
-    renderList({ screen: "play" });
+    await renderList("/play");
 
     expect(await screen.findByText("No table yet")).toBeTruthy();
     expect(screen.getByText(/once its DM shares it/)).toBeTruthy();
@@ -204,7 +202,7 @@ describe("the campaign list", () => {
   it("says something else when you run nothing", async () => {
     routes.set("GET /me/campaigns", { status: 200, body: [] });
 
-    renderList();
+    await renderList();
 
     expect(await screen.findByText("No campaigns yet")).toBeTruthy();
   });
@@ -212,7 +210,7 @@ describe("the campaign list", () => {
   it("renders a failed load with a way to try it again", async () => {
     routes.set("GET /me/campaigns", { status: 500, body: { message: "no" } });
 
-    renderList();
+    await renderList();
 
     expect(await screen.findByRole("button", { name: /Try again/ })).toBeTruthy();
   });

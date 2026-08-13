@@ -1,11 +1,5 @@
-import type {
-  CampaignId,
-  Combatant,
-  CombatantId,
-  EncounterRunId,
-  SessionEvent,
-  SessionId,
-} from "@taverns/api";
+import type { Combatant, CombatantId, SessionEvent } from "@taverns/api";
+import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
   Button,
@@ -24,7 +18,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
-import { hrefFor, type Route } from "../routes";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
@@ -78,17 +71,10 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target.closest("button, input, textarea, select, [role='switch'], [contenteditable='true']") !==
     null;
 
-export function RunScreen({
-  campaignId,
-  sessionId,
-  runId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly sessionId: SessionId;
-  readonly runId: EncounterRunId;
-  readonly route: Route;
-}) {
+export function RunScreen() {
+  const { campaignId, sessionId, runId } = useParams({
+    from: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
+  });
   const path = useMemo<RunPath>(
     () => ({ campaignId, sessionId, runId }),
     [campaignId, sessionId, runId],
@@ -253,7 +239,7 @@ export function RunScreen({
     refresh();
   }, [refresh]);
 
-  const backHref = hrefFor({ screen: "campaign", campaignId });
+  const back: LinkProps = { to: "/campaigns/$campaignId", params: { campaignId } };
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
   // Doubly so here: mid-fight is the last moment to hand 400px to a panel that
   // cannot answer, and Esc already means "close the panel" only while it is open.
@@ -262,7 +248,6 @@ export function RunScreen({
   return (
     <TooltipProvider>
       <AppShell
-        route={route}
         fill
         onAskHob={hob.toggle}
         panel={<Hob hob={hob} campaignId={campaignId} />}
@@ -271,7 +256,7 @@ export function RunScreen({
             // The campaign's name is the link back to prep. The rail spelled
             // that out in a row of its own; a 56px bar has no room for a second
             // line, and the name is where a DM reaches for it anyway.
-            <NavContext name={view.campaign.name} href={backHref}>
+            <NavContext name={view.campaign.name} link={back}>
               <Badge variant="secondary">Session {view.session.number}</Badge>
             </NavContext>
           )
@@ -333,7 +318,7 @@ export function RunScreen({
                 variant="secondary"
                 size="sm"
                 nativeButton={false}
-                render={<a href={backHref} />}
+                render={<Link {...back} />}
               >
                 Back to the campaign
               </Button>

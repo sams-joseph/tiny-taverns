@@ -1,9 +1,8 @@
+import { renderAt } from "../test/renderRoute";
 import { CampaignId } from "@taverns/api";
-import { render } from "@testing-library/react";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { HostedSessionContext, NO_HOSTED_SESSION } from "../auth/hostedSession";
-import { ChronicleScreen } from "./ChronicleScreen";
 
 /**
  * The Chronicle's test wire: two nights, one fight that crosses them, and a
@@ -295,10 +294,8 @@ export const installChronicleServer = (): StubServer => {
 };
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
-export const renderChronicle = (): void => {
-  render(
-    <HostedSessionContext value={NO_HOSTED_SESSION}>
-      <ChronicleScreen campaignId={campaignId} route={{ screen: "chronicle", campaignId }} />
-    </HostedSessionContext>,
-  );
+export const renderChronicle = async (): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
+    <HostedSessionContext value={NO_HOSTED_SESSION}>{screen}</HostedSessionContext>
+  ));
 };

@@ -1,7 +1,6 @@
-import { render } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
 import { campaignId, goblin, noSession } from "../campaign/campaign.fixtures";
-import { BestiaryScreen } from "./BestiaryScreen";
 
 /**
  * The bestiary's test wire.
@@ -39,10 +38,8 @@ export const bandit = {
   statBlock: { ...goblin.statBlock, meta: "Medium humanoid, chaotic neutral" },
 };
 
-export const renderBestiary = (hosted: HostedSession = noSession): void => {
-  render(
-    <HostedSessionContext value={hosted}>
-      <BestiaryScreen campaignId={campaignId} route={{ screen: "bestiary", campaignId }} />
-    </HostedSessionContext>,
-  );
+export const renderBestiary = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/bestiary`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
 };

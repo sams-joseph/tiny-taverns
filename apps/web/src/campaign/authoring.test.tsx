@@ -52,7 +52,7 @@ beforeEach(() => {
 
 /** Opens the dialog behind the top bar's one create slot. */
 const openCreate = async (label: string) => {
-  renderScreen(mintingSession());
+  await renderScreen(mintingSession());
   await screen.findByRole("heading", { name: "The Salt Road" });
   await userEvent.click(await screen.findByRole("button", { name: label }));
 };
@@ -168,7 +168,7 @@ describe("authoring an encounter", () => {
       status: 200,
       body: { ...encounter, difficulty: null },
     });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
 
@@ -197,7 +197,7 @@ describe("authoring an encounter", () => {
       status: 204,
       body: null,
     });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
     await userEvent.click(await screen.findByRole("button", { name: "Remove Goblin Boss" }));
@@ -215,7 +215,7 @@ describe("authoring an encounter", () => {
 
 describe("authoring a note", () => {
   const openNotes = async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
     await screen.findByRole("heading", { name: "The Salt Road" });
     await userEvent.click(screen.getByRole("tab", { name: "Notes" }));
   };
@@ -290,13 +290,13 @@ describe("authoring a note", () => {
  */
 describe("sharing a campaign", () => {
   const openSettings = async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
     await screen.findByRole("heading", { name: "The Salt Road" });
     await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
   };
 
   it("says on the screen itself which answer the campaign currently gives", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     // The fixture campaign is `dm`, and a DM should not have to open anything
     // — or infer it from an absent badge — to know that.
@@ -388,7 +388,7 @@ describe("sharing a campaign", () => {
 
 describe("authoring a character", () => {
   const openParty = async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
     await screen.findByRole("heading", { name: "The Salt Road" });
     await userEvent.click(screen.getByRole("tab", { name: "Party" }));
   };
@@ -523,7 +523,7 @@ describe("authoring the checklist", () => {
       status: 200,
       body: { ...prepItem, id: prepItemId, label: "Print the map" },
     });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     const field = await screen.findByRole("textbox", { name: "Add to the checklist" });
     await userEvent.type(field, "Print the map");
@@ -550,7 +550,7 @@ describe("authoring the checklist", () => {
       status: 200,
       body: { ...prepItem, label: "Reread the ambush" },
     });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Rename Reread the reeds ambush" }),
@@ -565,7 +565,7 @@ describe("authoring the checklist", () => {
   });
 
   it("keeps the old name on Escape, and sends nothing", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Rename Reread the reeds ambush" }),
@@ -587,7 +587,7 @@ describe("authoring the checklist", () => {
       status: 404,
       body: { _tag: "NotFound", resource: "prep item", id: prepItemId },
     });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Remove Reread the reeds ambush" }),
@@ -600,7 +600,7 @@ describe("authoring the checklist", () => {
 
   it("removes a line, and re-reads the checklist", async () => {
     server.routes.set(`DELETE ${prepPath}/${prepItemId}`, { status: 204, body: null });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Remove Reread the reeds ambush" }),
@@ -624,7 +624,7 @@ describe("starting a session", () => {
 
   it("runs an encounter in the session that already exists", async () => {
     server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
     await screen.findByText("Put an encounter on the table");
@@ -664,7 +664,7 @@ describe("starting a session", () => {
       body: { ...campaign, currentSessionId: sessionId },
     });
     server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
     // One past the highest that exists, which is the only thing the list is read for.
@@ -689,7 +689,7 @@ describe("starting a session", () => {
 
   it("offers the way back rather than a second fight when one is on the table", async () => {
     server.routes.set(`GET ${runsPath}`, { status: 200, body: [liveRun] });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     // Exactly one encounter is live, so the campaign says which — the
     // fixtures' `active: true`.
@@ -705,12 +705,12 @@ describe("finishing the night", () => {
 
   /** Opens the confirmation from the session card in the aside. */
   const openFinish = async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Finish the night" }));
   };
 
   it("offers the night's own ending on the screen that shows which night it is", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
     // In the aside, on a card that names the session and says where it stands —
     // so the ending is attached to the thing it ends, rather than sitting a
     // thumb's width from the two buttons a DM presses all evening.

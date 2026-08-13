@@ -28,7 +28,7 @@ const called = (method: string, fragment: string): boolean =>
 
 describe("the roster", () => {
   it("draws a member with a character and one without, and somebody invited", async () => {
-    renderParty();
+    await renderParty();
 
     expect(await screen.findByText("Ilse Vantar")).toBeInTheDocument();
     expect(screen.getByText("Playing")).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe("the roster", () => {
   });
 
   it("names the DM, and says what is true instead of counting seats", async () => {
-    renderParty();
+    await renderParty();
 
     const dm = await screen.findByText("Wren Alderby");
     // Scoped to the roster row: the shell's role switch carries a *DM* of its
@@ -58,7 +58,7 @@ describe("the roster", () => {
   });
 
   it("draws a redeemed invitation as the member it granted, and not twice", async () => {
-    renderParty();
+    await renderParty();
 
     await screen.findByText("Ilse Vantar");
     // `takenInvite` is labelled "Ilse" and is in the list the screen read.
@@ -68,7 +68,7 @@ describe("the roster", () => {
 
 describe("needs you", () => {
   it("names the member with no character and the invitation nobody has taken", async () => {
-    renderParty();
+    await renderParty();
 
     expect(
       await screen.findByText("Kofi Adeyemi has joined the table and has no character yet."),
@@ -82,7 +82,7 @@ describe("needs you", () => {
 
 describe("assigning a character", () => {
   it("gives an unassigned character to a member who has none", async () => {
-    renderParty();
+    await renderParty();
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Give Kofi Adeyemi a character" }),
@@ -95,7 +95,7 @@ describe("assigning a character", () => {
   });
 
   it("takes a character back, and re-reads the roster", async () => {
-    renderParty();
+    await renderParty();
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Change Ilse Vantar's character" }),
@@ -116,7 +116,7 @@ describe("assigning a character", () => {
       status: 200,
       body: [brannocOwned],
     });
-    renderParty();
+    await renderParty();
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Give Kofi Adeyemi a character" }),
@@ -129,7 +129,7 @@ describe("assigning a character", () => {
 
 describe("the invitations", () => {
   it("opens the one invitation surface rather than drawing a second", async () => {
-    renderParty();
+    await renderParty();
 
     await userEvent.click(await screen.findByRole("button", { name: /Invite a player/ }));
 
@@ -146,7 +146,7 @@ describe("the invitations", () => {
 describe("the states a real screen has", () => {
   it("says what a campaign with nobody at it should do next", async () => {
     server.routes = emptyParty();
-    renderParty();
+    await renderParty();
 
     expect(await screen.findByText("Nobody else at the table yet")).toBeInTheDocument();
     // The one affordance, named in the sentence and standing in the bar.
@@ -159,7 +159,7 @@ describe("the states a real screen has", () => {
 
   it("says the server did not answer, and offers to try again", async () => {
     server.transportDown = true;
-    renderParty();
+    await renderParty();
 
     expect(await screen.findByText("The server did not answer")).toBeInTheDocument();
     server.transportDown = false;
@@ -172,7 +172,7 @@ describe("the states a real screen has", () => {
       status: 404,
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     });
-    renderParty();
+    await renderParty();
 
     // The `DmActor` gate refuses a player with the ordinary `NotFound`, and the
     // screen says "Not here" rather than inventing a narrower page.
@@ -180,7 +180,7 @@ describe("the states a real screen has", () => {
   });
 
   it("reads the roster, the invitations and the characters in one round", async () => {
-    renderParty();
+    await renderParty();
     await screen.findByText("Ilse Vantar");
 
     expect(called("GET", "/members")).toBe(true);
@@ -191,7 +191,7 @@ describe("the states a real screen has", () => {
   });
 
   it("does not read anything Hob's panel would, because it is closed", async () => {
-    renderParty();
+    await renderParty();
     await screen.findByText("Ilse Vantar");
     expect(called("GET", "/hob")).toBe(false);
   });

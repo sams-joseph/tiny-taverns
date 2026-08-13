@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
+import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionContext } from "../auth/hostedSession";
 import {
@@ -9,7 +10,6 @@ import {
   mintingSession,
   readAloud,
 } from "../campaign/campaign.fixtures";
-import { PlayerCampaignScreen } from "./PlayerCampaignScreen";
 
 /**
  * A table you sit at — the first screen in the product that is not the DM's.
@@ -28,15 +28,10 @@ import { PlayerCampaignScreen } from "./PlayerCampaignScreen";
 const server = installStubServer();
 const session = mintingSession();
 
-const renderScreen = (): void => {
-  render(
-    <HostedSessionContext value={session}>
-      <PlayerCampaignScreen
-        campaignId={campaignId}
-        route={{ screen: "playCampaign", campaignId }}
-      />
-    </HostedSessionContext>,
-  );
+const renderScreen = async (): Promise<void> => {
+  await renderAt(`/play/campaigns/${campaignId}`, (screen) => (
+    <HostedSessionContext value={session}>{screen}</HostedSessionContext>
+  ));
 };
 
 const pathsCalled = (): ReadonlyArray<string> => server.calls.map((call) => call.pathname);
@@ -47,7 +42,7 @@ beforeEach(() => {
 
 describe("a table you sit at", () => {
   it("reads only what a player may read", async () => {
-    renderScreen();
+    await renderScreen();
 
     // Twice: the top nav's context, and the screen's own bar.
     expect(await screen.findAllByText(campaign.name)).toHaveLength(2);
@@ -63,7 +58,7 @@ describe("a table you sit at", () => {
   });
 
   it("shows the party and what the DM shared, and offers no way to change either", async () => {
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByText(character.name)).toBeTruthy();
     expect(screen.getByText(readAloud.title)).toBeTruthy();
@@ -77,7 +72,7 @@ describe("a table you sit at", () => {
   });
 
   it("keeps the DM's nav off the player's bar", async () => {
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByRole("link", { name: /Tables/ })).toBeTruthy();
     // The bestiary and the party are the DM's — `members.list` is gated and a
@@ -90,7 +85,7 @@ describe("a table you sit at", () => {
     // *Chronicle* is here because its screen now is, and it points at the
     // player's own route — `recap.readAsPlayer`, not the gated `recap.read`.
     expect(screen.getByRole("link", { name: /Chronicle/ }).getAttribute("href")).toBe(
-      `#/play/campaigns/${campaignId}/chronicle`,
+      `/#/play/campaigns/${campaignId}/chronicle`,
     );
   });
 
@@ -98,7 +93,7 @@ describe("a table you sit at", () => {
     server.routes.set(`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] });
     server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: [] });
 
-    renderScreen();
+    await renderScreen();
 
     // The ordinary outcome of joining: a table its DM has shared but has put
     // nothing shared inside. The master toggle and the row-level one working in
@@ -109,7 +104,7 @@ describe("a table you sit at", () => {
   it("renders a failed load with a way to try it again", async () => {
     server.routes.delete(`GET /campaigns/${campaignId}`);
 
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByRole("button", { name: /Try again/ })).toBeTruthy();
   });

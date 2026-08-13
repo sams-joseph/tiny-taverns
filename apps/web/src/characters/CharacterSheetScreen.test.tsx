@@ -20,7 +20,7 @@ const tab = async (name: string) => {
 
 describe("a character sheet", () => {
   it("draws the columns in the header and the identity card", async () => {
-    renderSheet();
+    await renderSheet();
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
 
     // `descriptor` is a generated column, drawn and never recomputed; the
@@ -45,7 +45,7 @@ describe("a character sheet", () => {
    * away" is not made here, because it is not true.
    */
   it("shows death saves as marks and offers no way to change them", async () => {
-    renderSheet();
+    await renderSheet();
     await screen.findByText("Death saves");
 
     expect(screen.getByText("1 of 3 successes")).toBeTruthy();
@@ -56,7 +56,7 @@ describe("a character sheet", () => {
   });
 
   it("draws the tabs the document fills, and only those", async () => {
-    renderSheet();
+    await renderSheet();
     await screen.findByRole("tab", { name: /Stats/ });
 
     expect(screen.getAllByRole("tab").map((node) => node.textContent)).toEqual([
@@ -69,7 +69,7 @@ describe("a character sheet", () => {
   });
 
   it("reads the document's own halves under each tab", async () => {
-    renderSheet();
+    await renderSheet();
     await screen.findByRole("tab", { name: /Stats/ });
 
     // Stats: the bestiary's `Ability`, grown a save and a proficiency mark.
@@ -110,7 +110,7 @@ describe("a character sheet", () => {
    * write anything — `ownedRowWritable` deliberately does not exist.
    */
   it("offers no control that would fail", async () => {
-    renderSheet();
+    await renderSheet();
     await screen.findByRole("tab", { name: /Stats/ });
 
     const controls = () =>
@@ -134,11 +134,11 @@ describe("a character sheet", () => {
   });
 
   it("goes back to the roster through a real link", async () => {
-    renderSheet();
+    await renderSheet();
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
 
     expect(screen.getByRole("button", { name: /Characters/ }).getAttribute("href")).toBe(
-      "#/play/characters",
+      "/#/play/characters",
     );
   });
 
@@ -148,7 +148,7 @@ describe("a character sheet", () => {
    * rather than five tabs saying it five times.
    */
   it("says an empty sheet is empty, once", async () => {
-    renderSheet(sorrelId);
+    await renderSheet(sorrelId);
     await screen.findByRole("heading", { name: "Sorrel Ash" });
 
     expect(screen.getByText("Nothing written on the sheet yet")).toBeTruthy();
@@ -164,20 +164,20 @@ describe("a character sheet", () => {
    * everything it will not show.
    */
   it("says not here for a character that is not yours", async () => {
-    renderSheet(strangerId);
+    await renderSheet(strangerId);
     await screen.findByText("Not here");
     expect(screen.getByText(/belongs to someone else/)).toBeTruthy();
   });
 
   it("names the campaign in the bar, from the membership list", async () => {
-    renderSheet(brannocId);
+    await renderSheet(brannocId);
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
     expect(screen.getByText("The Salt Road")).toBeTruthy();
   });
 
   it("says the server did not answer rather than not here", async () => {
     server.transportDown = true;
-    renderSheet();
+    await renderSheet();
 
     await screen.findByText("The server did not answer");
     expect(screen.queryByText("Not here")).toBeNull();

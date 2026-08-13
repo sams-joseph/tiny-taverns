@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaign,
   campaignId,
@@ -27,7 +27,7 @@ beforeEach(() => {
 
 describe("CampaignScreen", () => {
   it("renders the campaign the six endpoints describe", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     expect(await screen.findByRole("heading", { name: "The Salt Road" })).toBeInTheDocument();
     // The subtitle is assembled from two rows: the session's number, the
@@ -46,7 +46,7 @@ describe("CampaignScreen", () => {
   });
 
   it("sets read-aloud prose apart, in the prose face", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await screen.findByRole("tab", { name: "Notes" });
     await userEvent.click(screen.getByRole("tab", { name: "Notes" }));
@@ -59,7 +59,7 @@ describe("CampaignScreen", () => {
   });
 
   it("assembles a party row out of the separate columns", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     await screen.findByRole("tab", { name: "Party" });
     await userEvent.click(screen.getByRole("tab", { name: "Party" }));
@@ -78,7 +78,7 @@ describe("CampaignScreen", () => {
   });
 
   it("ticks a prep item off and saves it", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     const item = await screen.findByRole("checkbox", { name: "Reread the reeds ambush" });
     expect(screen.getByText("0/1")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("CampaignScreen", () => {
 
   it("puts the tick back when the save fails", async () => {
     server.routes.delete(`PATCH /campaigns/${campaignId}/sessions/${sessionId}/prep/${prepItemId}`);
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     const item = await screen.findByRole("checkbox", { name: "Reread the reeds ambush" });
     await userEvent.click(item);
@@ -108,7 +108,7 @@ describe("CampaignScreen", () => {
 
   it("fetches a fresh session token for every round of calls", async () => {
     const hosted = mintingSession();
-    renderScreen(hosted);
+    await renderScreen(hosted);
 
     const item = await screen.findByRole("checkbox", { name: "Reread the reeds ambush" });
     expect(hosted.minted()).toBe(1);
@@ -125,7 +125,7 @@ describe("CampaignScreen", () => {
 
   it("falls back to the pasted machine token when nobody is signed in", async () => {
     window.localStorage.setItem("taverns.token", "a-machine-token");
-    renderScreen();
+    await renderScreen();
 
     await screen.findByRole("heading", { name: "The Salt Road" });
     expect(server.calls[0]?.authorization).toBe("Bearer a-machine-token");
@@ -136,7 +136,7 @@ describe("CampaignScreen", () => {
       status: 401,
       body: { _tag: "Unauthorized", message: "no token" },
     });
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No credential yet");
     // The unconfigured branch: this is a normal way to run the app, so it points
@@ -146,7 +146,7 @@ describe("CampaignScreen", () => {
 
   it("tells a transport failure apart from a refusal", async () => {
     server.transportDown = true;
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The server did not answer");
     expect(screen.getByText(/pnpm db:up/)).toBeInTheDocument();
@@ -160,7 +160,7 @@ describe("CampaignScreen", () => {
     server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] });
     server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: [] });
     server.routes.set(`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] });
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     expect(await screen.findByText("No encounters yet")).toBeInTheDocument();
     // No session means no checklist to hang items on — a state, not a blank card.
@@ -174,7 +174,7 @@ describe("CampaignScreen", () => {
   });
 
   it("filters what is on screen without moving a card's own note count", async () => {
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
     const search = await screen.findByRole("textbox", { name: "Search this campaign" });
     await userEvent.type(search, "crate");
@@ -196,24 +196,25 @@ describe("CampaignScreen", () => {
     // screen's first round makes succeeds for a player, narrowed. So it would
     // draw *New encounter*, *Ask Hob* and the sharing control over rows a
     // player may see, and break only on the press.
-    const replace = vi.fn();
-    vi.spyOn(globalThis, "location", "get").mockReturnValue({
-      ...globalThis.location,
-      replace,
-    } as unknown as Location);
     server.routes.set("GET /me/campaigns", {
       status: 200,
       body: [{ campaign, role: "player", joinedAt: campaign.createdAt }],
     });
 
-    renderScreen(mintingSession());
+    await renderScreen(mintingSession());
 
+    // **The router performs the move now, and the assertion moved with it.**
+    // It used to spy on `location.replace`, which is what the screen called
+    // before there was a router; that is a check on a mechanism rather than on
+    // the outcome, and it would keep passing if the screen replaced the URL
+    // with something nobody could read. What is asserted instead is where the
+    // reader ends up — the player's own screen, on `replace` so *Back* returns
+    // them where they came from rather than here.
     await waitFor(() => {
-      expect(replace).toHaveBeenCalledWith(`#/play/campaigns/${campaignId}`);
+      expect(globalThis.location.hash).toBe(`#/play/campaigns/${campaignId}`);
     });
     // Not one control of this screen is drawn on the way.
     expect(screen.queryByRole("button", { name: "New encounter" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Party" })).not.toBeInTheDocument();
-    vi.restoreAllMocks();
   });
 });

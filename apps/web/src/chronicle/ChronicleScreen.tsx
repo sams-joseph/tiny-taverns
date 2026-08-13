@@ -1,4 +1,5 @@
-import type { CampaignId, SessionId } from "@taverns/api";
+import type { SessionId } from "@taverns/api";
+import { useParams } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
@@ -15,7 +16,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
-import { hrefFor, type Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadChronicle } from "./load";
@@ -68,13 +68,8 @@ const SCOPES: ReadonlyArray<{ readonly value: SearchScope; readonly label: strin
   { value: "character", label: "Party" },
 ];
 
-export function ChronicleScreen({
-  campaignId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly route: Route;
-}) {
+export function ChronicleScreen() {
+  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [term, setTerm] = useState("");
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
@@ -146,14 +141,13 @@ export function ChronicleScreen({
 
   return (
     <AppShell
-      route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
       context={
         view === undefined ? undefined : (
           <NavContext
             name={view.campaign.name}
-            href={hrefFor({ screen: "campaign", campaignId })}
+            link={{ to: "/campaigns/$campaignId", params: { campaignId } }}
           />
         )
       }

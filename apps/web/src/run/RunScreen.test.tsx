@@ -57,7 +57,7 @@ afterEach(() => server.drop());
 
 describe("the runner", () => {
   it("renders the initiative list in the order the server sent it", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
 
     // Not sorted here: the server's order is `initiative desc, created_at asc,
@@ -81,7 +81,7 @@ describe("the runner", () => {
       }
     }
 
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
@@ -96,7 +96,7 @@ describe("the runner", () => {
   });
 
   it("moves hit points before the round trip, and sends a delta with a request id", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
@@ -116,7 +116,7 @@ describe("the runner", () => {
 
   it("heals with a negative delta", async () => {
     reaim("/damage", { status: 200, body: { ...goblinBoss, hpCurrent: 21 } });
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
@@ -131,7 +131,7 @@ describe("the runner", () => {
 
   it("puts the hit points back when the server refuses the hit", async () => {
     reaim("/damage", { status: 404, body: { _tag: "NotFound", resource: "combatant", id: "x" } });
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
@@ -146,7 +146,7 @@ describe("the runner", () => {
   });
 
   it("advances the turn through the run's own endpoint", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByText(/Round 1 · Brannoc is up/);
 
     await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
@@ -157,7 +157,7 @@ describe("the runner", () => {
   });
 
   it("says which of the two visibility levels is in force, and never implies more", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
@@ -174,7 +174,7 @@ describe("the runner", () => {
   });
 
   it("re-reads the fight when the stream rings, rather than trusting the payload", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
     const before = server.calls.filter((call) => call.pathname.endsWith("/combatants")).length;
@@ -199,7 +199,7 @@ describe("the runner", () => {
   });
 
   it("shows the selected combatant, following the turn until told otherwise", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
@@ -226,7 +226,7 @@ describe("the runner", () => {
         server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
       }
     }
-    renderRunner();
+    await renderRunner();
 
     await screen.findByText(/came off the table/);
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
@@ -236,13 +236,13 @@ describe("the runner", () => {
 
   it("says where to get a credential rather than looking broken", async () => {
     reaim("GET", { status: 401, body: { _tag: "Unauthorized", message: "no token" } });
-    renderRunner();
+    await renderRunner();
 
     await screen.findByText("No credential yet");
   });
 
   it("keeps the fight on screen when a re-read fails, and says it may be behind", async () => {
-    renderRunner();
+    await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 

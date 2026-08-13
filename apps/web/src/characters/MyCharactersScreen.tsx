@@ -1,8 +1,7 @@
 import type { Character } from "@taverns/api";
+import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
-import type { Route } from "../routes";
 import { useApiResource } from "../api/resource";
-import { hrefFor } from "../routes";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadMyCharacters, type MyCharactersView } from "./load";
@@ -106,7 +105,9 @@ function CharacterCard({
           className="mt-auto w-full"
           size="sm"
           nativeButton={false}
-          render={<a href={hrefFor({ screen: "playCharacter", characterId: character.id })} />}
+          render={
+            <Link to="/play/characters/$characterId" params={{ characterId: character.id }} />
+          }
         >
           Open sheet
         </Button>
@@ -136,7 +137,7 @@ function NothingYet({ view }: { readonly view: MyCharactersView }) {
   );
 }
 
-export function MyCharactersScreen({ route }: { readonly route: Route }) {
+export function MyCharactersScreen() {
   // `loadMyCharacters` is module-level and closes over nothing, so it is already
   // the stable identity `useApiResource` needs — no `useCallback` to key.
   const [resource, reload] = useApiResource(loadMyCharacters);
@@ -144,7 +145,6 @@ export function MyCharactersScreen({ route }: { readonly route: Route }) {
 
   return (
     <AppShell
-      route={route}
       topBar={
         <TopBar
           title="Your characters"

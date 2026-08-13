@@ -23,7 +23,7 @@ afterEach(() => document.body.replaceChildren());
 
 describe("your characters", () => {
   it("reads the two endpoints that have no campaign in their path", async () => {
-    renderRoster();
+    await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
 
     const paths = server.calls.map((call) => call.pathname);
@@ -35,7 +35,7 @@ describe("your characters", () => {
   });
 
   it("draws every character it was given, at the table it is at", async () => {
-    renderRoster();
+    await renderRoster();
 
     const brannoc = (await screen.findByText("Brannoc Duskharrow")).closest("div[data-slot=card]");
     expect(brannoc).not.toBeNull();
@@ -53,7 +53,7 @@ describe("your characters", () => {
    * stubbed zero on the one screen whose whole job is to be true about a row.
    */
   it("omits a number the row does not have rather than showing a zero", async () => {
-    renderRoster();
+    await renderRoster();
     const sorrel = (await screen.findByText("Sorrel Ash")).closest("div[data-slot=card]");
     const pills = within(sorrel as HTMLElement);
 
@@ -63,20 +63,20 @@ describe("your characters", () => {
   });
 
   it("opens a sheet through a real link, keyed on the character", async () => {
-    renderRoster();
+    await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
 
     // The accessible role stays `button` on a `nativeButton={false}` anchor, so
     // this looks for a button and reads its href.
     const links = screen.getAllByRole("button", { name: "Open sheet" });
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      `#/play/characters/${brannocId}`,
-      `#/play/characters/${sorrelId}`,
+      `/#/play/characters/${brannocId}`,
+      `/#/play/characters/${sorrelId}`,
     ]);
   });
 
   it("offers nothing that writes", async () => {
-    renderRoster();
+    await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
 
     // A player cannot write anything yet, so no control here may claim to.
@@ -92,7 +92,7 @@ describe("your characters", () => {
 
   it("tells the two empty rosters apart", async () => {
     server.routes = noCharacters();
-    renderRoster();
+    await renderRoster();
 
     await screen.findByText("No characters yet");
     expect(screen.getByText(/Your DM writes the characters/)).toBeTruthy();
@@ -100,7 +100,7 @@ describe("your characters", () => {
 
     document.body.replaceChildren();
     server.routes = noTables();
-    renderRoster();
+    await renderRoster();
 
     await screen.findByText("No characters yet");
     expect(screen.getByText(/Nobody has invited you to a table/)).toBeTruthy();
@@ -109,7 +109,7 @@ describe("your characters", () => {
 
   it("says the server did not answer rather than an empty roster", async () => {
     server.transportDown = true;
-    renderRoster();
+    await renderRoster();
 
     await screen.findByText("The server did not answer");
     // "No characters" and "the API is down" are different sentences, and the
@@ -122,7 +122,7 @@ describe("your characters", () => {
       status: 401,
       body: { _tag: "Unauthorized", message: "no token" },
     });
-    renderRoster();
+    await renderRoster();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No credential yet");
     // A normal way to run this app, so it points at the machine token rather

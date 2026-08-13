@@ -1,12 +1,13 @@
 import type { CampaignMembership } from "@taverns/api";
+import { Link, type LinkProps } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { runApiResult, useApiResource } from "../api/resource";
 import { useCredential } from "../auth/credential";
-import { hrefFor, modeOf, type Route } from "../routes";
 import { Hob, useHobPanel } from "../hob";
+import { useMode } from "../shell/location";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 
@@ -58,19 +59,18 @@ function CampaignRow({ membership }: { readonly membership: CampaignMembership }
   const campaign = membership.campaign;
   // A mode, not a filter: the row goes to the screen for the role you are at
   // this table in, and there is exactly one such screen.
-  const open = hrefFor(
+  const open: LinkProps =
     membership.role === "player"
-      ? { screen: "playCampaign", campaignId: campaign.id }
-      : { screen: "campaign", campaignId: campaign.id },
-  );
+      ? { to: "/play/campaigns/$campaignId", params: { campaignId: campaign.id } }
+      : { to: "/campaigns/$campaignId", params: { campaignId: campaign.id } };
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
-            <a href={open} className="text-heading no-underline hover:text-link-hover">
+            <Link {...open} className="text-heading no-underline hover:text-link-hover">
               {campaign.name}
-            </a>
+            </Link>
           </CardTitle>
           {/* No `Player` badge any more, for the reason it earned one before:
               absence is what says "yours". Under a mode every row in a list has
@@ -94,7 +94,7 @@ function CampaignRow({ membership }: { readonly membership: CampaignMembership }
           size="sm"
           className="ml-auto text-link"
           nativeButton={false}
-          render={<a href={open} />}
+          render={<Link {...open} />}
         >
           Open
           <Icon name="chevron-right" size={15} />
@@ -155,7 +155,7 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
   );
 }
 
-export function CampaignsScreen({ route }: { readonly route: Route }) {
+export function CampaignsScreen() {
   const [resource, reload] = useApiResource(listMemberships);
   // Closed, against the hook's own `true` default, and its doc says why the
   // choice is the shell's: a 400px panel that opens itself is worse than a
@@ -164,8 +164,7 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
   // composer with nowhere to send.
   const hob = useHobPanel({ initialOpen: false });
 
-  const mode = modeOf(route);
-  const player = mode === "player";
+  const player = useMode() === "player";
 
   const live =
     resource.state === "ready"
@@ -175,7 +174,6 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
 
   return (
     <AppShell
-      route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} />}
       topBar={

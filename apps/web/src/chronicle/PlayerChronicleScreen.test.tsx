@@ -29,7 +29,7 @@ const paths = (): ReadonlyArray<string> => server.calls.map((call) => call.pathn
 
 describe("what it reads", () => {
   it("asks for the player's recap and never for the DM's", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     await screen.findByText("Session 12");
 
     await waitFor(() => {
@@ -46,7 +46,7 @@ describe("what it reads", () => {
   });
 
   it("costs one recap, not one per night", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     await screen.findByText("Session 11");
 
     await waitFor(() => {
@@ -70,7 +70,7 @@ describe("what it reads", () => {
  */
 describe("a fight, as a player is told it", () => {
   it("bands the monsters and gives the party their exact hit points", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     await screen.findByText("Session 11");
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
 
@@ -92,7 +92,7 @@ describe("a fight, as a player is told it", () => {
   });
 
   it("counts who ended it down from the band, not from a number it does not have", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     await screen.findByText("Session 11");
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
 
@@ -101,7 +101,7 @@ describe("a fight, as a player is told it", () => {
   });
 
   it("says so when the DM shared the fight but nobody in it", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     // Session 12's fight has no combatants a player may see.
     expect(await screen.findByText("Your DM did not share who was in it.")).toBeInTheDocument();
   });
@@ -115,7 +115,7 @@ describe("a fight, as a player is told it", () => {
  */
 describe("a fight that carried across two nights", () => {
   it("names the round it paused on, on the night it paused", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     await screen.findByText("Session 11");
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
 
@@ -127,7 +127,7 @@ describe("a fight that carried across two nights", () => {
   });
 
   it("names the same round, from the night that picked it up", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
 
     expect(await screen.findByText("Resumed from round 4 of session 11.")).toBeInTheDocument();
     expect(screen.getByText("On the table now, at round 7.")).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("a fight that carried across two nights", () => {
 
 describe("read aloud", () => {
   it("drops the fights and keeps the night's prose", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
     await screen.findByText("Session 11");
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
     await screen.findByText(/The ferryman is called Cazril/);
@@ -155,7 +155,7 @@ describe("read aloud", () => {
 describe("a table that has shared nothing", () => {
   it("is what a player who joined last night sees, and it names who decides", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/sessions`, { status: 200, body: [] });
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
 
     expect(await screen.findByText("No nights shared yet")).toBeInTheDocument();
     expect(screen.getByText(/Your DM decides which nights/)).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe("a table that has shared nothing", () => {
   });
 
   it("says where the shared record begins without claiming the rest was never played", async () => {
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
 
     expect(
       await screen.findByText("The earliest night shared with you is session 11."),
@@ -179,7 +179,7 @@ describe("a table that has shared nothing", () => {
 describe("when the load fails", () => {
   it("says so plainly, with a way to try again", async () => {
     server.routes.delete(`GET /campaigns/${campaignId}`);
-    renderPlayerChronicle();
+    await renderPlayerChronicle();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not here");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();

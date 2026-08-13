@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
 import {
@@ -8,7 +8,6 @@ import {
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
-import { PartyScreen } from "./PartyScreen";
 
 /**
  * The party screen's test wire.
@@ -211,10 +210,8 @@ export const noSession: HostedSession = {
 };
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
-export const renderParty = (): void => {
-  render(
-    <HostedSessionContext value={noSession}>
-      <PartyScreen campaignId={campaignId} route={{ screen: "party", campaignId }} />
-    </HostedSessionContext>,
-  );
+export const renderParty = async (): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
+    <HostedSessionContext value={noSession}>{screen}</HostedSessionContext>
+  ));
 };

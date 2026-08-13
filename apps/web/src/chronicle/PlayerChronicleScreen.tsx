@@ -1,9 +1,9 @@
-import type { CampaignId, SessionId } from "@taverns/api";
+import type { SessionId } from "@taverns/api";
+import { useParams } from "@tanstack/react-router";
 import { Icon, Toggle } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
-import { hrefFor, type Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerChronicle } from "./load";
@@ -44,13 +44,8 @@ import { SessionEntry } from "./SessionEntry";
  *   quote, the loot, the XP, the *Recap session N* button. None of them is a
  *   column anywhere in the product.
  */
-export function PlayerChronicleScreen({
-  campaignId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly route: Route;
-}) {
+export function PlayerChronicleScreen() {
+  const { campaignId } = useParams({ from: "/play/campaigns/$campaignId" });
   const [readAloud, setReadAloud] = useState(false);
   /**
    * Which night is open — `undefined` until somebody chooses, which resolves to
@@ -74,12 +69,11 @@ export function PlayerChronicleScreen({
 
   return (
     <AppShell
-      route={route}
       context={
         view === undefined ? undefined : (
           <NavContext
             name={view.campaign.name}
-            href={hrefFor({ screen: "playCampaign", campaignId })}
+            link={{ to: "/play/campaigns/$campaignId", params: { campaignId } }}
           />
         )
       }

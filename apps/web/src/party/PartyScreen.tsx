@@ -1,4 +1,5 @@
-import type { CampaignId, CampaignMember } from "@taverns/api";
+import type { CampaignMember } from "@taverns/api";
+import { useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { DateTime } from "effect";
 import { useCallback, useMemo, useState } from "react";
@@ -6,7 +7,6 @@ import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { InviteDialog } from "../campaign/InviteDialog";
 import { Hob, useHobPanel } from "../hob";
-import { hrefFor, type Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { AssignDialog } from "./AssignDialog";
@@ -48,13 +48,8 @@ import { RosterCard } from "./RosterCard";
  * and every line of it derives from rows that exist. See `needsOf`.
  */
 
-export function PartyScreen({
-  campaignId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly route: Route;
-}) {
+export function PartyScreen() {
+  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   // Memoised on the id alone: its identity is what tells `useApiResource` to
   // load again, so an unmemoised closure here would load forever.
   const load = useCallback((client: TavernsClient) => loadParty(campaignId)(client), [campaignId]);
@@ -90,14 +85,13 @@ export function PartyScreen({
 
   return (
     <AppShell
-      route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
       context={
         view === undefined ? undefined : (
           <NavContext
             name={view.campaign.name}
-            href={hrefFor({ screen: "campaign", campaignId })}
+            link={{ to: "/campaigns/$campaignId", params: { campaignId } }}
           />
         )
       }

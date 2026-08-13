@@ -1,11 +1,9 @@
+import { renderAt } from "../test/renderRoute";
 import { CharacterId } from "@taverns/api";
-import { render } from "@testing-library/react";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
 import { campaign, character, type Answer, type Call } from "../campaign/campaign.fixtures";
-import { CharacterSheetScreen } from "./CharacterSheetScreen";
-import { MyCharactersScreen } from "./MyCharactersScreen";
 
 /**
  * The character screens' test wire.
@@ -245,21 +243,17 @@ export const noSession: HostedSession = {
 };
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
-export const renderRoster = (hosted: HostedSession = noSession): void => {
-  render(
-    <HostedSessionContext value={hosted}>
-      <MyCharactersScreen route={{ screen: "playCharacters" }} />
-    </HostedSessionContext>,
-  );
+export const renderRoster = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt("/play/characters", (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
 };
 
-export const renderSheet = (characterId = brannocId, hosted: HostedSession = noSession): void => {
-  render(
-    <HostedSessionContext value={hosted}>
-      <CharacterSheetScreen
-        characterId={characterId}
-        route={{ screen: "playCharacter", characterId }}
-      />
-    </HostedSessionContext>,
-  );
+export const renderSheet = async (
+  characterId = brannocId,
+  hosted: HostedSession = noSession,
+): Promise<void> => {
+  await renderAt(`/play/characters/${characterId}`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
 };

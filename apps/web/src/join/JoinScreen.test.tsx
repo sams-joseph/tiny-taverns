@@ -1,8 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
-import { JoinScreen } from "./JoinScreen";
 
 /**
  * Following an invitation — the first screen a stranger sees.
@@ -88,12 +88,10 @@ const signedOut: HostedSession = {
   fetchToken: () => Promise.resolve(undefined),
 };
 
-const renderJoin = (hosted: HostedSession = signedIn): void => {
-  render(
-    <HostedSessionContext value={hosted}>
-      <JoinScreen token={TOKEN} route={{ screen: "join", token: TOKEN }} />
-    </HostedSessionContext>,
-  );
+const renderJoin = async (hosted: HostedSession = signedIn): Promise<void> => {
+  await renderAt(`/join/${TOKEN}`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
 };
 
 beforeEach(() => {
@@ -105,7 +103,7 @@ describe("following an invitation", () => {
   it("names the campaign and the DM, and keeps the token out of the URL", async () => {
     routes.set("POST /invites/preview", { status: 200, body: preview });
 
-    renderJoin();
+    await renderJoin();
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.getByText("Ada")).toBeTruthy();
@@ -126,7 +124,7 @@ describe("following an invitation", () => {
       body: { campaignId, campaignName: "The Salt Road", shared: false },
     });
 
-    renderJoin();
+    await renderJoin();
     await userEvent.click(await screen.findByRole("button", { name: "Take your seat" }));
 
     expect(await screen.findByText(/You are at The Salt Road/)).toBeTruthy();
@@ -146,7 +144,7 @@ describe("following an invitation", () => {
       body: { campaignId, campaignName: "The Salt Road", shared: true },
     });
 
-    renderJoin();
+    await renderJoin();
     await userEvent.click(await screen.findByRole("button", { name: "Take your seat" }));
 
     // A real `<a href>` wearing the button recipe — `nativeButton={false}` is
@@ -157,7 +155,7 @@ describe("following an invitation", () => {
     // membership; the DM's campaign screen composes `runs.list`, which is behind
     // the `DmActor` gate, so `#/campaigns/:c` would have answered a brand new
     // player a 404 on the first thing they pressed in the product.
-    expect(open.getAttribute("href")).toBe(`#/play/campaigns/${campaignId}`);
+    expect(open.getAttribute("href")).toBe(`/#/play/campaigns/${campaignId}`);
   });
 
   it("gives every dead link the same sentence", async () => {
@@ -167,7 +165,7 @@ describe("following an invitation", () => {
     // says what to do.
     routes.set("POST /invites/preview", notFound);
 
-    renderJoin();
+    await renderJoin();
 
     expect(await screen.findByText("This invitation is no longer good")).toBeTruthy();
     expect(screen.getByText(/Ask whoever sent it for a fresh one/)).toBeTruthy();
@@ -177,7 +175,7 @@ describe("following an invitation", () => {
   it("asks a signed-out reader to sign in rather than offering a seat it cannot give", async () => {
     routes.set("POST /invites/preview", { status: 200, body: preview });
 
-    renderJoin(signedOut);
+    await renderJoin(signedOut);
 
     // The campaign is still named — that is the point of previewing before
     // sign-in — but there is nothing to press until there is an account to

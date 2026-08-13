@@ -1,4 +1,5 @@
-import type { Character, CharacterId, InventoryItem, Trait } from "@taverns/api";
+import type { Character, InventoryItem, Trait } from "@taverns/api";
+import { Link, useParams } from "@tanstack/react-router";
 import {
   Badge,
   Button,
@@ -11,7 +12,6 @@ import {
   TabsTrigger,
 } from "@taverns/ui";
 import { useApiResource } from "../api/resource";
-import { hrefFor, type Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadMyCharacters } from "./load";
@@ -590,13 +590,8 @@ function IdentityColumn({ character }: { readonly character: Character }) {
   );
 }
 
-export function CharacterSheetScreen({
-  characterId,
-  route,
-}: {
-  readonly characterId: CharacterId;
-  readonly route: Route;
-}) {
+export function CharacterSheetScreen() {
+  const { characterId } = useParams({ from: "/play/characters/$characterId" });
   /**
    * The roster's own load, reused whole — **and that is the point rather than a
    * shortcut.** `GET /me/characters` composes `ownRowReadable`, which is the
@@ -617,7 +612,6 @@ export function CharacterSheetScreen({
 
   return (
     <AppShell
-      route={route}
       context={campaignName === undefined ? undefined : <NavContext name={campaignName} />}
       topBar={
         <TopBar
@@ -636,7 +630,7 @@ export function CharacterSheetScreen({
             variant="secondary"
             size="sm"
             nativeButton={false}
-            render={<a href={hrefFor({ screen: "playCharacters" })} />}
+            render={<Link to="/play/characters" />}
           >
             <Icon name="chevron-left" size={14} />
             Characters

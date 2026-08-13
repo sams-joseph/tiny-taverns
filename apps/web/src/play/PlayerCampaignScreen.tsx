@@ -1,9 +1,9 @@
-import type { CampaignId, Character, Note } from "@taverns/api";
+import type { Character, Note } from "@taverns/api";
+import { useParams } from "@tanstack/react-router";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { useCallback } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
-import type { Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
@@ -113,13 +113,8 @@ function Section({
   );
 }
 
-export function PlayerCampaignScreen({
-  campaignId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly route: Route;
-}) {
+export function PlayerCampaignScreen() {
+  const { campaignId } = useParams({ from: "/play/campaigns/$campaignId" });
   const load = useCallback(
     (client: TavernsClient) => loadPlayerCampaignView(campaignId)(client),
     [campaignId],
@@ -131,7 +126,6 @@ export function PlayerCampaignScreen({
 
   return (
     <AppShell
-      route={route}
       context={view === undefined ? undefined : <NavContext name={view.campaign.name} />}
       topBar={
         <TopBar

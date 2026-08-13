@@ -1,10 +1,8 @@
-import { CampaignId } from "@taverns/api";
-import { render, screen, waitFor } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
-import { CampaignScreen } from "../campaign/CampaignScreen";
 import {
   brannoc,
   campaign,
@@ -76,13 +74,10 @@ const noSession: HostedSession = {
   fetchToken: () => Promise.resolve(undefined),
 };
 
-const renderCampaign = (): void => {
-  const id = Schema.decodeSync(CampaignId)(campaignId);
-  render(
-    <HostedSessionContext value={noSession}>
-      <CampaignScreen campaignId={id} route={{ screen: "campaign", campaignId: id }} />
-    </HostedSessionContext>,
-  );
+const renderCampaign = async (): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}`, (screen) => (
+    <HostedSessionContext value={noSession}>{screen}</HostedSessionContext>
+  ));
 };
 
 /** Every write the screen made against the session, in order. */
@@ -110,7 +105,7 @@ describe("finishing a session", () => {
   it("is the same write from the fight dialog and from the campaign view", async () => {
     // --- Through the fight: End, with "Finish session 12 too" switched on.
     alsoAnswerTheCampaignView(false);
-    renderRunner();
+    await renderRunner();
     await userEvent.click(await screen.findByRole("button", { name: "End" }));
     await screen.findByText("End this fight?");
     // Base UI puts the `id` on the hidden input; the switch is the visible span.
@@ -122,7 +117,7 @@ describe("finishing a session", () => {
     // --- Through the campaign view, on a night whose fight is already over.
     server.reset();
     alsoAnswerTheCampaignView(true);
-    renderCampaign();
+    await renderCampaign();
     await userEvent.click(await screen.findByRole("button", { name: "Finish the night" }));
     await screen.findByText("Finish session 12?");
     await userEvent.click(screen.getByRole("button", { name: "Finish the night" }));
@@ -142,7 +137,7 @@ describe("finishing a session", () => {
     // and re-stamping would move the end time to now for no reason.
     alsoAnswerTheCampaignView(true);
     server.routes.set(`GET ${sessionPath}`, { status: 200, body: finished });
-    renderRunner();
+    await renderRunner();
 
     await userEvent.click(await screen.findByRole("button", { name: "End" }));
     await screen.findByText("End this fight?");
@@ -163,7 +158,7 @@ describe("finishing a session", () => {
     // table as `carried` is the server's half of the transaction, and a client
     // that also ended it would be writing `resolved` over the answer.
     alsoAnswerTheCampaignView(false);
-    renderCampaign();
+    await renderCampaign();
 
     await userEvent.click(await screen.findByRole("button", { name: "Finish the night" }));
     await screen.findByText("Finish session 12?");

@@ -1,4 +1,5 @@
 import type { InviteRedeemed } from "@taverns/api";
+import { Link, useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
@@ -10,7 +11,6 @@ import { useHostedSession } from "../auth/hostedSession";
 import { publishableKey } from "../auth/config";
 import { SignInSurface } from "../auth/SignInSurface";
 import { dayOf } from "../chronicle/format";
-import { hrefFor, type Route } from "../routes";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { SaveFailure } from "../ui/form";
@@ -69,7 +69,10 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
               // gate — so this link used to hand a brand new player a 404 on
               // the very first thing they pressed.
               render={
-                <a href={hrefFor({ screen: "playCampaign", campaignId: redeemed.campaignId })} />
+                <Link
+                  to="/play/campaigns/$campaignId"
+                  params={{ campaignId: redeemed.campaignId }}
+                />
               }
             >
               Open {redeemed.campaignName}
@@ -86,11 +89,7 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
               The DM has not shared this table yet, so there is nothing to read in it. Your seat is
               kept — it fills in the moment they share it.
             </p>
-            <Button
-              variant="secondary"
-              nativeButton={false}
-              render={<a href={hrefFor({ screen: "play" })} />}
-            >
+            <Button variant="secondary" nativeButton={false} render={<Link to="/play" />}>
               Your tables
               <Icon name="chevron-right" size={15} />
             </Button>
@@ -101,7 +100,8 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
   );
 }
 
-export function JoinScreen({ token, route }: { readonly token: string; readonly route: Route }) {
+export function JoinScreen() {
+  const { token } = useParams({ from: "/join/$token" });
   // Memoised on the token alone: its identity is what tells `useApiResource` to
   // load again, so an inline closure would load forever.
   const load = useCallback(
@@ -128,7 +128,6 @@ export function JoinScreen({ token, route }: { readonly token: string; readonly 
 
   return (
     <AppShell
-      route={route}
       topBar={<TopBar title="An invitation" subtitle="Somebody has asked you to their table." />}
     >
       <div className="flex max-w-3xl flex-col gap-6">

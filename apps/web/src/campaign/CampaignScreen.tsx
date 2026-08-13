@@ -1,9 +1,9 @@
-import type { CampaignId, Character, Encounter, EncounterId, Note } from "@taverns/api";
+import type { Character, Encounter, EncounterId, Note } from "@taverns/api";
+import { useNavigate, useParams, type LinkProps } from "@tanstack/react-router";
 import { Badge, Button, Icon, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@taverns/ui";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
-import { hrefFor, useRoute, type Route } from "../routes";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
@@ -243,13 +243,8 @@ function CampaignBody({
   );
 }
 
-export function CampaignScreen({
-  campaignId,
-  route,
-}: {
-  readonly campaignId: CampaignId;
-  readonly route: Route;
-}) {
+export function CampaignScreen() {
+  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   // Memoised on the id alone: its identity is what tells `useApiResource` to
   // load again, so an unmemoised closure here would load forever.
   const load = useCallback(
@@ -259,7 +254,7 @@ export function CampaignScreen({
   const [resource, reload] = useApiResource(load);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
   const hob = useHobPanel({ initialOpen: false });
-  const [, navigate] = useRoute();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("encounters");
   const [editing, setEditing] = useState<Editing | undefined>();
@@ -285,9 +280,13 @@ export function CampaignScreen({
   const wrongSide = loaded?.role === "player";
   useEffect(() => {
     if (wrongSide) {
-      globalThis.location.replace(hrefFor({ screen: "playCampaign", campaignId }));
+      void navigate({
+        to: "/play/campaigns/$campaignId",
+        params: { campaignId },
+        replace: true,
+      });
     }
-  }, [wrongSide, campaignId]);
+  }, [wrongSide, campaignId, navigate]);
 
   // Withheld for the frame before the hash lands, so none of this screen's
   // chrome is ever drawn for somebody it does not belong to.
@@ -306,25 +305,30 @@ export function CampaignScreen({
    * own card, because the DM who reopens this screen mid-session is looking for
    * exactly one thing.
    */
-  const live =
-    view?.run !== undefined && view.session !== undefined
-      ? hrefFor({
-          screen: "run",
-          campaignId,
-          sessionId: view.session.id,
-          runId: view.run.id,
-        })
-      : undefined;
+  //
+  // Memoised because it is an object now rather than the href string it used
+  // to be: a fresh literal every render would give `run` a fresh identity
+  // every render, and `run` is handed to the encounter grid.
+  const live: LinkProps | undefined = useMemo(
+    () =>
+      view?.run !== undefined && view.session !== undefined
+        ? {
+            to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
+            params: { campaignId, sessionId: view.session.id, runId: view.run.id },
+          }
+        : undefined,
+    [campaignId, view?.run, view?.session],
+  );
 
   const run = useCallback(
     (encounterId: EncounterId | undefined) => {
       if (live !== undefined) {
-        globalThis.location.hash = live;
+        void navigate(live);
         return;
       }
       setStarting({ encounterId });
     },
-    [live],
+    [live, navigate],
   );
 
   /** The top bar's one create slot, named for whichever tab is open. */
@@ -337,7 +341,6 @@ export function CampaignScreen({
 
   return (
     <AppShell
-      route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
       context={
@@ -481,7 +484,10 @@ export function CampaignScreen({
           onClose={() => setStarting(undefined)}
           onStarted={(sessionId, runId) => {
             setStarting(undefined);
-            navigate({ screen: "run", campaignId, sessionId, runId });
+            void navigate({
+              to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
+              params: { campaignId, sessionId, runId },
+            });
           }}
         />
       )}

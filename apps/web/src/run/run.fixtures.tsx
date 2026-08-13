@@ -1,5 +1,5 @@
-import { CampaignId, EncounterRunId, SessionId } from "@taverns/api";
-import { render } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
+import { EncounterRunId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
@@ -17,7 +17,6 @@ import {
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
-import { RunScreen } from "./RunScreen";
 
 /**
  * The runner's test wire: the campaign fixtures, plus a `fetch` stub that can
@@ -238,17 +237,10 @@ const noSession: HostedSession = {
  * `@testing-library/dom`, which pnpm's isolated layout puts out of reach of an
  * exported signature — the same TS2742 the server hits with `@clerk/shared`.
  */
-export const renderRunner = (): void => {
-  render(
-    <HostedSessionContext value={noSession}>
-      <RunScreen
-        campaignId={campaignId as CampaignId}
-        sessionId={sessionId}
-        runId={runId}
-        route={{ screen: "run", campaignId: campaignId as CampaignId, sessionId, runId }}
-      />
-    </HostedSessionContext>,
-  );
+export const renderRunner = async (): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`, (screen) => (
+    <HostedSessionContext value={noSession}>{screen}</HostedSessionContext>
+  ));
 };
 
 /** The JSON body of the first call matching a method and a path fragment. */

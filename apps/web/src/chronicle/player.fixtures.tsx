@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
 import { HostedSessionContext, NO_HOSTED_SESSION } from "../auth/hostedSession";
 import {
@@ -14,7 +14,6 @@ import {
   type Answer,
   type Call,
 } from "./chronicle.fixtures";
-import { PlayerChronicleScreen } from "./PlayerChronicleScreen";
 
 /**
  * The player Chronicle's wire — **the DM's fixtures, narrowed exactly where the
@@ -181,13 +180,8 @@ export const installPlayerChronicleServer = (): StubServer => {
 };
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
-export const renderPlayerChronicle = (): void => {
-  render(
-    <HostedSessionContext value={NO_HOSTED_SESSION}>
-      <PlayerChronicleScreen
-        campaignId={campaignId}
-        route={{ screen: "playChronicle", campaignId }}
-      />
-    </HostedSessionContext>,
-  );
+export const renderPlayerChronicle = async (): Promise<void> => {
+  await renderAt(`/play/campaigns/${campaignId}/chronicle`, (screen) => (
+    <HostedSessionContext value={NO_HOSTED_SESSION}>{screen}</HostedSessionContext>
+  ));
 };

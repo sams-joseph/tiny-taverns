@@ -1,9 +1,11 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
+import { Link, type LinkProps } from "@tanstack/react-router";
+import type { CampaignId } from "@taverns/api";
 import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { SignInSurface } from "../auth/SignInSurface";
 import { HobRegion } from "../hob/HobDock";
-import { hrefFor, listFor, modeOf, type Mode, type Route } from "../routes";
+import { useCampaignId, useMode, useSection, type Mode, type Section } from "./location";
 
 /**
  * The fixed shell: a 56px top nav, a per-screen bar under it, a scrolling body.
@@ -28,7 +30,17 @@ import { hrefFor, listFor, modeOf, type Mode, type Route } from "../routes";
 interface NavItem {
   readonly label: string;
   readonly icon: IconName;
-  readonly route: Route;
+  /**
+   * Where it goes, and **which section it is**, as one thing.
+   *
+   * `link` is `LinkProps` rather than a hand-built href, so a nav item pointing
+   * at a route that does not exist — or one whose params it forgot — fails to
+   * compile. That is most of what moving to a real router buys, and the nav is
+   * where it matters: the items are built from a route that may or may not name
+   * a campaign, which is exactly the shape a string template gets wrong.
+   */
+  readonly link: LinkProps;
+  readonly section: Section;
 }
 
 /**
@@ -53,13 +65,11 @@ interface NavItem {
  * `Party` with `users` (`AppShell.jsx`'s one new line each), which is the order
  * kept here.
  */
-const navFor = (route: Route): ReadonlyArray<NavItem> => {
-  const campaignId = "campaignId" in route ? route.campaignId : undefined;
-
+const navFor = (mode: Mode, campaignId: CampaignId | undefined): ReadonlyArray<NavItem> => {
   /**
-   * **The nav is a function of the route and the mode, and the mode is read off
-   * the route** (`modeOf`) rather than passed in beside it — one answer, so the
-   * bar can never light a section the URL is not in.
+   * **The nav is a function of the route and the mode, and both are read off
+   * the router** (`useMode`, `useCampaignId`) rather than passed in beside it —
+   * one answer, so the bar can never light a section the URL is not in.
    *
    * The delivery's player nav is *Characters*, *At the table* and *Chronicle*.
    * **Two of the three are built and are here**; *At the table* is not, and the
@@ -84,82 +94,61 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
    * a roster is *nothing* rather than a narrower list (`AGENTS.md`). A control
    * that exists and then errors is worse than one that is not there.
    */
-  if (modeOf(route) === "player") {
+  if (mode === "player") {
     return [
-      { label: "Tables", icon: "book-open", route: { screen: "play" } },
-      { label: "Characters", icon: "user", route: { screen: "playCharacters" } },
+      { label: "Tables", icon: "book-open", link: { to: "/play" }, section: "play" },
+      {
+        label: "Characters",
+        icon: "user",
+        link: { to: "/play/characters" },
+        section: "playCharacters",
+      },
       ...(campaignId === undefined
         ? []
         : [
             {
               label: "Chronicle",
               icon: "scroll-text",
-              route: { screen: "playChronicle", campaignId },
+              link: { to: "/play/campaigns/$campaignId/chronicle", params: { campaignId } },
+              section: "playChronicle",
             } satisfies NavItem,
           ]),
-      { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
+      {
+        label: "Components",
+        icon: "panel-left",
+        link: { to: "/gallery" },
+        section: "gallery",
+      },
     ];
   }
 
   return [
-    { label: "Campaigns", icon: "book-open", route: { screen: "campaigns" } },
+    { label: "Campaigns", icon: "book-open", link: { to: "/campaigns" }, section: "campaigns" },
     ...(campaignId === undefined
       ? []
       : [
           {
             label: "Bestiary",
             icon: "footprints",
-            route: { screen: "bestiary", campaignId },
+            link: { to: "/campaigns/$campaignId/bestiary", params: { campaignId } },
+            section: "bestiary",
           } satisfies NavItem,
           {
             label: "Chronicle",
             icon: "scroll-text",
-            route: { screen: "chronicle", campaignId },
+            link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
+            section: "chronicle",
           } satisfies NavItem,
           {
             label: "Party",
             icon: "users",
-            route: { screen: "party", campaignId },
+            link: { to: "/campaigns/$campaignId/party", params: { campaignId } },
+            section: "party",
           } satisfies NavItem,
         ]),
-    { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
+    { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
   ];
 };
-
-/**
- * Which nav item is lit.
- *
- * A campaign and the fight inside it are both *within* Campaigns, so those
- * routes light the same item — the underline says which part of the app you are
- * in, not which URL you are at, and an unlit nav on a campaign page reads as a
- * bug. The bestiary and the Chronicle are their own sections: they are screens
- * you go *to* from a campaign rather than views of one.
- *
- * **The second axis is the mode**, and it is the same rule one level up: a
- * player's campaign is *within* their tables, so `#/play` and
- * `#/play/campaigns/:c` light one item. There is no route that is both, so the
- * two axes cannot fight.
- *
- * `playChronicle` is its own section like `chronicle` is, and is deliberately
- * **not** folded into it: the two are different screens over different
- * endpoints, and one section shared between them would light a nav item that
- * points somewhere the reader cannot go.
- *
- * A character sheet is *within* the roster it was opened from, so both light
- * `Characters` — the same containment `run` has with `campaigns`.
- */
-const sectionOf = (route: Route): Route["screen"] =>
-  route.screen === "gallery" ||
-  route.screen === "bestiary" ||
-  route.screen === "chronicle" ||
-  route.screen === "playChronicle" ||
-  route.screen === "party"
-    ? route.screen
-    : route.screen === "playCharacters" || route.screen === "playCharacter"
-      ? "playCharacters"
-      : modeOf(route) === "player"
-        ? "play"
-        : "campaigns";
 
 /**
  * A nav item, wearing `Tabs`' own recipe.
@@ -170,14 +159,35 @@ const sectionOf = (route: Route): Route["screen"] =>
  * this — reproducing the class list here would be a second copy to keep in step
  * with the designers.
  *
- * A real `<a href="#/…">`, so a section is middle-clickable and copyable, and
- * `data-active` rather than a hand-rolled active class: it is the attribute Base
- * UI's own tab sets, and the same one the recipe's variants key on.
+ * `Link` renders a real `<a href="#/…">`, so a section is still middle-clickable
+ * and copyable — which is the property the hand-built anchors were here for, and
+ * it survives the move because the href is what the router builds rather than
+ * what a template guessed.
+ *
+ * **The active state is `item.section`, not `Link`'s own `activeProps`**, and
+ * that is deliberate: a nav item is lit for a whole *part of the app* — a fight
+ * lights Campaigns, a character sheet lights Characters — which is a broader
+ * question than whether this exact URL is the current one. `data-active` rather
+ * than a hand-rolled class: it is the attribute Base UI's own tab sets, and the
+ * same one the recipe's variants key on.
  */
 function NavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
   return (
-    <a
-      href={hrefFor(item.route)}
+    <Link
+      {...item.link}
+      // **`Link` marks itself active on a prefix by default, and this bar's
+      // question is not that one.** A nav item is lit for a whole *part* of the
+      // app — a fight lights Campaigns, a character sheet lights Characters —
+      // which is what `item.section` answers; `Link` would additionally light
+      // *Tables* while a sheet is open, because `/play` is a prefix of the URL.
+      // `exact` narrows its notion of active to "this is the page", which is
+      // always a case `item.section` also calls active, so the two agree
+      // instead of fighting. That matters because `Link` spreads its own
+      // `aria-current="page"` **after** everything below and there is no way to
+      // turn that off; `activeProps={{}}` only stops it appending a stray
+      // `active` class to the recipe's.
+      activeOptions={{ exact: true }}
+      activeProps={{}}
       aria-current={active ? "page" : undefined}
       data-active={active ? "" : undefined}
       // `h-auto` so the item stretches to the bar rather than keeping the tab
@@ -186,7 +196,7 @@ function NavLink({ item, active }: { readonly item: NavItem; readonly active: bo
     >
       <Icon name={item.icon} size={16} className={active ? "text-verdigris-300" : undefined} />
       {item.label}
-    </a>
+    </Link>
   );
 }
 
@@ -217,9 +227,14 @@ function NavLink({ item, active }: { readonly item: NavItem; readonly active: bo
  */
 function RoleSwitch({ mode }: { readonly mode: Mode }) {
   const options = [
-    { id: "dm", icon: "crown", label: "DM" },
-    { id: "player", icon: "user", label: "Player" },
-  ] as const satisfies ReadonlyArray<{ id: Mode; icon: IconName; label: string }>;
+    { id: "dm", icon: "crown", label: "DM", link: { to: "/campaigns" } },
+    { id: "player", icon: "user", label: "Player", link: { to: "/play" } },
+  ] as const satisfies ReadonlyArray<{
+    id: Mode;
+    icon: IconName;
+    label: string;
+    link: LinkProps;
+  }>;
 
   return (
     <div
@@ -229,9 +244,15 @@ function RoleSwitch({ mode }: { readonly mode: Mode }) {
       {options.map((option) => {
         const on = option.id === mode;
         return (
-          <a
+          <Link
             key={option.id}
-            href={hrefFor(listFor(option.id))}
+            {...option.link}
+            // Exact, and no active class, for the reasons `NavLink` gives.
+            // `aria-pressed` is what says which side is on here: this is a
+            // toggle wearing a link's clothes, and the mode it names is true
+            // across a whole half of the app rather than at one URL.
+            activeOptions={{ exact: true }}
+            activeProps={{}}
             aria-pressed={on}
             className={cn(
               "flex h-6.5 items-center gap-1.5 rounded-pill px-2.5 text-caption leading-none font-semibold whitespace-nowrap transition-control",
@@ -242,7 +263,7 @@ function RoleSwitch({ mode }: { readonly mode: Mode }) {
           >
             <Icon name={option.icon} size={13} />
             {option.label}
-          </a>
+          </Link>
         );
       })}
     </div>
@@ -302,18 +323,20 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
  * table appears once its DM shares it. A DM who has been handed a link to
  * somebody else's table can therefore find it — the actual need underneath —
  * without being told a URL.
+ *
+ * **Where you are is read from the router, not handed down.** There is no
+ * `route` prop to pass and none to get wrong; see `shell/location.ts`.
  */
 function TopNav({
-  route,
   context,
   onAskHob,
 }: {
-  readonly route: Route;
   readonly context?: ReactNode;
   readonly onAskHob?: () => void;
 }) {
-  const section = sectionOf(route);
-  const mode = modeOf(route);
+  const section = useSection();
+  const mode = useMode();
+  const campaignId = useCampaignId();
 
   return (
     <header className="@container flex h-14 shrink-0 items-center gap-6 border-b border-hairline bg-surface-card px-page-sm sm:px-page">
@@ -334,8 +357,8 @@ function TopNav({
       </div>
 
       <nav aria-label="Sections" className="flex h-full items-stretch">
-        {navFor(route).map((item) => (
-          <NavLink key={item.label} item={item} active={item.route.screen === section} />
+        {navFor(mode, campaignId).map((item) => (
+          <NavLink key={item.label} item={item} active={item.section === section} />
         ))}
       </nav>
 
@@ -368,18 +391,19 @@ function TopNav({
  * The top nav's right-hand pair: the campaign you are in, and its badges.
  *
  * Shared rather than composed twice, because the campaign view and the runner
- * both put the same thing there and the delivery draws it once. `href` is for
+ * both put the same thing there and the delivery draws it once. `link` is for
  * the screen that is *inside* the campaign — from a fight, the campaign's name
  * is the way back to prep, which is the one thing the rail used to carry that
- * this row would otherwise have dropped.
+ * this row would otherwise have dropped. It is `LinkProps` rather than a string
+ * so the way back cannot point at a route that does not exist.
  */
 export function NavContext({
   name,
-  href,
+  link,
   children,
 }: {
   readonly name: string;
-  readonly href?: string;
+  readonly link?: LinkProps;
   readonly children?: ReactNode;
 }) {
   // `truncate`, not `whitespace-nowrap`: this is the one part of the bar that is
@@ -388,12 +412,12 @@ export function NavContext({
   const label = "truncate text-label leading-snug font-semibold text-foreground";
   return (
     <div className="flex min-w-0 items-center gap-2">
-      {href === undefined ? (
+      {link === undefined ? (
         <span className={label}>{name}</span>
       ) : (
-        <a href={href} className={cn(label, "hover:text-link-hover")}>
+        <Link {...link} className={cn(label, "hover:text-link-hover")}>
           {name}
-        </a>
+        </Link>
       )}
       {children}
     </div>
@@ -438,7 +462,6 @@ export function TopBar({
 }
 
 export function AppShell({
-  route,
   context,
   topBar,
   onAskHob,
@@ -446,7 +469,6 @@ export function AppShell({
   fill = false,
   children,
 }: {
-  readonly route: Route;
   /**
    * What you are in, pushed right in the top nav: the campaign's name and its
    * session badge. The screen supplies it because the shell has no way to know
@@ -494,7 +516,7 @@ export function AppShell({
 }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav route={route} context={context} onAskHob={onAskHob} />
+      <TopNav context={context} onAskHob={onAskHob} />
       <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}

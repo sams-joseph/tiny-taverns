@@ -28,7 +28,7 @@ const requested = (fragment: string): boolean =>
 
 describe("the spine", () => {
   it("lists every night, newest first, and opens the newest", async () => {
-    renderChronicle();
+    await renderChronicle();
 
     await screen.findByText("Session 12");
     expect(screen.getByText("Session 11")).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe("the spine", () => {
   });
 
   it("reads a night's recap when its card is opened", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 11");
 
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
@@ -53,7 +53,7 @@ describe("the spine", () => {
   });
 
   it("says where the record begins, without offering to import what is missing", async () => {
-    renderChronicle();
+    await renderChronicle();
     expect(
       await screen.findByText(/The record starts at session 11\. Sessions 1–10 are not in it\./),
     ).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe("the spine", () => {
  */
 describe("a fight that carried across two nights", () => {
   it("names the round it paused on, on the night it paused", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 11");
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
 
@@ -79,7 +79,7 @@ describe("a fight that carried across two nights", () => {
   });
 
   it("names the same round, from the night that picked it up", async () => {
-    renderChronicle();
+    await renderChronicle();
 
     expect(await screen.findByText("Resumed from round 4 of session 11.")).toBeInTheDocument();
     expect(screen.getByText("On the table now, at round 7.")).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("a fight that carried across two nights", () => {
 
 describe("read aloud", () => {
   it("drops the DM-only half rather than restyling it", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 11");
     await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
     await screen.findByText(/The ferryman is called Cazril/);
@@ -108,7 +108,7 @@ describe("read aloud", () => {
 
 describe("searching the record", () => {
   it("asks the server, and shows hits from more than one source", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 12");
 
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
@@ -127,7 +127,7 @@ describe("searching the record", () => {
   });
 
   it("sends source as one scalar value, never as a list", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 12");
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
     await screen.findByText("Beat");
@@ -153,7 +153,7 @@ describe("searching the record", () => {
   });
 
   it("renders an excerpt as text, never as markup", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 12");
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
 
@@ -166,7 +166,7 @@ describe("searching the record", () => {
 
   it("says nothing matches, and says what to do about it", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/search`, { status: 200, body: [] });
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 12");
 
     await userEvent.type(screen.getByLabelText("Search the record"), "quokka");
@@ -177,7 +177,7 @@ describe("searching the record", () => {
   });
 
   it("opens the night a beat came from", async () => {
-    renderChronicle();
+    await renderChronicle();
     await screen.findByText("Session 12");
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
 
@@ -201,7 +201,7 @@ describe("a campaign with no history at all", () => {
         currentSessionId: null,
       },
     });
-    renderChronicle();
+    await renderChronicle();
 
     expect(await screen.findByText("Nothing written down yet")).toBeInTheDocument();
     expect(screen.getByText(/every beat you jot/)).toBeInTheDocument();
@@ -216,7 +216,7 @@ describe("a campaign with no history at all", () => {
 describe("when the load fails", () => {
   it("says so plainly, with a way to try again", async () => {
     server.routes.delete(`GET /campaigns/${campaignId}`);
-    renderChronicle();
+    await renderChronicle();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not here");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -225,7 +225,7 @@ describe("when the load fails", () => {
 
 describe("threads still open", () => {
   it("reads the unticked half of the current night's checklist, and names the night", async () => {
-    renderChronicle();
+    await renderChronicle();
 
     expect(await screen.findByText("Threads still open")).toBeInTheDocument();
     expect(screen.getByText("Decide what Ovid thinks is in the crate")).toBeInTheDocument();

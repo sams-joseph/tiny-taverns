@@ -1,4 +1,5 @@
 import type { AccountId, CampaignId, CampaignMember, Character, CharacterId } from "@taverns/api";
+import { Link } from "@tanstack/react-router";
 import {
   Button,
   Dialog,
@@ -17,7 +18,6 @@ import {
 import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
-import { hrefFor } from "../routes";
 import { Field, SaveFailure } from "../ui/form";
 
 /**
@@ -134,12 +134,13 @@ export function AssignDialog({
                 ? "No character in this campaign is unassigned."
                 : "Nothing else is unassigned."}{" "}
               Write one down on the campaign&rsquo;s{" "}
-              <a
-                href={hrefFor({ screen: "campaign", campaignId })}
+              <Link
+                to="/campaigns/$campaignId"
+                params={{ campaignId }}
                 className="text-link underline decoration-hairline underline-offset-2 hover:text-link-hover"
               >
                 Party tab
-              </a>{" "}
+              </Link>{" "}
               and it can be given to somebody here.
             </p>
           ) : (

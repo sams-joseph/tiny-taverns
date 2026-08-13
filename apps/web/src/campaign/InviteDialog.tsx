@@ -17,7 +17,7 @@ import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
 import { dayOf } from "../chronicle/format";
-import { hrefFor } from "../routes";
+import { useRouter, type RegisteredRouter } from "@tanstack/react-router";
 import { Field, SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 
@@ -89,9 +89,27 @@ const sentenceFor = (invite: CampaignInvite): string => {
   return `Good until ${dayOf(invite.expiresAt)}, and only once.`;
 };
 
-/** The whole link, composed here because only the browser knows its own origin. */
-const linkFor = (token: string): string =>
-  `${globalThis.location.origin}${globalThis.location.pathname}${hrefFor({ screen: "join", token })}`;
+/**
+ * The whole link, composed here because only the browser knows its own origin.
+ *
+ * The router builds everything after it — the path, and the token in the
+ * fragment — so the one place an invitation link is written down cannot spell
+ * the route slightly differently from the route that reads it. **The token is
+ * in the fragment and that is the point**: a browser never sends a fragment to
+ * a server, so this link can be pasted, opened and followed without the secret
+ * reaching an access log. See `routes.tsx`.
+ */
+const linkFor = (router: RegisteredRouter, token: string): string => {
+  const { publicHref } = router.buildLocation({ to: "/join/$token", params: { token } });
+  // `history.createHref`, **not** `buildLocation(…).href`. The latter is the
+  // route as the router thinks of it — `/join/<token>` — and pasting that after
+  // an origin would put the secret in the *path*, where every log and every
+  // `Referer` would carry it. `createHref` is what turns a route into the URL
+  // this app is actually reachable at, which on a hash history means the page's
+  // own path and the route behind a `#`. It is the same call `Link` makes, so
+  // this link and every rendered one cannot disagree.
+  return `${globalThis.location.origin}${router.history.createHref(publicHref)}`;
+};
 
 function InviteRow({
   invite,
@@ -150,6 +168,7 @@ export function InviteDialog({
     [campaignId],
   );
   const [resource, reload] = useApiResource(load);
+  const router = useRouter();
   const { busy, failure, submit } = useMutation();
   const [label, setLabel] = useState("");
   /** The one appearance of a plaintext token, kept until the dialog moves on. */
@@ -160,7 +179,7 @@ export function InviteDialog({
       client.invites.create({ params: { campaignId }, payload: { label: label.trim() } }),
     );
     if (Result.isSuccess(issued)) {
-      setLink(linkFor(issued.success.token));
+      setLink(linkFor(router, issued.success.token));
       setLabel("");
       reload();
     }

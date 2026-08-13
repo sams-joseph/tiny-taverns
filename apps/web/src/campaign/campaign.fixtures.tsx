@@ -1,9 +1,8 @@
+import { renderAt } from "../test/renderRoute";
 import { CampaignId } from "@taverns/api";
-import { render } from "@testing-library/react";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
-import { CampaignScreen } from "./CampaignScreen";
 
 /**
  * The campaign view's test wire: fixtures, a stub server, and one way in.
@@ -407,12 +406,10 @@ export const noSession: HostedSession = {
  * reach of an exported signature here — the same TS2742 the server hits with
  * `@clerk/shared`. Nothing needs the handle anyway; queries go through `screen`.
  */
-export const renderScreen = (hosted: HostedSession = noSession): void => {
-  render(
-    <HostedSessionContext value={hosted}>
-      <CampaignScreen campaignId={campaignId} route={{ screen: "campaign", campaignId }} />
-    </HostedSessionContext>,
-  );
+export const renderScreen = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
 };
 
 /**

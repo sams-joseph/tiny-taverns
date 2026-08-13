@@ -1,5 +1,5 @@
 import { ServerPanel } from "../api/ServerPanel";
-import type { Route } from "../routes";
+import { Link } from "@tanstack/react-router";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { Core } from "./Core";
 import { Feedback } from "./Feedback";
@@ -28,10 +28,9 @@ const SECTIONS = [
  * machine-token credential still authenticates from a browser, and it is where a
  * developer with no hosted sign-in pastes the token the rest of the app reads.
  */
-export function Gallery({ route }: { readonly route: Route }) {
+export function Gallery() {
   return (
     <AppShell
-      route={route}
       topBar={
         <TopBar
           title="Components"
@@ -42,13 +41,14 @@ export function Gallery({ route }: { readonly route: Route }) {
       <div className="flex flex-col gap-14">
         <nav aria-label="Specimens" className="flex flex-wrap gap-x-5 gap-y-2">
           {SECTIONS.map((section) => (
-            <a
+            <Link
               key={section.id}
-              href={`#${section.id}`}
+              to="/gallery"
+              hash={section.id}
               className="text-label font-medium text-link hover:text-link-hover"
             >
               {section.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
