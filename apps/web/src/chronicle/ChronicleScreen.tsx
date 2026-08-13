@@ -19,6 +19,7 @@ import { hrefFor, type Route } from "../routes";
 import { AppShell, NavContext, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadChronicle } from "./load";
+import { RecapBody } from "./RecapBody";
 import { searchCampaign, type SearchAnswer, type SearchScope } from "./search";
 import { SearchResults } from "./SearchResults";
 import { SessionEntry } from "./SessionEntry";
@@ -252,7 +253,6 @@ export function ChronicleScreen({
             {sessions.map((session) => (
               <SessionEntry
                 key={session.id}
-                campaignId={campaignId}
                 session={session}
                 latest={session.id === newest?.id}
                 open={session.id === open}
@@ -260,7 +260,9 @@ export function ChronicleScreen({
                 onToggle={() =>
                   setOpenId((current) => (current === session.id ? null : session.id))
                 }
-              />
+              >
+                <RecapBody campaignId={campaignId} sessionId={session.id} readAloud={readAloud} />
+              </SessionEntry>
             ))}
 
             {/* The spine's terminus (`Chronicle.jsx:166-173`). */}

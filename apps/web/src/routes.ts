@@ -40,6 +40,20 @@ export type Route =
   | { readonly screen: "play" }
   | { readonly screen: "playCampaign"; readonly campaignId: CampaignId }
   /**
+   * The record of a table you sit at.
+   *
+   * **A route of its own rather than `#/campaigns/:c/chronicle` in player
+   * mode**, and the reason is the mode itself: `modeOf` reads the route, so a
+   * player screen living under the DM's prefix would be a screen the pill says
+   * you are not on. It also keeps the two straight in a bookmark — the same
+   * campaign has two Chronicles, one wide and one narrow, and which you get is
+   * the part of the URL you can read.
+   *
+   * It names a campaign for the reason the DM's does: `recap.readAsPlayer` and
+   * `sessions.list` both hang off `/campaigns/:campaignId`.
+   */
+  | { readonly screen: "playChronicle"; readonly campaignId: CampaignId }
+  /**
    * The bestiary names a campaign, because the API does: `creatures.list` hangs
    * off `/campaigns/:campaignId/creatures`, and that path is the only thing
    * gating the global `system` rows it returns beside the campaign's own. A
@@ -121,7 +135,10 @@ const parseRunId = parser(EncounterRunId);
 
 export const parseRoute = (hash: string): Route => {
   // `section` is whatever follows the campaign's id: `bestiary`, or `sessions`
-  // on the way to a fight.
+  // on the way to a fight. Under `#/play` everything shifts one segment right —
+  // the mode is the head — so `section` holds the campaign there and
+  // `sessionRaw` holds its section. Named for the DM's shape, which is the
+  // longer one.
   const [head, campaignRaw, section, sessionRaw, runs, runRaw] = hash
     .replace(/^#\/?/, "")
     .split("/");
@@ -134,7 +151,13 @@ export const parseRoute = (hash: string): Route => {
     // DM's, because the mode is the part of the URL that was legible.
     if (campaignRaw === "campaigns") {
       const campaignId = parseCampaignId(section);
-      if (campaignId !== undefined) return { screen: "playCampaign", campaignId };
+      if (campaignId !== undefined) {
+        // A section that does not exist on the player's side falls back to the
+        // table itself, which is the same thing a half-typed run link does on
+        // the DM's — the part of the URL that was legible still names a screen.
+        if (sessionRaw === "chronicle") return { screen: "playChronicle", campaignId };
+        return { screen: "playCampaign", campaignId };
+      }
     }
     return { screen: "play" };
   }
@@ -177,6 +200,8 @@ export const hrefFor = (route: Route): string => {
       return "#/play";
     case "playCampaign":
       return `#/play/campaigns/${route.campaignId}`;
+    case "playChronicle":
+      return `#/play/campaigns/${route.campaignId}/chronicle`;
     case "campaign":
       return `#/campaigns/${route.campaignId}`;
     case "bestiary":
@@ -212,7 +237,9 @@ export const hrefFor = (route: Route): string => {
 export type Mode = "dm" | "player";
 
 export const modeOf = (route: Route): Mode =>
-  route.screen === "play" || route.screen === "playCampaign" ? "player" : "dm";
+  route.screen === "play" || route.screen === "playCampaign" || route.screen === "playChronicle"
+    ? "player"
+    : "dm";
 
 /** The same route on the other side, for the pill. */
 export const listFor = (mode: Mode): Route =>

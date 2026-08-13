@@ -1,7 +1,7 @@
-import type { CampaignId, Session } from "@taverns/api";
+import type { Session } from "@taverns/api";
 import { Card, CardContent, cn, Icon } from "@taverns/ui";
+import type { ReactNode } from "react";
 import { dayOf, spanOf } from "./format";
-import { RecapBody } from "./RecapBody";
 
 /**
  * One night on the spine: a dot, a rule, and a card that opens.
@@ -18,22 +18,30 @@ import { RecapBody } from "./RecapBody";
  * per collapsed row would be a request per night to draw a list. So the head
  * says what the `session` row itself knows — which night, when it was played,
  * and how long it ran — and the recap arrives when the card is opened.
+ *
+ * **The recap is a child rather than something this reaches for**, which is what
+ * lets the DM's Chronicle and the player's share one spine: the two read
+ * different endpoints and render different fights (`RecapBody` and
+ * `PlayerRecapBody`), and neither difference belongs to the dot, the rule or the
+ * heading. Rendered only while the card is open, so a collapsed row still costs
+ * no request — the property `load.ts` exists to keep.
  */
 export function SessionEntry({
-  campaignId,
   session,
   latest,
   open,
   readAloud,
   onToggle,
+  children,
 }: {
-  readonly campaignId: CampaignId;
   readonly session: Session;
   /** The newest night, which the delivery marks with the accent dot. */
   readonly latest: boolean;
   readonly open: boolean;
   readonly readAloud: boolean;
   readonly onToggle: () => void;
+  /** The night, read back. Mounted only while `open`. */
+  readonly children: ReactNode;
 }) {
   /**
    * A night is titled or it is not, and the head is arranged around which.
@@ -109,7 +117,7 @@ export function SessionEntry({
                   {spanOf(session.startedAt, session.endedAt)}
                 </p>
               )}
-              <RecapBody campaignId={campaignId} sessionId={session.id} readAloud={readAloud} />
+              {children}
             </CardContent>
           )}
         </Card>

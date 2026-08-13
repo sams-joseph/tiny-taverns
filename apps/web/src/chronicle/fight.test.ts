@@ -1,8 +1,9 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { RecapFight } from "@taverns/api";
-import { fightStory, standing } from "./fight";
+import { PlayerRecapFight, RecapFight } from "@taverns/api";
+import { fightStory, playerStanding, standing } from "./fight";
 import { recap11, recap12 } from "./chronicle.fixtures";
+import { playerRecap11, playerRecap12 } from "./player.fixtures";
 
 /**
  * The one thing on this screen that is wrong in a way nobody notices.
@@ -72,5 +73,48 @@ describe("who was standing", () => {
       combatants: [{ ...recap11.fights[0]!.combatants[0], hpCurrent: 0 }],
     });
     expect(standing(dropped)).toEqual({ total: 1, down: 1 });
+  });
+});
+
+/**
+ * The same fight, through the narrow projection.
+ *
+ * `PlayerRecapFight` carries the same `run` and the same two links — that is
+ * `PlayerRecap.ts`'s own decision — so it goes through the *same* `fightStory`,
+ * and these assertions are what say so rather than merely hoping. A second copy
+ * narrowed for the player would be a second chance to swap the two rounds, and
+ * the swap is invisible in every way but this one.
+ */
+const decodePlayer = Schema.decodeUnknownSync(PlayerRecapFight);
+const playerPaused = decodePlayer(playerRecap11.fights[0]);
+const playerResumed = decodePlayer(playerRecap12.fights[0]);
+
+describe("a carried fight, as a player is told it", () => {
+  it("tells both ends exactly as the DM's Chronicle does", () => {
+    expect(fightStory(playerPaused)).toEqual(fightStory(paused));
+    expect(fightStory(playerResumed)).toEqual(fightStory(resumed));
+  });
+
+  it("still names the pause from its own round and the pickup from the link's", () => {
+    expect(fightStory(playerPaused).state).toBe("Paused at round 4 when the night ended.");
+    expect(fightStory(playerPaused).state).not.toContain("7");
+    expect(fightStory(playerResumed).resumedFrom).toBe("Resumed from round 4 of session 11.");
+    expect(fightStory(playerResumed).resumedFrom).not.toContain("7");
+  });
+});
+
+describe("who was standing, counted from a band", () => {
+  it("reads a monster's `down` and a character's zero, and nothing else", () => {
+    // Brannoc at 6/52, a bloodied hag, and a stalker the night finished.
+    expect(playerStanding(playerPaused)).toEqual({ total: 3, down: 1 });
+    expect(playerStanding(playerResumed)).toEqual({ total: 0, down: 0 });
+
+    const wiped = decodePlayer({
+      ...playerRecap11.fights[0],
+      combatants: playerRecap11.fights[0]!.combatants.map((combatant) =>
+        combatant.kind === "pc" ? { ...combatant, hpCurrent: 0 } : { ...combatant, hpBand: "down" },
+      ),
+    });
+    expect(playerStanding(wiped)).toEqual({ total: 3, down: 3 });
   });
 });

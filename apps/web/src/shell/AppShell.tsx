@@ -62,20 +62,34 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
    * bar can never light a section the URL is not in.
    *
    * The delivery's player nav is *Characters*, *At the table* and *Chronicle*.
-   * None of the three is built, and the rule that keeps *Run* out of the DM's
-   * row keeps them out of this one: a nav item that goes nowhere is the same lie
-   * as a stubbed field. What a player has is the tables they sit at, so that is
-   * what the row carries, and each of the drawn three earns its item the day its
-   * screen exists.
+   * **The third is built now and is here**; the other two are not, and the rule
+   * that keeps *Run* out of the DM's row keeps them out of this one — a nav item
+   * that goes nowhere is the same lie as a stubbed field. Each earns its item
+   * the day its screen exists, which is what this one just did.
    *
-   * *Bestiary*, *Chronicle* and *Party* are deliberately absent even inside a
-   * campaign. They are not merely undrawn here — `recap.read` and `members.list`
-   * are both behind the `DmActor` gate and would answer a player a 404, and a
-   * control that exists and then errors is worse than one that is absent.
+   * *Chronicle* is campaign-scoped exactly as the DM's is, and for the same
+   * reason: `sessions.list` and `recap.readAsPlayer` both hang off
+   * `/campaigns/:campaignId`. It points at `playChronicle`, never at the DM's
+   * route — that screen reads `recap.read`, which is behind the `DmActor` gate
+   * and would answer a player a 404.
+   *
+   * *Bestiary* and *Party* stay absent even inside a campaign, and that is not
+   * merely "undrawn": `members.list` is gated too, and a player's projection of
+   * a roster is *nothing* rather than a narrower list (`AGENTS.md`). A control
+   * that exists and then errors is worse than one that is not there.
    */
   if (modeOf(route) === "player") {
     return [
       { label: "Tables", icon: "book-open", route: { screen: "play" } },
+      ...(campaignId === undefined
+        ? []
+        : [
+            {
+              label: "Chronicle",
+              icon: "scroll-text",
+              route: { screen: "playChronicle", campaignId },
+            } satisfies NavItem,
+          ]),
       { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
     ];
   }
@@ -118,11 +132,17 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
  * player's campaign is *within* their tables, so `#/play` and
  * `#/play/campaigns/:c` light one item. There is no route that is both, so the
  * two axes cannot fight.
+ *
+ * `playChronicle` is its own section like `chronicle` is, and is deliberately
+ * **not** folded into it: the two are different screens over different
+ * endpoints, and one section shared between them would light a nav item that
+ * points somewhere the reader cannot go.
  */
 const sectionOf = (route: Route): Route["screen"] =>
   route.screen === "gallery" ||
   route.screen === "bestiary" ||
   route.screen === "chronicle" ||
+  route.screen === "playChronicle" ||
   route.screen === "party"
     ? route.screen
     : modeOf(route) === "player"

@@ -1571,11 +1571,14 @@ _Player_ at a table you DM has no meaning, and there is no such route to be in.
 
 Six things that are decisions rather than layout:
 
-- **The player nav is the screens that exist**, which today is _Tables_ and the gallery — the same
-  rule that keeps _Run_ out of the DM's row. The delivery draws _Characters_, _At the table_ and
-  _Chronicle_; each earns its item on the day its screen is built. **_Chronicle_ and _Bestiary_ are
-  kept out on top of that**: `recap.read` is behind the `DmActor` gate and would answer a player a
-  404, and a control that exists and then errors is worse than one that is absent.
+- **The player nav is the screens that exist**, which today is _Tables_, _Chronicle_ once the route
+  names a campaign, and the gallery — the same rule that keeps _Run_ out of the DM's row. The
+  delivery draws _Characters_, _At the table_ and _Chronicle_; each earns its item on the day its
+  screen is built, and the third has. It is campaign-scoped exactly as the DM's is and points at
+  `playChronicle`, never at `chronicle` — that screen reads the gated `recap.read`. **_Bestiary_
+  and _Party_ are kept out on top of that**: `members.list` is behind the `DmActor` gate and a
+  player's projection of a roster is _nothing_, and a control that exists and then errors is worse
+  than one that is absent.
 - **_Ask Hob_ is absent in player mode, in the shell.** Asking is a write (`HobThreads.start` needs
   `campaignWritable`) and the captain settled that players do not talk to Hob, so the button would
   open a panel that can only apologise.
@@ -2078,8 +2081,8 @@ prep are already the `shared` ones by row-level predicate. Narrowing either with
 would settle the player fight view's shape by accident — which is the mistake that left this
 endpoint open in the first place.
 
-The player Chronicle screen is **not** built and nothing in `apps/web` calls the new endpoint yet;
-that is a separate task with its own design.
+**The player Chronicle is built and is the only caller** — `apps/web/src/chronicle/`, see "The
+player's Chronicle" below.
 
 `Recap.ts` imports other repositories' row mappers: `toBeat`, `toNote`, `toPrepItem`,
 `toSession`, `toCombatant`, `toEncounterRun` and the `BEATS`/`PREP` nested-table constants are
@@ -2381,6 +2384,45 @@ heading underneath the bar, and the offset that would fix it is the bar's height
 token. And read-aloud mode **drops** the DM half rather than restyling it (no aside, no _At the
 table_, no _Questions you answered_), leaving beats and read-aloud notes in Alegreya at 18px
 (`--fs-body-l`) on a 671px measure.
+
+### The player's Chronicle: the same record, through the narrow projection
+
+`#/play/campaigns/:c/chronicle` (`chronicle/PlayerChronicleScreen.tsx`), reading
+`recap.readAsPlayer`. **It sits in `chronicle/` beside the DM's rather than in `play/`, and that is
+the decision the whole screen turns on**: one record with two projections, so the parts where the
+two must not disagree are files rather than habits.
+
+- **`fightStory` is one function and takes the three fields it reads** (`chronicle/fight.ts`'s
+  `CarriedFight`). `RecapFight` and `PlayerRecapFight` carry the same `run` and the same two links,
+  by `PlayerRecap.ts`'s own decision, so both screens tell a carried fight with the same code — and
+  a second copy narrowed for the player would be a second chance to swap the two rounds, which
+  compiles, renders and reads plausibly. `fight.test.ts` asserts the two `FightStory` values are
+  **equal**, over a fixture whose rounds differ (paused at 4, since reached 7).
+- **`chronicle/recapParts.tsx` holds everything but the fights**, including the read-aloud rule.
+  The beats, notes and ticked prep are already the `shared` ones by row-level predicate and reach a
+  player unchanged; only the combatant was ever the disclosure. Each screen passes its own
+  already-rendered `fights` node, and `null` is what "there were none" is spelled as, so neither
+  caller restates it as a second boolean.
+- **`playerStanding` is a separate count, not the DM's with a cast** — a monster carries a band and
+  no number, so "who ended it down" is a different expression over a different shape.
+- **The roll call is the one thing the DM's card does not draw.** `PlayerRecapBody` renders the
+  initiative order because a player never saw it; the DM's counts, because the runner already has
+  it. It is the only surface in the product where `PlayerCombatant`'s two arms are rendered.
+- **The aside and the search box are deliberately absent.** _"Threads still open"_ is the unticked
+  half of the **DM's** checklist in the DM's voice; the ticked half is in the recap already and
+  reads _"What the night settled"_ here. Search is not gated and would answer honestly, but three
+  of its four arms point at screens a player does not have. Neither is a gap to close without a
+  decision.
+- The empty state is `sessions.list` answering `[]`, which is the **ordinary** outcome: sessions
+  start `dm`, so a table ten nights old shows nothing until its DM shares one. It says who decides.
+
+Measured in Chromium at 1440/1000/760 against a real server, a real Postgres and a real player
+membership minted through a real invitation, on a night with a carried fight: the player read
+`Brannoc · 6/52 hp` (exact), `Marsh Hag · Bloodied` and `Reed Stalker · Down` with **no armour
+class and no total anywhere on the page** (the DM's own read of the same fight is 41/82 at AC 17),
+a `dm` combatant absent entirely, `recap.read` a 404 for that credential, and both carried-fight
+sentences the right way round at both ends. No sideways scroll at any width. The DM's Chronicle is
+byte-for-byte the same screen it was.
 
 ## The invitation surfaces: the DM's link, and a stranger's first screen
 

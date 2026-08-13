@@ -2,6 +2,7 @@ import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
+import { PlayerChronicleScreen } from "./chronicle/PlayerChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { PartyScreen } from "./party/PartyScreen";
@@ -10,13 +11,13 @@ import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
 
 /**
- * Nine screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Ten screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
  *
- * **Two of them are the player's**, and the mode they are in is read off the
+ * **Three of them are the player's**, and the mode they are in is read off the
  * route rather than held anywhere: `#/play` is the same `CampaignsScreen`
- * answering the other question, and `#/play/campaigns/:c` is a screen of its
- * own. See `modeOf` in `routes.ts`.
+ * answering the other question, and `#/play/campaigns/:c` and its `/chronicle`
+ * are screens of their own. See `modeOf` in `routes.ts`.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
  * `useApiResource`, which resolves whichever credential exists — hosted session
@@ -59,6 +60,12 @@ export function App() {
         // what has been searched for belong to the one being read, and neither
         // should survive into another.
         <ChronicleScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
+      );
+    case "playChronicle":
+      return (
+        // Keyed for the reason the DM's Chronicle is: which night is open
+        // belongs to the record being read.
+        <PlayerChronicleScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
       );
     case "party":
       return (

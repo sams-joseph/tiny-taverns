@@ -27,6 +27,7 @@ describe("hash routes", () => {
       { screen: "join", token: "aG93LWRvLXlvdS1kbw" },
       { screen: "play" },
       { screen: "playCampaign", campaignId: CAMPAIGN_ID },
+      { screen: "playChronicle", campaignId: CAMPAIGN_ID },
     ];
     for (const route of routes) {
       expect(parseRoute(hrefFor(route))).toEqual(route);
@@ -134,6 +135,30 @@ describe("hash routes", () => {
     expect(parseRoute("#/play/campaigns/not-a-uuid")).toEqual({ screen: "play" });
     expect(parseRoute("#/play/campaigns")).toEqual({ screen: "play" });
     expect(parseRoute("#/play/nonsense")).toEqual({ screen: "play" });
+  });
+
+  it("gives the player's chronicle a route of its own, under the mode", () => {
+    // Two Chronicles read one record through two endpoints — `recap.read` is
+    // behind the `DmActor` gate, `recap.readAsPlayer` is the narrow one — so
+    // which you get has to be the part of the URL you can read. Under the DM's
+    // prefix it would also be a screen `modeOf` says you are not on.
+    expect(parseRoute(`#/play/campaigns/${CAMPAIGN_ID}/chronicle`)).toEqual({
+      screen: "playChronicle",
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(modeOf({ screen: "playChronicle", campaignId: CAMPAIGN_ID })).toBe("player");
+    // The DM's is untouched and still its own screen.
+    expect(parseRoute(`#/campaigns/${CAMPAIGN_ID}/chronicle`)).toEqual({
+      screen: "chronicle",
+      campaignId: CAMPAIGN_ID,
+    });
+    // An unknown section under a real player campaign is that table, the same
+    // fallback the DM's side takes.
+    expect(parseRoute(`#/play/campaigns/${CAMPAIGN_ID}/chronicles`)).toEqual({
+      screen: "playCampaign",
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(parseRoute("#/play/campaigns/not-a-uuid/chronicle")).toEqual({ screen: "play" });
   });
 
   it("falls back to the list rather than throwing on an id we never minted", () => {

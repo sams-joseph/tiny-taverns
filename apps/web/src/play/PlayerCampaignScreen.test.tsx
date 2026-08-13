@@ -80,12 +80,18 @@ describe("a table you sit at", () => {
     renderScreen();
 
     expect(await screen.findByRole("link", { name: /Tables/ })).toBeTruthy();
-    // `recap.read` is gated and the bestiary is not this audience's screen;
-    // neither is built for a player, and a nav item that goes nowhere is the
-    // same lie as a stubbed field.
-    expect(screen.queryByRole("link", { name: /Chronicle/ })).toBeNull();
+    // The bestiary and the party are the DM's — `members.list` is gated and a
+    // player's projection of a roster is nothing at all — and a nav item that
+    // goes nowhere is the same lie as a stubbed field.
     expect(screen.queryByRole("link", { name: /Bestiary/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Party/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Campaigns/ })).toBeNull();
+
+    // *Chronicle* is here because its screen now is, and it points at the
+    // player's own route — `recap.readAsPlayer`, not the gated `recap.read`.
+    expect(screen.getByRole("link", { name: /Chronicle/ }).getAttribute("href")).toBe(
+      `#/play/campaigns/${campaignId}/chronicle`,
+    );
   });
 
   it("says what an empty table means rather than looking broken", async () => {

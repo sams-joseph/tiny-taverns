@@ -37,6 +37,7 @@ const everyRoute: Record<Route["screen"], Route> = {
   run: { screen: "run", campaignId, sessionId, runId },
   play: { screen: "play" },
   playCampaign: { screen: "playCampaign", campaignId },
+  playChronicle: { screen: "playChronicle", campaignId },
   join: { screen: "join", token: "aaaaaaaaaaaaaaaaaaaaaaaa" },
   gallery: { screen: "gallery" },
 };
@@ -83,21 +84,55 @@ describe("the shell's top bar", () => {
     // The switch reaching every screen must not carry the DM's controls with
     // it. Asking Hob is a write — `HobThreads.start` needs `campaignWritable` —
     // so it stays absent rather than present and failing.
-    for (const route of [everyRoute.play, everyRoute.playCampaign]) {
+    for (const route of [everyRoute.play, everyRoute.playCampaign, everyRoute.playChronicle]) {
       const { unmount } = render(
         <AppShell route={route} topBar={<TopBar title="Anything" />}>
           <p>a screen</p>
         </AppShell>,
       );
       expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();
-      // The player nav is the screens that exist, and the DM's sections are
-      // not among them.
+      // The player nav is the screens that exist, and the DM's gated sections
+      // are not among them: `members.list` is behind `DmActor` and a player's
+      // projection of a roster is nothing at all.
       const nav = screen.getByRole("navigation", { name: "Sections" });
       expect(within(nav).queryByText("Bestiary")).toBeNull();
-      expect(within(nav).queryByText("Chronicle")).toBeNull();
       expect(within(nav).queryByText("Party")).toBeNull();
       unmount();
     }
+  });
+
+  /**
+   * The nav item a screen earns by existing — and the one place a player could
+   * be pointed at the DM's wide recap by accident.
+   */
+  describe("the player's Chronicle item", () => {
+    it("appears once the route names a campaign, and points at the player's route", () => {
+      renderShell(everyRoute.playCampaign);
+
+      const nav = screen.getByRole("navigation", { name: "Sections" });
+      const item = within(nav).getByRole("link", { name: "Chronicle" });
+      // `#/play/campaigns/:c/chronicle`, never `#/campaigns/:c/chronicle`:
+      // that screen reads `recap.read`, which is behind the `DmActor` gate.
+      expect(item.getAttribute("href")).toBe(`#/play/campaigns/${campaignId}/chronicle`);
+      expect(item.getAttribute("href")).not.toBe(`#/campaigns/${campaignId}/chronicle`);
+    });
+
+    it("is absent from the tables list, which names no campaign", () => {
+      renderShell(everyRoute.play);
+      const nav = screen.getByRole("navigation", { name: "Sections" });
+      expect(within(nav).queryByText("Chronicle")).toBeNull();
+    });
+
+    it("is the lit section while it is being read", () => {
+      renderShell(everyRoute.playChronicle);
+      const nav = screen.getByRole("navigation", { name: "Sections" });
+      expect(
+        within(nav).getByRole("link", { name: "Chronicle" }).getAttribute("aria-current"),
+      ).toBe("page");
+      expect(within(nav).getByRole("link", { name: "Tables" }).getAttribute("aria-current")).toBe(
+        null,
+      );
+    });
   });
 
   it("keeps Ask Hob on the DM's side", () => {

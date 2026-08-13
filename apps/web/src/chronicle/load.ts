@@ -92,3 +92,57 @@ export const loadChronicle = (campaignId: CampaignId) => (client: TavernsClient)
 export const loadRecap =
   (campaignId: CampaignId, sessionId: SessionId) => (client: TavernsClient) =>
     client.recap.read({ params: { campaignId, sessionId } });
+
+/**
+ * What a player's Chronicle reads, which is the spine and nothing else.
+ *
+ * Two of the DM's three reads survive, and the third is dropped rather than
+ * narrowed:
+ *
+ * - **`campaigns.findById` and `sessions.list`** are `rowReadable` and already
+ *   answer a player exactly the nights their DM shared. There is no gate here to
+ *   fall foul of and nothing to filter afterwards — a night a DM kept to
+ *   themselves is not in the list at all.
+ * - **The checklist is not read.** *"Threads still open"* is the unticked half of
+ *   the DM's own prep, and its aside is drawn as the DM's loose ends —
+ *   questions they went into the night with. Rendered to a player it would
+ *   attribute the DM's planning to the table, which is the same lie as a stubbed
+ *   field wearing somebody else's voice. The **ticked** lines are a different
+ *   matter and are in the recap already: they are facts about the night that
+ *   happened, and `PlayerRecapBody` renders them under a heading that names who
+ *   settled them.
+ *
+ * So the player's load is one round of two calls, and there is no shape of
+ * failure in it that the DM's screen does not also have.
+ */
+export const loadPlayerChronicle = (campaignId: CampaignId) => (client: TavernsClient) =>
+  Effect.gen(function* () {
+    const [campaign, sessions] = yield* Effect.all(
+      [
+        client.campaigns.findById({ params: { campaignId } }),
+        client.sessions.list({ params: { campaignId } }),
+      ],
+      { concurrency: "unbounded" },
+    );
+
+    return { campaign, sessions } satisfies PlayerChronicleView;
+  });
+
+export interface PlayerChronicleView {
+  readonly campaign: Campaign;
+  /** Newest first, and only the nights the DM shared. */
+  readonly sessions: ReadonlyArray<Session>;
+}
+
+/**
+ * One night's recap, **through the narrow projection and through nothing else.**
+ *
+ * `recap.readAsPlayer` is `GET …/recap/player` and answers `PlayerSessionRecap`,
+ * in which a monster carries an `hpBand` and there is no field for an armour
+ * class or an exact total. The DM's `recap.read` is behind the `DmActor` gate
+ * and would answer a player a 404 — but the point of the narrow endpoint is that
+ * the screen never has to depend on that. See `PlayerRecap.ts`.
+ */
+export const loadPlayerRecap =
+  (campaignId: CampaignId, sessionId: SessionId) => (client: TavernsClient) =>
+    client.recap.readAsPlayer({ params: { campaignId, sessionId } });
