@@ -90,6 +90,12 @@ export function CharacterDialog({
   // `dm` for a new character: the column default, and the only safe one to fail
   // to. Sharing the party is the campaign's own switch plus this one, in that
   // order — `campaign.visibility` is the gate this narrows within.
+  //
+  // It used to mean the player could not see their own character either, which
+  // was half of a real defect. It does not any more: once the DM assigns the
+  // row, the account it names reads it whatever this switch says. So `dm` here
+  // means *the rest of the table cannot see it*, which is what it should have
+  // meant all along.
   const [visibility, setVisibility] = useState<Visibility>(character?.visibility ?? "dm");
   const [showProblems, setShowProblems] = useState(false);
 

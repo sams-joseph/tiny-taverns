@@ -384,7 +384,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates seventeen methods and leaves the other fifty-nine alone", () => {
+  it("gates seventeen methods and leaves the other sixty alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -422,7 +422,7 @@ describe("the scope, counted", () => {
     // here there is no later projection to defer, because the narrow version of
     // a member list is no member list.
     expect(gated).toBe(17);
-    // 59 remaining service methods, plus `DmActors.of` itself — which requires
+    // 60 remaining service methods, plus `DmActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
     // method's signature. That duplicate is one of the two the plan's 69
@@ -454,7 +454,15 @@ describe("the scope, counted", () => {
     // worth noticing: `read` gave one up to the gate and `readAsPlayer` took
     // one back. A narrowed projection is an ordinary actor-scoped read — it is
     // the *type* that keeps it narrow, not the proof.
-    expect(ungated).toBe(61);
+    //
+    // The sixty-second is `Characters.assign`, which says whose character a row
+    // is. Ungated for the reason the rest of `Characters` is, and one more: it
+    // is a **write**, and `rowWritable` already requires `isDm` — a proof on
+    // top would be a second answer to a question the predicate underneath
+    // answers first, which is the shape `DmActor.ts` warns against. The gate is
+    // for reads whose *player projection diverges*, and assignment has no
+    // player projection at all.
+    expect(ungated).toBe(62);
   });
 });
 

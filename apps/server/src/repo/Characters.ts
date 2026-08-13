@@ -3,6 +3,7 @@ import {
   type Actor,
   type CampaignId,
   Character,
+  type CharacterAssign,
   type CharacterCreate,
   type CharacterDamage,
   type CharacterId,
@@ -27,14 +28,15 @@ import {
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
-  rowReadable,
+  memberOfCampaign,
+  ownedRowReadable,
   rowWritable,
 } from "./visibility.js";
 
 interface CharacterRow extends ProvenanceColumns {
   readonly id: CharacterId;
   readonly campaign_id: CampaignId;
-  /** Null for every row today — nothing mints a player credential yet. */
+  /** Whose character it is — null until a DM assigns it. See `assign`. */
   readonly account_id: AccountId | null;
   readonly name: string;
   readonly player_name: string | null;
@@ -115,11 +117,20 @@ const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
  * way to change it is to change one of those — a label stored beside the three
  * fields it summarises is a second answer waiting to disagree with the first.
  *
- * `account_id` is likewise absent from both payloads. It is the hook the invite
- * will use and nothing reads through it; an endpoint that accepted one would be
- * letting a client name an account it has no business naming, and the predicate
- * that will make it mean something belongs with the step that mints a player
- * actor.
+ * ### What has changed: `account_id` means something
+ *
+ * It is still absent from `CharacterCreate` and `CharacterUpdate`, and that has
+ * become *more* load-bearing rather than less. `assign` is its own method
+ * behind its own endpoint, so the DM-only act of saying whose character this is
+ * cannot be reached from the PATCH — which is where a player will one day edit
+ * their own sheet.
+ *
+ * The reads are `ownedRowReadable` rather than `rowReadable`, which is the
+ * whole of the read change: **the account a character names may read it
+ * whatever its `visibility` says**, still inside a campaign they are a live
+ * member of and still only while the DM has shared that campaign. Every write
+ * below is `rowWritable`, untouched — owning a character grants no write, and
+ * the predicate that will is its own decision.
  */
 export class Characters extends Context.Service<
   Characters,
@@ -139,6 +150,17 @@ export class Characters extends Context.Service<
       campaignId: CampaignId,
       id: CharacterId,
       patch: CharacterUpdate,
+    ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    /**
+     * Whose character this is — the DM naming somebody at their own table.
+     *
+     * The account has to hold a live membership of *this* campaign, so the set
+     * a DM can name is the set of people already there. `null` unassigns.
+     */
+    readonly assign: (
+      campaignId: CampaignId,
+      id: CharacterId,
+      payload: CharacterAssign,
     ) => Effect.Effect<Character, NotFound, CurrentActor>;
     /**
      * A signed delta on the one number two rows both hold.
@@ -184,7 +206,7 @@ export class Characters extends Context.Service<
       ): Effect.Effect<Character, NotFound> =>
         sql<CharacterRow>`
           select * from character
-          where character.id = ${id} and ${rowReadable(sql, "character", campaignId, actor)}
+          where character.id = ${id} and ${ownedRowReadable(sql, "character", campaignId, actor)}
         `.pipe(
           Effect.orDie,
           Effect.flatMap((rows) =>
@@ -202,7 +224,7 @@ export class Characters extends Context.Service<
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<CharacterRow>`
                 select * from character
-                where ${rowReadable(sql, "character", campaignId, actor)}
+                where ${ownedRowReadable(sql, "character", campaignId, actor)}
                 order by character.created_at asc
               `;
               return rows.map(toCharacter);
@@ -215,7 +237,7 @@ export class Characters extends Context.Service<
               const actor = yield* CurrentActor;
               const rows = yield* sql<CharacterRow>`
                 select * from character
-                where character.id = ${id} and ${rowReadable(sql, "character", campaignId, actor)}
+                where character.id = ${id} and ${ownedRowReadable(sql, "character", campaignId, actor)}
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
               return toCharacter(rows[0]!);
@@ -319,6 +341,84 @@ export class Characters extends Context.Service<
                     );
                   }
 
+                  const sessionId = yield* currentSessionOf(sql, campaignId, actor);
+                  if (sessionId !== undefined) {
+                    yield* appendCharacterUpdated(sql, {
+                      sessionId,
+                      characterId: id,
+                      live: yield* liveCombatantOf(sql, id, campaignId, actor),
+                      detail: { name: character.name },
+                    });
+                  }
+                  return { character, sessionId };
+                }),
+              )
+              .pipe(
+                Effect.tap(ring),
+                Effect.map(({ character }) => character),
+              ),
+          ),
+
+        /**
+         * Two statements, in this order, and the order is the disclosure
+         * argument rather than a style.
+         *
+         * The write predicate is asked **first**, about the character the path
+         * names. Anybody who is not the DM of this campaign is refused there,
+         * with the ordinary `NotFound` naming the character, and learns nothing
+         * at all about the account they named. Only a caller who has already
+         * proved they may write this row reaches the membership question — and
+         * that caller is the DM, who is entitled to a straight answer about who
+         * is at their own table, which is why the second refusal names the
+         * member rather than hiding behind the first.
+         *
+         * Folding both into one `WHERE` would collapse the two into a single
+         * "no such character", which is safe and unhelpful: assigning to
+         * somebody who has not accepted their invitation yet is a thing a DM
+         * will do, and it deserves to say so.
+         */
+        assign: (campaignId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const actor = yield* CurrentActor;
+                  const writable = yield* sql<{ readonly id: CharacterId }>`
+                    select character.id from character
+                    where character.id = ${id}
+                      and ${rowWritable(sql, "character", campaignId, actor)}
+                  `;
+                  if (writable.length === 0) {
+                    return yield* new NotFound({ resource: "character", id });
+                  }
+
+                  // Not "any account". A character may only be handed to
+                  // somebody who already holds a live membership here, which is
+                  // what keeps `accountId` on the wire from being a way to name
+                  // a stranger — and what makes the grant it carries no wider
+                  // than the campaign it was granted in.
+                  if (payload.accountId !== null) {
+                    const member = yield* sql<{ readonly ok: boolean }>`
+                      select ${memberOfCampaign(sql, campaignId, payload.accountId)} as ok
+                    `;
+                    if (member[0]?.ok !== true) {
+                      return yield* new NotFound({ resource: "member", id: payload.accountId });
+                    }
+                  }
+
+                  const rows = yield* sql<CharacterRow>`
+                    update character set account_id = ${payload.accountId}
+                    where character.id = ${id}
+                      and ${rowWritable(sql, "character", campaignId, actor)}
+                    returning *
+                  `;
+                  if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
+                  const character = toCharacter(rows[0]!);
+
+                  // The same line `update` writes, for the same reason: the
+                  // party changed while somebody's page is open. Nothing about
+                  // a fight moves — `combatant` holds no owner — so there is
+                  // nothing to write through.
                   const sessionId = yield* currentSessionOf(sql, campaignId, actor);
                   if (sessionId !== undefined) {
                     yield* appendCharacterUpdated(sql, {

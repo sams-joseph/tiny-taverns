@@ -3,7 +3,13 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/un
 import { Authorization } from "./Actor.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
-import { Character, CharacterCreate, CharacterDamage, CharacterUpdate } from "./Character.js";
+import {
+  Character,
+  CharacterAssign,
+  CharacterCreate,
+  CharacterDamage,
+  CharacterUpdate,
+} from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
@@ -309,6 +315,20 @@ class CharactersGroup extends HttpApiGroup.make("characters")
     HttpApiEndpoint.patch("update", "/:characterId", {
       params: { campaignId: CampaignId, characterId: CharacterId },
       payload: CharacterUpdate,
+      success: Character,
+      error: NotFound,
+    }),
+    /**
+     * Whose character it is — the DM's act, and the one that makes
+     * `character.account_id` mean something.
+     *
+     * Its own endpoint for the reason `CharacterAssign` gives: the PATCH is
+     * where a player's own edits will land, and the owner of a row is the field
+     * that must not be reachable from there.
+     */
+    HttpApiEndpoint.post("assign", "/:characterId/assign", {
+      params: { campaignId: CampaignId, characterId: CharacterId },
+      payload: CharacterAssign,
       success: Character,
       error: NotFound,
     }),

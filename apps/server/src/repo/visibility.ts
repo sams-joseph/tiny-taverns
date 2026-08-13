@@ -1,4 +1,4 @@
-import { type Actor, type CampaignId, NotFound } from "@taverns/api";
+import { type AccountId, type Actor, type CampaignId, NotFound } from "@taverns/api";
 import { Effect } from "effect";
 import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
 
@@ -34,11 +34,15 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * file that changed shape when membership arrived: the four branches that used
  * to read `actor.seesDmContent` read it instead.
  *
- * There is still no player credential. Nothing in `src` writes a `player`
- * membership (`repo/Memberships.ts` has one writer and it writes the owner's
- * `dm` row), so over HTTP every actor is a DM of everything it reaches. The
- * branches exist from the first query because adding them later means auditing
- * every read in the product instead of adding an invite table.
+ * Players are real now — `Invites.redeem` mints the membership — so those
+ * branches are exercised rather than merely present, which is what the file
+ * was built for.
+ *
+ * **One reach has been added since, and one only**: `ownedRowReadable`, which
+ * lets an account read the row that names it whatever that row's own
+ * `visibility` says. It is written as a third disjunct of the innermost test
+ * rather than as an alternative to the whole predicate, so every condition
+ * above it still applies. See its own comment for what that buys.
  */
 
 /**
@@ -78,10 +82,31 @@ const isMember = (
   sql: SqlClient.SqlClient,
   campaign: CampaignRef,
   actor: Actor,
+): Statement.Fragment => memberOfCampaign(sql, campaign, actor.accountId);
+
+/**
+ * Whether a *named* account holds a live membership of the campaign.
+ *
+ * `isMember` above is this question asked about the actor, and asking it about
+ * an account the request named is the only other legitimate form: a DM
+ * assigning a character to somebody at their table
+ * (`repo/Characters.ts`'s `assign`) is naming an account, and the thing that
+ * keeps that from being "name any account in the product" is that it has to be
+ * a member here.
+ *
+ * Deliberately not keyed on the role, for the reason `campaignInScope` is not:
+ * the narrowing that matters is *this campaign*, and a role test here would be
+ * a second, quieter answer to a question `campaign_member.role` already
+ * answers — one that would have to be revisited the day co-DMs arrive.
+ */
+export const memberOfCampaign = (
+  sql: SqlClient.SqlClient,
+  campaign: CampaignRef,
+  accountId: AccountId,
 ): Statement.Fragment =>
   sql`exists (select 1 from campaign_member
               where campaign_member.campaign_id = ${campaign}
-                and campaign_member.account_id = ${actor.accountId}
+                and campaign_member.account_id = ${accountId}
                 and campaign_member.revoked_at is null)`;
 
 /**
@@ -160,6 +185,27 @@ export const campaignWritable = (
 ): Statement.Fragment =>
   sql.and([campaignInScope(sql, actor, campaign), isDm(sql, campaign, actor)]);
 
+/**
+ * The half of a row read that is about the *campaign*: this row is in the
+ * campaign the path names, and that campaign is one this actor may read at all
+ * — which is where membership, credential scope and the master toggle are
+ * actually checked.
+ *
+ * It is a named piece rather than two lines inlined twice because
+ * `ownedRowReadable` below widens the *other* half and must not be able to
+ * restate this one slightly differently. Everything a caller is allowed to
+ * relax lives after it.
+ */
+const withinReadableCampaign = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): ReadonlyArray<Statement.Fragment> => [
+  sql`${sql(table)}.campaign_id = ${campaignId}`,
+  sql`exists (select 1 from campaign where campaign.id = ${sql(table)}.campaign_id and ${campaignReadable(sql, actor, campaignId)})`,
+];
+
 /** Rows of a campaign-scoped table (`session`, `character`, `note`) this actor may read. */
 export const rowReadable = (
   sql: SqlClient.SqlClient,
@@ -168,9 +214,56 @@ export const rowReadable = (
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
-    sql`${sql(table)}.campaign_id = ${campaignId}`,
-    sql`exists (select 1 from campaign where campaign.id = ${sql(table)}.campaign_id and ${campaignReadable(sql, actor, campaignId)})`,
+    ...withinReadableCampaign(sql, table, campaignId, actor),
     sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
+  ]);
+
+/**
+ * Rows of a campaign-scoped table whose rows may *belong to* an account — today
+ * only `character`, whose `account_id` says whose character it is.
+ *
+ * `rowReadable` plus one disjunct: **your own row, whatever its visibility.**
+ * That is a new reach and the only one this file has grown since membership
+ * arrived, so what it does *not* do is the part worth reading.
+ *
+ * **The campaign gate stays outside the union.** The extra disjunct sits inside
+ * the same `or` the row's own `visibility` is tested in, after
+ * `withinReadableCampaign` — so ownership relaxes the row-level toggle and
+ * nothing above it. A player still has to hold a live membership, the
+ * credential still has to reach this campaign, and `campaign.visibility` still
+ * has to be `shared`. Written the other way round — `rowReadable(…) or
+ * account_id = me` — a character would be readable by its owner in a campaign
+ * they had been revoked from, through a credential minted for another table,
+ * and in a campaign the DM has never shared. That is the `corpusRowReadable`
+ * lesson, met a second time: the union is over the *innermost* test only.
+ *
+ * **It grants your own row and no one else's.** `account_id` is compared to the
+ * actor's own account and to nothing a caller supplied, so there is no shape of
+ * request that asks for somebody else's character this way — a player reading
+ * another player's still needs the row to be `shared`.
+ *
+ * **It changes nothing a DM sees.** `isDm` is already a disjunct of the same
+ * `or`, so for a DM the clause is satisfied before ownership is reached.
+ *
+ * There is deliberately no `ownedRowWritable`. A player *editing* their own
+ * character is a settled decision with a predicate of its own to write
+ * (`player-edits-own-character`), and it is not this one: reads and writes use
+ * different predicates here for exactly the reason `rowWritable` is not
+ * `rowReadable`.
+ */
+export const ownedRowReadable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    ...withinReadableCampaign(sql, table, campaignId, actor),
+    sql.or([
+      isDm(sql, campaignId, actor),
+      sql`${sql(table)}.visibility = 'shared'`,
+      sql`${sql(table)}.account_id = ${actor.accountId}`,
+    ]),
   ]);
 
 /**

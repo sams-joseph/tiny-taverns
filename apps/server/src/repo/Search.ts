@@ -21,6 +21,7 @@ import {
   corpusRowReadable,
   ensureCampaignReadable,
   inCampaign,
+  ownedRowReadable,
   rowReadable,
   under,
 } from "./visibility.js";
@@ -46,7 +47,7 @@ import {
  * | `note`      | `rowReadable`                 | campaign-scoped rows    |
  * | `beat`      | the `beat → session` chain    | nested, no `campaign_id`|
  * | `creature`  | `corpusRowReadable`           | half the rows are global|
- * | `character` | `rowReadable`                 | campaign-scoped rows    |
+ * | `character` | `ownedRowReadable`            | plus: your own row      |
  *
  * The fourth arm is what `0009_search_index.ts` advertised as "about eight
  * lines", spent — and it is the arm that makes the people the campaign is about
@@ -277,10 +278,14 @@ const characterArm = (
           ''),
         character.descriptor,
         '')`,
-      // The ordinary campaign-scoped predicate. A character is not a corpus
-      // row: there is no global party, so nothing here needs the null branch
-      // that makes `corpusRowReadable` the delicate one.
-      readable: rowReadable(sql, "character", campaignId, actor),
+      // The same predicate `Characters.list` reads through, which is the rule
+      // rather than a detail: one table, one read predicate, or search becomes
+      // a second answer to what an actor may have. A character is not a corpus
+      // row — there is no global party, so nothing here needs the null branch
+      // that makes `corpusRowReadable` the delicate one — but it is an *owned*
+      // row, so a player's own character is findable by them whatever its
+      // visibility, and nobody else's is.
+      readable: ownedRowReadable(sql, "character", campaignId, actor),
       matches: sql.or([
         sql`character.name ilike ${likeContains(query)}`,
         // The player's own name, because "who is Ilse running" is a question a

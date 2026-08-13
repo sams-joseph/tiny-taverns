@@ -112,10 +112,17 @@ describe("the reach seam, enforced rather than asserted", () => {
     // the billing owner and no longer a way in.
     //
     // `repo/Characters.ts` is `character.account_id`, added by
-    // `0012_character_sheet.ts`: whose character it is. It is selected and
-    // mapped and **named by no predicate**, which is the property this file
-    // exists to keep. The write predicate it is a hook for belongs with the
-    // step that mints a player actor, and there is no player actor yet.
+    // `0012_character_sheet.ts`: whose character it is. It used to be named by
+    // no predicate at all; `ownedRowReadable` in `repo/visibility.ts` now names
+    // it, which is the one reach this seam has grown — a player reads *their
+    // own* character whatever its visibility, inside a campaign they are still
+    // a live member of. That is a disjunct under the membership and scope
+    // clauses rather than beside them, so nothing here moved: the list is
+    // unchanged, `character_ownership.test.ts` pins the narrowing, and the
+    // stranger below still reads nothing.
+    //
+    // The *write* predicate the column is also a hook for is a separate settled
+    // decision and is not written yet.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "repo/Campaigns.ts",
       "repo/Characters.ts",

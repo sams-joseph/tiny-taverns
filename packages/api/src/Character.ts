@@ -58,12 +58,21 @@ export class Character extends Schema.Class<Character>("Character")({
   id: CharacterId,
   campaignId: CampaignId,
   /**
-   * Whose character it is, once they have an account.
+   * Whose character it is — **the one pointer in the product that is read
+   * through.**
    *
-   * Null today for every row: nothing mints a player credential yet, and this
-   * is the hook the invite will use. **Nothing is read *through* it** — no
-   * predicate mentions it — so it is provenance and a filter, the same rule as
-   * `Combatant.characterId` and `Creature.derivedFrom`.
+   * Null until a DM assigns the character to somebody at their table
+   * (`CharacterAssign` below). Once set it is not merely provenance, unlike
+   * `Combatant.characterId` and `Creature.derivedFrom`: a predicate names it,
+   * and naming it is what lets the player whose character this is read their
+   * own row whatever its `visibility` says.
+   *
+   * What that grants is deliberately small. It is *their own row and no one
+   * else's*, inside a campaign they hold a live membership of, through a
+   * credential that reaches that campaign, and only while the DM has shared the
+   * campaign at all — the master toggle is untouched. It grants no write:
+   * editing your own sheet is its own decision with its own predicate. See
+   * `apps/server/src/repo/visibility.ts`'s `ownedRowReadable`.
    */
   accountId: Schema.NullOr(AccountId),
   name: Schema.String,
@@ -240,6 +249,31 @@ export type CharacterUpdate = typeof CharacterUpdate.Type;
  * repeat applies again; that is the same boundary the doorbell has, and it is
  * stated here rather than implied.
  */
+/**
+ * Whose character this is — the DM saying which of the people at their table
+ * plays it.
+ *
+ * **Its own endpoint rather than a field on `CharacterUpdate`, and that is the
+ * whole shape of it.** The PATCH is where a player will one day edit their own
+ * sheet, and a character's owner is precisely the field that must not travel on
+ * a payload a player can send: a write that could re-point `accountId` would
+ * let somebody hand their own character to somebody else, or take one. Kept
+ * separate, the DM-only act stays DM-only by *which endpoint exists* rather
+ * than by a field check somebody has to remember to write.
+ *
+ * `accountId` is not "any account". The server refuses one that does not hold a
+ * live membership of this campaign, so the set of accounts a DM can name is the
+ * set of people already at their table — which is also the only set they can
+ * see.
+ *
+ * `null` unassigns, which is what a player leaving the table looks like from
+ * the character's side. The character stays; it stops being anybody's.
+ */
+export const CharacterAssign = Schema.Struct({
+  accountId: Schema.NullOr(AccountId),
+});
+export type CharacterAssign = typeof CharacterAssign.Type;
+
 export const CharacterDamage = Schema.Struct({
   /** Positive damages, negative heals. Zero is legal and does nothing. */
   amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),

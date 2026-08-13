@@ -522,6 +522,15 @@ connection failure into a message saying `pnpm db:up`. Do not make them skip ins
 repo has twice shipped a defect that a green build hid, and a silently-skipped database test
 is that same pattern.
 
+**A pool per file against `max_connections = 100` is the ceiling, and on a big machine
+`pnpm -F server test` alone can hit it.** Vitest sizes its worker pool from the core count, each
+worker holds a `PgClient` pool, and past roughly twenty concurrent files Postgres starts refusing
+— which surfaces as the `pnpm db:up` message on files that have nothing wrong with them, several
+at once and different ones each run. It is not a defect in whatever you just changed: check it
+against a clean tree before believing it. `pnpm test` from the root does not show it (turbo runs
+web and server together and each takes fewer workers), and `--maxWorkers=6` is the one-flag
+answer when it does.
+
 ## The actor and visibility contract
 
 Every future endpoint follows this. It is the one ordering constraint the architecture calls
@@ -543,9 +552,13 @@ non-negotiable, because it is free on day one and a retrofit later.
   greps `apps/server/src` and fails if `campaign.account_id` reappears in any predicate, if a
   third module names `campaign_member`, or if anything but `repo/Memberships.ts`'s `addOwner`
   writes one. Everything composes it: `campaignReadable` / `campaignWritable` call it,
-  `rowReadable` and `corpusRowReadable` embed `campaignReadable` in an `exists`, and the
-  `contained*` / `nested*` / `ensure*` families recurse to those. There is no predicate in
-  `visibility.ts` that does not reach it. See `0011_membership.ts`.
+  `rowReadable`, `corpusRowReadable` and `ownedRowReadable` embed `campaignReadable` in an
+  `exists`, and the `contained*` / `nested*` / `ensure*` families recurse to those. There is no
+  predicate in `visibility.ts` that does not reach it. See `0011_membership.ts`.
+- **One reach has been added since, and one only**: `ownedRowReadable` — a player reads the
+  `character` row whose `account_id` is theirs, whatever that row's own `visibility` says. It is
+  a third disjunct of the innermost test, so every clause above it still applies. See "**`account_id`
+  means something now**" under the party for what it grants and what it deliberately does not.
 - **`Actor` carries no role, and cannot.** A person is the DM of one table and a player at
   another _at the same time, on the same credential_, so "may this actor see `dm` rows" is a
   question about a pair — this account, this campaign — and a pair is a row. `isDm` in
@@ -630,9 +643,12 @@ non-negotiable, because it is free on day one and a retrofit later.
   `EncounterRuns` (7), `SessionEvents` (3, including the streaming `pollForRun`, which a grep
   for `CurrentActor>` cannot see), `Recap.read` and `Memberships.list` — the roster, whose
   player projection is _nothing_ rather than a narrower schema (see "Membership is the model,
-  and there is no seat"). The other fifty-nine actor-scoped methods do
+  and there is no seat"). The other sixty actor-scoped methods do
   not, and should not: they return a `shared` row a player is entitled to see in full, so
-  `GET …/notes` answering the ordinary `Note` discloses nothing. **The gate is a precondition on
+  `GET …/notes` answering the ordinary `Note` discloses nothing. `Characters.assign` is the
+  newest of them and is ungated for one more reason worth keeping: it is a **write**, and
+  `rowWritable` already requires `isDm`, so a proof on top would be a second answer to a question
+  the predicate underneath answers first. **The gate is a precondition on
   the seam, not a replacement for it** — every gated method still composes `visibility.ts`
   unchanged, so a bug in the gate degrades to today's behaviour rather than to an open door.
   `apps/server/test/dm-actor.test.ts` pins all of it, including seven `@ts-expect-error` lines
@@ -922,12 +938,59 @@ also an `ILIKE` matcher, because "who is Dara running" is asked mid-type. The sn
 `ts_headline` over `body ->> 'notes'` falling back to the derived descriptor, the same
 substitution the creature arm makes to its meta line.
 
-**`account_id` is a column and not a credential, and step 4 owns making it mean something.**
-Nullable, `on delete set null`, named by **no predicate** — `membership.test.ts`'s grep lists
-`repo/Characters.ts` deliberately, and `characters.test.ts` proves the behaviour: pointing a
-character at an account through raw SQL grants that account nothing, because reach is a
-`campaign_member` row. The player-edits-their-own-character predicate is settled and belongs
-with the step that mints a player actor; there is none yet.
+#### `account_id` means something now: what ownership grants, and what it does not
+
+It was a column named by no predicate. It is **the one pointer in the product that is read
+through** — the character sheet and the player write both build on exactly this and nothing
+wider, so the boundary is worth reading before extending it.
+
+**A DM assigns; nobody else does.** `POST …/characters/:id/assign` with `{ accountId }`
+(`Characters.assign`), and `null` unassigns. It is **its own endpoint and not a field on
+`CharacterUpdate`**, which is the whole shape of it: the PATCH is where a player will one day edit
+their own sheet, and the owner of a row is precisely the field that must not travel on a payload a
+player can send. Kept apart, "a player cannot re-point their own character" is a fact about which
+endpoints exist rather than a field check somebody has to remember. The named account must hold a
+**live membership of this campaign** (`memberOfCampaign`, the only other caller of the fragment
+`isMember` composes), so a DM can name the people at their table and nobody else. Two statements
+in one transaction, in this order and for this reason: the write predicate first, so a non-DM is
+refused with the ordinary `NotFound` naming the _character_ and learns nothing about the account
+they named; the membership second, naming the **member**, because only somebody who may already
+write the row reaches it and "they have not accepted their invitation yet" is the answer that
+makes the endpoint useful.
+
+**The read it grants is one disjunct, and its position is the whole argument.**
+`ownedRowReadable` (`repo/visibility.ts`) is `rowReadable` with `account_id = <this actor>` added
+**inside the same `or` the row's own `visibility` is tested in** — after
+`withinReadableCampaign`, which both share so neither can restate it slightly differently. So
+ownership relaxes the row-level toggle and nothing above it:
+
+- **your own row and no one else's** — the column is compared to the actor's own account and to
+  nothing a caller supplied, so no request shape asks for somebody else's character this way;
+- **still a live member** — a revoked membership takes it back, measured through `Invites.revoke`;
+- **still in credential scope** — a token minted for one table reaches nothing at another;
+- **still under the master toggle** — `campaign.visibility = 'dm'` keeps a player out of their own
+  character, which is the same answer `GET /me/campaigns` gives and is not a gap;
+- **no write at all** — every write in `Characters` is `rowWritable`, untouched. Editing your own
+  sheet is a settled decision with a predicate still to write, and `ownedRowWritable` deliberately
+  does not exist.
+
+Written the other way round — `rowReadable(…) or account_id = me` — a character would be readable
+by its owner in a campaign they had been revoked from, through a credential minted for another
+table, in a campaign the DM never shared. That is the `corpusRowReadable` lesson met a second
+time: **the union is over the innermost test only.**
+
+**Both readers of `character` compose it** — `Characters.list`/`findById` and `Search.ts`'s
+character arm — because one table gets one read predicate or search becomes a second answer to
+what an actor may have.
+
+**What this fixed, measured either side.** A player who joined a shared campaign saw an empty
+party and a 404 on their own character: `CharacterDialog` defaults a new row to `dm`
+(fail-closed, correct) and owning a row granted nothing (also correct). Both halves were right and
+the pair was the defect. The dialog's default **stays `dm`** — it now means _the rest of the table
+cannot see it_, which is what it should always have meant. `character-ownership.test.ts` pins all
+of the above and fails four ways if the disjunct is removed; `Characters.assign` is ungated by
+`DmActor` on purpose (`dm-actor.test.ts` counts it), because `rowWritable` already requires `isDm`
+and assignment has no player projection to diverge.
 
 ### Where a hit point lives, and what the doorbell covers
 

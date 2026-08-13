@@ -199,6 +199,9 @@ const CharactersLive = HttpApiBuilder.group(
       .handle("update", ({ params, payload }) =>
         characters.update(params.campaignId, params.characterId, payload),
       )
+      .handle("assign", ({ params, payload }) =>
+        characters.assign(params.campaignId, params.characterId, payload),
+      )
       .handle("damage", ({ params, payload }) =>
         characters.damage(params.campaignId, params.characterId, payload),
       )
