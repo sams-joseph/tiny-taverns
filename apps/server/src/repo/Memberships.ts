@@ -1,6 +1,7 @@
 import {
   type AccountId,
   type CampaignId,
+  CampaignMember,
   CampaignMembership,
   CurrentActor,
   type MemberRole,
@@ -9,8 +10,9 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
 import { type CampaignRow, toCampaign } from "./Campaigns.js";
+import type { DmActor } from "./DmActor.js";
 import { dieOnSqlError } from "./rows.js";
-import { campaignReadable } from "./visibility.js";
+import { campaignReadable, campaignWritableById } from "./visibility.js";
 
 /**
  * `campaign_member`, the table that decides who reaches a campaign.
@@ -26,10 +28,19 @@ import { campaignReadable } from "./visibility.js";
  *
  * ### Two shapes in one file, on purpose
  *
- * The **service** answers a request: `mine` is `GET /me/campaigns`, and it
- * carries `CurrentActor` like every other read in the product. Membership got a
- * service the moment it got an endpoint, which it did not have when `0011`
- * landed.
+ * The **service** answers a request, and it now answers the same row from both
+ * ends. `mine` is `GET /me/campaigns` — *which tables am I at* — and carries
+ * `CurrentActor` like every other read in the product. `list` is
+ * `GET /campaigns/:c/members` — *who is at this table* — and takes a `DmActor`,
+ * which makes this the **fifth gated repository** and the second, after `Recap`,
+ * that is gated in part. Membership got a service the moment it got an endpoint,
+ * which it did not have when `0011` landed.
+ *
+ * The split is the standing rule rather than a judgement: a member list is other
+ * people's account names and the shape of somebody's table, so the player
+ * projection of it is *nothing* and there is no narrow schema to answer with.
+ * `mine` needs no gate for the mirror-image reason — the campaigns a credential
+ * already reaches are not a disclosure to the credential that reaches them.
  *
  * The **plain functions** write the row that *decides* what an actor reaches,
  * inside somebody else's transaction — `addOwner` inside `Campaigns.create`,
@@ -163,6 +174,13 @@ interface MembershipRow extends CampaignRow {
   readonly joined_at: Date;
 }
 
+interface MemberRow {
+  readonly account_id: AccountId;
+  readonly name: string;
+  readonly role: MemberRole;
+  readonly joined_at: Date;
+}
+
 export class Memberships extends Context.Service<
   Memberships,
   {
@@ -179,6 +197,34 @@ export class Memberships extends Context.Service<
      * `shared` — the moment to explain it is the moment of joining.
      */
     readonly mine: Effect.Effect<ReadonlyArray<CampaignMembership>, never, CurrentActor>;
+    /**
+     * Who is at this table, live members only — the roster the party screen
+     * draws, and the DM's own read.
+     *
+     * **The proof carries the campaign, so there is no id to disagree with
+     * it**, and the predicate still runs underneath: the `where` composes
+     * `campaignWritableById`, which is the identical question `DmActors.of`
+     * asked one line earlier. That looks redundant and is the point — the gate
+     * is a precondition on the seam rather than a replacement for it, so a bug
+     * in the gate degrades to today's behaviour instead of to an open door.
+     * Same shape as every other gated read in the product.
+     *
+     * **A revoked membership is absent, not flagged.** Every predicate here
+     * tests `revoked_at is null` and the index is over the same condition;
+     * somebody who left is not at the table, and what the DM needs to know
+     * about a withdrawal is on the invitation that granted it —
+     * `CampaignInvite.status` reads `revoked` and names who took it.
+     *
+     * **It answers no question about characters, deliberately.** *"Marta has a
+     * seat but no character"* is a member of this list with no `Character` in
+     * `characters.list` whose `accountId` is theirs — one join on a list the
+     * party screen reads anyway. A count here would be a second answer to that,
+     * and one that is structurally `0` for every row until something populates
+     * `character.account_id`; an absent field beats a stubbed one, which is the
+     * rule the encounter card's `count` follows. `accountId` is on the wire so
+     * the join has a key.
+     */
+    readonly list: (dm: DmActor) => Effect.Effect<ReadonlyArray<CampaignMember>, never, never>;
   }
 >()("Memberships") {
   static readonly layer = Layer.effect(this)(
@@ -211,6 +257,35 @@ export class Memberships extends Context.Service<
             );
           }),
         ),
+
+        list: (dm) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const rows = yield* sql<MemberRow>`
+                select campaign_member.account_id,
+                       campaign_member.role,
+                       campaign_member.created_at as joined_at,
+                       account.name
+                from campaign_member
+                join account on account.id = campaign_member.account_id
+                where campaign_member.campaign_id = ${dm.campaign}
+                  and campaign_member.revoked_at is null
+                  and ${campaignWritableById(sql, dm.campaign, dm.actor)}
+                order by (campaign_member.role = 'dm') desc,
+                         campaign_member.created_at asc,
+                         campaign_member.account_id asc
+              `;
+              return rows.map(
+                (row) =>
+                  new CampaignMember({
+                    accountId: row.account_id,
+                    name: row.name,
+                    role: row.role,
+                    joinedAt: DateTime.fromDateUnsafe(row.joined_at),
+                  }),
+              );
+            }),
+          ),
       };
     }),
   );

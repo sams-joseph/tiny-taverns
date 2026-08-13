@@ -76,6 +76,7 @@ describe("the API declaration", () => {
       "join",
       "live",
       "me",
+      "members",
       "notes",
       "prep",
       "recap",

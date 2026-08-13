@@ -101,6 +101,27 @@ const MeLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * The roster, and the only handler here that spends a proof outside the live
+ * groups and the recap.
+ *
+ * `Memberships` answers the same table from both ends — `mine` above with an
+ * ordinary actor, `list` here with a `DmActor` — so this is the whole of the
+ * fifth gate: a path segment becomes a proof, and there is no campaign id left
+ * for the read to be given.
+ */
+const MembersLive = HttpApiBuilder.group(
+  TavernsApi,
+  "members",
+  Effect.fnUntraced(function* (handlers) {
+    const memberships = yield* Memberships;
+    const asDm = yield* asDmOf;
+    return handlers.handle("list", ({ params }) =>
+      asDm(params.campaignId, (dm) => memberships.list(dm)),
+    );
+  }),
+);
+
 const InvitesLive = HttpApiBuilder.group(
   TavernsApi,
   "invites",
@@ -595,6 +616,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     InvitePreviewLive,
     JoinLive,
     CampaignsLive,
+    MembersLive,
     InvitesLive,
     SessionsLive,
     CharactersLive,

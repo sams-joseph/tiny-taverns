@@ -13,6 +13,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Memberships } from "../src/repo/Memberships.js";
 import { Recap } from "../src/repo/Recap.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
@@ -23,10 +24,16 @@ import { migratedDatabase } from "./support/database.js";
  * The DM gate: **the wide reads cannot be reached without a proof, and the
  * proof cannot be made without the membership check.**
  *
- * Four repositories now. The three live ones came first; `Recap.read` joined
- * them when the player projection landed, which is the standing rule working —
- * *when a table's player projection diverges from its DM projection, its DM
- * repository takes a `DmActor` in the same change.*
+ * Five repositories now. The three live ones came first; `Recap.read` joined
+ * them when the player projection landed, and `Memberships.list` arrived gated
+ * on the day the endpoint did — which is the standing rule working — *when a
+ * table's player projection diverges from its DM projection, its DM repository
+ * takes a `DmActor` in the same change.*
+ *
+ * The fifth is the one where the player projection is *nothing*: a member list
+ * is other people's account names and the shape of somebody's table. So unlike
+ * `Recap` there is no narrow method beside the gated one, and unlike the live
+ * three the thing being kept back is not a number but the roster itself.
  *
  * This lands before the invite that mints the first player actor, deliberately.
  * A boundary put in afterwards would leave one release in which player actors
@@ -114,6 +121,7 @@ describe("the compiler carries it", () => {
     combatants: (typeof Combatants)["Service"],
     runs: (typeof EncounterRuns)["Service"],
     events: (typeof SessionEvents)["Service"],
+    memberships: (typeof Memberships)["Service"],
     campaignId: CampaignId,
     sessionId: SessionId,
     actor: (typeof CurrentActor)["Service"],
@@ -127,6 +135,11 @@ describe("the compiler carries it", () => {
     combatants.list(campaignId, sessionId, sessionId);
     // @ts-expect-error the proof is what the method takes, not the id
     events.list(campaignId, sessionId, {});
+    // The roster takes the proof and *nothing else* — the campaign travels
+    // inside it — so naming a campaign is not a call with a spare argument, it
+    // is the wrong argument in the only position there is.
+    // @ts-expect-error the proof is what the method takes, not the id
+    memberships.list(campaignId);
 
     // The actor `Authorization` resolved is not a proof either: it carries no
     // role, and cannot — a person is the DM of one table and a player at
@@ -194,12 +207,25 @@ describe("the compiler carries it", () => {
       >;
     } = { read: true, readAsPlayer: false };
 
+    // `Memberships` is the fifth, and the second that is gated in part — for a
+    // different reason from `Recap`'s. `list` is *who is at this table* and
+    // takes the proof; `mine` is *which tables am I at*, an `Effect` rather
+    // than a function, and it is not gated because the campaigns a credential
+    // already reaches are not a disclosure to the credential that reaches
+    // them. Named rather than derived, so that an ungated third method here
+    // would be a visible edit.
+    const memberships: {
+      readonly list: ExactlyDmActor<Parameters<(typeof Memberships)["Service"]["list"]>[0]>;
+      readonly mine: false;
+    } = { list: true, mine: false };
+
     expect([
       Object.keys(combatants).length,
       Object.keys(runs).length,
       Object.keys(events).length,
       Object.keys(recap).length,
-    ]).toEqual([5, 7, 3, 2]);
+      Object.keys(memberships).length,
+    ]).toEqual([5, 7, 3, 2, 2]);
   });
 });
 
@@ -358,7 +384,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates sixteen methods and leaves the other fifty-nine alone", () => {
+  it("gates seventeen methods and leaves the other fifty-nine alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -388,7 +414,14 @@ describe("the scope, counted", () => {
       0,
     );
 
-    expect(gated).toBe(16);
+    // The seventeenth is `Memberships.list`, and it is the one that cost
+    // nothing to get right: it was gated in the change that declared the
+    // endpoint, so there is no release in which `GET /campaigns/:c/members`
+    // answered a player. That is the "gate first, project later" lesson
+    // `Recap.read` paid for, applied on the day rather than afterwards — and
+    // here there is no later projection to defer, because the narrow version of
+    // a member list is no member list.
+    expect(gated).toBe(17);
     // 59 remaining service methods, plus `DmActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -402,6 +435,11 @@ describe("the scope, counted", () => {
     // gated, and none should be: an invitation is a DM's own resource behind
     // `campaignWritable`, and `mine` returns the campaigns this credential
     // already reaches.
+    //
+    // `Memberships.list` did not move it either, which is the arithmetic to
+    // notice a second time: it takes the proof and requires no `CurrentActor`,
+    // so it lands in `gated` above and nowhere here. A gated method is not an
+    // ungated one that grew a check.
     //
     // The sixty-first is `Characters.damage` (`0014`), and it is ungated
     // deliberately: a character is the row a player is *most* entitled to see

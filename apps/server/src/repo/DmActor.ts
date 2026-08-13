@@ -8,18 +8,28 @@ import { ensureCampaignWritable } from "./visibility.js";
  * A proof that this actor is a DM of *this* campaign, carried in the type.
  *
  * `CurrentActor` makes an unscoped read impossible; this is the same idea one
- * level down. Four repositories — `Combatants`, `EncounterRuns`,
- * `SessionEvents` and `Recap` — return rows whose **player projection differs
- * from their DM projection**: exact hit points on a `shared` combatant, the
- * whole initiative order, the combat log, and the night assembled out of all
- * three. Every other actor-scoped read in the product returns a `shared` row a
- * player is entitled to see in full, so a player calling `GET …/notes` and
- * receiving the ordinary `Note` discloses nothing.
+ * level down. Five repositories — `Combatants`, `EncounterRuns`,
+ * `SessionEvents`, `Recap` and `Memberships` — return rows whose **player
+ * projection differs from their DM projection**: exact hit points on a `shared`
+ * combatant, the whole initiative order, the combat log, the night assembled
+ * out of all three, and the roster of who else is at the table. Every other
+ * actor-scoped read in the product returns a `shared` row a player is entitled
+ * to see in full, so a player calling `GET …/notes` and receiving the ordinary
+ * `Note` discloses nothing.
  *
- * Those four take a `DmActor` instead of reading `CurrentActor`, so a method
+ * Those five take a `DmActor` instead of reading `CurrentActor`, so a method
  * that skipped the check has no way to obtain one and does not compile. The
- * alternative — an `ensureDm(…)` at the top of each — is the same fifteen
- * sites with none of them enforced, and the sixteenth is the leak.
+ * alternative — an `ensureDm(…)` at the top of each — is the same sixteen
+ * sites with none of them enforced, and the seventeenth is the leak.
+ *
+ * ### `Memberships.list` is the fifth, and its player projection is nothing
+ *
+ * `GET /campaigns/:c/members` is other people's account names and the shape of
+ * somebody's table — who was invited, when they joined, who runs it. There is
+ * no narrower version of that a player is owed, so unlike `Recap` there is no
+ * second method beside the gated one; the gate is the whole answer. It went on
+ * with the endpoint rather than after it, which is this comment's own rule
+ * below working for once in the right order.
  *
  * **This lands before the first player actor exists, deliberately.** The invite
  * that mints a credential reaching a campaign it does not own is a later step;

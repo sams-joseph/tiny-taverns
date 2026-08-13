@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { Campaign } from "./Campaign.js";
+import { AccountId } from "./Ids.js";
 
 /**
  * What somebody is at a table.
@@ -39,5 +40,68 @@ export class CampaignMembership extends Schema.Class<CampaignMembership>("Campai
   campaign: Campaign,
   role: MemberRole,
   /** When this account joined — for the DM, when they created the campaign. */
+  joinedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+/**
+ * Somebody else at the table — the answer `GET /campaigns/:c/members` gives, and
+ * the mirror image of `CampaignMembership`.
+ *
+ * The pair is the same row read from either end: `mine` asks *which tables am I
+ * at*, this asks *who is at this table*. So it carries the campaign in the path
+ * rather than in the payload, and what it adds is the one thing the other cannot
+ * have — a name that is not the reader's.
+ *
+ * **That is why it is behind the `DmActor` gate.** A member list is other
+ * people's account names and the shape of the table; a player does not enumerate
+ * who else is sitting at it, and the day a player screen wants to it will be a
+ * decision with a narrower schema, not this one with a flag. See
+ * `apps/server/src/repo/DmActor.ts`.
+ *
+ * ### Live members only, and no seat
+ *
+ * A revoked membership is absent rather than listed with a flag: every predicate
+ * in the product tests `revoked_at is null`, and somebody who has left the table
+ * is not at it. What a DM needs to see about a withdrawal is on the invitation
+ * that granted it — `CampaignInvite.status` says `revoked` and names who took it
+ * — so listing the dead row here would be a second answer to a question
+ * `invites.list` already answers better.
+ *
+ * **There is no seat, and this schema is where that decision is visible.** The
+ * fourth delivery draws an *open* seat with nobody in it and an *"Add seat"*
+ * button; a membership cannot exist before an account, so an empty seat is not
+ * representable and inventing a row to hold one would create a thing that can
+ * disagree with membership, invitations and characters at once. What the drawn
+ * statuses become instead:
+ *
+ * - **invited** — a `CampaignInvite` whose `status` is `live`, from
+ *   `invites.list`. It is not a member yet, and this list does not pretend it is.
+ * - **no-character** — a member here with no `Character` in `characters.list`
+ *   whose `accountId` is this `accountId`.
+ * - **playing** — a member here with one.
+ * - **open** — nothing. It comes out of the drawing.
+ *
+ * So the join key is the whole reason `accountId` is on the wire, and the count
+ * of characters is deliberately *not*: `Character.accountId` already answers it
+ * from a list the party screen reads anyway, and a field here would be a second
+ * answer that is structurally `0` for every row until something populates that
+ * column. Absent beats stubbed — the rule the encounter card's `count` follows.
+ */
+export class CampaignMember extends Schema.Class<CampaignMember>("CampaignMember")({
+  /**
+   * Who they are, and the key everything about them is joined on —
+   * `Character.accountId` today, and whatever assigns one tomorrow.
+   */
+  accountId: AccountId,
+  /**
+   * Their account name.
+   *
+   * `DEFAULT_ACCOUNT_NAME` for somebody provisioned just-in-time who has not
+   * been given one, which is *"Someone"* rather than *"DM"* precisely because
+   * this is the list it would be wrong on.
+   */
+  name: Schema.String,
+  role: MemberRole,
+  /** When they joined — for the DM, when they created the campaign. */
   joinedAt: Schema.DateTimeUtcFromString,
 }) {}

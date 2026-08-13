@@ -216,7 +216,10 @@ is the newer drawing and the written rule is the older decision:
   `playing` / `no-character` / `invited` / `open`. **There is no seat table**; membership is a
   `campaign_member` row, which cannot exist before an account. The delivery's own README argues
   the split ("a seat can be invited, accepted-but-empty, playing, or open") and it is a
-  coherent model — it is simply not the one in the schema.
+  coherent model — it is simply not the one in the schema. **Settled since: membership is the
+  model and there is no seat**, with the three derivable statuses and the read each comes from
+  written down under "Membership is the model, and there is no seat" — go there before drawing
+  this screen.
 - **"I approve characters before they play" is a switch with nothing behind it**, and the
   delivery's own "Open questions" says so: there is no approval queue screen and no column.
 
@@ -623,15 +626,17 @@ non-negotiable, because it is free on day one and a retrofit later.
   proof of the pair (this account is a `dm` member of this campaign, and this credential reaches
   it), minted only by `DmActors.of` — one read through `campaignWritableById` — and it **carries
   the campaign**, so the gated methods take it _in place of_ a campaign id and a proof for one
-  table cannot be spent on another. Sixteen methods have it today: `Combatants` (5),
+  table cannot be spent on another. Seventeen methods have it today: `Combatants` (5),
   `EncounterRuns` (7), `SessionEvents` (3, including the streaming `pollForRun`, which a grep
-  for `CurrentActor>` cannot see) and `Recap.read`. The other fifty-nine actor-scoped methods do
+  for `CurrentActor>` cannot see), `Recap.read` and `Memberships.list` — the roster, whose
+  player projection is _nothing_ rather than a narrower schema (see "Membership is the model,
+  and there is no seat"). The other fifty-nine actor-scoped methods do
   not, and should not: they return a `shared` row a player is entitled to see in full, so
   `GET …/notes` answering the ordinary `Note` discloses nothing. **The gate is a precondition on
   the seam, not a replacement for it** — every gated method still composes `visibility.ts`
   unchanged, so a bug in the gate degrades to today's behaviour rather than to an open door.
-  `apps/server/test/dm-actor.test.ts` pins all of it, including six `@ts-expect-error` lines that
-  fail the _build_ if a campaign id, a plain `Actor` or a hand-built object ever becomes
+  `apps/server/test/dm-actor.test.ts` pins all of it, including seven `@ts-expect-error` lines
+  that fail the _build_ if a campaign id, a plain `Actor` or a hand-built object ever becomes
   acceptable.
 - **Gate first, project later — a boundary that waits for the screen behind it is not a
   boundary.** `Recap.read` was left ungated on the reasoning that the player Chronicle was a
@@ -642,6 +647,8 @@ non-negotiable, because it is free on day one and a retrofit later.
   campaign a monster's exact `hpCurrent`, `hpMax` and `ac` — measured against real Postgres, 41 of
   82 at armour class 17. The gate could have gone on the day the other three did, costing a 404
   for a screen nobody had built. See "The recap has a player projection" below.
+  **`Memberships.list` is what the rule looks like followed**: it was gated in the change that
+  declared `GET /campaigns/:c/members`, so there is no release in which it answered a player.
 
 ### The invitation: a credential, and the four rules that bound it
 
@@ -971,6 +978,65 @@ re-litigated:
   character is the row a player is _most_ entitled to see in full. What the live columns change
   is that a `shared` character now carries exact current hit points, so step 8's player
   projection has a real decision to make about somebody _else's_ character.
+
+### Membership is the model, and there is no seat
+
+**Settled, by the captain on 2026-08-12: seats are not a first-class thing.** The fourth
+delivery's `Party.jsx` draws a chair per person with four statuses, an _"Add seat"_ button and
+an _"N of M seats"_ subtitle. Three of the statuses are questions about rows that already
+exist; the fourth is not representable, because **a `campaign_member` row cannot exist before
+an account** — `account_id` is `not null` and a real foreign key. So there is no seat table,
+there is no migration to add one, and the party screen must not reintroduce one. A seat row
+would be a fourth answer that can disagree with membership, invitations _and_ characters at
+once, and nothing would notice which was wrong.
+
+What the drawn vocabulary becomes, and the read each half comes from — all three shipped, none
+of them new:
+
+| drawn          | derived from                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `playing`      | a `CampaignMember` with `role: "player"` **and** a `Character` whose `accountId` is theirs |
+| `no-character` | the same member with no such `Character`                                                   |
+| `invited`      | a `CampaignInvite` whose `status` is `live`, from `invites.list` — not a member yet        |
+| `open`         | nothing. It comes out of the drawing.                                                      |
+
+The subtitle becomes what is true — _"2 players, 1 invitation outstanding"_ — from the same
+three reads, and _"Invite a player"_ is the only affordance. Measured end to end against a
+running server: the derivation above produced exactly that from three ordinary `GET`s.
+
+**`GET /campaigns/:c/members` is the roster, and it is behind the `DmActor` gate** —
+`Memberships` is the **fifth gated repository** and the second gated only in part. `list` takes
+the proof, `mine` (`GET /me/campaigns`) does not, and the split is the standing rule rather
+than a judgement:
+
+- **The player projection of a member list is _nothing_.** It is other people's account names,
+  who was invited and when somebody joined; a player at the table does not enumerate it. So
+  unlike `Recap` there is no narrow method beside the gated one, and the gate is the whole
+  answer. It went on **in the change that declared the endpoint**, which is "gate first,
+  project later" applied on the day rather than after a disclosure.
+- **`mine` needs no gate for the mirror-image reason**: the campaigns a credential already
+  reaches are not a disclosure to the credential that reaches them.
+- The read still composes `campaignWritableById` in its own `where`, under the proof — the gate
+  is a precondition on the seam, not a substitute for it.
+
+Three more things that are decisions:
+
+- **`accountId` is on the wire because it is the join key**, and a character count is
+  deliberately _not_ on it. `Character.accountId` already answers "has this member got one"
+  from a list the party screen reads anyway; a count here would be a second answer, and one
+  that is structurally `0` for every row until something populates that column. Absent beats
+  stubbed — the rule the encounter card's `count` follows.
+- **Live members only; a revoked membership is absent rather than flagged.** What a DM needs to
+  know about a withdrawal is on the invitation that granted it (`CampaignInvite.status` reads
+  `revoked` and names who took it), and revoking an accepted invitation drops the person from
+  this list in the same transaction — verified against a real server.
+- **Read-only, and that is structural.** A membership is written by exactly two statements and
+  revoked by one, all of them acts on something else; a `POST` or `DELETE` here would be a
+  third way to grant reach, which is what `repo/Memberships.ts` exists to prevent.
+
+`apps/server/test/members.test.ts` pins the gate (a player of this campaign, a DM of another
+table, a credential scoped elsewhere, and the campaign's own DM), the row's four fields, and
+the derivation table above — including that no table in the schema is named for a seat.
 
 ## `HttpApi`, and the client derived from it
 

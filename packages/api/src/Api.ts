@@ -53,7 +53,7 @@ import {
   InviteToken,
   IssuedInvite,
 } from "./Invite.js";
-import { CampaignMembership } from "./Membership.js";
+import { CampaignMember, CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
@@ -124,6 +124,45 @@ class MeGroup extends HttpApiGroup.make("me")
     }),
   )
   .prefix("/me")
+  .middleware(Authorization) {}
+
+/**
+ * Who is at this table — the roster the party screen draws.
+ *
+ * The mirror of `me.campaigns`: one asks which tables this account is at, the
+ * other who is at this one. Same row, read from the other end, which is why both
+ * live in `repo/Memberships.ts` and neither writes a predicate of its own.
+ *
+ * **Behind the `DmActor` gate, and it is the fifth repository to be.** The
+ * standing rule is that a repository takes the proof when its player projection
+ * diverges from its DM projection, and here the player projection is *nothing*:
+ * a member list is other people's account names and the shape of somebody's
+ * table, and a player at it has no business enumerating who else was invited or
+ * when. `Memberships.mine` stays ungated beside it — the campaigns a credential
+ * already reaches are not a disclosure to the credential that reaches them.
+ *
+ * **There is no seat here and there never was one.** Three of the four statuses
+ * the fourth delivery draws derive from rows that exist — this list, an
+ * invitation from `invites.list`, and a `Character` whose `accountId` names a
+ * member — and the fourth, an *open* seat with nobody in it, is not
+ * representable, because a membership cannot exist before an account. See
+ * `CampaignMember`, which is where each one is written down.
+ *
+ * Read-only, deliberately. A membership is written by exactly two statements
+ * (`Campaigns.create`'s owner row and `Invites.redeem`'s player row) and revoked
+ * by one (`invites.revoke`), and every one of those is an act on something else
+ * — so a `POST` or `DELETE` here would be a third way to grant or take reach,
+ * which is precisely what `repo/Memberships.ts` exists to prevent.
+ */
+class MembersGroup extends HttpApiGroup.make("members")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(CampaignMember),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/members")
   .middleware(Authorization) {}
 
 /**
@@ -927,6 +966,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(InvitePreviewGroup)
   .add(JoinGroup)
   .add(CampaignsGroup)
+  .add(MembersGroup)
   .add(InvitesGroup)
   .add(SessionsGroup)
   .add(CharactersGroup)
