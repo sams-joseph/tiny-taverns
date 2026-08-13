@@ -1,6 +1,6 @@
 import type { CampaignId, Character, Encounter, EncounterId, Note } from "@taverns/api";
 import { Badge, Button, Icon, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@taverns/ui";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { hrefFor, useRoute, type Route } from "../routes";
@@ -268,7 +268,30 @@ export function CampaignScreen({
   /** Whether the "end the night" confirmation is up. */
   const [finishing, setFinishing] = useState(false);
 
-  const view = resource.state === "ready" ? resource.value : undefined;
+  const loaded = resource.state === "ready" ? resource.value : undefined;
+
+  /**
+   * **A player who arrives here is handed the screen that works.**
+   *
+   * Nothing in the product links a player at this URL any more — the campaign
+   * list and the invitation page both route by role — but a bookmark, or a link
+   * a DM pasted into a chat, still can. It does not fail loudly if they do:
+   * every read the first round makes succeeds for a player, narrowed, so this
+   * screen would draw its own chrome (*New encounter*, *Ask Hob*, the sharing
+   * control, the Chronicle in the nav) over a player's data and break only on
+   * the press. `location.replace` rather than an assignment, so *Back* goes
+   * where they came from instead of returning them here.
+   */
+  const wrongSide = loaded?.role === "player";
+  useEffect(() => {
+    if (wrongSide) {
+      globalThis.location.replace(hrefFor({ screen: "playCampaign", campaignId }));
+    }
+  }, [wrongSide, campaignId]);
+
+  // Withheld for the frame before the hash lands, so none of this screen's
+  // chrome is ever drawn for somebody it does not belong to.
+  const view = wrongSide ? undefined : loaded;
 
   const close = useCallback(() => setEditing(undefined), []);
   const saved = useCallback(() => {

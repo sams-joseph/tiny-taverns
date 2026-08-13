@@ -63,7 +63,14 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
             </p>
             <Button
               nativeButton={false}
-              render={<a href={hrefFor({ screen: "campaign", campaignId: redeemed.campaignId })} />}
+              // The player's screen, never the DM's. Redeeming an invitation
+              // mints a `player` membership and nothing else, and the DM's
+              // campaign screen composes `runs.list` — behind the `DmActor`
+              // gate — so this link used to hand a brand new player a 404 on
+              // the very first thing they pressed.
+              render={
+                <a href={hrefFor({ screen: "playCampaign", campaignId: redeemed.campaignId })} />
+              }
             >
               Open {redeemed.campaignName}
               <Icon name="chevron-right" size={15} />
@@ -82,7 +89,7 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
             <Button
               variant="secondary"
               nativeButton={false}
-              render={<a href={hrefFor({ screen: "campaigns" })} />}
+              render={<a href={hrefFor({ screen: "play" })} />}
             >
               Your tables
               <Icon name="chevron-right" size={15} />

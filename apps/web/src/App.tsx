@@ -4,12 +4,18 @@ import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
+import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
 import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
 
 /**
- * Six screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Eight screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
+ *
+ * **Two of them are the player's**, and the mode they are in is read off the
+ * route rather than held anywhere: `#/play` is the same `CampaignsScreen`
+ * answering the other question, and `#/play/campaigns/:c` is a screen of its
+ * own. See `modeOf` in `routes.ts`.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
  * `useApiResource`, which resolves whichever credential exists — hosted session
@@ -32,6 +38,13 @@ export function App() {
       );
     case "campaign":
       return <CampaignScreen campaignId={route.campaignId} route={route} />;
+    case "playCampaign":
+      return (
+        // A different table is a different screen, for the reason every other
+        // campaign-keyed screen here is keyed: nothing loaded for one table
+        // should survive into another.
+        <PlayerCampaignScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
+      );
     case "bestiary":
       return (
         // A different campaign is a different bestiary: the environment chips
@@ -59,6 +72,9 @@ export function App() {
           route={route}
         />
       );
+    // `campaigns` and `play` are one screen answering two questions — which
+    // tables I run, and which I sit at — off the one `GET /me/campaigns` that
+    // already carries the role.
     default:
       return <CampaignsScreen route={route} />;
   }

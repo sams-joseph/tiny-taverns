@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { runApiResult, useApiResource } from "../api/resource";
 import { useCredential } from "../auth/credential";
-import { hrefFor, type Route } from "../routes";
+import { hrefFor, modeOf, type Route } from "../routes";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
@@ -26,28 +26,50 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
  * a fact about the pair. Both reads compose the same predicate (see
  * `CampaignMembership`), so the switch cannot change *which* campaigns appear —
  * only what the screen can say about them.
+ *
+ * ### It is two screens now, on one read
+ *
+ * **The role switch is a mode**, so this file answers two questions rather than
+ * one: *the tables I run* at `#/campaigns`, and *the tables I sit at* at
+ * `#/play`. One `useApiResource` and one endpoint serve both — `role` is on
+ * every row already — and the split is a filter over the answer plus different
+ * copy, different affordances and a different destination per row.
+ *
+ * That last one is the point of the whole step. A player's row goes to
+ * `#/play/campaigns/:c`, not to the DM's campaign screen, which composes
+ * `runs.list` and would answer them a 404 the first time they followed an
+ * invitation. **The branch is the thing that stops a player landing on a broken
+ * screen**, so it happens here — at the only place that knows the role — rather
+ * than being discovered by the screen underneath.
+ *
+ * This is also where the switch is offered, because this is where the answer to
+ * "is there a player side at all" is in hand. See `AppShell`'s `roleSwitch`.
  */
 
 const listMemberships = (client: TavernsClient) => client.me.campaigns();
 
 function CampaignRow({ membership }: { readonly membership: CampaignMembership }) {
   const campaign = membership.campaign;
+  // A mode, not a filter: the row goes to the screen for the role you are at
+  // this table in, and there is exactly one such screen.
+  const open = hrefFor(
+    membership.role === "player"
+      ? { screen: "playCampaign", campaignId: campaign.id }
+      : { screen: "campaign", campaignId: campaign.id },
+  );
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
-            <a
-              href={hrefFor({ screen: "campaign", campaignId: campaign.id })}
-              className="text-heading no-underline hover:text-link-hover"
-            >
+            <a href={open} className="text-heading no-underline hover:text-link-hover">
               {campaign.name}
             </a>
           </CardTitle>
-          {/* A player earns a badge and a DM does not, for the reason a
-              creature's `authored` origin earns none: absence is what says
-              "yours", and a badge on every row would say nothing. */}
-          {membership.role === "player" && <Badge variant="secondary">Player</Badge>}
+          {/* No `Player` badge any more, for the reason it earned one before:
+              absence is what says "yours". Under a mode every row in a list has
+              the same role, so a badge on all of them would say nothing — the
+              nav and the pill are what carry which side you are looking at. */}
           {campaign.visibility === "shared" && <Badge variant="info">Shared</Badge>}
         </div>
       </CardHeader>
@@ -66,7 +88,7 @@ function CampaignRow({ membership }: { readonly membership: CampaignMembership }
           size="sm"
           className="ml-auto text-link"
           nativeButton={false}
-          render={<a href={hrefFor({ screen: "campaign", campaignId: campaign.id })} />}
+          render={<a href={open} />}
         >
           Open
           <Icon name="chevron-right" size={15} />
@@ -136,20 +158,35 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
   // composer with nowhere to send.
   const hob = useHobPanel({ initialOpen: false });
 
-  const memberships =
+  const mode = modeOf(route);
+  const player = mode === "player";
+
+  const live =
     resource.state === "ready"
       ? resource.value.filter((row) => row.campaign.archivedAt === null)
       : undefined;
+  const memberships = live?.filter((row) => (player ? row.role === "player" : row.role === "dm"));
+
+  // Offered when there is a side to switch *to*, and always in player mode,
+  // which is what keeps a bookmark into `#/play` from being a dead end. An
+  // account that is a DM everywhere and a player nowhere — every account that
+  // predates the invitation — is not shown a pill leading to an empty list.
+  const roleSwitch = player || (live?.some((row) => row.role === "player") ?? false);
 
   return (
     <AppShell
       route={route}
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} />}
+      roleSwitch={roleSwitch}
       topBar={
         <TopBar
-          title="Campaigns"
-          subtitle="Every table this credential reaches — the ones you run, and the ones you sit at."
+          title={player ? "Tables" : "Campaigns"}
+          subtitle={
+            player
+              ? "The tables you sit at. What you can read at each is whatever its DM has shared."
+              : "The tables you run."
+          }
         />
       }
     >
@@ -164,19 +201,29 @@ export function CampaignsScreen({ route }: { readonly route: Route }) {
         )}
         {memberships !== undefined && (
           <>
-            <NewCampaign onCreated={reload} />
+            {/* Creating a campaign makes you its DM — `Campaigns.create` writes
+                the owner's `dm` row in the same transaction — so the one write
+                on the way in belongs to the DM side and nowhere else. Offering
+                it here would be offering to leave the mode. */}
+            {!player && <NewCampaign onCreated={reload} />}
             {memberships.length === 0 ? (
-              // Two states behind one card, and the second is new: an account
-              // that has been invited nowhere is a legitimate steady state now,
-              // and so is one whose DM has not shared the table yet — a player
-              // member of an unshared campaign reads nothing, which is the
-              // master toggle working rather than a gap. Neither can be told
-              // apart from here without a second read, so the copy covers both
-              // rather than guessing at one.
-              <EmptyState icon="book-open" title="No tables yet">
-                Name the one you are running and it opens above. If you have followed an invitation,
-                the table appears here once its DM shares it.
-              </EmptyState>
+              player ? (
+                // Two states behind one card, and neither can be told apart
+                // from here without a second read: nobody has invited you, or
+                // the DM of a table you joined has not shared it — a player
+                // member of an unshared campaign reads nothing, which is the
+                // master toggle working rather than a gap. So the copy covers
+                // both rather than guessing at one.
+                <EmptyState icon="user" title="No table yet">
+                  Follow the link somebody sends you and their table appears here. A table you have
+                  already joined shows up once its DM shares it.
+                </EmptyState>
+              ) : (
+                <EmptyState icon="book-open" title="No campaigns yet">
+                  Name the one you are running and it opens above. Tables you have been invited to
+                  are on the player side.
+                </EmptyState>
+              )
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (

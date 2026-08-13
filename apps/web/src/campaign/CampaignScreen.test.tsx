@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   campaign,
   campaignId,
@@ -188,5 +188,32 @@ describe("CampaignScreen", () => {
     // Searching to nothing is not the same state as having nothing, and says so.
     expect(await screen.findByText("Nothing matches")).toBeInTheDocument();
     expect(screen.getByText(/Loosen the search, or clear it/)).toBeInTheDocument();
+  });
+
+  it("hands a player the screen that works, rather than drawing the DM's over their data", async () => {
+    // Nothing in the product links a player here any more, but a bookmark or a
+    // pasted link still can — and it would not fail loudly: every read this
+    // screen's first round makes succeeds for a player, narrowed. So it would
+    // draw *New encounter*, *Ask Hob* and the sharing control over rows a
+    // player may see, and break only on the press.
+    const replace = vi.fn();
+    vi.spyOn(globalThis, "location", "get").mockReturnValue({
+      ...globalThis.location,
+      replace,
+    } as unknown as Location);
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [{ campaign, role: "player", joinedAt: campaign.createdAt }],
+    });
+
+    renderScreen(mintingSession());
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith(`#/play/campaigns/${campaignId}`);
+    });
+    // Not one control of this screen is drawn on the way.
+    expect(screen.queryByRole("button", { name: "New encounter" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Party" })).not.toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 });

@@ -1,7 +1,7 @@
 import { CampaignId, EncounterRunId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { hrefFor, parseRoute, type Route } from "./routes";
+import { hrefFor, listFor, modeOf, parseRoute, type Route } from "./routes";
 
 const CAMPAIGN_ID = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-000000000501");
@@ -24,6 +24,8 @@ describe("hash routes", () => {
       { screen: "chronicle", campaignId: CAMPAIGN_ID },
       { screen: "run", campaignId: CAMPAIGN_ID, sessionId: SESSION_ID, runId: RUN_ID },
       { screen: "join", token: "aG93LWRvLXlvdS1kbw" },
+      { screen: "play" },
+      { screen: "playCampaign", campaignId: CAMPAIGN_ID },
     ];
     for (const route of routes) {
       expect(parseRoute(hrefFor(route))).toEqual(route);
@@ -90,6 +92,37 @@ describe("hash routes", () => {
       screen: "campaign",
       campaignId: CAMPAIGN_ID,
     });
+  });
+
+  it("carries the role switch in the URL, because a mode kept beside it could disagree", () => {
+    // The captain settled the switch as a mode rather than a filter, so it
+    // changes what the app is. Held in React state it would be a second answer
+    // to "which app am I in" beside the URL, and a reload, a bookmark or a
+    // shared link would land on a screen the pill says you are not looking at.
+    expect(parseRoute("#/play")).toEqual({ screen: "play" });
+    expect(parseRoute(`#/play/campaigns/${CAMPAIGN_ID}`)).toEqual({
+      screen: "playCampaign",
+      campaignId: CAMPAIGN_ID,
+    });
+
+    expect(modeOf({ screen: "play" })).toBe("player");
+    expect(modeOf({ screen: "playCampaign", campaignId: CAMPAIGN_ID })).toBe("player");
+    expect(modeOf({ screen: "campaign", campaignId: CAMPAIGN_ID })).toBe("dm");
+    // Neither names a mode; the answer only decides which nav they draw, and
+    // the invitation page runs before there is anybody to have a role at all.
+    expect(modeOf({ screen: "join", token: "aG93" })).toBe("dm");
+    expect(modeOf({ screen: "gallery" })).toBe("dm");
+
+    expect(hrefFor(listFor("player"))).toBe("#/play");
+    expect(hrefFor(listFor("dm"))).toBe("#/campaigns");
+  });
+
+  it("falls back within the mode, not out of it, on a player link it cannot read", () => {
+    // The id is what was illegible; the mode was not. Falling back to the DM's
+    // list would answer a question the URL did not ask.
+    expect(parseRoute("#/play/campaigns/not-a-uuid")).toEqual({ screen: "play" });
+    expect(parseRoute("#/play/campaigns")).toEqual({ screen: "play" });
+    expect(parseRoute("#/play/nonsense")).toEqual({ screen: "play" });
   });
 
   it("falls back to the list rather than throwing on an id we never minted", () => {

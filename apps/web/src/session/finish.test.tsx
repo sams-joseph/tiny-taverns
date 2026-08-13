@@ -7,6 +7,7 @@ import { HostedSessionContext, type HostedSession } from "../auth/hostedSession"
 import { CampaignScreen } from "../campaign/CampaignScreen";
 import {
   brannoc,
+  campaign,
   campaignId,
   character,
   encounter,
@@ -50,6 +51,12 @@ const finished = { ...session, endedAt: "2026-08-04T23:40:00.000Z" };
 
 /** The campaign view's reads, which the runner's fixture has no need of. */
 const alsoAnswerTheCampaignView = (over: boolean) => {
+  // The role at this table, which the campaign view reads to know it is the
+  // DM's screen to draw at all.
+  server.routes.set("GET /me/campaigns", {
+    status: 200,
+    body: [{ campaign, role: "dm", joinedAt: campaign.createdAt }],
+  });
   server.routes.set(`GET ${base}/encounters`, { status: 200, body: [encounter] });
   server.routes.set(`GET ${base}/notes`, { status: 200, body: [readAloud] });
   server.routes.set(`GET ${base}/characters`, { status: 200, body: [character] });

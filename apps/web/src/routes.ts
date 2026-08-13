@@ -22,6 +22,24 @@ export type Route =
   | { readonly screen: "campaigns" }
   | { readonly screen: "campaign"; readonly campaignId: CampaignId }
   /**
+   * The player side, and the whole of how the role switch is carried.
+   *
+   * **The mode lives in the URL and nowhere else.** The captain settled the
+   * switch as a *mode* rather than a filter — flipping it changes what the app
+   * is, not merely which campaigns are listed — and a mode kept in React state
+   * beside the route is a second source of truth that can disagree with it: a
+   * reload, a bookmark or a link would land on a screen the pill says you are
+   * not looking at. Carried here it cannot, because `modeOf` reads the route
+   * itself and the pill is two links.
+   *
+   * It also answers the question a global pill leaves open. *Player* at a table
+   * you DM has no meaning; there is no such route to be in. `#/play` is the
+   * tables you sit at, and `#/play/campaigns/:c` is one of them — a screen that
+   * reads only what a player may read, so nothing on it can 404.
+   */
+  | { readonly screen: "play" }
+  | { readonly screen: "playCampaign"; readonly campaignId: CampaignId }
+  /**
    * The bestiary names a campaign, because the API does: `creatures.list` hangs
    * off `/campaigns/:campaignId/creatures`, and that path is the only thing
    * gating the global `system` rows it returns beside the campaign's own. A
@@ -101,6 +119,17 @@ export const parseRoute = (hash: string): Route => {
 
   if (head === "gallery") return { screen: "gallery" };
 
+  if (head === "play") {
+    // `#/play` is the list; `#/play/campaigns/:c` is one table. A campaign id
+    // that does not decode falls back to the player list rather than to the
+    // DM's, because the mode is the part of the URL that was legible.
+    if (campaignRaw === "campaigns") {
+      const campaignId = parseCampaignId(section);
+      if (campaignId !== undefined) return { screen: "playCampaign", campaignId };
+    }
+    return { screen: "play" };
+  }
+
   if (head === "join") {
     // `campaignRaw` is the second segment whatever it holds; here it is the
     // token. A malformed one falls through to the campaign list, which is the
@@ -134,6 +163,10 @@ export const hrefFor = (route: Route): string => {
   switch (route.screen) {
     case "gallery":
       return "#/gallery";
+    case "play":
+      return "#/play";
+    case "playCampaign":
+      return `#/play/campaigns/${route.campaignId}`;
     case "campaign":
       return `#/campaigns/${route.campaignId}`;
     case "bestiary":
@@ -148,6 +181,30 @@ export const hrefFor = (route: Route): string => {
       return "#/campaigns";
   }
 };
+
+/**
+ * Which app you are in: the DM's tool, or the player's.
+ *
+ * **Derived from the route, never stored beside it.** That is what makes the
+ * switch a mode rather than a filter without needing a second piece of state to
+ * keep in step — there is one answer, the URL is it, and every screen, every
+ * nav item and the pill itself read the same function. A role is otherwise a
+ * fact about a *pair* (this account, this campaign), so a mode held globally is
+ * under-determined the moment you open a table: reading it off the route means
+ * the campaign you are looking at is always the campaign the mode is about.
+ *
+ * `join` and `gallery` name no mode and answer `dm`. Neither is a DM screen —
+ * the invitation page runs before there is anybody to have a role — and the
+ * answer only decides which nav they draw.
+ */
+export type Mode = "dm" | "player";
+
+export const modeOf = (route: Route): Mode =>
+  route.screen === "play" || route.screen === "playCampaign" ? "player" : "dm";
+
+/** The same route on the other side, for the pill. */
+export const listFor = (mode: Mode): Route =>
+  mode === "player" ? { screen: "play" } : { screen: "campaigns" };
 
 const currentHash = (): string => globalThis.location?.hash ?? "";
 

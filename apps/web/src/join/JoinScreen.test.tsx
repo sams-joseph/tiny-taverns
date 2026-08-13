@@ -139,7 +139,7 @@ describe("following an invitation", () => {
     });
   });
 
-  it("points straight at a table that is already shared", async () => {
+  it("points straight at a table that is already shared — at the player's screen", async () => {
     routes.set("POST /invites/preview", { status: 200, body: preview });
     routes.set("POST /invites/redeem", {
       status: 200,
@@ -153,7 +153,11 @@ describe("following an invitation", () => {
     // what keeps the href while Base UI applies button semantics, so the role
     // is `button` and the destination is still a link somebody can copy.
     const open = await screen.findByRole("button", { name: /Open The Salt Road/ });
-    expect(open.getAttribute("href")).toBe(`#/campaigns/${campaignId}`);
+    // **The player's route, never the DM's.** Redeeming mints a `player`
+    // membership; the DM's campaign screen composes `runs.list`, which is behind
+    // the `DmActor` gate, so `#/campaigns/:c` would have answered a brand new
+    // player a 404 on the first thing they pressed in the product.
+    expect(open.getAttribute("href")).toBe(`#/play/campaigns/${campaignId}`);
   });
 
   it("gives every dead link the same sentence", async () => {

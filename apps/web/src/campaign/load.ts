@@ -4,6 +4,7 @@ import type {
   Character,
   Encounter,
   EncounterRun,
+  MemberRole,
   Note,
   PrepItem,
   Session,
@@ -14,6 +15,19 @@ import type { TavernsClient } from "../api/client";
 /** Everything the campaign view renders, in one shape. */
 export interface CampaignView {
   readonly campaign: Campaign;
+  /**
+   * What this account is at *this* table — the one thing the campaign row
+   * cannot carry, because a role is a fact about a pair.
+   *
+   * **It is here to close the last way a player reaches a DM screen.** The
+   * campaign list and the invitation page both route by role now, so nothing
+   * in the product links here for a player; a bookmark or a link a DM pasted
+   * still can. Landing there does not even fail loudly — every read this screen
+   * makes in its first round succeeds for a player, narrowed — so it draws a
+   * DM's chrome over a player's data and only breaks when something is pressed.
+   * Knowing the role is what lets the screen hand them the one that works.
+   */
+  readonly role: MemberRole;
   /** The session the DM is preparing, or `undefined` when there is not one yet. */
   readonly session: Session | undefined;
   readonly encounters: ReadonlyArray<Encounter>;
@@ -48,11 +62,17 @@ export const loadCampaignView = (campaignId: CampaignId) => (client: TavernsClie
   Effect.gen(function* () {
     const campaign = yield* client.campaigns.findById({ params: { campaignId } });
 
-    const [encounters, notes, party] = yield* Effect.all(
+    const [encounters, notes, party, memberships] = yield* Effect.all(
       [
         client.encounters.list({ params: { campaignId } }),
         client.notes.list({ params: { campaignId } }),
         client.characters.list({ params: { campaignId } }),
+        // In the round that was already running, so it costs no round trip. A
+        // campaign this actor can read is a campaign they are a member of —
+        // `campaignInScope` is membership — so the row is there; defaulting to
+        // `dm` if it somehow is not keeps the screen it is on rather than
+        // bouncing somebody out of their own table.
+        client.me.campaigns(),
       ],
       { concurrency: "unbounded" },
     );
@@ -72,6 +92,7 @@ export const loadCampaignView = (campaignId: CampaignId) => (client: TavernsClie
 
     return {
       campaign,
+      role: memberships.find((row) => row.campaign.id === campaignId)?.role ?? "dm",
       session: live?.[0],
       encounters,
       notes,

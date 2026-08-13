@@ -197,11 +197,12 @@ delivery is `ui_kits/dm-screen`: **seven new files and three changed**, nothing 
 - `player-data.js` is `window.TT_PLAYER`, a **fourth** global beside `TT_DATA`, `TT_CHRONICLE`
   and `TT_CHAT`. `index.html` and `README.md` wire and describe it.
 
-**None of the shipped screens account for the role switch, and `shell/AppShell.tsx` has no
-concept of a role at all.** Its nav is `navFor(route)` — a function of the route, not of who is
-looking. Adding a role means the nav becomes a function of both, and `sectionOf` gains a second
-axis. Nothing about that is decided; it is a real design decision the first player screen has to
-take, not a mechanical port.
+**The role switch is shipped, as a _mode_** — see "The role switch" under the shell. The delivery
+draws it with a `setRole` callback; what shipped carries the mode in the URL instead, so
+`navFor`/`sectionOf` gained their second axis by reading the route rather than by taking a role
+argument, and the pill is two links. The delivery's player nav is three items and the shipped one
+is _Tables_ plus the gallery, for the rule that keeps _Run_ out of the DM's row: a screen earns
+its item when it exists.
 
 **Three places where the delivery contradicts something already shipped and reasoned about.**
 Read the relevant section before building against the fixture, because in each case the fixture
@@ -1481,14 +1482,16 @@ Three things about it that are decisions, not details:
   UI's own tab sets, which is what makes the shared recipe work on a plain anchor. `-mb-px` in
   that recipe is what lands the underline _on_ the bar's hairline; the item needs `h-auto
 self-stretch` to reach it.
-- **The nav is the screens that exist, and it is a function of the route** — which is why it is
-  shorter than the kit's. The kit draws four as of the third delivery (Campaign, Run, Bestiary,
-  Chronicle); a screen earns its item when it is built, and _Run_ never does, because a fight is
-  reached from the campaign that owns it and a top-level link could not know which. **_Bestiary_
-  is there, but only once a campaign is**, because `creatures.list` hangs off one; `navFor(route)`
-  adds it when the route names a campaign and omits it on the campaign list. `sectionOf` lights
-  **Campaigns** for the campaign list, a campaign _and_ a run, and gives the bestiary its own
-  underline — the underline says which part of the app you are in.
+- **The nav is the screens that exist, and it is a function of the route _and the mode_** — which
+  is why it is shorter than the kit's. The kit draws four as of the third delivery (Campaign, Run,
+  Bestiary, Chronicle); a screen earns its item when it is built, and _Run_ never does, because a
+  fight is reached from the campaign that owns it and a top-level link could not know which.
+  **_Bestiary_ is there, but only once a campaign is**, because `creatures.list` hangs off one;
+  `navFor(route)` adds it when the route names a campaign and omits it on the campaign list.
+  `sectionOf` lights **Campaigns** for the campaign list, a campaign _and_ a run, and gives the
+  bestiary its own underline — the underline says which part of the app you are in. The mode is
+  the second axis and is read off the route rather than passed beside it; see "The role switch"
+  below.
 - **The campaign name is the only elastic thing in the bar, so it is the thing that truncates.**
   The right-hand group is `min-w-0`, not `shrink-0`. Without that the bar overflowed its own
   width at 760px and clipped _Ask Hob_ — invisible to every test, because the shell's
@@ -1532,6 +1535,80 @@ narrower now, and that is the number to assert — see the sidebar section below
 `NavContext` is exported from the same file for the bar's right-hand pair, and takes an `href` for
 the screen that is _inside_ a campaign — from a fight, the campaign's name is the way back to
 prep, which is what the rail's footer used to be.
+
+### The role switch: a mode, carried by the URL — and how navigation derives from it
+
+**Captain's decision, 2026-08-12: the pill is a _mode_, not a filter.** Flipping it changes what
+the app is — a DM's tool or a player's — not merely which campaigns a list shows. So the two sides
+may diverge freely: a player's campaign screen owes nothing to the DM's and is **not that screen
+with rows hidden**. Any player screen that follows should read this before inventing a second
+scheme.
+
+**It cost nothing at the data layer, and if a change here needs a server change that is the signal
+something has been misunderstood.** One account being a DM at one table and a player at another was
+already expressible and already answered: `GET /me/campaigns` returns `{campaign, role, joinedAt}`,
+and the `DmActor` gate grants at one campaign and refuses at another. No migration, no `Actor`
+change, no predicate. **Account-wide credentials are load-bearing for this** — `Actor.campaignId`
+may narrow a credential to one table, and adopting that form for players would turn the switch into
+a per-table sign-in.
+
+**The mode lives in the route and nowhere else** (`modeOf` in `routes.ts`), which is the whole
+design in one line:
+
+| route                     | mode     | screen                                             |
+| ------------------------- | -------- | -------------------------------------------------- |
+| `#/campaigns`             | `dm`     | `CampaignsScreen`, filtered to `role === "dm"`     |
+| `#/campaigns/:c` and down | `dm`     | the DM's screens, unchanged                        |
+| `#/play`                  | `player` | the same `CampaignsScreen`, filtered to `"player"` |
+| `#/play/campaigns/:c`     | `player` | `play/PlayerCampaignScreen`, a screen of its own   |
+
+Held in React state beside the route it would be a second answer to "which app am I in", and a
+reload, a bookmark or a shared link would land on a screen the pill says you are not looking at.
+**So the pill is two `<a href>` and holds nothing** (`RoleSwitch` in `AppShell.tsx`), and
+`navFor`/`sectionOf` read `modeOf(route)` rather than taking a role argument — one answer, so the
+bar cannot light a section the URL is not in. It also settles what a global pill leaves open:
+_Player_ at a table you DM has no meaning, and there is no such route to be in.
+
+Five things that are decisions rather than layout:
+
+- **The player nav is the screens that exist**, which today is _Tables_ and the gallery — the same
+  rule that keeps _Run_ out of the DM's row. The delivery draws _Characters_, _At the table_ and
+  _Chronicle_; each earns its item on the day its screen is built. **_Chronicle_ and _Bestiary_ are
+  kept out on top of that**: `recap.read` is behind the `DmActor` gate and would answer a player a
+  404, and a control that exists and then errors is worse than one that is absent.
+- **_Ask Hob_ is absent in player mode, in the shell.** Asking is a write (`HobThreads.start` needs
+  `campaignWritable`) and the captain settled that players do not talk to Hob, so the button would
+  open a panel that can only apologise.
+- **The pill is offered by the screen, not by the shell** — `AppShell`'s `roleSwitch` prop — because
+  whether there _is_ a player side is a fact about this account's memberships and only a screen that
+  has read `GET /me/campaigns` holds it. The two campaign lists pass it and nothing else does. The
+  DM's list passes it **only once a `player` membership exists**, so an account that is a DM
+  everywhere and a player nowhere — every account that predates the invitation — is not shown a mode
+  with nothing in it; the player's list passes it unconditionally, which is the way back and what
+  keeps a bookmark into `#/play` from being a dead end. **Inside a campaign there is no pill**, and
+  that is not an omission: role is a fact about a pair, so at a table you are already at the question
+  is settled by the table, and the nav's first item is the way out of the mode.
+- **The `Player` badge on a campaign row is gone with the mixed list.** Under a mode every row has
+  the same role, so a badge on all of them would say nothing — the same rule that gave a DM's row no
+  badge in the first place.
+- **Two routes lead a player to a DM screen, and both are closed.** `CampaignsScreen` sends a
+  `player` row to `#/play/campaigns/:c`, and `JoinScreen` does too — it used to point a brand new
+  player at `#/campaigns/:c`, the first thing they ever pressed, which the gate answers 404. For the
+  bookmark and the pasted link, **`CampaignScreen` reads the role in the round it was already making
+  and `location.replace`s a player onto the screen that works.** That last one matters because
+  landing there does _not_ fail loudly: every read its first round makes succeeds for a player,
+  narrowed, so it would draw _New encounter_, _Ask Hob_ and the sharing control over a player's data
+  and break only on the press.
+
+Measured in Chromium against a real server and a real Postgres, with one account that is a DM at
+_The Salt Road_ and a player at _The Hag's Bargain_: pressing _Player_ moved `#/campaigns` →
+`#/play`, the nav went `Campaigns, Components` → `Tables, Components`, _Ask Hob_ disappeared, the
+list swapped one campaign for the other, and the row's href was `#/play/campaigns/:c`. Typing the
+DM URL for the table they only play at landed on the player screen instead. The same account's DM
+screen kept every one of its controls. A second account — DM everywhere, player nowhere — got no
+pill at all, and `#/play` typed by hand gave the honest empty state plus the pill back. Server-side,
+the same credential got 404 from `runs.list`, `members.list` and `recap.read` at the table it plays
+at, and 200 from `notes.list` and `characters.list` with only the shared rows.
 
 ## Authoring in `apps/web`: forms, mutations, and the traps in them
 
@@ -2316,8 +2393,10 @@ that is already gone, which is the one sentence here that could make a DM think 
 worked.
 
 **The campaign list reads `GET /me/campaigns`, not `GET /campaigns`.** Both compose the same
-predicate, so the switch cannot change which campaigns appear; what it adds is the role, which
-earns a `Player` badge and, for a DM, no badge at all — absence is what says "yours".
+predicate, so the switch cannot change which campaigns appear; what it adds is the role, which is
+now what the role switch splits the list on and what decides where a row's link goes — see "The
+role switch" under the shell. It stopped earning a `Player` badge in the same change: under a mode
+every row in a list has the same role, so a badge on all of them would say nothing.
 
 ## Hob: the chat surface, and what it is now attached to
 

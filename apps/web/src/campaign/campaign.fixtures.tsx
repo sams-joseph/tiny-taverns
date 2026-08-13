@@ -294,6 +294,14 @@ export interface Call {
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+    // The campaign view reads the membership list in its first round, to know
+    // which side of the role switch this account is on at this table. A test
+    // that wants the other side re-aims this at `role: "player"`, which is what
+    // bounces the screen to `#/play/campaigns/:c`.
+    [
+      "GET /me/campaigns",
+      { status: 200, body: [{ campaign, role: "dm", joinedAt: stamps.createdAt }] },
+    ],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [encounter, sketch] }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: [readAloud] }],
     [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [character] }],

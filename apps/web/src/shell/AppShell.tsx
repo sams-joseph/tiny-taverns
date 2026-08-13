@@ -3,7 +3,7 @@ import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/u
 import type { ReactNode } from "react";
 import { SignInSurface } from "../auth/SignInSurface";
 import { HobRegion } from "../hob/HobDock";
-import { hrefFor, type Route } from "../routes";
+import { hrefFor, listFor, modeOf, type Mode, type Route } from "../routes";
 
 /**
  * The fixed shell: a 56px top nav, a per-screen bar under it, a scrolling body.
@@ -53,6 +53,31 @@ interface NavItem {
  */
 const navFor = (route: Route): ReadonlyArray<NavItem> => {
   const campaignId = "campaignId" in route ? route.campaignId : undefined;
+
+  /**
+   * **The nav is a function of the route and the mode, and the mode is read off
+   * the route** (`modeOf`) rather than passed in beside it — one answer, so the
+   * bar can never light a section the URL is not in.
+   *
+   * The delivery's player nav is *Characters*, *At the table* and *Chronicle*.
+   * None of the three is built, and the rule that keeps *Run* out of the DM's
+   * row keeps them out of this one: a nav item that goes nowhere is the same lie
+   * as a stubbed field. What a player has is the tables they sit at, so that is
+   * what the row carries, and each of the drawn three earns its item the day its
+   * screen exists.
+   *
+   * *Bestiary* and *Chronicle* are deliberately absent even inside a campaign.
+   * They are not merely undrawn here — `recap.read` is behind the `DmActor` gate
+   * and would answer a player a 404, and a control that exists and then errors
+   * is worse than one that is absent.
+   */
+  if (modeOf(route) === "player") {
+    return [
+      { label: "Tables", icon: "book-open", route: { screen: "play" } },
+      { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
+    ];
+  }
+
   return [
     { label: "Campaigns", icon: "book-open", route: { screen: "campaigns" } },
     ...(campaignId === undefined
@@ -81,11 +106,18 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
  * in, not which URL you are at, and an unlit nav on a campaign page reads as a
  * bug. The bestiary and the Chronicle are their own sections: they are screens
  * you go *to* from a campaign rather than views of one.
+ *
+ * **The second axis is the mode**, and it is the same rule one level up: a
+ * player's campaign is *within* their tables, so `#/play` and
+ * `#/play/campaigns/:c` light one item. There is no route that is both, so the
+ * two axes cannot fight.
  */
 const sectionOf = (route: Route): Route["screen"] =>
   route.screen === "gallery" || route.screen === "bestiary" || route.screen === "chronicle"
     ? route.screen
-    : "campaigns";
+    : modeOf(route) === "player"
+      ? "play"
+      : "campaigns";
 
 /**
  * A nav item, wearing `Tabs`' own recipe.
@@ -113,6 +145,59 @@ function NavLink({ item, active }: { readonly item: NavItem; readonly active: bo
       <Icon name={item.icon} size={16} className={active ? "text-verdigris-300" : undefined} />
       {item.label}
     </a>
+  );
+}
+
+/**
+ * The role switch: which app this is.
+ *
+ * `AppShell.jsx:42-60` draws it as a two-segment pill in the top row, and the
+ * captain settled what it means — **a mode, not a filter.** Flipping it changes
+ * the nav, the routes and the screens, not merely which rows a list shows.
+ *
+ * **So it is two links and holds no state**, which is the whole of how a mode
+ * survives a reload, a bookmark and a middle click. The delivery's `setRole`
+ * callback would have been a second answer to "which app am I in" beside the
+ * URL, and the two would part company the first time somebody shared a link.
+ *
+ * It lands on the *list* on each side rather than trying to carry the campaign
+ * across, because a campaign does not exist on both: role is a fact about a
+ * pair, and the table you DM has no player screen to be shown.
+ *
+ * `aria-pressed` as the delivery has it, and a real `<a>`: this is navigation
+ * wearing a toggle's clothes, so it must behave like navigation.
+ */
+function RoleSwitch({ mode }: { readonly mode: Mode }) {
+  const options = [
+    { id: "dm", icon: "crown", label: "DM" },
+    { id: "player", icon: "user", label: "Player" },
+  ] as const satisfies ReadonlyArray<{ id: Mode; icon: IconName; label: string }>;
+
+  return (
+    <div
+      aria-label="Role"
+      className="flex shrink-0 gap-0.5 rounded-pill border border-hairline bg-surface-sunken p-0.5"
+    >
+      {options.map((option) => {
+        const on = option.id === mode;
+        return (
+          <a
+            key={option.id}
+            href={hrefFor(listFor(option.id))}
+            aria-pressed={on}
+            className={cn(
+              "flex h-6.5 items-center gap-1.5 rounded-pill px-2.5 text-caption leading-none font-semibold whitespace-nowrap transition-control",
+              on
+                ? "bg-accent text-on-accent"
+                : "text-muted-foreground hover:bg-surface-raised hover:text-foreground",
+            )}
+          >
+            <Icon name={option.icon} size={13} />
+            {option.label}
+          </a>
+        );
+      })}
+    </div>
   );
 }
 
@@ -146,12 +231,15 @@ function TopNav({
   route,
   context,
   onAskHob,
+  roleSwitch = false,
 }: {
   readonly route: Route;
   readonly context?: ReactNode;
   readonly onAskHob?: () => void;
+  readonly roleSwitch?: boolean;
 }) {
   const section = sectionOf(route);
+  const mode = modeOf(route);
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-6 border-b border-hairline bg-surface-card px-page-sm sm:px-page">
@@ -173,7 +261,13 @@ function TopNav({
           allowed to shrink and the name is what absorbs it. */}
       <div className="ml-auto flex min-w-0 items-center gap-4">
         {context}
-        <AskHobButton onClick={onAskHob} />
+        {roleSwitch && <RoleSwitch mode={mode} />}
+        {/* Absent in player mode rather than present and failing. Asking Hob is
+            a write — `HobThreads.start` needs `campaignWritable` — so a player
+            gets the ordinary `NotFound`, and the captain settled that players do
+            not talk to Hob at all. A button that opens a panel which can only
+            apologise is the DM chrome this mode exists to keep out of the way. */}
+        {mode === "dm" && <AskHobButton onClick={onAskHob} />}
         {/* Clerk's own components, unthemed on purpose — see SignInSurface.
             Renders nothing at all when no publishable key is configured, which
             is why the bar can carry it unconditionally. It moved here from the
@@ -263,6 +357,7 @@ export function AppShell({
   topBar,
   onAskHob,
   panel,
+  roleSwitch = false,
   fill = false,
   children,
 }: {
@@ -299,6 +394,27 @@ export function AppShell({
   readonly onAskHob?: () => void;
   readonly panel?: ReactNode;
   /**
+   * Offer the role switch here.
+   *
+   * **The screen decides, because the shell cannot know.** Whether there is a
+   * player side at all is a fact about this account's memberships, and only a
+   * screen that has read `GET /me/campaigns` holds it — the same reason the
+   * shell is handed `context` rather than reaching for a campaign's name.
+   *
+   * So the two campaign lists pass it and nothing else does, which is also the
+   * honest place for it: the DM's list offers it only once a `player`
+   * membership exists (an account that is a DM everywhere and a player nowhere
+   * — which is every account that predates the invitation — is not offered a
+   * mode it has nothing in), and the player's list offers it unconditionally,
+   * because that is the way back.
+   *
+   * Inside a campaign there is no switch, and that is not an omission. Role is
+   * a fact about a pair, so on a table you are already at the question is
+   * settled by the table; a pill there could only be inert or wrong, and the
+   * nav's own first item is the way out of the mode.
+   */
+  readonly roleSwitch?: boolean;
+  /**
    * Give the body the viewport's height instead of letting the page scroll.
    *
    * The prep screens scroll: they are a document, and the top bar is sticky
@@ -314,7 +430,7 @@ export function AppShell({
 }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav route={route} context={context} onAskHob={onAskHob} />
+      <TopNav route={route} context={context} onAskHob={onAskHob} roleSwitch={roleSwitch} />
       <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
