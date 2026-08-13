@@ -96,7 +96,7 @@ function SessionEntry({ s, open, onToggle, readAloud, latest }) {
               <div style={{ display: "flex", alignItems: "center", gap: "var(--s-6)", flexWrap: "wrap", marginTop: "var(--s-7)",
                 padding: "10px var(--s-6)", background: "var(--surface-sunken)", border: "1px solid var(--border-hairline)", borderRadius: "var(--r-card)" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6, font: "var(--type-stat)", color: "var(--text-body)" }}>
-                  <Icon name="trending-up" size={13} style={{ color: "var(--verdigris-300)" }} />{s.xp.gained.toLocaleString()} XP
+                  <Icon name="trending-up" size={13} style={{ color: "var(--peach-300)" }} />{s.xp.gained.toLocaleString()} XP
                 </span>
                 {s.xp.levelUps.map((l) => <Badge key={l} variant="success"><Icon name="chevrons-up" size={10} />{l}</Badge>)}
                 {s.xp.levelUps.length === 0 ? <span style={{ font: "var(--fw-regular) var(--fs-label)/1 var(--font-sans)", color: "var(--text-faint)" }}>No level ups</span> : null}

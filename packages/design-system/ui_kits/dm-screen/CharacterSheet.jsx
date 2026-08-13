@@ -133,7 +133,7 @@ function CharacterSheet({ onTable, onBack }) {
                     <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: "var(--surface-sunken)", border: "1px solid var(--border-hairline)" }}>
                       <span style={{ flex: 1, font: "var(--fw-regular) var(--fs-caption)/1.3 var(--font-sans)", color: "var(--text-muted)" }}>{r.label}</span>
                       <span style={{ font: "var(--fw-regular) var(--fs-micro)/1 var(--font-mono)", color: "var(--text-faint)" }}>{r.dice}</span>
-                      <span style={{ minWidth: 28, textAlign: "right", fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 18, color: "var(--verdigris-300)" }}>{r.total}</span>
+                      <span style={{ minWidth: 28, textAlign: "right", fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 18, color: "var(--peach-300)" }}>{r.total}</span>
                     </div>
                   ))}
                 </div>
@@ -274,7 +274,7 @@ function CharacterSheet({ onTable, onBack }) {
                 {s.levelUps.map((l, i) => (
                   <div key={l.level} style={{ display: "flex", gap: 14, padding: "12px 0", borderTop: i ? "1px solid var(--border-hairline)" : "none" }}>
                     <div style={{ flex: "0 0 44px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                      <span style={{ fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 21, lineHeight: 1, color: "var(--verdigris-300)" }}>{l.level}</span>
+                      <span style={{ fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 21, lineHeight: 1, color: "var(--peach-300)" }}>{l.level}</span>
                       <span style={{ font: "var(--fw-regular) var(--fs-micro)/1 var(--font-sans)", color: "var(--text-faint)" }}>level</span>
                     </div>
                     <div style={{ flex: 1 }}>

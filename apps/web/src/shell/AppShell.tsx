@@ -194,7 +194,7 @@ function NavLink({ item, active }: { readonly item: NavItem; readonly active: bo
       // strip's 36px, which is what puts the underline on the bar's own hairline.
       className={cn(tabsTriggerVariants(), "h-auto gap-2 self-stretch px-3.5")}
     >
-      <Icon name={item.icon} size={16} className={active ? "text-verdigris-300" : undefined} />
+      <Icon name={item.icon} size={16} className={active ? "text-accent-ink" : undefined} />
       {item.label}
     </Link>
   );

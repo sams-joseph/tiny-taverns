@@ -20,7 +20,7 @@ function Wordmark() {
 function SiteHeader() {
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 20, display: "flex", alignItems: "center", gap: "var(--s-9)",
-      padding: "14px var(--pad-page)", background: "rgba(10,14,19,.78)", backdropFilter: "blur(12px)",
+      padding: "14px var(--pad-page)", background: "rgba(24,24,37,.80)", backdropFilter: "blur(12px)",
       borderBottom: "1px solid var(--border-hairline)" }}>
       <Wordmark />
       <nav style={{ display: "flex", gap: "var(--s-8)", marginLeft: "var(--s-8)" }}>
@@ -37,7 +37,7 @@ function SiteHeader() {
 function Hero() {
   return (
     <section style={{ position: "relative", padding: "var(--s-13) var(--pad-page) var(--s-12)", background: "var(--surface-page)", overflow: "hidden" }}>
-      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 90% at 22% 15%, rgba(23,121,140,.20), transparent 70%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 90% at 22% 15%, rgba(250,179,135,.14), transparent 70%)" }} />
       <div style={{ position: "relative", maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: "var(--s-12)", alignItems: "center" }}>
         <div>
           <Badge>v2.4</Badge>
@@ -63,13 +63,13 @@ function Hero() {
           {[["21","Brannoc","44/52",true],["19","Goblin Boss","21/21",false],["16","Wren","31/31",false],["14","Goblin Archer","4/7",false]].map(([i, n, hp, on]) => (
             <div key={n} style={{ display: "flex", alignItems: "center", gap: 11, height: 42, padding: "0 14px",
               borderLeft: "3px solid " + (on ? "var(--accent)" : "transparent"), borderBottom: "1px solid var(--border-on-dark)",
-              background: on ? "rgba(63,163,181,.10)" : "transparent" }}>
+              background: on ? "rgba(250,179,135,.10)" : "transparent" }}>
               <span style={{ font: "var(--fw-bold) var(--fs-mono-l)/1 var(--font-mono)", color: on ? "var(--accent)" : "var(--text-on-dark-muted)", width: 22, textAlign: "right" }}>{i}</span>
               <span style={{ flex: 1, font: "var(--fw-bold) var(--fs-body-s)/1 var(--font-sans)", color: "var(--text-on-dark)" }}>{n}</span>
               <span style={{ font: "var(--type-stat)", color: "var(--text-on-dark-muted)" }}>{hp}</span>
             </div>
           ))}
-          <div style={{ padding: "12px 14px", background: "rgba(63,163,181,.10)", borderLeft: "3px solid var(--verdigris-300)" }}>
+          <div style={{ padding: "12px 14px", background: "rgba(250,179,135,.10)", borderLeft: "3px solid var(--peach-300)" }}>
             <p style={{ margin: 0, font: "var(--type-read-aloud)", fontSize: "var(--fs-body-s)", color: "var(--slate-50)" }}>
               He is wearing three cloaks, none of them his.
             </p>
@@ -97,7 +97,7 @@ function Features() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "var(--s-6)", marginTop: "var(--s-9)" }}>
           {FEATURES.map((f) => (
             <Card key={f.title} style={{ display: "flex", flexDirection: "column", gap: 9, padding: "var(--pad-card)" }}>
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, background: "var(--accent-soft)", border: "1px solid var(--verdigris-600)", borderRadius: "var(--r-sm)", color: "var(--accent-ink)" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, background: "var(--accent-soft)", border: "1px solid var(--peach-600)", borderRadius: "var(--r-sm)", color: "var(--accent-ink)" }}>
                 <Icon name={f.icon} size={19} />
               </span>
               <div style={{ font: "var(--type-title)", color: "var(--text-heading)" }}>{f.title}</div>
@@ -199,7 +199,7 @@ function SiteFooter() {
         <div><Wordmark /></div>
         {cols.map(([h, items]) => (
           <div key={h}>
-            <div style={{ font: "var(--type-label)", color: "var(--verdigris-300)", marginBottom: 12 }}>{h}</div>
+            <div style={{ font: "var(--type-label)", color: "var(--peach-300)", marginBottom: 12 }}>{h}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {items.map((i) => <a key={i} href="#" style={{ font: "var(--fw-regular) var(--fs-body-s)/1.3 var(--font-sans)", color: "var(--slate-300)", textDecoration: "none" }}>{i}</a>)}
             </div>

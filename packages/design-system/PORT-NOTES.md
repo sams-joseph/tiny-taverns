@@ -39,10 +39,23 @@ and elevation* — was wrong: they had revised neither. Both now live in
 `packages/ui/src/local-tokens.css`, which is the same rule that keeps the layering scale
 in `packages/ui/src/styles.css` §3. `adherence.test.ts` fails if one of them reappears in
 a delivered token file. A `diff -r` against the next delivery should therefore show
-`styles.css`, `SKILL.md`, and nothing else. **It did on the third, and again on the
-fourth** — the rule paid for itself the first time it was tested, and both updates were
-kit files only, with no theme-bridge work. The fourth's check was 117 files byte-identical,
+`styles.css`, `SKILL.md`, and nothing else. **It did on the third, the fourth and the
+fifth** — the rule paid for itself the first time it was tested. The third and fourth were
+kit files only, with no theme-bridge work; the fourth's check was 117 files byte-identical,
 2 differing (these two), 2 workspace-only (`package.json`, this file).
+
+**The fifth is the first delivery that changed the palette**, and it is the one that proves
+the rule is worth its cost: `tokens/colors.css` was rewritten wholesale (Catppuccin Mocha),
+`tokens/base.css` moved one `::selection` colour, and the other 22 changed files were the
+same `verdigris` → `peach` substitution carried into the guidelines, the kits, `Toast.jsx`
+and `assets/README.md`. Because nothing we author sits in here, the whole of that arrived
+as a clean overwrite and the *only* judgement needed was on our side of the bridge. Its
+check was the same two files differing and nothing else.
+
+**The fifth delivery also reused the folder name in the other direction**: it landed at
+`Tiny Taverns Design System (1)/` beside the stale folder the first four had each
+overwritten, rather than overwriting it again. Neither path is evidence — check the
+content and the mtime, as the paragraph above says.
 
 **The delivery folder is reused, so its path proves nothing about which delivery is in
 it.** The third export overwrote the folder the first arrived in. Diff the content before

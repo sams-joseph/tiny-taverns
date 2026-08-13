@@ -44,8 +44,9 @@ const CONDITION_VARIANT: Record<string, "destructive" | "magic" | "info"> = {
  * Hit points, as a bar and a number.
  *
  * The colour steps the way the prototype's does — crimson at nothing, danger
- * under a third, verdigris under two thirds, emerald above — because that is
- * the one thing on the row a DM reads without looking at it.
+ * under a third, the accent under two thirds, success above — because that is
+ * the one thing on the row a DM reads without looking at it. Named for the
+ * semantic slots the code actually fills, so a palette change does not date it.
  */
 function HpBar({ hp, max }: { readonly hp: number; readonly max: number }) {
   const percent = max <= 0 ? 0 : Math.max(0, Math.min(100, (hp / max) * 100));
@@ -199,7 +200,7 @@ function CombatantRow({
     >
       <span
         className={`w-6 shrink-0 text-right font-mono text-mono-l leading-none font-bold ${
-          active ? "text-verdigris-300" : "text-on-dark-muted"
+          active ? "text-accent-ink" : "text-on-dark-muted"
         }`}
       >
         {combatant.initiative}

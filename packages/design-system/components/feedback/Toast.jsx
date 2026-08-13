@@ -34,7 +34,7 @@ export function Toast({ variant = "default", style, children, ...rest }) {
       {...rest}
     >
       <style>{"@keyframes tt-toast-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}"}</style>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, flex: "0 0 auto", background: v.strip, color: "#FFFFFF" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, flex: "0 0 auto", background: v.strip, color: "var(--text-on-solid)" }}>
         <Icon name={v.icon} size={16} />
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3, padding: "10px 12px" }}>{children}</div>

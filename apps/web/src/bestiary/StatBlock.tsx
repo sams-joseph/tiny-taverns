@@ -42,7 +42,7 @@ function AbilityCell({ ability }: { readonly ability: Ability }) {
       <div className="font-mono text-mono-l leading-snug font-medium text-on-dark">
         {ability.score}
       </div>
-      <div className="font-mono text-micro leading-none text-verdigris-300">{ability.modifier}</div>
+      <div className="font-mono text-micro leading-none text-accent-ink">{ability.modifier}</div>
     </div>
   );
 }
@@ -57,7 +57,7 @@ function TraitBlock({ trait }: { readonly trait: Trait }) {
             what either screen was asked for — so the notation is rendered as
             what it is, a thing the DM reads. */}
         {trait.dice !== undefined && trait.dice !== "" && (
-          <span className="rounded-xs bg-slate-50/10 px-1.5 py-px font-mono text-micro leading-tight text-verdigris-300">
+          <span className="rounded-xs bg-slate-50/10 px-1.5 py-px font-mono text-micro leading-tight text-accent-ink">
             {trait.dice}
           </span>
         )}

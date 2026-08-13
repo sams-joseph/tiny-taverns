@@ -71,7 +71,7 @@ export function Portrait({
     <div
       aria-hidden="true"
       className={cn(
-        "flex shrink-0 items-center justify-center border border-strong bg-accent-soft font-display leading-none font-semibold text-verdigris-300",
+        "flex shrink-0 items-center justify-center border border-strong bg-accent-soft font-display leading-none font-semibold text-accent-ink",
         size === "lg" ? "size-16 text-display-m" : "size-13 text-display-s",
       )}
     >

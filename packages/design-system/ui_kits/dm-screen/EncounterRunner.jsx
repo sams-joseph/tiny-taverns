@@ -28,7 +28,7 @@ function InitRow({ c, active, onSelect, onDamage }) {
         borderBottom: "1px solid var(--border-on-dark)",
         background: active ? "rgba(63,163,181,.14)" : hover ? "rgba(255,255,255,.04)" : "transparent",
         opacity: down ? 0.45 : 1, cursor: "pointer" }}>
-      <span style={{ width: 24, textAlign: "right", font: "var(--fw-bold) var(--fs-mono-l)/1 var(--font-mono)", color: active ? "var(--verdigris-300)" : "var(--text-on-dark-muted)" }}>{c.init}</span>
+      <span style={{ width: 24, textAlign: "right", font: "var(--fw-bold) var(--fs-mono-l)/1 var(--font-mono)", color: active ? "var(--peach-300)" : "var(--text-on-dark-muted)" }}>{c.init}</span>
       <Icon name={c.kind === "pc" ? "shield" : "skull"} size={15} style={{ color: c.kind === "pc" ? "var(--info)" : "var(--danger)" }} />
       <div style={{ flex: "1 1 auto", minWidth: 118 }}>
         <div style={{ font: "var(--fw-bold) var(--fs-body-s)/1.2 var(--font-sans)", color: "var(--text-on-dark)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: down ? "line-through" : "none" }}>{c.name}</div>
@@ -73,7 +73,7 @@ function DiceTray({ rolls, onRoll }) {
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: "var(--surface-panel-sunken)", border: "2px solid var(--border-on-dark)" }}>
               <span style={{ flex: 1, font: "var(--fw-regular) var(--fs-caption)/1.3 var(--font-sans)", color: "var(--text-on-dark-muted)" }}>{r.label}</span>
               <span style={{ font: "var(--fw-regular) var(--fs-micro)/1 var(--font-mono)", color: "var(--text-faint)" }}>{r.dice}</span>
-              <span style={{ minWidth: 30, textAlign: "right", fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 19, color: "var(--verdigris-300)" }}>{r.total}</span>
+              <span style={{ minWidth: 30, textAlign: "right", fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 19, color: "var(--peach-300)" }}>{r.total}</span>
             </div>
           ))}
         </div>

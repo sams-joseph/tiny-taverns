@@ -20,7 +20,7 @@ function Stepper({ step }) {
                 background: done ? "var(--accent)" : now ? "var(--accent-soft)" : "transparent",
                 border: "1px solid " + (done || now ? "var(--accent)" : "var(--border-strong)"),
                 font: "var(--fw-semibold) 10px/1 var(--font-sans)",
-                color: done ? "var(--text-on-accent)" : now ? "var(--verdigris-300)" : "var(--text-faint)" }}>
+                color: done ? "var(--text-on-accent)" : now ? "var(--peach-300)" : "var(--text-faint)" }}>
                 {done ? <Icon name="check" size={11} /> : s.id}
               </span>
               <span style={{ font: "var(--fw-medium) var(--fs-caption)/1 var(--font-sans)", color: now ? "var(--text-heading)" : "var(--text-faint)" }}>{s.label}</span>
@@ -237,7 +237,7 @@ function CharacterCreate({ onDone, onCancel }) {
               </Select>
               {campaign === "salt-road" ? (
                 <div style={{ display: "flex", gap: 9, marginTop: "var(--s-6)", padding: "10px 12px", background: "var(--accent-soft)", border: "1px solid var(--accent)" }}>
-                  <Icon name="info" size={14} style={{ color: "var(--verdigris-300)", marginTop: 2 }} />
+                  <Icon name="info" size={14} style={{ color: "var(--peach-300)", marginTop: 2 }} />
                   <span style={{ flex: 1, font: "var(--fw-regular) var(--fs-caption)/1.6 var(--font-sans)", color: "var(--text-body)" }}>
                     Fen approves characters before they play. Sorrel is level 1 and the party is level 5 — he'll probably level her up.
                   </span>

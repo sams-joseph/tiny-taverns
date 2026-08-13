@@ -37,8 +37,8 @@ import {
  * default, Easy success. `Hard` completes the band and needs a step between
  * Medium and Deadly — so it takes the *soft* half of the same crimson family
  * Deadly fills solid, which is what the `--danger-soft` / `--danger-ink` pair
- * exists for. Read down the grid it escalates soft emerald → verdigris → soft
- * crimson → solid crimson.
+ * exists for. Read down the grid it escalates soft success → accent → soft
+ * danger → solid danger.
  *
  * Unrated is its own thing rather than a missing badge: a sketched encounter the
  * DM has not weighed yet is information.

@@ -31,7 +31,7 @@ function NavItem({ item, active, onClick }) {
         fontFamily: "var(--font-sans)", fontSize: "var(--fs-label)",
         fontWeight: active ? "var(--fw-semibold)" : "var(--fw-medium)", lineHeight: 1,
         cursor: "pointer", whiteSpace: "nowrap", transition: "var(--transition-control)" }}>
-      <Icon name={item.icon} size={16} style={{ color: active ? "var(--verdigris-300)" : "inherit" }} />
+      <Icon name={item.icon} size={16} style={{ color: active ? "var(--peach-300)" : "inherit" }} />
       {item.label}
     </button>
   );
@@ -87,7 +87,7 @@ function TopNav({ screen, setScreen, role, setRole, onAskHob }) {
         {player && p ? (
           <span title={p.account.name} style={{ flex: "0 0 auto", width: 28, height: 28, borderRadius: "var(--r-pill)",
             display: "flex", alignItems: "center", justifyContent: "center", background: "var(--accent-soft)",
-            border: "1px solid var(--accent)", font: "var(--fw-semibold) 11px/1 var(--font-sans)", color: "var(--verdigris-300)" }}>
+            border: "1px solid var(--accent)", font: "var(--fw-semibold) 11px/1 var(--font-sans)", color: "var(--peach-300)" }}>
             {p.account.initials}
           </span>
         ) : null}

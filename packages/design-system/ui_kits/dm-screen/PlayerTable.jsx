@@ -11,7 +11,7 @@ function OrderRow({ c, active }) {
       borderLeft: "3px solid " + (active ? "var(--accent)" : "transparent"),
       borderBottom: "1px solid var(--border-on-dark)",
       background: active ? "rgba(63,163,181,.14)" : "transparent", opacity: c.down ? 0.4 : 1 }}>
-      <span style={{ width: 22, textAlign: "right", font: "var(--fw-bold) var(--fs-mono-l)/1 var(--font-mono)", color: active ? "var(--verdigris-300)" : "var(--text-on-dark-muted)" }}>{c.init}</span>
+      <span style={{ width: 22, textAlign: "right", font: "var(--fw-bold) var(--fs-mono-l)/1 var(--font-mono)", color: active ? "var(--peach-300)" : "var(--text-on-dark-muted)" }}>{c.init}</span>
       <Icon name={c.kind === "npc" ? "skull" : "shield"} size={14} style={{ color: c.kind === "npc" ? "var(--danger)" : you ? "var(--accent)" : "var(--info)" }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ font: (you ? "var(--fw-bold)" : "var(--fw-medium)") + " var(--fs-body-s)/1.2 var(--font-sans)", color: "var(--text-on-dark)", textDecoration: c.down ? "line-through" : "none" }}>{c.name}</div>
@@ -139,7 +139,7 @@ function PlayerTable({ onLeave }) {
                 <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: "var(--surface-panel-sunken)", border: "1px solid var(--border-on-dark)" }}>
                   <span style={{ flex: 1, font: "var(--fw-regular) var(--fs-caption)/1.3 var(--font-sans)", color: "var(--text-on-dark-muted)" }}>You · {r.label}</span>
                   <span style={{ font: "var(--fw-regular) var(--fs-micro)/1 var(--font-mono)", color: "var(--text-faint)" }}>{r.dice}</span>
-                  <span style={{ minWidth: 28, textAlign: "right", fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 18, color: "var(--verdigris-300)" }}>{r.total}</span>
+                  <span style={{ minWidth: 28, textAlign: "right", fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: 18, color: "var(--peach-300)" }}>{r.total}</span>
                 </div>
               ))}
               {t.log.map((l, i) => (

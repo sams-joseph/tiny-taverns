@@ -4,7 +4,7 @@
 
 `assets/icon/` holds the app icon, chosen from the "App icon — pint + die" exploration
 (option **P2**, tankard with handle) and refined for export. It is a **tankard in
-verdigris on a deep-slate tile, with a hexagonal die as negative space in the body,
+peach on a deep-slate tile, with a hexagonal die as negative space in the body,
 a bumped froth crown, and one fleck of foam breaking off the rim.**
 
 | File | Use |
@@ -29,7 +29,7 @@ Contact sheet: `brand/app-icon-final.html`. Earlier explorations are kept in
 `app-icon-pint-options.html` and `app-icon-mug-options.html`.
 
 **The amber question is still open.** The system palette is entirely cool, so the
-verdigris tankard reads as teal fluid rather than ale. The warm variant uses
+peach tankard reads as teal fluid rather than ale. The warm variant uses
 `#E8A33A`, which exists nowhere else in the system. It is **not a token** — if the
 warm route is chosen, it should be declared a brand-only accent (icon and marketing
 moments), never a UI colour.
@@ -45,7 +45,7 @@ or photograph** — it is a Vite + Effect.ts boilerplate whose only UI is a plac
 
 Wherever a mark would go, the brand name is set in plain type: **Instrument Sans 600** at
 `--ls-display`, with the tagline "The DM's side kick" beneath it in the same face at
-13px regular (`--verdigris-300` on dark, `--accent-ink` on light). See
+13px regular (`--peach-300` on dark, `--accent-ink` on light). See
 `Wordmark` in `ui_kits/marketing/Site.jsx` and `Rail` in `ui_kits/dm-screen/AppShell.jsx`.
 
 ## Icons — Lucide, from CDN

@@ -79,7 +79,7 @@ function Attack({ attack }: { readonly attack: Trait }) {
       {/* The notation, shown and not rolled — there is no dice tray behind a
           button here, and `StatBlock.tsx` renders a monster's the same way. */}
       {attack.dice !== undefined && attack.dice !== "" && (
-        <span className="rounded-xs bg-surface-raised px-1.5 py-px font-mono text-micro leading-snug text-verdigris-300">
+        <span className="rounded-xs bg-surface-raised px-1.5 py-px font-mono text-micro leading-snug text-accent-ink">
           {attack.dice}
         </span>
       )}
@@ -445,7 +445,7 @@ function SheetBody({ character }: { readonly character: Character }) {
                 className={`flex gap-4 py-3 ${index === 0 ? "" : "border-t border-hairline"}`}
               >
                 <div className="flex w-11 shrink-0 flex-col items-center gap-0.5">
-                  <span className="font-display text-display-s leading-none font-semibold text-verdigris-300">
+                  <span className="font-display text-display-s leading-none font-semibold text-accent-ink">
                     {levelUp.level}
                   </span>
                   <span className="text-micro leading-none text-faint">level</span>

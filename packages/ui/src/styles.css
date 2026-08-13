@@ -95,38 +95,47 @@
   --color-mist-deep: var(--mist-deep);
   --color-frost: var(--frost);
 
-  /* -- verdigris: the only colour that carries an action -------------------- */
-  --color-verdigris-700: var(--verdigris-700);
-  --color-verdigris-600: var(--verdigris-600);
-  --color-verdigris-500: var(--verdigris-500);
-  --color-verdigris-400: var(--verdigris-400);
-  --color-verdigris-300: var(--verdigris-300);
-  --color-verdigris-200: var(--verdigris-200);
-  --color-verdigris-100: var(--verdigris-100);
+  /* -- peach: the only colour that carries an action ------------------------
+     The primary ramp, and the one warm family in the system. Reach for the
+     semantic aliases below (`accent`, `accent-ink`, `accent-soft`) rather than
+     a step here — a step is the right answer only where the swatch genuinely
+     is that colour, which in practice is the gallery. See §"Colour" in the
+     root `AGENTS.md`. */
+  --color-peach-700: var(--peach-700);
+  --color-peach-600: var(--peach-600);
+  --color-peach-500: var(--peach-500);
+  --color-peach-400: var(--peach-400);
+  --color-peach-300: var(--peach-300);
+  --color-peach-200: var(--peach-200);
+  --color-peach-100: var(--peach-100);
 
   /* -- the four semantic families ----------------------------------------- */
   --color-crimson-700: var(--crimson-700);
   --color-crimson-600: var(--crimson-600);
   --color-crimson-500: var(--crimson-500);
   --color-crimson-400: var(--crimson-400);
+  --color-crimson-300: var(--crimson-300);
   --color-crimson-200: var(--crimson-200);
   --color-crimson-100: var(--crimson-100);
   --color-emerald-700: var(--emerald-700);
   --color-emerald-600: var(--emerald-600);
   --color-emerald-500: var(--emerald-500);
   --color-emerald-400: var(--emerald-400);
+  --color-emerald-300: var(--emerald-300);
   --color-emerald-200: var(--emerald-200);
   --color-emerald-100: var(--emerald-100);
   --color-violet-700: var(--violet-700);
   --color-violet-600: var(--violet-600);
   --color-violet-500: var(--violet-500);
   --color-violet-400: var(--violet-400);
+  --color-violet-300: var(--violet-300);
   --color-violet-200: var(--violet-200);
   --color-violet-100: var(--violet-100);
   --color-azure-700: var(--azure-700);
   --color-azure-600: var(--azure-600);
   --color-azure-500: var(--azure-500);
   --color-azure-400: var(--azure-400);
+  --color-azure-300: var(--azure-300);
   --color-azure-200: var(--azure-200);
   --color-azure-100: var(--azure-100);
 

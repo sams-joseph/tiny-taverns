@@ -26,7 +26,7 @@ function Avatar({ name, muted }: { readonly name: string; readonly muted: boolea
       className={
         muted
           ? "flex size-7 shrink-0 items-center justify-center rounded-pill border border-hairline bg-surface-raised text-label-s leading-none font-semibold text-faint"
-          : "flex size-7 shrink-0 items-center justify-center rounded-pill border border-accent bg-accent-soft text-label-s leading-none font-semibold text-verdigris-300"
+          : "flex size-7 shrink-0 items-center justify-center rounded-pill border border-accent bg-accent-soft text-label-s leading-none font-semibold text-accent-ink"
       }
     >
       {initialsOf(name)}

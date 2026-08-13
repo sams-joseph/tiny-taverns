@@ -1,65 +1,67 @@
 :root{
-/* ---- Base ramps. Cool, low-humidity. Every neutral carries a blue cast. ---- */
---slate-950:#0A0E13;--slate-900:#111820;--slate-800:#1A2330;--slate-700:#2B3745;--slate-600:#40505F;
---slate-500:#5B6B7C;--slate-400:#7D8C9C;--slate-300:#A6B3C0;--slate-200:#C8D2DC;--slate-100:#E2E9EF;--slate-50:#F1F5F8;
---mist:#F5F8FA;--mist-deep:#E8EEF3;--frost:#FDFEFF;
+/* ---- Base ramps. Catppuccin Mocha. Every ramp is its Mocha accent blended toward
+       crust for the dark steps and toward white for the tints, so mid-tones stay on-hue. ---- */
+--slate-950:#11111B;--slate-900:#181825;--slate-800:#1E1E2E;--slate-700:#313244;--slate-600:#45475A;
+--slate-500:#6C7086;--slate-400:#9399B2;--slate-300:#A6ADC8;--slate-200:#BAC2DE;--slate-100:#CDD6F4;--slate-50:#EFF1F5;
+--mist:#EFF1F5;--mist-deep:#E6E9EF;--frost:#FFFFFF;
 
-/* Verdigris — the primary. On dark surfaces the lighter steps do the work. */
---verdigris-700:#06323C;--verdigris-600:#0A4A58;--verdigris-500:#106173;--verdigris-400:#17798C;
---verdigris-300:#3FA3B5;--verdigris-200:#A2D4DE;--verdigris-100:#DCEFF3;
+/* Peach — the primary. Lantern light, the one warm family in the system. */
+--peach-700:#34292B;--peach-600:#57423B;--peach-500:#916A5A;--peach-400:#C08B72;
+--peach-300:#FAB387;--peach-200:#FDD1B4;--peach-100:#FEEBDE;
 
-/* Crimson — damage, destruction, danger. */
---crimson-700:#7A0B22;--crimson-600:#A0122F;--crimson-500:#C81E43;--crimson-400:#E8375C;--crimson-200:#F9B4C2;--crimson-100:#FDE4EA;
+/* Crimson — damage, destruction, danger. Mocha red. */
+--crimson-700:#33212A;--crimson-600:#56333F;--crimson-500:#8E5468;--crimson-400:#BF6F89;--crimson-300:#F38BA8;--crimson-200:#F8C0D0;--crimson-100:#FCE4EB;
 
-/* Emerald — healing, saves made, success. */
---emerald-700:#05593C;--emerald-600:#08774F;--emerald-500:#0D9765;--emerald-400:#17B87C;--emerald-200:#A5E9CC;--emerald-100:#DCF7EA;
+/* Emerald — healing, saves made, success. Mocha green. */
+--emerald-700:#26302F;--emerald-600:#3E5043;--emerald-500:#638366;--emerald-400:#81AF80;--emerald-300:#A6E3A1;--emerald-200:#CEEFCB;--emerald-100:#E8F9E7;
 
-/* Violet — magic, spells, concentration. Flat, never a gradient. */
---violet-700:#3A1B7A;--violet-600:#4F27A3;--violet-500:#6633CC;--violet-400:#8154E8;--violet-200:#CBBAF6;--violet-100:#EAE2FD;
+/* Violet — magic, spells, concentration. Mocha mauve. Flat, never a gradient. */
+--violet-700:#2A2233;--violet-600:#463A55;--violet-500:#755F8E;--violet-400:#9E80C1;--violet-300:#CBA6F7;--violet-200:#E0CBFA;--violet-100:#F1E8FD;
 
-/* Azure — information, rules text, cold. */
---azure-700:#0B3F73;--azure-600:#0F569B;--azure-500:#1470C6;--azure-400:#2E8FE6;--azure-200:#AED5F5;--azure-100:#DEEDFC;
+/* Azure — information, rules text, cold. Mocha blue. */
+--azure-700:#1E2634;--azure-600:#333F58;--azure-500:#546A94;--azure-400:#6E8FC7;--azure-300:#89B4FA;--azure-200:#C0D5FC;--azure-100:#E4EDFE;
 
 /* ---- Semantic aliases. DARK ONLY. ----
    This system has no light mode. A DM runs it at a lit table, so every surface is
    dark and nothing is ever set on a light background. The --mist / --frost tokens
-   remain defined for the odd inverted element, but are NOT page or card surfaces. */
---surface-page:var(--slate-950);
---surface-card:var(--slate-900);
---surface-raised:var(--slate-800);
---surface-sunken:#06090D;
+   remain defined for the odd inverted element, but are NOT page or card surfaces.
+   Mocha convention: solid fills are the pastel step, so text on them is --slate-950. */
+--surface-page:var(--slate-900);
+--surface-card:var(--slate-800);
+--surface-raised:var(--slate-700);
+--surface-sunken:var(--slate-950);
 --surface-inverse:var(--slate-50);
---surface-panel:var(--slate-900);
---surface-panel-raised:var(--slate-800);
---surface-panel-sunken:#06090D;
+--surface-panel:var(--slate-800);
+--surface-panel-raised:var(--slate-700);
+--surface-panel-sunken:var(--slate-950);
 
---text-heading:var(--slate-50);
+--text-heading:var(--slate-100);
 --text-body:var(--slate-200);
 --text-muted:var(--slate-400);
 --text-faint:var(--slate-500);
---text-on-accent:#F5FBFC;
---text-on-solid:#FFFFFF;
---text-on-dark:var(--slate-50);
+--text-on-accent:var(--slate-950);
+--text-on-solid:var(--slate-950);
+--text-on-dark:var(--slate-100);
 --text-on-dark-muted:var(--slate-400);
---text-link:var(--verdigris-300);
---text-link-hover:var(--verdigris-200);
+--text-link:var(--peach-300);
+--text-link-hover:var(--peach-200);
 
---border-hairline:var(--slate-800);
---border-strong:var(--slate-700);
---border-ink:var(--slate-700);
---border-on-dark:var(--slate-700);
+--border-hairline:var(--slate-700);
+--border-strong:var(--slate-600);
+--border-ink:var(--slate-600);
+--border-on-dark:var(--slate-600);
 
---accent:var(--verdigris-400);
---accent-hover:var(--verdigris-300);
---accent-press:var(--verdigris-500);
---accent-soft:#0E2A31;
---accent-ink:var(--verdigris-300);
+--accent:var(--peach-300);
+--accent-hover:var(--peach-200);
+--accent-press:var(--peach-400);
+--accent-soft:#3A2A22;
+--accent-ink:var(--peach-300);
 
---danger:var(--crimson-500);--danger-hover:var(--crimson-400);--danger-soft:#2A0C14;--danger-ink:var(--crimson-200);
---success:var(--emerald-500);--success-hover:var(--emerald-400);--success-soft:#06231A;--success-ink:var(--emerald-200);
---magic:var(--violet-500);--magic-hover:var(--violet-400);--magic-soft:#191036;--magic-ink:var(--violet-200);
---info:var(--azure-500);--info-hover:var(--azure-400);--info-soft:#091E33;--info-ink:var(--azure-200);
+--danger:var(--crimson-300);--danger-hover:var(--crimson-200);--danger-soft:#2C1E26;--danger-ink:var(--crimson-300);
+--success:var(--emerald-300);--success-hover:var(--emerald-200);--success-soft:#1E2A22;--success-ink:var(--emerald-300);
+--magic:var(--violet-300);--magic-hover:var(--violet-200);--magic-soft:#272138;--magic-ink:var(--violet-300);
+--info:var(--azure-300);--info-hover:var(--azure-200);--info-soft:#1E2434;--info-ink:var(--azure-300);
 
---focus-ring:rgba(63,163,181,.60);
---scrim:rgba(3,5,8,.74);
+--focus-ring:rgba(250,179,135,.60);
+--scrim:rgba(17,17,27,.74);
 }

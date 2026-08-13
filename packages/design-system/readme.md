@@ -109,21 +109,24 @@ be used as a page or card fill.** If a design needs a light panel, the design is
 
 ### Colour
 
-- **Verdigris (`--accent`, `#17798C`) is the only colour that carries an action.**
-  Oxidised copper on a lantern. It is deliberately **deeper and less saturated than the
-  semantic families**, so a primary button never competes with a damage number for the
-  eye. **White sits on verdigris** (`--text-on-accent: #F5FBFC`, 4.9:1) — dark ink fails
-  contrast on it, so never use it.
-- **There is no warm grey and no true neutral grey.** Every neutral carries a blue cast
-  (`--slate-950` `#0A0E13` → `--slate-50` `#F1F5F8`). Pure `#808080`, `#F5F5F5` or any
-  browned neutral is a bug.
-- **Four semantic families, vivid on purpose, each with a table meaning:** crimson
-  `#C81E43` = damage / hostile / destructive, emerald `#0D9765` = healing / saved /
-  success, violet `#6633CC` = magic / concentration, azure `#1470C6` = rules reference /
+- **The palette is Catppuccin Mocha.** Ramp names are kept (`--peach-*`, `--crimson-*`,
+  …) but every value resolves to a Mocha colour, so nothing outside `tokens/colors.css`
+  needed rewiring.
+- **Peach (`--accent`, Mocha teal `#FAB387`) is the only colour that carries an
+  action.** Mocha convention: solid fills are the **pastel** step, so **dark ink sits on
+  a fill** (`--text-on-accent` / `--text-on-solid` = `--slate-950` `#11111B`) — never
+  white. Anything that needs to read as accent *text* on a dark surface uses the same
+  step via `--accent-ink`.
+- **There is no warm grey and no true neutral grey.** Every neutral carries the Mocha
+  blue-mauve cast (`--slate-950` `#11111B` crust → `--slate-100` `#CDD6F4` text). Pure
+  `#808080`, `#F5F5F5` or any browned neutral is a bug.
+- **Four semantic families, each with a table meaning:** crimson
+  `#F38BA8` = damage / hostile / destructive, emerald `#A6E3A1` = healing / saved /
+  success, violet `#CBA6F7` = magic / concentration, azure `#89B4FA` = rules reference /
   cold. They are the loudest colours in the system because they are what a DM must read
   at a glance mid-combat. Violet is **flat** — never a gradient.
-- **Backgrounds are flat colour.** The single exception is the hero's one radial verdigris
-  glow at 20% (`radial-gradient(60% 90% at 22% 15%, rgba(23,121,140,.20), transparent)`) —
+- **Backgrounds are flat colour.** The single exception is the hero's one radial peach
+  glow at 14% (`radial-gradient(60% 90% at 22% 15%, rgba(250,179,135,.14), transparent)`) —
   a lit window at blue hour, not a gradient mesh.
 
 ### Type
@@ -173,7 +176,7 @@ item uses the same 2px accent underline as `Tabs`. The marketing header is stick
   `--border-hairline` on all four sides**, `--r-md` 8px, `--shadow-1`, 20px padding.
 - **Never a card with a coloured left border only.** The one place a coloured left rail
   is correct is `Toast` (3px), where it's a status rail on a dark chip. Cards mark
-  emphasis on the **top edge** (`accentEdge`, 3px verdigris).
+  emphasis on the **top edge** (`accentEdge`, 3px peach).
 - **Dark panel:** `--surface-panel` (`#111820`), `--r-lg` 12px, `--border-on-dark`
   `#2A3644`, `--shadow-dark`. No grain.
 - **Grain:** light cards carry `--grain` — `radial-gradient(rgba(90,110,130,.055) 1px,
@@ -361,7 +364,7 @@ the brand owner and wired into `tokens/fonts.css`. Instrument Sans and JetBrains
 binaries; until then they load non-blocking from CDN.
 
 ### `guidelines/` — 20 specimen cards
-Colours (slate neutrals, mist surfaces, verdigris primary, semantic families, aliases in use) · Type (display,
+Colours (slate neutrals, mist surfaces, peach primary, semantic families, aliases in use) · Type (display,
 UI, read-aloud, serif weight axis, mono, pairing) · Spacing (scale, layout tokens) · Brand (radii,
 elevation, states, motion, surfaces, iconography, voice do/don't).
 

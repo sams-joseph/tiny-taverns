@@ -100,7 +100,7 @@ function Portrait({ name, size = 84, onUpload }) {
     <div style={{ position: "relative", flex: "0 0 auto", width: size, height: size,
       display: "flex", alignItems: "center", justifyContent: "center",
       background: "var(--accent-soft)", border: "1px solid var(--border-strong)" }}>
-      <span style={{ fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: size * 0.38, lineHeight: 1, color: "var(--verdigris-300)" }}>{initials}</span>
+      <span style={{ fontFamily: "var(--font-display)", fontWeight: "var(--fw-semibold)", fontSize: size * 0.38, lineHeight: 1, color: "var(--peach-300)" }}>{initials}</span>
       {onUpload ? (
         <Button variant="outline" size="icon" aria-label="Upload portrait" onClick={onUpload}
           style={{ position: "absolute", right: -9, bottom: -9, width: 26, height: 26, background: "var(--surface-card)" }}>
@@ -119,7 +119,7 @@ function Seat({ initials, tone }) {
       background: tone === "muted" ? "var(--surface-raised)" : "var(--accent-soft)",
       border: "1px solid " + (tone === "muted" ? "var(--border-hairline)" : "var(--accent)"),
       font: "var(--fw-semibold) 11px/1 var(--font-sans)",
-      color: tone === "muted" ? "var(--text-faint)" : "var(--verdigris-300)" }}>{initials || "—"}</span>
+      color: tone === "muted" ? "var(--text-faint)" : "var(--peach-300)" }}>{initials || "—"}</span>
   );
 }
 

@@ -8,4 +8,4 @@ a{color:var(--text-link);text-decoration-thickness:1px;text-underline-offset:2px
 a:hover{color:var(--text-link-hover)}
 :focus-visible{outline:none;box-shadow:var(--ring)}
 code,kbd{font-family:var(--font-mono);font-size:var(--fs-mono)}
-::selection{background:var(--verdigris-200);color:var(--slate-950)}
+::selection{background:var(--peach-200);color:var(--slate-950)}
