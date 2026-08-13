@@ -30,6 +30,8 @@ import {
   ensureCampaignWritable,
   memberOfCampaign,
   ownedRowReadable,
+  ownRowReadable,
+  rowCampaign,
   rowWritable,
 } from "./visibility.js";
 
@@ -125,12 +127,17 @@ const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
  * cannot be reached from the PATCH — which is where a player will one day edit
  * their own sheet.
  *
- * The reads are `ownedRowReadable` rather than `rowReadable`, which is the
- * whole of the read change: **the account a character names may read it
- * whatever its `visibility` says**, still inside a campaign they are a live
- * member of and still only while the DM has shared that campaign. Every write
- * below is `rowWritable`, untouched — owning a character grants no write, and
- * the predicate that will is its own decision.
+ * The campaign-scoped reads are `ownedRowReadable` rather than `rowReadable`,
+ * which is the whole of the read change: **the account a character names may
+ * read it whatever its `visibility` says**, still inside a campaign they are a
+ * live member of and still only while the DM has shared that campaign. Every
+ * write below is `rowWritable`, untouched — owning a character grants no write,
+ * and the predicate that will is its own decision.
+ *
+ * `mine` is the third read and the only one with no campaign in its path. It
+ * composes that same predicate conjoined with ownership, so it is narrower than
+ * the other two rather than a way round them; see `repo/visibility.ts`'s
+ * `ownRowReadable` and `rowCampaign`.
  */
 export class Characters extends Context.Service<
   Characters,
@@ -138,6 +145,26 @@ export class Characters extends Context.Service<
     readonly list: (
       campaignId: CampaignId,
     ) => Effect.Effect<ReadonlyArray<Character>, NotFound, CurrentActor>;
+    /**
+     * Every character this account plays, across every table it is at —
+     * `GET /me/characters`.
+     *
+     * **The only read on this table that names no campaign**, and the second in
+     * the product after `Memberships.mine`. It is the read a player's own
+     * screen starts from: which characters are mine, and which table is each
+     * one at.
+     *
+     * It cannot fail. An account that is a member of nothing, or of a campaign
+     * nobody has shared, gets an empty list — the same honest emptiness
+     * `GET /me/campaigns` gives, and for the same reason. There is no campaign
+     * in the path for a `NotFound` to be about.
+     *
+     * `ownRowReadable` is `ownedRowReadable` conjoined with ownership, so this
+     * cannot return a row `characters.list` would refuse in that row's own
+     * campaign; what it adds is the narrowing to *mine*. Ordered like `list`,
+     * so a character appears in the same relative position in both reads.
+     */
+    readonly mine: Effect.Effect<ReadonlyArray<Character>, never, CurrentActor>;
     readonly findById: (
       campaignId: CampaignId,
       id: CharacterId,
@@ -230,6 +257,18 @@ export class Characters extends Context.Service<
               return rows.map(toCharacter);
             }),
           ),
+
+        mine: dieOnSqlError(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            const rows = yield* sql<CharacterRow>`
+              select * from character
+              where ${ownRowReadable(sql, "character", rowCampaign(sql, "character"), actor)}
+              order by character.created_at asc, character.id asc
+            `;
+            return rows.map(toCharacter);
+          }),
+        ),
 
         findById: (campaignId, id) =>
           dieOnSqlError(

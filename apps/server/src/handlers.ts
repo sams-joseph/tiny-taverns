@@ -92,12 +92,25 @@ const CampaignsLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * The two reads that name no campaign — which tables this account is at, and
+ * which characters it plays across them.
+ *
+ * Both are `mine` on their repository and neither takes a proof: what a
+ * credential already reaches is not a disclosure to the credential reaching it.
+ * The narrowing to *your own* characters is in the predicate, not here — a
+ * handler that filtered would be the leak pattern `repo/visibility.ts` exists
+ * to prevent, and it has nothing to filter with.
+ */
 const MeLive = HttpApiBuilder.group(
   TavernsApi,
   "me",
   Effect.fnUntraced(function* (handlers) {
     const memberships = yield* Memberships;
-    return handlers.handle("campaigns", () => memberships.mine);
+    const characters = yield* Characters;
+    return handlers
+      .handle("campaigns", () => memberships.mine)
+      .handle("characters", () => characters.mine);
   }),
 );
 

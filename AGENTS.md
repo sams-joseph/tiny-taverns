@@ -226,9 +226,10 @@ is the newer drawing and the written rule is the older decision:
 Two smaller things the follow-on work will need:
 
 - **The drawn character sheet is far richer than the `character` table** — skills, spell slots,
-  features, inventory, currency, death saves, level-ups, a journal. The rule that decides what
-  becomes a column is already written and unchanged: see "The party: what earns a column on
-  `character`". Most of this is display and belongs in `body`.
+  features, inventory, currency, death saves, level-ups, a journal. **Its server half is built,
+  and it cost no migration**: every one of those is an optional key on `body`, and the rule that
+  decided so is unchanged. See "What the character sheet reads, and where each part of it lives",
+  which is also where the drawn things the data cannot supply are listed.
 - **`PlayerTable.jsx` is the player projection of a fight**, which the server has never built —
   its own header comment states the contract (no monster hit points, no initiative editing, only
   what the DM shares plus your own turn). That is the projection the `DmActor` gate exists to
@@ -899,10 +900,12 @@ and the first thing it owes anyone is errata. So:
 
 - **Columns**: `name`, `player_name`, `level`, `species`, `class_name`, `ac`, `hp_max`,
   `sheet_url`, `account_id`, plus the usual visibility/provenance tail.
-- **Document**: `body` (on the wire `sheet`) — `notes`, `abilities`, `traits`. `Ability` and
-  `Trait` are imported from `Creature.ts` rather than restated: an ability cell and a named
-  block of prose are one question whether the row is a monster or a person, and
-  `bestiary/StatBlock.tsx` already draws them.
+- **Document**: `body` (on the wire `sheet`) — `notes`, `abilities`, `traits`, plus the thirteen
+  optional keys the drawn sheet added without a migration (see "What the character sheet reads,
+  and where each part of it lives"). `Ability` and `Trait` are imported from `Creature.ts` rather
+  than restated: an ability cell and a named block of prose are one question whether the row is a
+  monster or a person, and `bestiary/StatBlock.tsx` already draws them — which is why the sheet
+  extended those two rather than minting a `CharacterAbility` and an `Attack`.
 
 **`level`, `species` and `class_name` are columns by the captain's decision, against the
 report's own recommendation**, and the reason is that players edit their own characters and
@@ -1100,6 +1103,100 @@ Three more things that are decisions:
 `apps/server/test/members.test.ts` pins the gate (a player of this campaign, a DM of another
 table, a credential scoped elsewhere, and the campaign's own DM), the row's four fields, and
 the derivation table above — including that no table in the schema is named for a seat.
+
+### What the character sheet reads, and where each part of it lives
+
+`ui_kits/dm-screen/CharacterSheet.jsx` (with `PlayerParts.jsx` and `player-data.js`) draws about
+thirty fields against nine columns, and **not one of them earned a tenth. `0012` and `0014` are
+still the last migrations `character` needed.** The whole of it is optional keys on the existing
+`jsonb` document, so there is no backfill, `emptyCharacterSheet` still decodes, and a row written
+before any of it reads exactly as it did. If a future sheet change seems to need a column, that
+is a finding to report rather than a routine step.
+
+Where a drawn field comes from — read this before building the screen, so nothing is looked for
+twice:
+
+| what the sheet draws                                                                           | where it comes from                                                              |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| name, player, AC, hp / hpMax / temp, conditions                                                | **columns** on `character`, live since `0014`                                    |
+| `"Level 5 Half-orc Paladin"`                                                                   | `descriptor`, the generated column — not writable, and not restated anywhere     |
+| `"Oath of the Open Road"`, background, alignment, speed, initiative, proficiency, hit dice, XP | `sheet.identity`                                                                 |
+| abilities, with saving throws                                                                  | `sheet.abilities` — the bestiary's `Ability`, which grew `save` and `proficient` |
+| skills, proficiencies & languages                                                              | `sheet.skills`, `sheet.proficiencies`                                            |
+| attacks (Actions tab)                                                                          | `sheet.attacks` — `Trait`s, which grew `hit` and `note`                          |
+| features & traits (Stats tab)                                                                  | `sheet.traits` — the same `Trait`, the key that was already there                |
+| spellcasting, slots and known spells                                                           | `sheet.spellcasting`                                                             |
+| inventory and coin                                                                             | `sheet.inventory`, `sheet.currency`                                              |
+| backstory                                                                                      | `sheet.notes` — where `0012` put it; there is no second `backstory` key          |
+| bond / ideal / flaw / personality                                                              | `sheet.story`                                                                    |
+| death saves                                                                                    | `sheet.deathSaves`                                                               |
+| level-ups, journal                                                                             | `sheet.levelUps`, `sheet.journal`                                                |
+
+Four things about it that are decisions rather than details:
+
+- **`Ability` and `Trait` are the bestiary's, extended, not a second pair.** A stat block's
+  ability cell and a character sheet's are one question, and `bestiary/StatBlock.tsx` already
+  draws both — so `save`/`proficient` went on `Ability` and `hit`/`note` on `Trait` rather than
+  into a `CharacterAbility` and an `Attack`. Every addition is an optional key, so no creature
+  renders differently.
+- **The two genuinely _live_ values in the document are there by decision.** Death saves claim a
+  DM-side reader (`CharacterSheet.jsx:126`) that **does not exist** — no delivery of
+  `EncounterRunner.jsx` draws one — and spell slots have no second holder at all. A column whose
+  only reader is the row that owns it is what the rule excludes. When a delivery draws death
+  saves on the initiative row they become two `smallint`s and a `vitals.ts` write-through, which
+  is the shape `0014` already established.
+- **Whole-document writes race, and that is accepted rather than hidden.** `CharacterUpdate.sheet`
+  is the entire document, so "I spent a first-level slot" is a read-modify-write that can lose a
+  DM's concurrent condition edit. The fix is a patch grain or an `updatedAt` precondition, and it
+  is not needed until two people edit one sheet at once.
+- **Growing the document grew what campaign search indexes, silently and by design.** `0012` puts
+  `jsonb_to_tsvector(body)` at weight C in `character.search`, so a player's backstory and journal
+  are findable in their DM's campaign search the moment they are typed. Mostly the point; also
+  means a player's journal is not private from their DM.
+
+**What the drawing asks for that the data cannot supply** — report these, do not invent them:
+
+- **A character with no campaign.** `MyCharacters.jsx` draws _"Not in a campaign yet"_ and a
+  _Join a game_ button. `character.campaign_id` is `not null` and a campaign-less character would
+  need a reach rule beside membership — the one thing the whole model contains. Bringing a
+  character to a second table is a **copy**, shaped like `creatures/:id/derive`; it is not built.
+- **The campaign's _name_ on a character.** `GET /me/characters` answers `Character`, whose
+  `campaignId` is the join key; the name comes from `GET /me/campaigns`, which the player shell
+  reads anyway. A name here would be a second answer to what a campaign is called.
+- **Every affordance that writes.** Rolling dice "to your DM's dice tray", spending a slot,
+  marking a death save, uploading a portrait, adding gear, editing the backstory: **a player
+  cannot write anything.** `ownedRowWritable` deliberately does not exist and the player write
+  path is its own step with its own decision. `hpCurrent` is not on any update payload in any
+  case — it moves by delta, through `POST …/characters/:id/damage`, which is DM-only.
+- **The live banner** (_"The Salt Road is playing right now · session 12 · round 3 · Brannoc is up
+  next"_) has no read behind it. It is three campaign-scoped reads a player is partly refused, and
+  the player projection of a fight is the step-8 decision.
+- **Subclass is in `sheet.identity` and not in `descriptor`.** A fifth column on the generated
+  expression would be a migration for a string only the header draws.
+
+#### `GET /me/characters`: the one read on `character` that names no campaign
+
+Every character this account plays, across every table it is at — `Characters.mine`,
+`repo/Characters.ts`. Three things about it:
+
+- **It is a _narrowing_, not a reach.** `repo/visibility.ts`'s `ownRowReadable` is
+  `ownedRowReadable` **conjoined** with ownership, so it cannot be wider than the predicate
+  `characters.list` already composes, however that predicate changes. That shape is the whole
+  argument: `readable OR mine` would have answered a DM their whole table and looked right doing
+  it. Nothing in `Characters.ts` compares `account_id` — the seam is the one place that is
+  written.
+- **It needs no campaign in the path, and `rowCampaign(sql, "character")` is how.** The campaign
+  ref is the row's own `campaign_id` rather than a correlated outer `campaign.id`, so the
+  predicate composes with **no join to `campaign`** and no inner alias shadowing an outer one. It
+  satisfies `CampaignRef`'s rule trivially and therefore exactly.
+- **It cannot fail.** An account that is a member of nothing gets `[]`, like `GET /me/campaigns`
+  and for the same reason: there is no campaign in the path for a `NotFound` to be about.
+
+Measured against a real server, one account with characters at two tables and none at a third:
+both come back with their `campaignId`; a revoked membership takes one away while the row still
+exists and still names the account; unsharing a campaign takes the other away though the DM
+assigned it; a credential scoped to one table sees only that table's; and an unassigned character
+is nobody's, including the DM's. `apps/server/test/my-characters.test.ts` pins all of it.
 
 ## `HttpApi`, and the client derived from it
 

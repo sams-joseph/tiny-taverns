@@ -462,7 +462,16 @@ describe("the scope, counted", () => {
     // answers first, which is the shape `DmActor.ts` warns against. The gate is
     // for reads whose *player projection diverges*, and assignment has no
     // player projection at all.
-    expect(ungated).toBe(62);
+    //
+    // The sixty-third is `Characters.mine` — `GET /me/characters`. It is the
+    // mirror of `Memberships.mine` and ungated for the mirror-image reason: the
+    // characters an account already owns, in campaigns its credential already
+    // reaches, are not a disclosure to that credential. It is also the only read
+    // in the product that is *narrower* than what the actor may see, because
+    // `ownRowReadable` conjoins ownership onto the same predicate
+    // `characters.list` composes — so it cannot answer a row the gate would have
+    // been protecting, one campaign at a time.
+    expect(ungated).toBe(63);
   });
 });
 

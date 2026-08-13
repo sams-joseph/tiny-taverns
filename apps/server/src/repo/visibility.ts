@@ -43,6 +43,10 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * `visibility` says. It is written as a third disjunct of the innermost test
  * rather than as an alternative to the whole predicate, so every condition
  * above it still applies. See its own comment for what that buys.
+ *
+ * `ownRowReadable` beside it is **not** a second reach and the distinction is
+ * worth keeping: it is that same predicate conjoined with ownership, so it can
+ * only ever return fewer rows. A narrowing is free to be added; a reach is not.
  */
 
 /**
@@ -68,6 +72,27 @@ type CampaignRef = CampaignId | Statement.Identifier;
 
 /** The `campaign` row of the query this fragment lands in. */
 const correlatedCampaign = (sql: SqlClient.SqlClient): Statement.Identifier => sql("campaign.id");
+
+/**
+ * The campaign a row of `table` is in — the ref for a read over a
+ * campaign-scoped table that names **no** campaign in its path.
+ *
+ * There is one such read today, `GET /me/characters`, and it is the second time
+ * the file has needed a correlated form: `campaignReadable`'s default is the
+ * first, for the campaign list. The difference is which row the question is
+ * asked from. There, the row *is* the campaign; here the row points at one, so
+ * the ref is the pointer rather than the outer `campaign.id` — which means the
+ * predicate composes with no join to `campaign` at all, and no inner alias
+ * shadowing an outer one.
+ *
+ * It satisfies `CampaignRef`'s rule trivially and therefore exactly: the
+ * sibling clause `withinReadableCampaign` writes becomes
+ * `<table>.campaign_id = <table>.campaign_id`, so the campaign the membership
+ * and scope questions are asked about is, by construction, the campaign the row
+ * is in. A caller cannot pass one it is not.
+ */
+export const rowCampaign = (sql: SqlClient.SqlClient, table: string): Statement.Identifier =>
+  sql(`${table}.campaign_id`);
 
 /**
  * Whether this actor's account holds a live membership of the campaign.
@@ -199,7 +224,7 @@ export const campaignWritable = (
 const withinReadableCampaign = (
   sql: SqlClient.SqlClient,
   table: string,
-  campaignId: CampaignId,
+  campaignId: CampaignRef,
   actor: Actor,
 ): ReadonlyArray<Statement.Fragment> => [
   sql`${sql(table)}.campaign_id = ${campaignId}`,
@@ -250,11 +275,15 @@ export const rowReadable = (
  * (`player-edits-own-character`), and it is not this one: reads and writes use
  * different predicates here for exactly the reason `rowWritable` is not
  * `rowReadable`.
+ *
+ * It takes a `CampaignRef` rather than a bound id so that a read with no
+ * campaign in its path can compose it — see `ownRowReadable` below and
+ * `rowCampaign` above. Every existing caller passes a bound id and is unchanged.
  */
 export const ownedRowReadable = (
   sql: SqlClient.SqlClient,
   table: string,
-  campaignId: CampaignId,
+  campaignId: CampaignRef,
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
@@ -264,6 +293,42 @@ export const ownedRowReadable = (
       sql`${sql(table)}.visibility = 'shared'`,
       sql`${sql(table)}.account_id = ${actor.accountId}`,
     ]),
+  ]);
+
+/**
+ * Rows of an ownable table that are **this actor's own** — `GET /me/characters`,
+ * and the only read in the product that is narrower than what the actor may see
+ * rather than equal to it.
+ *
+ * It is `ownedRowReadable` **conjoined** with ownership, not a fourth predicate
+ * that restates it. That shape is the whole guarantee: a conjunction cannot be
+ * wider than either half, so however `ownedRowReadable` changes, this stays
+ * inside it. (Postgres then simplifies the disjunction away, since
+ * `account_id = me` implies the `or` it sits in — what survives is *in a
+ * campaign I may read* and *mine*, which is what "my characters" means.)
+ *
+ * **The narrowing is the only thing this adds, and it is not a security
+ * boundary.** Every refusal is still the seam's: a revoked membership, a
+ * credential minted for another table and an unshared campaign each take the row
+ * away before ownership is reached, exactly as they do for `characters.list`. So
+ * the endpoint discloses nothing `GET /campaigns/:c/characters` would not, one
+ * campaign at a time.
+ *
+ * `account_id` is compared to the actor's own account and to nothing a caller
+ * supplied — there is no request shape that asks for somebody else's characters
+ * here. This is the one place the comparison is written, for the reason the
+ * whole file exists: a repository that spelled it in its own `WHERE` would be
+ * the second place the ownership rule lives.
+ */
+export const ownRowReadable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignRef,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    ownedRowReadable(sql, table, campaignId, actor),
+    sql`${sql(table)}.account_id = ${actor.accountId}`,
   ]);
 
 /**

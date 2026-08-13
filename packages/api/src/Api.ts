@@ -111,22 +111,46 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
   .middleware(Authorization) {}
 
 /**
- * The tables this account is at, and what it is at them.
+ * The tables this account is at, and what it is at them — and the characters it
+ * plays across all of them.
  *
  * **The one group in the product that names no campaign**, because it is the
  * question you ask before you have one: a signed-in account with no membership
  * anywhere is now a legitimate steady state — somebody who signed up and has
  * not been invited yet — and this is the read whose empty answer says so.
  *
- * It is not a second answer to `campaigns.list`. It composes the identical
- * predicate (see `CampaignMembership`), so the two cannot disagree about reach;
- * what it adds is the role, which is a fact about the pair and has nowhere on
- * the campaign row to live. That is what a player screen will branch on.
+ * Neither endpoint is a second answer to a campaign-scoped one. `campaigns`
+ * composes the identical predicate `campaigns.list` does (see
+ * `CampaignMembership`), so the two cannot disagree about reach; what it adds is
+ * the role, which is a fact about the pair and has nowhere on the campaign row
+ * to live. `characters` composes the identical predicate `characters.list` does,
+ * narrowed to the caller's own rows — see `repo/visibility.ts`'s
+ * `ownRowReadable`, which is `ownedRowReadable` *conjoined* with ownership and
+ * therefore cannot be wider than it.
  */
 class MeGroup extends HttpApiGroup.make("me")
   .add(
     HttpApiEndpoint.get("campaigns", "/campaigns", {
       success: Schema.Array(CampaignMembership),
+    }),
+    /**
+     * Every character this account plays, across every table it is at.
+     *
+     * **A list, not a row, and a character still belongs to exactly one
+     * campaign.** The tempting shape — one character row several campaigns share
+     * — would need a predicate that reaches across campaigns, which is the one
+     * thing the whole membership model contains. Bringing a character to a
+     * second table is a copy, shaped like `creatures/:id/derive`; it is not
+     * built, and this endpoint is not the place it would go.
+     *
+     * It answers `Character` unchanged rather than a shape carrying the
+     * campaign's *name*. `campaignId` is the join key and `GET /me/campaigns` is
+     * the read that names campaigns — a name here would be a second answer to
+     * what a campaign is called, which is the rule `CampaignMember.accountId`
+     * already follows from the other side.
+     */
+    HttpApiEndpoint.get("characters", "/characters", {
+      success: Schema.Array(Character),
     }),
   )
   .prefix("/me")

@@ -27,6 +27,18 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * modifier is arithmetically derivable from the score, but only for creatures
  * that obey the arithmetic — and a stat block is a document, so it keeps what
  * was written rather than what can be recomputed.
+ *
+ * `save` and `proficient` arrived with the character sheet
+ * (`ui_kits/dm-screen/PlayerParts.jsx`'s `AbilityBlock`, which draws a saving
+ * throw under the modifier and a dot beside it). They are here rather than on a
+ * `CharacterAbility` of their own for this file's own stated reason: **a stat
+ * block's ability cell and a character sheet's are one question.** A monster has
+ * saving throws too, and `apps/web/src/bestiary/StatBlock.tsx` already draws
+ * this cell — two shapes meaning the same thing would be two renderers.
+ *
+ * Both are optional keys, so every stat block written before them still
+ * decodes and a creature that has never had a saving throw typed in renders
+ * exactly as it did.
  */
 export const Ability = Schema.Struct({
   /** `"STR"` */
@@ -35,22 +47,47 @@ export const Ability = Schema.Struct({
   score: Schema.NonEmptyString,
   /** `"+0"` */
   modifier: Schema.NonEmptyString,
+  /**
+   * `"+7"` — the saving throw, pre-signed like `modifier` and for the same
+   * reason: the document keeps what was written.
+   */
+  save: Schema.optional(Schema.String),
+  /**
+   * Whether the saving throw is proficient — the filled dot beside it.
+   *
+   * A boolean rather than a string because it is the one thing here nothing
+   * renders verbatim: it is drawn as a mark, not as text.
+   */
+  proficient: Schema.optional(Schema.Boolean),
 });
 export type Ability = typeof Ability.Type;
 
 /**
- * A named trait, action or reaction (`data.js:27-32`).
+ * A named trait, action or reaction (`data.js:27-32`) — and, since the
+ * character sheet, a feature and an attack as well.
  *
  * `dice` is present only on the rollable ones — `StatBlock.jsx:47-51` renders a
  * roll button when it is there and nothing when it is not, so an absent key and
  * a present-but-empty one would render differently. It is an optional key for
  * that reason rather than a nullable string.
+ *
+ * `hit` and `note` are the two the sheet needed, and they are here rather than
+ * in an `Attack` and a `Feature` shape because a named block of prose is a
+ * monster's trait, a character's feature, a spell and a piece of equipment —
+ * `Character.ts` says so and `CharacterSheet` composes this in three places.
+ * The mapping onto what the kit draws is exact: `AttackRow` is a name, a second
+ * line (`text`), a to-hit (`hit`) and a dice button (`dice`); the Features list
+ * is a name, an accented short label (`note`) and a paragraph (`text`).
  */
 export const Trait = Schema.Struct({
   name: Schema.NonEmptyString,
   text: Schema.String,
   /** `"1d6+2"` — omitted when the trait is not something you roll. */
   dice: Schema.optional(Schema.String),
+  /** `"+7"`, or `"—"` for something that does not roll to hit. */
+  hit: Schema.optional(Schema.String),
+  /** `"1/short rest"`, `"10 ft."` — the short label beside the name. */
+  note: Schema.optional(Schema.String),
 });
 export type Trait = typeof Trait.Type;
 

@@ -16,6 +16,188 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  */
 
 /**
+ * The half-line under a character's name that no column derives, plus the
+ * numbers the sheet's identity card draws around it.
+ *
+ * `descriptor` on the row already answers *"Level 5 Half-orc Paladin"* from
+ * three columns. What the kit draws beside it — *"Oath of the Open Road"*, a
+ * background, an alignment, a speed, an initiative, a proficiency bonus, hit
+ * dice and an experience bar — is filtered by nothing, sorted by nothing,
+ * seeded by nothing and predicated on nothing, so by the rule at the top of
+ * this file it is document.
+ *
+ * **`subclass` is the one identity field with no home and no derivation**, and
+ * it is here rather than as a fifth column of the generated `descriptor`
+ * expression: adding one would be a migration for a string only the header
+ * draws.
+ *
+ * Strings where the sheet renders the value verbatim, numbers where it counts
+ * with it. `xp`/`xpNext` fill a progress bar, so they are integers; `speed`,
+ * `initiative` and `proficiency` are drawn as written, so they are strings and
+ * `"30 ft."` and `"+3"` are both expressible. That is `Ability`'s rule, applied
+ * one level out.
+ */
+export const SheetIdentity = Schema.Struct({
+  /** `"Oath of the Open Road"` — part of the drawn tagline, derivable from nothing. */
+  subclass: Schema.optional(Schema.String),
+  /** `"Temple foundling"` */
+  background: Schema.optional(Schema.String),
+  /** `"Lawful neutral"` */
+  alignment: Schema.optional(Schema.String),
+  /** `"30 ft."` */
+  speed: Schema.optional(Schema.String),
+  /** `"+1"` — pre-signed, like `Ability.modifier`. */
+  initiative: Schema.optional(Schema.String),
+  /** `"+3"` */
+  proficiency: Schema.optional(Schema.String),
+  /** `"3/5 d10"` */
+  hitDice: Schema.optional(Schema.String),
+  /** Counted: the bar is `xp / xpNext`. */
+  xp: Schema.optional(Schema.Int),
+  xpNext: Schema.optional(Schema.Int),
+});
+export type SheetIdentity = typeof SheetIdentity.Type;
+
+/** One row of the skill list — a name, the ability it keys off, and the bonus. */
+export const Skill = Schema.Struct({
+  /** `"Athletics"` */
+  name: Schema.NonEmptyString,
+  /** `"STR"` — the same label an `Ability` carries, so the two can be matched up. */
+  ability: Schema.optional(Schema.String),
+  /** `"+7"`, pre-signed. */
+  bonus: Schema.optional(Schema.String),
+  /** Drawn as a mark rather than as text, so a boolean. */
+  proficient: Schema.optional(Schema.Boolean),
+});
+export type Skill = typeof Skill.Type;
+
+/**
+ * A row of spell slot pips — **counted, so integers.**
+ *
+ * `used` is a live value that moves during play, and it is deliberately in the
+ * document rather than in a column. The rule a live value has to clear is
+ * `0014`'s: *a value two rows both hold gets a column, and one transaction
+ * writes both.* Nothing else holds this one — the DM's runner draws no spell
+ * slots — so there is no second copy to keep in step and a column would have no
+ * reader but the row that owns it.
+ *
+ * **The cost is real and is stated rather than hidden**: `CharacterUpdate.sheet`
+ * is whole-document, so spending a slot is a read-modify-write of the entire
+ * sheet and races a DM editing the same row. Accepted for now; the fix, when two
+ * people editing one sheet becomes common, is a patch grain or an `updatedAt`
+ * precondition, not a column.
+ */
+export const SpellSlot = Schema.Struct({
+  level: Schema.Int,
+  used: Schema.Int,
+  total: Schema.Int,
+});
+export type SpellSlot = typeof SpellSlot.Type;
+
+/** One spell on the known list. */
+export const SpellKnown = Schema.Struct({
+  name: Schema.NonEmptyString,
+  level: Schema.optional(Schema.Int),
+  /** `"Concentration · 1 min"` */
+  note: Schema.optional(Schema.String),
+  prepared: Schema.optional(Schema.Boolean),
+});
+export type SpellKnown = typeof SpellKnown.Type;
+
+export const Spellcasting = Schema.Struct({
+  /** `"CHA"` */
+  ability: Schema.optional(Schema.String),
+  /** `"14"` — the save DC, as written. */
+  save: Schema.optional(Schema.String),
+  /** `"+6"` */
+  attack: Schema.optional(Schema.String),
+  slots: Schema.optional(Schema.Array(SpellSlot)),
+  known: Schema.optional(Schema.Array(SpellKnown)),
+});
+export type Spellcasting = typeof Spellcasting.Type;
+
+/** One line of the Gear tab. */
+export const InventoryItem = Schema.Struct({
+  name: Schema.NonEmptyString,
+  /** Counted — the sheet draws `×2`. */
+  quantity: Schema.optional(Schema.Int),
+  /** `"6 lb"`, `"—"`. As written, so half a pound is expressible. */
+  weight: Schema.optional(Schema.String),
+  /** `"From session 11"` — the badge beside the name. */
+  note: Schema.optional(Schema.String),
+  equipped: Schema.optional(Schema.Boolean),
+});
+export type InventoryItem = typeof InventoryItem.Type;
+
+/**
+ * Coin, as five counted piles.
+ *
+ * A fixed struct rather than an open record: the sheet draws all five in this
+ * order whether or not they are held, and an open vocabulary would be a
+ * currency nothing renders.
+ */
+export const Currency = Schema.Struct({
+  pp: Schema.optional(Schema.Int),
+  gp: Schema.optional(Schema.Int),
+  ep: Schema.optional(Schema.Int),
+  sp: Schema.optional(Schema.Int),
+  cp: Schema.optional(Schema.Int),
+});
+export type Currency = typeof Currency.Type;
+
+/**
+ * Three up, three down — **live, and in the document by decision.**
+ *
+ * `CharacterSheet.jsx:126` claims a DM-side reader for this (*"Marks here show
+ * on your DM's initiative row straight away"*) and there is not one: no delivery
+ * of `EncounterRunner.jsx` draws a death save, and `data.js`'s `initiative` rows
+ * carry none. A column whose only reader is the row that owns it is exactly what
+ * the column rule excludes, so this stays document until a delivery draws it on
+ * the DM's row — at which point it is two `smallint`s and a `vitals.ts`
+ * write-through, which is a small and well-precedented change.
+ */
+export const DeathSaves = Schema.Struct({
+  successes: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 3 })),
+  failures: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 3 })),
+});
+export type DeathSaves = typeof DeathSaves.Type;
+
+/** One entry in the Log tab. `session` is the number, not a `SessionId`. */
+export const LevelUp = Schema.Struct({
+  level: Schema.Int,
+  session: Schema.optional(Schema.Int),
+  note: Schema.optional(Schema.String),
+});
+export type LevelUp = typeof LevelUp.Type;
+
+/**
+ * A line the player wrote about a night, filed by session **number**.
+ *
+ * Not a `SessionId`: this is prose the player typed on their own sheet, and a
+ * real foreign key would make a journal entry something the campaign's cascade
+ * can reach. The number is what the badge draws.
+ */
+export const JournalEntry = Schema.Struct({
+  session: Schema.optional(Schema.Int),
+  text: Schema.String,
+});
+export type JournalEntry = typeof JournalEntry.Type;
+
+/**
+ * The four lines the Story tab draws beside the backstory.
+ *
+ * The backstory itself is `notes`, which has held it since `0012` — a second
+ * key for the same prose would be two places to look for one paragraph.
+ */
+export const SheetStory = Schema.Struct({
+  personality: Schema.optional(Schema.String),
+  ideal: Schema.optional(Schema.String),
+  bond: Schema.optional(Schema.String),
+  flaw: Schema.optional(Schema.String),
+});
+export type SheetStory = typeof SheetStory.Type;
+
+/**
  * The document half: whatever the player pasted or the DM typed.
  *
  * `Ability` and `Trait` are the bestiary's own shapes rather than a second pair
@@ -25,15 +207,35 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * spell and a piece of equipment. Two shapes here would be two renderers, and
  * `apps/web/src/bestiary/StatBlock.tsx` already draws these.
  *
- * Nothing narrower is defined, because nobody has drawn a character page: the
- * delivered kit has a party *row* and no sheet. Modelling saves, skills and
- * spell slots as fields would be inventing that page in a schema, and it is the
- * document precisely so that it can hold what a real table keeps without a
- * migration each time.
+ * ### The sheet arrived, and it changed no SQL
+ *
+ * `ui_kits/dm-screen/CharacterSheet.jsx` draws about thirty fields against the
+ * nine columns `0012` gave `character`, and **not one of them earned a tenth**.
+ * The rule is the file's own and its inputs did not change: *a field earns a
+ * column when something in the product reads it* — a screen filters or sorts on
+ * it, the seed copies it, a predicate uses it, search indexes it. Nothing on
+ * Stats, Gear or Story is any of those. They are drawn, all at once, on one
+ * screen, for one row fetched by id.
+ *
+ * So every key below is a new **optional** key on a `jsonb` document:
+ * `emptyCharacterSheet` still decodes, every row written before them still
+ * reads, and there is no backfill and no migration. The two values that are
+ * genuinely *live* — death saves and spell slots — cleared a different rule and
+ * are argued at `DeathSaves` and `SpellSlot`; the short version is that the DM's
+ * runner draws neither, so neither has a second holder.
+ *
+ * **Growing the document grows what campaign search indexes.** `0012` puts
+ * `jsonb_to_tsvector(body)` at weight C in `character.search` and `repo/Search.ts`
+ * is the fourth arm, so a player's backstory and journal become findable in
+ * their DM's campaign search the moment they are typed, with no code change.
+ * That is mostly the point — *"the ferryman's token"* is exactly what a DM wants
+ * to find — but it also means a player's journal is not private from their DM,
+ * and nothing here pretends otherwise.
  */
 export const CharacterSheet = Schema.Struct({
   /**
-   * Free prose about them — background, appearance, what they are afraid of.
+   * Free prose about them — background, appearance, what they are afraid of,
+   * and the Story tab's backstory.
    *
    * This is also where a descriptor written before `species` and `class_name`
    * were columns landed: `0012_character_sheet.ts` moved it here verbatim
@@ -42,8 +244,29 @@ export const CharacterSheet = Schema.Struct({
   notes: Schema.String,
   /** `STR 10 (+0)` — the same cell a stat block has. */
   abilities: Schema.Array(Ability),
-  /** Named blocks: features, spells known, equipment. */
+  /** Named blocks: features, spells known, equipment. The sheet's Features list. */
   traits: Schema.Array(Trait),
+  /** The tagline's unowned half, and the identity card's numbers. */
+  identity: Schema.optional(SheetIdentity),
+  skills: Schema.optional(Schema.Array(Skill)),
+  /** `"All armour"`, `"Orcish"` — badges, an open vocabulary. */
+  proficiencies: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * The Actions tab. `Trait`s, not an `Attack` shape — see `Trait`, which grew
+   * `hit` and `note` for exactly this and for the Features list beside it.
+   *
+   * Its own key rather than more `traits` because the sheet draws the two in
+   * different tabs with different affordances, and a reader cannot tell an
+   * attack from a feature by inspecting the fields.
+   */
+  attacks: Schema.optional(Schema.Array(Trait)),
+  spellcasting: Schema.optional(Spellcasting),
+  inventory: Schema.optional(Schema.Array(InventoryItem)),
+  currency: Schema.optional(Currency),
+  deathSaves: Schema.optional(DeathSaves),
+  levelUps: Schema.optional(Schema.Array(LevelUp)),
+  journal: Schema.optional(Schema.Array(JournalEntry)),
+  story: Schema.optional(SheetStory),
 });
 export type CharacterSheet = typeof CharacterSheet.Type;
 
@@ -51,6 +274,10 @@ export type CharacterSheet = typeof CharacterSheet.Type;
  * What a character created with no sheet gets — the same value the migration
  * states as the column default, so a client can render an empty sheet without a
  * special case.
+ *
+ * It names the three required keys and none of the optional ones, which is what
+ * makes the document's growth additive rather than a new default: a row written
+ * before the sheet existed decodes to exactly this.
  */
 export const emptyCharacterSheet: CharacterSheet = { notes: "", abilities: [], traits: [] };
 
