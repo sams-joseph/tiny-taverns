@@ -8,6 +8,7 @@ import {
   CharacterAssign,
   CharacterCreate,
   CharacterDamage,
+  CharacterOwnUpdate,
   CharacterUpdate,
 } from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
@@ -119,7 +120,7 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * anywhere is now a legitimate steady state — somebody who signed up and has
  * not been invited yet — and this is the read whose empty answer says so.
  *
- * Neither endpoint is a second answer to a campaign-scoped one. `campaigns`
+ * No endpoint here is a second answer to a campaign-scoped one. `campaigns`
  * composes the identical predicate `campaigns.list` does (see
  * `CampaignMembership`), so the two cannot disagree about reach; what it adds is
  * the role, which is a fact about the pair and has nowhere on the campaign row
@@ -127,6 +128,12 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * narrowed to the caller's own rows — see `repo/visibility.ts`'s
  * `ownRowReadable`, which is `ownedRowReadable` *conjoined* with ownership and
  * therefore cannot be wider than it.
+ *
+ * `updateCharacter` is the group's first write and the product's first player
+ * write. It follows the same rule from the other side: its predicate is
+ * conjoined with ownership too, so it can only ever reach rows `characters`
+ * above already answers — and it carries a payload of its own rather than the
+ * DM's, so the columns it may move are a fact about which schema exists.
  */
 class MeGroup extends HttpApiGroup.make("me")
   .add(
@@ -151,6 +158,38 @@ class MeGroup extends HttpApiGroup.make("me")
      */
     HttpApiEndpoint.get("characters", "/characters", {
       success: Schema.Array(Character),
+    }),
+    /**
+     * **The first write in the product a player may make**, and the only
+     * endpoint outside `join` that a non-DM can change anything through.
+     *
+     * It is here rather than in `characters` for the reason the whole group is
+     * here: **it names no campaign, so there is none for a caller to claim.**
+     * Everywhere else a parent id in a path is a client claim the predicate has
+     * to refuse; here the row's own `campaign_id` is what the membership,
+     * credential-scope and master-toggle clauses are asked about, so the
+     * campaign a request reaches is by construction the campaign the row is in.
+     * It is also where the player's own screen already reads from — `mine`
+     * above lists it, this patches one of them.
+     *
+     * Two boundaries, and neither is a check in a handler:
+     *
+     * - **Which rows** — `repo/visibility.ts`'s `ownRowWritable`: yours, inside
+     *   a campaign you hold a live membership of, through a credential that
+     *   reaches it, while the DM has shared it. Strictly narrower than the read
+     *   beside it.
+     * - **Which columns** — `CharacterOwnUpdate`, which has no field for
+     *   `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId`. The
+     *   live half of a character is not something this payload can say.
+     *
+     * `NotFound` covers every refusal, including "that is somebody else's",
+     * because saying it exists but is not yours is itself a disclosure.
+     */
+    HttpApiEndpoint.patch("updateCharacter", "/characters/:characterId", {
+      params: { characterId: CharacterId },
+      payload: CharacterOwnUpdate,
+      success: Character,
+      error: NotFound,
     }),
   )
   .prefix("/me")

@@ -121,8 +121,12 @@ describe("the reach seam, enforced rather than asserted", () => {
     // unchanged, `character_ownership.test.ts` pins the narrowing, and the
     // stranger below still reads nothing.
     //
-    // The *write* predicate the column is also a hook for is a separate settled
-    // decision and is not written yet.
+    // The *write* predicate the column is also a hook for has since been
+    // written: `ownRowWritable`, in the same file, is the first predicate in the
+    // product that lets somebody who is not a DM change a row. It names the same
+    // column and conjoins it onto the same campaign gate, so it is strictly
+    // narrower than the read above and this list is again unchanged.
+    // `player-write.test.ts` pins the boundary.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "repo/Campaigns.ts",
       "repo/Characters.ts",

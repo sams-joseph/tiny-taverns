@@ -471,7 +471,18 @@ describe("the scope, counted", () => {
     // `ownRowReadable` conjoins ownership onto the same predicate
     // `characters.list` composes — so it cannot answer a row the gate would have
     // been protecting, one campaign at a time.
-    expect(ungated).toBe(63);
+    //
+    // The sixty-fourth is `Characters.updateOwn` — `PATCH /me/characters/:id`,
+    // and the first write in the product a non-DM may make. It is the one entry
+    // here that is ungated because the gate would answer the *wrong question*
+    // rather than a redundant one: a `DmActor` is a proof that this account is
+    // the campaign's DM, and the whole point of this method is that its caller
+    // is not. What bounds it is `ownRowWritable` — ownership conjoined with the
+    // same campaign gate the reads use, so it can never reach a row
+    // `ownedRowReadable` refuses — and `CharacterOwnUpdate`, which has no field
+    // for a live column. Two boundaries, neither of them a proof, and
+    // `player-write.test.ts` pins both.
+    expect(ungated).toBe(64);
   });
 });
 

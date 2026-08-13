@@ -93,14 +93,20 @@ const CampaignsLive = HttpApiBuilder.group(
 );
 
 /**
- * The two reads that name no campaign — which tables this account is at, and
- * which characters it plays across them.
+ * The endpoints that name no campaign — which tables this account is at, which
+ * characters it plays across them, and the one write a player may make.
  *
- * Both are `mine` on their repository and neither takes a proof: what a
+ * The two reads are `mine` on their repository and neither takes a proof: what a
  * credential already reaches is not a disclosure to the credential reaching it.
  * The narrowing to *your own* characters is in the predicate, not here — a
  * handler that filtered would be the leak pattern `repo/visibility.ts` exists
  * to prevent, and it has nothing to filter with.
+ *
+ * `updateCharacter` is as thin as the rest, which matters more here than
+ * anywhere else in this file: it is the product's first player write, and a
+ * "while we are here, refuse a live column" block would be the second place that
+ * rule lives. There is nothing to refuse — `CharacterOwnUpdate` has no such
+ * field, and `ownRowWritable` decides the row.
  */
 const MeLive = HttpApiBuilder.group(
   TavernsApi,
@@ -110,7 +116,10 @@ const MeLive = HttpApiBuilder.group(
     const characters = yield* Characters;
     return handlers
       .handle("campaigns", () => memberships.mine)
-      .handle("characters", () => characters.mine);
+      .handle("characters", () => characters.mine)
+      .handle("updateCharacter", ({ params, payload }) =>
+        characters.updateOwn(params.characterId, payload),
+      );
   }),
 );
 

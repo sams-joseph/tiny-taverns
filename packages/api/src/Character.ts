@@ -456,6 +456,63 @@ export const CharacterUpdate = Schema.Struct({
 export type CharacterUpdate = typeof CharacterUpdate.Type;
 
 /**
+ * What a **player** may change about their own character — the first player
+ * write in the product's history, and deliberately the smaller schema.
+ *
+ * The captain's decision (`player-edits-own-character`) grants the **durable
+ * half only**: their name, the three fields the descriptor derives from, the
+ * numbers that move when they level up, where their real sheet lives, and the
+ * document. *Never hit points, never anything inside a live fight.*
+ *
+ * ### Why it is a second schema rather than a flag on `CharacterUpdate`
+ *
+ * The same rule `PlayerSessionRecap` follows, met on the write side: **distinct
+ * schemas on distinct paths, never a field filter over the wider type.** A
+ * payload that *can* carry `hpCurrent` is one that eventually will, and the
+ * thing standing between it and the column would be an `if` somebody has to
+ * remember. Here the three live columns have no field at all, so a player
+ * writing one is not a check that failed — it is not expressible, and it is
+ * refused by the client's own encoder before a request leaves the browser.
+ *
+ * It is the same argument `CharacterAssign` already makes from the other side:
+ * the DM-only act of saying whose character this is stays DM-only by *which
+ * endpoint exists*.
+ *
+ * ### What is left out, and why each one
+ *
+ * - **`hpCurrent`, `tempHp`, `conditions`** — `0014`'s live trio, the values a
+ *   fight and a character both hold. `hpCurrent` moves by delta through
+ *   `CharacterDamage` and `conditions` writes through to every live combatant;
+ *   both are the DM's, by the live-hit-points decision this one sits under.
+ * - **`visibility`** — the row's own half of the disclosure seam. Who else at
+ *   the table may read this sheet is the DM's answer, and it is not named by the
+ *   decision. A new row still fails closed at `dm`, and it stays that way until
+ *   a DM says otherwise.
+ * - **`accountId`** — not on `CharacterUpdate` either, for the reason
+ *   `CharacterAssign` gives at length: the owner of a row is precisely the field
+ *   a player must not be able to send.
+ * - **`descriptor`** — derived, and writable by nobody.
+ *
+ * `ac` and `hpMax` are *in*, and are the durable half rather than the live one:
+ * they are `0012`'s prep columns, they are what changes when somebody levels or
+ * finds better armour, and neither is a hit point. A combatant snapshots both at
+ * seed time, so writing them reaches no fight already on the table.
+ */
+export const CharacterOwnUpdate = Schema.Struct({
+  name: Schema.optional(Schema.NonEmptyString),
+  playerName: Schema.optional(Schema.NullOr(Schema.String)),
+  level: Schema.optional(Schema.NullOr(level)),
+  species: Schema.optional(Schema.NullOr(shortLabel)),
+  className: Schema.optional(Schema.NullOr(shortLabel)),
+  ac: Schema.optional(Schema.NullOr(ac)),
+  hpMax: Schema.optional(Schema.NullOr(hp)),
+  sheetUrl: Schema.optional(Schema.NullOr(sheetUrl)),
+  /** Whole-document, like `CharacterUpdate.sheet` — and it races the same way. */
+  sheet: Schema.optional(CharacterSheet),
+});
+export type CharacterOwnUpdate = typeof CharacterOwnUpdate.Type;
+
+/**
  * Apply damage or healing to a character, outside a fight or inside one.
  *
  * `CombatantDamage`'s shape exactly, and for its reasons — a delta rather than

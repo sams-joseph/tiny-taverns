@@ -7,6 +7,7 @@ import {
   type CharacterCreate,
   type CharacterDamage,
   type CharacterId,
+  type CharacterOwnUpdate,
   type CharacterSheet,
   type CharacterUpdate,
   CurrentActor,
@@ -31,6 +32,7 @@ import {
   memberOfCampaign,
   ownedRowReadable,
   ownRowReadable,
+  ownRowWritable,
   rowCampaign,
   rowWritable,
 } from "./visibility.js";
@@ -130,14 +132,27 @@ const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
  * The campaign-scoped reads are `ownedRowReadable` rather than `rowReadable`,
  * which is the whole of the read change: **the account a character names may
  * read it whatever its `visibility` says**, still inside a campaign they are a
- * live member of and still only while the DM has shared that campaign. Every
- * write below is `rowWritable`, untouched — owning a character grants no write,
- * and the predicate that will is its own decision.
+ * live member of and still only while the DM has shared that campaign.
  *
  * `mine` is the third read and the only one with no campaign in its path. It
  * composes that same predicate conjoined with ownership, so it is narrower than
  * the other two rather than a way round them; see `repo/visibility.ts`'s
  * `ownRowReadable` and `rowCampaign`.
+ *
+ * ### And a player writes now, in exactly one place
+ *
+ * `updateOwn` — `PATCH /me/characters/:characterId` — is **the first write in
+ * the product a non-DM may make.** Every other method in this file is
+ * `rowWritable` and therefore DM-only, unchanged; this one is `ownRowWritable`,
+ * which is ownership conjoined with the same campaign gate the reads use.
+ *
+ * Two boundaries hold it, and they are different kinds of thing on purpose.
+ * **Which rows** is the predicate: yours, and nothing else. **Which columns** is
+ * the payload: `CharacterOwnUpdate` has no field for `hpCurrent`, `tempHp`,
+ * `conditions`, `visibility` or `accountId`, so the live half of a character
+ * cannot be named by a player at all. A predicate cannot bound a column list and
+ * a schema cannot bound a row set — reaching for one to do the other is how this
+ * gets wide.
  */
 export class Characters extends Context.Service<
   Characters,
@@ -177,6 +192,30 @@ export class Characters extends Context.Service<
       campaignId: CampaignId,
       id: CharacterId,
       patch: CharacterUpdate,
+    ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    /**
+     * A player editing their own sheet — `PATCH /me/characters/:characterId`,
+     * and **the first write in the product a non-DM may make.**
+     *
+     * The twin of `mine` and the mirror of `update`, and the differences from
+     * `update` are all of it:
+     *
+     * - **No campaign id, for the reason `mine` has none.** The campaign is the
+     *   row's own, so there is nothing for a caller to claim and nothing for a
+     *   predicate to have to refuse. See `ownRowWritable` with
+     *   `rowCampaign`.
+     * - **A narrower payload.** `CharacterOwnUpdate` cannot express
+     *   `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId`, so
+     *   the live half of a character and the disclosure seam are out of reach
+     *   by shape rather than by a check here.
+     * - **`ownRowWritable`, which is not `rowWritable`.** Writable because the
+     *   row is theirs, not because they are the DM.
+     *
+     * `NotFound` covers every refusal, the same one a read gives.
+     */
+    readonly updateOwn: (
+      id: CharacterId,
+      patch: CharacterOwnUpdate,
     ) => Effect.Effect<Character, NotFound, CurrentActor>;
     /**
      * Whose character this is — the DM naming somebody at their own table.
@@ -396,6 +435,56 @@ export class Characters extends Context.Service<
                 Effect.tap(ring),
                 Effect.map(({ character }) => character),
               ),
+          ),
+
+        /**
+         * The player's own PATCH — **one statement, and the only write in this
+         * file that is not a transaction.**
+         *
+         * That is not an oversight, it is the reason the whole thing is safe:
+         * every other write here may reach a second row, so it has to commit
+         * with the first or not at all. This one cannot. `conditions` is the
+         * only field `update` writes through to a fight and `CharacterOwnUpdate`
+         * has no such field; a live combatant snapshots `display_name`,
+         * `subtitle`, `player_name`, `ac` and `hp_max` at seed time and reads
+         * none of them back. So a player's edit lands on exactly one row,
+         * whether or not a fight is on the table — which is the strongest form
+         * of *"never anything inside a live fight"* available: not a refusal at
+         * fight time, but nothing a fight holds being expressible at all.
+         *
+         * **It rings no doorbell, and that is the same decision `vitals.ts`
+         * already made one step out.** The bell exists to carry a live value to
+         * a screen watching one, and nothing live moved. Ringing it would need a
+         * player-reachable `currentSessionOf` — that helper composes
+         * `campaignWritableById` and answers a player nothing — which is a new
+         * read with a predicate of its own, for an event whose payload nothing
+         * branches on. An open DM page stays stale until it refetches, exactly
+         * as it does for a level-up typed between games.
+         */
+        updateOwn: (id, patch) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const columns = defined({
+                name: patch.name,
+                player_name: patch.playerName,
+                level: patch.level,
+                species: patch.species,
+                class_name: patch.className,
+                ac: patch.ac,
+                hp_max: patch.hpMax,
+                sheet_url: patch.sheetUrl,
+                body: patch.sheet && encodeSheet(patch.sheet),
+              });
+              const rows = yield* sql<CharacterRow>`
+                update character set ${setClause(sql, columns)}
+                where character.id = ${id}
+                  and ${ownRowWritable(sql, "character", rowCampaign(sql, "character"), actor)}
+                returning *
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
+              return toCharacter(rows[0]!);
+            }),
           ),
 
         /**

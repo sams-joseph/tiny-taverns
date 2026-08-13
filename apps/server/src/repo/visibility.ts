@@ -47,6 +47,13 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * `ownRowReadable` beside it is **not** a second reach and the distinction is
  * worth keeping: it is that same predicate conjoined with ownership, so it can
  * only ever return fewer rows. A narrowing is free to be added; a reach is not.
+ *
+ * **The write half is no longer all `isDm`, and that is the newest thing in this
+ * file.** `ownRowWritable` is the first predicate here that lets somebody who is
+ * not a DM change a row — a player editing their own character, settled by the
+ * captain. It is one hole, in one table, over the columns a payload schema
+ * allows, and it is strictly narrower than the read beside it; the argument is
+ * on the function itself and is worth reading before anything like it is added.
  */
 
 /**
@@ -270,11 +277,11 @@ export const rowReadable = (
  * **It changes nothing a DM sees.** `isDm` is already a disjunct of the same
  * `or`, so for a DM the clause is satisfied before ownership is reached.
  *
- * There is deliberately no `ownedRowWritable`. A player *editing* their own
- * character is a settled decision with a predicate of its own to write
- * (`player-edits-own-character`), and it is not this one: reads and writes use
- * different predicates here for exactly the reason `rowWritable` is not
- * `rowReadable`.
+ * There is deliberately no `ownedRowWritable`, and there still is not. The
+ * player write that has since shipped is `ownRowWritable` — the **conjoined**
+ * shape, one row rather than a relaxed toggle. A player editing their own
+ * character does not make a `shared` row somebody else owns writable, which is
+ * what an `ownedRowWritable` would have meant.
  *
  * It takes a `CampaignRef` rather than a bound id so that a read with no
  * campaign in its path can compose it — see `ownRowReadable` below and
@@ -328,6 +335,60 @@ export const ownRowReadable = (
 ): Statement.Fragment =>
   sql.and([
     ownedRowReadable(sql, table, campaignId, actor),
+    sql`${sql(table)}.account_id = ${actor.accountId}`,
+  ]);
+
+/**
+ * Rows of an ownable table this actor may **write because they are theirs** —
+ * *the first player write in the product's history*, and the only hole in the
+ * write half of this file.
+ *
+ * Until this existed, every write predicate here bottomed out in `isDm`, so a
+ * player's refusal was a fact about the seam rather than a check anywhere. That
+ * simplification is now spent, deliberately, by the captain's decision
+ * (`player-edits-own-character`). What follows is the shape it bought, and why
+ * each part of it is the narrow version.
+ *
+ * **It sits beside `rowWritable`, not inside it.** `rowWritable` composes
+ * `campaignWritableById`, which requires `isDm` — there is no argument that
+ * relaxes it into this, and one that tried would have to weaken the DM test for
+ * every table at once. Two predicates that mean different things, exactly as
+ * `rowWritable` is not `rowReadable`.
+ *
+ * **The campaign half is `withinReadableCampaign`, shared with the two read
+ * predicates above and not restated.** So a write is bounded by every narrowing
+ * a read is: a live membership, a credential that reaches this campaign, and
+ * `campaign.visibility = 'shared'`. Written as its own `exists (…)` it would be
+ * a second spelling of the campaign gate, and the day the two disagree the
+ * wrong one is the one nobody is looking at.
+ *
+ * **The row half is ownership and nothing else.** No `visibility` disjunct: a
+ * `shared` row somebody else owns is not writable here, and neither is an
+ * unassigned one — `account_id = ${actor.accountId}` never matches null. There
+ * is no shape of request that names an account, so this cannot be pointed at
+ * anybody else's row.
+ *
+ * The consequence worth stating: this fragment is **strictly narrower than
+ * `ownedRowReadable`**, because `account_id = me` implies the disjunct it would
+ * have had to satisfy there. A player can never write a row they could not
+ * read, however either predicate changes, and that is a property of the shapes
+ * rather than of two lists kept in step.
+ *
+ * **What it does not bound is which columns move**, and a predicate cannot:
+ * `WHERE` decides rows. The live half of a character — `hp_current`, `temp_hp`,
+ * `conditions` — is kept out by the payload schema instead
+ * (`CharacterOwnUpdate` has no field for any of them), which is the same shape
+ * as the recap's player projection: a leak has to be *written*, not caused by a
+ * forgotten flag. Anything composing this fragment owes the same discipline.
+ */
+export const ownRowWritable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignRef,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    ...withinReadableCampaign(sql, table, campaignId, actor),
     sql`${sql(table)}.account_id = ${actor.accountId}`,
   ]);
 

@@ -379,10 +379,12 @@ describe("what ownership does not grant", () => {
   });
 
   it("grants no write at all — the player still cannot edit, damage or delete their own row", async () => {
-    // `player-edits-own-character` is settled and is not this change. Every
-    // write below composes `rowWritable`, which is untouched, so the first
-    // player write in the product's history is still ahead rather than
-    // half-arrived.
+    // The *reach* grants no write, and that is still exactly true. A player
+    // editing their own sheet shipped afterwards as `Characters.updateOwn`
+    // behind `ownRowWritable` — a second predicate beside `rowWritable`, not a
+    // widening of it — so every write below still composes `rowWritable` and
+    // still refuses. See `player-write.test.ts` for what the player may do
+    // instead, and how much less it is than this.
     const refused = await runtime.runPromise(
       Effect.gen(function* () {
         const characters = yield* Characters;

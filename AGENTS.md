@@ -561,6 +561,14 @@ non-negotiable, because it is free on day one and a retrofit later.
   `character` row whose `account_id` is theirs, whatever that row's own `visibility` says. It is
   a third disjunct of the innermost test, so every clause above it still applies. See "**`account_id`
   means something now**" under the party for what it grants and what it deliberately does not.
+- **The write half is no longer all `isDm`, and there is exactly one hole in it**: `ownRowWritable`
+  — a player edits the durable half of the `character` row whose `account_id` is theirs. It sits
+  _beside_ `rowWritable` rather than widening it, its campaign half is the same
+  `withinReadableCampaign` the reads use, and it is ownership **conjoined** rather than disjoined,
+  so it is strictly narrower than `ownedRowReadable`: nothing a player may write is something they
+  could not read. **Which columns move is bounded by a second payload schema, not by the
+  predicate** — see "A player writes, and this is the whole of it" under the party, which is the
+  list every future player write will be read against.
 - **`Actor` carries no role, and cannot.** A person is the DM of one table and a player at
   another _at the same time, on the same credential_, so "may this actor see `dm` rows" is a
   question about a pair — this account, this campaign — and a pair is a row. `isDm` in
@@ -645,12 +653,15 @@ non-negotiable, because it is free on day one and a retrofit later.
   `EncounterRuns` (7), `SessionEvents` (3, including the streaming `pollForRun`, which a grep
   for `CurrentActor>` cannot see), `Recap.read` and `Memberships.list` — the roster, whose
   player projection is _nothing_ rather than a narrower schema (see "Membership is the model,
-  and there is no seat"). The other sixty actor-scoped methods do
+  and there is no seat"). The other sixty-four actor-scoped methods do
   not, and should not: they return a `shared` row a player is entitled to see in full, so
-  `GET …/notes` answering the ordinary `Note` discloses nothing. `Characters.assign` is the
-  newest of them and is ungated for one more reason worth keeping: it is a **write**, and
+  `GET …/notes` answering the ordinary `Note` discloses nothing. `Characters.assign` is ungated for
+  one more reason worth keeping: it is a **write**, and
   `rowWritable` already requires `isDm`, so a proof on top would be a second answer to a question
-  the predicate underneath answers first. **The gate is a precondition on
+  the predicate underneath answers first. **`Characters.updateOwn` is the newest, and the one
+  method where the gate would answer the _wrong_ question** rather than a redundant one — a
+  `DmActor` proves the caller is the campaign's DM, and the whole point of the player write is that
+  they are not. **The gate is a precondition on
   the seam, not a replacement for it** — every gated method still composes `visibility.ts`
   unchanged, so a bug in the gate degrades to today's behaviour rather than to an open door.
   `apps/server/test/dm-actor.test.ts` pins all of it, including seven `@ts-expect-error` lines
@@ -974,9 +985,10 @@ ownership relaxes the row-level toggle and nothing above it:
 - **still in credential scope** — a token minted for one table reaches nothing at another;
 - **still under the master toggle** — `campaign.visibility = 'dm'` keeps a player out of their own
   character, which is the same answer `GET /me/campaigns` gives and is not a gap;
-- **no write at all** — every write in `Characters` is `rowWritable`, untouched. Editing your own
-  sheet is a settled decision with a predicate still to write, and `ownedRowWritable` deliberately
-  does not exist.
+- **no write** — this predicate grants none, and it still does not. A player edits their own sheet
+  through a **second** predicate beside it, `ownRowWritable`; `ownedRowWritable` — the reach-shaped
+  one, which would have made a `shared` row somebody else owns writable — deliberately does not
+  exist. See "A player writes, and this is the whole of it" below.
 
 Written the other way round — `rowReadable(…) or account_id = me` — a character would be readable
 by its owner in a campaign they had been revoked from, through a credential minted for another
@@ -995,6 +1007,86 @@ cannot see it_, which is what it should always have meant. `character-ownership.
 of the above and fails four ways if the disjunct is removed; `Characters.assign` is ungated by
 `DmActor` on purpose (`dm-actor.test.ts` counts it), because `rowWritable` already requires `isDm`
 and assignment has no player projection to diverge.
+
+#### A player writes, and this is the whole of it
+
+**`PATCH /me/characters/:characterId` is the first write in the product's history that a non-DM may
+make**, by the captain's decision of 2026-08-12 (`player-edits-own-character`). Until it landed,
+every write predicate in `repo/visibility.ts` bottomed out in `isDm`, so a player's refusal was a
+fact about the seam rather than a check anywhere. That simplification is spent. **This is the first
+entry in the list of what a player may write, and every future one will be read against it.**
+
+**What a player may write, exactly — the durable half of their own character:**
+
+| may write                                                  | how it is bounded                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `name`, `player_name`                                      | on `CharacterOwnUpdate`                                                   |
+| `level`, `species`, `class_name` — so `descriptor` follows | on `CharacterOwnUpdate`; `descriptor` is generated and writable by nobody |
+| `ac`, `hp_max`                                             | `0012`'s prep columns — durable, and neither is a hit point               |
+| `sheet_url`, `body` (the whole sheet document)             | on `CharacterOwnUpdate`                                                   |
+
+**What a player may not write, and why each is out:**
+
+| may not write                           | why                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `hp_current`, `temp_hp`, `conditions`   | `0014`'s live trio — the live-hit-points decision this one sits under                 |
+| `visibility`                            | the row's own half of the disclosure seam; the DM's answer, not named by the decision |
+| `account_id`                            | the owner of a row is the field a player must not be able to send (`CharacterAssign`) |
+| `descriptor`, `campaign_id`, provenance | derived, structural, or the assistant's                                               |
+| anything on any other table             | there is no other player write                                                        |
+
+**Two boundaries, and they are different kinds of thing on purpose. Neither may stand in for the
+other**, because a predicate cannot bound a column list and a schema cannot bound a row set:
+
+- **Which rows — `ownRowWritable` (`repo/visibility.ts`).** It sits **beside** `rowWritable`, not
+  inside it: `rowWritable` composes `campaignWritableById`, which requires `isDm`, and there is no
+  argument that relaxes it into this. Its campaign half is `withinReadableCampaign`, the same named
+  piece the two read predicates use and not a second spelling — so a live membership, credential
+  scope and `campaign.visibility = 'shared'` all still apply. Its row half is ownership and nothing
+  else: no `visibility` disjunct, and `account_id = <me>` never matches null, so an unassigned row
+  and somebody else's `shared` row are both refused. It is therefore **strictly narrower than
+  `ownedRowReadable`** — a player can never write a row they could not read, and that is a property
+  of the shapes rather than of two lists kept in step.
+- **Which columns — `CharacterOwnUpdate` (`packages/api/src/Character.ts`).** A _second schema_,
+  the same rule `PlayerSessionRecap` follows on the read side: **distinct schemas on distinct
+  paths, never a field filter over the DM's type.** A payload that can carry `hpCurrent` is one
+  that eventually will. Measured: excess keys are dropped by `Schema.Struct` on **encode and
+  decode**, so a live value a client sends never leaves the browser and would be dropped again at
+  the server — a `PATCH` naming only live keys is an empty patch and answers `200` unchanged.
+
+Four more things that are decisions rather than details:
+
+- **It lives on `me`, so there is no campaign for a caller to claim.** `PATCH /me/characters/:id`
+  takes no campaign id; the predicate is asked about the row's own `campaign_id` through
+  `rowCampaign`, exactly as `GET /me/characters` is. Everywhere else "a parent id in a path is a
+  client claim" is a thing the predicate has to refuse — here there is nothing to smuggle. It is
+  also where the player's own screen already reads from.
+- **"Never anything inside a live fight" holds without a fight-time refusal, and that is the
+  stronger form.** `Characters.updateOwn` is **one statement** and the only write in that file that
+  is not a transaction: `conditions` is the only field the DM's PATCH writes through to a combatant
+  and this payload has no such field, and a combatant snapshots `display_name`, `subtitle`,
+  `player_name`, `ac` and `hp_max` at seed time and never reads them back. So a player's edit lands
+  on one row whether or not a fight is on the table — pinned by driving a real run.
+- **It rings no doorbell, deliberately.** The bell carries a live value to a screen watching one,
+  and nothing live moved. Ringing it would need a player-reachable `currentSessionOf`, which
+  composes `campaignWritableById` and answers a player nothing — a new read with a predicate of its
+  own, for an event whose payload nothing branches on. An open DM page stays stale until it
+  refetches, exactly as it does for a level-up typed between games.
+- **`Characters.updateOwn` is ungated by `DmActor`, and it is the one method where the gate would
+  answer the wrong question** rather than a redundant one: the proof says _this account is the
+  campaign's DM_, and the whole point is that its caller is not. `dm-actor.test.ts` counts it as the
+  sixty-fourth ungated method and says so.
+
+**Measured over real HTTP** against the real application and a real Postgres, with a DM, two players
+minted through real invitations and a stranger's table: the durable PATCH answered `200` with
+`descriptor` following to `"Level 5 Half-orc Paladin"` and `hpCurrent`/`tempHp`/`conditions`/
+`visibility`/`accountId` untouched; another player's character, an unassigned `shared` one, one in a
+campaign the caller is not a member of, and one named by the campaign's **own DM** each answered
+`404 {"_tag":"NotFound","resource":"character"}`; a payload of nothing but live keys answered `200`
+with the row unchanged; and unsharing the campaign took the write away and gave it back on sharing,
+with `GET /me/characters` honestly `[]` in between. `apps/server/test/player-write.test.ts` pins all
+of it plus the revoked membership, the mis-scoped credential, and — row by row across the campaign —
+that nothing writable is unreadable and that the write is genuinely the narrower of the two.
 
 ### Where a hit point lives, and what the doorbell covers
 
@@ -1164,11 +1256,14 @@ Four things about it that are decisions rather than details:
 - **The campaign's _name_ on a character.** `GET /me/characters` answers `Character`, whose
   `campaignId` is the join key; the name comes from `GET /me/campaigns`, which the player shell
   reads anyway. A name here would be a second answer to what a campaign is called.
-- **Every affordance that writes.** Rolling dice "to your DM's dice tray", spending a slot,
-  marking a death save, uploading a portrait, adding gear, editing the backstory: **a player
-  cannot write anything.** `ownedRowWritable` deliberately does not exist and the player write
-  path is its own step with its own decision. `hpCurrent` is not on any update payload in any
-  case — it moves by delta, through `POST …/characters/:id/damage`, which is DM-only.
+- **The affordances that write a _live_ value.** Rolling dice "to your DM's dice tray", marking a
+  death save, spending a slot: the durable half of the sheet is writable now —
+  `PATCH /me/characters/:id`, see "A player writes, and this is the whole of it" — so the backstory,
+  the gear, the journal and a level-up all have a home. What still does not is anything in `0014`'s
+  live trio: `hpCurrent` is on no update payload at all and moves by delta through
+  `POST …/characters/:id/damage`, which is DM-only, and `tempHp`/`conditions` are on the DM's
+  `CharacterUpdate` and not on the player's. A death save is a document key and _is_ writable; the
+  DM-side reader it claims still does not exist.
 - **The live banner** (_"The Salt Road is playing right now · session 12 · round 3 · Brannoc is up
   next"_) has no read behind it. It is three campaign-scoped reads a player is partly refused, and
   the player projection of a fight is the step-8 decision.
