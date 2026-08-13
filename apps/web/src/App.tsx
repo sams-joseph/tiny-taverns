@@ -1,6 +1,8 @@
 import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
+import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { PlayerChronicleScreen } from "./chronicle/PlayerChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
@@ -11,13 +13,15 @@ import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
 
 /**
- * Ten screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Twelve screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
  *
- * **Three of them are the player's**, and the mode they are in is read off the
+ * **Five of them are the player's**, and the mode they are in is read off the
  * route rather than held anywhere: `#/play` is the same `CampaignsScreen`
- * answering the other question, and `#/play/campaigns/:c` and its `/chronicle`
- * are screens of their own. See `modeOf` in `routes.ts`.
+ * answering the other question, `#/play/campaigns/:c` and its `/chronicle` are
+ * screens of their own, and the two character screens name no campaign at all —
+ * `GET /me/characters` is the one read on `character` that does not. See
+ * `modeOf` in `routes.ts`.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
  * `useApiResource`, which resolves whichever credential exists — hosted session
@@ -46,6 +50,18 @@ export function App() {
         // campaign-keyed screen here is keyed: nothing loaded for one table
         // should survive into another.
         <PlayerCampaignScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
+      );
+    case "playCharacters":
+      return <MyCharactersScreen route={route} />;
+    case "playCharacter":
+      return (
+        // A different character is a different sheet: which tab is open belongs
+        // to the one being read.
+        <CharacterSheetScreen
+          key={route.characterId}
+          characterId={route.characterId}
+          route={route}
+        />
       );
     case "bestiary":
       return (

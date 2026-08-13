@@ -62,10 +62,16 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
    * bar can never light a section the URL is not in.
    *
    * The delivery's player nav is *Characters*, *At the table* and *Chronicle*.
-   * **The third is built now and is here**; the other two are not, and the rule
-   * that keeps *Run* out of the DM's row keeps them out of this one — a nav item
-   * that goes nowhere is the same lie as a stubbed field. Each earns its item
-   * the day its screen exists, which is what this one just did.
+   * **Two of the three are built and are here**; *At the table* is not, and the
+   * rule that keeps *Run* out of the DM's row keeps it out of this one — a nav
+   * item that goes nowhere is the same lie as a stubbed field. Each earns its
+   * item the day its screen exists.
+   *
+   * **`Characters` carries no campaign, unlike every campaign-scoped item
+   * above.** `GET /me/characters` is the one read on `character` with no
+   * campaign in its path — which is what makes the item constant across player
+   * mode rather than appearing once a table is open. It leads, as the delivery
+   * has it, with the delivery's own `user` glyph.
    *
    * *Chronicle* is campaign-scoped exactly as the DM's is, and for the same
    * reason: `sessions.list` and `recap.readAsPlayer` both hang off
@@ -81,6 +87,7 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
   if (modeOf(route) === "player") {
     return [
       { label: "Tables", icon: "book-open", route: { screen: "play" } },
+      { label: "Characters", icon: "user", route: { screen: "playCharacters" } },
       ...(campaignId === undefined
         ? []
         : [
@@ -137,6 +144,9 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
  * **not** folded into it: the two are different screens over different
  * endpoints, and one section shared between them would light a nav item that
  * points somewhere the reader cannot go.
+ *
+ * A character sheet is *within* the roster it was opened from, so both light
+ * `Characters` — the same containment `run` has with `campaigns`.
  */
 const sectionOf = (route: Route): Route["screen"] =>
   route.screen === "gallery" ||
@@ -145,9 +155,11 @@ const sectionOf = (route: Route): Route["screen"] =>
   route.screen === "playChronicle" ||
   route.screen === "party"
     ? route.screen
-    : modeOf(route) === "player"
-      ? "play"
-      : "campaigns";
+    : route.screen === "playCharacters" || route.screen === "playCharacter"
+      ? "playCharacters"
+      : modeOf(route) === "player"
+        ? "play"
+        : "campaigns";
 
 /**
  * A nav item, wearing `Tabs`' own recipe.

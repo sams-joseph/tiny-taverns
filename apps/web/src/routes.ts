@@ -1,4 +1,4 @@
-import { CampaignId, EncounterRunId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { useCallback, useEffect, useState } from "react";
 
@@ -53,6 +53,24 @@ export type Route =
    * `sessions.list` both hang off `/campaigns/:campaignId`.
    */
   | { readonly screen: "playChronicle"; readonly campaignId: CampaignId }
+  /**
+   * The characters this account plays, and one of them.
+   *
+   * **The only pair of routes in the product that names no campaign**, and that
+   * is the endpoint's shape rather than a convenience: `GET /me/characters` is
+   * the one read on `character` with no campaign in its path, because the
+   * question *"which characters are mine"* is asked across every table at once
+   * and a player at three tables has one list, not three. The campaign a
+   * character belongs to is on the row (`campaignId`), so the screens still know
+   * which table each one sits at.
+   *
+   * The sheet names the character alone for the same reason. `GET /me/campaigns`
+   * is what turns that row's `campaignId` into a name — the join key travels,
+   * the name is looked up — which is the rule `CampaignMember.accountId` already
+   * follows from the other side.
+   */
+  | { readonly screen: "playCharacters" }
+  | { readonly screen: "playCharacter"; readonly characterId: CharacterId }
   /**
    * The bestiary names a campaign, because the API does: `creatures.list` hangs
    * off `/campaigns/:campaignId/creatures`, and that path is the only thing
@@ -130,6 +148,7 @@ const parseToken = (raw: string | undefined): string | undefined =>
   raw !== undefined && /^[A-Za-z0-9_-]+$/.test(raw) ? raw : undefined;
 
 const parseCampaignId = parser(CampaignId);
+const parseCharacterId = parser(CharacterId);
 const parseSessionId = parser(SessionId);
 const parseRunId = parser(EncounterRunId);
 
@@ -158,6 +177,14 @@ export const parseRoute = (hash: string): Route => {
         if (sessionRaw === "chronicle") return { screen: "playChronicle", campaignId };
         return { screen: "playCampaign", campaignId };
       }
+    }
+    if (campaignRaw === "characters") {
+      // A half-typed sheet link still knows it meant the roster, which is the
+      // same fall-back-one-level a broken run link takes to its campaign.
+      const characterId = parseCharacterId(section);
+      return characterId === undefined
+        ? { screen: "playCharacters" }
+        : { screen: "playCharacter", characterId };
     }
     return { screen: "play" };
   }
@@ -202,6 +229,10 @@ export const hrefFor = (route: Route): string => {
       return `#/play/campaigns/${route.campaignId}`;
     case "playChronicle":
       return `#/play/campaigns/${route.campaignId}/chronicle`;
+    case "playCharacters":
+      return "#/play/characters";
+    case "playCharacter":
+      return `#/play/characters/${route.characterId}`;
     case "campaign":
       return `#/campaigns/${route.campaignId}`;
     case "bestiary":
@@ -237,7 +268,11 @@ export const hrefFor = (route: Route): string => {
 export type Mode = "dm" | "player";
 
 export const modeOf = (route: Route): Mode =>
-  route.screen === "play" || route.screen === "playCampaign" || route.screen === "playChronicle"
+  route.screen === "play" ||
+  route.screen === "playCampaign" ||
+  route.screen === "playChronicle" ||
+  route.screen === "playCharacters" ||
+  route.screen === "playCharacter"
     ? "player"
     : "dm";
 

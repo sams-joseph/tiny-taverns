@@ -2593,6 +2593,58 @@ the dialog sat at `z-dialog` 110 over `z-scrim` 100 at 460px with the click land
 the `--aside-w` aside docked at 1440 and 1000 and stacked at 760 with no sideways scroll at any
 width.
 
+### The player's character screens: read-only, and the two routes that name no campaign
+
+`apps/web/src/characters/` is `ui_kits/dm-screen/MyCharacters.jsx` and `CharacterSheet.jsx` against
+the real API — `#/play/characters` and `#/play/characters/:characterId`, with a `user` nav item in
+player mode. `PlayerParts.jsx` becomes `SheetParts.tsx`; `sheet.ts` is the pure half and is
+separately tested, the way `chronicle/fight.ts` is, because everything decided in it is wrong
+silently.
+
+- **Both routes name no campaign, and both screens are one `loadMyCharacters`.**
+  `GET /me/characters` is the one read on `character` with no campaign in its path, so the roster
+  and the sheet are the same two calls — the characters, and `GET /me/campaigns` for the one line a
+  `Character` cannot carry, its campaign's _name_. **The sheet deliberately does not use
+  `characters.findById`**: that needs a campaign in a path this route does not have, and answers
+  through the wider `ownedRowReadable` rather than the `ownRowReadable` narrowing. So _"this
+  character is not in the answer"_ and _"it is not yours"_ are the same fact, and the screen says
+  `NotFound`'s own sentence about it.
+- **A tab is drawn when the document fills it, and an entirely empty sheet says so once.**
+  Thirteen optional keys, and a character written through `CharacterDialog` has none of them; five
+  empty tabs would claim the data exists and is blank. `sheetTabs` is the whole rule.
+- **The empty roster tells its two silences apart** — invited nowhere, or at a table with nothing
+  handed to you — off `tableCount`, which is why the load reads memberships even when the campaign
+  names are not needed. Neither is papered over with a friendlier sentence.
+- **The subtitle is counted, never named.** The delivery's _"Ilse Vantar · playing in 2
+  campaigns"_ cannot be built: no `GET /me/…` answers who the account _is_, only what it has.
+
+**What comes out of the drawing, and why** — report these rather than reinventing them:
+
+- **The live banner** (_"…session 12 · round 3 · Brannoc is up next"_) and _Take your turn_ / _Go to
+  the table_ have **no read behind them**. They need the player projection of a fight, which is
+  step 12's decision; drawing one here would settle it by accident.
+- **Every control that writes**: rolling a check or an attack into the DM's dice tray, spending a
+  slot, marking a death save, preparing a spell, uploading a portrait, adding gear, editing the
+  backstory, _New character_, _Join a game_, _Claim a seat_. A player cannot write anything —
+  `ownedRowWritable` deliberately does not exist — and rolling has no endpoint at all. Each is
+  drawn as the value it is, the call `bestiary/StatBlock.tsx` already made about a rollable trait.
+  **The tab strip, the back link and the `sheetUrl` anchor are the only pressable things on either
+  screen**, and `CharacterSheetScreen.test.tsx` walks all five tabs asserting exactly that.
+- **The unassigned card** (_"Not in a campaign yet"_) and the join card. `character.campaign_id` is
+  `not null`, so the first is not representable; the second is `#/join/<token>`, which already
+  exists and reads the invitation before anyone signs in.
+- **A _Playing_ badge**, for the list's own rule: every character here is in a campaign, so a badge
+  on all of them says nothing — the same reason the `Player` badge left the campaign rows.
+
+Measured in Chromium against a real server, a real Postgres and four real accounts (one DM, a
+player at two tables, a player at one with no character, an account invited nowhere): the roster
+drew two cards naming _The Salt Road_ and _The Hag's Bargain_, and **not** the `shared` character
+nobody holds at the first — the endpoint's narrowing, not a client filter; the sheet drew all five
+tabs off the document with the identity column at exactly `--rail-w` 260px; a character with no
+`hpMax` drew no bar, no pills and no invented pair; a character id that is not this account's gave
+_"Not here"_; both empty rosters rendered with **zero** controls in `main`; and no page scrolled
+sideways at 1440 or 900. Clerk was unconfigured throughout, which is the supported mode.
+
 ## Hob: the chat surface, and what it is now attached to
 
 `apps/web/src/hob/` is the designers' Option A —

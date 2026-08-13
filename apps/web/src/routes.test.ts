@@ -1,4 +1,4 @@
-import { CampaignId, EncounterRunId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { hrefFor, listFor, modeOf, parseRoute, type Route } from "./routes";
@@ -6,6 +6,7 @@ import { hrefFor, listFor, modeOf, parseRoute, type Route } from "./routes";
 const CAMPAIGN_ID = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-000000000501");
 const RUN_ID = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-000000000c01");
+const CHARACTER_ID = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
 
 describe("hash routes", () => {
   it("reads a campaign id out of the hash", () => {
@@ -28,6 +29,8 @@ describe("hash routes", () => {
       { screen: "play" },
       { screen: "playCampaign", campaignId: CAMPAIGN_ID },
       { screen: "playChronicle", campaignId: CAMPAIGN_ID },
+      { screen: "playCharacters" },
+      { screen: "playCharacter", characterId: CHARACTER_ID },
     ];
     for (const route of routes) {
       expect(parseRoute(hrefFor(route))).toEqual(route);
@@ -119,6 +122,8 @@ describe("hash routes", () => {
 
     expect(modeOf({ screen: "play" })).toBe("player");
     expect(modeOf({ screen: "playCampaign", campaignId: CAMPAIGN_ID })).toBe("player");
+    expect(modeOf({ screen: "playCharacters" })).toBe("player");
+    expect(modeOf({ screen: "playCharacter", characterId: CHARACTER_ID })).toBe("player");
     expect(modeOf({ screen: "campaign", campaignId: CAMPAIGN_ID })).toBe("dm");
     // Neither names a mode; the answer only decides which nav they draw, and
     // the invitation page runs before there is anybody to have a role at all.
@@ -135,6 +140,19 @@ describe("hash routes", () => {
     expect(parseRoute("#/play/campaigns/not-a-uuid")).toEqual({ screen: "play" });
     expect(parseRoute("#/play/campaigns")).toEqual({ screen: "play" });
     expect(parseRoute("#/play/nonsense")).toEqual({ screen: "play" });
+    // A half-typed sheet link still knows it meant the roster, which is the
+    // same fall-back-one-level a broken run link takes to its campaign.
+    expect(parseRoute("#/play/characters/not-a-uuid")).toEqual({ screen: "playCharacters" });
+  });
+
+  it("reads the character routes, which name no campaign at all", () => {
+    // `GET /me/characters` is the one read on `character` with no campaign in
+    // its path, so neither route carries one — the campaign is on the row.
+    expect(parseRoute("#/play/characters")).toEqual({ screen: "playCharacters" });
+    expect(parseRoute(`#/play/characters/${CHARACTER_ID}`)).toEqual({
+      screen: "playCharacter",
+      characterId: CHARACTER_ID,
+    });
   });
 
   it("gives the player's chronicle a route of its own, under the mode", () => {

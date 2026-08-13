@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { CampaignId, EncounterRunId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import type { Route } from "../routes";
 import { AppShell, TopBar } from "./AppShell";
@@ -26,6 +26,7 @@ import { AppShell, TopBar } from "./AppShell";
 const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000cafe");
 const runId = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-00000000beef");
+const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-00000000fade");
 
 /** Every screen there is. Exhaustive by type, so a new one lands here. */
 const everyRoute: Record<Route["screen"], Route> = {
@@ -38,6 +39,8 @@ const everyRoute: Record<Route["screen"], Route> = {
   play: { screen: "play" },
   playCampaign: { screen: "playCampaign", campaignId },
   playChronicle: { screen: "playChronicle", campaignId },
+  playCharacters: { screen: "playCharacters" },
+  playCharacter: { screen: "playCharacter", characterId },
   join: { screen: "join", token: "aaaaaaaaaaaaaaaaaaaaaaaa" },
   gallery: { screen: "gallery" },
 };
@@ -133,6 +136,42 @@ describe("the shell's top bar", () => {
         null,
       );
     });
+  });
+
+  it("carries Characters through player mode, and never into the DM's", () => {
+    // `GET /me/characters` names no campaign, so unlike Bestiary, Chronicle and
+    // Party the item is constant rather than appearing once a table is open.
+    for (const route of [
+      everyRoute.play,
+      everyRoute.playCampaign,
+      everyRoute.playCharacters,
+      everyRoute.playCharacter,
+    ]) {
+      const { unmount } = render(
+        <AppShell route={route} topBar={<TopBar title="Anything" />}>
+          <p>a screen</p>
+        </AppShell>,
+      );
+      const nav = screen.getByRole("navigation", { name: "Sections" });
+      expect(within(nav).getByText("Characters").closest("a")?.getAttribute("href")).toBe(
+        "#/play/characters",
+      );
+      unmount();
+    }
+
+    renderShell(everyRoute.campaign);
+    expect(
+      within(screen.getByRole("navigation", { name: "Sections" })).queryByText("Characters"),
+    ).toBeNull();
+  });
+
+  it("lights Characters from a sheet, because a sheet is within the roster", () => {
+    renderShell(everyRoute.playCharacter);
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    expect(within(nav).getByText("Characters").closest("a")?.getAttribute("aria-current")).toBe(
+      "page",
+    );
+    expect(within(nav).getByText("Tables").closest("a")?.getAttribute("aria-current")).toBeNull();
   });
 
   it("keeps Ask Hob on the DM's side", () => {
