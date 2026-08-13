@@ -246,6 +246,59 @@ against `lucide-react`'s own export list and read the survivors in context — w
 only way to reject the false positives, since `grid`, `baseline`, `pointer`, `text` and `table`
 are all real Lucide glyph names and none of them is an icon here.
 
+### The fifth delivery: the palette is Catppuccin Mocha, and the primary is peach
+
+The first delivery to change a token value. **`tokens/colors.css` was rewritten wholesale** and
+`tokens/base.css` moved one `::selection` colour; the other 22 changed files are the same
+`verdigris` → `peach` substitution carried into `guidelines/`, the kits, `Toast.jsx` and
+`assets/README.md`. No component, no `guidelines/` specimen structure, no font, no asset and no
+other token file moved. Test counts were identical across the swap (64 files, 830 tests).
+
+- **`--verdigris-*` is gone, not renamed in place.** The primary ramp is `--peach-700…100` —
+  "lantern light, the one warm family in the system". The delivery's own
+  `_adherence.oxlintrc.json` drops all seven verdigris names and adds seven peach ones, which is
+  what makes this a removal rather than a rename.
+- **Four ramps gained a `-300` step** — `crimson`, `emerald`, `violet`, `azure` — which previously
+  ran 700/600/500/400/200/100. Both `packages/ui/src/styles.css` and `lib/tw-theme.ts` list every
+  step by name, so a new step is unreachable from Tailwind until it is added to both.
+- **`--text-on-accent` and `--text-on-solid` are `--slate-950` now.** Mocha fills solid with the
+  _pastel_ step, so the text on it is near-black. This is the palette working, not a bug — and it
+  is why "light-on-light" is the failure mode a palette change here causes.
+- **Every `--surface-*` moved one step lighter** (page was `--slate-950`, is now `--slate-900`),
+  and each semantic pair moved down a step (`--danger` was `crimson-500`, is now `crimson-300`).
+  `--accent` and `--accent-ink` are now the _same_ value, `--peach-300`.
+- **`--focus-ring` is a peach rgba.** `--ring` composites it over a 2px `--surface-page` spacer, so
+  it reads against every surface; measured 3.58–4.46:1 against sunken/page/card/raised.
+
+#### Reach for the semantic token, not the ramp step
+
+**This is the rule that decides what the next palette change costs.** A ramp step names a colour;
+a semantic alias names a _job_. When a component means "this is the accent", it must say
+`accent`/`accent-ink`/`accent-soft` — never `peach-300`, however exactly that happens to be the
+value today.
+
+It is not a style preference, it is what makes a palette swap a token-file edit instead of a
+sweep. The fifth delivery cost 29 class edits **only** because eight component sites had reached
+for `verdigris-300` directly; every one of them meant the accent, and `verdigris-300` _was_
+`--accent-ink` exactly, so each became `text-accent-ink` — value-identical under the old palette
+and correct under the new one, with no visual diff to review. Sixteen other sites in `apps/web`
+already said `text-accent-ink` and needed no edit at all. **A ramp step is the right answer only
+where the swatch genuinely is that specific colour, which in practice is `gallery/Foundations.tsx`
+and nothing else.** The same goes for prose: a comment naming a ramp where the code names a slot
+dates the moment the ramp does.
+
+**The failure is silent, which is why this needs writing down.** Tailwind emits no rule for a
+utility whose theme name does not exist, so `text-verdigris-300` does not fail the build, fail a
+test, or log anything — the element just inherits body colour. Measured in the running app after
+the swap: `text-verdigris-300` computes to `rgb(186,194,222)`, byte-identical to the inherited
+body colour, while `text-accent-ink` computes to `rgb(250,179,135)`. A grep for the retired ramp
+name across everything but the vendored tree is therefore part of adopting a palette delivery, and
+it must come back empty.
+
+(Related, and the same mechanism: Tailwind only emits utilities it **scans in source**. A class
+injected at runtime that appears in no source file has no rule either — so a browser probe that
+invents a class to test the theme measures nothing. Probe with a class the codebase actually uses.)
+
 ## Overlay layering: one scale, and where a new overlay goes on it
 
 **Every z-index in this product comes from the scale in `packages/ui/src/styles.css` §3.**
