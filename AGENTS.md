@@ -1533,12 +1533,8 @@ its own section below: the recap of a night is loaded by the card that shows it,
 
 Three smaller facts that cost time:
 
-- **Routing is the hash, and only `#/…` is a route** (`routes.ts`). The gallery's section links
-  are plain `#foundations` anchors, and without that rule every one of them reads as an unknown
-  route and throws the reader back to the campaign list mid-scroll. **`#/join/<token>` puts a
-  secret in that hash on purpose**: a browser never sends a fragment to a server, so an
-  invitation token stays out of access logs and out of the `Referer` of anything the join page
-  links to, and `join/JoinScreen.tsx` carries it onward only in a `POST` body.
+- **Routing is TanStack Router on a hash history** — see "Routing" below, which is where the
+  whole of it is written down, including why the fragment is not negotiable.
 - **`Button` rendering an `<a>` needs `nativeButton={false}`.** Base UI warns and applies
   button-only semantics otherwise. That is how a route rendered as a button stays a real link —
   and note the accessible **role stays `button`**, so a test looks for a button and reads its
@@ -1553,6 +1549,75 @@ the shell's own top nav — it belongs to the app, not to a page — so every sc
 the two conditions are the same question `AuthProvider` asks before mounting `ClerkProvider`: the
 vendor's chrome may only mount where the vendor's provider did. Without the second check any
 screen's test is liable to be the one that discovers Clerk is missing above it.
+
+### Routing: TanStack Router, on a hash history, and why the fragment is not negotiable
+
+`apps/web/src/routes.tsx` is the whole route table — the tree, the branded param decoders, the
+one `createRouter`, and the `Register` augmentation that makes `Link`, `useParams` and
+`useNavigate` typed against it everywhere without importing it. `App.tsx` is four lines of
+`RouterProvider`. `shell/location.ts` is the three facts the bar reads.
+
+**It is `createHashHistory`, and that is a decision the router change was not allowed to
+undo.** `#/join/<token>` carries a real invitation secret. A browser never sends the fragment in
+a request line, a redirect or a `Referer`, so a link can be pasted into a chat, opened and
+redeemed without the token reaching an access log — ours, a proxy's or a CDN's. A query string
+or a path segment would put it in every one of those. **Measured, not reasoned**: driving the
+real join page through CDP with a fresh invitation, 19 requests were made while it was open and
+redeemed, the token appeared in **zero** request URLs and **zero** `Referer` headers (every one
+of them the fragment-stripped `http://localhost:5399/`), and it travelled only in the `POST`
+bodies of `invites/preview` and `invites/redeem`. One route needing that is enough for the whole
+app: two history kinds in one app would be a second answer to where the URL lives.
+
+Four things about it that are decisions rather than configuration:
+
+- **A bad id is a bad link, not a crash, and `params.parse` returning `false` is the mechanism.**
+  Each id decodes through its branded Effect schema; anything we did not mint returns `false`,
+  which makes the router **reject that candidate and keep matching** (`findRouteMatch` backtracks
+  over the segment trie). Every level that is still legible carries a `$` splat child pointing at
+  its own screen, so a truncated run link lands on its campaign, an unknown section under a real
+  campaign lands on that campaign, and a mangled campaign id or invitation token lands on the
+  list. **Do not throw instead** — a throw becomes a `PathParamError` on the match, which is an
+  error boundary and a rendered apology rather than a link that was never real.
+- **The mode is a fact about the tree.** Every player screen is a descendant of `/play`, so
+  `useMode` asks `matchRoute({ to: "/play", fuzzy: true })` rather than listing screens by name,
+  and a player screen added tomorrow is in player mode by where it sits. **`AppShell` takes no
+  location prop at all** — the pill, the nav and the campaign-scoped items read the router — so
+  there is nothing left for a new screen to forget. That is the same failure the `roleSwitch`
+  prop caused, closed by shape.
+- **`remountDeps` is what `App.tsx`'s `key` was.** Four routes have it (bestiary, chronicle,
+  party, run, plus the two player-campaign leaves, the sheet and the join page): a different
+  campaign, character, fight or invitation is a different screen, and nothing loaded for one may
+  survive into another.
+- **A rendered `href` is `/#/…`, not `#/…`.** `createHashHistory`'s `createHref` is the page's own
+  path, then the route behind the fragment, and it is what `Link` renders. Anything building a
+  link imperatively must go through **`router.history.createHref(router.buildLocation(…).publicHref)`**
+  — `buildLocation(…).href` is the route as the router thinks of it (`/join/<token>`), and pasting
+  _that_ after an origin would put the invitation secret in the **path**. `campaign/InviteDialog.tsx`
+  is the one caller and says so.
+
+Two smaller traps, both found by driving it:
+
+- **`Link` spreads its own `data-status="active"` and `aria-current="page"` unconditionally when
+  the URL matches its `to`, and `activeProps={{}}` does not turn that off** (it only stops the
+  stray `active` class). The bar's question is broader — a fight lights _Campaigns_, a sheet
+  lights _Characters_ — so `NavLink` and `RoleSwitch` pass `activeOptions={{ exact: true }}`,
+  which narrows `Link`'s notion of active to a case the section rule also calls active. Without
+  it _Tables_ stays lit on every `/play/…` screen.
+- **In-page anchors must be `<Link to="…" hash="…">`, never a bare `href="#foundations"`.** Under
+  a hash history a bare fragment replaces the whole route and throws the reader back to the
+  campaign list. A hash history parses `#/gallery#feedback` as the route `/gallery` with the
+  fragment `feedback`, and `scrollRestoration: true` is what performs the scroll (the browser's
+  own fragment is the whole of `/gallery#feedback` and matches no element). The gallery does this,
+  and it is now better than before: the route survives a reload.
+
+**Testing it**: `test/renderRoute.tsx`'s `renderAt(path, wrap?)` renders the real tree at a real
+URL on a real hash history, with a fresh router per render. It is `await`ed because
+`RouterProvider` resolves its first match inside a `Suspense` — an un-awaited render paints an
+empty body, which reads as "the screen drew nothing". A screen is no longer mountable on its own,
+which is the point: it reads its ids from the router and its shell reads the mode from the router,
+so constructing those by hand would test a wiring the product does not have.
+`shell/AppShell.test.tsx` enumerates `Record<RouteIds<typeof routeTree>, string | undefined>`, so
+**a new route does not compile until somebody gives it a URL** — the splats included.
 
 ### The shell: two bars, and the one seam in it
 
@@ -1647,8 +1712,8 @@ change, no predicate. **Account-wide credentials are load-bearing for this** —
 may narrow a credential to one table, and adopting that form for players would turn the switch into
 a per-table sign-in.
 
-**The mode lives in the route and nowhere else** (`modeOf` in `routes.ts`), which is the whole
-design in one line:
+**The mode lives in the route and nowhere else** (`useMode` in `shell/location.ts`), which is
+the whole design in one line:
 
 | route                     | mode     | screen                                             |
 | ------------------------- | -------- | -------------------------------------------------- |
@@ -1659,9 +1724,11 @@ design in one line:
 
 Held in React state beside the route it would be a second answer to "which app am I in", and a
 reload, a bookmark or a shared link would land on a screen the pill says you are not looking at.
-**So the pill is two `<a href>` and holds nothing** (`RoleSwitch` in `AppShell.tsx`), and
-`navFor`/`sectionOf` read `modeOf(route)` rather than taking a role argument — one answer, so the
-bar cannot light a section the URL is not in. It also settles what a global pill leaves open:
+**So the pill is two `Link`s and holds nothing** (`RoleSwitch` in `AppShell.tsx`), and
+`navFor`/`useSection` read the router rather than taking a role argument — one answer, so the
+bar cannot light a section the URL is not in. Since the move to TanStack Router the mode is a
+fact about the _tree_: every player screen is a descendant of `/play`, so being in player mode
+and being on one of those routes are the same statement rather than two lists kept in step. It also settles what a global pill leaves open:
 _Player_ at a table you DM has no meaning, and there is no such route to be in.
 
 Six things that are decisions rather than layout:
@@ -1685,18 +1752,19 @@ Six things that are decisions rather than layout:
   the pill was absent on all eight DM screens _including the campaign list_, and present only at
   `#/play`, a URL you have to be told. It was also circular: you could not reach player mode until
   you were a player, and the control that takes you there was hidden until you were one. So it is
-  drawn from `modeOf(route)` exactly as the nav is, on every screen, with **nothing to pass and
+  drawn from the router exactly as the nav is, on every screen, with **nothing to pass and
   nothing to opt into** — a control every screen must remember is one every new screen will forget.
   The single-role account gets the honest empty state rather than a hidden control: _Player_ lands
   on `#/play`, which says nobody has invited you yet and that a table appears once its DM shares it.
   That is what lets a DM handed a link to somebody else's table find it, which is the need
   underneath. **Inside a campaign the pill is there too**, and it lands on the _list_ on each side
-  (`listFor`) rather than trying to carry the campaign across — role is a fact about a pair, so
+  (`/campaigns` and `/play`) rather than trying to carry the campaign across — role is a fact about a pair, so
   there is no player screen for the table you DM, and _"the tables I sit at"_ is a sentence that is
   true wherever it is read. The guard against a regression is the shape rather than a habit: with no
-  prop there is nothing to forget, and `shell/AppShell.test.tsx` enumerates the `Route` union as a
-  `Record<Route["screen"], Route>`, so a new screen does not compile until somebody has decided
-  which mode it is in.
+  prop there is nothing to forget, and `shell/AppShell.test.tsx` enumerates the router's own ids as
+  a `Record<RouteIds<typeof routeTree>, string | undefined>`, so a new route does not compile until
+  somebody has given it a URL and therefore decided which mode it is in — the splat fall-backs
+  included, which the old `Record<Route["screen"], Route>` did not reach.
 - **The bar's contents are wider than its box below about 1024px, and the wordmark and the ⌘K chip
   are what give way.** Adding the pill cost 143px + a gap, which pushed the intrinsic width of the
   DM campaign screen's bar from 904px to 1063px — enough to clip _Ask Hob_ on a 1024 laptop window.
