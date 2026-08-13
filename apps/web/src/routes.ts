@@ -54,6 +54,15 @@ export type Route =
    * `#/chronicle` would have no campaign whose record to read.
    */
   | { readonly screen: "chronicle"; readonly campaignId: CampaignId }
+  /**
+   * Who is at the table, which is a question about one table.
+   *
+   * `members.list`, `invites.list` and `characters.list` all hang off
+   * `/campaigns/:campaignId`, and on the first two the path is what the `DmActor`
+   * gate is checked against — so, like the bestiary and the Chronicle, there is
+   * no campaign-less party to route to.
+   */
+  | { readonly screen: "party"; readonly campaignId: CampaignId }
   | {
       readonly screen: "run";
       readonly campaignId: CampaignId;
@@ -143,6 +152,7 @@ export const parseRoute = (hash: string): Route => {
     if (campaignId !== undefined) {
       if (section === "bestiary") return { screen: "bestiary", campaignId };
       if (section === "chronicle") return { screen: "chronicle", campaignId };
+      if (section === "party") return { screen: "party", campaignId };
       if (section === "sessions" && runs === "runs") {
         const sessionId = parseSessionId(sessionRaw);
         const runId = parseRunId(runRaw);
@@ -173,6 +183,8 @@ export const hrefFor = (route: Route): string => {
       return `#/campaigns/${route.campaignId}/bestiary`;
     case "chronicle":
       return `#/campaigns/${route.campaignId}/chronicle`;
+    case "party":
+      return `#/campaigns/${route.campaignId}/party`;
     case "join":
       return `#/join/${route.token}`;
     case "run":

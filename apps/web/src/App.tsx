@@ -4,12 +4,13 @@ import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
+import { PartyScreen } from "./party/PartyScreen";
 import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
 import { useRoute } from "./routes";
 import { RunScreen } from "./run/RunScreen";
 
 /**
- * Eight screens behind the hash. See `routes.ts` for why it is the hash and not
+ * Nine screens behind the hash. See `routes.ts` for why it is the hash and not
  * a router, and `shell/AppShell.tsx` for the frame each of them composes.
  *
  * **Two of them are the player's**, and the mode they are in is read off the
@@ -58,6 +59,12 @@ export function App() {
         // what has been searched for belong to the one being read, and neither
         // should survive into another.
         <ChronicleScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
+      );
+    case "party":
+      return (
+        // A different campaign is a different table: which member's characters
+        // are being assigned belongs to the one being read.
+        <PartyScreen key={route.campaignId} campaignId={route.campaignId} route={route} />
       );
     case "run":
       return (

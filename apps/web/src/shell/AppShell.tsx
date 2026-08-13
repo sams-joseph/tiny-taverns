@@ -40,16 +40,18 @@ interface NavItem {
  * meant. A nav item that goes nowhere is the same lie as a stubbed field, so the
  * row carries what exists.
  *
- * **`Bestiary` and `Chronicle` are here only once a campaign is**, for the same
- * reason and one more: `creatures.list` hangs off
- * `/campaigns/:campaignId/creatures` and every source the Chronicle reads hangs
- * off `/campaigns/:campaignId` too, so neither has a meaning without a campaign
- * to read it through — and on both the path is the *only* thing scoping what
- * comes back. From the campaign list there is no campaign yet, so the items are
- * absent rather than disabled.
+ * **`Bestiary`, `Chronicle` and `Party` are here only once a campaign is**, for
+ * the same reason and one more: `creatures.list` hangs off
+ * `/campaigns/:campaignId/creatures`, every source the Chronicle reads hangs off
+ * `/campaigns/:campaignId` too, and the party's roster is `members.list` under
+ * the same prefix — so none has a meaning without a campaign to read it through,
+ * and on all three the path is the *only* thing scoping what comes back. From
+ * the campaign list there is no campaign yet, so the items are absent rather
+ * than disabled.
  *
- * The third delivery adds `Chronicle` with `scroll-text`
- * (`AppShell.jsx`'s one new line), which is the order kept here.
+ * The third delivery adds `Chronicle` with `scroll-text` and the fourth adds
+ * `Party` with `users` (`AppShell.jsx`'s one new line each), which is the order
+ * kept here.
  */
 const navFor = (route: Route): ReadonlyArray<NavItem> => {
   const campaignId = "campaignId" in route ? route.campaignId : undefined;
@@ -66,10 +68,10 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
    * what the row carries, and each of the drawn three earns its item the day its
    * screen exists.
    *
-   * *Bestiary* and *Chronicle* are deliberately absent even inside a campaign.
-   * They are not merely undrawn here — `recap.read` is behind the `DmActor` gate
-   * and would answer a player a 404, and a control that exists and then errors
-   * is worse than one that is absent.
+   * *Bestiary*, *Chronicle* and *Party* are deliberately absent even inside a
+   * campaign. They are not merely undrawn here — `recap.read` and `members.list`
+   * are both behind the `DmActor` gate and would answer a player a 404, and a
+   * control that exists and then errors is worse than one that is absent.
    */
   if (modeOf(route) === "player") {
     return [
@@ -93,6 +95,11 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
             icon: "scroll-text",
             route: { screen: "chronicle", campaignId },
           } satisfies NavItem,
+          {
+            label: "Party",
+            icon: "users",
+            route: { screen: "party", campaignId },
+          } satisfies NavItem,
         ]),
     { label: "Components", icon: "panel-left", route: { screen: "gallery" } },
   ];
@@ -113,7 +120,10 @@ const navFor = (route: Route): ReadonlyArray<NavItem> => {
  * two axes cannot fight.
  */
 const sectionOf = (route: Route): Route["screen"] =>
-  route.screen === "gallery" || route.screen === "bestiary" || route.screen === "chronicle"
+  route.screen === "gallery" ||
+  route.screen === "bestiary" ||
+  route.screen === "chronicle" ||
+  route.screen === "party"
     ? route.screen
     : modeOf(route) === "player"
       ? "play"

@@ -22,6 +22,7 @@ describe("hash routes", () => {
       { screen: "campaign", campaignId: CAMPAIGN_ID },
       { screen: "bestiary", campaignId: CAMPAIGN_ID },
       { screen: "chronicle", campaignId: CAMPAIGN_ID },
+      { screen: "party", campaignId: CAMPAIGN_ID },
       { screen: "run", campaignId: CAMPAIGN_ID, sessionId: SESSION_ID, runId: RUN_ID },
       { screen: "join", token: "aG93LWRvLXlvdS1kbw" },
       { screen: "play" },
@@ -80,6 +81,16 @@ describe("hash routes", () => {
       screen: "campaign",
       campaignId: CAMPAIGN_ID,
     });
+  });
+
+  it("hangs the party off a campaign, because the roster is one table's", () => {
+    // `members.list` and `invites.list` are both `/campaigns/:campaignId/…` and
+    // both behind the DM gate, which is checked against exactly that path.
+    expect(parseRoute(`#/campaigns/${CAMPAIGN_ID}/party`)).toEqual({
+      screen: "party",
+      campaignId: CAMPAIGN_ID,
+    });
+    expect(parseRoute("#/campaigns/not-a-uuid/party")).toEqual({ screen: "campaigns" });
   });
 
   it("falls back a level, not all the way, on a half-typed run link", () => {

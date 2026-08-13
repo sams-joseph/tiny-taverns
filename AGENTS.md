@@ -219,8 +219,8 @@ is the newer drawing and the written rule is the older decision:
   the split ("a seat can be invited, accepted-but-empty, playing, or open") and it is a
   coherent model — it is simply not the one in the schema. **Settled since: membership is the
   model and there is no seat**, with the three derivable statuses and the read each comes from
-  written down under "Membership is the model, and there is no seat" — go there before drawing
-  this screen.
+  written down under "Membership is the model, and there is no seat". **It is drawn** — see "The
+  party screen: the roster, and the seat vocabulary derived" — so read both before changing it.
 - **"I approve characters before they play" is a switch with nothing behind it**, and the
   delivery's own "Open questions" says so: there is no approval queue screen and no column.
 
@@ -2397,6 +2397,44 @@ predicate, so the switch cannot change which campaigns appear; what it adds is t
 now what the role switch splits the list on and what decides where a row's link goes — see "The
 role switch" under the shell. It stopped earning a `Player` badge in the same change: under a mode
 every row in a list has the same role, so a badge on all of them would say nothing.
+
+### The party screen: the roster, and the seat vocabulary derived
+
+`apps/web/src/party/` is `ui_kits/dm-screen/Party.jsx` against the real API, at
+`#/campaigns/:c/party` with a `users` nav item `navFor` adds once the route names a campaign — the
+third screen to hang off a campaign for the same reason the bestiary and the Chronicle do. It is
+the third invitation surface and the first reader `GET /campaigns/:c/members` ever had.
+
+**`roster.ts` is the whole of what it knows, it is pure, and it takes its clock as an argument.**
+The derivation table it implements is the one under "Membership is the model, and there is no
+seat" — three statuses from three lists, and no fourth. Four things about it are decisions:
+
+- **One `Effect`, four calls, one round** (`load.ts`). Nothing here depends on another response,
+  and three of the four reads only mean anything joined to the others, so four hooks would give
+  the screen sixteen states to say one sentence about a roster.
+- **The DM is a row**, badged `crown`/`DM` and carrying no character status, because the endpoint
+  returns them and a roster that silently drops a person is one you cannot trust. It deliberately
+  does **not** claim "You": today the single `dm` member must be the viewer, but that is an
+  inference off two other rules, and "DM" stays true the day a co-DM exists.
+- **Only `live` invitations become rows.** A `redeemed` one is already a member and would draw the
+  same person twice; the full lifecycle is `InviteDialog`, reused whole rather than redrawn — the
+  report's own instruction, and it is where the withdrawn-before-taken precedence lives once.
+- **The lower median, not the mean**, for _"the party is mostly level 5"_ — so the sentence names
+  a level somebody is actually at, and a two-character party gets no line at all.
+
+**`AssignDialog.tsx` is the only client of `characters.assign`**, and it exists because without it
+`playing` is a status nothing can ever reach. Both directions are in one dialog (give, and `null`
+to take back), and it offers only characters nobody holds — taking somebody else's away is two
+deliberate presses, not a side effect of a select.
+
+Measured in Chromium against a real server, a real Postgres and three real accounts (one DM, two
+players joined through real invitations): the roster drew the DM, a `playing` member with
+_"Brannoc · Level 5 Half-orc Paladin"_, a `no-character` member and a live invitation as a person;
+minting one added it to the roster and withdrawing one removed it and dropped _Needs you_ from 3
+to 2; assigning through the real select flipped a row to `playing` and dropped _Needs you_ again;
+the dialog sat at `z-dialog` 110 over `z-scrim` 100 at 460px with the click landing inside it; and
+the `--aside-w` aside docked at 1440 and 1000 and stacked at 760 with no sideways scroll at any
+width.
 
 ## Hob: the chat surface, and what it is now attached to
 
