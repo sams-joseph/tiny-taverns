@@ -1842,6 +1842,11 @@ Reported rather than shipped, the rule every kit screen has followed:
   against and has `campaign_invite`'s missing `role` column preventing. _Pricing_ left the header
   nav and the footer with it. The hero's _v2.4_ badge and its "free while your party is under five"
   line went for the same reason.
+- **The testimonial is gone**, by the captain's decision and for the same reason: a named person
+  vouching for a product with no users is a claim this build cannot make. It was the kit's only
+  `sunken` band, so the surface rhythm below lost a step with it. **The kit still draws it and the
+  next delivery will too** — `MarketingScreen.test.tsx` pins the absence, because that is the class
+  of thing that comes quietly back.
 - **The email capture is gone.** Accounts come from the hosted identity provider; there is no list
   to join and no link this product sends. `marketing/StartCta.tsx` is what replaced it, and **the
   wrinkle it answers is the interesting part**: hosted sign-in is usually unconfigured, and
@@ -1857,7 +1862,8 @@ Reported rather than shipped, the rule every kit screen has followed:
 **The kit's README is stale about colour and should be ignored on that point.** It describes a
 "dark / light / light / sunken / light / dark" rhythm; `Site.jsx` is fully dark on the current
 palette and is the one that is right — this product is dark only by construction. What the rhythm
-survives as is the surface stack: page, page, sunken, page, card.
+survives as is the surface stack: page, page, page, card — the `sunken` step went with the
+testimonial.
 
 **In-page anchors are `<Link to="/" hash="…">`, never `href="#features"`** — a bare fragment
 replaces the route under a hash history. One measured caveat: a **cross-route** hash

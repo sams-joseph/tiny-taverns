@@ -20,7 +20,9 @@ import { StartCta, StartCtaNote } from "./StartCta";
  * the one that is right: **Tiny Taverns is dark only by construction** — the
  * tokens resolve dark at `:root`, there is no `.dark` class to add and
  * `packages/ui/src/adherence.test.ts` fails on a `dark:` utility. What the
- * rhythm survives as is the *surface* stack: page, page, sunken, page, card.
+ * rhythm survives as is the *surface* stack: page, page, page, card. (The
+ * kit's one `sunken` band was the testimonial, which is not on this page —
+ * see below.)
  *
  * ### What is drawn here and is not on this page
  *
@@ -32,6 +34,11 @@ import { StartCta, StartCtaNote } from "./StartCta";
  *    limits, and one of its features (co-DM seats) is a thing this project has
  *    decided against and has a schema constraint preventing. *Pricing* left the
  *    header nav and the footer with it.
+ *  - **The testimonial is gone**, by the captain's decision and for the same
+ *    reason the pricing table is: a named person vouching for a product with
+ *    no users is a claim this build cannot make. It was the kit's only
+ *    `sunken` band, so the surface rhythm above lost a step with it. It comes
+ *    back when somebody has actually said it.
  *  - **The email capture is gone**, and `StartCta.tsx` is what replaced it —
  *    read that file for the wrinkle it had to answer.
  *  - **Every link that led nowhere is gone** rather than rendered as dead text:
@@ -347,22 +354,6 @@ function Features(): ReactNode {
   );
 }
 
-function Quote(): ReactNode {
-  return (
-    <section className="border-y border-hairline bg-surface-sunken px-page-sm py-14 @3xl:px-page">
-      <blockquote className="mx-auto max-w-190 text-center">
-        <p className="font-serif text-display-m leading-heading italic text-foreground">
-          &ldquo;I ran a six-creature ambush without once saying &lsquo;hang on&rsquo;. That has
-          never happened.&rdquo;
-        </p>
-        <footer className="mt-4 text-body-s leading-snug font-medium text-muted-foreground">
-          Ilse M. &middot; running The Salt Road since 2021
-        </footer>
-      </blockquote>
-    </section>
-  );
-}
-
 function Start(): ReactNode {
   return (
     <section
@@ -442,7 +433,6 @@ export function MarketingScreen(): ReactNode {
       <main>
         <Hero />
         <Features />
-        <Quote />
         <Start />
       </main>
       <SiteFooter />

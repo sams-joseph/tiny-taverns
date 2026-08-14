@@ -76,6 +76,20 @@ describe("the marketing homepage", () => {
     expect(document.body.textContent).not.toMatch(/\$\d/);
   });
 
+  /**
+   * Dropped by the captain, for the reason the pricing table was: a named
+   * person vouching for a product with no users is a claim this build cannot
+   * make. Pinned as an absence because that is the kind of thing that comes
+   * quietly back — the kit still draws it, and the next delivery will too.
+   */
+  it("quotes nobody, because nobody has said it", async () => {
+    await renderHome();
+
+    expect(document.querySelector("blockquote")).toBeNull();
+    expect(screen.queryByText(/Ilse M\./)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/six-creature ambush|since 2021/);
+  });
+
   /** Accounts come from the hosted identity provider; there is no list to join. */
   it("captures no email and promises no link", async () => {
     await renderHome();
