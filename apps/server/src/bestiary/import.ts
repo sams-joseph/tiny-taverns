@@ -28,9 +28,16 @@ export interface ImportResult {
  * should be argued for rather than added.
  *
  * Idempotent: upserts on `creature_system_name_key`, the partial unique index
- * over `lower(name)` where `campaign_id is null`. Re-running it after editing
- * this corpus updates the rows in place, so a DM's reskins — which point at
- * these rows through `derived_from` — survive.
+ * over `lower(name)` where the row is owned by nobody. Re-running it after
+ * editing this corpus updates the rows in place, so a DM's reskins — which point
+ * at these rows through `derived_from` — survive.
+ *
+ * **The inference clause has to name both ownership columns**, and that is a
+ * requirement of Postgres rather than tidiness: `0015_library_creatures.ts`
+ * narrowed the index to `campaign_id is null and account_id is null` when a null
+ * campaign stopped meaning "nobody's", and an arbiter index is inferred only
+ * from an inference predicate that *implies* the index's own. `where campaign_id
+ * is null` no longer does, so it would fail to infer any index at all.
  *
  * `visibility` is never written, so the column default (`dm`) decides on
  * insert and an existing row's value is left alone on update. A DM who shared a
@@ -69,7 +76,7 @@ export const importSystemCreatures = (
               ${creature.legendary ?? false},
               ${JSON.stringify(creature.statBlock ?? emptyStatBlock)}
             )
-            on conflict (lower(name)) where campaign_id is null
+            on conflict (lower(name)) where campaign_id is null and account_id is null
             do update set
               size         = excluded.size,
               type         = excluded.type,

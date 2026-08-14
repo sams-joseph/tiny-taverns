@@ -55,14 +55,22 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * allows, and it is strictly narrower than the read beside it; the argument is
  * on the function itself and is worth reading before anything like it is added.
  *
- * **Every predicate here reaches `campaignInScope`, including the newest.**
- * `corpusRowReadableAnywhere` — the Library — looks at first like the exception,
- * because it names no campaign; it is not. It is `corpusRowReadable` with the
- * campaign existentially quantified rather than bound, so the same four
- * conditions are asked once per campaign the actor reaches instead of once about
- * a campaign the path named. A read with no campaign in its path is not a read
- * with no campaign in its predicate, and that distinction is the whole of why
- * the Library needed no new statement about reach.
+ * **Every predicate here reaches `campaignInScope` except the two the Library
+ * added, and those two reach nothing at all.** `libraryRowReadable` and
+ * `libraryRowWritable` are about rows that are in **no campaign**: the bundled
+ * corpus and the creatures an account authored for itself. There is no
+ * membership question to ask about a row no campaign contains, so they ask none
+ * — they compare `account_id` to the actor's own account and stop. That is not a
+ * hole in the rule above; it is the rule not applying, because reach is about
+ * campaigns and these rows are outside every one of them.
+ *
+ * (An earlier draft of the Library did compose `campaignInScope`, by
+ * quantifying the campaign rather than binding it — `corpusRowReadableAnywhere`,
+ * now deleted. It answered every campaign copy the credential could reach, which
+ * is the opposite of what the Library is for: those are copies, and the Library
+ * shows originals. The trap that comment warned about survives its deletion and
+ * is restated on `corpusRowReadable` below, because it is a fact about unions
+ * over a gate rather than about that one predicate.)
  */
 
 /**
@@ -402,29 +410,58 @@ export const ownRowWritable = (
   ]);
 
 /**
- * Rows of a table whose content is *either* campaign-scoped or global — today
- * only `creature`, where an `origin = 'system'` row has `campaign_id is null`
- * and belongs to every campaign at once.
+ * Whether a row of `table` belongs to no campaign and to no account — the
+ * **bundle**, the corpus `pnpm -F server bestiary:import` provisions.
  *
- * Two things about this are easy to get wrong, and both are the difference
- * between a shared corpus and a leak.
+ * One fragment rather than two clauses inlined at each of its callers, because
+ * this is the sentence the shared corpus's immutability is written in: the
+ * bundle is the content nobody owns. `creature_system_is_unowned` makes it the
+ * same statement as `origin = 'system'`, which is why no predicate in this file
+ * and no query in `src` ever names that origin.
+ */
+const unowned = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
+  sql.and([sql`${sql(table)}.campaign_id is null`, sql`${sql(table)}.account_id is null`]);
+
+/**
+ * Rows of a table whose content is *either* campaign-scoped or bundled — today
+ * only `creature`, where an `origin = 'system'` row is owned by nobody and
+ * belongs to every campaign at once. **The campaign bestiary.**
  *
- * **The campaign gate is not inside the branch.** A global row is reachable
+ * Three things about this are easy to get wrong, and all three are the
+ * difference between a shared corpus and a leak.
+ *
+ * **The campaign gate is not inside the branch.** A bundled row is reachable
  * *through a campaign this actor can read*, and through nothing else — the
  * `exists (…)` clause below applies to both halves of the union. Written the
- * other way round, as `campaign_id is null or rowReadable(…)`, a global row
- * would be readable by any authenticated request naming any campaign id at all,
+ * other way round, as `unowned(…) or rowReadable(…)`, a bundled row would be
+ * readable by any authenticated request naming any campaign id at all,
  * including one belonging to somebody else. There is no separate check to lean
  * on: `findById` on this table is reached by path, and the path is a claim.
  *
- * **The row's own visibility still applies.** System creatures default to `dm`
+ * **The global half is `unowned`, not `campaign_id is null`.** Since
+ * `0015_library_creatures.ts` a null campaign no longer means "bundled": an
+ * account's own Library entities sit there too. Spelled the old way this
+ * predicate would hand every campaign bestiary in the product every Library
+ * entity of every account — the widest disclosure the seam has ever been one
+ * clause away from. A Library entity is invisible here until it is *copied in*,
+ * which is what `creatures/:id/derive` is for and what the model means by the
+ * campaign holding copied state.
+ *
+ * **The row's own visibility still applies.** Bundled creatures default to `dm`
  * like everything else, so "global" means shared between a DM's campaigns, not
  * shared with their players. A stat block is exactly the thing the product says
  * a player must not have.
  *
+ * **This predicate did not otherwise change when the Library arrived, and that
+ * was decided rather than skipped.** The campaign bestiary is a different
+ * question: it answers *what is in this campaign*, plus the bundle every
+ * campaign shares. Narrowing it to the campaign's own rows would take the bundle
+ * away from the screen and from `derive`'s source; widening it to reach a DM's
+ * Library would put originals in a list whose whole content is copies.
+ *
  * There is deliberately no `corpusRowWritable`. Writes use `rowWritable`
  * unchanged, which requires `campaign_id` to equal the campaign in the path —
- * and a null never equals a uuid, so the immutability of the global corpus is a
+ * and a null never equals a uuid, so the immutability of the bundle is a
  * consequence of the predicate rather than a rule someone has to remember.
  */
 export const corpusRowReadable = (
@@ -434,83 +471,150 @@ export const corpusRowReadable = (
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
-    sql.or([
-      sql`${sql(table)}.campaign_id = ${campaignId}`,
-      sql`${sql(table)}.campaign_id is null`,
-    ]),
+    sql.or([sql`${sql(table)}.campaign_id = ${campaignId}`, unowned(sql, table)]),
     sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
     sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
   ]);
 
 /**
- * Rows of that same table, readable through **any campaign this actor reaches**
- * rather than one named in a path. The Library.
+ * Rows of that same table that are in **no campaign at all** and are either the
+ * bundle or this actor's own. **The Library.**
  *
- * `corpusRowReadable` above, with the campaign existentially quantified instead
- * of bound. That is the whole of it, and saying it that way is the point: the
- * Library is what the signed-in account can already reach, gathered with no
- * campaign in the path — never a new reach. Captain's decision, 2026-08-14.
+ * The captain's model, and the whole of it in one line: *the library should only
+ * show the raw entity, not anything in campaigns, as the campaign is a copied
+ * state of the entity.* So this predicate is anchored on `campaign_id is null`
+ * and nothing it returns has ever been in a campaign.
  *
- * **"Anywhere" means any campaign this actor reaches, not anywhere at all.** The
- * `exists (…)` is over `campaign` and composes `campaignReadable` in its
- * correlated form, so every narrowing the bound version applies still applies,
- * once per candidate campaign: a live `campaign_member` row, the credential's
- * own scope, and `campaign.visibility = 'shared'` for a player member. An
- * account that is a member of nothing matches no campaign and therefore reads
- * nothing — which is not a gap but the rule stated exactly, since there is
- * nothing such an account can reach through a path either.
+ * **It composes no campaign gate, and that is not an omission.** Every other
+ * read in this file bottoms out in `campaignInScope`, because every other read
+ * is about a row a campaign contains and reach is the question of which
+ * campaigns an actor's credential and memberships let it touch. A Library entity
+ * is in no campaign, so there is no membership to check — the row's *owner* is
+ * the entire question, and it is compared to the actor's own account and to
+ * nothing a caller supplied. There is no shape of request that asks for somebody
+ * else's Library this way.
  *
- * The union is the same shape as the bound version and goes wrong the same way
- * if it is rearranged:
+ * **`Actor.campaignId` does not narrow it either, and that is a decision.** The
+ * standing rule is that membership and credential scope narrow independently and
+ * both apply to every read — but `campaignId` says *which campaign this
+ * credential was minted for*, and every predicate that uses it is answering "may
+ * this credential reach campaign C". There is no campaign here for it to be
+ * about, so applying it would mean **inventing** a second meaning for the field
+ * ("scoped to a table ⇒ no Library"), which is not derivable from what it says
+ * and is the second-answer shape this file refuses everywhere else. What is not
+ * narrowed by scope is the credential's *account*, and the Library is the
+ * account's.
  *
- * - **A campaign row is reachable through its own campaign and no other.** The
- *   `campaign_id is null` disjunct is false for it, so the `exists` can only be
- *   satisfied by the campaign the row is actually in. Hoisting that disjunct out
- *   — `campaign_id is null or exists (…)` — would make every global row readable
- *   by an account that reaches nothing, and moving the row's own `visibility`
- *   test outside the `exists` would let a `shared` row in a campaign this actor
- *   is *not* at satisfy the clause a readable campaign was supposed to.
- * - **A global row is reachable through any one of them.** `campaign_id is null`
- *   is true for every candidate, so the question becomes "is there a campaign
- *   this actor reaches, in which this row would be readable" — which is exactly
- *   what it means for the corpus to belong to every campaign at once.
- * - **The row's own `visibility` still applies, inside the `exists`.** So a DM
- *   gets the whole corpus and their own tables' `dm` rows, a player gets the
- *   `shared` half of both, and neither gets anything from a table they are not
- *   at. It is `rowReadable`'s answer, asked of every campaign at once.
+ * Nothing mints a campaign-scoped credential over HTTP today, so this changes no
+ * answer now; `library.test.ts` pins it so that whatever mints one first meets
+ * the decision rather than inheriting it silently. It is on the list in
+ * `AGENTS.md` of what the captain has not been asked.
  *
- * It takes an `Actor` and reads it, unlike almost nothing else here — worth
- * saying only because an earlier draft of this endpoint did not, having been
- * built to a different rule. Who is asking is the *entire* content of this
- * predicate now.
+ * This **reverses** the rule that shipped hours earlier. `corpusRowReadableAnywhere`
+ * gathered every campaign copy the credential could reach; under the model those
+ * are precisely the rows the Library must not show, and the read it replaces is
+ * simpler than the one it replaces — no quantifier, no join to `campaign`, no
+ * membership subplan.
  *
- * **Quantifying does not mean scanning every campaign, and that was measured
- * rather than hoped.** Postgres 18 plans it as a nested-loop **semi join** whose
- * inner side is materialised once and driven by `campaign_member_account_idx` on
- * the actor's own account — so the set it joins against is "the campaigns this
- * account is a member of", and it stops at the first match per row. The
- * membership tests inside hoist to hashed subplans exactly as they do for the
- * bound version, which is what keeps this the same shape of query as
- * `creatures.list` rather than a different one wearing its clothes.
+ * Three consequences worth stating, because each is a real change of answer:
  *
- * There is deliberately no writable counterpart, for the reason
- * `corpusRowReadable` has none and one more: a write needs a campaign to write
- * *into*, and the whole shape of this read is that it names none. Bringing a
- * Library creature into a campaign is `creatures/:id/derive`, which is a write
- * at a path that has one.
+ * - **A DM sees no campaign creature here**, not even their own tables'. Those
+ *   are copies. What they see is the bundle and what they have authored.
+ * - **An account that is a member of nothing has a Library**, where before it
+ *   read `[]`. That is the point of the model: authoring is not an act inside a
+ *   campaign, so it cannot require one.
+ * - **The row's own `visibility` is not tested, in either half.** For your own
+ *   rows there is nobody to hide from. For the bundle it would hide the whole
+ *   corpus, since `bestiary:import` never writes a visibility and the column
+ *   defaults to `dm` — and `visibility` is a statement about *players at a
+ *   table*, which a read with no table in it cannot be asking. What a player at
+ *   somebody's table may see of the corpus is still `corpusRowReadable`'s
+ *   question, unchanged.
  */
-export const corpusRowReadableAnywhere = (
+export const libraryRowReadable = (
   sql: SqlClient.SqlClient,
   table: string,
   actor: Actor,
 ): Statement.Fragment =>
-  sql`exists (select 1 from campaign
-              where (${sql(table)}.campaign_id is null or ${sql(table)}.campaign_id = campaign.id)
-                and ${campaignReadable(sql, actor)}
-                and ${sql.or([
-                  isDm(sql, correlatedCampaign(sql), actor),
-                  sql`${sql(table)}.visibility = 'shared'`,
-                ])})`;
+  sql.and([
+    sql`${sql(table)}.campaign_id is null`,
+    sql.or([
+      sql`${sql(table)}.account_id is null`,
+      sql`${sql(table)}.account_id = ${actor.accountId}`,
+    ]),
+  ]);
+
+/**
+ * Rows of the Library this actor may **write** — the ones they own.
+ *
+ * `libraryRowReadable` with the bundle's disjunct removed, which makes it
+ * strictly narrower than the read beside it by shape rather than by two lists
+ * kept in step: an account can never write a Library row it could not read.
+ *
+ * **This is where the shared corpus's structural immutability now lives, and it
+ * is the same argument one column across.** `0004_bestiary.ts` bought it with
+ * "every write requires `campaign_id` to equal the campaign in the path, and a
+ * null never equals a uuid". That sentence stopped being sufficient the moment a
+ * second kind of row appeared at `campaign_id is null` with a write path of its
+ * own. What replaces it:
+ *
+ * > A Library write requires `account_id` to equal the account the credential
+ * > resolved to. A bundled row's `account_id` is null, and a null never equals a
+ * > uuid.
+ *
+ * And a bundled row's `account_id` *is* null as a fact about the schema rather
+ * than about how the importer happens to be written:
+ * `creature_system_is_unowned` makes `origin = 'system'` and *owned by nobody*
+ * the same statement, so a system row that named an account is not a row
+ * somebody forgot to reject — it is not a row Postgres will store.
+ *
+ * So there is still no `origin = 'system'` check anywhere in `apps/server/src`,
+ * and there still does not need to be one. `apps/server/test/library.test.ts`
+ * pins it from the endpoints and `apps/server/test/bestiary.test.ts` from raw
+ * SQL.
+ *
+ * `campaign_id is null` is carried over from the read rather than dropped as
+ * redundant. `creature_one_owner` does make it implied — a row with an
+ * `account_id` has no campaign — but a predicate that leans on a constraint to
+ * mean what it says is one constraint away from meaning something else, and the
+ * something else here would be "the owner of a row may write it inside a
+ * campaign they do not DM".
+ */
+export const libraryRowWritable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(table)}.campaign_id is null`,
+    sql`${sql(table)}.account_id = ${actor.accountId}`,
+  ]);
+
+/**
+ * Rows this actor may **copy into** the named campaign — the campaign's own
+ * bestiary, plus their own Library. The source read of `creatures/:id/derive`.
+ *
+ * A plain `or` of two predicates that are each complete on their own, which is a
+ * different shape from the union inside `corpusRowReadable` and must not be
+ * confused with it. The trap there is hoisting a *disjunct* out of a gate, so
+ * that one half of a union escapes the campaign check the other half is bounded
+ * by. Here neither half is a fragment of the other: `corpusRowReadable` carries
+ * its own campaign gate and `libraryRowReadable` is anchored on there being no
+ * campaign, so the disjunction says exactly "readable through this campaign, or
+ * mine and in no campaign" and there is nothing for a row to slip between.
+ *
+ * **And no further.** Not another account's Library, and not another campaign's
+ * bestiary — copying between a DM's *own* tables is still refused (see
+ * `AGENTS.md`), because that would need `corpusRowReadable`'s campaign to be
+ * quantified, which is the shape this change has just taken out.
+ */
+export const copyableIntoCampaign = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.or([corpusRowReadable(sql, table, campaignId, actor), libraryRowReadable(sql, table, actor)]);
 
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (

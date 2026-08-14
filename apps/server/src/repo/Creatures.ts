@@ -1,10 +1,13 @@
 import {
+  type AccountId,
   type CampaignId,
   Conflict,
   Creature,
   type CreatureCreate,
   type CreatureFilterValues,
   type CreatureId,
+  type CreatureLibraryCreate,
+  type CreatureLibraryUpdate,
   type CreatureScope,
   type CreatureSort,
   type CreatureUpdate,
@@ -24,17 +27,21 @@ import {
   setClause,
 } from "./rows.js";
 import {
+  copyableIntoCampaign,
   corpusRowReadable,
-  corpusRowReadableAnywhere,
   ensureCampaignReadable,
   ensureCampaignWritable,
+  libraryRowReadable,
+  libraryRowWritable,
   rowWritable,
 } from "./visibility.js";
 
 interface CreatureRow extends ProvenanceColumns {
   readonly id: CreatureId;
-  /** Null for the global `system` corpus. */
+  /** Null for a Library entity and for the bundled `system` corpus. */
   readonly campaign_id: CampaignId | null;
+  /** Whose Library this is in; null for a campaign copy and for the bundle. */
+  readonly account_id: AccountId | null;
   readonly derived_from: CreatureId | null;
   readonly name: string;
   readonly size: string | null;
@@ -54,6 +61,7 @@ const toCreature = (row: CreatureRow): Creature =>
   new Creature({
     id: row.id,
     campaignId: row.campaign_id,
+    accountId: row.account_id,
     derivedFrom: row.derived_from,
     name: row.name,
     size: row.size,
@@ -204,29 +212,38 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
   );
 
 /**
- * The bestiary.
+ * The bestiary **and** the Library — one table, two worlds, and one mapper.
  *
- * Every read goes through `corpusRowReadable`, which is the only predicate in
- * the product that returns rows with no campaign of their own. Every write goes
- * through `rowWritable`, which is the ordinary campaign-scoped one — and that
- * asymmetry *is* the immutability of the `system` corpus, because `rowWritable`
- * requires `campaign_id` to equal the campaign in the path and a global row's is
- * null. There is no `origin = 'system'` check anywhere in this file, and there
- * does not need to be one.
+ * A creature belongs to a campaign, or to an account (a Library entity, which is
+ * where monsters are authored), or to nobody (the bundle). The methods split the
+ * same way, and each half has its own pair of predicates:
  *
- * `library` is the only read here that names no campaign — the nav's global
- * *Library* item, which is every creature this account can reach at once. It is
- * the *same* question `list` asks, with the campaign quantified rather than
- * bound (`corpusRowReadableAnywhere`), which is why it shares the parts a client
- * varies (`narrowedBy`, `orderBy`) and needs nothing else: one list of two
- * campaigns' creatures is two `list` answers unioned, and the predicate says so.
+ * | method                   | reads through           | writes through        |
+ * | ------------------------ | ----------------------- | --------------------- |
+ * | `list` / `findById`      | `corpusRowReadable`     |                       |
+ * | `create` / `update` / `remove` | `corpusRowReadable` | `rowWritable`       |
+ * | `library*`               | `libraryRowReadable`    | `libraryRowWritable`  |
+ * | `derive`                 | `copyableIntoCampaign`  | `rowWritable`         |
  *
- * Nothing here can write a `system` row either: `create` never sets `origin`, so
- * the column default (`authored`) decides, and the database's
- * `creature_system_is_global` check would refuse a global row from a path that
- * always has a campaign. The shared corpus is provisioned by
+ * **The bundle is immutable and no line here says so.** Both write predicates
+ * compare an ownership column to a value the request carries — `rowWritable` the
+ * campaign in the path, `libraryRowWritable` the account the credential resolved
+ * to — and a bundled row has neither, so a null is compared to a uuid and
+ * matches nothing. `creature_system_is_unowned` (`0015`) is what makes "a
+ * bundled row has no owner" a fact about the schema rather than about how the
+ * importer happens to be written. So there is still no `origin = 'system'` check
+ * anywhere in this file, and there still does not need to be one.
+ *
+ * Nothing here can *mint* a bundled row either: neither create sets `origin`, so
+ * the column default (`authored`) decides, and both set an owner — which the
+ * same check refuses to pair with `system`. The shared corpus is provisioned by
  * `pnpm -F server bestiary:import` — see `src/bestiary/import.ts`, which
  * explains why that is a shell command and not an endpoint.
+ *
+ * The two lists share every part a client varies (`narrowedBy`, `orderBy`), so a
+ * search box cannot come to mean something different at `/library` than it does
+ * inside a campaign. What they never share is a row: a campaign holds copies and
+ * the Library holds originals, and `derive` is the one seam between them.
  */
 export class Creatures extends Context.Service<
   Creatures,
@@ -236,24 +253,40 @@ export class Creatures extends Context.Service<
       filter: CreatureFilterValues,
     ) => Effect.Effect<ReadonlyArray<Creature>, NotFound, CurrentActor>;
     /**
-     * The Library — every creature this account can reach, gathered with no
-     * campaign in the path: its own tables' creatures and the `system` corpus,
-     * in one list.
+     * The Library — **originals only**: the bundled corpus and the creatures
+     * this account has authored, with no campaign in the path and no campaign
+     * row in the answer.
      *
-     * **A gathering, never a reach.** `corpusRowReadableAnywhere` is
-     * `corpusRowReadable` with the campaign quantified rather than bound, so
-     * this answers exactly the union of what `creatures.list` answers at each
-     * campaign the actor reaches — one request instead of one per table. Nothing
-     * appears here that a campaign-scoped read would not already have given up.
+     * A campaign's creatures are copies (`derive` makes them), and the model is
+     * that the Library shows the raw entity rather than anything a campaign is
+     * holding. So this is not the union of `list` over every table — that is
+     * what it used to be, and it was the wrong list.
      *
      * It cannot fail. There is no campaign in the path for a `NotFound` to be
-     * about, so an account that is a member of nothing gets `[]` rather than a
-     * 404 — the same shape, and the same honest empty answer, as
-     * `Memberships.mine`.
+     * about, so an account that has authored nothing gets the bundle rather than
+     * a 404 — the shape `Memberships.mine` has, for the same reason.
      */
     readonly library: (
       filter: LibraryFilterValues,
     ) => Effect.Effect<ReadonlyArray<Creature>, never, CurrentActor>;
+    readonly libraryFindById: (id: CreatureId) => Effect.Effect<Creature, NotFound, CurrentActor>;
+    /**
+     * Author a monster. **The only create in the product that names no
+     * campaign**, which is the second of the captain's four statements: making a
+     * monster is not an act inside a campaign.
+     *
+     * It cannot fail either — an account is the only thing it needs and the
+     * credential already resolved to one, so there is no parent for a `NotFound`
+     * to be about.
+     */
+    readonly libraryCreate: (
+      payload: CreatureLibraryCreate,
+    ) => Effect.Effect<Creature, never, CurrentActor>;
+    readonly libraryUpdate: (
+      id: CreatureId,
+      patch: CreatureLibraryUpdate,
+    ) => Effect.Effect<Creature, NotFound, CurrentActor>;
+    readonly libraryRemove: (id: CreatureId) => Effect.Effect<void, NotFound, CurrentActor>;
     readonly findById: (
       campaignId: CampaignId,
       id: CreatureId,
@@ -294,6 +327,39 @@ export class Creatures extends Context.Service<
           return rows[0]!;
         });
 
+      /** The same, for the Library: this account's own entities and the bundle. */
+      const inLibrary = (id: CreatureId) =>
+        Effect.gen(function* () {
+          const actor = yield* CurrentActor;
+          const rows = yield* sql<CreatureRow>`
+            select * from creature
+            where creature.id = ${id}
+              and ${libraryRowReadable(sql, "creature", actor)}
+          `;
+          if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
+          return rows[0]!;
+        });
+
+      /**
+       * What `derive` may copy: this campaign's bestiary, the bundle, or the
+       * caller's own Library — and nothing else.
+       *
+       * A separate reader rather than an argument to `readable`, so the wider
+       * predicate is reachable from exactly one method and a future read cannot
+       * pick it up by passing a flag.
+       */
+      const copyable = (campaignId: CampaignId, id: CreatureId) =>
+        Effect.gen(function* () {
+          const actor = yield* CurrentActor;
+          const rows = yield* sql<CreatureRow>`
+            select * from creature
+            where creature.id = ${id}
+              and ${copyableIntoCampaign(sql, "creature", campaignId, actor)}
+          `;
+          if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
+          return rows[0]!;
+        });
+
       return {
         list: (campaignId, filter) =>
           dieOnSqlError(
@@ -323,12 +389,111 @@ export class Creatures extends Context.Service<
               const rows = yield* sql<CreatureRow>`
                 select * from creature
                 where ${sql.and([
-                  corpusRowReadableAnywhere(sql, "creature", actor),
+                  libraryRowReadable(sql, "creature", actor),
                   ...narrowedBy(sql, filter),
                 ])}
                 order by ${orderBy(sql, filter.sort ?? "cr")}
               `;
               return rows.map(toCreature);
+            }),
+          ),
+
+        libraryFindById: (id) => dieOnSqlError(Effect.map(inLibrary(id), toCreature)),
+
+        /**
+         * Author a monster into this account's Library.
+         *
+         * `account_id` comes from the actor and from nothing a caller supplied,
+         * so there is no shape of request that authors into somebody else's
+         * Library. `campaign_id` is not named at all — it takes the column
+         * default, which is null, and that is what makes the row an original.
+         *
+         * No `ensure…` before it and nothing to check: an account is the only
+         * thing this needs, and the credential already resolved to one. That
+         * absence is the second of the captain's four statements written as
+         * code.
+         */
+        libraryCreate: (payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<CreatureRow>`
+                insert into creature ${sql.insert(
+                  defined({
+                    account_id: actor.accountId,
+                    name: payload.name,
+                    size: payload.size,
+                    type: payload.type,
+                    cr: payload.cr,
+                    cr_sort: payload.crSort ?? crSortFor(payload.cr),
+                    ac: payload.ac,
+                    hp: payload.hp,
+                    environments: payload.environments,
+                    legendary: payload.legendary,
+                    body: payload.statBlock && encodeStatBlock(payload.statBlock),
+                  }),
+                )}
+                returning *
+              `;
+              return toCreature(rows[0]!);
+            }),
+          ),
+
+        libraryUpdate: (id, patch) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const columns = defined({
+                name: patch.name,
+                size: patch.size,
+                type: patch.type,
+                cr: patch.cr,
+                cr_sort: patch.crSort ?? (patch.cr === undefined ? undefined : crSortFor(patch.cr)),
+                ac: patch.ac,
+                hp: patch.hp,
+                environments: patch.environments,
+                legendary: patch.legendary,
+                body: patch.statBlock && encodeStatBlock(patch.statBlock),
+              });
+              const rows = yield* sql<CreatureRow>`
+                update creature set ${setClause(sql, columns)}
+                where creature.id = ${id}
+                  and ${libraryRowWritable(sql, "creature", actor)}
+                returning *
+              `;
+              // A bundled creature lands here — readable in this Library and
+              // owned by nobody — and so does another account's entity. Both get
+              // the same refusal as "no such creature", on purpose.
+              if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
+              return toCreature(rows[0]!);
+            }),
+          ),
+
+        /**
+         * Delete one of this account's own Library entities.
+         *
+         * No `asConflict` here, unlike `remove`: the 409 there is
+         * `encounter_creature.creature_id` refusing to lose a creature a roster
+         * still names, and a roster can only ever name a row `corpusRowReadable`
+         * returned — a campaign's own creature or the bundle, never an original.
+         * A campaign holds copies. `library.test.ts` pins that a Library entity
+         * cannot be put on a roster, so this stays a two-outcome endpoint.
+         *
+         * A campaign copy derived from this row keeps working: `derived_from` is
+         * `on delete set null` and is read through by nothing, which is what the
+         * copy being a snapshot means.
+         */
+        libraryRemove: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<{ readonly id: CreatureId }>`
+                delete from creature
+                where creature.id = ${id}
+                  and ${libraryRowWritable(sql, "creature", actor)}
+                returning creature.id
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
             }),
           ),
 
@@ -414,17 +579,35 @@ export class Creatures extends Context.Service<
           ),
 
         /**
-         * The reskin: copy a creature this actor can read into this campaign,
-         * apply the edits, and remember where it came from.
+         * **Using a monster in a campaign: the copy.** A creature this actor may
+         * copy goes into this campaign, the edits are applied, and where it came
+         * from is remembered.
+         *
+         * This is the third of the captain's four statements, and the words that
+         * settle it are *copied state*: the campaign's row is a **snapshot**.
+         * Nothing is ever read through `derived_from`, so editing the original
+         * afterwards does not reach the copy and deleting the original leaves it
+         * standing with a null pointer. That is the same rule `combatant`
+         * already follows for a fight.
+         *
+         * The source is `copyableIntoCampaign` — this campaign's bestiary, the
+         * bundle, or the caller's own Library. The Library half is what makes
+         * authoring-then-using a real path; it is the *only* widening, and in
+         * particular a creature in another of this DM's own campaigns is still a
+         * 404 (see `AGENTS.md`).
          *
          * The copy is `authored` whatever the original was — the DM wrote the
-         * changes, so they are the author — and `derived_from` is the only
-         * record that the Ferryman's Wife started life as a Marsh Hag.
+         * changes, so they are the author — and `campaign_id` is what makes it
+         * the campaign's rather than anybody's Library entity. `account_id` is
+         * not copied and could not be: `creature_one_owner` refuses a row that
+         * is a campaign's and an account's at once, which is the constraint
+         * saying "a copy has left the Library".
          *
          * Its visibility is **not** copied. It falls to the column default
          * (`dm`) unless the patch names one, because a copy is a new row and a
          * new row fails closed. Inheriting `shared` from the original would
-         * make the safe default depend on what you happened to derive from.
+         * make the safe default depend on what you happened to derive from —
+         * and a Library entity has no visibility to inherit in the first place.
          */
         derive: (campaignId, id, patch) =>
           dieOnSqlError(
@@ -432,7 +615,7 @@ export class Creatures extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* readable(campaignId, id);
+                const source = yield* copyable(campaignId, id);
                 const cr = patch.cr ?? source.cr;
                 const rows = yield* sql<CreatureRow>`
                   insert into creature ${sql.insert(

@@ -352,14 +352,16 @@ Reported rather than invented, the rule this project has held since the first de
   one here would need a model call in a read path the captain has ruled out. The link to the
   Chronicle is drawn; the invented prose is not.
 - **Library, as a global item.** The delivery puts the Bestiary on the top row, above any
-  campaign. **The read landed in the same breath as this** — `GET /library/creatures`, see "The
-  Library" above — but **the screen over it has not**, and an item is earned by a screen rather
+  campaign. **The whole server half landed since** — read, authoring and copy-in, see "The
+  Library" below — but **the screen over it has not**, and an item is earned by a screen rather
   than by an endpoint. `creatures.list` cannot stand in: the campaign in its path is the only
-  thing gating the global `system` rows it returns, so a campaign-less route has nothing to read
+  thing gating the bundled rows it returns, so a campaign-less route has nothing to read
   _through_. **Bestiary therefore stays on the campaign row for now** — moving it up first would
   strand a working screen behind an item that goes nowhere. `globalNavFor` says so in a comment;
   when `#/library` is real the swap is one item moving from `campaignNavFor` to `globalNavFor`
-  plus a `useSection` case.
+  plus a `useSection` case. Note the two are **not** the same list any more: the campaign row's
+  _Bestiary_ is what that campaign holds (copies, plus the bundle) and a global _Library_ is the
+  originals. Both screens exist to be built; neither replaces the other.
 - **The player's _At the table_.** No screen, because the player projection of a fight is an
   open decision. **And its _My character_** is not campaign-scoped here — the sheet is
   `/play/characters/$characterId` — so it stays on the global row, which is also what "nothing
@@ -759,9 +761,12 @@ non-negotiable, because it is free on day one and a retrofit later.
   edit. The columns went in at `0001` because retrofitting provenance onto a table that already
   mixes authored and generated rows means guessing which is which; only `repo/Proposals.ts`
   ever writes `origin = 'assistant'`.
-- **`creature` is the one table whose rows may belong to no campaign** — the global `system`
-  corpus — and it therefore has a predicate of its own, `corpusRowReadable`. Read the bestiary
-  section below before writing anything that looks like it; the obvious spelling leaks.
+- **`creature` is the one table whose rows may belong to no campaign** — the bundled `system`
+  corpus, and since `0015` an account's own **Library** entities — so it has three predicates of
+  its own: `corpusRowReadable` (the campaign bestiary), `libraryRowReadable` and
+  `libraryRowWritable` (the Library, which reach no campaign because their rows are in none), and
+  `copyableIntoCampaign` for `derive`'s source. Read the bestiary and Library sections below before
+  writing anything that looks like any of them; the obvious spelling leaks.
 - **When a table's player projection diverges from its DM projection, its DM repository takes a
   `DmActor` in the same change.** This is the one rule here that has to be remembered rather than
   compiled, and it is why `apps/server/src/repo/DmActor.ts` exists. A `DmActor` is a branded
@@ -772,9 +777,12 @@ non-negotiable, because it is free on day one and a retrofit later.
   `EncounterRuns` (7), `SessionEvents` (3, including the streaming `pollForRun`, which a grep
   for `CurrentActor>` cannot see), `Recap.read` and `Memberships.list` — the roster, whose
   player projection is _nothing_ rather than a narrower schema (see "Membership is the model,
-  and there is no seat"). The other sixty-four actor-scoped methods do
+  and there is no seat"). The other sixty-eight actor-scoped methods do
   not, and should not: they return a `shared` row a player is entitled to see in full, so
-  `GET …/notes` answering the ordinary `Note` discloses nothing. `Characters.assign` is ungated for
+  `GET …/notes` answering the ordinary `Note` discloses nothing. **The Library's five are the
+  newest and the clearest case of the gate not applying**: a proof carries a campaign and those
+  rows are in none, so there is no membership to prove and no player projection to diverge from —
+  the owner is the whole question. `Characters.assign` is ungated for
   one more reason worth keeping: it is a **write**, and
   `rowWritable` already requires `isDm`, so a proof on top would be a second answer to a question
   the predicate underneath answers first. **`Characters.updateOwn` is the newest, and the one
@@ -929,30 +937,40 @@ know. `cr_sort` is `double precision`, not the report's `numeric`: **`pg` hands 
 as a string** to protect precision this does not need, and every rating is an integer or one
 of 1/8, 1/4, 1/2 — all exact in binary.
 
-**`origin = 'system'` and `campaign_id is null` are the same statement** (`creature_system_is_global`).
-That is what makes the shared corpus immutable _structurally_ rather than by a rule someone has
-to remember: reads use `corpusRowReadable`, writes use the ordinary `rowWritable`, which
-requires `campaign_id` to equal the campaign in the request path — and a null never equals a
-uuid. **There is no `origin = 'system'` check anywhere in `apps/server/src`, and none is
-needed.** Do not add one; add a test if you doubt it.
+**`origin = 'system'` and _owned by nobody_ are the same statement**
+(`creature_system_is_unowned`, `0015`). That is what makes the shared corpus immutable
+_structurally_ rather than by a rule someone has to remember: every write predicate compares an
+ownership column to a value the request carries — `rowWritable` the campaign in the path,
+`libraryRowWritable` the account the credential resolved to — and a bundled row has neither, so a
+null is compared to a uuid and matches nothing. **There is no `origin = 'system'` check anywhere in
+`apps/server/src`, and none is needed.** Do not add one; add a test if you doubt it. It was
+`creature_system_is_global` and `campaign_id is null` alone until the Library gave a second kind of
+row that campaign-less position; the argument moved one column across and is written out under "The
+Library" below.
 
-**`corpusRowReadable` is the leak-shaped one, so read its two rules before writing anything
-like it.** (a) The campaign gate is _outside_ the union: a global row is reachable through a
+**`corpusRowReadable` is the leak-shaped one, so read its three rules before writing anything
+like it.** (a) The campaign gate is _outside_ the union: a bundled row is reachable through a
 campaign this actor can read and through nothing else. Written the natural way —
-`campaign_id is null OR <the campaign-scoped test>` — a global row would come back for any
+`<unowned> OR <the campaign-scoped test>` — a bundled row would come back for any
 authenticated request naming any campaign id, including somebody else's, because `findById` is
-reached by path and a path is a claim. (b) The row's own `visibility` still applies, so
-"global" means shared between a DM's campaigns, not shared with their players — a stat block
-is precisely what the product says a player must not have. `apps/server/test/bestiary.test.ts`
-pins both, and pins that a `system` creature named through a stranger's campaign is a 404.
+reached by path and a path is a claim. (b) The global half is `unowned` — **both** ownership
+columns null — and not `campaign_id is null`, which since `0015` would also match every account's
+Library entities and hand them to every campaign bestiary in the product. (c) The row's own
+`visibility` still applies, so "global" means shared between a DM's campaigns, not shared with their
+players — a stat block is precisely what the product says a player must not have.
+`apps/server/test/bestiary.test.ts` pins all three, and pins that a `system` creature named through
+a stranger's campaign is a 404; `library.test.ts` pins (b) from the Library side.
 
 **Editing a system creature means deriving a copy** — `POST …/creatures/:id/derive`, which
-copies a readable creature into the campaign, applies the patch in the same request, and sets
-`derived_from`. The copy is `authored` whatever the original was (the DM wrote the changes),
+copies a creature the actor may copy into the campaign, applies the patch in the same request, and
+sets `derived_from`. **It is also how a Library entity enters a campaign at all**, which is the
+captain's third statement; the source read is `copyableIntoCampaign` and the whole of it is under
+"The Library" below. The copy is `authored` whatever the original was (the DM wrote the changes),
 and its **visibility is not copied**: it falls to the column default, because a new row fails
 closed and inheriting `shared` would make that depend on what you happened to derive from.
 Nothing is ever _read through_ `derived_from`, so it is a provenance pointer and not an access
-path; it survives its ancestor's deletion as `null`.
+path; it survives its ancestor's deletion as `null` — which is also what makes the campaign's row a
+**snapshot** rather than a view of the original.
 
 **The shared corpus is provisioned by `pnpm -F server bestiary:import`, not by an endpoint.**
 Global content has no campaign to scope it to, so there is no actor an endpoint could check it
@@ -960,8 +978,11 @@ against — an endpoint that could mint one would write rows every campaign can 
 `src/bestiary/import.ts` is therefore **the only code in `src/` that touches campaign content
 without `CurrentActor` in its requirements**, and that exception is why it is confined to one
 file and a bin script. It upserts on `creature_system_name_key` (partial unique index over
-`lower(name)` where `campaign_id is null`), so re-running it updates in place and a DM's
-reskins keep their ancestor. It never writes `visibility`, so a shared system creature is not
+`lower(name)` where the row is owned by nobody — **both** columns, since `0015`, and the
+`on conflict … where` clause has to say so because Postgres infers an arbiter index only from an
+inference predicate that implies the index's own), so re-running it updates in place and a DM's
+reskins keep their ancestor. Two accounts may each keep a monster called Goblin Boss; only the
+bundle is unique. It never writes `visibility`, so a shared system creature is not
 un-shared by an upgrade.
 
 **`encounter_creature` hangs off `encounter` with no `campaign_id`,** like `prep_item` under
@@ -1017,71 +1038,166 @@ contract. `type` and `size` are **open** strings while `difficulty` is a closed 
 difference is that `CampaignHome.jsx:13` _branches_ on difficulty, and nothing branches on a
 creature's type.
 
-### The Library: every creature _this account_ can reach, with no campaign in the path
+### The Library: a monster belongs to an **account**, and a campaign holds copies
 
-`GET /library/creatures` (`Creatures.library`) is the sixth delivery's global **Library** nav item
-— the Bestiary moved out of the campaign row and up above every campaign, and `creatures.list`
-could not serve it because the campaign in that path is the only thing gating the global `system`
-rows it returns.
+Captain's model, 2026-08-14, in their own words:
 
-**It is the account's, not the world's** — captain's decision, 2026-08-14: _"The library will be
-scoped to the authenticated user."_ So it answers this credential's own tables' creatures **and**
-the shared corpus, in one list. It is the **second group in the product that names no campaign**
-(`me` is the first) and it is read-only, structurally: every write predicate requires `campaign_id`
-to equal a campaign named in a path, and this path names none.
+> The library should be where you create the entities; when you use them in a campaign they are
+> copied in, so the library should only show the raw entity and not anything in campaigns, as the
+> campaign is a copied state of the entity.
 
-**`corpusRowReadableAnywhere` is `corpusRowReadable` with the campaign existentially quantified
-rather than bound**, and that sentence is the whole design. It is a _gathering, never a reach_:
-the answer is exactly the union of what `creatures.list` gives at each campaign the credential
-reaches, one request instead of one per table, so nothing appears that a campaign-scoped read
-would not already have given up. **A read with no campaign in its path is not a read with no
-campaign in its predicate** — every predicate in `repo/visibility.ts` still bottoms out in
-`campaignInScope`, this one included.
+Four statements, and `0015_library_creatures.ts` is what made the first expressible at all:
 
-What that yields, and each half is pinned:
+1. **A creature can be owned by an account and sit in no campaign** — a _Library entity_.
+2. **Authoring happens in the Library.** Creating a monster is not an act inside a campaign, so
+   nothing in the `library` group names one.
+3. **Using one in a campaign copies it in** (`creatures/:id/derive`), and the campaign's row is a
+   **snapshot**. Editing the original afterwards does not reach the copy.
+4. **The Library shows originals only** — never a campaign's copy of one.
 
-| the reader                     | what the Library answers                                                |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| a DM                           | every one of their tables' creatures, plus the **whole** corpus         |
-| a player                       | the `shared` half of their tables, plus the `shared` half of the corpus |
-| a credential scoped to a table | that table only, plus the corpus                                        |
-| a revoked member               | nothing from that table, the moment the membership goes                 |
-| an account invited nowhere     | `[]` — the honest empty answer `GET /me/campaigns` also gives           |
+**Monsters only.** Encounters, notes and characters stay campaign-owned exactly as they are; the
+captain chose that over the wider versions, so do not generalise the mechanism to another table.
 
-Three things about the SQL that are decisions rather than details, and `library.test.ts` fails on
-each if it is rearranged (verified by mutating the predicate three ways: 7, 3 and 6 tests fail):
+**This reversed a rule that was two commits old**, and the superseded section is worth knowing about
+because its trap is still live. `corpusRowReadableAnywhere` was `corpusRowReadable` with the campaign
+existentially quantified: it gathered every campaign creature the credential could reach. Under the
+model those are precisely the rows the Library must not show. The read that replaces it is _simpler_
+— no quantifier, no join to `campaign`, no membership subplan — and the union-over-a-gate trap that
+comment warned about is restated on `corpusRowReadable`, where it still applies.
 
-- **The `campaign_id is null` disjunct lives _inside_ the `exists`.** Hoisting it out —
-  `campaign_id is null or exists (…)` — makes every global row readable by an account that reaches
-  nothing at all. That is the `corpusRowReadable` lesson met a third time.
-- **A campaign row is reachable through its own campaign and no other**, because that disjunct is
-  false for it; a global row is reachable through any one of them, which is what "belongs to every
-  campaign at once" means.
-- **The row's own `visibility` is tested inside the `exists` too**, so `dm` rows stay the DM's and
-  "global" still means shared between a DM's campaigns rather than with their players.
+#### Three owners, and `origin` is not one of them
 
-**Quantifying does not mean scanning every campaign** — measured on Postgres 18: a nested-loop
-semi join whose inner side is materialised once and driven by `campaign_member_account_idx` on the
-actor's own account, with the membership tests hoisted to hashed subplans exactly as the bound
-version hoists them.
+`creature` now holds three kinds of row, told apart by **two id columns and nothing else**:
 
-Two more things worth knowing:
+| row              | `campaign_id` | `account_id` | who may write it   | write predicate      |
+| ---------------- | ------------- | ------------ | ------------------ | -------------------- |
+| the bundle       | null          | null         | **nobody**         | —                    |
+| a Library entity | null          | an account   | that account       | `libraryRowWritable` |
+| a campaign copy  | a campaign    | null         | that campaign's DM | `rowWritable`        |
 
-- **`LibraryFilter` is spread into `CreatureFilter`** (`packages/api/src/Creature.ts`) and
-  `narrowedBy` is shared in `repo/Creatures.ts`, so the search box, the environment chips and the
-  sort cannot come to mean something different at `/library` than inside a campaign. `scope` is
-  left off: the Library is one list by definition, and a filter with one legal value is the shape
-  `campaign_invite.role` was refused for. The one-element `environments` wire defect is inherited
-  unchanged and pinned — one contract, one bug, one fix.
-- **Player visibility is not the Library's problem**, by the same decision. A DM brings a creature
-  into a campaign with `creatures/:id/derive`, and whether the players there then see it is settled
-  by the campaign-level sharing that already exists.
+`creature_one_owner` makes the middle column exclusive — a row is a campaign's or an account's or
+nobody's, never two at once — which is what lets each write predicate name one column and be
+complete. Without it, `account_id = me` would be a way to write a row inside a campaign the actor
+does not DM.
 
-**The gap `derive` leaves, reported and not closed**: `derive` reads its source through
-`corpusRowReadable`, so it accepts a creature from _the campaign in the path_ or the global corpus
-— and nothing else. The Library now shows a DM their campaign A creatures, but deriving one into
-campaign B is a 404. Copying **across a DM's own tables** is the obvious next want and it needs a
-widened source read, which is a change to an existing predicate rather than a routine step.
+#### The shared corpus is still immutable by construction — the same argument, one column across
+
+**This is the sentence to hold on to, and the whole risk the change carried.** `0004_bestiary.ts`
+bought immutability structurally: every write requires `campaign_id` to equal the campaign named in
+the path, and a null never equals a uuid. Putting a second kind of row at `campaign_id is null` —
+one its owner must be able to write — is exactly what spends that. What replaces it:
+
+> A Library write requires `account_id` to equal the account the credential resolved to. A bundled
+> row's `account_id` is null, and a null never equals a uuid.
+
+And a bundled row's `account_id` _is_ null as a fact about the schema rather than about how the
+importer happens to be written. `creature_system_is_unowned` replaces `creature_system_is_global`
+and says `(origin = 'system') = (campaign_id is null and account_id is null)` — **being `system`
+and being owned by nobody are the same statement**, in both directions:
+
+- `system` ⇒ unowned, so no write path can reach a bundled row;
+- unowned ⇒ `system`, so no write path can _mint_ one by omission, because both creates set an
+  owner and the check refuses that paired with `system`.
+
+**So there is still no `origin = 'system'` check anywhere in `apps/server/src`, and none is needed.**
+Do not add one; add a test if you doubt it. `library.test.ts` drives it from every write path the
+product has (both Library writes, both campaign writes, `derive`) plus raw SQL, and
+`bestiary.test.ts` and `migrations.test.ts` hold the constraint from the schema side.
+
+`repo/visibility.ts`'s `unowned` fragment is the one place "the bundle" is spelled, for the same
+reason: it is the sentence the guarantee is written in.
+
+#### The read, and what changed for each reader
+
+`libraryRowReadable` is `campaign_id is null and (account_id is null or account_id = <me>)`.
+**It composes no campaign gate, and that is not an omission** — every other predicate in
+`repo/visibility.ts` bottoms out in `campaignInScope` because every other predicate is about a row a
+campaign contains. A Library entity is in no campaign: there is no membership to check and nothing
+for a credential's `campaignId` to narrow. The row's owner is the entire question, and it is
+compared to the actor's own account and to nothing a caller supplied.
+
+| the reader                 | what the Library answers, now                 | what it answered before           |
+| -------------------------- | --------------------------------------------- | --------------------------------- |
+| any account                | the bundle, plus what **it** authored         | its campaigns' creatures + corpus |
+| a DM                       | the same — **none of their own tables' rows** | every table's rows                |
+| an account invited nowhere | the bundle, plus what it authored             | `[]`                              |
+
+Three consequences that are decisions rather than details:
+
+- **A DM sees no campaign creature in their Library, including their own.** Those are copies. This
+  is statement 4 and it is the point of the reversal.
+- **An account that is a member of nothing has a Library.** Authoring is not an act inside a
+  campaign, so it cannot require one — a Library that were empty until somebody invited you would
+  make it one.
+- **The row's own `visibility` is not tested, in either half.** For your own rows there is nobody to
+  hide from. For the bundle it would hide the whole corpus, since `bestiary:import` never writes a
+  visibility and the column defaults to `dm`. `visibility` is a statement about _players at a
+  table_, and a read with no table in it cannot be asking it. **The consequence, stated rather than
+  buried: an account that is only ever a player somewhere now reads the whole bundle in its own
+  Library.** What a player may see of the corpus _through a campaign_ is still
+  `corpusRowReadable`'s question and is unchanged — `library.test.ts` pins the pair.
+
+#### `corpusRowReadable` — the campaign bestiary — decided deliberately, and unchanged but for one clause
+
+The campaign bestiary answers a different question: _what is in this campaign_, plus the bundle every
+campaign shares. Narrowing it to the campaign's own rows would take the bundle away from the screen
+and from `derive`'s source; widening it to reach a DM's Library would put originals in a list whose
+whole content is copies. So it does not change — **except that its global half is now `unowned`
+rather than `campaign_id is null`.** That one clause is load-bearing: spelled the old way, every
+campaign bestiary in the product would return every Library entity of every account, which is the
+widest disclosure this seam has ever been one clause away from.
+
+The same narrowing carries, for free and correctly, to everything else that composes it — the
+encounter roster (`EncounterCreatures`), the fight seed (`EncounterRuns`), campaign search
+(`repo/Search.ts`) and Hob's `proposeEncounter`. **A Library entity cannot be put on a roster**,
+which is also why `library.remove` declares no `Conflict` where the campaign `remove` does: a roster
+can only ever name a row `corpusRowReadable` returned.
+
+#### `derive`: the copy, and the one widening
+
+`copyableIntoCampaign` is `corpusRowReadable(campaign) OR libraryRowReadable`. A plain `or` of two
+predicates that are each **complete on their own** — which is a different shape from the union
+_inside_ `corpusRowReadable` and must not be confused with it. The trap there is hoisting a disjunct
+out of a gate so one half escapes the campaign check; here neither half is a fragment of the other,
+so the disjunction says exactly "readable through this campaign, or mine and in no campaign".
+
+The existing decisions about a copy are unchanged: it is `authored` whatever the original was, and
+its visibility falls to the column default rather than being inherited, because a new row fails
+closed. `account_id` is not copied and could not be — `creature_one_owner` is the constraint saying
+"a copy has left the Library".
+
+**The copy is a snapshot, and that is a property of there being no join.** Nothing is ever read
+through `derived_from`, so editing the original does not reach the copy and deleting the original
+leaves it standing with a null pointer — the rule `combatant` already follows for a fight.
+
+**Still refused, and it is the same gap as before**: copying across a DM's _own_ tables. The source
+read reaches this campaign, the bundle, and your Library, and no further; another campaign would
+need `corpusRowReadable`'s campaign quantified, which is the shape this change just removed.
+
+#### What the captain has _not_ been asked, and what is deliberately still there
+
+- **`POST /campaigns/:c/creatures` still exists.** Statement 2 says authoring is not an act inside a
+  campaign, and this endpoint is the one thing left that contradicts it — a campaign row created
+  directly is "copied state" with no original behind it. It was kept because removing an endpoint is
+  a contract deletion the task did not ask for and no acceptance criterion needs; if the captain
+  wants the model whole, deleting it plus its handler is a small change and the fixtures that use it
+  would move to `library.create` + `derive`. **Ask before assuming either way.**
+- **Two copies of one entity in one campaign is legal**, and nothing refuses it. `derive` has no
+  uniqueness rule and `creature_system_name_key` covers the bundle alone.
+- **`Actor.campaignId` does not narrow the Library**, and the argument is on `libraryRowReadable`:
+  scope says which _campaign_ a credential reaches, and there is none here to be about, so applying
+  it would mean inventing a second meaning for the field. It changes no answer today because
+  nothing mints a scoped credential over HTTP — but it is the one place the "membership and scope
+  both apply to every read" rule is deliberately not applied, and whoever mints the first scoped
+  credential should be told rather than left to find it. `library.test.ts` pins it.
+- **What a campaign copy should do when its original is deleted** is answered as _nothing_
+  (`derived_from` goes null, the copy stands), which follows from the copy being a snapshot — but it
+  was inferred from the model rather than asked.
+- **A Library entity carries a `visibility` column that nothing reads.** `schema.test.ts` requires
+  the column on every content table; `CreatureLibraryCreate` and `CreatureLibraryUpdate` deliberately
+  have no field for it, so it is always the default and no client can set it.
+- **Existing campaign-authored creatures were not migrated into anybody's Library**, by the captain's
+  own instruction, and `0015` clears nothing. Whose Library would have been a guess.
 
 ## The party: what earns a column on `character`, and what lives in the document
 
@@ -1858,8 +1974,10 @@ Six things about it that are decisions, not details:
 - **The rows are the screens that exist, on the route and the mode**, both read off the router.
   _Run_ has never earned an item (a fight is reached from the campaign that owns it); _At the
   table_ has not either. **_Bestiary_ is on the campaign row though the delivery draws it as
-  _Library_ on the global one** — deliberately, until there is a global read behind it; see the
-  sixth delivery's section.
+  _Library_ on the global one** — deliberately, until a Library screen exists. The server half is
+  built now, but a nav item is earned by a screen; and the two are **different lists** since the
+  Library became originals-only, so _Library_ arriving is an item added rather than one moved. See
+  the sixth delivery's section and "The Library".
 - **The name is the first thing to give way, and it gives way whole.** The campaign row needs
   986px with six items, a badge and _Start session_, so below about 1024 something must go.
   Left as a plain shrinking flex item the name squeezed the **chevron** to zero width at 760 and
@@ -2496,12 +2614,18 @@ re-derived slightly wrong.
 
 **What is indexed, and by what:**
 
-| arm         | index                                                   | read predicate                                        |
-| ----------- | ------------------------------------------------------- | ----------------------------------------------------- |
-| `note`      | `0009` — `title` at weight A, `body` at B               | `rowReadable`                                         |
-| `beat`      | `0009` — `body` at weight **B**, not the default D      | the `beat → session` chain via `containedRowReadable` |
-| `creature`  | `0004` — name A, size/type B, `jsonb` body C            | `corpusRowReadable`                                   |
-| `character` | `0012` — name A, player/species/class B, `jsonb` body C | `rowReadable`                                         |
+| arm         | index                                                   | read predicate                                         |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------ |
+| `note`      | `0009` — `title` at weight A, `body` at B               | `rowReadable`                                          |
+| `beat`      | `0009` — `body` at weight **B**, not the default D      | the `beat → session` chain via `containedRowReadable`  |
+| `creature`  | `0004` — name A, size/type B, `jsonb` body C            | `corpusRowReadable` — this campaign's, plus the bundle |
+| `character` | `0012` — name A, player/species/class B, `jsonb` body C | `rowReadable`                                          |
+
+**A Library entity is deliberately not findable here**, and it falls out of the predicate rather
+than being arranged: a search is scoped to a campaign by its path, and an original is in no
+campaign. What a campaign search finds of a monster somebody authored is the _copy_ they brought
+in — the row that campaign actually contains. The Library has its own search, over the same two
+matchers, in `Creatures.library`.
 
 Beat body is weighted **B on purpose**: it is the same kind of thing as a note's body, and the
 unweighted default would rank every beat at a quarter of an equally good note for no defensible
@@ -2670,9 +2794,11 @@ Five things it settled that the next screen over this contract should not re-der
   (`campaignNavFor` in `shell/AppShell.tsx`), which exists exactly when the route names a
   campaign; from the campaign list there is no row at all rather than a disabled item.
   `useSection` gives it its own underline, because it is a screen you go _to_ from a campaign
-  rather than a view of one. **The sixth delivery draws it as _Library_ on the global row instead,
-  and it will move there once a global read exists** — see that delivery's own section; the swap
-  is one item moving between two lists.
+  rather than a view of one. **The sixth delivery draws it as _Library_ on the global row
+  instead** — and that is a _second_ screen rather than this one relocated, because the Library is
+  originals (the bundle plus what you authored) and this screen is what a campaign holds (copies,
+  plus the bundle). `GET /library/creatures` and its authoring endpoints exist; the screen over them
+  does not. See "The Library".
 - **The search and the sort are query parameters; the environment chips are not.** The search
   has to be the server's, because `ILIKE` on the name is only half of it and the other half is
   full text over the stat block — measured against a running server, `"nimble escape"` returns

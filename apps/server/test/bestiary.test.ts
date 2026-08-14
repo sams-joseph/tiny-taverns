@@ -199,10 +199,14 @@ describe("the new tables fail closed", () => {
   });
 
   it("refuses a system creature that names a campaign, and a global one that does not", async () => {
-    // `creature_system_is_global`. The two states are the same statement, so
-    // there is no campaign-scoped system row and no global authored one — which
-    // is what makes immutability a consequence of the write predicate rather
-    // than a rule to remember.
+    // `creature_system_is_unowned` (`0015`), which replaced
+    // `creature_system_is_global` when a null campaign stopped meaning
+    // "nobody's": a bundled creature is the one **nobody owns**, and being
+    // `system` and being unowned are the same statement. So there is no
+    // campaign-scoped system row and no ownerless authored one — which is what
+    // makes immutability a consequence of the write predicates rather than a
+    // rule to remember. `library.test.ts` pins the other ownership column and
+    // every write path in the product against it.
     const insert = (origin: string, campaignId: string | null) =>
       runtime.runPromise(
         Effect.gen(function* () {

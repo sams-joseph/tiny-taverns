@@ -167,10 +167,17 @@ const goblinStatBlock = {
   ],
 };
 
-/** A global `system` row: `campaignId` null, which is what makes it global. */
+/**
+ * A bundled `system` row: **owned by nobody**, which is what makes it global.
+ *
+ * Both ownership columns null. A Library entity is `campaignId: null` with an
+ * `accountId`, and a campaign's own creature is the other way round — the three
+ * positions are told apart by these two fields and never by `origin`.
+ */
 export const goblin = {
   id: goblinId,
   campaignId: null,
+  accountId: null,
   derivedFrom: null,
   name: "Goblin Boss",
   size: "Small",

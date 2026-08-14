@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CampaignId, CreatureId } from "./Ids.js";
+import { AccountId, CampaignId, CreatureId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -148,20 +148,49 @@ export const emptyStatBlock: StatBlock = {
  * rows coexist in the list `Bestiary.jsx` renders, and `origin` is what tells
  * them apart.
  *
- * `system` rows are **global and immutable**: `campaignId` is null, and the
- * write predicate matches on `campaign_id = <the campaign in the path>`, which
- * a null can never satisfy. Immutability is therefore structural rather than a
- * rule someone has to remember. A DM who wants to change one derives a copy —
- * see `derivedFrom`.
+ * ### Three owners, and `origin` is not one of them
+ *
+ * A creature belongs to **a campaign**, or to **an account** — a Library entity,
+ * where monsters are authored — or to **nobody**, which is the bundled `system`
+ * corpus. The two id columns say which, they are mutually exclusive
+ * (`creature_one_owner`), and together they are the only thing any write
+ * predicate looks at:
+ *
+ * | row              | `campaignId` | `accountId` | who may write it   |
+ * | ---------------- | ------------ | ----------- | ------------------ |
+ * | the bundle       | null         | null        | **nobody**         |
+ * | a Library entity | null         | an account  | that account       |
+ * | a campaign copy  | a campaign   | null        | that campaign's DM |
+ *
+ * The bundle is **immutable structurally**: every write predicate compares an
+ * ownership column to a value the request carries, and a null matches neither.
+ * `creature_system_is_unowned` is what makes a bundled row's `accountId` null as
+ * a fact about the schema — `origin = 'system'` and *owned by nobody* are the
+ * same statement — so there is no `origin` check anywhere in the server and none
+ * is needed. Somebody who wants to change a bundled creature copies it, either
+ * into their Library or into a campaign — see `derivedFrom`.
  */
 export class Creature extends Schema.Class<Creature>("Creature")({
   id: CreatureId,
   /**
-   * The campaign that owns this creature, or `null` for the global `system`
-   * corpus. The two cases are exclusive and the database enforces it:
-   * `origin = 'system'` exactly when `campaign_id is null`.
+   * The campaign that owns this creature — the *copy*, in a campaign that took
+   * one in — or `null` for a row that is in no campaign, which is either a
+   * Library entity or the bundle. `accountId` tells those two apart.
    */
   campaignId: Schema.NullOr(CampaignId),
+  /**
+   * The account whose Library this creature is in, or `null` for a campaign copy
+   * and for the bundle.
+   *
+   * On the wire because it is the ownership fact, and reading it is how a screen
+   * knows whether a row is its reader's to edit. That question must not be
+   * answered from `origin`: provenance says where content came from, never who
+   * may write it, and an imported Library entity is `imported` and still yours.
+   *
+   * The only non-null value any credential ever sees here is its own account's,
+   * because the only rows with one that it can read are the ones it owns.
+   */
+  accountId: Schema.NullOr(AccountId),
   /**
    * The creature this one was copied from, for a reskin.
    *
@@ -235,7 +264,19 @@ const crSort = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1000 
  */
 const environments = Schema.Array(shortLabel).check(Schema.isLengthBetween(0, 16));
 
-export const CreatureCreate = Schema.Struct({
+/**
+ * Everything a creature is, as a client may state it — and the whole of what a
+ * **Library** entity has, because a Library entity is in no campaign and
+ * `visibility` is a statement about players at a table.
+ *
+ * Named and spread rather than restated, exactly as `LibraryFilter` is spread
+ * into `CreatureFilter`: a field added to a monster arrives on both paths, and
+ * the one thing that differs between them is the one thing that means something
+ * different. Neither carries `origin`, on any path, so a client cannot claim
+ * `system` or `assistant` provenance — only `repo/Proposals.ts` can, out of a
+ * turn the server itself stored, and only `bestiary/import.ts` writes `system`.
+ */
+const LibraryCreatureCreate = {
   name: Schema.NonEmptyString,
   size: Schema.optional(shortLabel),
   type: shortLabel,
@@ -249,11 +290,28 @@ export const CreatureCreate = Schema.Struct({
   legendary: Schema.optional(Schema.Boolean),
   /** Omit and the column default — an empty document — decides. */
   statBlock: Schema.optional(StatBlock),
+} as const;
+
+/**
+ * What a Library entity is created from.
+ *
+ * **No `visibility`, and its absence is the decision.** A row's visibility says
+ * which of a campaign's players may read it, and a Library entity is in no
+ * campaign — there are no players to narrow it against, and the copy `derive`
+ * makes into a campaign deliberately takes the column default rather than
+ * inheriting one, so a value set here would reach nothing and change nothing. A
+ * control with no reader is the shape this contract refuses everywhere else.
+ */
+export const CreatureLibraryCreate = Schema.Struct(LibraryCreatureCreate);
+export type CreatureLibraryCreate = typeof CreatureLibraryCreate.Type;
+
+export const CreatureCreate = Schema.Struct({
+  ...LibraryCreatureCreate,
   visibility: Schema.optional(Visibility),
 });
 export type CreatureCreate = typeof CreatureCreate.Type;
 
-export const CreatureUpdate = Schema.Struct({
+const LibraryCreatureUpdate = {
   name: Schema.optional(Schema.NonEmptyString),
   size: Schema.optional(Schema.NullOr(shortLabel)),
   type: Schema.optional(shortLabel),
@@ -264,6 +322,14 @@ export const CreatureUpdate = Schema.Struct({
   environments: Schema.optional(environments),
   legendary: Schema.optional(Schema.Boolean),
   statBlock: Schema.optional(StatBlock),
+} as const;
+
+/** The same fields again, all optional — a Library entity's PATCH. */
+export const CreatureLibraryUpdate = Schema.Struct(LibraryCreatureUpdate);
+export type CreatureLibraryUpdate = typeof CreatureLibraryUpdate.Type;
+
+export const CreatureUpdate = Schema.Struct({
+  ...LibraryCreatureUpdate,
   visibility: Schema.optional(Visibility),
 });
 export type CreatureUpdate = typeof CreatureUpdate.Type;
@@ -319,10 +385,13 @@ const LibraryFilterValues = Schema.Struct(LibraryFilter);
 /**
  * `Bestiary.jsx`'s three controls, as query parameters.
  *
- * `scope` is the one the Library has no use for: that list *is* the `system`
- * half, anchored on `campaign_id is null` by its predicate rather than by a
- * parameter a client may vary. A `scope` there would be a filter with one legal
- * value — the shape `campaign_invite.role` was refused for.
+ * `scope` is the one the Library has no use for. Every row that list can return
+ * is `campaign_id is null` — the bundle and the reader's own entities — so
+ * `scope: "campaign"` would name nothing and `scope: "system"` would be the only
+ * narrowing left, which is `origin` read as a filter. The split a Library screen
+ * actually wants is *mine* versus *the bundle*, and every row already carries
+ * `accountId`, so it is a fact on the row rather than a parameter that could
+ * disagree with one.
  */
 export const CreatureFilter = {
   ...LibraryFilter,

@@ -16,6 +16,8 @@ import {
   Creature,
   CreatureCreate,
   CreatureFilter,
+  CreatureLibraryCreate,
+  CreatureLibraryUpdate,
   CreatureUpdate,
   LibraryFilter,
 } from "./Creature.js";
@@ -551,7 +553,16 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
       success: HttpApiSchema.NoContent,
       error: [NotFound, Conflict],
     }),
-    /** Copy a readable creature into this campaign, edits applied, origin trail kept. */
+    /**
+     * Copy a creature into this campaign, edits applied, origin trail kept —
+     * **the third statement of the Library model**: using a monster in a
+     * campaign copies it in, and what the campaign then holds is copied state.
+     * Editing the original afterwards does not reach the copy.
+     *
+     * The source may be this campaign's own bestiary, the bundle, or **the
+     * caller's own Library**, and nothing else — `copyableIntoCampaign` in
+     * `repo/visibility.ts`. Copying between a DM's own tables is still refused.
+     */
     HttpApiEndpoint.post("derive", "/:creatureId/derive", {
       params: { campaignId: CampaignId, creatureId: CreatureId },
       payload: CreatureUpdate,
@@ -563,58 +574,106 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
   .middleware(Authorization) {}
 
 /**
- * The Library: every creature **this account** can reach, in one list.
+ * The Library: **where a monster is authored**, and the only place a creature
+ * exists that is in no campaign and is somebody's.
  *
- * The sixth delivery moves the Bestiary out of the campaign row of the nav and
- * into the global row as *Library*, so there has to be a read of creatures that
- * does not hang off one table. `creatures.list` cannot be it: the campaign in
- * that path is the only thing gating the global `system` rows it returns.
+ * Captain's model, in their own words: *"The library should be where you create
+ * the entities; when you use them in a campaign they are copied in, so the
+ * library should only show the raw entity and not anything in campaigns, as the
+ * campaign is a copied state of the entity."* Four statements, and this group is
+ * the first two of them:
  *
- * **It is the account's, not the world's** — captain's decision, 2026-08-14: the
- * signed-in account's own tables' creatures *and* the shared corpus, gathered
- * with no campaign in the path. So it is not a second answer to
- * `creatures.list`; it is the union of that answer over every campaign the
- * credential reaches, and `repo/visibility.ts`'s `corpusRowReadableAnywhere` is
- * literally `corpusRowReadable` with the campaign existentially quantified
- * rather than bound. **A gathering, never a reach**: nothing appears here that a
- * campaign-scoped read would not already have given up, and an account that is
- * a member of nothing reads `[]`.
+ * 1. a creature can be owned by an **account** and sit in no campaign;
+ * 2. **authoring happens here** — creating a monster is not an act inside a
+ *    campaign, so nothing in this group names one;
+ * 3. using one in a campaign **copies it in** — `creatures.derive`, which is at
+ *    a path that has a campaign because a copy needs somewhere to land;
+ * 4. this list shows **originals only**, never a campaign's copy of one.
  *
- * The second half of that decision is that **player visibility is not this
- * group's problem**. A DM brings a creature into a campaign with
- * `creatures/:id/derive`, and whether the players at that table then see it is
- * settled by the campaign-level sharing that already exists — nothing here
- * serves it, because nothing here needs to.
+ * **This reverses the shape that shipped hours earlier.** The first Library read
+ * gathered every campaign creature the credential could reach, over every table
+ * at once. Under the model those are exactly the rows it must not show: they are
+ * copies, and a copy that appeared here would offer to be edited without the
+ * edit reaching the campaign that holds it. What replaces it is anchored on
+ * `campaign_id is null` and is simpler than what it replaces — no quantifier and
+ * no join to `campaign` at all.
+ *
+ * **What a reader gets is the bundle plus their own**, and nothing else ever.
+ * `repo/visibility.ts`'s `libraryRowReadable` compares `account_id` to the
+ * account the credential resolved to and to nothing a caller supplied, so there
+ * is no shape of request in this group that asks for somebody else's Library.
+ * Writes go through `libraryRowWritable`, the same predicate with the bundle's
+ * disjunct removed — which is where the shared corpus's structural immutability
+ * lives now that a null campaign no longer means "nobody's": a bundled row's
+ * `account_id` is null, a null never equals a uuid, and
+ * `creature_system_is_unowned` is what makes that a fact about the schema.
+ *
+ * **An account that is a member of nothing has a Library**, which is the one
+ * outcome that changed for a reader rather than for the list: authoring cannot
+ * require a campaign if it is not an act inside one.
  *
  * The search, the environment narrowing and the sort are the same controls the
  * campaign bestiary has (`LibraryFilter` is spread into `CreatureFilter`), so
  * the two lists cannot come to disagree about what "gob" finds or how CR orders.
- *
- * **Read-only, and structurally so.** Every write predicate in the product
- * requires `campaign_id` to equal a campaign named in a path, and this path
- * names none — so there is nothing to create, update or delete here, and
- * `derive` stays where it is: copying a creature needs a campaign to copy
- * *into*.
+ * The payloads are the same shape for the same reason, minus `visibility` — see
+ * `CreatureLibraryCreate`, where its absence is the decision.
  */
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
-     * The account's creatures, filtered the way the campaign bestiary filters.
+     * The account's own creatures and the bundle, filtered the way the campaign
+     * bestiary filters.
      *
-     * No `NotFound`: there is no parent in the path to be missing, so an account
-     * with no membership anywhere gets an honestly empty list rather than a 404
-     * — the same shape as `me.campaigns`, whose empty answer is a legitimate
-     * steady state rather than an error.
-     *
-     * There is deliberately no `findById` beside it. Nothing needs one: the card
-     * and the stat block are the row half and the document half of the same
-     * `Creature`, which the list already carries — the campaign bestiary screen
-     * renders both from its list and this one is the same shape. An endpoint
-     * nothing calls is the stubbed-field rule applied to a route.
+     * No `NotFound`: there is no parent in the path to be missing, and an
+     * account that has authored nothing gets the bundle rather than a 404 — the
+     * same shape as `me.campaigns`, whose empty answer is a legitimate steady
+     * state rather than an error.
      */
     HttpApiEndpoint.get("list", "/creatures", {
       query: LibraryFilter,
       success: Schema.Array(Creature),
+    }),
+    /**
+     * Author a monster. **No campaign, and no `origin`** — the column default
+     * decides, so a client cannot claim `system` or `assistant` provenance here
+     * any more than it can on the campaign path.
+     */
+    HttpApiEndpoint.post("create", "/creatures", {
+      payload: CreatureLibraryCreate,
+      success: Creature,
+    }),
+    HttpApiEndpoint.get("findById", "/creatures/:creatureId", {
+      params: { creatureId: CreatureId },
+      success: Creature,
+      error: NotFound,
+    }),
+    /**
+     * Edit one you own. A bundled creature is readable here and not writable,
+     * and the refusal is the ordinary `NotFound` — saying "it exists but is not
+     * yours" is itself a disclosure, and here it would also be an invitation to
+     * keep trying.
+     */
+    HttpApiEndpoint.patch("update", "/creatures/:creatureId", {
+      params: { creatureId: CreatureId },
+      payload: CreatureLibraryUpdate,
+      success: Creature,
+      error: NotFound,
+    }),
+    /**
+     * Delete one you own.
+     *
+     * **No `Conflict`, unlike the campaign path**, and the difference is
+     * structural rather than an omission: the 409 there means an encounter's
+     * roster still points at the creature, and a roster can only ever name a row
+     * `corpusRowReadable` returned — which is a campaign's own creature or the
+     * bundle, never a Library entity. Nothing in a campaign can reference an
+     * original; a campaign holds copies. `library.test.ts` pins that, so the day
+     * it stops being true this endpoint fails loudly rather than 500ing.
+     */
+    HttpApiEndpoint.delete("remove", "/creatures/:creatureId", {
+      params: { creatureId: CreatureId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
     }),
   )
   .prefix("/library")

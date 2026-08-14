@@ -127,9 +127,28 @@ describe("the reach seam, enforced rather than asserted", () => {
     // column and conjoins it onto the same campaign gate, so it is strictly
     // narrower than the read above and this list is again unchanged.
     // `player-write.test.ts` pins the boundary.
+    //
+    // `repo/Creatures.ts` is the newest and the one that is *not* about a
+    // campaign at all: `creature.account_id`, added by
+    // `0015_library_creatures.ts`, is whose **Library** a monster is in — a row
+    // that belongs to an account and to no campaign. So it is named by two
+    // predicates in `repo/visibility.ts` (`libraryRowReadable` and
+    // `libraryRowWritable`) and written once here, from `CurrentActor` and never
+    // from anything a caller supplied. It is not a reach path for the same
+    // reason it is not a membership question: there is no campaign for it to
+    // reach *into*. `library.test.ts` pins that one account's Library is neither
+    // readable nor writable by another.
+    // `bestiary/import.ts` names it in the *negative*, in the one place that
+    // has to: the bundled corpus's upsert target is now the partial unique index
+    // over rows owned by nobody, and Postgres infers an arbiter index only from
+    // an inference predicate that implies the index's own. It never assigns the
+    // column — a bundled row has no owner, which is what
+    // `creature_system_is_unowned` makes a fact about the schema.
     expect(mentioning(/\baccount_id\b/)).toEqual([
+      "bestiary/import.ts",
       "repo/Campaigns.ts",
       "repo/Characters.ts",
+      "repo/Creatures.ts",
       "repo/Memberships.ts",
       "repo/visibility.ts",
     ]);

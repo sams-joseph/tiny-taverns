@@ -384,7 +384,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates seventeen methods and leaves the other sixty alone", () => {
+  it("gates seventeen methods and leaves the other sixty-nine alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -422,11 +422,12 @@ describe("the scope, counted", () => {
     // here there is no later projection to defer, because the narrow version of
     // a member list is no member list.
     expect(gated).toBe(17);
-    // 60 remaining service methods, plus `DmActors.of` itself — which requires
+    // Every ungated service method, plus `DmActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
     // method's signature. That duplicate is one of the two the plan's 69
-    // counted as methods.
+    // counted as methods, which is why this is an occurrence count with two
+    // named exceptions rather than a method count.
     //
     // It was 55 before the invite: `Invites` adds four (`list`, `create`,
     // `revoke`, `redeem` — `preview` is the one read in the product that
@@ -483,17 +484,23 @@ describe("the scope, counted", () => {
     // for a live column. Two boundaries, neither of them a proof, and
     // `player-write.test.ts` pins both.
     //
-    // The sixty-fifth is `Creatures.library` — `GET /library/creatures`, every
-    // creature this account can reach, with no campaign in the path. A `DmActor`
-    // could not be spent on it and should not be: the proof carries a campaign,
-    // and the whole shape of this read is that it names none. What bounds it is
-    // `corpusRowReadableAnywhere`, which is `corpusRowReadable` with the
-    // campaign existentially quantified rather than bound — so the answer is the
-    // union of what `creatures.list` already gives at each table the credential
-    // reaches, and there is no projection to narrow. A gathering, never a reach.
-    // `library.test.ts` pins the rows, including the one that matters most: one
-    // account's Library never shows another's monsters.
-    expect(ungated).toBe(65);
+    // The last five are the **Library** — `Creatures.library`, `libraryFindById`,
+    // `libraryCreate`, `libraryUpdate` and `libraryRemove`, the whole of
+    // `/library/creatures`. A `DmActor` could not be spent on any of them and
+    // should not be: the proof carries a campaign, and the whole shape of this
+    // group is that it names none. These rows are in no campaign at all —
+    // originals, which a campaign takes copies of — so there is no membership to
+    // prove, no role to be, and no player projection to diverge from.
+    //
+    // What bounds them is `libraryRowReadable` and `libraryRowWritable`, which
+    // compare `account_id` to the account the credential resolved to and to
+    // nothing a caller supplied. The write half is also where the shared
+    // corpus's structural immutability lives now that a null campaign no longer
+    // means "nobody's": a bundled row's `account_id` is null and a null never
+    // equals a uuid. `library.test.ts` pins both, including the two that matter
+    // most — one account's Library is neither readable nor writable by another,
+    // and no path in the product writes a bundled row.
+    expect(ungated).toBe(69);
   });
 });
 

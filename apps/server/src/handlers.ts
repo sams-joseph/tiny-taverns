@@ -285,21 +285,31 @@ const CreaturesLive = HttpApiBuilder.group(
 );
 
 /**
- * The Library — every creature this account can reach, in one list.
+ * The Library — where a monster is authored, and the originals a campaign's
+ * copies are made from.
  *
  * The same `Creatures` service as the group above, because it is the same table
- * and one table gets one mapper. What differs is the predicate the read
- * composes, and that difference is in the repository where every other one is:
- * this handler has no campaign to pass and nothing to filter with, which is what
- * makes "one account's Library never shows another's monsters" a property of
- * `corpusRowReadableAnywhere` rather than of anything here.
+ * and one table gets one mapper. What differs is the pair of predicates the
+ * methods compose, and that difference is in the repository where every other
+ * one is: **no handler here has a campaign to pass and none takes an account
+ * id**, which is what makes "one account's Library never shows or accepts
+ * another's monsters" a property of `libraryRowReadable` / `libraryRowWritable`
+ * rather than of anything on this page. The owner comes from `CurrentActor`,
+ * inside the repository, and there is nowhere in these signatures to put one.
  */
 const LibraryLive = HttpApiBuilder.group(
   TavernsApi,
   "library",
   Effect.fnUntraced(function* (handlers) {
     const creatures = yield* Creatures;
-    return handlers.handle("list", ({ query }) => creatures.library(query));
+    return handlers
+      .handle("list", ({ query }) => creatures.library(query))
+      .handle("create", ({ payload }) => creatures.libraryCreate(payload))
+      .handle("findById", ({ params }) => creatures.libraryFindById(params.creatureId))
+      .handle("update", ({ params, payload }) =>
+        creatures.libraryUpdate(params.creatureId, payload),
+      )
+      .handle("remove", ({ params }) => creatures.libraryRemove(params.creatureId));
   }),
 );
 

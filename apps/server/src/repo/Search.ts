@@ -239,10 +239,17 @@ const creatureArm = (
       // humanoid (goblinoid), neutral evil" — is what the bestiary card shows
       // under the name, and it is the honest subtitle for a result row.
       snippet: sql`coalesce(creature.body ->> 'meta', '')`,
-      // The one predicate that returns rows with no campaign of their own. The
-      // campaign gate is still outside the null/equals branch, which is what
-      // keeps a global creature reachable only through a campaign this actor
-      // can read.
+      // The one predicate here that returns rows with no campaign of their own.
+      // The campaign gate is still outside the unowned/equals branch, which is
+      // what keeps a bundled creature reachable only through a campaign this
+      // actor can read.
+      //
+      // **A Library entity is deliberately not findable here**, and that falls
+      // out of the predicate rather than being arranged: a search is scoped to a
+      // campaign by its path, and an original is in no campaign. What a campaign
+      // search finds of a monster somebody authored is the *copy* they brought
+      // in, which is the row that campaign actually contains. The Library has
+      // its own search, over the same two matchers, in `Creatures.library`.
       readable: corpusRowReadable(sql, "creature", campaignId, actor),
       matches: sql.or([
         sql`creature.name ilike ${likeContains(query)}`,

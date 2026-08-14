@@ -10,6 +10,7 @@ import membership from "../src/migrations/0011_membership.js";
 import characterSheet from "../src/migrations/0012_character_sheet.js";
 import invites from "../src/migrations/0013_invites.js";
 import characterLive from "../src/migrations/0014_character_live.js";
+import libraryCreatures from "../src/migrations/0015_library_creatures.js";
 import prepSurface from "../src/migrations/0003_prep_surface.js";
 import bestiary from "../src/migrations/0004_bestiary.js";
 import liveSession from "../src/migrations/0005_live_session.js";
@@ -42,6 +43,10 @@ afterAll(() => sheetRuntime.dispose());
 /** A sixth, for characters written before they were live. */
 const liveRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_live"));
 afterAll(() => liveRuntime.dispose());
+
+/** A seventh, for creatures written before a monster could belong to an account. */
+const libraryRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_library"));
+afterAll(() => libraryRuntime.dispose());
 
 const migrate = Effect.scoped(
   Layer.build(Layer.provide(Database.layerMigrator, NodeServices.layer)),
@@ -110,6 +115,7 @@ describe("migrations", () => {
       { migration_id: 12, name: "character_sheet" },
       { migration_id: 13, name: "invites" },
       { migration_id: 14, name: "character_live" },
+      { migration_id: 15, name: "library_creatures" },
     ]);
   }, 60_000);
 
@@ -134,6 +140,7 @@ describe("migrations", () => {
       { migration_id: 12, name: "character_sheet" },
       { migration_id: 13, name: "invites" },
       { migration_id: 14, name: "character_live" },
+      { migration_id: 15, name: "library_creatures" },
     ]);
   }, 60_000);
 });
@@ -527,5 +534,170 @@ describe("upgrading a database whose characters predate the live columns", () =>
     ]);
     expect(kindAccepted).toBe("Success");
     expect(kindRefused).toBe("Failure");
+  }, 60_000);
+});
+
+describe("upgrading a database whose creatures predate the Library", () => {
+  it("keeps every row, gives none of them an owner, and keeps the bundle unownable", async () => {
+    // **`0015` clears nothing, and that is the property to hold.** The captain's
+    // note was that the app is early and campaign-authored monsters need not be
+    // carried over — but a migration is permanent history and runs everywhere it
+    // is ever applied, so "the app is early" is a fact about today rather than
+    // about the file. What lands instead is one nullable column and two
+    // constraints that every existing row already satisfies.
+    //
+    // A creature written before this is a campaign's, `account_id` null, and
+    // stays exactly that: readable in its campaign's bestiary as it always was,
+    // and absent from every Library because it is not an original. Backfilling
+    // one into somebody's Library would mean guessing whose, and a guess written
+    // into a column somebody trusts is worse than an absence — the same refusal
+    // `0012` made about parsing old descriptors.
+    //
+    // Stepped by hand for the reason the five above are: the property is about
+    // rows written under the old schema, and an empty database cannot show it.
+    const { rows, owned, promoted, both, stillUnique } = await libraryRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* init;
+        yield* prepSurface;
+        yield* bestiary;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
+        `)[0]!.id;
+        const campaign = (yield* sql<{ readonly id: string }>`
+          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
+          returning id
+        `)[0]!.id;
+        const authored = (yield* sql<{ readonly id: string }>`
+          insert into creature ${sql.insert({
+            campaign_id: campaign,
+            name: "The Ferryman's Wife",
+            type: "Fey",
+            cr: "5",
+            ac: 17,
+            hp: 82,
+            visibility: "shared",
+          })}
+          returning id
+        `)[0]!.id;
+        const bundled = (yield* sql<{ readonly id: string }>`
+          insert into creature ${sql.insert({
+            campaign_id: null,
+            origin: "system",
+            name: "Goblin Boss",
+            type: "Humanoid",
+            cr: "1",
+            ac: 17,
+            hp: 21,
+          })}
+          returning id
+        `)[0]!.id;
+
+        // Everything between, because `creature` arrives in `0004` and nothing
+        // after it touches the table until here.
+        yield* liveSession;
+        yield* sessionFinished;
+        yield* runCarryover;
+        yield* beats;
+        yield* searchIndex;
+        yield* assistantConversation;
+        yield* membership;
+        yield* characterSheet;
+        yield* invites;
+        yield* characterLive;
+        yield* libraryCreatures;
+
+        const rows = yield* sql<{
+          readonly name: string;
+          readonly campaign_id: string | null;
+          readonly account_id: string | null;
+          readonly origin: string;
+          readonly visibility: string;
+        }>`
+          select name, campaign_id, account_id, origin, visibility
+          from creature order by name
+        `;
+
+        // The bundle cannot be given an owner, which is the sentence the shared
+        // corpus's immutability now rests on, and an owned row cannot be made
+        // bundled from the other side.
+        const owned = yield* sql`
+          update creature set account_id = ${account} where id = ${bundled}
+        `.pipe(Effect.result);
+        const promoted = yield* sql`
+          update creature set origin = 'system' where id = ${authored}
+        `.pipe(Effect.result);
+        // And no row is a campaign's and an account's at once.
+        const both = yield* sql`
+          insert into creature ${sql.insert({
+            campaign_id: campaign,
+            account_id: account,
+            name: "Two owners",
+            type: "Ooze",
+            cr: "1",
+            ac: 10,
+            hp: 10,
+          })}
+        `.pipe(Effect.result);
+
+        // The upsert target is the bundle's alone now, so two accounts may both
+        // keep a Goblin Boss and neither collides with the corpus.
+        yield* sql`
+          insert into creature ${sql.insert({
+            account_id: account,
+            name: "Goblin Boss",
+            type: "Humanoid",
+            cr: "1",
+            ac: 17,
+            hp: 21,
+          })}
+        `;
+        const stillUnique = yield* sql`
+          insert into creature ${sql.insert({
+            campaign_id: null,
+            origin: "system",
+            name: "goblin boss",
+            type: "Humanoid",
+            cr: "1",
+            ac: 17,
+            hp: 21,
+          })}
+        `.pipe(Effect.result);
+
+        return {
+          rows,
+          owned: owned._tag,
+          promoted: promoted._tag,
+          both: both._tag,
+          stillUnique: stillUnique._tag,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(rows).toEqual([
+      // Bundled before, bundled after, owned by nobody.
+      {
+        name: "Goblin Boss",
+        campaign_id: null,
+        account_id: null,
+        origin: "system",
+        visibility: "dm",
+      },
+      // A campaign's own creature, untouched — including the visibility its DM
+      // chose, which nothing here re-decides.
+      {
+        name: "The Ferryman's Wife",
+        campaign_id: expect.any(String),
+        account_id: null,
+        origin: "authored",
+        visibility: "shared",
+      },
+    ]);
+    expect(owned).toBe("Failure");
+    expect(promoted).toBe("Failure");
+    expect(both).toBe("Failure");
+    expect(stillUnique).toBe("Failure");
   }, 60_000);
 });
