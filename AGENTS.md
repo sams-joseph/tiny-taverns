@@ -1844,9 +1844,13 @@ Reported rather than shipped, the rule every kit screen has followed:
   line went for the same reason.
 - **The testimonial is gone**, by the captain's decision and for the same reason: a named person
   vouching for a product with no users is a claim this build cannot make. It was the kit's only
-  `sunken` band, so the surface rhythm below lost a step with it. **The kit still draws it and the
-  next delivery will too** — `MarketingScreen.test.tsx` pins the absence, because that is the class
-  of thing that comes quietly back.
+  `sunken` band, and **cutting it flattened two sections it was not part of**: the kit alternates
+  surfaces so no two bands of the same tone touch, so removing the middle one left _features |
+  start_ both on `--surface-page` with no border between them. `Start` carries the removed band's
+  recipe now. **The kit still draws the testimonial and the next delivery will too** —
+  `MarketingScreen.test.tsx` pins both the absence and the adjacency rule, because both are the
+  class of thing that comes quietly back. A dropped section is a rendering change two bands away
+  from itself; re-measure the surfaces, not just the section you removed.
 - **The email capture is gone.** Accounts come from the hosted identity provider; there is no list
   to join and no link this product sends. `marketing/StartCta.tsx` is what replaced it, and **the
   wrinkle it answers is the interesting part**: hosted sign-in is usually unconfigured, and
@@ -1862,8 +1866,11 @@ Reported rather than shipped, the rule every kit screen has followed:
 **The kit's README is stale about colour and should be ignored on that point.** It describes a
 "dark / light / light / sunken / light / dark" rhythm; `Site.jsx` is fully dark on the current
 palette and is the one that is right — this product is dark only by construction. What the rhythm
-survives as is the surface stack: page, page, page, card — the `sunken` step went with the
-testimonial.
+survives as is the surface stack — page, page, sunken, card — and the rule under it: **no two
+bands of the same tone touch.** One adjacency on the page breaks that and is deliberately kept:
+_hero | features_, both `--surface-page`, because `Site.jsx` puts the hero on that surface and
+gives the features section no background at all, so it inherits the same one. That is the
+delivery's, not ours to correct — the test allows exactly that pair and no other.
 
 **In-page anchors are `<Link to="/" hash="…">`, never `href="#features"`** — a bare fragment
 replaces the route under a hash history. One measured caveat: a **cross-route** hash

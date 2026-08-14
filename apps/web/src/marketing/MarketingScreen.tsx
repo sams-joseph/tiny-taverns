@@ -20,9 +20,11 @@ import { StartCta, StartCtaNote } from "./StartCta";
  * the one that is right: **Tiny Taverns is dark only by construction** — the
  * tokens resolve dark at `:root`, there is no `.dark` class to add and
  * `packages/ui/src/adherence.test.ts` fails on a `dark:` utility. What the
- * rhythm survives as is the *surface* stack: page, page, page, card. (The
- * kit's one `sunken` band was the testimonial, which is not on this page —
- * see below.)
+ * rhythm survives as is the *surface* stack — page, page, sunken, card — and
+ * the rule under it: **no two bands of the same tone touch.** The kit spends
+ * its one `sunken` band on the section before the footer, and `Start` holds
+ * that slot here; see its own note for why, and `MarketingScreen.test.tsx`
+ * for the assertion that keeps it true.
  *
  * ### What is drawn here and is not on this page
  *
@@ -36,9 +38,10 @@ import { StartCta, StartCtaNote } from "./StartCta";
  *    header nav and the footer with it.
  *  - **The testimonial is gone**, by the captain's decision and for the same
  *    reason the pricing table is: a named person vouching for a product with
- *    no users is a claim this build cannot make. It was the kit's only
- *    `sunken` band, so the surface rhythm above lost a step with it. It comes
- *    back when somebody has actually said it.
+ *    no users is a claim this build cannot make. It comes back when somebody
+ *    has actually said it. **It was also the page's only `sunken` band**, so
+ *    cutting it flattened two sections it was not part of — `Start` carries
+ *    that band now, and `Start`'s own note is where that is written down.
  *  - **The email capture is gone**, and `StartCta.tsx` is what replaced it —
  *    read that file for the wrinkle it had to answer.
  *  - **Every link that led nowhere is gone** rather than rendered as dead text:
@@ -354,11 +357,28 @@ function Features(): ReactNode {
   );
 }
 
+/**
+ * The closing block, on the **sunken** surface the testimonial used to hold.
+ *
+ * Not a restyle for its own sake: the kit alternates surfaces so that no two
+ * bands of the same tone touch, and it spends exactly one `sunken` band on the
+ * section between the features and the footer. Cutting the testimonial cut that
+ * band, which left *features | start* both on `--surface-page` with no border
+ * between them — measured, before this line existed. So this is the removed
+ * band's own recipe (`border-y border-hairline bg-surface-sunken`) applied to
+ * the section that now stands in its slot, rather than a tone invented here.
+ *
+ * The one same-tone adjacency left on the page — *hero | features*, both
+ * `--surface-page` — **is the delivery's own** and is deliberately not
+ * "corrected": `Site.jsx` puts the hero on `--surface-page` and gives the
+ * features section no background at all, so it inherits the same one. Changing
+ * it would be redrawing a section the delivery did not change.
+ */
 function Start(): ReactNode {
   return (
     <section
       id={SECTIONS.start}
-      className="scroll-mt-20 bg-surface-page px-page-sm py-14 @3xl:px-page @3xl:py-18"
+      className="scroll-mt-20 border-y border-hairline bg-surface-sunken px-page-sm py-14 @3xl:px-page @3xl:py-18"
     >
       <div className="mx-auto max-w-155 text-center">
         <h2 className="font-display text-display-m leading-tight font-bold tracking-display text-heading @2xl:text-display-l">

@@ -90,6 +90,53 @@ describe("the marketing homepage", () => {
     expect(document.body.textContent).not.toMatch(/six-creature ambush|since 2021/);
   });
 
+  /**
+   * The rule cutting the testimonial nearly broke, and the reason this is a
+   * test rather than a look.
+   *
+   * The kit alternates surfaces so that no two bands of the same tone touch,
+   * and it spends its one `sunken` band on the section between the features and
+   * the footer. The testimonial *was* that band, so removing it left
+   * *features | start* both on `--surface-page` with no border between them —
+   * measured in Chromium before `Start` took the removed band's recipe. A
+   * dropped section can quietly flatten the page two bands away from itself,
+   * which is exactly the kind of change nobody re-checks.
+   *
+   * jsdom computes no styles, so this reads the surface *class* on each band —
+   * which is what the page is written in, and what a future edit would change.
+   * The one adjacency it allows is **the delivery's own**: `Site.jsx` puts the
+   * hero on `--surface-page` and gives the features section no background at
+   * all, so it inherits the same one. That is not ours to correct.
+   */
+  it("puts no two bands of the same tone together, but for the one the kit draws", async () => {
+    await renderHome();
+
+    const page = document.querySelector("div.\\@container");
+    const bands = [
+      document.querySelector("header"),
+      ...Array.from(page?.querySelector("main")?.children ?? []),
+      document.querySelector("footer"),
+    ];
+    const toneOf = (el: Element | null) =>
+      Array.from(el?.classList ?? []).find((name) => name.startsWith("bg-surface-")) ??
+      "bg-surface-page"; // no background of its own: it inherits the page's.
+
+    const tones = bands.map(toneOf);
+    const touching = tones.flatMap((tone, i) =>
+      i > 0 && tone === tones[i - 1] ? [`${String(i - 1)}|${String(i)} both ${tone}`] : [],
+    );
+
+    // Hero and features, and nothing else. Named as an index pair rather than
+    // as a count so a *different* collision cannot pass by replacing this one.
+    expect(touching).toEqual(["1|2 both bg-surface-page"]);
+    // The band that stands where the testimonial did carries its recipe.
+    expect(document.getElementById("start")).toHaveClass(
+      "bg-surface-sunken",
+      "border-y",
+      "border-hairline",
+    );
+  });
+
   /** Accounts come from the hosted identity provider; there is no list to join. */
   it("captures no email and promises no link", async () => {
     await renderHome();
