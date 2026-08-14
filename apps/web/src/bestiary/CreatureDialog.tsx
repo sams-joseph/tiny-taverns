@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@taverns/ui";
+import type { ReactNode } from "react";
 import { provenanceOf } from "./provenance";
 import { StatBlockBody } from "./StatBlock";
 
@@ -27,14 +28,30 @@ import { StatBlockBody } from "./StatBlock";
  * same grid holds bundled `system` rows, imported ones and the DM's own, and
  * which it is decides whether they may change it. See `provenance.ts`.
  *
- * There is no *Edit* and no *Derive*. Authoring is not built, and a button that
- * opened nothing would be the same lie as a stubbed field.
+ * **There is no *Edit* here, in either screen, and that is a layout decision
+ * rather than a gap.** The Library authors monsters, but the way in is a button
+ * on the card beside *Stat block*: opening a form from inside this dialog would
+ * be a modal over a modal, which the design system forbids. What this dialog
+ * does carry is `actions` — the Library's *copy into a campaign*, which is the
+ * one verb that belongs where the creature is being read rather than where it is
+ * being listed.
  */
 export function CreatureDialog({
   creature,
+  actions,
   onClose,
 }: {
   readonly creature: Creature;
+  /**
+   * What can be done with this creature *from here* — the Library's copy-into-a-
+   * campaign control, and nothing in the campaign bestiary.
+   *
+   * A slot rather than props for each action, because the reader is one
+   * component over two screens and the two have genuinely different verbs. It is
+   * rendered inside the scrolling body, above the provenance sentences, so it
+   * sits with the row it acts on and the footer stays *Close*.
+   */
+  readonly actions?: ReactNode;
   readonly onClose: () => void;
 }) {
   const provenance = provenanceOf(creature);
@@ -74,6 +91,8 @@ export function CreatureDialog({
             creature={creature}
             emptyNote="Nothing is written on this one yet. Its rating and the two numbers above are all it has."
           />
+
+          {actions !== undefined && <div className="border-t border-hairline pt-4">{actions}</div>}
 
           <div className="flex flex-col gap-2 border-t border-hairline pt-4">
             <div className="flex flex-wrap items-center gap-1.5">

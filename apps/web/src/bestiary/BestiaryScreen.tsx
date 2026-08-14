@@ -1,25 +1,14 @@
-import type { Creature, CreatureId, CreatureSort } from "@taverns/api";
+import type { CreatureId } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
-import {
-  Button,
-  Input,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Toggle,
-} from "@taverns/ui";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { CreatureCard } from "./CreatureCard";
+import { CorpusControls, CreatureGrid, EnvironmentChips } from "./CorpusParts";
+import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
-import { inEnvironments, loadBestiary, NO_QUERY, type BestiaryQuery } from "./load";
+import { loadBestiary, type CorpusQuery } from "./load";
 
 /**
  * The bestiary — `ui_kits/dm-screen/Bestiary.jsx`, against the real API.
@@ -32,35 +21,31 @@ import { inEnvironments, loadBestiary, NO_QUERY, type BestiaryQuery } from "./lo
  * empty-because-you-narrowed) that are the whole difference between this and a
  * scaffold.
  *
+ * ### One campaign's reach, and the Library beside it
+ *
+ * **This screen is no longer in the nav.** The sixth delivery puts a *Library*
+ * on the global row, `GET /library/creatures` is the read behind it, and
+ * `LibraryScreen` is the screen — so the item moved up a tier and out of the
+ * campaign row, which is that delivery's *"nothing appears on both rows"*.
+ *
+ * **The route stayed**, and that is a decision rather than an oversight: this is
+ * the only list in the product that answers *"what can **this** campaign reach"*.
+ * The Library's filter is `LibraryFilter` — a search, the chips and a sort — and
+ * carries no campaign narrowing at all, so it cannot be asked that question. A
+ * link somebody bookmarked still lands on a screen that works, and the campaign
+ * row's title is still the way back. See `AGENTS.md`.
+ *
  * ### The search is the server's answer; the chips are not
  *
- * The search and the sort are query parameters and the environment chips are
- * not, and `load.ts` is where both halves of that are argued. In short: the
- * search reaches the stat block's full text as well as the name, which a
+ * `load.ts` argues both halves and `corpus.ts` implements the reading behaviour
+ * this shares with the Library — the debounce, the accumulated chip vocabulary,
+ * the last-good list that keeps the grid from blanking on every keystroke, and
+ * the "is it empty *at all*" flag that tells the two silences apart. In short:
+ * the search reaches the stat block's full text as well as the name, which a
  * substring match over an already-loaded list cannot, and the CR sort orders by
  * `crSort` so `"1/4"` lands where it reads — while the chips are an any-of over
- * a field every row already carries, so applying them here loses nothing and
- * sidesteps a one-element-array defect on the wire. The cost of the search is a
- * request per settled keystroke, which is what the debounce below is for.
- *
- * **The last good list stays on screen while the next one loads.** A grid that
- * blanked to "Loading…" on every keystroke would flicker through the whole of a
- * DM typing a name; `shown` is the last thing the server said, and the top bar
- * says quietly that a newer answer is on its way.
+ * a field every row already carries.
  */
-
-/**
- * Long enough that typing a name is one request rather than eight, short enough
- * that the list has moved by the time the eye gets to it. Same number as
- * `CreaturePicker`, for the same reason.
- */
-const SEARCH_SETTLE_MS = 250;
-
-const SORTS: ReadonlyArray<{ readonly value: CreatureSort; readonly label: string }> = [
-  { value: "cr", label: "Sort: CR" },
-  { value: "name", label: "Sort: Name" },
-  { value: "recent", label: "Sort: Recent" },
-];
 
 const countOf = (n: number, narrowed: boolean): string => {
   const creatures = `${n} ${n === 1 ? "creature" : "creatures"}`;
@@ -74,175 +59,56 @@ const countOf = (n: number, narrowed: boolean): string => {
 
 export function BestiaryScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
-  const [term, setTerm] = useState("");
-  const [q, setQ] = useState("");
-  const [environments, setEnvironments] = useState<ReadonlyArray<string>>([]);
-  const [sort, setSort] = useState<CreatureSort>(NO_QUERY.sort);
   const [opened, setOpened] = useState<CreatureId | undefined>();
 
-  useEffect(() => {
-    const timer = setTimeout(() => setQ(term), SEARCH_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [term]);
-
-  /**
-   * Narrowed by anything the DM did, which is what tells "nothing lives here at
-   * all" apart from "nothing matches what you asked for". Sort is not part of it:
-   * reordering a list is not filtering it.
-   */
-  const narrowed = q.trim() !== "" || environments.length > 0;
-
-  // The environments are deliberately absent: they are applied to what comes
-  // back rather than sent (see `inEnvironments`), so pressing a chip is not a
-  // reload. Memoised on what *is* sent, because its identity is what tells
-  // `useApiResource` to load again — an inline closure here would load forever
-  // and the debounce above would buy nothing.
-  const query = useMemo<BestiaryQuery>(() => ({ q, sort }), [q, sort]);
   const load = useCallback(
-    (client: TavernsClient) => loadBestiary(campaignId, query)(client),
-    [campaignId, query],
+    (query: CorpusQuery) => (client: TavernsClient) => loadBestiary(campaignId, query)(client),
+    [campaignId],
   );
-  const [resource, reload] = useApiResource(load);
+  const corpus = useCorpus(load);
 
-  /** The last answer, kept so a re-query does not blank the grid. */
-  const [shown, setShown] = useState<{
-    readonly campaign: { readonly name: string };
-    readonly creatures: ReadonlyArray<Creature>;
-  }>();
-
-  /**
-   * The chips are the environments this campaign's creatures actually live in,
-   * not the prototype's hard-coded four (`Bestiary.jsx:4`) — `environments` is
-   * an open vocabulary in a `text[]` and a DM's own list in reality.
-   *
-   * Accumulated rather than recomputed, because a search narrows the list this
-   * reads: typing "goblin" would otherwise take every chip the goblins do not
-   * live in off the row. The screen opens unsearched, so the first answer is the
-   * whole vocabulary and later ones can only add to it.
-   */
-  const [vocabulary, setVocabulary] = useState<ReadonlyArray<string>>([]);
-
-  /** Whether the bestiary is empty *at all*, as opposed to empty for this filter. */
-  const [barren, setBarren] = useState<boolean>();
-
-  useEffect(() => {
-    if (resource.state !== "ready") return;
-    const { campaign, creatures } = resource.value;
-    setShown({ campaign, creatures });
-    setVocabulary((current) => {
-      const merged = new Set(current);
-      for (const creature of creatures) {
-        for (const environment of creature.environments) merged.add(environment);
-      }
-      return merged.size === current.length
-        ? current
-        : [...merged].sort((left, right) => left.localeCompare(right));
-    });
-    // An unsearched answer *is* the whole bestiary — the chips never reach the
-    // server, so nothing else can have narrowed it.
-    if (q.trim() === "") setBarren(creatures.length === 0);
-  }, [resource, q]);
-
-  const creatures = (shown?.creatures ?? []).filter((creature) =>
-    inEnvironments(creature, environments),
-  );
-  const opening = creatures.find((creature) => creature.id === opened);
+  const opening = corpus.creatures.find((creature) => creature.id === opened);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
   const hob = useHobPanel({ initialOpen: false });
-
-  const clear = () => {
-    setTerm("");
-    setQ("");
-    setEnvironments([]);
-  };
 
   return (
     <AppShell
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
-      campaignName={shown?.campaign.name}
+      campaignName={corpus.shown?.campaign.name}
       topBar={
         <TopBar
           title="Bestiary"
-          subtitle={shown === undefined ? undefined : countOf(creatures.length, narrowed)}
+          subtitle={
+            corpus.shown === undefined
+              ? undefined
+              : countOf(corpus.creatures.length, corpus.narrowed)
+          }
         >
-          <Input
-            aria-label="Search creatures"
-            placeholder="Search creatures"
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            className="h-control-sm w-44"
-          />
-          <Select value={sort} onValueChange={(value) => setSort(value as CreatureSort)}>
-            <SelectTrigger aria-label="Sort creatures" className="h-control-sm w-36">
-              {/* Written out rather than left to Base UI: `Select.Value` with
-                  neither `items` nor children serialises the *value*, which
-                  would put `cr` on screen. */}
-              <SelectValue>
-                {(value) => SORTS.find((entry) => entry.value === value)?.label ?? "Sort: CR"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {SORTS.map((entry) => (
-                <SelectItem key={entry.value} value={entry.value}>
-                  {entry.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CorpusControls corpus={corpus} label="Search creatures" />
         </TopBar>
       }
     >
-      {shown === undefined && resource.state === "loading" && (
+      {corpus.shown === undefined && corpus.resource.state === "loading" && (
         <Loading label="Reading the bestiary…" />
       )}
-      {resource.state === "failed" && (
+      {corpus.resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <FailureNotice failure={corpus.resource.failure} onRetry={corpus.reload} />
         </div>
       )}
 
-      {shown !== undefined && resource.state !== "failed" && (
+      {corpus.shown !== undefined && corpus.resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          {vocabulary.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Label className="mr-1 text-faint">Environment</Label>
-              {vocabulary.map((environment) => (
-                <Toggle
-                  key={environment}
-                  size="sm"
-                  pressed={environments.includes(environment)}
-                  onPressedChange={() =>
-                    setEnvironments((current) =>
-                      current.includes(environment)
-                        ? current.filter((entry) => entry !== environment)
-                        : [...current, environment],
-                    )
-                  }
-                >
-                  {environment}
-                </Toggle>
-              ))}
-              {narrowed && (
-                <Button variant="ghost" size="sm" onClick={clear}>
-                  Clear
-                </Button>
-              )}
-              {resource.state === "loading" && (
-                <span role="status" className="text-caption leading-body text-faint">
-                  Looking…
-                </span>
-              )}
-            </div>
-          )}
+          <EnvironmentChips corpus={corpus} />
 
-          {creatures.length === 0 ? (
+          {corpus.creatures.length === 0 ? (
             /* The designers' own empty state (`Bestiary.jsx:57-68`), with its
                second sentence answering whichever question was asked. Their
                *Add a creature* button is absent: authoring is not built, and a
                button that opened nothing is the same lie as a stubbed field. */
             <EmptyState icon="footprints" title="Nothing lives here">
-              {narrowed && barren !== true ? (
+              {corpus.narrowed && corpus.barren !== true ? (
                 "Loosen a filter, or clear the search — the shared corpus is in this list too."
               ) : (
                 <>
@@ -256,19 +122,10 @@ export function BestiaryScreen() {
               )}
             </EmptyState>
           ) : (
-            /* The column's width, not the viewport's — `main` is the container.
-               The prototype fills at `minmax(300px, 1fr)`: with a `gap-4` two
-               cards need 616px and three need 932px, which is where `@2xl`
-               (672) and `@5xl` (1024) are the first steps that fit. */
-            <div className="grid gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
-              {creatures.map((creature) => (
-                <CreatureCard
-                  key={creature.id}
-                  creature={creature}
-                  onOpen={() => setOpened(creature.id)}
-                />
-              ))}
-            </div>
+            /* No `homeOf`: every row here is either the campaign you are
+               already in or the global corpus, so naming a table would put the
+               same word on every card. The Library is where that changes. */
+            <CreatureGrid creatures={corpus.creatures} onOpen={setOpened} />
           )}
         </div>
       )}

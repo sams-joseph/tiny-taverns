@@ -38,9 +38,23 @@ const typeLine = (creature: Creature): string =>
 
 export function CreatureCard({
   creature,
+  onEdit,
   onOpen,
 }: {
   readonly creature: Creature;
+  /**
+   * Open this row for editing — **the Library passes it, the campaign bestiary
+   * does not**, and neither passes it for a row its reader cannot write.
+   *
+   * The Library is where a monster is authored, so a card there carries the way
+   * in; the campaign bestiary is a browse screen over copies and has never had
+   * an authoring path. A bundled row gets none in either list, which is the
+   * shipped predicate rendered rather than restated: `libraryRowWritable` is
+   * `libraryRowReadable` with the bundle's disjunct removed, and `accountId` on
+   * the wire is how a screen knows which side of that a row is on
+   * (`provenance.ts`'s `isLibraryEntity`).
+   */
+  readonly onEdit?: () => void;
   readonly onOpen: () => void;
 }) {
   const provenance = provenanceOf(creature);
@@ -86,6 +100,16 @@ export function CreatureCard({
             <Icon name="scroll-text" size={13} />
             Stat block
           </Button>
+          {/* Beside the reader rather than inside it: opening the form from
+              within the stat block dialog would be a modal over a modal, which
+              the design system forbids and which `CombatantDialog` already
+              records as the reason removal lives in the form it does. */}
+          {onEdit !== undefined && (
+            <Button variant="ghost" size="sm" aria-label={`Edit ${creature.name}`} onClick={onEdit}>
+              <Icon name="pencil" size={13} />
+              Edit
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

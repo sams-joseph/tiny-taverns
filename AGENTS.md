@@ -2873,22 +2873,28 @@ worked, driving Chromium over CDP:
 environment chips, the grid, the stat block and the empty state the designers drew. It is a
 read-only browse screen: **there is no authoring, no importing and no derive**, and nothing on
 it offers one, because a button that opens nothing is the same lie as a stubbed field. The
-endpoints for all three exist (`creatures.create` / `update` / `derive`); the screens do not.
+endpoints for all three exist (`creatures.create` / `update` / `derive`); this screen calls none
+of them. Authoring a monster happens in the Library, and `CopyIntoCampaign` is the one caller of
+`derive` — see the section below.
+
+**It is no longer a nav item and it is deliberately still a route.** _Library_ took the global
+row and the delivery's rule is that nothing appears on both, so `campaignNavFor` is five items.
+What survived the swap is the question: the two lists are **disjoint by predicate** — the Library
+is `campaign_id is null` and this is that campaign's rows plus the bundle — so this screen is the
+only place _"what is in this campaign"_ is answered at all, bookmarks to it still work, and
+`CopyIntoCampaign` links here after a copy lands. `useSection` therefore has no `bestiary` case
+any more: it falls through to the campaign's Overview, the way a fight does, because a section
+with no item to light would leave the campaign row dark.
 
 Five things it settled that the next screen over this contract should not re-derive:
 
-- **The route hangs off a campaign — `#/campaigns/:c/bestiary` — and so does the nav item.**
+- **The route hangs off a campaign — `#/campaigns/:c/bestiary` — because the read does.**
   `creatures.list` is `/campaigns/:campaignId/creatures`, and that path is the _only_ thing
   gating the global `system` rows it returns beside the campaign's own, so a campaign-less
-  bestiary has nothing to read through. It therefore rides the **campaign row**
-  (`campaignNavFor` in `shell/AppShell.tsx`), which exists exactly when the route names a
-  campaign; from the campaign list there is no row at all rather than a disabled item.
-  `useSection` gives it its own underline, because it is a screen you go _to_ from a campaign
-  rather than a view of one. **The sixth delivery draws it as _Library_ on the global row
-  instead** — and that is a _second_ screen rather than this one relocated, because the Library is
-  originals (the bundle plus what you authored) and this screen is what a campaign holds (copies,
-  plus the bundle). `GET /library/creatures` and its authoring endpoints exist; the screen over them
-  does not. See "The Library".
+  bestiary has nothing to read through. **The sixth delivery draws _Library_ on the global row
+  instead, and that is a _second_ screen rather than this one relocated**: the Library is
+  originals (the bundle plus what you authored) and this is what a campaign holds (copies, plus
+  the bundle). Both exist now; see the section below for the pair.
 - **The search and the sort are query parameters; the environment chips are not.** The search
   has to be the server's, because `ILIKE` on the name is only half of it and the other half is
   full text over the stat block — measured against a running server, `"nimble escape"` returns
@@ -2927,6 +2933,114 @@ to "Loading…" on every keystroke. Measured in Chromium against a real server a
 3 × 448px columns at 1440 and 2 × 410px at 900 with no horizontal document scroll; the stat
 block dialog at `z-dialog` 110 over a scrim at `z-scrim` 100, `elementFromPoint` inside it
 returning the dialog; a pressed chip at `--accent-soft` on `--accent` with `--accent-ink` text.
+
+### The Library screen: where a monster is written, and the copy that leaves it
+
+`apps/web/src/bestiary/LibraryScreen.tsx` at `#/library`, on the global row in DM mode. It is the
+client half of the captain's Library model — read that model first, under "The Library: a monster
+belongs to an **account**"; this section is only what the screens do with it.
+
+**It lives in `bestiary/` beside the campaign bestiary, and that is the decision the pair turns
+on** — the same argument `chronicle/PlayerChronicleScreen.tsx` makes from the other side. Two
+lists over one table, so the parts where they must not disagree are **files**: `corpus.ts` is the
+reading behaviour (debounced server-side search, the CR sort, the client-side any-of chips, the
+accumulated chip vocabulary, the last-good list, the "empty at all vs empty for this filter"
+flag), `CorpusParts.tsx` is the controls, the chip row and the grid, and `provenance.ts`,
+`CreatureCard`, `CreatureDialog` and `StatBlock` are shared whole. What differs between the two
+screens is the endpoint, the copy and the verbs — which is all that should.
+
+Each statement of the model, and where it is on screen:
+
+| the model                      | the screen                                                       |
+| ------------------------------ | ---------------------------------------------------------------- |
+| a creature can be an account's | `accountId` on the wire; `provenance.ts`'s `isLibraryEntity`     |
+| authoring happens here         | _Write a creature_, _Edit_ per row, delete inside `CreatureForm` |
+| using one copies it in         | `CopyIntoCampaign`, inside the stat block dialog                 |
+| originals only                 | nothing — it is the predicate, and the screen adds no filter     |
+
+Seven things that are decisions rather than layout:
+
+- **Ownership is `accountId`, never `origin`, and `provenance.ts` is where the two were pulled
+  apart.** Before `0015` a creature was a campaign's or nobody's, so `campaignId === null` and
+  `origin === "system"` were the same statement and that file could read one and mean the other.
+  There is a third position now: `ownerOf` returns `bundle | library | campaign` and
+  `isLibraryEntity` is the one place a screen asks _may I edit this_. An **imported** Library
+  entity is `Imported` and still yours — that pair is a test, because reading the badge as the
+  permission is the mistake the old file invited.
+- **_Edit_ is on the card, not in the reader.** Opening a form from inside the stat block dialog
+  would be a modal over a modal, which the design system forbids — `CombatantDialog` already
+  records the rule for its own removal button. So the card carries _Stat block_ and _Edit_, and
+  the reader carries the one verb that belongs where a creature is being read: the copy.
+- **Delete lives in the form, with no second confirmation**, same rule. What is beside it is the
+  part that matters: _"Copies already in your campaigns stay where they are."_
+- **Both halves of a creature are writable, and the form says why there are two AC boxes.** The
+  columns filter and sort; the document is what you read out. Neither derives from the other, so
+  `"14 (natural armour)"` is not recoverable from `14` and a form writing only one half would
+  author half a monster.
+- **Ability cells are preserved and not editable, and that is a gap rather than a decision.**
+  `CreatureForm` sends the whole document with the parts it draws replaced, so an edit never
+  erases cells it was not shown — but a creature **created** here has none and there is no way to
+  add one. Six cells of three fields is its own control and no delivery has drawn it. Traits
+  _are_ editable, because a named paragraph is what a DM actually writes.
+- **The copy names its campaign and never infers one.** The Library names no campaign, so there
+  is no "current" table to fall back on and inventing one would silently write a row into a table
+  nobody chose. The select offers the tables this account **runs** — filtered to `role === "dm"`
+  in `load.ts`, because `derive` writes through `rowWritable` — and an account running none gets a
+  sentence rather than an empty select.
+- **`GET /me/campaigns` is still read, and it is not a leftover.** It was here to turn a row's
+  `campaignId` into a table's name, back when this list gathered campaign copies; there is no
+  campaign row in the answer any more. It stayed because the copy control needs exactly it.
+
+**Two things about a copy are said out loud on the screen, and both are the captain's decisions of
+2026-08-14 rather than inferences**: a copy is a **snapshot**, so editing the original afterwards
+does not reach it; and **copying again makes a second copy**, because `derive` has no uniqueness
+rule and nothing refuses it. A DM who fixed a typo in their Library and expected tonight's fight
+to change would otherwise find out at the table, and a button that looks idempotent and is not is
+worse than one that says so. The third — **deleting an original leaves its copies standing** — is
+the line beside _Delete_.
+
+**Its two empty states are not the campaign bestiary's.** _"Loosen a filter"_ is shared; the other
+one is **"write something"** rather than "import the corpus", because authoring is not an act
+inside a campaign and a brand new account with no table at all is one press from a full list. (The
+sentence it replaced said _join a table_, which was true of the gathering this screen was first
+built against and is now wrong.)
+
+**Measured in Chromium** against a real server, a real Postgres and two real accounts, at
+1440/1200/1024/900/760: **no sideways scroll at any width** (`document.scrollWidth` equals the
+viewport in all five); the grid reflows **3 → 2 columns** on the **container** — 448px cards at
+1440, 368 at 1200, then 465 at 1024, where `main` measures 1009 and is under `@5xl`'s 1024, which
+is the case a viewport breakpoint gets wrong; the global row is `Campaigns / Library / Components`
+with _Library_ `aria-current="page"` and **no campaign row at all**; `#/play` and
+`#/play/characters` draw `Tables / Characters / Components` with **no Library**; the campaign row
+is five items with **no Bestiary**, `#/…/notes` lights _Notes_ and `#/…/bestiary` lights
+_Overview_ with the way home intact. The stat block dialog is `z-dialog` 110 over a
+`dialog-overlay` at `z-scrim` 100 with `elementFromPoint` at its centre inside the dialog and at
+the page corner on the overlay; the authoring form is the same pair (460 × 726, and 460 wide at
+760px with no sideways scroll); and the campaign select **inside** that dialog opens at
+`z-popup` 200 above the dialog's 110 with `elementFromPoint` at the popup's centre hitting an
+option — the exact property the select-under-a-dialog bug violated.
+
+**And the model itself, end to end**: the campaign bestiary answered 7 rows — that campaign's copy
+plus the bundle, and **no Library entity of any account**; the Library answered 8 — the account's
+originals plus the bundle, and **no campaign row**. Authoring through the form wrote
+`campaignId: null, accountId: <me>, origin: authored` with `crSort` derived server-side (0.5 from
+`"1/2"`) and both halves stored. Copying into a campaign wrote a row with `campaignId` set,
+`accountId` **null**, `derivedFrom` at the original and `visibility` at the column default. Editing
+the original to `"Bog Owlbear (fixed)"` / 72 hp left the copy `"Bog Owlbear"` / 59 hp — the
+snapshot. Deleting the original left the copy standing with `derived_from` null. A second account
+saw the 6 bundled rows, **zero** _Edit_ buttons and the no-table sentence, then authored a monster
+and had 7 — statement 2 with no campaign anywhere in it.
+
+**Not browser-checked, and stated rather than implied:** the "nothing here yet" empty state. Every
+account reads the bundle, so it is only reachable on a database where `bestiary:import` has never
+run; `LibraryScreen.test.tsx` pins it instead.
+
+**Worth knowing about the signed-out route**, found while measuring: `#/library` with an empty
+`localStorage` draws the marketing homepage, because `marketing/SignedOutGate.tsx` sits above every
+match. So the reachable 401 on this screen is a **stale or revoked** token rather than no token,
+and the test says so. The campaign bestiary's equivalent test still asserts the absent-credential
+version and is now describing a state the app cannot reach at that route — a small pre-existing
+inaccuracy, left alone rather than swept into this change.
 
 ## The Chronicle screen: the recap, the record, and the one number that lies
 

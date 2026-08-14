@@ -69,6 +69,7 @@ describe("the route table", () => {
     // build the URL for a screen, and land back on that screen.
     const screens = [
       { to: "/campaigns", at: "/campaigns" },
+      { to: "/library", at: "/library" },
       { to: "/gallery", at: "/gallery" },
       {
         to: "/campaigns/$campaignId",
@@ -177,6 +178,18 @@ describe("the route table", () => {
       params: { campaignId: CAMPAIGN_ID },
     });
     expect(landsOn("/campaigns/not-a-uuid/bestiary").at).toBe("/$");
+  });
+
+  it("gives the Library a route that names no campaign, because its rows are in none", () => {
+    // A Library entity is owned by an account and sits in no campaign, so
+    // `libraryRowReadable` composes no campaign gate at all — there is nothing
+    // for this URL to carry, and it is the second place in the product (after
+    // `/play/characters`) where that is true. The campaign-scoped bestiary above
+    // is untouched and still its own screen: it holds that campaign's copies,
+    // which is a question the Library cannot be asked. What it lost was its nav
+    // item, not its route.
+    expect(landsOn("/library")).toEqual({ at: "/library", params: {} });
+    expect(landsOn("/library/anything").at).toBe("/$");
   });
 
   it("hangs the chronicle off a campaign too, for the same reason", () => {

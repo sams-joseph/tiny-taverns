@@ -58,6 +58,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/": "/",
   "/$": "/nothing-like-a-route",
   "/campaigns": "/campaigns",
+  "/library": "/library",
   "/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
@@ -139,7 +140,12 @@ describe("the shell's top bar", () => {
       // player's projection of a roster is nothing at all. Queried across the
       // whole document rather than one row, because the bar has two since the
       // sixth delivery and "absent" has to mean absent from both.
-      expect(screen.queryByRole("link", { name: "Bestiary" })).toBeNull();
+      //
+      // **Library is the newest of them and the delivery draws it that way** —
+      // its `GLOBAL_PLAYER` has no Library. Its reason is the mode rather than a
+      // gate, unlike *Party* above: authoring monsters is not something you do
+      // at somebody else's table. See `globalNavFor`.
+      expect(screen.queryByRole("link", { name: "Library" })).toBeNull();
       expect(screen.queryByRole("link", { name: "Party" })).toBeNull();
       cleanup();
     }
@@ -208,6 +214,56 @@ describe("the shell's top bar", () => {
     expect(within(nav()).getByText("Tables").closest("a")?.getAttribute("aria-current")).toBeNull();
   });
 
+  /**
+   * The item the sixth delivery asked for, arriving a delivery late because it
+   * was waiting for a read rather than for a drawing.
+   */
+  describe("the Library item", () => {
+    it("rides the global row in DM mode, unchanged by where in the app you are", async () => {
+      // The whole reason the bar was split: this row is a function of the mode
+      // alone, so it does not move as you go in and out of a table.
+      for (const path of [
+        "/campaigns",
+        "/library",
+        `/campaigns/${campaignId}`,
+        `/campaigns/${campaignId}/notes`,
+        `/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`,
+      ]) {
+        await renderAt(path);
+        expect(within(nav()).getByRole("link", { name: "Library" }).getAttribute("href")).toBe(
+          "/#/library",
+        );
+        cleanup();
+      }
+    });
+
+    it("is lit at its own URL, and nothing on the campaign row is", async () => {
+      await renderAt("/library");
+      expect(
+        within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
+      ).toBe("page");
+      expect(
+        within(nav()).getByRole("link", { name: "Campaigns" }).getAttribute("aria-current"),
+      ).toBeNull();
+      expect(noCampaignNav()).toBeNull();
+    });
+
+    it("took Bestiary off the campaign row, and left the screen reachable", async () => {
+      // *Nothing appears on both rows* — so the item moved rather than being
+      // duplicated. The route it used to point at is deliberately still a
+      // route (see `routes.tsx`): it is the only answer to "what can **this**
+      // campaign reach", and a bookmark to it still lands on a working screen
+      // with the way home in the row above.
+      await renderAt(`/campaigns/${campaignId}/bestiary`);
+      expect(screen.queryByRole("link", { name: "Bestiary" })).toBeNull();
+      expect(within(nav()).getByRole("link", { name: "Library" })).toBeTruthy();
+      expect(
+        within(campaignNav()).getByRole("link", { name: "Overview" }).getAttribute("aria-current"),
+      ).toBe("page");
+      expect(screen.getByTitle("Campaign home")).toBeTruthy();
+    });
+  });
+
   it("keeps Ask Hob on the DM's side", async () => {
     await renderAt(`/campaigns/${campaignId}`);
     expect(screen.getByRole("button", { name: /Ask Hob/ })).toBeTruthy();
@@ -220,7 +276,7 @@ describe("the shell's top bar", () => {
    */
   it("draws a campaign's bar on a section under it that does not exist", async () => {
     await renderAt(`/campaigns/${campaignId}/a-section-we-do-not-serve`);
-    expect(within(campaignNav()).getByText("Bestiary")).toBeTruthy();
+    expect(within(campaignNav()).getByText("Encounters")).toBeTruthy();
     expect(within(pill()).getByRole("link", { name: "DM" }).getAttribute("aria-pressed")).toBe(
       "true",
     );
@@ -234,7 +290,7 @@ describe("the shell's top bar", () => {
    */
   describe("two tiers", () => {
     it("has no campaign row above a campaign, in either mode", async () => {
-      for (const path of ["/campaigns", "/play", "/play/characters", "/gallery"]) {
+      for (const path of ["/campaigns", "/library", "/play", "/play/characters", "/gallery"]) {
         await renderAt(path);
         expect(noCampaignNav()).toBeNull();
         cleanup();
@@ -248,7 +304,9 @@ describe("the shell's top bar", () => {
         within(campaignNav())
           .getAllByRole("link")
           .map((link) => link.textContent),
-      ).toEqual(["Overview", "Encounters", "Party", "Notes", "Chronicle", "Bestiary"]);
+        // Five, not six: *Bestiary* left this row when *Library* arrived on the
+        // one above, which is the delivery's "nothing appears on both rows".
+      ).toEqual(["Overview", "Encounters", "Party", "Notes", "Chronicle"]);
       // Every one of them names the campaign, because every endpoint behind
       // them does — which is the same fact that makes the row exist at all.
       for (const link of within(campaignNav()).getAllByRole("link")) {

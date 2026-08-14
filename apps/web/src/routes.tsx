@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { BestiaryScreen } from "./bestiary/BestiaryScreen";
+import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
@@ -213,12 +214,51 @@ const campaignSplatRoute = createRoute({
  * `key`: a different campaign is a different bestiary — the environment chips
  * and the "is this list empty at all" answer are accumulated from what has been
  * read — so the match is remounted rather than re-rendered with new props.
+ *
+ * **It is no longer in the nav, and it is deliberately still a route.** The
+ * *Library* item on the global row is `libraryRoute` below, and the sixth
+ * delivery's rule is that nothing appears on both rows — so the campaign row
+ * gave the item up.
+ *
+ * What it did not give up is the question. Under the captain's Library model the
+ * two lists are **disjoint by predicate**: `libraryRowReadable` is anchored on
+ * `campaign_id is null`, so the Library holds originals and can never show a
+ * campaign's rows, while `corpusRowReadable` holds this campaign's **copies**
+ * plus the bundle. So this screen is the only place *"what is in this
+ * campaign"* is answered at all, and deleting the route would have retired a
+ * capability and broken every bookmark to it at the same time.
+ *
+ * It is reachable rather than merely surviving: `CopyIntoCampaign` links here
+ * after a copy lands, which is the one moment a DM wants to see the campaign's
+ * own list. See `AGENTS.md`.
  */
 const bestiaryRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "bestiary",
   component: BestiaryScreen,
   remountDeps: ({ params }) => params.campaignId,
+});
+
+/**
+ * The Library: where a monster is authored, and **the first route outside
+ * `/play/characters` that names no campaign.**
+ *
+ * That is the model's shape rather than a routing preference. Since
+ * `0015_library_creatures.ts` a creature can belong to an **account** and sit in
+ * no campaign, and `libraryRowReadable` composes no campaign gate at all —
+ * uniquely in this product — because there is no membership to check on a row no
+ * campaign contains. So there is nothing for this URL to carry, and an account
+ * at no table gets its Library rather than a 404: authoring is not an act inside
+ * a campaign, so it cannot require one.
+ *
+ * No `remountDeps`: there is no id for a different one of to exist. What the
+ * screen accumulates — the chip vocabulary, and whether the list is empty at all
+ * — is about this account, which does not change under it.
+ */
+const libraryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library",
+  component: LibraryScreen,
 });
 
 /**
@@ -470,6 +510,7 @@ const indexRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   campaignsRoute,
+  libraryRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
@@ -531,6 +572,7 @@ declare module "@tanstack/react-router" {
  */
 export const routes = {
   campaigns: campaignsRoute,
+  library: libraryRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,

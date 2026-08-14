@@ -227,7 +227,7 @@ describe("BestiaryScreen", () => {
     expect(await screen.findByText("Goblin Boss")).toBeInTheDocument();
   });
 
-  it("hangs a way back to the campaign in the campaign row, and lights Bestiary", async () => {
+  it("hangs a way back to the campaign in the campaign row, and lights its Overview", async () => {
     await renderBestiary(mintingSession());
 
     // **The way back is the campaign row's title since the sixth delivery**,
@@ -239,8 +239,26 @@ describe("BestiaryScreen", () => {
     const back = await screen.findByRole("link", { name: "The Salt Road — campaign home" });
     expect(back).toHaveAttribute("href", `/#/campaigns/${campaignId}`);
 
-    const nav = screen.getByRole("link", { name: "Bestiary" });
-    expect(nav).toHaveAttribute("href", `/#/campaigns/${campaignId}/bestiary`);
-    expect(nav).toHaveAttribute("aria-current", "page");
+    // **This screen is no longer an item on the row**, since the Library took
+    // it up a tier — so it lights the campaign's Overview, the way a fight does.
+    // A section with no item would leave the row dark inside a campaign.
+    expect(screen.queryByRole("link", { name: "Bestiary" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+  });
+
+  it("still answers what this one campaign reaches, which the Library cannot be asked", async () => {
+    // The reason the route survived the item moving: `creatures.list` is
+    // campaign-scoped by path, and `LibraryFilter` — a search, the chips and a
+    // sort — carries no campaign narrowing at all. This list is the only place
+    // the question gets an answer.
+    await renderBestiary(mintingSession());
+    await screen.findByText("Goblin Boss");
+
+    expect(server.calls.some((call) => call.pathname === "/library/creatures")).toBe(false);
+    expect(
+      server.calls.some((call) => call.pathname === `/campaigns/${campaignId}/creatures`),
+    ).toBe(true);
   });
 });

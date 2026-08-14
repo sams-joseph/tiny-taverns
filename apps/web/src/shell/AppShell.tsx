@@ -94,22 +94,35 @@ interface NavItem {
  * `character` with no campaign in its path, because *"which characters are
  * mine"* is asked across every table at once.
  *
- * ### Library is deliberately not here yet
+ * ### Library, and the item that finally moved
  *
- * The delivery puts the Bestiary on this row, as **Library**, above any
- * campaign. **The read for it exists now** — `GET /library/creatures`, landed
- * alongside this — but the screen over it does not, and an item is earned by a
- * screen rather than by an endpoint. `creatures.list` cannot stand in: it hangs
- * off `/campaigns/:campaignId/creatures`, and that path is the *only* thing
- * gating the global `system` rows it returns beside the campaign's own, so there
- * is nothing for a campaign-less route to read *through*.
+ * The delivery puts the shared monster library on this row — its own
+ * `GLOBAL_DM` is `{ id: "bestiary", icon: "footprints", label: "Library" }` —
+ * and it is here now that both halves exist: `GET /library/creatures` is the
+ * read, and `bestiary/LibraryScreen.tsx` is the screen. **It genuinely belongs
+ * above a campaign**, which is what took two attempts to get right: a Library
+ * entity is owned by an *account* and sits in no campaign at all
+ * (`0015_library_creatures.ts`), so there is nothing for a campaign-scoped route
+ * to read it through and nothing for one to narrow it by.
  *
- * So **Bestiary stays on the campaign row for now**, where it works. Moving it
- * up before the screen exists would strand a working screen behind a nav item
- * that goes nowhere, which is the rule that has kept *Run* out of every row
- * since the second delivery. This is a deferral with a date on it, not an
- * oversight: when `#/library` is real the swap is one item moving from
- * `campaignNavFor` to the list below, and `useSection` gaining a case.
+ * **So `Bestiary` came off the campaign row in the same change**, which is the
+ * delivery's *"nothing appears on both rows"* rather than housekeeping. That
+ * screen is still a route, and under the Library model its reason is stronger
+ * than when it was written: the two lists ask genuinely different questions —
+ * the Library holds the **originals**, a campaign's bestiary holds that
+ * campaign's **copies** — and neither can answer the other's. See `routes.tsx`,
+ * where the decision about it is written down.
+ *
+ * **DM only, as the delivery draws it** (`GLOBAL_PLAYER` has no Library), and
+ * the reason is the mode rather than the endpoint. Player mode is the tables you
+ * sit at; authoring monsters is not something you do at somebody else's table.
+ * Worth being exact, because it is **not** the reason `Bestiary` was kept out of
+ * the player's campaign row: that one is a gate — a stat block is what the
+ * product says a player must not have — and this one is not. `libraryRowReadable`
+ * would answer any account, so an account that only ever plays somewhere still
+ * has a Library and can still reach `#/library` by URL; what it would find there
+ * is the bundle and whatever it has written itself, never another table's rows.
+ * If the captain wants it on both rows that is a nav edit and nothing else.
  */
 const globalNavFor = (mode: Mode): ReadonlyArray<NavItem> => {
   if (mode === "player") {
@@ -127,6 +140,9 @@ const globalNavFor = (mode: Mode): ReadonlyArray<NavItem> => {
 
   return [
     { label: "Campaigns", icon: "layers", link: { to: "/campaigns" }, section: "campaigns" },
+    // `footprints`, as the delivery names it — the same glyph the bestiary's own
+    // empty state wears, which is what makes the two read as one corpus.
+    { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
     { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
   ];
 };
@@ -158,11 +174,12 @@ const globalNavFor = (mode: Mode): ReadonlyArray<NavItem> => {
  *   the row's title already goes to, so it is drawn as the row's first item for
  *   the reason the DM's is.
  *
- * **`Bestiary` and `Party` stay out of the player's row entirely**, and that is
- * not merely "undrawn": `members.list` is behind the `DmActor` gate and a
- * player's projection of a roster is *nothing* rather than a narrower list
- * (`AGENTS.md`). A control that exists and then errors is worse than one that is
- * absent.
+ * **`Party` stays out of the player's row entirely**, and that is not merely
+ * "undrawn": `members.list` is behind the `DmActor` gate and a player's
+ * projection of a roster is *nothing* rather than a narrower list (`AGENTS.md`).
+ * A control that exists and then errors is worse than one that is absent.
+ * (*Bestiary* used to be named here for the same reason; it is off **both**
+ * campaign rows now, and its successor on the global row is DM-only.)
  */
 const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavItem> => {
   if (mode === "player") {
@@ -210,14 +227,10 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
       section: "chronicle",
     },
-    {
-      // Drawn as *Library* on the global row by the delivery, and it will move
-      // there — see `globalNavFor`. Until the global read exists it belongs to
-      // the campaign whose path is what scopes it.
-      label: "Bestiary",
-      link: { to: "/campaigns/$campaignId/bestiary", params: { campaignId } },
-      section: "bestiary",
-    },
+    // *Bestiary* was the sixth item here and is now *Library* on the global row
+    // — see `globalNavFor`. The route it pointed at still exists and still
+    // works; what it no longer is, is a destination this row offers, because
+    // nothing appears on both rows.
   ];
 };
 

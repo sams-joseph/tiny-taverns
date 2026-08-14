@@ -56,9 +56,17 @@ export function useMode(): Mode {
  * so those routes light the same item — the underline says which part of the app
  * you are in, not which URL you are at, and an unlit nav on a campaign page
  * reads as a bug. That is the old "a fight lights Campaigns" rule translated one
- * level down, which is where the campaign's own screens now live. The bestiary,
- * the Chronicle and the party stay their own sections for the reason they always
- * were: they are screens you go *to* from a campaign rather than views of one.
+ * level down, which is where the campaign's own screens now live. The Chronicle
+ * and the party stay their own sections for the reason they always were: they
+ * are screens you go *to* from a campaign rather than views of one.
+ *
+ * **The bestiary stopped being one when the Library took its item.** Its item is
+ * on the global row now and points at `/library`, which names no campaign; the
+ * campaign-scoped bestiary is still a route (see `routes.tsx`) but is no longer
+ * a destination the bar offers, so it falls through to its campaign's Overview
+ * exactly as a fight does. A section with no item to light would leave the
+ * campaign row dark on a screen inside a campaign, which is the thing that reads
+ * as a bug.
  *
  * **The second axis is the mode**, and it is the same rule one level up: a
  * player's campaign is *within* their tables. There is no route that is both, so
@@ -75,6 +83,7 @@ export function useMode(): Mode {
 export type Section =
   /* The global row: everything above a campaign. */
   | "campaigns"
+  | "library"
   | "play"
   | "playCharacters"
   | "gallery"
@@ -84,7 +93,6 @@ export type Section =
   | "notes"
   | "party"
   | "chronicle"
-  | "bestiary"
   /* The player's campaign row. */
   | "playOverview"
   | "playChronicle";
@@ -94,6 +102,9 @@ export function useSection(): Section {
   const mode = useMode();
 
   if (matchRoute({ to: "/gallery" })) return "gallery";
+  // Above any campaign, so it is asked before the mode: the Library is the DM's
+  // and there is no player route under it to confuse it with.
+  if (matchRoute({ to: "/library" })) return "library";
   if (mode === "player") {
     if (matchRoute({ to: "/play/campaigns/$campaignId/chronicle" })) return "playChronicle";
     // Fuzzy, so the splat under a player's campaign lands on its Overview for
@@ -102,13 +113,13 @@ export function useSection(): Section {
     if (matchRoute({ to: "/play/characters", fuzzy: true })) return "playCharacters";
     return "play";
   }
-  if (matchRoute({ to: "/campaigns/$campaignId/bestiary" })) return "bestiary";
   if (matchRoute({ to: "/campaigns/$campaignId/chronicle" })) return "chronicle";
   if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
-  // a fight, and the splat a half-typed section falls back through.
+  // a fight, the bestiary the Library replaced in the row, and the splat a
+  // half-typed section falls back through.
   if (matchRoute({ to: "/campaigns/$campaignId", fuzzy: true })) return "overview";
   return "campaigns";
 }

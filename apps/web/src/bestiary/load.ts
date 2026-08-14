@@ -3,15 +3,29 @@ import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
 /**
- * What the bestiary asks the server for, and what it works out for itself.
+ * What the two creature lists ask the server for, and what they work out for
+ * themselves.
  *
- * One Effect for the screen, the same rule `campaign/load.ts` follows: the
- * campaign row and the creature list load together, concurrently, so the screen
- * has three states rather than nine.
+ * One Effect per screen, the same rule `campaign/load.ts` follows: everything a
+ * screen draws loads together, concurrently, so it has three states rather than
+ * nine.
+ *
+ * **Two lists over one table, asking different questions.** The campaign
+ * bestiary is `GET /campaigns/:c/creatures` — that campaign's own rows plus the
+ * bundle, with the path doing the gating; what it holds is **copies**. The
+ * Library is `GET /library/creatures` — the **originals**: the bundle plus what
+ * this account authored, with no campaign in the path at all. Neither list can
+ * show the other's rows, and that is the captain's model rather than a filter
+ * either screen applies.
+ *
+ * They take the same filter (`LibraryFilter` is spread into `CreatureFilter`)
+ * and both come back as `Creature`, which is why everything below this line is
+ * shared.
  */
 
 /**
- * The two controls that are worth a round trip.
+ * The two controls that are worth a round trip. The same pair on both lists,
+ * because the server's `LibraryFilter` is literally the same declaration.
  *
  * **The search goes to the server**, for the reason `CreaturePicker` records:
  * the server matches the name by `ILIKE` *and* the stat block by full text, so
@@ -23,12 +37,12 @@ import type { TavernsClient } from "../api/client";
  * from `"1/4"` on write, and a client sorting on the displayed string would put
  * 1/4 after 1.
  */
-export interface BestiaryQuery {
+export interface CorpusQuery {
   readonly q: string;
   readonly sort: CreatureSort;
 }
 
-export const NO_QUERY: BestiaryQuery = { q: "", sort: "cr" };
+export const NO_QUERY: CorpusQuery = { q: "", sort: "cr" };
 
 export interface BestiaryView {
   readonly campaign: Campaign;
@@ -42,7 +56,7 @@ export interface BestiaryView {
 }
 
 export const loadBestiary =
-  (campaignId: CampaignId, query: BestiaryQuery) => (client: TavernsClient) =>
+  (campaignId: CampaignId, query: CorpusQuery) => (client: TavernsClient) =>
     Effect.gen(function* () {
       const [campaign, creatures] = yield* Effect.all(
         [
@@ -57,6 +71,67 @@ export const loadBestiary =
 
       return { campaign, creatures } satisfies BestiaryView;
     });
+
+export interface LibraryView {
+  /**
+   * **Originals only** — the bundle, plus what this account has authored. Never
+   * a campaign's copy of anything, which is statement 4 of the captain's model.
+   *
+   * `repo/visibility.ts`'s `libraryRowReadable` is
+   * `campaign_id is null and (account_id is null or account_id = <me>)`, and it
+   * composes no campaign gate at all: a Library entity is in no campaign, so
+   * there is no membership to check and nothing for a credential's scope to
+   * narrow. The owner is the entire question, and it is compared to the actor's
+   * own account and to nothing a caller supplied — so the only non-null
+   * `accountId` any reader ever sees here is its own.
+   */
+  readonly creatures: ReadonlyArray<Creature>;
+  /**
+   * The tables this account **runs**, for the one action on this screen that
+   * needs a campaign: copying an entity into one.
+   *
+   * A `Campaign` and never a name-only map, because the copy control needs the
+   * id to send and the name to show. Filtered to `dm` here rather than in the
+   * control: `derive` writes through `rowWritable`, which requires `isDm`, so a
+   * table this account only plays at is not a place a copy can land and offering
+   * it would be a control that exists and then errors.
+   */
+  readonly campaigns: ReadonlyArray<Campaign>;
+}
+
+/**
+ * The Library, and the one read on `creature` that names no campaign.
+ *
+ * Two calls in one round, neither of which can fail: there is no parent in the
+ * path to be missing, so an account that has authored nothing gets the bundle
+ * and an account at no table gets `[]` campaigns — both legitimate steady
+ * states rather than errors. Same shape, and the same reasoning, as
+ * `loadMyCharacters`.
+ *
+ * **The second call is for the copy action and nothing else.** It used to be
+ * here to turn a row's `campaignId` into a table's name, back when this list
+ * gathered campaign copies; under the model there is no campaign row in the
+ * answer to name. Kept, repurposed, and worth stating so that nobody removes it
+ * as a leftover.
+ */
+export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
+  Effect.gen(function* () {
+    const [creatures, memberships] = yield* Effect.all(
+      [
+        client.library.list({ query: { q: query.q.trim(), sort: query.sort } }),
+        client.me.campaigns(),
+      ],
+      { concurrency: "unbounded" },
+    );
+
+    return {
+      creatures,
+      campaigns: memberships
+        .filter((membership) => membership.role === "dm")
+        .map((membership) => membership.campaign)
+        .filter((campaign) => campaign.archivedAt === null),
+    } satisfies LibraryView;
+  });
 
 /**
  * The environment chips, applied here rather than sent.
@@ -81,6 +156,10 @@ export const loadBestiary =
  *
  * It also means pressing a chip costs no request, and the chip row cannot narrow
  * itself out of existence.
+ *
+ * **One function for both lists**, so the Library and the bestiary cannot come
+ * to mean different things by a pressed chip — the client-side half of the same
+ * guarantee `LibraryFilter` gives the server-side half of.
  */
 export const inEnvironments = (creature: Creature, environments: ReadonlyArray<string>): boolean =>
   environments.length === 0 ||
