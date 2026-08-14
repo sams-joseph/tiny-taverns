@@ -1,7 +1,52 @@
 import { ClerkProvider, useAuth } from "@clerk/react";
 import { useMemo, type PropsWithChildren, type ReactNode } from "react";
 import { publishableKey } from "./config";
+import { useSignOutForgetsMachineToken } from "./credential";
 import { HostedSessionContext, type HostedSession } from "./hostedSession";
+
+/**
+ * Signing out forgets the pasted machine token as well.
+ *
+ * A component rather than a call in `HostedSessionScope` itself, because the
+ * hook reads `HostedSessionContext` and the scope is the thing *providing* it —
+ * called there it would read the context one level up, which is the
+ * unconfigured default, and would then never do anything at all. Rendered as a
+ * child it sees the session that was just published.
+ */
+function SignOutForgetsMachineToken(): null {
+  useSignOutForgetsMachineToken();
+  return null;
+}
+
+/**
+ * Publishes a hosted session to the app, and hangs the rules that follow from
+ * one off it.
+ *
+ * There is exactly one such rule today and it is the reported sign-out defect:
+ * signing out has to forget the pasted machine token too, or the app never
+ * returns to the marketing page. It hangs here rather than on a screen for the
+ * reason `SignInSurface` hangs in the shell — a sign-out can happen from any
+ * page, through the vendor's own account menu, and a rule each screen had to
+ * remember to mount is one a new screen will forget.
+ *
+ * **Split out from the bridge below so the composition is testable without the
+ * vendor.** The bridge is Clerk's `useAuth()` and cannot be mounted in jsdom;
+ * this is the part worth asserting on, and a test gives it a `HostedSession` of
+ * its own and flips it. Every consumer, including the signed-out gate, is then
+ * looking at exactly the tree the app builds rather than at one a test wired by
+ * hand.
+ */
+export function HostedSessionScope({
+  session,
+  children,
+}: PropsWithChildren<{ readonly session: HostedSession }>): ReactNode {
+  return (
+    <HostedSessionContext value={session}>
+      <SignOutForgetsMachineToken />
+      {children}
+    </HostedSessionContext>
+  );
+}
 
 /**
  * Bridges the vendor's hook onto the local `HostedSession` shape.
@@ -38,7 +83,7 @@ function HostedSessionBridge({ children }: PropsWithChildren): ReactNode {
     [isLoaded, isSignedIn, getToken],
   );
 
-  return <HostedSessionContext value={session}>{children}</HostedSessionContext>;
+  return <HostedSessionScope session={session}>{children}</HostedSessionScope>;
 }
 
 /**

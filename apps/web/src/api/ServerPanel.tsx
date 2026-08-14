@@ -10,8 +10,8 @@ import {
   Input,
   Label,
 } from "@taverns/ui";
-import { useCallback, useEffect, useState } from "react";
-import { readMachineToken, writeMachineToken } from "../auth/credential";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMachineToken, writeMachineToken } from "../auth/credential";
 import { useHostedSession } from "../auth/hostedSession";
 import { runApi } from "./client";
 
@@ -47,9 +47,31 @@ function CampaignList({ campaigns }: { readonly campaigns: ReadonlyArray<Campaig
  */
 function MachineTokenCampaigns() {
   const [campaigns, setCampaigns] = useState<ReadonlyArray<Campaign> | undefined>();
-  const [token, setToken] = useState(readMachineToken);
+  const stored = useMachineToken();
+  const [token, setToken] = useState(stored);
+  const [forgotten, setForgotten] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const previouslyStored = useRef(stored);
+
+  /**
+   * Signing out forgets the token (`useSignOutForgetsMachineToken`), and this
+   * box is where a developer finds out. It is subscribed to the store rather
+   * than seeded from it once, so the field cannot go on showing a credential
+   * that is no longer there — and the line below says *why* it emptied, because
+   * a box that clears itself with no explanation reads as a bug rather than as
+   * the decision it is.
+   */
+  useEffect(() => {
+    if (previouslyStored.current !== "" && stored === "") {
+      setToken("");
+      setCampaigns(undefined);
+      setForgotten(true);
+    } else if (stored !== "") {
+      setForgotten(false);
+    }
+    previouslyStored.current = stored;
+  }, [stored]);
 
   const loadCampaigns = useCallback(() => {
     setBusy(true);
@@ -95,6 +117,13 @@ function MachineTokenCampaigns() {
             </Button>
           </div>
         </div>
+
+        {forgotten && (
+          <p role="status" className="text-body-s leading-body text-muted-foreground">
+            Signing out forgot this token. Paste it again — signing out clears the developer
+            credential too, so that signed out means signed out.
+          </p>
+        )}
 
         {campaigns !== undefined && <CampaignList campaigns={campaigns} />}
 

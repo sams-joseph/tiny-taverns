@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { clearMachineToken, writeMachineToken } from "../auth/credential";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { installMemoryStorage } from "../test/storage";
 import { ServerPanel } from "./ServerPanel";
 
 /**
@@ -56,6 +58,12 @@ const mintingSession = (): HostedSession & { readonly minted: () => number } => 
     minted: () => issued,
   };
 };
+
+installMemoryStorage();
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 describe("ServerPanel", () => {
   it("renders the decoded health status", async () => {
@@ -161,5 +169,35 @@ describe("ServerPanel", () => {
 
     expect(await screen.findByRole("button", { name: "Load my campaigns" })).toBeDisabled();
     expect(screen.getByText(/Sign in from the header/)).toBeInTheDocument();
+  });
+
+  /**
+   * Signing out forgets the machine token, and this box is where a developer
+   * finds out. A field that silently empties itself reads as a bug rather than
+   * as the decision it is — and a field that goes on showing a token that is no
+   * longer stored is worse, because the next press would send a credential the
+   * app has already thrown away.
+   */
+  it("empties the box and says why when the token is forgotten", async () => {
+    routes.set("/health", { status: "ok", uptime: 1 });
+    writeMachineToken("a-machine-token");
+
+    render(<ServerPanel />);
+    expect(screen.getByLabelText("Machine token")).toHaveValue("a-machine-token");
+
+    act(() => clearMachineToken());
+
+    expect(screen.getByLabelText("Machine token")).toHaveValue("");
+    expect(screen.getByRole("status")).toHaveTextContent(/Signing out forgot this token/);
+  });
+
+  it("says nothing about it to somebody who simply never pasted one", async () => {
+    routes.set("/health", { status: "ok", uptime: 1 });
+
+    render(<ServerPanel />);
+    await screen.findByText("ok · up 1s");
+
+    expect(screen.getByLabelText("Machine token")).toHaveValue("");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

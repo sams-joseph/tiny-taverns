@@ -1816,6 +1816,43 @@ settles it without asking the vendor at all. Measured with a `MutationObserver` 
 document-start: with a token, the homepage's headline was in the DOM on **zero** of 207 sampled
 frames.
 
+### Signing out forgets the machine token, and the fix had one real hazard
+
+Captain's decision, with the cost put to them and accepted: **after any sign-out a developer
+pastes their token again.** Do not soften it and do not add a "keep my token" opt-out.
+
+It is the fix for a reported defect — _"if I authenticate and then sign out I can't get to the
+marketing site"_ — and the shape of that defect is worth keeping, because the three facts read as
+one and are not: the **trigger** was signing out of the hosted provider; the **masking condition**
+was a machine token left in `localStorage` that the presence check consults first and that nothing
+removed; the **symptom** was the app staying on screen. A private window worked, which made it look
+like a hosted-session bug. Measured either side in a real browser with a real publishable key.
+
+**`useSignOutForgetsMachineToken` (`auth/credential.ts`) is keyed on a transition, never on the
+steady state of `signedIn` being false, and that distinction is the whole design.** A configured
+provider reports `signedIn: false` while it is still deciding, so the obvious version of this fix
+clears the token on **every page load, before the vendor answers** — destroying the credential of
+every developer who reloads, including everyone who never signed out. It would pass a hand test.
+What makes the transition structural rather than careful is a ref that starts `false` on every
+mount and is set only by `signedIn === true`: a load can only ever set it, `loading` returns early,
+and with no provider `signedIn` is never true, so the whole hook is inert on the unconfigured build.
+Measured after the fix: 10/10 reloads kept the token, and across 705 sampled frames the homepage's
+headline was in the DOM **zero** times and the token was absent **zero** times.
+
+It is mounted by `HostedSessionScope` in `auth/AuthProvider.tsx` — **which exists to make that
+composition testable without the vendor**, since Clerk's `useAuth()` cannot be mounted in jsdom.
+`apps/web/src/auth/signOut.test.tsx` renders that real scope with a `HostedSession` of its own and
+flips it; five of its ten tests fail with the mount removed and the four load-time ones do not,
+which is what says the guard is a guard rather than a restatement. `clearMachineToken` notifies the
+same watchers a write does, so forgetting the token is a **render** — the gate flips to the homepage
+with no reload — and `ServerPanel`'s machine-token box is subscribed to the store rather than seeded
+from it once, so it empties and says why instead of showing a credential the app has thrown away.
+
+**Driving the captain's literal path is not possible from a scripted browser**: hosted sign-_in_ is
+behind Cloudflare Turnstile (`AGENTS.md`'s sign-in surface section records this), so there is no way
+to reach a session to end. Everything either side of the vendor is measurable and was measured; the
+sign-out edge itself is only reachable in tests. Do not spend time trying to defeat the challenge.
+
 ### Two routes are exempt, and one exemption is a security property
 
 - **`#/join/<token>`.** It previews an invitation _before_ there is anybody to accept it as, which
