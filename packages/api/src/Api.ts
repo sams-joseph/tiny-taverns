@@ -563,43 +563,47 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
   .middleware(Authorization) {}
 
 /**
- * The Library: the shared `system` corpus, above every campaign.
+ * The Library: every creature **this account** can reach, in one list.
  *
- * **The second group in the product that names no campaign**, and it is here for
- * the reason `MeGroup` is: it answers a question you ask *before* you have one.
  * The sixth delivery moves the Bestiary out of the campaign row of the nav and
- * into the global row as *Library*, so there has to be a read of the corpus that
- * does not hang off a table — `creatures.list` cannot be it, because the campaign
- * in that path is the only thing gating the global rows it returns.
+ * into the global row as *Library*, so there has to be a read of creatures that
+ * does not hang off one table. `creatures.list` cannot be it: the campaign in
+ * that path is the only thing gating the global `system` rows it returns.
  *
- * It is not a second answer to `creatures.list`. That list is *this campaign's
- * creatures plus the shared corpus*; this one is the shared corpus and nothing
- * else, anchored on `campaign_id is null` by `sharedCorpusRowReadable` rather
- * than by a filter a client chooses. The search, the environment narrowing and
- * the sort are the same controls (`LibraryFilter` is spread into
- * `CreatureFilter`), so the two lists cannot come to disagree about what "gob"
- * finds or how CR orders.
+ * **It is the account's, not the world's** — captain's decision, 2026-08-14: the
+ * signed-in account's own tables' creatures *and* the shared corpus, gathered
+ * with no campaign in the path. So it is not a second answer to
+ * `creatures.list`; it is the union of that answer over every campaign the
+ * credential reaches, and `repo/visibility.ts`'s `corpusRowReadableAnywhere` is
+ * literally `corpusRowReadable` with the campaign existentially quantified
+ * rather than bound. **A gathering, never a reach**: nothing appears here that a
+ * campaign-scoped read would not already have given up, and an account that is
+ * a member of nothing reads `[]`.
  *
- * **Read-only, structurally.** `system` rows are `campaign_id is null`, and every
- * write predicate in the product requires `campaign_id` to equal a campaign in a
- * path — a null never equals a uuid. So there is nothing to create, update or
- * delete here, and `derive` stays where it is: a reskin needs a campaign to copy
- * *into*, which this path does not have.
+ * The second half of that decision is that **player visibility is not this
+ * group's problem**. A DM brings a creature into a campaign with
+ * `creatures/:id/derive`, and whether the players at that table then see it is
+ * settled by the campaign-level sharing that already exists — nothing here
+ * serves it, because nothing here needs to.
  *
- * **Behind `Authorization`, and the reach rule is exactly "authenticated".** A
- * `system` creature belongs to no campaign, is already reachable through every
- * campaign, and cannot be edited by anyone — so an account that is a member of
- * nothing may read it, and reads nothing else through here. That statement is
- * written down once, as `repo/visibility.ts`'s `sharedCorpusRowReadable`.
+ * The search, the environment narrowing and the sort are the same controls the
+ * campaign bestiary has (`LibraryFilter` is spread into `CreatureFilter`), so
+ * the two lists cannot come to disagree about what "gob" finds or how CR orders.
+ *
+ * **Read-only, and structurally so.** Every write predicate in the product
+ * requires `campaign_id` to equal a campaign named in a path, and this path
+ * names none — so there is nothing to create, update or delete here, and
+ * `derive` stays where it is: copying a creature needs a campaign to copy
+ * *into*.
  */
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
-     * The corpus, filtered the way the campaign bestiary filters.
+     * The account's creatures, filtered the way the campaign bestiary filters.
      *
-     * No `NotFound`: there is no parent in the path to be missing, and an
-     * account with no membership anywhere gets a real list rather than a 404 —
-     * the same shape as `me.campaigns`, whose empty answer is a legitimate
+     * No `NotFound`: there is no parent in the path to be missing, so an account
+     * with no membership anywhere gets an honestly empty list rather than a 404
+     * — the same shape as `me.campaigns`, whose empty answer is a legitimate
      * steady state rather than an error.
      *
      * There is deliberately no `findById` beside it. Nothing needs one: the card

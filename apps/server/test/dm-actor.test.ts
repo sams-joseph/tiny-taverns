@@ -483,15 +483,16 @@ describe("the scope, counted", () => {
     // for a live column. Two boundaries, neither of them a proof, and
     // `player-write.test.ts` pins both.
     //
-    // The sixty-fifth is `Creatures.library` — `GET /library/creatures`, the
-    // shared corpus read with no campaign in the path. It is the one method here
-    // whose `CurrentActor` is required and *never read*: what it returns is the
-    // same list for everybody, because a `system` creature belongs to no
-    // campaign and is writable through no path. The requirement is the whole of
-    // the "authenticated" half of its reach rule — a caller with no actor cannot
-    // reach it — and a `DmActor` would be the wrong question twice over, since
-    // there is no campaign to be the DM of and nothing narrower to project.
-    // `library.test.ts` pins the rows.
+    // The sixty-fifth is `Creatures.library` — `GET /library/creatures`, every
+    // creature this account can reach, with no campaign in the path. A `DmActor`
+    // could not be spent on it and should not be: the proof carries a campaign,
+    // and the whole shape of this read is that it names none. What bounds it is
+    // `corpusRowReadableAnywhere`, which is `corpusRowReadable` with the
+    // campaign existentially quantified rather than bound — so the answer is the
+    // union of what `creatures.list` already gives at each table the credential
+    // reaches, and there is no projection to narrow. A gathering, never a reach.
+    // `library.test.ts` pins the rows, including the one that matters most: one
+    // account's Library never shows another's monsters.
     expect(ungated).toBe(65);
   });
 });

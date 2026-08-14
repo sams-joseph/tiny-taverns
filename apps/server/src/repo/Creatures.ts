@@ -25,10 +25,10 @@ import {
 } from "./rows.js";
 import {
   corpusRowReadable,
+  corpusRowReadableAnywhere,
   ensureCampaignReadable,
   ensureCampaignWritable,
   rowWritable,
-  sharedCorpusRowReadable,
 } from "./visibility.js";
 
 interface CreatureRow extends ProvenanceColumns {
@@ -214,12 +214,12 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
  * null. There is no `origin = 'system'` check anywhere in this file, and there
  * does not need to be one.
  *
- * `library` is the third predicate in the file and the only read that names no
- * campaign: the shared corpus read on its own, for the nav's global *Library*
- * item. It is not a special case of `list` — `list` answers *this campaign's
- * creatures plus the corpus*, which is a different question with a different
- * gate — so it composes `sharedCorpusRowReadable` rather than passing a scope,
- * and shares only the parts a client varies (`narrowedBy`, `orderBy`).
+ * `library` is the only read here that names no campaign — the nav's global
+ * *Library* item, which is every creature this account can reach at once. It is
+ * the *same* question `list` asks, with the campaign quantified rather than
+ * bound (`corpusRowReadableAnywhere`), which is why it shares the parts a client
+ * varies (`narrowedBy`, `orderBy`) and needs nothing else: one list of two
+ * campaigns' creatures is two `list` answers unioned, and the predicate says so.
  *
  * Nothing here can write a `system` row either: `create` never sets `origin`, so
  * the column default (`authored`) decides, and the database's
@@ -236,20 +236,20 @@ export class Creatures extends Context.Service<
       filter: CreatureFilterValues,
     ) => Effect.Effect<ReadonlyArray<Creature>, NotFound, CurrentActor>;
     /**
-     * The Library — the shared corpus, with no campaign to read it through.
+     * The Library — every creature this account can reach, gathered with no
+     * campaign in the path: its own tables' creatures and the `system` corpus,
+     * in one list.
      *
-     * **`CurrentActor` is required and never read, and that is the point.** The
-     * rule this endpoint implements is *any authenticated account*, and the
-     * requirement is what makes the word "authenticated" a fact the compiler
-     * checks: a caller with no actor — `bestiary/import.ts`, a bin script, a
-     * future group somebody forgets to put `Authorization` on — cannot reach
-     * this method at all. Which rows come back is `sharedCorpusRowReadable`'s
-     * answer and does not depend on who is asking; *that* somebody is asking
-     * does, and this is where it is enforced.
+     * **A gathering, never a reach.** `corpusRowReadableAnywhere` is
+     * `corpusRowReadable` with the campaign quantified rather than bound, so
+     * this answers exactly the union of what `creatures.list` answers at each
+     * campaign the actor reaches — one request instead of one per table. Nothing
+     * appears here that a campaign-scoped read would not already have given up.
      *
      * It cannot fail. There is no campaign in the path for a `NotFound` to be
-     * about, so an account that is a member of nothing gets a list rather than a
-     * 404 — the same shape as `Memberships.mine`.
+     * about, so an account that is a member of nothing gets `[]` rather than a
+     * 404 — the same shape, and the same honest empty answer, as
+     * `Memberships.mine`.
      */
     readonly library: (
       filter: LibraryFilterValues,
@@ -319,13 +319,13 @@ export class Creatures extends Context.Service<
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              // Named and discarded. It is not a filter — see the doc on this
-              // method's signature for why requiring it is the whole of the
-              // "authenticated" half of the reach rule.
-              yield* CurrentActor;
+              const actor = yield* CurrentActor;
               const rows = yield* sql<CreatureRow>`
                 select * from creature
-                where ${sql.and([sharedCorpusRowReadable(sql, "creature"), ...narrowedBy(sql, filter)])}
+                where ${sql.and([
+                  corpusRowReadableAnywhere(sql, "creature", actor),
+                  ...narrowedBy(sql, filter),
+                ])}
                 order by ${orderBy(sql, filter.sort ?? "cr")}
               `;
               return rows.map(toCreature);

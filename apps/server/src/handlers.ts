@@ -285,14 +285,14 @@ const CreaturesLive = HttpApiBuilder.group(
 );
 
 /**
- * The Library — the shared corpus, above every campaign.
+ * The Library — every creature this account can reach, in one list.
  *
  * The same `Creatures` service as the group above, because it is the same table
  * and one table gets one mapper. What differs is the predicate the read
  * composes, and that difference is in the repository where every other one is:
  * this handler has no campaign to pass and nothing to filter with, which is what
- * makes "the Library cannot reach a campaign's creatures" a property of
- * `sharedCorpusRowReadable` rather than of anything here.
+ * makes "one account's Library never shows another's monsters" a property of
+ * `corpusRowReadableAnywhere` rather than of anything here.
  */
 const LibraryLive = HttpApiBuilder.group(
   TavernsApi,

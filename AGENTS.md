@@ -951,56 +951,71 @@ contract. `type` and `size` are **open** strings while `difficulty` is a closed 
 difference is that `CampaignHome.jsx:13` _branches_ on difficulty, and nothing branches on a
 creature's type.
 
-### The Library: the corpus read with no campaign, and the one reach rule that is not membership
+### The Library: every creature _this account_ can reach, with no campaign in the path
 
-`GET /library/creatures` (`Creatures.library`) answers the shared `system` corpus **above** every
-campaign — the sixth delivery moves the Bestiary out of the campaign row of the nav and into the
-global row as _Library_, and the campaign in `creatures.list`'s path is the only thing gating the
-global rows it returns, so there was nothing behind the drawn item. Captain's decision,
-2026-08-14. It is the **second group in the product that names no campaign** (`me` is the first),
-and it is read-only: `system` rows are `campaign_id is null`, every write predicate needs
-`campaign_id` to equal a campaign in a path, and a null never equals a uuid, so there is nothing
-here to create or edit and `derive` stays where it is — a reskin needs a campaign to copy _into_.
+`GET /library/creatures` (`Creatures.library`) is the sixth delivery's global **Library** nav item
+— the Bestiary moved out of the campaign row and up above every campaign, and `creatures.list`
+could not serve it because the campaign in that path is the only thing gating the global `system`
+rows it returns.
 
-**`sharedCorpusRowReadable` (`repo/visibility.ts`) is the first predicate in that file that does
-not reach `campaignInScope`**, and that is why it is a named, commented function rather than a
-`where` clause in a repository. Everything else there bottoms out in a membership row because
-everything else is somebody's content; the shared corpus is nobody's. The rule, written down:
+**It is the account's, not the world's** — captain's decision, 2026-08-14: _"The library will be
+scoped to the authenticated user."_ So it answers this credential's own tables' creatures **and**
+the shared corpus, in one list. It is the **second group in the product that names no campaign**
+(`me` is the first) and it is read-only, structurally: every write predicate requires `campaign_id`
+to equal a campaign named in a path, and this path names none.
 
-> A `system` creature belongs to no campaign, is already readable through every campaign, and
-> cannot be edited by anyone. So any **authenticated** account may read it, and reads nothing else
-> this way.
+**`corpusRowReadableAnywhere` is `corpusRowReadable` with the campaign existentially quantified
+rather than bound**, and that sentence is the whole design. It is a _gathering, never a reach_:
+the answer is exactly the union of what `creatures.list` gives at each campaign the credential
+reaches, one request instead of one per table, so nothing appears that a campaign-scoped read
+would not already have given up. **A read with no campaign in its path is not a read with no
+campaign in its predicate** — every predicate in `repo/visibility.ts` still bottoms out in
+`campaignInScope`, this one included.
 
-Four things about it that are decisions rather than details:
+What that yields, and each half is pinned:
 
-- **The anchor is `campaign_id is null`, not the visibility.** `creature_system_is_global` makes
-  that the same statement as `origin = 'system'`, so the fragment cannot select a campaign's
-  authored creature however it is composed — it names no campaign id a caller could vary. A
-  predicate that tested only `visibility = 'shared'` would hand every account every DM's shared
-  creatures; `library.test.ts` pins that from both directions, including by search.
-- **The row's own `visibility` still applies, so `shared` is the whole of it.**
-  `corpusRowReadable` gives a `dm` system row to a DM _of the campaign in the path_; there is no
-  path here, so there is no such question and no answer that could be yes. The endpoint removes
-  the campaign a reader had to name, not the narrowing — so it discloses nothing that was not
-  already reachable.
-- **It takes no `Actor` and the repository method requires `CurrentActor` anyway.** Which rows
-  come back does not depend on who is asking, so a parameter would lie; _that_ somebody is asking
-  is the whole reach rule, and the type-level requirement is what enforces it — a caller with no
-  actor (`bestiary/import.ts`, a bin script, a group somebody forgot `Authorization` on) cannot
-  reach the method. It is the sixty-fifth ungated method in `dm-actor.test.ts`'s count.
+| the reader                     | what the Library answers                                                |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| a DM                           | every one of their tables' creatures, plus the **whole** corpus         |
+| a player                       | the `shared` half of their tables, plus the `shared` half of the corpus |
+| a credential scoped to a table | that table only, plus the corpus                                        |
+| a revoked member               | nothing from that table, the moment the membership goes                 |
+| an account invited nowhere     | `[]` — the honest empty answer `GET /me/campaigns` also gives           |
+
+Three things about the SQL that are decisions rather than details, and `library.test.ts` fails on
+each if it is rearranged (verified by mutating the predicate three ways: 7, 3 and 6 tests fail):
+
+- **The `campaign_id is null` disjunct lives _inside_ the `exists`.** Hoisting it out —
+  `campaign_id is null or exists (…)` — makes every global row readable by an account that reaches
+  nothing at all. That is the `corpusRowReadable` lesson met a third time.
+- **A campaign row is reachable through its own campaign and no other**, because that disjunct is
+  false for it; a global row is reachable through any one of them, which is what "belongs to every
+  campaign at once" means.
+- **The row's own `visibility` is tested inside the `exists` too**, so `dm` rows stay the DM's and
+  "global" still means shared between a DM's campaigns rather than with their players.
+
+**Quantifying does not mean scanning every campaign** — measured on Postgres 18: a nested-loop
+semi join whose inner side is materialised once and driven by `campaign_member_account_idx` on the
+actor's own account, with the membership tests hoisted to hashed subplans exactly as the bound
+version hoists them.
+
+Two more things worth knowing:
+
 - **`LibraryFilter` is spread into `CreatureFilter`** (`packages/api/src/Creature.ts`) and
   `narrowedBy` is shared in `repo/Creatures.ts`, so the search box, the environment chips and the
   sort cannot come to mean something different at `/library` than inside a campaign. `scope` is
-  the one control the Library has no use for: a filter with one legal value is the shape
-  `campaign_invite.role` was refused for.
+  left off: the Library is one list by definition, and a filter with one legal value is the shape
+  `campaign_invite.role` was refused for. The one-element `environments` wire defect is inherited
+  unchanged and pinned — one contract, one bug, one fix.
+- **Player visibility is not the Library's problem**, by the same decision. A DM brings a creature
+  into a campaign with `creatures/:id/derive`, and whether the players there then see it is settled
+  by the campaign-level sharing that already exists.
 
-**The finding this shipped with, measured: the Library is empty on a freshly provisioned
-deployment.** `bestiary/import.ts` never writes a `visibility`, so the bundled corpus is entirely
-`dm` and the Library correctly reads `[]` until somebody shares rows. That is the predicate
-working — widening it would hand every authenticated account content the product says is DM-only —
-so the answer is a decision about **provisioning** (should `bestiary:import` write `shared`, or
-should an operator?), not a wider `where`. `library.test.ts` asserts the empty answer, so
-whichever way it goes it breaks there first.
+**The gap `derive` leaves, reported and not closed**: `derive` reads its source through
+`corpusRowReadable`, so it accepts a creature from _the campaign in the path_ or the global corpus
+— and nothing else. The Library now shows a DM their campaign A creatures, but deriving one into
+campaign B is a 404. Copying **across a DM's own tables** is the obvious next want and it needs a
+widened source read, which is a change to an existing predicate rather than a routine step.
 
 ## The party: what earns a column on `character`, and what lives in the document
 

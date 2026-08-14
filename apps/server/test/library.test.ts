@@ -1,5 +1,5 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { type Creature, TavernsApi } from "@taverns/api";
+import { Actor, type CampaignId, type Creature, CurrentActor, TavernsApi } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
@@ -8,34 +8,39 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
+import { Creatures } from "../src/repo/Creatures.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * The Library: `GET /library/creatures`, the shared corpus read with **no
- * campaign in the path**.
+ * The Library: `GET /library/creatures`, every creature **this account** can
+ * reach, gathered with **no campaign in the path**.
  *
  * `bestiary.test.ts` pins the corpus as it is reached *through* a campaign, and
  * says in its own header that reasoning about a `WHERE` clause is not evidence.
- * This file holds the same line for the read that has no campaign to be gated
- * by, which is the one place the argument is genuinely new: every other
- * predicate in `repo/visibility.ts` bottoms out in a membership row, and this
- * one does not.
+ * This file holds the same line for the read that names no campaign, which is
+ * where the argument is easiest to get wrong: with nothing in the path to gate
+ * against, the predicate is the *only* thing standing between one account's
+ * Library and another account's monsters.
  *
  * So it runs over the **real application** — the same `servicesOver` /
  * `applicationOver` `main.ts` uses — through the client derived from the
- * declaration the server implements. Nothing here reaches a repository
- * directly: the credential, the middleware, the query decoding and the
- * predicate are all the shipped ones, which is what makes "it 401s without a
- * token" a fact about the endpoint rather than about a service call.
+ * declaration the server implements. The credential, the middleware, the query
+ * decoding and the predicate are all the shipped ones, which is what makes "it
+ * 401s without a token" a fact about the endpoint rather than about a service
+ * call.
+ *
+ * One case has to reach past HTTP, and says so where it does: nothing in the
+ * product mints a campaign-scoped credential over the wire yet, so the actor for
+ * that one is built by hand and the read goes straight to the repository.
  */
 const database = migratedDatabase("taverns_test_library");
 const services = servicesOver(database);
 
 /**
- * `database` is merged in as well as provided, so this file can load the bundled
- * corpus the way an operator does and set a row's visibility behind the
- * repositories. `Layer` memoises by identity, so it is still one pool and one
- * migration run.
+ * `database` and `services` are merged in as well as provided, so this file can
+ * load the bundled corpus the way an operator does and reach a repository for
+ * the one case HTTP cannot express. `Layer` memoises by identity, so it is still
+ * one pool and one migration run.
  */
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
@@ -53,13 +58,13 @@ const clientFor = (token: string) =>
 
 const anonymous = HttpApiClient.make(TavernsApi);
 
-/** The Library, as this credential reads it. */
 interface LibraryQuery {
   readonly q?: string;
   readonly environments?: ReadonlyArray<string>;
   readonly sort?: "cr" | "name" | "recent";
 }
 
+/** The Library, as this credential reads it. */
 const libraryFor = (token: string, query: LibraryQuery = {}) =>
   runtime.runPromise(
     Effect.flatMap(clientFor(token), (client) => client.library.list({ query })).pipe(Effect.orDie),
@@ -68,101 +73,97 @@ const libraryFor = (token: string, query: LibraryQuery = {}) =>
 const named = (creatures: ReadonlyArray<Creature>): ReadonlyArray<string> =>
   creatures.map((creature) => creature.name);
 
+/** One creature per interesting position, so an absence is never accidental. */
+const CREATURES = {
+  /** Jo's first table, DM-only — the ordinary case. */
+  hersPrivate: "The Ferryman's Wife",
+  /** Jo's first table, shared with her players. */
+  hersShared: "Reed Skiff",
+  /** Jo's *second* table — the Library is over both, not over one. */
+  herOtherTable: "Whatever Is In The Crate",
+  /** Bo's table, which Jo is not at. Shared, so only the campaign gate hides it. */
+  theirs: "The Sixpence Wraith",
+} as const;
+
+const aCreature = (name: string, visibility?: "dm" | "shared") => ({
+  name,
+  type: "Fey" as const,
+  cr: "5",
+  ac: 17,
+  hp: 82,
+  environments: ["River"],
+  ...(visibility === undefined ? {} : { visibility }),
+});
+
 /**
- * A DM with a table of their own, a player at it, and a stranger who is at no
- * table anywhere.
+ * Two DMs with tables of their own, a player at one of them, a player whose
+ * membership is then withdrawn, and an account that is at no table anywhere.
  *
- * The third is the actor this endpoint exists for and the one no other test file
- * has a use for: an account that is a member of nothing at all is a legitimate
- * steady state — somebody who signed up and has not been invited yet — and the
- * Library is the first read in the product that answers them anything.
+ * The second DM is the fixture this file exists for: the Library has no campaign
+ * in its path, so "Jo does not read Bo's monsters" is a claim about the
+ * predicate and nothing else.
  */
 const makeFixture = Effect.gen(function* () {
   const accounts = yield* Accounts;
-  const sql = yield* SqlClient.SqlClient;
 
+  // Left exactly as `pnpm -F server bestiary:import` leaves it: entirely `dm`,
+  // because that file never writes a visibility. What a DM reads of it is the
+  // whole corpus, and what a player reads of it is nothing — both are the
+  // predicate applying the row's own visibility, and both are pinned below.
   yield* importSystemCreatures();
 
-  const dm = yield* accounts.issue("Jo");
-  const stranger = yield* accounts.issue("Nobody in particular");
+  const jo = yield* accounts.issue("Jo");
+  const bo = yield* accounts.issue("Bo");
+  const uninvited = yield* accounts.issue("Nobody in particular");
 
-  const client = yield* clientFor(dm.token);
+  const asJo = yield* clientFor(jo.token);
+  const asBo = yield* clientFor(bo.token);
 
-  const campaign = yield* client.campaigns.create({
+  const saltRoad = yield* asJo.campaigns.create({
     payload: { name: "The Salt Road", visibility: "shared" },
   });
-
-  // Two campaign creatures, one of each visibility. Neither may appear in the
-  // Library — a `shared` one is the interesting half, because "shared" is what
-  // the Library's own rows have to be and a predicate that tested only that
-  // would let this through.
-  const authored = yield* client.creatures.create({
-    params: { campaignId: campaign.id },
-    payload: {
-      name: "The Ferryman's Wife",
-      size: "Medium",
-      type: "Fey",
-      cr: "5",
-      ac: 17,
-      hp: 82,
-      environments: ["River"],
-    },
+  const sixpence = yield* asJo.campaigns.create({
+    payload: { name: "Salt and Sixpence", visibility: "shared" },
   });
-  const sharedAuthored = yield* client.creatures.create({
-    params: { campaignId: campaign.id },
-    payload: {
-      name: "Reed Skiff",
-      type: "Beast",
-      cr: "1/8",
-      ac: 11,
-      hp: 8,
-      environments: ["River"],
-      visibility: "shared",
-    },
+  const theirTable = yield* asBo.campaigns.create({
+    payload: { name: "A different table", visibility: "shared" },
   });
 
-  // A real player, minted the way a person is: the DM issues an invitation and
-  // a fresh account redeems it over HTTP.
-  const invite = yield* client.invites.create({
-    params: { campaignId: campaign.id },
-    payload: { label: "Pim" },
+  yield* asJo.creatures.create({
+    params: { campaignId: saltRoad.id },
+    payload: aCreature(CREATURES.hersPrivate),
   });
-  const player = yield* accounts.issue("Pim");
-  yield* Effect.flatMap(clientFor(player.token), (asPlayer) =>
-    asPlayer.join.redeem({ payload: { token: invite.token } }),
-  );
+  yield* asJo.creatures.create({
+    params: { campaignId: saltRoad.id },
+    payload: aCreature(CREATURES.hersShared, "shared"),
+  });
+  yield* asJo.creatures.create({
+    params: { campaignId: sixpence.id },
+    payload: aCreature(CREATURES.herOtherTable),
+  });
+  yield* asBo.creatures.create({
+    params: { campaignId: theirTable.id },
+    payload: aCreature(CREATURES.theirs, "shared"),
+  });
 
-  // Measured before anything is shared, because it is the state a fresh
-  // deployment is really in — see the assertion that reads it.
-  const beforeSharing = yield* Effect.flatMap(clientFor(dm.token), (asDm) =>
-    asDm.library.list({ query: {} }),
-  );
+  /** A real player at Jo's first table, minted the way a person is. */
+  const joins = (campaignId: CampaignId, name: string) =>
+    Effect.gen(function* () {
+      const issued = yield* asJo.invites.create({
+        params: { campaignId },
+        payload: { label: name },
+      });
+      const account = yield* accounts.issue(name);
+      yield* Effect.flatMap(clientFor(account.token), (asThem) =>
+        asThem.join.redeem({ payload: { token: issued.token } }),
+      );
+      return { account, invite: issued.invite };
+    });
 
-  // The corpus arrives from `bestiary/import.ts` entirely `dm`, because that
-  // file never writes a visibility and the column default decides. Sharing two
-  // of them is what an operator or a future provisioning step does; the rest
-  // stay `dm` and are the refusal this file pins.
-  yield* sql`
-    update creature set visibility = 'shared'
-    where campaign_id is null and name in ('Goblin Boss', 'Marsh Hag')
-  `;
-  const stillPrivate = yield* sql<{ readonly name: string }>`
-    select name from creature
-    where campaign_id is null and visibility = 'dm'
-    order by name limit 1
-  `;
+  const player = yield* joins(saltRoad.id, "Pim");
+  const leaver = yield* joins(saltRoad.id, "Wren");
 
-  return {
-    dm,
-    player,
-    stranger,
-    campaign,
-    authored,
-    sharedAuthored,
-    beforeSharing,
-    /** A `system` creature the operator has not shared. */
-    privateSystem: stillPrivate[0]!.name,
-  };
+  return { jo, bo, uninvited, player, leaver, saltRoad, sixpence, theirTable };
 }).pipe(Effect.orDie);
 
 let fixture: Effect.Success<typeof makeFixture>;
@@ -186,155 +187,187 @@ describe("the Library", () => {
     expect(result._tag).toBe("Failure");
   });
 
-  it("is empty on a deployment where nothing has been shared, and that is honest", async () => {
-    // **A finding, pinned rather than papered over.** `bestiary/import.ts`
-    // never writes a `visibility`, so the column default (`dm`) decides and the
-    // corpus `pnpm -F server bestiary:import` provisions is entirely DM-only.
-    // The Library requires `shared` — a `dm` system row is readable only by a
-    // DM *of the campaign in the path*, and there is no path here — so a freshly
-    // provisioned deployment reads empty until somebody shares rows.
-    //
-    // That is the predicate working, not a bug in it, and the fix is a decision
-    // about how the corpus is provisioned rather than a wider `where`: sharing
-    // the bundled rows is a data change, and widening this read would hand every
-    // authenticated account content the product currently says is DM-only.
-    // Whichever way that goes, it should break this assertion first.
-    expect(fixture.beforeSharing).toEqual([]);
+  it("gives a DM every table's creatures and the bundled corpus, in one list", async () => {
+    const seen = await libraryFor(fixture.jo.token);
+
+    // Both her tables — the Library is over every campaign the credential
+    // reaches, not over one. If this only ever held for a DM with a single
+    // campaign, the quantifier would be doing nothing.
+    expect(named(seen)).toContain(CREATURES.hersPrivate);
+    expect(named(seen)).toContain(CREATURES.hersShared);
+    expect(named(seen)).toContain(CREATURES.herOtherTable);
+
+    // And the corpus, untouched by anybody — which is the whole point of the
+    // captain's answer. The rule this file first shipped required
+    // `visibility = 'shared'` of a global row and therefore read `[]` against
+    // the corpus `bestiary:import` actually provisions.
+    const corpus = seen.filter((creature) => creature.campaignId === null);
+    expect(named(corpus)).toContain("Goblin Boss");
+    expect(corpus.every((creature) => creature.origin === "system")).toBe(true);
+    expect(corpus.every((creature) => creature.visibility === "dm")).toBe(true);
   });
 
-  it("answers a shared system creature", async () => {
-    const seen = await libraryFor(fixture.dm.token);
+  it("gives a DM nothing at all from a table they are not at", async () => {
+    // **The case that matters most.** There is no campaign in the path, so
+    // nothing but the predicate stops one account's Library showing another's
+    // monsters — and Bo's creature is `shared`, so the row's own visibility is
+    // not what is hiding it. It is `campaignInScope`, quantified.
+    const hers = await libraryFor(fixture.jo.token);
+    const theirs = await libraryFor(fixture.bo.token);
 
-    expect(named(seen)).toContain("Goblin Boss");
+    expect(named(hers)).not.toContain(CREATURES.theirs);
+    expect(named(theirs)).not.toContain(CREATURES.hersPrivate);
+    expect(named(theirs)).not.toContain(CREATURES.hersShared);
+    expect(named(theirs)).not.toContain(CREATURES.herOtherTable);
+
+    // Each really has something for the other to miss, otherwise "nothing" is
+    // trivially true and this proves less than it appears to.
+    expect(named(theirs)).toContain(CREATURES.theirs);
   });
 
-  it("answers an account that is a member of no campaign anywhere", async () => {
-    // The captain's decision, and the point of the whole endpoint: the shared
-    // corpus belongs to no campaign, is reachable through every campaign
-    // already, and is writable through no path — so membership is not the
-    // question. This actor holds no `campaign_member` row at all, which every
-    // other read in the product refuses outright.
-    const seen = await libraryFor(fixture.stranger.token);
-
-    expect(seen.length).toBeGreaterThan(0);
-    expect(named(seen)).toContain("Goblin Boss");
-  });
-
-  it("answers a player the same list it answers the DM", async () => {
-    const asDm = await libraryFor(fixture.dm.token);
-    const asPlayer = await libraryFor(fixture.player.token);
-    const asStranger = await libraryFor(fixture.stranger.token);
-
-    // Not "a narrower list": there is nothing here to narrow. Who is asking
-    // does not appear in the predicate, and this is the assertion that would
-    // fail if a future edit smuggled an actor into it.
-    expect(named(asPlayer)).toEqual(named(asDm));
-    expect(named(asStranger)).toEqual(named(asDm));
-  });
-
-  it("returns nothing but the global corpus", async () => {
-    const seen = await libraryFor(fixture.stranger.token);
-
-    for (const creature of seen) {
-      expect(creature.campaignId, `${creature.name} names a campaign`).toBeNull();
-      expect(creature.origin, `${creature.name} is not a system row`).toBe("system");
-      expect(creature.visibility, `${creature.name} is not shared`).toBe("shared");
-    }
-  });
-
-  it("refuses a system creature the operator has not shared", async () => {
-    // `corpusRowReadable` gives a `dm` system row to a DM *of the campaign in
-    // the path*. There is no campaign here, so there is no such question to ask
-    // — what is left is `shared`, which is the half every account already
-    // reaches through every campaign it is at. The endpoint removes the campaign
-    // a reader had to name, not the narrowing.
-    for (const token of [fixture.dm.token, fixture.player.token, fixture.stranger.token]) {
-      const seen = await libraryFor(token);
-
-      expect(named(seen)).not.toContain(fixture.privateSystem);
-    }
-  });
-
-  it("is still readable through a campaign by its DM, which is the contrast", async () => {
-    // The Library is narrower than the campaign bestiary, not a replacement for
-    // it. If this ever fails, the change widened `corpusRowReadable` rather than
-    // adding a predicate beside it.
-    const throughCampaign = await runtime.runPromise(
-      Effect.flatMap(clientFor(fixture.dm.token), (client) =>
-        client.creatures.list({
-          params: { campaignId: fixture.campaign.id },
-          query: { scope: "system" },
-        }),
-      ).pipe(Effect.orDie),
-    );
-
-    expect(named(throughCampaign)).toContain(fixture.privateSystem);
-  });
-});
-
-describe("a campaign's own creatures", () => {
-  it("are absent from the Library, shared or not, even for their own DM", async () => {
-    const seen = await libraryFor(fixture.dm.token);
-
-    // The `shared` one is the half that matters. `sharedCorpusRowReadable`
-    // anchors on `campaign_id is null` as well as on the visibility, so a
-    // predicate that tested only the visibility would hand this campaign's
-    // read-aloud-able creature to every account in the product.
-    expect(named(seen)).not.toContain(fixture.sharedAuthored.name);
-    expect(named(seen)).not.toContain(fixture.authored.name);
-  });
-
-  it("cannot be surfaced by searching for them by name", async () => {
+  it("cannot be talked into another table's creatures by searching for them", async () => {
     // The search box is a client-varied clause beside the reach predicate, never
-    // instead of it — the thing `narrowedBy` is kept separate from the anchor to
-    // make structural.
-    // Neither word appears anywhere in the bundled corpus, so an empty answer
-    // here means the row was refused rather than merely outranked.
-    const byName = await libraryFor(fixture.dm.token, { q: "Reed Skiff" });
-    const byFragment = await libraryFor(fixture.dm.token, { q: "wife" });
+    // instead of it — which is what `narrowedBy` being separate from the gate
+    // makes structural rather than careful.
+    const byName = await libraryFor(fixture.jo.token, { q: CREATURES.theirs });
+    const byFragment = await libraryFor(fixture.jo.token, { q: "wraith" });
 
     expect(named(byName)).toEqual([]);
     expect(named(byFragment)).toEqual([]);
   });
 
-  it("cannot be reached by a credential scoped to their campaign either", async () => {
-    // Scope narrows; it never widens. A player's credential is minted for one
-    // table, and the Library is not that table — it is above every table, which
-    // is the same answer for both.
-    const seen = await libraryFor(fixture.player.token);
+  it("is honestly empty for an account that is at no table anywhere", async () => {
+    // Not a gap: the Library is what this account can already reach, and an
+    // account with no membership reaches nothing through a path either. The
+    // same answer `GET /me/campaigns` gives, for the same reason — and the one
+    // outcome that changed when the rule became the account's rather than the
+    // world's.
+    const seen = await libraryFor(fixture.uninvited.token);
 
-    expect(named(seen)).not.toContain(fixture.sharedAuthored.name);
+    expect(seen).toEqual([]);
+  });
+});
+
+describe("the row's own visibility, in both directions", () => {
+  it("gives a player the shared half of their table and not the rest", async () => {
+    const seen = await libraryFor(fixture.player.account.token);
+
+    expect(named(seen)).toContain(CREATURES.hersShared);
+    expect(named(seen)).not.toContain(CREATURES.hersPrivate);
+    // The other table is Jo's, not theirs, so it is out by the campaign gate as
+    // well — two independent reasons, and this asserts the pair.
+    expect(named(seen)).not.toContain(CREATURES.herOtherTable);
+  });
+
+  it("gives a player none of the corpus while the corpus is DM-only", async () => {
+    // `corpusRowReadable` says "global" means shared between a DM's campaigns,
+    // not shared with their players, and quantifying the campaign does not
+    // change that: the row's own visibility is tested inside the `exists`.
+    const seen = await libraryFor(fixture.player.account.token);
+
+    expect(seen.filter((creature) => creature.campaignId === null)).toEqual([]);
+  });
+
+  it("gives it to them once their DM shares it, and takes it back when she stops", async () => {
+    const list = () => libraryFor(fixture.player.account.token);
+    const setVisibility = (visibility: "dm" | "shared") =>
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`
+            update creature set visibility = ${visibility}
+            where campaign_id is null and name = 'Goblin Boss'
+          `;
+        }).pipe(Effect.orDie),
+      );
+
+    await setVisibility("shared");
+    const shared = await list();
+    await setVisibility("dm");
+    const unshared = await list();
+
+    expect(named(shared)).toContain("Goblin Boss");
+    expect(named(unshared)).not.toContain("Goblin Boss");
+  });
+});
+
+describe("the credential's own narrowings", () => {
+  it("reaches only the campaign a scoped credential was minted for, plus the corpus", async () => {
+    // Nothing mints a campaign-scoped credential over HTTP yet, so this is the
+    // one case that reaches past the wire: the actor is built by hand and the
+    // read goes to the repository. Scope and membership narrow independently,
+    // and this is the half no HTTP request in the product can exercise.
+    const scoped = new Actor({ accountId: fixture.jo.accountId, campaignId: fixture.saltRoad.id });
+    const seen = await runtime.runPromise(
+      Effect.flatMap(Creatures, (creatures) => creatures.library({})).pipe(
+        Effect.provideService(CurrentActor, scoped),
+        Effect.orDie,
+      ),
+    );
+
+    expect(named(seen)).toContain(CREATURES.hersPrivate);
+    expect(named(seen)).toContain("Goblin Boss");
+    // Her own second table, refused by the credential rather than by membership
+    // — which is exactly the leak the scope clause closed, met with no campaign
+    // in the path to hide behind.
+    expect(named(seen)).not.toContain(CREATURES.herOtherTable);
+    expect(named(seen)).not.toContain(CREATURES.theirs);
+  });
+
+  it("loses the rows when the membership behind them is revoked", async () => {
+    const before = await libraryFor(fixture.leaver.account.token);
+
+    await runtime.runPromise(
+      Effect.flatMap(clientFor(fixture.jo.token), (asJo) =>
+        asJo.invites.revoke({
+          params: { campaignId: fixture.saltRoad.id, inviteId: fixture.leaver.invite.id },
+          payload: {},
+        }),
+      ).pipe(Effect.orDie),
+    );
+
+    const after = await libraryFor(fixture.leaver.account.token);
+
+    // Revoking an accepted invitation revokes the membership it granted, in the
+    // same transaction — so this is the ordinary `campaignInScope` clause taking
+    // the rows away, one level up from where it usually does.
+    expect(named(before)).toContain(CREATURES.hersShared);
+    expect(after).toEqual([]);
   });
 });
 
 describe("the controls", () => {
   it("search the name and the stat block, the way the bestiary does", async () => {
-    const byName = await libraryFor(fixture.stranger.token, { q: "gob" });
-
     // `ILIKE` on the name, mid-type — the half full text cannot do, because
     // "gob" is no lexeme of "Goblin".
+    const byName = await libraryFor(fixture.jo.token, { q: "gob" });
+    // And full text over the document, which no column holds.
+    const byTrait = await libraryFor(fixture.jo.token, { q: "nimble escape" });
+
     expect(named(byName)).toContain("Goblin Boss");
+    expect(named(byTrait)).toEqual(["Goblin Boss"]);
   });
 
-  it("order by challenge rating, name and recency", async () => {
-    const byCr = await libraryFor(fixture.stranger.token, { sort: "cr" });
-    const byName = await libraryFor(fixture.stranger.token, { sort: "name" });
+  it("order by challenge rating and by name", async () => {
+    const byCr = await libraryFor(fixture.jo.token, { sort: "cr" });
+    const byName = await libraryFor(fixture.jo.token, { sort: "name" });
 
-    expect([...byCr].map((creature) => creature.crSort)).toEqual(
-      [...byCr].map((creature) => creature.crSort).sort((a, b) => a - b),
+    expect(byCr.map((creature) => creature.crSort)).toEqual(
+      [...byCr.map((creature) => creature.crSort)].sort((a, b) => a - b),
     );
     expect(named(byName)).toEqual([...named(byName)].sort());
   });
 
   it("narrow by environment, any-of", async () => {
-    // Two of them, deliberately — see the next test. The corpus's two shared
-    // rows are Goblin Boss (`Marsh`, `Cave`) and Marsh Hag (`Marsh`), so this
-    // pair really narrows rather than trivially matching everything.
-    const narrowed = await libraryFor(fixture.stranger.token, {
-      environments: ["Cave", "River"],
-    });
+    const narrowed = await libraryFor(fixture.jo.token, { environments: ["Cave", "Night"] });
 
-    expect(named(narrowed)).toEqual(["Goblin Boss"]);
+    expect(narrowed.length).toBeGreaterThan(0);
+    for (const creature of narrowed) {
+      expect(
+        creature.environments.some((environment) => ["Cave", "Night"].includes(environment)),
+        `${creature.name} lives in neither`,
+      ).toBe(true);
+    }
   });
 
   it("is refused a one-element environment filter, exactly as the bestiary is", async () => {
@@ -350,7 +383,7 @@ describe("the controls", () => {
     // client-side workaround and not in a special case here. This assertion is
     // what will fail — loudly, and in the right file — on the day it lands.
     const refused = await runtime.runPromise(
-      Effect.flatMap(clientFor(fixture.stranger.token), (client) =>
+      Effect.flatMap(clientFor(fixture.jo.token), (client) =>
         client.library.list({ query: { environments: ["Cave"] } }),
       ).pipe(Effect.result),
     );
@@ -360,17 +393,17 @@ describe("the controls", () => {
 
   it("has no scope, and naming one anyway reaches nothing", async () => {
     // `CreatureFilter` carries `scope`; `LibraryFilter` deliberately does not —
-    // a filter with one legal value is a control that cannot mean anything, the
-    // shape `campaign_invite.role` was refused for. The derived client will not
-    // let one be sent at all, which is the good outcome and also why this goes
-    // over a raw request: the question is what the *server* does when a client
-    // that is not ours names one.
+    // the Library is one list by definition, and a client that could ask for
+    // "just the campaign half" would be asking a question with no campaign to
+    // ask it about. The derived client will not send one, which is the good
+    // outcome and also why this goes over a raw request: the question is what
+    // the *server* does when a client that is not ours names one.
     const body = await runtime.runPromise(
       Effect.gen(function* () {
         const http = yield* HttpClient.HttpClient;
         const response = yield* http.get(
-          "/library/creatures?scope=campaign&campaignId=" + fixture.campaign.id,
-          { headers: { authorization: `Bearer ${fixture.dm.token}` } },
+          `/library/creatures?scope=campaign&campaignId=${fixture.theirTable}`,
+          { headers: { authorization: `Bearer ${fixture.jo.token}` } },
         );
         return yield* response.json;
       }).pipe(Effect.orDie),
@@ -379,7 +412,7 @@ describe("the controls", () => {
       (creature) => creature.name,
     );
 
-    expect(names).not.toContain(fixture.sharedAuthored.name);
-    expect(names).toContain("Goblin Boss");
+    expect(names).not.toContain(CREATURES.theirs);
+    expect(names).toContain(CREATURES.hersPrivate);
   });
 });
