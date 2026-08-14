@@ -654,6 +654,18 @@ against a clean tree before believing it. `pnpm test` from the root does not sho
 web and server together and each takes fewer workers), and `--maxWorkers=6` is the one-flag
 answer when it does.
 
+**The web suite has its own load-sensitive flake, and it is the same trap wearing a different
+face.** `campaign/authoring.test.tsx`'s _"names it, rates it, tags it, and attaches a creature — in
+one save"_ drives a whole dialog through Base UI's keyboard-driven `Select`, and on a busy machine
+it lands near Vitest's default 5000ms. Measured across ten root runs on an unchanged tree it ranged
+**1963–4980ms** — twenty milliseconds from failing, with nothing changed — and it takes
+`sends shared only when the DM says so` down with it. Both times it has been seen, the change in
+flight was nowhere near it. **Check the same commit twice under different load before believing a
+web-suite failure is yours**, and measure the suspect file _in isolation_ rather than comparing
+whole-suite numbers taken minutes apart: this box runs several agents at once, load average swings
+from 2 to 12, and a same-commit A/B taken at two different moments will happily "prove" a doubling
+that is not there.
+
 ## The actor and visibility contract
 
 Every future endpoint follows this. It is the one ordering constraint the architecture calls
@@ -1816,7 +1828,7 @@ settles it without asking the vendor at all. Measured with a `MutationObserver` 
 document-start: with a token, the homepage's headline was in the DOM on **zero** of 207 sampled
 frames.
 
-### Signing out forgets the machine token, and the fix had one real hazard
+### Signing out forgets the machine token, and the arming has to outlive the page
 
 Captain's decision, with the cost put to them and accepted: **after any sign-out a developer
 pastes their token again.** Do not soften it and do not add a "keep my token" opt-out.
@@ -1826,32 +1838,113 @@ marketing site"_ — and the shape of that defect is worth keeping, because the 
 one and are not: the **trigger** was signing out of the hosted provider; the **masking condition**
 was a machine token left in `localStorage` that the presence check consults first and that nothing
 removed; the **symptom** was the app staying on screen. A private window worked, which made it look
-like a hosted-session bug. Measured either side in a real browser with a real publishable key.
+like a hosted-session bug.
 
-**`useSignOutForgetsMachineToken` (`auth/credential.ts`) is keyed on a transition, never on the
-steady state of `signedIn` being false, and that distinction is the whole design.** A configured
-provider reports `signedIn: false` while it is still deciding, so the obvious version of this fix
-clears the token on **every page load, before the vendor answers** — destroying the credential of
-every developer who reloads, including everyone who never signed out. It would pass a hand test.
-What makes the transition structural rather than careful is a ref that starts `false` on every
-mount and is set only by `signedIn === true`: a load can only ever set it, `loading` returns early,
-and with no provider `signedIn` is never true, so the whole hook is inert on the unconfigured build.
-Measured after the fix: 10/10 reloads kept the token, and across 705 sampled frames the homepage's
-headline was in the DOM **zero** times and the token was absent **zero** times.
+**This has been fixed twice, and the second round is the one worth reading**, because the first fix
+was correct about the hazard and wrong about the mechanism — and it failed _silently_, reaching the
+captain a second time with the same symptom.
+
+#### Why the in-memory guard could never have worked
+
+`useSignOutForgetsMachineToken` (`auth/credential.ts`) must not be keyed on the steady state of
+`signedIn` being false: a configured provider reports exactly that while it is still deciding, so
+the obvious version clears the token on **every page load, before the vendor answers**, destroying
+the credential of every developer who reloads including everyone who never signed out. That hazard
+is real, is the worse of the two, and nothing here relaxes it.
+
+The first fix answered it with a `useRef` that started `false` on every mount and was set only by
+observing `signedIn === true`. Load-safe, and **remount-fragile — which is fatal, because a hosted
+sign-out _is_ a remount.** Clerk navigates to its after-sign-out URL (`afterSignOutUrl`, default
+`/`), the page reloads, and the fresh instance watches nobody sign in, so the transition it is
+waiting for cannot happen. The captain saw a bare `http://localhost:5173/` showing the app and
+_"No credential yet"_, with `taverns.token` still in storage and reloading no help at all.
+
+**The lesson generalises past this hook: a guard that only lives in memory is not a guard against
+anything a navigation can do.** The two are only distinguishable by a test that actually rebuilds
+the tree, which is why `signOut.test.tsx` has a `reload()` helper (`cleanup()`, then a fresh
+`render`) and why every assertion about the sign-out goes through it.
+
+#### What works: durable arming, spent on use
+
+`taverns.hosted-seen` is written to `localStorage` when a **settled** session is observed, and the
+clear reads it back rather than remembering it — so the arming outlives the tree, the tab and the
+reload, which is the one property a ref could not have. Four guards, each answering a different
+half, and all four are pinned by their own tests:
+
+- **`configured` returns first**, so a build with no publishable key reaches storage at all — it
+  neither arms the marker nor spends one left behind by a build that had a key. That is most
+  development and is the case that must not regress.
+- **`loading` returns early**, so an in-flight answer is not an answer. This is what keeps an
+  ordinary reload safe _while the marker is armed_, which is the state the old fix could never be
+  in on a fresh load and is where the load-time hazard now lives.
+- **only a settled `signedIn === true` arms it**, so a browser that has never been signed in never
+  has a marker and the everyday case — Clerk configured, nobody signed in, working off a pasted
+  token — is untouched however often it reloads.
+- **disarming is part of the same act as the clear.** This is the cost of holding state and the
+  mirror of the bug above: a marker that outlived the sign-out it armed would eat the _next_ token
+  pasted, on the next reload, for ever.
+
+`useLayoutEffect`, not `useEffect`: the clear flips the gate, and on the load after a sign-out the
+app would otherwise paint for one frame before the homepage replaced it — the flash `SignedOutGate`
+exists to avoid, arriving by a different door.
+
+#### The vendor offers no sign-out seam worth having, and this was checked rather than assumed
+
+Hooking Clerk's own sign-out would need no marker and nothing to clean up, so it was the first
+candidate. It does not exist for this app, measured against the installed `@clerk/react@6.12.11` and
+`@clerk/shared@4.26.0` type declarations:
+
+- **`ClerkProvider` has no sign-out callback of any kind.** `afterSignOutUrl` and
+  `afterMultiSessionSingleSignOutUrl` are `string | null` navigation targets, not functions.
+- **`signOut(callback, options)` does exist** on `useClerk()`/`useAuth()` — but it only fires for a
+  sign-out _we_ initiate. This app signs out through Clerk's prefabricated `<UserButton />`
+  (`auth/SignInSurface.tsx`), whose props carry nothing sign-out related; `<UserButton.Action>` can
+  reorder or relabel the built-in action but cannot attach a handler. Taking that seam therefore
+  means replacing the account menu with our own control, which is exactly what the sign-in surface
+  section records the captain deciding against.
+- **`clerk.on(...)`'s entire event union is `'status'`** (`'degraded' | 'error' | 'loading' |
+'ready'`), which does not change on sign-out.
+- **`clerk.addListener` is the only universal-coverage seam and is the same design one layer
+  lower** — it observes the aftermath and its own doc says you must track previous state yourself,
+  because there is no "signed out" event. That tracking is the ref that dies on remount, plus a
+  vendor import outside the two files allowed to have one.
+
+Observing the settled state also keeps a behaviour a callback would lose: **a session that expires
+or is revoked in another tab takes the same path**, which is correct rather than incidental — the
+credential this token was sitting beside is gone.
+
+#### Where it is mounted, and what is measurable
 
 It is mounted by `HostedSessionScope` in `auth/AuthProvider.tsx` — **which exists to make that
 composition testable without the vendor**, since Clerk's `useAuth()` cannot be mounted in jsdom.
 `apps/web/src/auth/signOut.test.tsx` renders that real scope with a `HostedSession` of its own and
-flips it; five of its ten tests fail with the mount removed and the four load-time ones do not,
-which is what says the guard is a guard rather than a restatement. `clearMachineToken` notifies the
-same watchers a write does, so forgetting the token is a **render** — the gate flips to the homepage
-with no reload — and `ServerPanel`'s machine-token box is subscribed to the store rather than seeded
-from it once, so it empties and says why instead of showing a credential the app has thrown away.
+flips it; **8 of its 21 tests fail against the previous fix and 13 do not**, which is what says the
+durability is load-bearing rather than a restatement. `clearMachineToken` notifies the same watchers
+a write does, so forgetting the token is a **render** — the gate flips to the homepage with no
+reload — and `ServerPanel`'s machine-token box is subscribed to the store rather than seeded from it
+once, so it empties and says why instead of showing a credential the app has thrown away.
 
 **Driving the captain's literal path is not possible from a scripted browser**: hosted sign-_in_ is
-behind Cloudflare Turnstile (`AGENTS.md`'s sign-in surface section records this), so there is no way
-to reach a session to end. Everything either side of the vendor is measurable and was measured; the
-sign-out edge itself is only reachable in tests. Do not spend time trying to defeat the challenge.
+behind Cloudflare Turnstile (see the sign-in surface section), so there is no way to reach a session
+to end. Do not spend time trying to defeat the challenge. What _is_ measurable is everything either
+side of it, and the post-sign-out load is fully reachable because the state a real sign-out leaves
+is just _marker armed + Clerk settling to signed-out_ — only the arming has to be seeded by hand.
+Measured against a real Clerk in Chromium, sampling every frame from a document-start hook
+(`Page.addScriptToEvaluateOnNewDocument`; nothing later can see the loading window):
+
+- **armed + token, Clerk deciding** — 233 frames: token and marker present through the whole 657ms
+  loading window, then **both gone in the same frame** Clerk settles, with the homepage already up.
+  **Zero frames** show the app over a dead credential, which is the layout effect earning its place.
+- **token, never signed in, Clerk deciding** — 229 frames, token present in **every one**.
+- **no publishable key, stale marker present** — 225 frames, marker never read and never removed,
+  token present throughout. Inert, not merely harmless.
+- **the whole flow in one session** — sign-out clears both keys, then a re-pasted token survives
+  three consecutive reloads.
+
+The one thing no test and no measurement here reaches is whether a real Clerk can report
+`isLoaded: true, isSignedIn: false` transiently for a genuinely signed-in user; a spurious settle
+would spend the marker. Every observed transition was monotonic `loading → signed-out`, but that is
+the signed-out case only, and confirming the other one needs a sign-in nobody can script.
 
 ### Two routes are exempt, and one exemption is a security property
 

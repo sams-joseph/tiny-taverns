@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useLayoutEffect, useSyncExternalStore } from "react";
 import { useHostedSession } from "./hostedSession";
 
 /**
@@ -20,6 +20,16 @@ import { useHostedSession } from "./hostedSession";
  */
 
 const MACHINE_TOKEN_KEY = "taverns.token";
+
+/**
+ * Where "this browser has been signed in" is remembered, so that a sign-out
+ * still forgets the machine token when the vendor reloads the page on its way
+ * out. See `useSignOutForgetsMachineToken`, which is the only reader.
+ *
+ * Storage rather than a `useRef`, and that is the whole fix: a marker held in
+ * memory dies with the tree, and a hosted sign-out commonly navigates.
+ */
+const HOSTED_SEEN_KEY = "taverns.hosted-seen";
 
 /**
  * `window.localStorage`, not the bare global: Node 26 defines its own
@@ -114,6 +124,19 @@ export const useCredentialPresence = (): CredentialPresence => {
 };
 
 /**
+ * Whether this browser has been signed in — the armed half of the sign-out
+ * clear, and the *only* thing that distinguishes a sign-out from an ordinary
+ * signed-out page load.
+ *
+ * The value is never read; the key's presence is the whole of it.
+ */
+const signedInHere = (): boolean => (storage()?.getItem(HOSTED_SEEN_KEY) ?? null) !== null;
+
+const armSignOutClear = (): void => void storage()?.setItem(HOSTED_SEEN_KEY, "1");
+
+const disarmSignOutClear = (): void => void storage()?.removeItem(HOSTED_SEEN_KEY);
+
+/**
  * Signing out of the hosted provider forgets the pasted machine token too.
  *
  * **The captain's decision, with the cost put to them and accepted: after any
@@ -125,46 +148,82 @@ export const useCredentialPresence = (): CredentialPresence => {
  * That is the reported defect, and it was invisible in a private window because
  * a private window has no stored token to outrank anything.
  *
- * ### Why this cannot fire on a plain page load
+ * ### The clear must survive the app being built again
  *
- * The hazard is the whole design here, so it is worth being explicit about.
+ * **This is the second round of that defect and the reason the marker is in
+ * storage.** The first fix armed a `useRef` that started `false` on every
+ * mount, set only by observing `signedIn === true`. That is remount-*fragile*,
+ * and a hosted sign-out is exactly a remount: the vendor navigates to its
+ * after-sign-out URL, the page reloads, and the fresh instance never watches
+ * anybody sign in — so the transition it is waiting for cannot happen and the
+ * token is never cleared. Measured as a bare `http://localhost:5173/` showing
+ * the app and *"No credential yet"*, with `taverns.token` still in storage and
+ * reloading no help at all.
+ *
+ * So the arming is durable and the hook reads it back rather than remembering
+ * it: `signedInHere()` outlives the tree, the tab and the reload, which is the
+ * one property a ref could not have.
+ *
+ * ### Why it still cannot fire on a plain page load
+ *
+ * The hazard is real and is the worse of the two, so nothing here relaxes it.
  * A configured provider says `signedIn: false` while it is still deciding — the
  * same `unknown` moment `HostedSession.loading` exists for. A clear keyed on
- * *"`signedIn` is false"* would therefore run on every single load, before the
- * vendor answered, and destroy the token of every developer who reloaded. It
- * would look like it worked when tested by hand.
+ * *"`signedIn` is false"* would run on every single load, before the vendor
+ * answered, and destroy the token of every developer who reloaded. It would
+ * look like it worked when tested by hand.
  *
- * So the clear is keyed on a **transition this page has watched happen**, and
- * `seenSignedIn` is what makes that structural rather than a matter of care:
+ * Three guards keep that shut, and each answers a different half of it:
  *
- *  - it starts `false` on every mount, so a load can only ever *set* it;
- *  - only `signedIn === true` sets it, which no unsettled provider reports;
- *  - `loading` returns early, so an in-flight answer is not an answer;
- *  - with no provider configured `signedIn` is never `true`
- *    (`NO_HOSTED_SESSION`), so the whole hook is inert and the machine token
- *    keeps working exactly as it did — the opt-in property this app is built
- *    on, and the reason a developer never waits on a vendor they have not set
- *    up.
+ *  - **`loading` returns early**, so an in-flight answer is not an answer. This
+ *    is the one that makes an ordinary reload safe: the marker may well be
+ *    armed, and while the vendor is deciding it is not consulted at all.
+ *  - **only a settled `signedIn === true` arms it**, which no unsettled
+ *    provider reports. A browser that has never been signed in never has a
+ *    marker, so the everyday case — Clerk configured, nobody signed in, working
+ *    off a pasted token — is untouched however often it reloads.
+ *  - **`configured` returns earlier still**, so a build with no publishable key
+ *    neither writes the marker nor spends one. That is most development, and it
+ *    is inert rather than merely harmless: the hook reaches no storage at all.
+ *
+ * ### The marker is spent, not left behind
+ *
+ * The mirror of the bug above, and the cost of holding state: a marker that
+ * outlived the sign-out it armed would eat the *next* token pasted, on the next
+ * reload, for ever. So disarming is part of the same act as the clear rather
+ * than a tidy-up somewhere else — after a sign-out the browser is back to
+ * having-never-been-signed-in, and a token pasted afterwards is safe until
+ * somebody signs in again.
  *
  * A session that expires or is revoked in another tab takes the same path, and
  * that is correct rather than incidental: the credential this token was sitting
  * beside is gone, and the app's answer to "who are you" should not be "still
- * whoever pasted that".
+ * whoever pasted that". It is also why this observes the vendor's state rather
+ * than hooking its sign-out button — see `AGENTS.md` for the seam that was
+ * weighed and rejected.
+ *
+ * `useLayoutEffect`, not `useEffect`: the clear flips the signed-out gate, and
+ * on the load after a sign-out the app would otherwise paint for one frame
+ * before the marketing page replaced it. That is the flash `SignedOutGate`
+ * exists to avoid, arriving by a different door. This app has no SSR, so there
+ * is no environment where a layout effect is the wrong hook.
  */
 export const useSignOutForgetsMachineToken = (): void => {
-  const { signedIn, loading } = useHostedSession();
-  const seenSignedIn = useRef(false);
+  const { configured, signedIn, loading } = useHostedSession();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!configured) return;
     if (loading) return;
     if (signedIn) {
-      seenSignedIn.current = true;
+      armSignOutClear();
       return;
     }
-    if (!seenSignedIn.current) return;
-    seenSignedIn.current = false;
+    if (!signedInHere()) return;
+    // Disarmed first, so that nothing woken by the clear can find the marker
+    // still standing and spend it a second time.
+    disarmSignOutClear();
     clearMachineToken();
-  }, [signedIn, loading]);
+  }, [configured, signedIn, loading]);
 };
 
 /** Resolves a bearer token, or `undefined` when the app has no credential at all. */
