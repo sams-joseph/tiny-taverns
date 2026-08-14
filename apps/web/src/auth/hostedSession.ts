@@ -16,12 +16,31 @@ import { createContext, use } from "react";
  *    dashboard runs the app. The whole surface simply is not offered.
  *  - `configured: true, signedIn: false` — sign-in is available, nobody has.
  *  - `signedIn: true` — `fetchToken` can produce a credential.
+ *
+ * `loading` cuts across those: a configured provider answers *"is anybody
+ * signed in?"* asynchronously, and until it has, `signedIn: false` means *"we
+ * do not know yet"* rather than *"nobody is"*.
  */
 export interface HostedSession {
   /** Whether a hosted identity provider is configured at all. */
   readonly configured: boolean;
   /** Whether someone is signed in through it right now. */
   readonly signedIn: boolean;
+  /**
+   * Whether the vendor is still deciding whether anybody is signed in.
+   *
+   * **This exists for the signed-out gate and nothing else** (see
+   * `marketing/SignedOutGate.tsx`). Everything else in the app treats "not
+   * signed in yet" and "not signed in" alike, because both mean the same thing
+   * to a request: fall through to the machine token. The gate cannot, because
+   * it renders a whole different page for the two, and a `signedIn: false`
+   * that has not settled would paint the marketing homepage over the app for
+   * as long as the vendor's script takes to answer.
+   *
+   * `false` whenever `configured` is `false` — with no provider there is
+   * nothing to wait for, and the answer is already known.
+   */
+  readonly loading: boolean;
   /**
    * A *fresh* session token, or `undefined` when there is none to be had.
    *
@@ -45,6 +64,7 @@ export interface HostedSession {
 export const NO_HOSTED_SESSION: HostedSession = {
   configured: false,
   signedIn: false,
+  loading: false,
   fetchToken: () => Promise.resolve(undefined),
 };
 

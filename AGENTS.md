@@ -1788,6 +1788,83 @@ either a real human or `@clerk/testing`'s Testing Tokens — and those need `CLE
 which this design deliberately does not have. Budget for a human to click through it, or
 expect to bypass it in the dashboard for a development instance.
 
+## The signed-out view: the marketing homepage, and the gate that decides
+
+`apps/web/src/marketing/` is `packages/design-system/ui_kits/marketing/Site.jsx` built out of the
+shipped components — the homepage, plus **`SignedOutGate`, which is the root route's component**.
+The gate is the part worth reading before touching anything here; the page is an ordinary screen.
+
+### The gate is "no credential of any kind", and that is the captain's own wording
+
+> _It shows when there is neither a hosted session nor a developer token._
+
+Not "nobody is signed in through the hosted provider", which is the reading that looks equivalent
+and is not. **Hosted sign-in is opt-in and is normally unconfigured in development**, so a gate
+keyed on the hosted session alone would show the marketing page to every developer instead of the
+app, every time. `auth/credential.ts` already resolves both kinds per request; `useCredentialPresence`
+there asks that same file the same question one moment earlier, and is the _only_ consumer of
+the machine token that is a React subscription (`useSyncExternalStore` over `writeMachineToken`) —
+because pasting a token into the Server panel now changes **which page the app is**, and
+`localStorage` fires no event for a write in its own tab.
+
+**It has a third answer, and a boolean would have been a bug.** `HostedSession.loading` exists for
+this and nothing else: a configured provider says `signedIn: false` while it is still deciding, so
+read as a boolean it paints the homepage over the app on every load for every signed-in visitor.
+`unknown` renders **neither page** — an empty page-coloured frame, the same choice Clerk's own
+`Show` makes. It cannot hang: with no provider there is nothing to wait for, and a pasted token
+settles it without asking the vendor at all. Measured with a `MutationObserver` installed at
+document-start: with a token, the homepage's headline was in the DOM on **zero** of 207 sampled
+frames.
+
+### Two routes are exempt, and one exemption is a security property
+
+- **`#/join/<token>`.** It previews an invitation _before_ there is anybody to accept it as, which
+  is the whole point of it. A gate over it would break the one flow designed to run with no
+  credential and would do it silently — the homepage renders perfectly well over an invitation.
+- **`#/gallery`.** It holds `ServerPanel`, where a machine token is pasted, and that is the only
+  credential a build with no publishable key has. Gated, a developer with neither would see the
+  homepage, whose call to action points at the Server panel, which is behind the homepage.
+
+The exemption is checked **before** the credential, so neither route ever waits on a vendor.
+
+**Every screen test goes through the gate now**, which is why `test/renderRoute.tsx`'s `renderAt`
+pastes a machine token by default: a screen fixture means _the app as somebody entitled to be in it
+sees it_, and without a credential the root route renders the homepage. Pass `"none"` for the tests
+that are about the gate, and for `join/JoinScreen.test.tsx`, whose signed-out case would otherwise
+stop meaning anything.
+
+### What the drawing claims that this build cannot
+
+Reported rather than shipped, the rule every kit screen has followed:
+
+- **The pricing section is gone**, by the captain's decision: three plans and two prices for a
+  product with no billing, no plans and no limits — and co-DM seats, which this project has decided
+  against and has `campaign_invite`'s missing `role` column preventing. _Pricing_ left the header
+  nav and the footer with it. The hero's _v2.4_ badge and its "free while your party is under five"
+  line went for the same reason.
+- **The email capture is gone.** Accounts come from the hosted identity provider; there is no list
+  to join and no link this product sends. `marketing/StartCta.tsx` is what replaced it, and **the
+  wrinkle it answers is the interesting part**: hosted sign-in is usually unconfigured, and
+  `SignInSurface` answers that by rendering nothing — right for a header, wrong for the one button
+  a whole page is built around. So the button changes destination rather than disappearing, to the
+  machine token, which is a real way in and the only one on that build.
+- **Three of the six feature claims were rewritten onto shipped behaviour**: rolling has no
+  endpoint, the bestiary screen is read-only, and there is no map.
+- **Every dead link is absent rather than inert** — Bestiary, Changelog, Player view, Status,
+  Contact, Privacy, Getting started, Keyboard shortcuts, Import a monster, Printable sheets. What
+  is left is this page's own sections and `#/gallery`.
+
+**The kit's README is stale about colour and should be ignored on that point.** It describes a
+"dark / light / light / sunken / light / dark" rhythm; `Site.jsx` is fully dark on the current
+palette and is the one that is right — this product is dark only by construction. What the rhythm
+survives as is the surface stack: page, page, sunken, page, card.
+
+**In-page anchors are `<Link to="/" hash="…">`, never `href="#features"`** — a bare fragment
+replaces the route under a hash history. One measured caveat: a **cross-route** hash
+(`#/gallery#server`) navigates correctly but lands imprecisely, because the gallery grows under
+the scroll restoration as its specimens paint. That is the gallery's own behaviour, not the link's,
+and it is why the sentence under the button names the way there in words as well.
+
 ## Screens in `apps/web`: the shape every new one should copy
 
 The campaign view is the first screen built on the API, the runner is the second, the bestiary

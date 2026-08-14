@@ -12,12 +12,16 @@ import { HostedSessionContext, type HostedSession } from "./hostedSession";
  * conditionally.
  */
 function HostedSessionBridge({ children }: PropsWithChildren): ReactNode {
-  const { isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
 
   const session = useMemo<HostedSession>(
     () => ({
       configured: true,
       signedIn: isSignedIn === true,
+      // Until the vendor has loaded, `isSignedIn` is `undefined` — which is
+      // *unknown*, not *no*. Only the signed-out gate cares about the
+      // difference, and it cares a great deal: see `HostedSession.loading`.
+      loading: isLoaded !== true,
       fetchToken: async () => {
         try {
           // Core 3 changed this: `getToken()` *throws* `ClerkOfflineError`
@@ -31,7 +35,7 @@ function HostedSessionBridge({ children }: PropsWithChildren): ReactNode {
         }
       },
     }),
-    [isSignedIn, getToken],
+    [isLoaded, isSignedIn, getToken],
   );
 
   return <HostedSessionContext value={session}>{children}</HostedSessionContext>;

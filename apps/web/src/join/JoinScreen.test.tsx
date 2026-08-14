@@ -79,19 +79,35 @@ vi.stubGlobal("fetch", (url: string | URL, init: RequestInit | undefined) => {
 const signedIn: HostedSession = {
   configured: true,
   signedIn: true,
+  loading: false,
   fetchToken: () => Promise.resolve("session-token"),
 };
 
 const signedOut: HostedSession = {
   configured: true,
   signedIn: false,
+  loading: false,
   fetchToken: () => Promise.resolve(undefined),
 };
 
+/**
+ * The join page, with **no machine token pasted** — unlike every other screen
+ * fixture here.
+ *
+ * That is the point of the page rather than a detail of the test: it renders
+ * before there is anybody to render it for, and `JoinScreen` decides whether to
+ * offer the seat on whether *any* credential exists. Handed the default token
+ * `renderAt` pastes, the signed-out case below would be a signed-in one and the
+ * assertion that there is nothing to press would silently stop meaning
+ * anything. The route's exemption from the signed-out gate is asserted in
+ * `marketing/SignedOutGate.test.tsx`.
+ */
 const renderJoin = async (hosted: HostedSession = signedIn): Promise<void> => {
-  await renderAt(`/join/${TOKEN}`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
-  ));
+  await renderAt(
+    `/join/${TOKEN}`,
+    (screen) => <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>,
+    "none",
+  );
 };
 
 beforeEach(() => {

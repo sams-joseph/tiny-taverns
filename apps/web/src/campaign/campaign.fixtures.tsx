@@ -420,6 +420,7 @@ export const mintingSession = (): HostedSession & { readonly minted: () => numbe
   return {
     configured: true,
     signedIn: true,
+    loading: false,
     fetchToken: () => Promise.resolve(`session-token-${++issued}`),
     minted: () => issued,
   };
@@ -428,6 +429,7 @@ export const mintingSession = (): HostedSession & { readonly minted: () => numbe
 export const noSession: HostedSession = {
   configured: false,
   signedIn: false,
+  loading: false,
   fetchToken: () => Promise.resolve(undefined),
 };
 
@@ -472,28 +474,13 @@ export const renderParty = async (hosted: HostedSession = noSession): Promise<vo
 };
 
 /**
- * jsdom here ships **no** `localStorage` at all — neither `window.localStorage`
- * nor the bare global, since Node 26's own one is inert without
- * `--localstorage-file`. `auth/credential.ts` tolerates that (the machine token
- * simply reads empty), so exercising the fallback needs a real one installed.
+ * jsdom here ships **no** `localStorage` at all, so exercising the stored
+ * machine token needs one installed. It lives in `test/storage.ts` now — every
+ * rendered route needs a credential since the signed-out gate landed, not only
+ * this screen's — and is re-exported here so the call sites did not have to
+ * move with it.
  */
-export const installMemoryStorage = (): void => {
-  const entries = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
-    value: {
-      getItem: (key: string) => entries.get(key) ?? null,
-      setItem: (key: string, value: string) => void entries.set(key, value),
-      removeItem: (key: string) => void entries.delete(key),
-      clear: () => entries.clear(),
-      key: (index: number) => [...entries.keys()][index] ?? null,
-      get length() {
-        return entries.size;
-      },
-    } satisfies Storage,
-    configurable: true,
-    writable: true,
-  });
-};
+export { installMemoryStorage } from "../test/storage";
 
 /** The JSON body of the first call matching a method and a path fragment. */
 export const bodyOf = (server: StubServer, method: string, fragment: string): unknown => {

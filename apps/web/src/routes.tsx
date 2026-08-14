@@ -4,7 +4,6 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  Outlet,
 } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { BestiaryScreen } from "./bestiary/BestiaryScreen";
@@ -18,6 +17,7 @@ import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { PlayerChronicleScreen } from "./chronicle/PlayerChronicleScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
+import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
 import { RunScreen } from "./run/RunScreen";
@@ -101,7 +101,17 @@ const asRunId = decoder(EncounterRunId);
 const asToken = (raw: string | undefined): string | undefined =>
   raw !== undefined && /^[A-Za-z0-9_-]+$/.test(raw) ? raw : undefined;
 
-const rootRoute = createRootRoute({ component: Outlet });
+/**
+ * The root, which renders the gate rather than a bare `<Outlet />`.
+ *
+ * **The marketing homepage is the signed-out view of the app**, so "is there a
+ * credential?" is asked once, above every match, instead of by each screen. It
+ * has to be *inside* the router rather than around it, because two routes are
+ * exempt and one of those exemptions is a security property — see
+ * `marketing/SignedOutGate.tsx`, which is where the whole of it is written
+ * down, including why `#/join/<token>` may never be swallowed by it.
+ */
+const rootRoute = createRootRoute({ component: SignedOutGate });
 
 /**
  * The campaign list, and the whole of what `#/` means.

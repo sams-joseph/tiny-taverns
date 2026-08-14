@@ -264,6 +264,7 @@
   --shadow-ring: var(--ring);
 
   --blur-scrim: var(--scrim-blur);
+  --blur-site-header: var(--site-header-blur);
 
   /* -- motion. Nothing overshoots and nothing steps. ------------------------ */
   --ease-out: var(--ease-out);

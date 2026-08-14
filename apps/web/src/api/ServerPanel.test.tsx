@@ -51,6 +51,7 @@ const mintingSession = (): HostedSession & { readonly minted: () => number } => 
   return {
     configured: true,
     signedIn: true,
+    loading: false,
     fetchToken: () => Promise.resolve(`session-token-${++issued}`),
     minted: () => issued,
   };
@@ -148,6 +149,7 @@ describe("ServerPanel", () => {
     const signedOut: HostedSession = {
       configured: true,
       signedIn: false,
+      loading: false,
       fetchToken: () => Promise.resolve(undefined),
     };
 

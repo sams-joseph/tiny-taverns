@@ -61,6 +61,7 @@ vi.stubGlobal("fetch", (url: string | URL, init: RequestInit | undefined) => {
 const session: HostedSession = {
   configured: true,
   signedIn: true,
+  loading: false,
   fetchToken: () => Promise.resolve("session-token"),
 };
 

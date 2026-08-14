@@ -1,7 +1,25 @@
 import { createHashHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { readMachineToken, writeMachineToken } from "../auth/credential";
 import { routeTree } from "../routes";
+import { ensureStorage } from "./storage";
+
+/**
+ * Whether the visitor has a credential — which since the signed-out gate landed
+ * decides *which page the app is*, not merely whether a request is answered.
+ *
+ * `"machine-token"` is the default because that is what a screen test means:
+ * *the app, as somebody who is entitled to be in it sees it*. Without one the
+ * root route renders the marketing homepage, which is the product's real
+ * answer and would make every screen fixture assert against the wrong page.
+ * `"none"` is for the tests that are about the gate itself, and for the join
+ * page, which is designed to render with no credential at all.
+ */
+export type TestCredential = "machine-token" | "none";
+
+/** The token `renderAt` pastes when a test does not paste one of its own. */
+export const TEST_MACHINE_TOKEN = "a-test-token";
 
 /**
  * Render the app at a URL, rather than rendering a screen by hand.
@@ -27,7 +45,14 @@ import { routeTree } from "../routes";
 export const renderAt = async (
   path: string,
   wrap?: (children: ReactNode) => ReactNode,
+  credential: TestCredential = "machine-token",
 ): Promise<void> => {
+  // A test that pasted its own token keeps it: `CampaignScreen.test.tsx` asserts
+  // the exact bearer the fallback sends, and this would otherwise overwrite it.
+  if (credential === "machine-token") {
+    ensureStorage();
+    if (readMachineToken() === "") writeMachineToken(TEST_MACHINE_TOKEN);
+  }
   globalThis.location.hash = `#${path}`;
   const router = createRouter({
     routeTree,

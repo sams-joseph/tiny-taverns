@@ -229,6 +229,7 @@ export const installRunServer = (): RunStubServer => {
 const noSession: HostedSession = {
   configured: false,
   signedIn: false,
+  loading: false,
   fetchToken: () => Promise.resolve(undefined),
 };
 

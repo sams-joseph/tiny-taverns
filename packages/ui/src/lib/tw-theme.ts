@@ -159,7 +159,7 @@ export const twTheme = {
     "circle",
   ],
   shadow: ["1", "2", "3", "dark", "inset-lip", "inset-press", "ring"],
-  blur: ["scrim"],
+  blur: ["scrim", "site-header"],
   ease: ["out", "in-out", "settle"],
   animate: ["dialog-in", "dialog-out"],
   container: ["measure"],

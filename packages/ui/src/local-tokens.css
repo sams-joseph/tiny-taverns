@@ -28,6 +28,12 @@
      tokenises the colour but not the blur. */
   --scrim-blur: 3px;
 
+  /* ui_kits/marketing/Site.jsx sets the sticky site header's backdrop to
+     `blur(12px)` inline, and its README calls it "the only blur on the site".
+     No token answers it, and `--scrim-blur` above is a different measurement —
+     the 3px behind a dialog, not the frost on a page header. */
+  --site-header-blur: 12px;
+
   /* ui_kits/dm-screen/README.md decides Option A — "A 400px right panel" — and
      ChatLayouts.jsx sets `width: 400` inline; no token answers it. It is a
      measurement rather than a spacing step now that the panel is a shadcn

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { useHostedSession } from "./hostedSession";
 
 /**
@@ -32,8 +32,69 @@ const storage = (): Storage | undefined => globalThis.window?.localStorage;
 /** The pasted machine token, or `""` when there is none. */
 export const readMachineToken = (): string => storage()?.getItem(MACHINE_TOKEN_KEY) ?? "";
 
+/**
+ * Everything watching the machine token, so pasting one is a *render* and not
+ * only a fact about the next request.
+ *
+ * It became load-bearing when the signed-out gate landed: whether there is a
+ * credential now decides which page the app is, and `localStorage` fires no
+ * event for a write in its own tab. Without this, pasting a token into the
+ * Server panel would leave the marketing homepage on screen until something
+ * else happened to re-render — which reads exactly like the paste not working.
+ */
+const watchers = new Set<() => void>();
+
+const subscribeToMachineToken = (notify: () => void): (() => void) => {
+  watchers.add(notify);
+  // The other tab's paste. `storage` fires only for *other* documents, which
+  // is precisely the half `watchers` cannot see.
+  globalThis.window?.addEventListener("storage", notify);
+  return () => {
+    watchers.delete(notify);
+    globalThis.window?.removeEventListener("storage", notify);
+  };
+};
+
 export const writeMachineToken = (token: string): void => {
   storage()?.setItem(MACHINE_TOKEN_KEY, token);
+  for (const notify of watchers) notify();
+};
+
+/**
+ * The pasted machine token as React state.
+ *
+ * `useSyncExternalStore` rather than `useState` seeded from storage: the token
+ * lives outside React, is written from one component and read by another, and
+ * a snapshot held in state would be the second answer that goes stale. The
+ * snapshot is a string, so React's own `Object.is` comparison settles it.
+ */
+export const useMachineToken = (): string =>
+  useSyncExternalStore(subscribeToMachineToken, readMachineToken, () => "");
+
+/**
+ * Whether this visitor has *any* credential — the question the signed-out gate
+ * is built on, and the captain's own wording for it: *"it shows when there is
+ * neither a hosted session nor a developer token"*.
+ *
+ * It is the synchronous shadow of `useCredential` below and must stay in step
+ * with it: same two kinds, same order of preference. What it adds is the third
+ * answer `useCredential` has no need for. A hosted provider decides *"is
+ * anybody signed in?"* asynchronously, and a gate that read that as "no" while
+ * it was still deciding would paint the marketing homepage over the app for
+ * every signed-in visitor, every load. `unknown` is what that moment is called.
+ */
+export type CredentialPresence = "present" | "absent" | "unknown";
+
+export const useCredentialPresence = (): CredentialPresence => {
+  const { signedIn, loading } = useHostedSession();
+  const machine = useMachineToken();
+
+  // A pasted token settles it either way, so it is worth asking first: a
+  // developer with one never waits on a vendor they have not configured, and
+  // one who *has* configured it still gets the app rather than a blank frame.
+  if (machine !== "") return "present";
+  if (signedIn) return "present";
+  return loading ? "unknown" : "absent";
 };
 
 /** Resolves a bearer token, or `undefined` when the app has no credential at all. */
