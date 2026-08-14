@@ -4,7 +4,7 @@ import { Icon, Toggle } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerChronicle } from "./load";
 import { PlayerRecapBody } from "./PlayerRecapBody";
@@ -69,14 +69,7 @@ export function PlayerChronicleScreen() {
 
   return (
     <AppShell
-      context={
-        view === undefined ? undefined : (
-          <NavContext
-            name={view.campaign.name}
-            link={{ to: "/play/campaigns/$campaignId", params: { campaignId } }}
-          />
-        )
-      }
+      campaignName={view?.campaign.name}
       topBar={
         <TopBar
           title="Chronicle"

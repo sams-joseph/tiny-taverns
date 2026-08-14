@@ -4,7 +4,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/
 import { useCallback } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
 
@@ -126,7 +126,7 @@ export function PlayerCampaignScreen() {
 
   return (
     <AppShell
-      context={view === undefined ? undefined : <NavContext name={view.campaign.name} />}
+      campaignName={view?.campaign.name}
       topBar={
         <TopBar
           title={view?.campaign.name ?? "A table"}

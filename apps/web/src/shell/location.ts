@@ -41,18 +41,28 @@ export function useMode(): Mode {
 }
 
 /**
- * Which nav item is lit.
+ * Which nav item is lit — **one value across two rows**, which is how the sixth
+ * delivery's *"nothing appears on both rows"* is enforced rather than
+ * remembered.
  *
- * A campaign and the fight inside it are both *within* Campaigns, so those
- * routes light the same item — the underline says which part of the app you are
- * in, not which URL you are at, and an unlit nav on a campaign page reads as a
- * bug. The bestiary, the Chronicle and the party are their own sections: they
- * are screens you go *to* from a campaign rather than views of one.
+ * The shell draws a global row (everything above a campaign) and, inside a
+ * campaign, a second row of that campaign's screens. Both rows light an item by
+ * asking whether its section is this one, and since there is exactly one answer,
+ * **being inside a campaign is the same fact as no global item being lit.** The
+ * delivery's own `GlobalItem` does this: `active={screen === n.id}`, with the
+ * campaign screens named nowhere in the global list.
+ *
+ * A campaign and the fight inside it are both *within* the campaign's Overview,
+ * so those routes light the same item — the underline says which part of the app
+ * you are in, not which URL you are at, and an unlit nav on a campaign page
+ * reads as a bug. That is the old "a fight lights Campaigns" rule translated one
+ * level down, which is where the campaign's own screens now live. The bestiary,
+ * the Chronicle and the party stay their own sections for the reason they always
+ * were: they are screens you go *to* from a campaign rather than views of one.
  *
  * **The second axis is the mode**, and it is the same rule one level up: a
- * player's campaign is *within* their tables, so `#/play` and
- * `#/play/campaigns/:c` light one item. There is no route that is both, so the
- * two axes cannot fight.
+ * player's campaign is *within* their tables. There is no route that is both, so
+ * the two axes cannot fight.
  *
  * `playChronicle` is its own section like `chronicle` is, and is deliberately
  * **not** folded into it: the two are different screens over different
@@ -60,17 +70,24 @@ export function useMode(): Mode {
  * points somewhere the reader cannot go.
  *
  * A character sheet is *within* the roster it was opened from, so both light
- * `Characters` — the same containment `run` has with `campaigns`.
+ * `Characters` — the same containment `run` has with the campaign's Overview.
  */
 export type Section =
+  /* The global row: everything above a campaign. */
   | "campaigns"
-  | "bestiary"
-  | "chronicle"
-  | "party"
   | "play"
-  | "playChronicle"
   | "playCharacters"
-  | "gallery";
+  | "gallery"
+  /* The DM's campaign row. */
+  | "overview"
+  | "encounters"
+  | "notes"
+  | "party"
+  | "chronicle"
+  | "bestiary"
+  /* The player's campaign row. */
+  | "playOverview"
+  | "playChronicle";
 
 export function useSection(): Section {
   const matchRoute = useMatchRoute();
@@ -79,12 +96,20 @@ export function useSection(): Section {
   if (matchRoute({ to: "/gallery" })) return "gallery";
   if (mode === "player") {
     if (matchRoute({ to: "/play/campaigns/$campaignId/chronicle" })) return "playChronicle";
+    // Fuzzy, so the splat under a player's campaign lands on its Overview for
+    // the reason the DM's does: the campaign was legible, the section was not.
+    if (matchRoute({ to: "/play/campaigns/$campaignId", fuzzy: true })) return "playOverview";
     if (matchRoute({ to: "/play/characters", fuzzy: true })) return "playCharacters";
     return "play";
   }
   if (matchRoute({ to: "/campaigns/$campaignId/bestiary" })) return "bestiary";
   if (matchRoute({ to: "/campaigns/$campaignId/chronicle" })) return "chronicle";
   if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
+  if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
+  if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
+  // Anything else *inside* a campaign is that campaign's Overview — the index,
+  // a fight, and the splat a half-typed section falls back through.
+  if (matchRoute({ to: "/campaigns/$campaignId", fuzzy: true })) return "overview";
   return "campaigns";
 }
 

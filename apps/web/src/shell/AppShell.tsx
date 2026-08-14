@@ -8,20 +8,44 @@ import { HobRegion } from "../hob/HobDock";
 import { useCampaignId, useMode, useSection, type Mode, type Section } from "./location";
 
 /**
- * The fixed shell: a 56px top nav, a per-screen bar under it, a scrolling body.
+ * The fixed shell: **two nav rows**, a per-screen bar under them, a scrolling
+ * body.
  *
  * This is `ui_kits/dm-screen/AppShell.jsx` built out of the shipped components
  * and the theme's names — the prototype's inline styles and hand-rolled hover
  * state are the visual specification, not code to carry across.
  *
- * **The 260px rail is gone, and the width it took is the point of the change.**
- * The second delivery replaced it with one 56px row — mark and wordmark, the
- * nav, then the campaign, its session badge and *Ask Hob* pushed right — and the
- * content is what got the 260px back. So the screens under this measure
- * themselves against the column they now have rather than against the viewport:
- * `main` is a `@container`, and every layout that used to turn over at an `xl:`
- * or `lg:` viewport breakpoint asks the column instead. A breakpoint chosen when
- * a rail was eating 260px is a breakpoint that answers the wrong question now.
+ * ### Navigation has two tiers, and the rule is the shape rather than a habit
+ *
+ * The sixth delivery states it in its own header comment: *the thin top row is
+ * everything ABOVE a campaign (your campaign list, the shared monster library,
+ * your account); the second row exists only inside a campaign, is titled with
+ * the campaign name — which is also the way home — and holds the
+ * campaign-scoped screens. Nothing appears on both rows.*
+ *
+ * That last clause is not enforced by keeping two lists disjoint by hand. There
+ * is **one** `Section` for the whole bar (`shell/location.ts`) and both rows ask
+ * the same question of it, so "inside a campaign" and "no global item is lit"
+ * are the same fact rather than two that could disagree. It is the delivery's
+ * own mechanism — its `GlobalItem` is `active={screen === n.id}` and the
+ * campaign screens appear in no global list.
+ *
+ * **The campaign's name is the way home**, so the second row's title is a link
+ * to the campaign index with the delivery's back-chevron beside it. The shell
+ * builds that link itself from the route — it knows the id and the mode — and
+ * takes only the name, which is data no router can supply. That replaced a
+ * `NavContext` every campaign screen passed a hand-built `link` to: seven call
+ * sites, seven chances to point the way home at the wrong route, and the player
+ * screens had to remember to point at `/play/…`.
+ *
+ * **The 260px rail is gone, and the width it took is still the point.** The
+ * second delivery replaced it with one 56px row and gave the content the 260px
+ * back; the sixth splits that row in two (44px + 46px) without taking any width
+ * away, because both rows are horizontal. So the screens under this still
+ * measure themselves against the column they have rather than against the
+ * viewport: `main` is a `@container`, and so is each nav row — the question a
+ * row asks is whether *it* fits its own contents, which the window does not
+ * answer.
  *
  * Each screen composes this itself and supplies its own top bar, rather than
  * the shell reaching down for a title it would have to be told about anyway.
@@ -29,7 +53,16 @@ import { useCampaignId, useMode, useSection, type Mode, type Section } from "./l
 
 interface NavItem {
   readonly label: string;
-  readonly icon: IconName;
+  /**
+   * The glyph, on the global row only.
+   *
+   * The campaign row draws labels and nothing else — `CampItem` in the delivery
+   * renders `{item.label}` and no icon, and `CAMP_DM`/`CAMP_PLAYER` carry no
+   * `icon` key to render. That is not only the drawing: six labelled items plus
+   * a name, a badge and *Start session* is the widest thing in this bar, and the
+   * icons were the part of it carrying no information the label did not.
+   */
+  readonly icon?: IconName;
   /**
    * Where it goes, and **which section it is**, as one thing.
    *
@@ -44,157 +77,241 @@ interface NavItem {
 }
 
 /**
- * The kit names three sections; the app has the screens that exist to point
- * them at.
+ * The global row: everything that is above any campaign.
  *
- * `Run` is not here because it is not a destination — a fight is reached from
- * the campaign that owns it, and a top-level link could not know which run it
- * meant. A nav item that goes nowhere is the same lie as a stubbed field, so the
- * row carries what exists.
+ * **A function of the mode alone**, which is what makes it the row that never
+ * changes as you move around inside a table — the delivery's whole reason for
+ * splitting the bar. It is read off the router (`useMode`) rather than passed
+ * in, so the bar can never light a section the URL is not in.
  *
- * **`Bestiary`, `Chronicle` and `Party` are here only once a campaign is**, for
- * the same reason and one more: `creatures.list` hangs off
- * `/campaigns/:campaignId/creatures`, every source the Chronicle reads hangs off
- * `/campaigns/:campaignId` too, and the party's roster is `members.list` under
- * the same prefix — so none has a meaning without a campaign to read it through,
- * and on all three the path is the *only* thing scoping what comes back. From
- * the campaign list there is no campaign yet, so the items are absent rather
- * than disabled.
+ * `Campaigns` leads in both modes, as the delivery has it, on the `layers`
+ * glyph it names. *Tables* is what the player's copy of it is called here, and
+ * has been since the role switch shipped: it is the same screen answering
+ * *"which tables do I sit at"*.
  *
- * The third delivery adds `Chronicle` with `scroll-text` and the fourth adds
- * `Party` with `users` (`AppShell.jsx`'s one new line each), which is the order
- * kept here.
+ * **`Characters` is global and campaign-scoped nowhere**, which the delivery
+ * agrees with and the API decided first: `GET /me/characters` is the one read on
+ * `character` with no campaign in its path, because *"which characters are
+ * mine"* is asked across every table at once.
+ *
+ * ### Library is deliberately not here yet
+ *
+ * The delivery puts the Bestiary on this row, as **Library**, above any
+ * campaign. **The read for it exists now** — `GET /library/creatures`, landed
+ * alongside this — but the screen over it does not, and an item is earned by a
+ * screen rather than by an endpoint. `creatures.list` cannot stand in: it hangs
+ * off `/campaigns/:campaignId/creatures`, and that path is the *only* thing
+ * gating the global `system` rows it returns beside the campaign's own, so there
+ * is nothing for a campaign-less route to read *through*.
+ *
+ * So **Bestiary stays on the campaign row for now**, where it works. Moving it
+ * up before the screen exists would strand a working screen behind a nav item
+ * that goes nowhere, which is the rule that has kept *Run* out of every row
+ * since the second delivery. This is a deferral with a date on it, not an
+ * oversight: when `#/library` is real the swap is one item moving from
+ * `campaignNavFor` to the list below, and `useSection` gaining a case.
  */
-const navFor = (mode: Mode, campaignId: CampaignId | undefined): ReadonlyArray<NavItem> => {
-  /**
-   * **The nav is a function of the route and the mode, and both are read off
-   * the router** (`useMode`, `useCampaignId`) rather than passed in beside it —
-   * one answer, so the bar can never light a section the URL is not in.
-   *
-   * The delivery's player nav is *Characters*, *At the table* and *Chronicle*.
-   * **Two of the three are built and are here**; *At the table* is not, and the
-   * rule that keeps *Run* out of the DM's row keeps it out of this one — a nav
-   * item that goes nowhere is the same lie as a stubbed field. Each earns its
-   * item the day its screen exists.
-   *
-   * **`Characters` carries no campaign, unlike every campaign-scoped item
-   * above.** `GET /me/characters` is the one read on `character` with no
-   * campaign in its path — which is what makes the item constant across player
-   * mode rather than appearing once a table is open. It leads, as the delivery
-   * has it, with the delivery's own `user` glyph.
-   *
-   * *Chronicle* is campaign-scoped exactly as the DM's is, and for the same
-   * reason: `sessions.list` and `recap.readAsPlayer` both hang off
-   * `/campaigns/:campaignId`. It points at `playChronicle`, never at the DM's
-   * route — that screen reads `recap.read`, which is behind the `DmActor` gate
-   * and would answer a player a 404.
-   *
-   * *Bestiary* and *Party* stay absent even inside a campaign, and that is not
-   * merely "undrawn": `members.list` is gated too, and a player's projection of
-   * a roster is *nothing* rather than a narrower list (`AGENTS.md`). A control
-   * that exists and then errors is worse than one that is not there.
-   */
+const globalNavFor = (mode: Mode): ReadonlyArray<NavItem> => {
   if (mode === "player") {
     return [
-      { label: "Tables", icon: "book-open", link: { to: "/play" }, section: "play" },
+      { label: "Tables", icon: "layers", link: { to: "/play" }, section: "play" },
       {
         label: "Characters",
         icon: "user",
         link: { to: "/play/characters" },
         section: "playCharacters",
       },
-      ...(campaignId === undefined
-        ? []
-        : [
-            {
-              label: "Chronicle",
-              icon: "scroll-text",
-              link: { to: "/play/campaigns/$campaignId/chronicle", params: { campaignId } },
-              section: "playChronicle",
-            } satisfies NavItem,
-          ]),
-      {
-        label: "Components",
-        icon: "panel-left",
-        link: { to: "/gallery" },
-        section: "gallery",
-      },
+      { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
     ];
   }
 
   return [
-    { label: "Campaigns", icon: "book-open", link: { to: "/campaigns" }, section: "campaigns" },
-    ...(campaignId === undefined
-      ? []
-      : [
-          {
-            label: "Bestiary",
-            icon: "footprints",
-            link: { to: "/campaigns/$campaignId/bestiary", params: { campaignId } },
-            section: "bestiary",
-          } satisfies NavItem,
-          {
-            label: "Chronicle",
-            icon: "scroll-text",
-            link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
-            section: "chronicle",
-          } satisfies NavItem,
-          {
-            label: "Party",
-            icon: "users",
-            link: { to: "/campaigns/$campaignId/party", params: { campaignId } },
-            section: "party",
-          } satisfies NavItem,
-        ]),
+    { label: "Campaigns", icon: "layers", link: { to: "/campaigns" }, section: "campaigns" },
     { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
   ];
 };
 
 /**
- * A nav item, wearing `Tabs`' own recipe.
+ * The campaign row: the screens inside one table, and only ever inside one.
  *
- * The delivery asks for this in as many words: the active item takes the same
- * 2px accent underline as a tab strip, "so navigation reads identically at both
- * levels". `tabsTriggerVariants` is that recipe, exported from `@taverns/ui` for
- * this — reproducing the class list here would be a second copy to keep in step
- * with the designers.
+ * Every item here names the campaign in its path because every endpoint behind
+ * it does — which is the same fact that makes the row exist at all. From the
+ * campaign list there is no campaign yet, so there is no row rather than a row
+ * of disabled items.
  *
- * `Link` renders a real `<a href="#/…">`, so a section is still middle-clickable
- * and copyable — which is the property the hand-built anchors were here for, and
- * it survives the move because the href is what the router builds rather than
- * what a template guessed.
+ * **The rule that a screen earns its item on the day it exists survives the
+ * split, and it is what makes both rows shorter than the drawing.** The
+ * delivery's DM row is Overview / Encounters / Party / Notes / Chronicle and all
+ * five are built. Its player row is *My character* / *At the table* /
+ * *Chronicle*:
+ *
+ * - *At the table* has no screen. The player projection of a fight is an open
+ *   decision, not an unwritten component, and a nav item that goes nowhere is
+ *   the same lie as a stubbed field — the rule that has kept *Run* out of the
+ *   DM's row since the second delivery.
+ * - *My character* is not campaign-scoped here. The sheet is
+ *   `/play/characters/$characterId`, reached from the roster that `Characters`
+ *   on the global row already points at, so an item here would be a second
+ *   answer to where a sheet lives — and the delivery's own rule is that nothing
+ *   appears on both rows.
+ * - The player's *Overview* is `PlayerCampaignScreen`, which exists and is what
+ *   the row's title already goes to, so it is drawn as the row's first item for
+ *   the reason the DM's is.
+ *
+ * **`Bestiary` and `Party` stay out of the player's row entirely**, and that is
+ * not merely "undrawn": `members.list` is behind the `DmActor` gate and a
+ * player's projection of a roster is *nothing* rather than a narrower list
+ * (`AGENTS.md`). A control that exists and then errors is worse than one that is
+ * absent.
+ */
+const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavItem> => {
+  if (mode === "player") {
+    return [
+      {
+        label: "Overview",
+        link: { to: "/play/campaigns/$campaignId", params: { campaignId } },
+        section: "playOverview",
+      },
+      {
+        // `playChronicle`, never the DM's `chronicle` route — that screen reads
+        // `recap.read`, which is behind the `DmActor` gate and would answer a
+        // player a 404. Two routes, two sections, so neither can light the
+        // other's item.
+        label: "Chronicle",
+        link: { to: "/play/campaigns/$campaignId/chronicle", params: { campaignId } },
+        section: "playChronicle",
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Overview",
+      link: { to: "/campaigns/$campaignId", params: { campaignId } },
+      section: "overview",
+    },
+    {
+      label: "Encounters",
+      link: { to: "/campaigns/$campaignId/encounters", params: { campaignId } },
+      section: "encounters",
+    },
+    {
+      label: "Party",
+      link: { to: "/campaigns/$campaignId/party", params: { campaignId } },
+      section: "party",
+    },
+    {
+      label: "Notes",
+      link: { to: "/campaigns/$campaignId/notes", params: { campaignId } },
+      section: "notes",
+    },
+    {
+      label: "Chronicle",
+      link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
+      section: "chronicle",
+    },
+    {
+      // Drawn as *Library* on the global row by the delivery, and it will move
+      // there — see `globalNavFor`. Until the global read exists it belongs to
+      // the campaign whose path is what scopes it.
+      label: "Bestiary",
+      link: { to: "/campaigns/$campaignId/bestiary", params: { campaignId } },
+      section: "bestiary",
+    },
+  ];
+};
+
+/**
+ * The props both rows' items share — everything except how they are dressed.
  *
  * **The active state is `item.section`, not `Link`'s own `activeProps`**, and
  * that is deliberate: a nav item is lit for a whole *part of the app* — a fight
- * lights Campaigns, a character sheet lights Characters — which is a broader
- * question than whether this exact URL is the current one. `data-active` rather
- * than a hand-rolled class: it is the attribute Base UI's own tab sets, and the
- * same one the recipe's variants key on.
+ * lights its campaign's Overview, a character sheet lights Characters — which is
+ * a broader question than whether this exact URL is the current one.
+ * `data-active` rather than a hand-rolled class: it is the attribute Base UI's
+ * own tab sets, and the same one the campaign row's recipe keys on.
+ *
+ * `Link` renders a real `<a href="#/…">`, so a section is still middle-clickable
+ * and copyable — the property the hand-built anchors were here for, and it
+ * survives because the href is what the router builds rather than what a
+ * template guessed.
  */
-function NavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
+const navLinkProps = (active: boolean) =>
+  ({
+    // **`Link` marks itself active on a prefix by default, and this bar's
+    // question is not that one.** `item.section` answers the broader one above;
+    // `Link` would additionally light *Tables* while a sheet is open, because
+    // `/play` is a prefix of the URL, and *Overview* on every screen inside a
+    // campaign, because the campaign index is a prefix of all of them. `exact`
+    // narrows its notion of active to "this is the page", which is always a case
+    // `item.section` also calls active, so the two agree instead of fighting.
+    // That matters because `Link` spreads its own `aria-current="page"` **after**
+    // everything else and there is no way to turn that off; `activeProps={{}}`
+    // only stops it appending a stray `active` class to the recipe's.
+    activeOptions: { exact: true },
+    activeProps: {},
+    "aria-current": active ? ("page" as const) : undefined,
+    "data-active": active ? "" : undefined,
+  }) satisfies Partial<LinkProps> & Record<string, unknown>;
+
+/**
+ * A global-row item: a pill, not an underline.
+ *
+ * The delivery gives the two rows deliberately different recipes, and the
+ * difference is the information: an underline says *which part of this campaign
+ * you are reading*, and the row above it is not about a campaign at all. Drawn
+ * the same way, the bar would read as ten peers of one kind rather than two
+ * tiers — which is the whole thing the split was for.
+ *
+ * So this one is `GlobalItem`'s 26px pill, and it is written out rather than
+ * pulled from a variant in `@taverns/ui`: it is this bar's own recipe and has no
+ * second call site, unlike the underline, which is `Tabs`' and must not be
+ * copied.
+ */
+function GlobalNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
   return (
     <Link
       {...item.link}
-      // **`Link` marks itself active on a prefix by default, and this bar's
-      // question is not that one.** A nav item is lit for a whole *part* of the
-      // app — a fight lights Campaigns, a character sheet lights Characters —
-      // which is what `item.section` answers; `Link` would additionally light
-      // *Tables* while a sheet is open, because `/play` is a prefix of the URL.
-      // `exact` narrows its notion of active to "this is the page", which is
-      // always a case `item.section` also calls active, so the two agree
-      // instead of fighting. That matters because `Link` spreads its own
-      // `aria-current="page"` **after** everything below and there is no way to
-      // turn that off; `activeProps={{}}` only stops it appending a stray
-      // `active` class to the recipe's.
-      activeOptions={{ exact: true }}
-      activeProps={{}}
-      aria-current={active ? "page" : undefined}
-      data-active={active ? "" : undefined}
-      // `h-auto` so the item stretches to the bar rather than keeping the tab
-      // strip's 36px, which is what puts the underline on the bar's own hairline.
-      className={cn(tabsTriggerVariants(), "h-auto gap-2 self-stretch px-3.5")}
+      {...navLinkProps(active)}
+      className={cn(
+        "flex h-6.5 shrink-0 items-center gap-1.75 rounded-pill border px-2.5",
+        "text-caption leading-none font-medium whitespace-nowrap transition-control",
+        active
+          ? "border-hairline bg-surface-sunken text-heading"
+          : "border-transparent text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
+      )}
     >
-      <Icon name={item.icon} size={16} className={active ? "text-accent-ink" : undefined} />
+      {item.icon !== undefined && (
+        <Icon name={item.icon} size={13} className={active ? "text-accent-ink" : undefined} />
+      )}
+      {item.label}
+    </Link>
+  );
+}
+
+/**
+ * A campaign-row item, wearing `Tabs`' own recipe.
+ *
+ * The delivery asks for this in as many words — `CampItem`'s comment is
+ * *"campaign row items carry the 2px accent underline the system uses for
+ * Tabs"* — and `tabsTriggerVariants` is that recipe, exported from `@taverns/ui`
+ * for exactly this. Reproducing the class list here would be a second copy to
+ * keep in step with the designers, and the whole point of the shared recipe is
+ * that a tab strip inside a screen and the row above it move together.
+ *
+ * Label only: see `NavItem.icon`.
+ */
+function CampaignNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
+  return (
+    <Link
+      {...item.link}
+      {...navLinkProps(active)}
+      // `h-auto self-stretch` so the item reaches the full 46px of the row
+      // rather than keeping the tab strip's 36px, which is what lands the
+      // underline on the header's own hairline (with the recipe's `-mb-px`).
+      // `px-3.25` is `CampItem`'s 13px.
+      className={cn(tabsTriggerVariants(), "h-auto self-stretch px-3.25")}
+    >
       {item.label}
     </Link>
   );
@@ -328,10 +445,14 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
  * `route` prop to pass and none to get wrong; see `shell/location.ts`.
  */
 function TopNav({
-  context,
+  campaignName,
+  campaignBadge,
+  campaignActions,
   onAskHob,
 }: {
-  readonly context?: ReactNode;
+  readonly campaignName?: string;
+  readonly campaignBadge?: ReactNode;
+  readonly campaignActions?: ReactNode;
   readonly onAskHob?: () => void;
 }) {
   const section = useSection();
@@ -339,88 +460,152 @@ function TopNav({
   const campaignId = useCampaignId();
 
   return (
-    <header className="@container flex h-14 shrink-0 items-center gap-6 border-b border-hairline bg-surface-card px-page-sm sm:px-page">
-      <div className="flex shrink-0 items-center gap-2">
-        <img src={markUrl} alt="" aria-hidden="true" width={26} height={26} className="block" />
-        {/* The one thing on this bar that is decoration rather than a control,
-            so it is the one that gives way when the bar runs out of room —
-            measured at 118px, which is most of what the role switch costs. The
-            mark stays, so the corner still says where you are.
+    <header className="shrink-0 border-b border-hairline bg-surface-card">
+      {/* The global row. `@container` on the row rather than on the header,
+          because each row runs out of space at its own width and the question
+          is always whether *this* row fits — which the window does not answer
+          (a narrow window with a short nav has room to spare). Same rule as
+          `main`'s `@container`. */}
+      <div
+        className={cn(
+          "@container flex h-11 items-center gap-4 px-page-sm sm:px-page",
+          campaignId !== undefined && "border-b border-hairline",
+        )}
+      >
+        <div className="flex shrink-0 items-center gap-2">
+          <img src={markUrl} alt="" aria-hidden="true" width={22} height={22} className="block" />
+          {/* The one thing on this row that is decoration rather than a control,
+              so it is the one that gives way when it runs out of room. The mark
+              stays, so the corner still says where you are.
 
-            A container query rather than a breakpoint, and the container is the
-            bar itself: the question is whether *this row* fits its contents,
-            which is exactly what the window is not (a narrow window with a
-            short nav has room to spare). Same rule as `main`'s `@container`. */}
-        <span className="hidden font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading @5xl:inline">
-          Tiny Taverns
-        </span>
+              The threshold is lower than it was: splitting the bar took the
+              campaign's name, its badge and five nav items off this row, so what
+              is left fits a long way further down. Re-derived in a browser
+              rather than inherited — see this file's own note is not enough,
+              the numbers are in the commit. */}
+          <span className="hidden font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading @2xl:inline">
+            Tiny Taverns
+          </span>
+        </div>
+
+        <nav aria-label="Sections" className="flex items-center gap-1">
+          {globalNavFor(mode).map((item) => (
+            <GlobalNavLink key={item.label} item={item} active={item.section === section} />
+          ))}
+        </nav>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Absent in player mode rather than present and failing. Asking Hob is
+              a write — `HobThreads.start` needs `campaignWritable` — so a player
+              gets the ordinary `NotFound`, and the captain settled that players
+              do not talk to Hob at all. A button that opens a panel which can
+              only apologise is the DM chrome this mode exists to keep out of the
+              way.
+
+              It is on the *global* row, where the delivery puts it, and that is
+              right even though every question it can ask is about a campaign:
+              the panel is the app's, opens over whatever you are reading, and a
+              button that moved between rows as you navigated would be a control
+              you have to look for. */}
+          {mode === "dm" && <AskHobButton onClick={onAskHob} />}
+          {/* Unconditional, and that is the point — see this component's own
+              note. It is the bar's, like the nav, rather than something each
+              screen remembers to ask for. */}
+          <RoleSwitch mode={mode} />
+          {/* Clerk's own components, unthemed on purpose — see SignInSurface.
+              Renders nothing at all when no publishable key is configured, which
+              is why the bar can carry it unconditionally. It moved here from the
+              per-screen bar with the rail: it belongs to the app, not the page. */}
+          <SignInSurface />
+        </div>
       </div>
 
-      <nav aria-label="Sections" className="flex h-full items-stretch">
-        {navFor(mode, campaignId).map((item) => (
-          <NavLink key={item.label} item={item} active={item.section === section} />
-        ))}
-      </nav>
-
-      {/* `min-w-0` rather than `shrink-0`: everything in this group but the
-          campaign's name is a fixed size and says so itself, so the group is
-          allowed to shrink and the name is what absorbs it. */}
-      <div className="ml-auto flex min-w-0 items-center gap-4">
-        {context}
-        {/* Unconditional, and that is the point — see this component's own
-            note. It is the bar's, like the nav, rather than something each
-            screen remembers to ask for. */}
-        <RoleSwitch mode={mode} />
-        {/* Absent in player mode rather than present and failing. Asking Hob is
-            a write — `HobThreads.start` needs `campaignWritable` — so a player
-            gets the ordinary `NotFound`, and the captain settled that players do
-            not talk to Hob at all. A button that opens a panel which can only
-            apologise is the DM chrome this mode exists to keep out of the way. */}
-        {mode === "dm" && <AskHobButton onClick={onAskHob} />}
-        {/* Clerk's own components, unthemed on purpose — see SignInSurface.
-            Renders nothing at all when no publishable key is configured, which
-            is why the bar can carry it unconditionally. It moved here from the
-            per-screen bar with the rail: it belongs to the app, not the page. */}
-        <SignInSurface />
-      </div>
+      {/* The campaign row — present exactly when the route names a campaign,
+          which is the delivery's `inCampaign` read off the router instead of off
+          a screen-id list. A screen cannot render it by mistake and cannot
+          forget it either. */}
+      {campaignId !== undefined && (
+        <div className="@container flex h-11.5 items-center gap-3 px-page-sm sm:px-page">
+          <CampaignHome mode={mode} campaignId={campaignId} name={campaignName} />
+          {/* The badge is this row's decoration, so it is the second thing to
+              give way — the campaign's own screens say which night it is in
+              their subtitle, and a narrow bar has to keep its controls. */}
+          <div className="hidden shrink-0 @2xl:block">{campaignBadge}</div>
+          <nav aria-label="This campaign" className="ml-2 flex items-stretch self-stretch">
+            {campaignNavFor(mode, campaignId).map((item) => (
+              <CampaignNavLink key={item.label} item={item} active={item.section === section} />
+            ))}
+          </nav>
+          {campaignActions !== undefined && (
+            <div className="ml-auto flex shrink-0 items-center gap-2">{campaignActions}</div>
+          )}
+        </div>
+      )}
     </header>
   );
 }
 
 /**
- * The top nav's right-hand pair: the campaign you are in, and its badges.
+ * The campaign row's title, which is also the way home.
  *
- * Shared rather than composed twice, because the campaign view and the runner
- * both put the same thing there and the delivery draws it once. `link` is for
- * the screen that is *inside* the campaign — from a fight, the campaign's name
- * is the way back to prep, which is the one thing the rail used to carry that
- * this row would otherwise have dropped. It is `LinkProps` rather than a string
- * so the way back cannot point at a route that does not exist.
+ * The delivery draws a back-chevron and the campaign's name as one button
+ * pointing at the campaign's own home screen, and that is the whole of what the
+ * rail's footer used to do: from a fight, from the bestiary, from the Chronicle,
+ * the name is the way back to prep.
+ *
+ * **The shell builds the link, and the screen supplies only the name.** Where it
+ * goes is a fact about the route — the id is in the URL and the mode decides
+ * which of the two campaign screens is home — so there is nothing for a screen
+ * to get wrong. It replaced a `link` prop that seven screens each passed by
+ * hand, four of which had to remember the `/play/…` prefix.
+ *
+ * The name is data no router can supply, so it is a prop; while it is still
+ * loading the chevron is drawn on its own rather than under a placeholder, which
+ * keeps the row's height from moving and says nothing untrue in the meantime.
+ *
+ * **The name is the first thing to give way on a narrow bar, and it gives way
+ * whole.** Measured in Chromium: this row needs 986px with six items, a badge
+ * and *Start session*, so below about 1024 something has to go — and left as a
+ * plain shrinking flex item the name squeezed the *chevron* to zero width at
+ * 760, taking the way home with it. So the name is `hidden` under the row's own
+ * `@3xl`, where it truncates instead, and `min-w-4` is the chevron's own width
+ * held as a floor. What is left below that is a back-chevron, which is a control
+ * that says what it does without a label.
  */
-export function NavContext({
+function CampaignHome({
+  mode,
+  campaignId,
   name,
-  link,
-  children,
 }: {
-  readonly name: string;
-  readonly link?: LinkProps;
-  readonly children?: ReactNode;
+  readonly mode: Mode;
+  readonly campaignId: CampaignId;
+  readonly name?: string;
 }) {
-  // `truncate`, not `whitespace-nowrap`: this is the one part of the bar that is
-  // arbitrary length, so it is the one that gives way. A campaign called
-  // something long must not push *Ask Hob* off the end of a narrow window.
-  const label = "truncate text-label leading-snug font-semibold text-foreground";
+  const link: LinkProps =
+    mode === "player"
+      ? { to: "/play/campaigns/$campaignId", params: { campaignId } }
+      : { to: "/campaigns/$campaignId", params: { campaignId } };
+
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      {link === undefined ? (
-        <span className={label}>{name}</span>
-      ) : (
-        <Link {...link} className={cn(label, "hover:text-link-hover")}>
+    <Link
+      {...link}
+      // No `data-active`: this is the title, not an item, and the row's own
+      // *Overview* is what lights when you are at it.
+      activeProps={{}}
+      title="Campaign home"
+      aria-label={name === undefined ? "Campaign home" : `${name} — campaign home`}
+      className="flex min-w-4 items-center gap-1.75 text-faint transition-control hover:text-muted-foreground"
+    >
+      <Icon name="chevron-left" size={15} className="shrink-0" />
+      {name !== undefined && (
+        // `truncate`, not `whitespace-nowrap`: this is the one part of the row
+        // that is arbitrary length, so it is the one that gives way — and
+        // `hidden` below `@3xl`, where there is no longer room to give.
+        <span className="hidden min-w-0 truncate font-display text-label leading-none font-semibold tracking-display text-heading @3xl:block">
           {name}
-        </Link>
+        </span>
       )}
-      {children}
-    </div>
+    </Link>
   );
 }
 
@@ -462,7 +647,9 @@ export function TopBar({
 }
 
 export function AppShell({
-  context,
+  campaignName,
+  campaignBadge,
+  campaignActions,
   topBar,
   onAskHob,
   panel,
@@ -470,11 +657,26 @@ export function AppShell({
   children,
 }: {
   /**
-   * What you are in, pushed right in the top nav: the campaign's name and its
-   * session badge. The screen supplies it because the shell has no way to know
-   * it — the same reason the screen supplies its own `topBar`.
+   * What this table is called — the campaign row's title, and the way home.
+   *
+   * The screen supplies it because the shell has no way to know it (the same
+   * reason the screen supplies its own `topBar`), and **only** it: where the
+   * title links to is a fact about the route, so the shell builds that itself.
+   * A screen that names no campaign in its URL has no campaign row at all and
+   * anything passed here is ignored, which is the shape rather than a rule.
    */
-  readonly context?: ReactNode;
+  readonly campaignName?: string;
+  /** The session badge beside the name, when the screen has read one. */
+  readonly campaignBadge?: ReactNode;
+  /**
+   * Pushed right on the campaign row — *Start session*, in the delivery.
+   *
+   * A screen's own top bar is still where the things you do *to what you are
+   * looking at* go; this is for the one action that belongs to the whole
+   * campaign and is drawn on the row that names it. Only DM screens supply one,
+   * which is the delivery's `!player` guard held as a shape instead of a check.
+   */
+  readonly campaignActions?: ReactNode;
   readonly topBar: ReactNode;
   /**
    * The seam for the Hob chat panel, and the whole of it.
@@ -516,7 +718,12 @@ export function AppShell({
 }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav context={context} onAskHob={onAskHob} />
+      <TopNav
+        campaignName={campaignName}
+        campaignBadge={campaignBadge}
+        campaignActions={campaignActions}
+        onAskHob={onAskHob}
+      />
       <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}

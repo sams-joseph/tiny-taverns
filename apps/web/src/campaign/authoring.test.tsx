@@ -16,6 +16,9 @@ import {
   prepItem,
   prepItemId,
   readAloud,
+  renderEncounters,
+  renderNotes,
+  renderParty,
   renderScreen,
   rosterRowId,
   session,
@@ -50,10 +53,20 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-/** Opens the dialog behind the top bar's one create slot. */
+/**
+ * Opens the dialog behind a screen's create button.
+ *
+ * **The sixth delivery split the campaign screen into three, so the one create
+ * slot became one per screen** — and the character's moved further than that,
+ * to the Party screen, because the delivery's campaign row has a single *Party*
+ * destination and the tab that used to author a character was folded into it.
+ * The label still says which, so the tests below read exactly as they did; what
+ * changed is that each is now reached by a URL rather than by a tab.
+ */
 const openCreate = async (label: string) => {
-  await renderScreen(mintingSession());
-  await screen.findByRole("heading", { name: "The Salt Road" });
+  const render =
+    label === "New encounter" ? renderEncounters : label === "New note" ? renderNotes : renderParty;
+  await render(mintingSession());
   await userEvent.click(await screen.findByRole("button", { name: label }));
 };
 
@@ -215,17 +228,15 @@ describe("authoring an encounter", () => {
 
 describe("authoring a note", () => {
   const openNotes = async () => {
-    await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "The Salt Road" });
-    await userEvent.click(screen.getByRole("tab", { name: "Notes" }));
+    await renderNotes(mintingSession());
+    await screen.findByRole("heading", { name: "Notes" });
   };
 
   it("writes read-aloud prose attached to an encounter", async () => {
     server.routes.set(`POST ${notesPath}`, { status: 200, body: readAloud });
     await openNotes();
 
-    // The create slot is named for the open tab — there is one, and it is the
-    // prototype's.
+    // The create slot is the screen's own now that Notes is a screen.
     await userEvent.click(await screen.findByRole("button", { name: "New note" }));
 
     await userEvent.type(
@@ -290,8 +301,10 @@ describe("authoring a note", () => {
  */
 describe("sharing a campaign", () => {
   const openSettings = async () => {
+    // The sharing control is the campaign's own setting, so it stayed with the
+    // campaign's home screen rather than being repeated on all three bars.
     await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "The Salt Road" });
+    await screen.findByRole("heading", { name: "Overview" });
     await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
   };
 
@@ -388,16 +401,18 @@ describe("sharing a campaign", () => {
 
 describe("authoring a character", () => {
   const openParty = async () => {
-    await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "The Salt Road" });
-    await userEvent.click(screen.getByRole("tab", { name: "Party" }));
+    // **A character is written on the Party screen since the split.** The
+    // campaign row has one *Party* destination, so the tab's authoring went
+    // where the tab did rather than being deleted with it.
+    await renderParty(mintingSession());
+    await screen.findByRole("heading", { name: "Party" });
   };
 
   it("writes one down, omitting what the DM left blank", async () => {
     server.routes.set(`POST ${charactersPath}`, { status: 200, body: character });
     await openParty();
 
-    // The one create slot, named for the open tab — Party had none until now.
+    // The Party screen's create button — the old tab's, where the tab went.
     await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
 
     await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
@@ -622,11 +637,22 @@ describe("authoring the checklist", () => {
 describe("starting a session", () => {
   const runsPath = `/campaigns/${campaignId}/sessions/${sessionId}/runs`;
 
+  /**
+   * *Start session* is drawn twice on the Overview, and both are the delivery's:
+   * `AppShell.jsx` puts one on the campaign row (where it belongs to the
+   * campaign and follows you across all six of its screens) and `CampOverview`
+   * puts one in the "Next session" card (the contextual, primary one). They call
+   * the same thing, so a test takes the first — the row's, which is the one that
+   * exists on every campaign screen.
+   */
+  const startSession = async () =>
+    userEvent.click((await screen.findAllByRole("button", { name: "Start session" }))[0]!);
+
   it("runs an encounter in the session that already exists", async () => {
     server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
     await renderScreen(mintingSession());
 
-    await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
+    await startSession();
     await screen.findByText("Put an encounter on the table");
     // No session is invented: the campaign already names one.
     expect(screen.getByText(/This runs in session 12/)).toBeInTheDocument();
@@ -666,7 +692,7 @@ describe("starting a session", () => {
     server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
     await renderScreen(mintingSession());
 
-    await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
+    await startSession();
     // One past the highest that exists, which is the only thing the list is read for.
     await screen.findByText(/This starts session 13/);
 
@@ -693,7 +719,9 @@ describe("starting a session", () => {
 
     // Exactly one encounter is live, so the campaign says which — the
     // fixtures' `active: true`.
-    await screen.findByRole("button", { name: "Back to the fight" });
+    // Both of them say the other thing — the row's and the card's, which is
+    // what makes the pair one answer rather than two controls that can differ.
+    expect(await screen.findAllByRole("button", { name: "Back to the fight" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
     expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();
   });

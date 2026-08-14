@@ -10,6 +10,8 @@ import { Schema } from "effect";
 import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { EncountersScreen } from "./campaign/EncountersScreen";
+import { NotesScreen } from "./campaign/NotesScreen";
 import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
@@ -135,10 +137,45 @@ const campaignRoute = createRoute({
   },
 });
 
+/**
+ * The campaign's home — the sixth delivery's `CampOverview`.
+ *
+ * **The campaign view was one screen with three tabs and is now three
+ * destinations**, because the delivery's second nav row is a row of URLs and a
+ * tab is not one. `CampaignScreens.jsx` splits it exactly this way, and the
+ * split is what the row is for: *Encounters* and *Notes* are places you can be
+ * sent, bookmark, reload into and middle-click, none of which a `useState` tab
+ * was.
+ *
+ * The index is the Overview rather than a redirect to Encounters, so the way
+ * home the campaign row's title points at lands somewhere that answers *"where
+ * were we and what happens when we sit down"*.
+ */
 const campaignIndexRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "/",
   component: CampaignScreen,
+});
+
+/**
+ * The encounters built for this table, and the Notes beside them.
+ *
+ * Both are `remountDeps`-per-campaign for the reason every campaign-scoped
+ * screen here is: which row is being edited and what has been searched for
+ * belong to the table being read, and none of it may survive into another.
+ */
+const encountersRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "encounters",
+  component: EncountersScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+const notesRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "notes",
+  component: NotesScreen,
+  remountDeps: ({ params }) => params.campaignId,
 });
 
 /**
@@ -425,6 +462,8 @@ export const routeTree = rootRoute.addChildren([
   campaignsRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
+    encountersRoute,
+    notesRoute,
     bestiaryRoute,
     chronicleRoute,
     partyRoute,
@@ -483,6 +522,8 @@ declare module "@tanstack/react-router" {
 export const routes = {
   campaigns: campaignsRoute,
   campaign: campaignRoute,
+  encounters: encountersRoute,
+  notes: notesRoute,
   bestiary: bestiaryRoute,
   chronicle: chronicleRoute,
   party: partyRoute,

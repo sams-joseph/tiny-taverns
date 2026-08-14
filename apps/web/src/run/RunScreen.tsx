@@ -19,7 +19,7 @@ import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
@@ -251,14 +251,14 @@ export function RunScreen() {
         fill
         onAskHob={hob.toggle}
         panel={<Hob hob={hob} campaignId={campaignId} />}
-        context={
+        // The campaign's name is the link back to prep, and the shell builds
+        // that link itself now — a fight is inside a campaign, so the campaign
+        // row is drawn with the way home already in it. The badge is the one
+        // thing here the route cannot answer.
+        campaignName={view?.campaign.name}
+        campaignBadge={
           view === undefined ? undefined : (
-            // The campaign's name is the link back to prep. The rail spelled
-            // that out in a row of its own; a 56px bar has no room for a second
-            // line, and the name is where a DM reaches for it anyway.
-            <NavContext name={view.campaign.name} link={back}>
-              <Badge variant="secondary">Session {view.session.number}</Badge>
-            </NavContext>
+            <Badge variant="secondary">Session {view.session.number}</Badge>
           )
         }
         topBar={

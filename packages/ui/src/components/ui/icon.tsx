@@ -38,6 +38,7 @@ import {
   ImagePlus,
   Info,
   Keyboard,
+  Layers,
   Link,
   ListChecks,
   LoaderCircle,
@@ -54,6 +55,7 @@ import {
   PanelLeft,
   PanelRightClose,
   Pencil,
+  Play,
   Plus,
   RefreshCw,
   Scale,
@@ -115,6 +117,17 @@ import {
  * `lucide-react`'s own export list and then read the survivors in context, which is
  * what separates a glyph from a CSS value: `grid`, `baseline`, `pointer`, `text`
  * and `table` are all real Lucide names and none of them is an icon here.
+ *
+ * The sixth delivery's two-tier shell adds only two: `layers` (the Campaigns item
+ * on the global row, both roles) and `play` (*Start session* on the campaign row,
+ * and the encounter card's "On the table now"). It is the smallest growth any
+ * delivery has caused, and the reason is worth knowing before trusting a guess:
+ * the new shell *reads* as though it names four new glyphs, but `chevron-left` and
+ * `sparkles` were already here, so only the intersection sweep tells you which
+ * two are actually new. The false positives it turned up this time were `grid`,
+ * `baseline`, `pointer` and `ellipsis` (CSS values) plus `home`, `sheet`, `table`
+ * and `vault` — screen and campaign ids, and the campaign row draws no icons at
+ * all, which is exactly the trap: an id list that looks like the icon lists above it.
  */
 export const icons = {
   "arrow-big-up-dash": ArrowBigUpDash,
@@ -157,6 +170,7 @@ export const icons = {
   "image-plus": ImagePlus,
   info: Info,
   keyboard: Keyboard,
+  layers: Layers,
   link: Link,
   "list-checks": ListChecks,
   "loader-circle": LoaderCircle,
@@ -173,6 +187,7 @@ export const icons = {
   "panel-left": PanelLeft,
   "panel-right-close": PanelRightClose,
   pencil: Pencil,
+  play: Play,
   plus: Plus,
   "refresh-cw": RefreshCw,
   scale: Scale,

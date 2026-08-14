@@ -227,10 +227,16 @@ describe("BestiaryScreen", () => {
     expect(await screen.findByText("Goblin Boss")).toBeInTheDocument();
   });
 
-  it("hangs a way back to the campaign in the top nav, and lights Bestiary", async () => {
+  it("hangs a way back to the campaign in the campaign row, and lights Bestiary", async () => {
     await renderBestiary(mintingSession());
 
-    const back = await screen.findByRole("link", { name: "The Salt Road" });
+    // **The way back is the campaign row's title since the sixth delivery**,
+    // and the shell builds the link rather than this screen passing one. Its
+    // accessible name carries the campaign *and* what pressing it does, because
+    // the visible name is hidden on a narrow bar and the back-chevron is then
+    // the whole control — a label that was only the campaign's name would leave
+    // that state saying nothing.
+    const back = await screen.findByRole("link", { name: "The Salt Road — campaign home" });
     expect(back).toHaveAttribute("href", `/#/campaigns/${campaignId}`);
 
     const nav = screen.getByRole("link", { name: "Bestiary" });

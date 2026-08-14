@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CreatureCard } from "./CreatureCard";
 import { CreatureDialog } from "./CreatureDialog";
@@ -160,17 +160,7 @@ export function BestiaryScreen() {
     <AppShell
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
-      context={
-        shown === undefined ? undefined : (
-          // The campaign's name is the way back to prep, exactly as it is from a
-          // fight: this screen is inside a campaign, and the top nav is where
-          // that is said.
-          <NavContext
-            name={shown.campaign.name}
-            link={{ to: "/campaigns/$campaignId", params: { campaignId } }}
-          />
-        )
-      }
+      campaignName={shown?.campaign.name}
       topBar={
         <TopBar
           title="Bestiary"

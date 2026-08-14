@@ -1,13 +1,15 @@
-import type { CampaignMember } from "@taverns/api";
+import type { CampaignMember, Character } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { DateTime } from "effect";
 import { useCallback, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
+import { CharacterDialog } from "../campaign/CharacterDialog";
 import { InviteDialog } from "../campaign/InviteDialog";
+import { PartyList } from "../campaign/PartyList";
 import { Hob, useHobPanel } from "../hob";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { AssignDialog } from "./AssignDialog";
 import { loadParty } from "./load";
@@ -58,6 +60,8 @@ export function PartyScreen() {
   const hob = useHobPanel({ initialOpen: false });
   const [inviting, setInviting] = useState(false);
   const [assigning, setAssigning] = useState<CampaignMember | undefined>();
+  /** The character being written or edited — the old Party tab's one dialog. */
+  const [editing, setEditing] = useState<{ readonly character: Character | undefined }>();
 
   const view = resource.state === "ready" ? resource.value : undefined;
 
@@ -87,21 +91,32 @@ export function PartyScreen() {
     <AppShell
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
-      context={
-        view === undefined ? undefined : (
-          <NavContext
-            name={view.campaign.name}
-            link={{ to: "/campaigns/$campaignId", params: { campaignId } }}
-          />
-        )
-      }
+      campaignName={view?.campaign.name}
       topBar={
         <TopBar title="Party" subtitle={summaryOf(rows)}>
           {view !== undefined && (
-            <Button size="sm" onClick={() => setInviting(true)}>
-              <Icon name="user-plus" size={14} />
-              Invite a player
-            </Button>
+            <>
+              {/* **The characters moved here with the sixth delivery's nav, and
+                  that is why this button exists.** The campaign screen's third
+                  tab was the party's characters and the only place one could be
+                  written; the delivery's campaign row has a single *Party*
+                  destination, so collapsing the tab without bringing its
+                  authoring along would have deleted the only way to add a
+                  character. One screen answers "who is at this table" now, in
+                  both senses — the people and what they are running. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setEditing({ character: undefined })}
+              >
+                <Icon name="plus" size={14} />
+                Add character
+              </Button>
+              <Button size="sm" onClick={() => setInviting(true)}>
+                <Icon name="user-plus" size={14} />
+                Invite a player
+              </Button>
+            </>
           )}
         </TopBar>
       }
@@ -119,31 +134,57 @@ export function PartyScreen() {
         // their `--aside-w` aside at.
         <div className="flex flex-col gap-8 @4xl:flex-row @4xl:items-start">
           <div className="min-w-0 flex-1">
-            {nobody ? (
-              <EmptyState icon="users" title="Nobody else at the table yet">
-                {view.campaign.visibility === "shared" ? (
-                  <>
-                    Send somebody a link with <span className="text-heading">Invite a player</span>{" "}
-                    above. It works for one person, once, and whoever takes it appears here with
-                    their name.
-                  </>
-                ) : (
-                  <>
-                    Send somebody a link with <span className="text-heading">Invite a player</span>{" "}
-                    above. This campaign is <span className="text-heading">Private</span>, so share
-                    it from the campaign screen too or whoever joins sees nothing in it.
-                  </>
-                )}
-              </EmptyState>
-            ) : (
-              <RosterCard
-                rows={rows}
-                onAssign={(row) => {
-                  if (row.kind === "playing" || row.kind === "no-character") {
-                    setAssigning(row.member);
-                  }
-                }}
-              />
+            {/* Two lists on one screen since the delivery folded the campaign
+                screen's Party tab in here, so each says which it is. They are
+                different questions — the accounts at the table, and what those
+                accounts are running. */}
+            <section aria-label="Who is at the table">
+              {nobody ? (
+                <EmptyState icon="users" title="Nobody else at the table yet">
+                  {view.campaign.visibility === "shared" ? (
+                    <>
+                      Send somebody a link with{" "}
+                      <span className="text-heading">Invite a player</span> above. It works for one
+                      person, once, and whoever takes it appears here with their name.
+                    </>
+                  ) : (
+                    <>
+                      Send somebody a link with{" "}
+                      <span className="text-heading">Invite a player</span> above. This campaign is{" "}
+                      <span className="text-heading">Private</span>, so share it from the campaign
+                      screen too or whoever joins sees nothing in it.
+                    </>
+                  )}
+                </EmptyState>
+              ) : (
+                <RosterCard
+                  rows={rows}
+                  onAssign={(row) => {
+                    if (row.kind === "playing" || row.kind === "no-character") {
+                      setAssigning(row.member);
+                    }
+                  }}
+                />
+              )}
+            </section>
+
+            {/* The characters themselves, under the people running them.
+                `PartyList` is the campaign screen's old Party tab, moved rather
+                than rewritten: it is the one row that draws a character's
+                derived descriptor, its AC and its live hit points, and the
+                roster above is about accounts. Drawn only when there are any —
+                an empty table's answer is the roster's own empty state, and a
+                second "nobody yet" under it would say it twice. */}
+            {view.characters.length > 0 && (
+              <section aria-label="Characters" className="mt-8">
+                <h2 className="mb-3 font-display text-body leading-tight font-semibold tracking-display text-heading">
+                  Characters
+                </h2>
+                <PartyList
+                  party={view.characters}
+                  onEdit={(character) => setEditing({ character })}
+                />
+              </section>
             )}
           </div>
 
@@ -195,6 +236,25 @@ export function PartyScreen() {
             </Card>
           </aside>
         </div>
+      )}
+
+      {editing !== undefined && view !== undefined && (
+        // Keyed on the row, so opening it on a second character builds a fresh
+        // form rather than showing the first one's fields.
+        <CharacterDialog
+          key={editing.character?.id ?? "new-character"}
+          campaignId={campaignId}
+          character={editing.character}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => {
+            setEditing(undefined);
+            // A character is half of what the roster derives from — writing one
+            // can flip a member from `no-character` to `playing` and drop a line
+            // out of *Needs you*. One re-read, the rule every structural write
+            // in this app follows.
+            reload();
+          }}
+        />
       )}
 
       {inviting && view !== undefined && (

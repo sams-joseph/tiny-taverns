@@ -16,7 +16,7 @@ else. `packages/ui/src/styles.css` bridges these tokens into Tailwind's theme la
 | `assets/` | App icon exports + `assets/README.md`. |
 | `guidelines/` | The 20 specimen cards — the visual reference the ported components were checked against. |
 | `components/` | `.prompt.md` (intent + measurements), `.d.ts` (API contract), `.jsx` (visual spec), `*.card.html` (state sheets). |
-| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — now including the Hob chat panel, the Chronicle, and the fourth delivery's player side (seats, characters, sheet, table view) with the shell's role switch. Reference for later screen work. |
+| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — the Hob chat panel, the Chronicle, the fourth delivery's player side (seats, characters, sheet, table view), and the sixth's two-tier navigation with the campaign view split into `CampaignScreens.jsx`. Reference for later screen work. |
 | `readme.md`, `SKILL.md` | Guidance material. |
 | `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to ESLint in `packages/eslint-config/design-system.js`. |
 
@@ -56,6 +56,15 @@ check was the same two files differing and nothing else.
 `Tiny Taverns Design System (1)/` beside the stale folder the first four had each
 overwritten, rather than overwriting it again. Neither path is evidence — check the
 content and the mtime, as the paragraph above says.
+
+**The sixth is the first delivery that _deletes_ a file, and `--delete` is what handles
+it.** `ui_kits/dm-screen/CampaignHome.jsx` is replaced by `CampaignScreens.jsx` — not
+renamed in place, but split into four screens — and without `--delete` the old file would
+sit in this package forever, still referenced by nothing and still read as current by
+whoever opened it next. The flag has always been in the command above; this is the first
+update where it did any work, so check `git status` names the deletion after an rsync
+rather than assuming it did. Its check was again the same two files differing and nothing
+else, plus that one removal and one addition.
 
 **The delivery folder is reused, so its path proves nothing about which delivery is in
 it.** The third export overwrote the folder the first arrived in. Diff the content before

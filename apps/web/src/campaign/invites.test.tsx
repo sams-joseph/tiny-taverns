@@ -63,7 +63,7 @@ beforeEach(() => {
 
 const openInvites = async () => {
   await renderScreen(mintingSession());
-  await screen.findByRole("heading", { name: "The Salt Road" });
+  await screen.findByRole("heading", { name: "Overview" });
   await userEvent.click(await screen.findByRole("button", { name: "Invite" }));
 };
 

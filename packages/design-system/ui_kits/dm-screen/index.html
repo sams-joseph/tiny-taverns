@@ -1,4 +1,4 @@
-<!-- @dsCard group="DM Screen" viewport="1440x900" name="The app — DM and player" subtitle="Role switch in the top bar: DM prep, party seats and the encounter runner; player characters, sheet, Hob-drafted creation and the table view" -->
+<!-- @dsCard group="DM Screen" viewport="1440x900" name="The app — DM and player" subtitle="Two-tier navigation: a global row for campaigns and the shared library, a campaign row for overview, encounters, party, notes and chronicle. Role switch swaps DM prep for the player's character and table view" -->
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tiny Taverns — DM screen</title>
 <link rel="icon" type="image/png" href="../../assets/icon/favicon-32.png">
 <link rel="stylesheet" href="../../styles.css">
@@ -18,7 +18,7 @@
 <script type="text/babel" src="ChatPanel.jsx"></script>
 <script type="text/babel" src="AppShell.jsx"></script>
 <script type="text/babel" src="StatBlock.jsx"></script>
-<script type="text/babel" src="CampaignHome.jsx"></script>
+<script type="text/babel" src="CampaignScreens.jsx"></script>
 <script type="text/babel" src="EncounterRunner.jsx"></script>
 <script type="text/babel" src="Bestiary.jsx"></script>
 <script type="text/babel" src="Chronicle.jsx"></script>
@@ -36,25 +36,26 @@ function App() {
   const [screen, setScreen] = React.useState(DM_HOME);
   const setRole = (r) => { setRoleRaw(r); setScreen(r === "dm" ? DM_HOME : PLAYER_HOME); };
 
-  /* Character sheet and creation live under Characters in the nav. */
-  const navScreen = screen === "sheet" || screen === "create" ? "characters" : screen;
-
   const dm =
-    screen === "home" ? <CampaignHome onRun={() => setScreen("run")} />
+    screen === "campaigns" ? <CampaignList onOpen={() => setScreen("home")} />
+    : screen === "home" ? <CampOverview onRun={() => setScreen("run")} onGo={setScreen} />
+    : screen === "encounters" ? <CampEncounters onRun={() => setScreen("run")} />
     : screen === "party" ? <Party onChronicle={() => setScreen("chronicle")} />
-    : screen === "run" ? <EncounterRunner onExit={() => setScreen("home")} />
+    : screen === "notes" ? <CampNotes />
     : screen === "bestiary" ? <Bestiary onRun={() => setScreen("run")} />
+    : screen === "run" ? <EncounterRunner onExit={() => setScreen("home")} />
     : <Chronicle />;
 
   const player =
-    screen === "characters" ? <MyCharacters onOpen={() => setScreen("sheet")} onCreate={() => setScreen("create")} onTable={() => setScreen("table")} />
-    : screen === "sheet" ? <CharacterSheet onTable={() => setScreen("table")} onBack={() => setScreen("characters")} />
+    screen === "campaigns" ? <CampaignList onOpen={() => setScreen("sheet")} />
+    : screen === "characters" ? <MyCharacters onOpen={() => setScreen("sheet")} onCreate={() => setScreen("create")} onTable={() => setScreen("table")} />
     : screen === "create" ? <CharacterCreate onDone={() => setScreen("characters")} onCancel={() => setScreen("characters")} />
+    : screen === "sheet" ? <CharacterSheet onTable={() => setScreen("table")} onBack={() => setScreen("characters")} />
     : screen === "table" ? <PlayerTable onLeave={() => setScreen("sheet")} />
     : <Chronicle />;
 
   return (
-    <AppShell screen={navScreen} setScreen={setScreen} role={role} setRole={setRole}>
+    <AppShell screen={screen} setScreen={setScreen} role={role} setRole={setRole}>
       {role === "dm" ? dm : player}
     </AppShell>
   );

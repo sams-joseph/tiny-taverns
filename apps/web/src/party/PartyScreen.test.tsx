@@ -62,7 +62,12 @@ describe("the roster", () => {
 
     await screen.findByText("Ilse Vantar");
     // `takenInvite` is labelled "Ilse" and is in the list the screen read.
-    expect(screen.getAllByText(/Ilse/)).toHaveLength(1);
+    // Scoped to the roster: the screen grew a second list when the campaign
+    // screen's Party tab was folded in, and a character's *player name* is
+    // legitimately "Ilse" there. The claim is about the roster drawing one
+    // person once, not about the string appearing once on the page.
+    const roster = screen.getByRole("region", { name: "Who is at the table" });
+    expect(within(roster).getAllByText(/Ilse/)).toHaveLength(1);
   });
 });
 

@@ -60,6 +60,8 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns": "/campaigns",
   "/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
+  "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
+  "/campaigns/$campaignId/notes": `/campaigns/${campaignId}/notes`,
   "/campaigns/$campaignId/bestiary": `/campaigns/${campaignId}/bestiary`,
   "/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
   "/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
@@ -82,7 +84,11 @@ const reachable = Object.entries(everyRoute).filter(
 );
 
 const pill = () => screen.getByLabelText("Role");
+/** The global row: everything above a campaign. */
 const nav = () => screen.getByRole("navigation", { name: "Sections" });
+/** The campaign row, which exists only inside a campaign. */
+const campaignNav = () => screen.getByRole("navigation", { name: "This campaign" });
+const noCampaignNav = () => screen.queryByRole("navigation", { name: "This campaign" });
 
 afterEach(cleanup);
 
@@ -128,11 +134,13 @@ describe("the shell's top bar", () => {
     for (const [, path] of playerRoutes) {
       await renderAt(path);
       expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();
-      // The player nav is the screens that exist, and the DM's gated sections
-      // are not among them: `members.list` is behind `DmActor` and a player's
-      // projection of a roster is nothing at all.
-      expect(within(nav()).queryByText("Bestiary")).toBeNull();
-      expect(within(nav()).queryByText("Party")).toBeNull();
+      // The player's rows are the screens that exist, and the DM's gated
+      // sections are not among them: `members.list` is behind `DmActor` and a
+      // player's projection of a roster is nothing at all. Queried across the
+      // whole document rather than one row, because the bar has two since the
+      // sixth delivery and "absent" has to mean absent from both.
+      expect(screen.queryByRole("link", { name: "Bestiary" })).toBeNull();
+      expect(screen.queryByRole("link", { name: "Party" })).toBeNull();
       cleanup();
     }
   });
@@ -145,7 +153,7 @@ describe("the shell's top bar", () => {
     it("appears once the route names a campaign, and points at the player's route", async () => {
       await renderAt(`/play/campaigns/${campaignId}`);
 
-      const item = within(nav()).getByRole("link", { name: "Chronicle" });
+      const item = within(campaignNav()).getByRole("link", { name: "Chronicle" });
       // `#/play/campaigns/:c/chronicle`, never `#/campaigns/:c/chronicle`:
       // that screen reads `recap.read`, which is behind the `DmActor` gate.
       expect(item.getAttribute("href")).toBe(`/#/play/campaigns/${campaignId}/chronicle`);
@@ -154,13 +162,17 @@ describe("the shell's top bar", () => {
 
     it("is absent from the tables list, which names no campaign", async () => {
       await renderAt("/play");
-      expect(within(nav()).queryByText("Chronicle")).toBeNull();
+      // Not merely absent from the row — there is **no campaign row at all**,
+      // which is the sixth delivery's rule held as a shape: the second row
+      // exists exactly when the route names a campaign.
+      expect(noCampaignNav()).toBeNull();
+      expect(screen.queryByRole("link", { name: "Chronicle" })).toBeNull();
     });
 
     it("is the lit section while it is being read", async () => {
       await renderAt(`/play/campaigns/${campaignId}/chronicle`);
       expect(
-        within(nav()).getByRole("link", { name: "Chronicle" }).getAttribute("aria-current"),
+        within(campaignNav()).getByRole("link", { name: "Chronicle" }).getAttribute("aria-current"),
       ).toBe("page");
       expect(within(nav()).getByRole("link", { name: "Tables" }).getAttribute("aria-current")).toBe(
         null,
@@ -208,10 +220,92 @@ describe("the shell's top bar", () => {
    */
   it("draws a campaign's bar on a section under it that does not exist", async () => {
     await renderAt(`/campaigns/${campaignId}/a-section-we-do-not-serve`);
-    expect(within(nav()).getByText("Bestiary")).toBeTruthy();
+    expect(within(campaignNav()).getByText("Bestiary")).toBeTruthy();
     expect(within(pill()).getByRole("link", { name: "DM" }).getAttribute("aria-pressed")).toBe(
       "true",
     );
+  });
+
+  /**
+   * The sixth delivery's rule, which is the shape of the bar rather than two
+   * lists somebody keeps disjoint: *the thin top row is everything above a
+   * campaign, the second row exists only inside one, and nothing appears on
+   * both.*
+   */
+  describe("two tiers", () => {
+    it("has no campaign row above a campaign, in either mode", async () => {
+      for (const path of ["/campaigns", "/play", "/play/characters", "/gallery"]) {
+        await renderAt(path);
+        expect(noCampaignNav()).toBeNull();
+        cleanup();
+      }
+    });
+
+    it("draws the campaign's own screens on the second row, inside one", async () => {
+      await renderAt(`/campaigns/${campaignId}`);
+
+      expect(
+        within(campaignNav())
+          .getAllByRole("link")
+          .map((link) => link.textContent),
+      ).toEqual(["Overview", "Encounters", "Party", "Notes", "Chronicle", "Bestiary"]);
+      // Every one of them names the campaign, because every endpoint behind
+      // them does — which is the same fact that makes the row exist at all.
+      for (const link of within(campaignNav()).getAllByRole("link")) {
+        expect(link.getAttribute("href")).toContain(`/#/campaigns/${campaignId}`);
+      }
+    });
+
+    it("gives a player the two screens that exist, and not the gated ones", async () => {
+      // *At the table* is drawn by the delivery and has no screen; *My
+      // character* is not campaign-scoped here, so it stays on the global row.
+      // Each earns its item the day it exists — the rule that keeps *Run* out.
+      await renderAt(`/play/campaigns/${campaignId}`);
+      expect(
+        within(campaignNav())
+          .getAllByRole("link")
+          .map((link) => link.textContent),
+      ).toEqual(["Overview", "Chronicle"]);
+    });
+
+    it("lights nothing on the global row while you are inside a campaign", async () => {
+      // **This is "nothing appears on both rows", and it is one value rather
+      // than two lists**: there is a single `Section` for the whole bar, so
+      // being on a campaign screen and no global item being lit are the same
+      // fact. The delivery's own `GlobalItem` works this way.
+      await renderAt(`/campaigns/${campaignId}/notes`);
+
+      for (const link of within(nav()).getAllByRole("link")) {
+        expect(link.getAttribute("aria-current")).toBeNull();
+      }
+      expect(
+        within(campaignNav()).getByRole("link", { name: "Notes" }).getAttribute("aria-current"),
+      ).toBe("page");
+    });
+
+    it("lights Overview from a fight, because a fight is within its campaign", async () => {
+      // The old "a fight lights Campaigns" rule, one level down — which is
+      // where the campaign's own screens live now.
+      await renderAt(`/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`);
+      expect(
+        within(campaignNav()).getByRole("link", { name: "Overview" }).getAttribute("aria-current"),
+      ).toBe("page");
+    });
+
+    it("titles the second row with the campaign, and that is the way home", async () => {
+      // The shell builds this link itself — where home is, is a fact about the
+      // route — so no screen can point the way back at the wrong one.
+      await renderAt(`/campaigns/${campaignId}/bestiary`);
+      expect(screen.getByTitle("Campaign home").getAttribute("href")).toBe(
+        `/#/campaigns/${campaignId}`,
+      );
+
+      cleanup();
+      await renderAt(`/play/campaigns/${campaignId}/chronicle`);
+      expect(screen.getByTitle("Campaign home").getAttribute("href")).toBe(
+        `/#/play/campaigns/${campaignId}`,
+      );
+    });
   });
 
   it("stays in player mode on a player link it could not read", async () => {

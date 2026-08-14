@@ -289,6 +289,25 @@ export interface Call {
   readonly body: string;
 }
 
+/**
+ * The DM's own account, and the membership `Campaigns.create` writes for it in
+ * the transaction that makes the campaign.
+ *
+ * Here rather than in `party/party.fixtures.tsx` because it is not the party
+ * screen's any more: **the sixth delivery folded the campaign screen's Party tab
+ * into the Party screen**, so writing a character is a thing that happens there
+ * and the shared server has to be able to draw it. One definition, imported by
+ * the party's own fixtures — the rule this file exists for.
+ */
+export const dmAccountId = "2b1f2a1e-0000-4000-8000-0000000000a1";
+
+export const dmMember = {
+  accountId: dmAccountId,
+  name: "Wren Alderby",
+  role: "dm",
+  joinedAt: "2026-06-01T10:00:00.000Z",
+};
+
 /** Everything a fully populated campaign answers, before a test re-aims it. */
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -304,6 +323,11 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [encounter, sketch] }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: [readAloud] }],
     [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [character] }],
+    // The Party screen's own two reads. A campaign with only its DM in it and
+    // nothing outstanding — `party/party.fixtures.tsx` is where a populated
+    // roster lives, and it re-aims both.
+    [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
+    [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: [goblin, hag] }],
     [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/creatures`,
@@ -408,6 +432,34 @@ export const noSession: HostedSession = {
  */
 export const renderScreen = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
+};
+
+/**
+ * The campaign's other two destinations.
+ *
+ * **The sixth delivery split the campaign screen into three**, so a test that
+ * used to click a tab now renders a URL — which is the whole point of the
+ * change and is worth the tests saying out loud. All three compose the same
+ * `CampaignChrome` over the same `loadCampaignView`, so the stub server serves
+ * every one of them without a route being added.
+ */
+export const renderEncounters = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/encounters`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
+};
+
+export const renderNotes = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/notes`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
+};
+
+/** The party screen, which is where a character is written since the split. */
+export const renderParty = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
     <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
   ));
 };

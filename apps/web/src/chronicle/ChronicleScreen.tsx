@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadChronicle } from "./load";
 import { RecapBody } from "./RecapBody";
@@ -143,14 +143,7 @@ export function ChronicleScreen() {
     <AppShell
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} campaignId={campaignId} />}
-      context={
-        view === undefined ? undefined : (
-          <NavContext
-            name={view.campaign.name}
-            link={{ to: "/campaigns/$campaignId", params: { campaignId } }}
-          />
-        )
-      }
+      campaignName={view?.campaign.name}
       topBar={
         <TopBar title="Chronicle" subtitle={subtitle}>
           <Input

@@ -5,6 +5,7 @@ import {
   campaign,
   campaignId,
   character,
+  dmMember,
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
@@ -21,23 +22,14 @@ import {
  * contract rename fails decoding rather than rendering `undefined`.
  */
 
-export { campaign, campaignId } from "../campaign/campaign.fixtures";
+export { campaign, campaignId, dmAccountId, dmMember } from "../campaign/campaign.fixtures";
 
 const base = `/campaigns/${campaignId}`;
 
-export const dmAccountId = "2b1f2a1e-0000-4000-8000-0000000000a1";
 export const ilseAccountId = "2b1f2a1e-0000-4000-8000-0000000000a2";
 export const kofiAccountId = "2b1f2a1e-0000-4000-8000-0000000000a3";
 
 export const inviteId = "2b1f2a1e-0000-4000-8000-0000000000e1";
-
-/** The owner's own membership, written by `Campaigns.create` in its transaction. */
-export const dmMember = {
-  accountId: dmAccountId,
-  name: "Wren Alderby",
-  role: "dm",
-  joinedAt: "2026-06-01T10:00:00.000Z",
-};
 
 /** A player with a character: the `playing` row. */
 export const ilse = {

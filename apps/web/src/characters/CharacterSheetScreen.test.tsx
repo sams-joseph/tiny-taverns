@@ -24,8 +24,13 @@ describe("a character sheet", () => {
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
 
     // `descriptor` is a generated column, drawn and never recomputed; the
-    // subclass is the one identity field it cannot derive.
-    expect(screen.getByText("Level 5 Half-orc Paladin · Oath of the Open Road")).toBeTruthy();
+    // subclass is the one identity field it cannot derive. **The campaign leads
+    // the line since the sixth delivery**: this route names no campaign, so
+    // there is no campaign row to hang it in and it joined the subtitle that
+    // already says which character this is.
+    expect(
+      screen.getByText("The Salt Road · Level 5 Half-orc Paladin · Oath of the Open Road"),
+    ).toBeTruthy();
     expect(screen.getByText("Temple foundling · Lawful neutral")).toBeTruthy();
     expect(screen.getByText("/ 52 hp")).toBeTruthy();
     expect(screen.getByText("+3 temp")).toBeTruthy();
@@ -169,10 +174,15 @@ describe("a character sheet", () => {
     expect(screen.getByText(/belongs to someone else/)).toBeTruthy();
   });
 
-  it("names the campaign in the bar, from the membership list", async () => {
+  it("names the campaign on the sheet's own line, from the membership list", async () => {
+    // It used to hang in the top nav. This route names no campaign — `GET
+    // /me/characters` is the one read on `character` with none in its path — so
+    // the sixth delivery's campaign row is correctly absent here, and the name
+    // moved to the line that identifies the character rather than being lost.
     await renderSheet(brannocId);
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
-    expect(screen.getByText("The Salt Road")).toBeTruthy();
+    expect(screen.getByText(/^The Salt Road · /)).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "This campaign" })).toBeNull();
   });
 
   it("says the server did not answer rather than not here", async () => {

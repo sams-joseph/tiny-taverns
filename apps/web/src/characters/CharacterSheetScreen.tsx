@@ -12,7 +12,7 @@ import {
   TabsTrigger,
 } from "@taverns/ui";
 import { useApiResource } from "../api/resource";
-import { AppShell, NavContext, TopBar } from "../shell/AppShell";
+import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadMyCharacters } from "./load";
 import { coins, sheetTabs } from "./sheet";
@@ -612,14 +612,21 @@ export function CharacterSheetScreen() {
 
   return (
     <AppShell
-      context={campaignName === undefined ? undefined : <NavContext name={campaignName} />}
       topBar={
         <TopBar
           title={character?.name ?? "A character"}
+          /* **The campaign's name is on this line now, and that is where it has
+             to be.** It used to hang in the top nav beside the campaign the
+             route named — but this route names none: `GET /me/characters` is the
+             one read on `character` with no campaign in its path, so the sixth
+             delivery's campaign row is correctly absent here and there is no
+             second bar to put it in. It is still the thing that tells two
+             characters at two tables apart, so it joins the line that already
+             says which character this is. */
           subtitle={
             character === undefined
               ? undefined
-              : [character.descriptor, character.sheet.identity?.subclass]
+              : [campaignName, character.descriptor, character.sheet.identity?.subclass]
                   .filter(
                     (part): part is string => part !== null && part !== undefined && part !== "",
                   )

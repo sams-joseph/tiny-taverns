@@ -108,8 +108,8 @@ exactly the tokenised one (display-xl 48 / l 34 / m 26 / s 20, title 18, body 16
 - **`ui_kits/dm-screen/AppShell.jsx` — the 260px left rail is gone, replaced by a 56px top
   bar** (mark + wordmark, three nav items, then campaign, session badge and _Ask Hob_
   pushed right), with a per-screen `TopBar` below it. The active nav item uses `Tabs`' own
-  2px accent underline, so navigation reads the same at both levels. **The shipped shell
-  now matches** — see "The shell" below. `--rail-w` is still `260px` in `tokens/spacing.css`
+  2px accent underline, so navigation reads the same at both levels. **The sixth delivery
+  splits this row in two and the shipped shell follows it** — see "The shell" below. `--rail-w` is still `260px` in `tokens/spacing.css`
   and `--spacing-rail` is still bridged, but nothing uses `w-rail` any more.
 - **`ChatPanel.jsx`, `ChatParts.jsx`, `ChatLayouts.jsx`, `chat-data.js`, `chat-prep.html`**
   — the Hob assistant surface. `chat-prep.html` is the record of the three layouts that
@@ -298,6 +298,72 @@ it must come back empty.
 (Related, and the same mechanism: Tailwind only emits utilities it **scans in source**. A class
 injected at runtime that appears in no source file has no rule either — so a browser probe that
 invents a class to test the theme measures nothing. Probe with a class the codebase actually uses.)
+
+### The sixth delivery: navigation has two tiers, and the campaign view is three screens
+
+Measured the same way as the others, and back to the usual answer: **not one token changed** —
+all eight `tokens/*.css` are byte-identical, and so is every file under `components/`,
+`guidelines/`, `assets/`, `fonts/` and `_adherence.oxlintrc.json`. No palette work and no
+theme-bridge work; the fifth delivery's Mocha is untouched. Test counts across the swap were
+identical (`packages/ui`, 5 files, 90 tests).
+
+**It is the first delivery that deletes a file**, which is the one thing about the port worth
+knowing: `ui_kits/dm-screen/CampaignHome.jsx` is _replaced by_ `CampaignScreens.jsx`, and
+PORT-NOTES' `rsync --delete` is what removes it. The flag was always in that command; this is
+the first update where it did any work, so confirm `git status` names the deletion rather than
+assuming it happened. Four files, one removed and one added:
+
+- **`AppShell.jsx` splits one 56px bar into two rows**, and its own header comment is the rule
+  rather than the pixels: _the thin top row is everything ABOVE a campaign (your campaign list,
+  the shared monster library, your account); the second row exists only inside a campaign, is
+  titled with the campaign name — which is also the way home — and holds the campaign-scoped
+  screens. Nothing appears on both rows._ Global row 44px, pill-shaped items, no underline;
+  campaign row 46px, present only inside a campaign, items carrying `Tabs`' 2px accent
+  underline, with a back-chevron plus the name at the left and _Start session_ pushed right in
+  DM mode. **It is shipped** — see "The shell" below.
+- **`CampaignScreens.jsx` replaces `CampaignHome.jsx`**, splitting the campaign view into
+  `CampOverview` / `CampEncounters` / `CampNotes` plus `CampaignList`. **Shipped as three real
+  routes**, because the delivery's second row is a row of URLs and a tab is not one.
+- `index.html` rewires both and restates its own subtitle.
+
+**`packages/ui`'s icon table grew by two and that is the only change outside the vendored
+tree** — `layers` (Campaigns, both roles) and `play` (_Start session_, and the encounter card's
+"On the table now"). The sixth is the smallest growth any delivery has caused and it is the one
+where a guess would have been wrong in both directions: the new shell _reads_ as though it names
+four glyphs, but `chevron-left` and `sparkles` were already in the table. The three-spellings
+sweep is still the only thing that answers it, and this delivery adds a fourth way to be fooled —
+**a screen-id list that looks exactly like the icon lists above it.** `CAMP_DM` is
+`{ id: "home", label: "Overview" }` and carries no `icon` key at all, so `home`, `sheet`, `table`
+and `vault` all survive the intersection against Lucide's exports and none of them is a glyph.
+(`grid`, `baseline`, `pointer` and `ellipsis` were the CSS-value false positives, as before.)
+
+#### What the drawing asks for that the data cannot supply
+
+Reported rather than invented, the rule this project has held since the first delivery:
+
+- **A session's scheduled date** (_"Session 13 — Saturday, 22 August"_) and **the blurb under
+  it**. `session` has `startedAt` and `endedAt`, which are when a night _ran_; nothing anywhere
+  schedules one and nothing on the row carries prose. `title` is the nearest thing and is drawn
+  where it exists.
+- **"4 of 6 seats filled"** — settled long ago: _there is no seat_, so the denominator is a
+  number nothing can produce. The Overview draws the character count instead.
+- **"Last time", as a prose summary of the previous night.** A recap is assembled per read and
+  **nothing stores a summary** — that is the whole design of the feature, and a card promising
+  one here would need a model call in a read path the captain has ruled out. The link to the
+  Chronicle is drawn; the invented prose is not.
+- **Library, as a global item.** The delivery puts the Bestiary on the top row, above any
+  campaign. **The read landed in the same breath as this** — `GET /library/creatures`, see "The
+  Library" above — but **the screen over it has not**, and an item is earned by a screen rather
+  than by an endpoint. `creatures.list` cannot stand in: the campaign in its path is the only
+  thing gating the global `system` rows it returns, so a campaign-less route has nothing to read
+  _through_. **Bestiary therefore stays on the campaign row for now** — moving it up first would
+  strand a working screen behind an item that goes nowhere. `globalNavFor` says so in a comment;
+  when `#/library` is real the swap is one item moving from `campaignNavFor` to `globalNavFor`
+  plus a `useSection` case.
+- **The player's _At the table_.** No screen, because the player projection of a fight is an
+  open decision. **And its _My character_** is not campaign-scoped here — the sheet is
+  `/play/characters/$characterId` — so it stays on the global row, which is also what "nothing
+  appears on both rows" requires.
 
 ## Overlay layering: one scale, and where a new overlay goes on it
 
@@ -1614,6 +1680,19 @@ re-deriving them. (The Chronicle keeps all five and adds one qualification to th
 its own section below: the recap of a night is loaded by the card that shows it, because one
 `Effect` per screen would mean one recap per night just to draw a list.)
 
+**Several screens over one campaign share a frame, and the frame is not an exception to the
+first rule.** The sixth delivery split the campaign view into Overview / Encounters / Notes, and
+`campaign/CampaignChrome.tsx` is what they have in common: the name in the bar, the way home, the
+session badge, whether the table is shared, who is invited, and starting or finishing the night
+are facts about the _campaign_ rather than about whichever of its screens is open. Each
+destination still composes `loadCampaignView` **once** and still has three states, so the cost is
+honest and stated: moving between Encounters and Notes re-reads the campaign. That is the price of
+one source of truth — every write on these screens changes something the screen did not send
+(`Encounter.creatureCount` is computed per read, a note's attachment moves a count on a different
+card), so a cache would be right until the first write it did not hear about. A screen's own
+search term and open dialog live **above** the frame, because the top bar sets them and the body
+reads them and they are two slots of one screen.
+
 - **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
   (two rounds, concurrent within a round, because the checklist hangs off
   `campaign.currentSessionId`) into one value, and `api/resource.ts`'s `useApiResource` turns
@@ -1703,10 +1782,11 @@ Four things about it that are decisions rather than configuration:
   location prop at all** — the pill, the nav and the campaign-scoped items read the router — so
   there is nothing left for a new screen to forget. That is the same failure the `roleSwitch`
   prop caused, closed by shape.
-- **`remountDeps` is what `App.tsx`'s `key` was.** Four routes have it (bestiary, chronicle,
-  party, run, plus the two player-campaign leaves, the sheet and the join page): a different
+- **`remountDeps` is what `App.tsx`'s `key` was.** Bestiary, chronicle, party, encounters, notes
+  and run have it, plus the two player-campaign leaves, the sheet and the join page: a different
   campaign, character, fight or invitation is a different screen, and nothing loaded for one may
-  survive into another.
+  survive into another. **The campaign index deliberately does not** — it is the parent every
+  other one falls back to, and its own id is already the parent route's.
 - **A rendered `href` is `/#/…`, not `#/…`.** `createHashHistory`'s `createHref` is the page's own
   path, then the route behind the fragment, and it is what `Link` renders. Anything building a
   link imperatively must go through **`router.history.createHref(router.buildLocation(…).publicHref)`**
@@ -1738,43 +1818,64 @@ so constructing those by hand would test a wiring the product does not have.
 `shell/AppShell.test.tsx` enumerates `Record<RouteIds<typeof routeTree>, string | undefined>`, so
 **a new route does not compile until somebody gives it a URL** — the splats included.
 
-### The shell: two bars, and the one seam in it
+### The shell: two nav rows, and the one seam in it
 
 `apps/web/src/shell/AppShell.tsx` is `ui_kits/dm-screen/AppShell.jsx` in shipped components.
-**The 260px rail is gone and the content has its width**, which is the whole point of the second
-delivery's shell change rather than a side effect of it. Structure, outermost in:
+**The 260px rail is gone and the content has its width** (the second delivery), and **the one bar
+that replaced it is two rows since the sixth** — horizontally, so the split cost the content
+nothing. Structure, outermost in:
 
-- a **56px top nav** (`h-14` = `--s-11`) — mark, wordmark, the nav, then `context`, _Ask Hob_ and
-  `SignInSurface` pushed right. Not sticky and not on the layering scale: it is a flex row
-  _above_ the scrolling column, so it overlaps nothing and never has to win a stacking contest.
-- the **per-screen `TopBar`**, sticky at `z-chrome` inside that column, at `--fs-display-s` (the
-  delivery's size now that the wordmark has a row of its own).
+- a **44px global row** (`h-11`) — mark, wordmark, the global nav, then _Ask Hob_, the role
+  switch and `SignInSurface` pushed right.
+- a **46px campaign row** (`h-11.5`), **present exactly when the route names a campaign** — a
+  back-chevron and the campaign's name (the way home), the session badge, the campaign's own
+  screens, and `campaignActions` (_Start session_) pushed right.
+  Neither is sticky and neither is on the layering scale: they are flex rows _above_ the
+  scrolling column, so they overlap nothing and never have to win a stacking contest.
+- the **per-screen `TopBar`**, sticky at `z-chrome` inside that column, at `--fs-display-s`.
 - **`main`, a `@container`**, so screens size against their column.
 
-Three things about it that are decisions, not details:
+Six things about it that are decisions, not details:
 
-- **The nav wears `tabsTriggerVariants`, exported from `@taverns/ui` for exactly this.** The
-  delivery asks for the same 2px accent underline at both levels; a second copy of the class list
-  would be a second thing to change when the designers move it. Verified in Chromium: a nav link
-  and a `TabsTrigger` compute the same four values (2px `rgb(23,121,140)`, `rgb(241,245,248)`,
-  600, 13px). The items are real `<a href="#/…">` carrying `data-active` — the attribute Base
-  UI's own tab sets, which is what makes the shared recipe work on a plain anchor. `-mb-px` in
-  that recipe is what lands the underline _on_ the bar's hairline; the item needs `h-auto
-self-stretch` to reach it.
-- **The nav is the screens that exist, and it is a function of the route _and the mode_** — which
-  is why it is shorter than the kit's. The kit draws four as of the third delivery (Campaign, Run,
-  Bestiary, Chronicle); a screen earns its item when it is built, and _Run_ never does, because a
-  fight is reached from the campaign that owns it and a top-level link could not know which.
-  **_Bestiary_ is there, but only once a campaign is**, because `creatures.list` hangs off one;
-  `navFor(route)` adds it when the route names a campaign and omits it on the campaign list.
-  `sectionOf` lights **Campaigns** for the campaign list, a campaign _and_ a run, and gives the
-  bestiary its own underline — the underline says which part of the app you are in. The mode is
-  the second axis and is read off the route rather than passed beside it; see "The role switch"
-  below.
-- **The campaign name is the only elastic thing in the bar, so it is the thing that truncates.**
-  The right-hand group is `min-w-0`, not `shrink-0`. Without that the bar overflowed its own
-  width at 760px and clipped _Ask Hob_ — invisible to every test, because the shell's
-  `overflow-hidden` keeps the document from scrolling.
+- **"Nothing appears on both rows" is one value, not two lists kept disjoint.** There is a single
+  `Section` (`shell/location.ts`) and both rows ask the same question of it, so _being inside a
+  campaign_ and _no global item being lit_ are the same fact. It is the delivery's own mechanism —
+  its `GlobalItem` is `active={screen === n.id}` and the campaign screens appear in no global
+  list. Verified in Chromium: on `…/notes` every global link has no `aria-current` and the
+  campaign row's _Notes_ has `page`.
+- **The campaign row wears `tabsTriggerVariants`; the global row is pills.** The delivery gives
+  the two rows deliberately different recipes, and the difference is the information: an underline
+  says which part of _this campaign_ you are reading, and the row above is not about a campaign.
+  `tabsTriggerVariants` is exported from `@taverns/ui` for exactly this and must not be copied.
+  Verified in Chromium: a campaign-row item and a `TabsTrigger` compute the _same six_ values,
+  active and idle — 2px, `rgb(250,179,135)`, `rgb(205,214,244)`, 600, 13px, Instrument Sans (and
+  `rgba(0,0,0,0)` / `rgb(147,153,178)` / 500 idle). `-mb-px` lands the underline on the header's
+  hairline; the item needs `h-auto self-stretch` to reach it. **The campaign row draws no icons** —
+  `CampItem` renders the label alone, and six labelled items plus a name, a badge and a button is
+  already the widest thing in this bar.
+- **Each row is its own `@container`**, because they run out of room at different widths and the
+  question is always whether _this row_ fits — which the window does not answer.
+- **The rows are the screens that exist, on the route and the mode**, both read off the router.
+  _Run_ has never earned an item (a fight is reached from the campaign that owns it); _At the
+  table_ has not either. **_Bestiary_ is on the campaign row though the delivery draws it as
+  _Library_ on the global one** — deliberately, until there is a global read behind it; see the
+  sixth delivery's section.
+- **The name is the first thing to give way, and it gives way whole.** The campaign row needs
+  986px with six items, a badge and _Start session_, so below about 1024 something must go.
+  Left as a plain shrinking flex item the name squeezed the **chevron** to zero width at 760 and
+  took the way home with it — measured, and invisible to every test, because the shell's
+  `overflow-hidden` keeps the document from scrolling. So the name is `hidden` under the row's own
+  `@3xl` (it truncates above), `min-w-4` is the chevron's width held as a floor, and the session
+  badge goes at `@2xl` as the row's second piece of decoration. Below that the control is a
+  back-chevron, which says what it does without a label — and its `aria-label` carries the
+  campaign name and the word "home", because a label that were only the name would say nothing in
+  the state where the name is not drawn.
+- **The way home is built by the shell, and the screen supplies only the name.** Where it goes is
+  a fact about the route — the id is in the URL and the mode picks which of the two campaign
+  screens is home — so there is nothing for a screen to point wrong. That replaced a `NavContext`
+  seven screens each passed a hand-built `link` to, four of which had to remember the `/play/…`
+  prefix. `campaignName`, `campaignBadge` and `campaignActions` are the whole of what a screen
+  gives the row; a screen whose URL names no campaign has no row and anything passed is ignored.
 
 **The seam for the Hob chat panel is two props and nothing else** — `onAskHob?: () => void` (the
 bar's button; with none passed it still renders, because it is the bar the designers drew) and
@@ -1801,19 +1902,22 @@ opens it when asked, and nothing is requested until it is opened. Mounted on the
 gallery is left to its specimen, which owns a `useHobPanel` of its own — two on one page would
 both answer the same ⌘K.
 
-Measured in Chromium either side of the threshold, per screen: inline at 1440/1021/**1020** the
-panel is `absolute` at `z-chrome` over a 400px gap element, so the _content column_ shrinks by
-exactly 400 (1040 at 1440, 620 at 1020); at 1019/900 the panel is `absolute` at `z-dialog` and
-the scrim `absolute` at `z-scrim` — different rungs, never one — with the scrim's box exactly the
-row's (`0, 56, vw×844`), so it starts below the nav and `elementFromPoint` still returns the
-_Ask Hob_ button. That is the property worth re-checking if either class list moves: **the overlay
-covers the content, not the app.** `document.scrollWidth` stays equal to the viewport in every
-case. (Inline was `position: static` before the sidebar; it is the gap that keeps the content
-narrower now, and that is the number to assert — see the sidebar section below.)
+Measured in Chromium either side of the threshold, per screen — **re-measured under the sixth
+delivery's two-row nav, which is what moved the numbers**: inline at 1440/1021/**1020** the panel
+is `absolute` at `z-chrome` over a 400px gap element, so the _content column_ shrinks by exactly
+400 (1040 at 1440, 621 at 1021, 620 at 1020); at 1019/900 the panel is `absolute` at `z-dialog`
+110 and the scrim `absolute` at `z-scrim` 100 — different rungs, never one — with the scrim's box
+exactly the row's, **`0, 91, vw×809`** (it was `0, 56, vw×844` under the one-row bar; 91 is
+44 + 1 + 46). So it still starts below the nav, `elementFromPoint` over the content returns the
+scrim, and `elementFromPoint` over _Ask Hob_ still returns the button. That pair is the property
+worth re-checking if either class list moves: **the overlay covers the content, not the app** —
+and rendering above is not the same as taking the click. `document.scrollWidth` stays equal to the
+viewport in every case. (Inline was `position: static` before the sidebar; it is the gap that
+keeps the content narrower now, and that is the number to assert — see the sidebar section below.)
 
-`NavContext` is exported from the same file for the bar's right-hand pair, and takes an `href` for
-the screen that is _inside_ a campaign — from a fight, the campaign's name is the way back to
-prep, which is what the rail's footer used to be.
+**The 400px is measured from the region, not the viewport, so the taller nav cost it nothing** —
+which is why this whole area survived a bar change with no edit. If a future bar change _does_
+move these numbers, that is the signal something started measuring the window.
 
 ### The role switch: a mode, carried by the URL — and how navigation derives from it
 
@@ -1837,7 +1941,7 @@ the whole design in one line:
 | route                     | mode     | screen                                             |
 | ------------------------- | -------- | -------------------------------------------------- |
 | `#/campaigns`             | `dm`     | `CampaignsScreen`, filtered to `role === "dm"`     |
-| `#/campaigns/:c` and down | `dm`     | the DM's screens, unchanged                        |
+| `#/campaigns/:c` and down | `dm`     | the DM's screens — Overview, Encounters, Notes, …  |
 | `#/play`                  | `player` | the same `CampaignsScreen`, filtered to `"player"` |
 | `#/play/campaigns/:c`     | `player` | `play/PlayerCampaignScreen`, a screen of its own   |
 
@@ -1852,14 +1956,14 @@ _Player_ at a table you DM has no meaning, and there is no such route to be in.
 
 Six things that are decisions rather than layout:
 
-- **The player nav is the screens that exist**, which today is _Tables_, _Chronicle_ once the route
-  names a campaign, and the gallery — the same rule that keeps _Run_ out of the DM's row. The
-  delivery draws _Characters_, _At the table_ and _Chronicle_; each earns its item on the day its
-  screen is built, and the third has. It is campaign-scoped exactly as the DM's is and points at
-  `playChronicle`, never at `chronicle` — that screen reads the gated `recap.read`. **_Bestiary_
-  and _Party_ are kept out on top of that**: `members.list` is behind the `DmActor` gate and a
-  player's projection of a roster is _nothing_, and a control that exists and then errors is worse
-  than one that is absent.
+- **The player's rows are the screens that exist** — _Tables_, _Characters_ and the gallery on the
+  global row, and _Overview_ + _Chronicle_ on the campaign row once the route names one. The same
+  rule that keeps _Run_ out of the DM's rows keeps the sixth delivery's _At the table_ out of this
+  one; each earns its item on the day its screen is built. The Chronicle points at
+  `playChronicle`, never at `chronicle` — that screen reads the gated `recap.read`, and two
+  sections means neither can light the other's item. **_Bestiary_ and _Party_ are kept out on top
+  of that**: `members.list` is behind the `DmActor` gate and a player's projection of a roster is
+  _nothing_, and a control that exists and then errors is worse than one that is absent.
 - **_Ask Hob_ is absent in player mode, in the shell.** Asking is a write (`HobThreads.start` needs
   `campaignWritable`) and the captain settled that players do not talk to Hob, so the button would
   open a panel that can only apologise.
@@ -1997,8 +2101,13 @@ than one per test file. `installStubServer()` (or the runner's `installRunServer
 also hold a stream open) must be called once per file at module scope, for the
 `Context.Reference` reason `api/client.test.ts` records.
 
-**The Party tab authors now, so the top bar's one create slot names all three tabs** — there is no
-"nothing on Party" branch left. `campaign/CharacterDialog.tsx` is deliberately the `character` row
+**The three tabs are three screens since the sixth delivery, so the one create slot is one per
+screen** — _New encounter_ on Encounters, _New note_ on Notes, and **_Add character_ on the Party
+screen**, which is where the Party tab's authoring went when the delivery's campaign row collapsed
+it into the single _Party_ destination. Collapsing the tab without carrying its dialog would have
+deleted the only way to write a character; `party/PartyScreen.tsx` now answers _"who is at this
+table"_ in both senses, over two labelled regions, at the cost of no extra read (`loadParty`
+already listed the characters, for the roster). `campaign/CharacterDialog.tsx` is deliberately the `character` row
 **as it stands today** (name, player, descriptor, AC, max HP, visibility): the table is due to gain
 `level`, `species` and `class_name` as real columns, at which point `descriptor` stops being a free
 line, and building for that shape early would mean either a column that does not exist or a display
@@ -2557,10 +2666,13 @@ Five things it settled that the next screen over this contract should not re-der
 - **The route hangs off a campaign — `#/campaigns/:c/bestiary` — and so does the nav item.**
   `creatures.list` is `/campaigns/:campaignId/creatures`, and that path is the _only_ thing
   gating the global `system` rows it returns beside the campaign's own, so a campaign-less
-  bestiary has nothing to read through. `navFor(route)` in `shell/AppShell.tsx` therefore adds
-  _Bestiary_ only when the route names a campaign; from the campaign list it is absent rather
-  than disabled. `sectionOf` gives it its own underline, because it is a screen you go _to_ from
-  a campaign rather than a view of one.
+  bestiary has nothing to read through. It therefore rides the **campaign row**
+  (`campaignNavFor` in `shell/AppShell.tsx`), which exists exactly when the route names a
+  campaign; from the campaign list there is no row at all rather than a disabled item.
+  `useSection` gives it its own underline, because it is a screen you go _to_ from a campaign
+  rather than a view of one. **The sixth delivery draws it as _Library_ on the global row instead,
+  and it will move there once a global read exists** — see that delivery's own section; the swap
+  is one item moving between two lists.
 - **The search and the sort are query parameters; the environment chips are not.** The search
   has to be the server's, because `ILIKE` on the name is only half of it and the other half is
   full text over the stat block — measured against a running server, `"nimble escape"` returns
@@ -2663,7 +2775,13 @@ Two smaller things, both measured in Chromium at 1440×900 against a real four-n
 the aside is **not** sticky though the delivery draws it so — the scroll container is the shell's
 column and `TopBar` is already sticky at its top, so an aside pinned to the same edge parks its
 heading underneath the bar, and the offset that would fix it is the bar's height, which is not a
-token. And read-aloud mode **drops** the DM half rather than restyling it (no aside, no _At the
+token. **The sixth delivery's two-row nav did not touch this, and re-measuring made the note
+stronger rather than stale**: the nav rows sit _outside_ the scroll container, so the sticky
+`TopBar` still pins at `top: 0` of a column that now begins at y=91 instead of 56, unmoved after
+scrolling — and the height that would be needed as an offset is `TopBar`'s own, which measured
+**89px on the Chronicle and 61px on the party screen**. It is not merely un-tokenised; it is not
+even constant between screens, so it could never be one token. And read-aloud mode **drops** the
+DM half rather than restyling it (no aside, no _At the
 table_, no _Questions you answered_), leaving beats and read-aloud notes in Alegreya at 18px
 (`--fs-body-l`) on a 671px measure.
 
@@ -2901,12 +3019,15 @@ caller writes the key explicitly, which is exactly what a `const threadId = …`
 in Chromium after the panel became a sidebar (see the section below), at 1440 / 1021 / **1020** /
 1019 / 900: above the threshold the panel is 400px with a gap element beside the content
 reserving exactly that width, so the content column is 1040 at 1440 and 620 at 1020, and there
-is no scrim; at 1019 and below the scrim's box is the region's exactly (`0, 56, vw × 844`) at
-`z-index: 100` with the panel at `110`, and `elementFromPoint` over the content returns the
-scrim while over _Ask Hob_ it still returns the button. That pair is the point — it is the
-property the select-under-a-dialog bug violated, and rendering above is not the same as _taking
-the click_; and the scrim starting at y=56 is what keeps the overlay over the **content** rather
-than over the app. `document.scrollWidth` equals the viewport at every width.
+is no scrim; at 1019 and below the scrim's box is the region's exactly at `z-index: 100` with the
+panel at `110`, and `elementFromPoint` over the content returns the scrim while over _Ask Hob_ it
+still returns the button. That pair is the point — it is the property the select-under-a-dialog
+bug violated, and rendering above is not the same as _taking the click_; and the scrim starting
+below the nav is what keeps the overlay over the **content** rather than over the app.
+`document.scrollWidth` equals the viewport at every width. **Re-measured under the sixth
+delivery's two-row nav**: the region's box is now `0, 91, vw × 809` where it was `0, 56, vw × 844`,
+and nothing else moved — the 400px is measured from the region rather than from the window, which
+is why a bar change costs this area no edit.
 
 Three things that cost time here:
 
