@@ -54,6 +54,15 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * captain. It is one hole, in one table, over the columns a payload schema
  * allows, and it is strictly narrower than the read beside it; the argument is
  * on the function itself and is worth reading before anything like it is added.
+ *
+ * **One predicate here does not reach `campaignInScope` at all**, and it is the
+ * newest: `sharedCorpusRowReadable`, the Library's read of the global half of
+ * `creature`. Everything else in this file bottoms out in a membership row
+ * because everything else is somebody's content; the shared corpus is nobody's,
+ * belongs to no campaign and is writable through no path, so the rule it states
+ * is *authenticated*, not *a member here*. It is written down as its own
+ * function for exactly that reason — a statement about reach that no other
+ * predicate implies should be a thing somebody decided, not a `where` clause.
  */
 
 /**
@@ -432,6 +441,58 @@ export const corpusRowReadable = (
     sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
     sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
   ]);
+
+/**
+ * Rows of the **shared corpus itself** — the global half of `creature`, read
+ * with no campaign in the path at all. The Library.
+ *
+ * This is the first predicate in this file that does not reach
+ * `campaignInScope`, and that is a genuinely new statement about reach rather
+ * than a variation on the existing one. It is written here, once, so that it is
+ * a thing somebody decided rather than a `where` clause inlined into a
+ * repository:
+ *
+ * > A `system` creature belongs to no campaign, is already readable through
+ * > every campaign, and cannot be edited by anyone. So any **authenticated**
+ * > account may read it, and reads nothing else this way.
+ *
+ * Each of the three clauses of that sentence is load-bearing:
+ *
+ * **"Belongs to no campaign"** is `campaign_id is null`, which is the anchor and
+ * not a filter. `creature_system_is_global` makes `origin = 'system'` and
+ * `campaign_id is null` the same statement, so this fragment cannot select a
+ * campaign's authored creature however it is composed — there is no id a caller
+ * could supply that would widen it, because it names none. That is why the test
+ * is written as the null check rather than as `origin = 'system'`: the column
+ * that decides is the one every other predicate in this file also reads.
+ *
+ * **"Cannot be edited by anyone"** is why there is no writable counterpart and
+ * must not be one. `rowWritable` requires `campaign_id` to equal a campaign in a
+ * path, and a null never equals a uuid — immutability is a consequence of the
+ * write predicate, so a `sharedCorpusRowWritable` would be a hole rather than a
+ * symmetry.
+ *
+ * **"Already readable through every campaign"** is what bounds it, and it is why
+ * the row's own `visibility` still applies. `corpusRowReadable` reads a `dm` row
+ * only for a DM *of the campaign in the path*; here there is no campaign, so
+ * there is no such question to ask and no answer that could be yes. What is left
+ * is `shared`, which is the half every account already reaches through every
+ * campaign it is at. So this endpoint discloses nothing that was not already
+ * reachable — it removes the campaign the reader had to name, not the narrowing.
+ *
+ * **It takes no `Actor`, deliberately.** Every other fragment here does, because
+ * every other answer depends on *who* is asking; this one does not, and a
+ * parameter it never read would say otherwise. What makes "authenticated" true
+ * is upstream: the group carries `Authorization`, and the repository method
+ * composing this still requires `CurrentActor` at the type level — see
+ * `Creatures.library`, where that requirement is the whole enforcement of the
+ * word "authenticated" in the rule above.
+ */
+export const sharedCorpusRowReadable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+): Statement.Fragment =>
+  sql.and([sql`${sql(table)}.campaign_id is null`, sql`${sql(table)}.visibility = 'shared'`]);
 
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (

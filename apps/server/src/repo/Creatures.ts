@@ -9,6 +9,7 @@ import {
   type CreatureSort,
   type CreatureUpdate,
   CurrentActor,
+  type LibraryFilterValues,
   NotFound,
   type StatBlock,
 } from "@taverns/api";
@@ -27,6 +28,7 @@ import {
   ensureCampaignReadable,
   ensureCampaignWritable,
   rowWritable,
+  sharedCorpusRowReadable,
 } from "./visibility.js";
 
 interface CreatureRow extends ProvenanceColumns {
@@ -127,6 +129,37 @@ const inScope = (sql: SqlClient.SqlClient, scope: CreatureScope): Statement.Frag
 };
 
 /**
+ * The clauses the search box and the environment chips contribute — everything
+ * a client may vary about *which* creatures, as opposed to which corpus.
+ *
+ * Shared by the campaign bestiary and the Library rather than written twice, for
+ * the reason `LibraryFilter` is spread into `CreatureFilter`: the two lists are
+ * one screen's worth of behaviour read from two places, and the failure mode of
+ * a second copy is a search box that quietly means something different at
+ * `/library` than it does inside a campaign.
+ *
+ * It contributes **no** reach clause and cannot: what bounds the rows is the
+ * predicate its caller puts beside these, and keeping the two apart is what
+ * makes "the Library is anchored on `campaign_id is null`" a property of one
+ * line in one method rather than of this helper being used correctly.
+ */
+const narrowedBy = (
+  sql: SqlClient.SqlClient,
+  filter: LibraryFilterValues,
+): ReadonlyArray<Statement.Fragment> => {
+  const clauses: Array<Statement.Fragment> = [];
+  if (filter.q !== undefined && filter.q.trim() !== "") {
+    clauses.push(matchesQuery(sql, filter.q.trim()));
+  }
+  if (filter.environments !== undefined && filter.environments.length > 0) {
+    // `&&` is array overlap: matches if the creature lives in any of them,
+    // which is what a row of toggles means.
+    clauses.push(sql`creature.environments && ${filter.environments}`);
+  }
+  return clauses;
+};
+
+/**
  * `Bestiary.jsx:22-24`'s three orderings. Built from a closed literal union and
  * never from a client string, so there is no ordering to inject.
  *
@@ -181,6 +214,13 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
  * null. There is no `origin = 'system'` check anywhere in this file, and there
  * does not need to be one.
  *
+ * `library` is the third predicate in the file and the only read that names no
+ * campaign: the shared corpus read on its own, for the nav's global *Library*
+ * item. It is not a special case of `list` — `list` answers *this campaign's
+ * creatures plus the corpus*, which is a different question with a different
+ * gate — so it composes `sharedCorpusRowReadable` rather than passing a scope,
+ * and shares only the parts a client varies (`narrowedBy`, `orderBy`).
+ *
  * Nothing here can write a `system` row either: `create` never sets `origin`, so
  * the column default (`authored`) decides, and the database's
  * `creature_system_is_global` check would refuse a global row from a path that
@@ -195,6 +235,25 @@ export class Creatures extends Context.Service<
       campaignId: CampaignId,
       filter: CreatureFilterValues,
     ) => Effect.Effect<ReadonlyArray<Creature>, NotFound, CurrentActor>;
+    /**
+     * The Library — the shared corpus, with no campaign to read it through.
+     *
+     * **`CurrentActor` is required and never read, and that is the point.** The
+     * rule this endpoint implements is *any authenticated account*, and the
+     * requirement is what makes the word "authenticated" a fact the compiler
+     * checks: a caller with no actor — `bestiary/import.ts`, a bin script, a
+     * future group somebody forgets to put `Authorization` on — cannot reach
+     * this method at all. Which rows come back is `sharedCorpusRowReadable`'s
+     * answer and does not depend on who is asking; *that* somebody is asking
+     * does, and this is where it is enforced.
+     *
+     * It cannot fail. There is no campaign in the path for a `NotFound` to be
+     * about, so an account that is a member of nothing gets a list rather than a
+     * 404 — the same shape as `Memberships.mine`.
+     */
+    readonly library: (
+      filter: LibraryFilterValues,
+    ) => Effect.Effect<ReadonlyArray<Creature>, never, CurrentActor>;
     readonly findById: (
       campaignId: CampaignId,
       id: CreatureId,
@@ -246,18 +305,27 @@ export class Creatures extends Context.Service<
               const clauses = [
                 corpusRowReadable(sql, "creature", campaignId, actor),
                 inScope(sql, filter.scope ?? "all"),
+                ...narrowedBy(sql, filter),
               ];
-              if (filter.q !== undefined && filter.q.trim() !== "") {
-                clauses.push(matchesQuery(sql, filter.q.trim()));
-              }
-              if (filter.environments !== undefined && filter.environments.length > 0) {
-                // `&&` is array overlap: matches if the creature lives in any
-                // of them, which is what a row of toggles means.
-                clauses.push(sql`creature.environments && ${filter.environments}`);
-              }
               const rows = yield* sql<CreatureRow>`
                 select * from creature
                 where ${sql.and(clauses)}
+                order by ${orderBy(sql, filter.sort ?? "cr")}
+              `;
+              return rows.map(toCreature);
+            }),
+          ),
+
+        library: (filter) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              // Named and discarded. It is not a filter — see the doc on this
+              // method's signature for why requiring it is the whole of the
+              // "authenticated" half of the reach rule.
+              yield* CurrentActor;
+              const rows = yield* sql<CreatureRow>`
+                select * from creature
+                where ${sql.and([sharedCorpusRowReadable(sql, "creature"), ...narrowedBy(sql, filter)])}
                 order by ${orderBy(sql, filter.sort ?? "cr")}
               `;
               return rows.map(toCreature);

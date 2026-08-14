@@ -284,6 +284,25 @@ const CreaturesLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * The Library — the shared corpus, above every campaign.
+ *
+ * The same `Creatures` service as the group above, because it is the same table
+ * and one table gets one mapper. What differs is the predicate the read
+ * composes, and that difference is in the repository where every other one is:
+ * this handler has no campaign to pass and nothing to filter with, which is what
+ * makes "the Library cannot reach a campaign's creatures" a property of
+ * `sharedCorpusRowReadable` rather than of anything here.
+ */
+const LibraryLive = HttpApiBuilder.group(
+  TavernsApi,
+  "library",
+  Effect.fnUntraced(function* (handlers) {
+    const creatures = yield* Creatures;
+    return handlers.handle("list", ({ query }) => creatures.library(query));
+  }),
+);
+
 const EncounterCreaturesLive = HttpApiBuilder.group(
   TavernsApi,
   "encounterCreatures",
@@ -648,6 +667,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     NotesLive,
     EncountersLive,
     CreaturesLive,
+    LibraryLive,
     EncounterCreaturesLive,
     PrepLive,
     BeatsLive,

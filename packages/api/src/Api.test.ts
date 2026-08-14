@@ -74,6 +74,11 @@ describe("the API declaration", () => {
       "invitePreview",
       "invites",
       "join",
+      // The Library: the shared corpus, read with no campaign in the path. The
+      // second group that names none, and it is behind `Authorization` like
+      // every other — the reach rule it implements is *authenticated*, which is
+      // a thing only the middleware above it can make true.
+      "library",
       "live",
       "me",
       "members",

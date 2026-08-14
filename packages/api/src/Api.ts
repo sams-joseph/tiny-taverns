@@ -12,7 +12,13 @@ import {
   CharacterUpdate,
 } from "./Character.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
-import { Creature, CreatureCreate, CreatureFilter, CreatureUpdate } from "./Creature.js";
+import {
+  Creature,
+  CreatureCreate,
+  CreatureFilter,
+  CreatureUpdate,
+  LibraryFilter,
+} from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
 import {
   HobAccepted,
@@ -557,6 +563,60 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
   .middleware(Authorization) {}
 
 /**
+ * The Library: the shared `system` corpus, above every campaign.
+ *
+ * **The second group in the product that names no campaign**, and it is here for
+ * the reason `MeGroup` is: it answers a question you ask *before* you have one.
+ * The sixth delivery moves the Bestiary out of the campaign row of the nav and
+ * into the global row as *Library*, so there has to be a read of the corpus that
+ * does not hang off a table — `creatures.list` cannot be it, because the campaign
+ * in that path is the only thing gating the global rows it returns.
+ *
+ * It is not a second answer to `creatures.list`. That list is *this campaign's
+ * creatures plus the shared corpus*; this one is the shared corpus and nothing
+ * else, anchored on `campaign_id is null` by `sharedCorpusRowReadable` rather
+ * than by a filter a client chooses. The search, the environment narrowing and
+ * the sort are the same controls (`LibraryFilter` is spread into
+ * `CreatureFilter`), so the two lists cannot come to disagree about what "gob"
+ * finds or how CR orders.
+ *
+ * **Read-only, structurally.** `system` rows are `campaign_id is null`, and every
+ * write predicate in the product requires `campaign_id` to equal a campaign in a
+ * path — a null never equals a uuid. So there is nothing to create, update or
+ * delete here, and `derive` stays where it is: a reskin needs a campaign to copy
+ * *into*, which this path does not have.
+ *
+ * **Behind `Authorization`, and the reach rule is exactly "authenticated".** A
+ * `system` creature belongs to no campaign, is already reachable through every
+ * campaign, and cannot be edited by anyone — so an account that is a member of
+ * nothing may read it, and reads nothing else through here. That statement is
+ * written down once, as `repo/visibility.ts`'s `sharedCorpusRowReadable`.
+ */
+class LibraryGroup extends HttpApiGroup.make("library")
+  .add(
+    /**
+     * The corpus, filtered the way the campaign bestiary filters.
+     *
+     * No `NotFound`: there is no parent in the path to be missing, and an
+     * account with no membership anywhere gets a real list rather than a 404 —
+     * the same shape as `me.campaigns`, whose empty answer is a legitimate
+     * steady state rather than an error.
+     *
+     * There is deliberately no `findById` beside it. Nothing needs one: the card
+     * and the stat block are the row half and the document half of the same
+     * `Creature`, which the list already carries — the campaign bestiary screen
+     * renders both from its list and this one is the same shape. An endpoint
+     * nothing calls is the stubbed-field rule applied to a route.
+     */
+    HttpApiEndpoint.get("list", "/creatures", {
+      query: LibraryFilter,
+      success: Schema.Array(Creature),
+    }),
+  )
+  .prefix("/library")
+  .middleware(Authorization) {}
+
+/**
  * What an encounter contains. The roster, not the running fight.
  *
  * Nested under the encounter for the same reason the checklist is nested under
@@ -1056,6 +1116,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(CreaturesGroup)
+  .add(LibraryGroup)
   .add(EncounterCreaturesGroup)
   .add(PrepGroup)
   .add(BeatsGroup)

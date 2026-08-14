@@ -482,7 +482,17 @@ describe("the scope, counted", () => {
     // `ownedRowReadable` refuses — and `CharacterOwnUpdate`, which has no field
     // for a live column. Two boundaries, neither of them a proof, and
     // `player-write.test.ts` pins both.
-    expect(ungated).toBe(64);
+    //
+    // The sixty-fifth is `Creatures.library` — `GET /library/creatures`, the
+    // shared corpus read with no campaign in the path. It is the one method here
+    // whose `CurrentActor` is required and *never read*: what it returns is the
+    // same list for everybody, because a `system` creature belongs to no
+    // campaign and is writable through no path. The requirement is the whole of
+    // the "authenticated" half of its reach rule — a caller with no actor cannot
+    // reach it — and a `DmActor` would be the wrong question twice over, since
+    // there is no campaign to be the DM of and nothing narrower to project.
+    // `library.test.ts` pins the rows.
+    expect(ungated).toBe(65);
   });
 });
 

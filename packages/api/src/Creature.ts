@@ -291,18 +291,41 @@ export const CreatureScope = Schema.Literals(["all", "campaign", "system"]);
 export type CreatureScope = typeof CreatureScope.Type;
 
 /**
- * `Bestiary.jsx`'s three controls, as query parameters.
+ * The controls that mean the same thing whether the list is a campaign's
+ * bestiary or the shared Library — searching, narrowing by environment, and
+ * ordering.
  *
  * `q` matches the way the prototype searches — `name.toLowerCase().includes(q)`
  * (`Bestiary.jsx:11-12`) — *and* the stat block's full text, so "nimble escape"
  * finds the Goblin Boss. Substring alone would miss the trait; full text alone
  * would miss "gob" halfway through typing "Goblin".
+ *
+ * Named and spread rather than restated, so a control added to one list arrives
+ * in the other. The two lists are one screen's worth of behaviour read from two
+ * places, and a search box that means something different at `/library` than it
+ * does inside a campaign is the shape this avoids.
  */
-export const CreatureFilter = {
+export const LibraryFilter = {
   q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
   /** Any-of, like the toggle row: a creature matches if it lives in any of them. */
   environments: Schema.optional(environments),
   sort: Schema.optional(CreatureSort),
+} as const;
+
+/** The decoded Library filter, as a repository sees it. */
+export type LibraryFilterValues = typeof LibraryFilterValues.Type;
+const LibraryFilterValues = Schema.Struct(LibraryFilter);
+
+/**
+ * `Bestiary.jsx`'s three controls, as query parameters.
+ *
+ * `scope` is the one the Library has no use for: that list *is* the `system`
+ * half, anchored on `campaign_id is null` by its predicate rather than by a
+ * parameter a client may vary. A `scope` there would be a filter with one legal
+ * value — the shape `campaign_invite.role` was refused for.
+ */
+export const CreatureFilter = {
+  ...LibraryFilter,
   scope: Schema.optional(CreatureScope),
 } as const;
 
