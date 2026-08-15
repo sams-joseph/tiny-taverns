@@ -23,34 +23,45 @@ import {
   SelectValue,
   Switch,
 } from "@taverns/ui";
-import { DateTime, Effect, Result } from "effect";
+import { Effect, Result } from "effect";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
+import { nextSessionNumber, startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 
 /**
- * *Start session* — `CampaignHome.jsx:41`, and the only way into the runner.
+ * Putting an encounter on the table — the way into the runner.
  *
  * The prototype's button does one thing because the prototype has one fixture.
- * Here it has to make three statements true at once, and they are three tables:
- * a **session** to hang the night off, a **run** to put an encounter on the
- * table, and the campaign's pointer at the session so the prep screen agrees
+ * Here it may have to make three statements true at once, and they are three
+ * tables: a **session** to hang the night off, a **run** to put an encounter on
+ * the table, and the campaign's pointer at the session so the prep screen agrees
  * with the runner. So this is one `Effect` handed to one `submit`, exactly as
  * the encounter form composes its roster — two submits in a row would give this
  * dialog two busy flags and a session with no fight in it to explain.
  *
  * **A session is created only when there is not one.** `campaign.currentSessionId`
  * is the DM's current night; running a second encounter on the same night is
- * the common case and must not manufacture "Session 13" for it. When there is
- * no session at all, the number is one past the highest that exists, which is
- * what `sessions.list` is read for and the only reason it is read.
+ * the common case and must not manufacture "Session 13" for it.
  *
- * **`startedAt` is written here and nowhere else in the app.** `Session.ts`
- * calls the lifecycle planned → running → ended; putting a fight on the table
- * is what "running" means, so this is where the stamp belongs.
+ * **This is no longer the only way into a night, and the branch that opens one
+ * is deliberately kept.** `StartSessionDialog` opens a night with no fight in
+ * it — a session can start in a tavern, and an encounter goes on the table when
+ * the party reaches one. That is a second door rather than a replacement: a DM
+ * who goes straight from a cold campaign to a fight must not be made to open the
+ * night first, so the cold branch stays and both doors go through
+ * `session/start.ts`, which is where the numbering, the pointer and the stamp
+ * live once.
+ *
+ * **`startedAt` belongs to the night, not to the fight.** It used to be written
+ * here on the reasoning that a fight on the table is what `Session.ts`'s
+ * "running" means. It is not, since a night can be running with nothing on the
+ * table: the stamp goes on when the session opens, wherever it was opened from,
+ * and this dialog writes it only in the case where it is the thing that opened
+ * one.
  */
 
 /** The one value the encounter select takes that is not an encounter. */
@@ -77,19 +88,16 @@ export function StartRunDialog({
   const needsSession = session === undefined;
 
   /**
-   * The session numbers already used — read only when a session has to be
-   * invented, because that is the only thing the answer is for.
+   * The number this fight's night will carry — read from the server only when a
+   * session has to be invented, because that is the only thing the answer is
+   * for. With a session already open it is that session's, and no request.
    */
   const load = useCallback(
     (client: TavernsClient) =>
-      needsSession
-        ? Effect.map(client.sessions.list({ params: { campaignId } }), (rows) =>
-            rows.reduce((highest, row) => Math.max(highest, row.number), 0),
-          )
-        : Effect.succeed(session.number - 1),
+      needsSession ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(session.number),
     [campaignId, needsSession, session],
   );
-  const [highest, reload] = useApiResource(load);
+  const [number, reload] = useApiResource(load);
 
   const [encounterId, setEncounterId] = useState<string>(preselected ?? NONE);
   const [includeParty, setIncludeParty] = useState(true);
@@ -105,37 +113,20 @@ export function StartRunDialog({
 
   const start = async () => {
     setShowProblems(true);
-    if (chosen === undefined || highest.state !== "ready") return;
-    const number = highest.value + 1;
+    if (chosen === undefined || number.state !== "ready") return;
+    const opening = number.value;
 
     const started = await submit((client) =>
       Effect.gen(function* () {
-        let sessionId: SessionId;
-        let started: boolean;
+        // Opening the night — numbering, the campaign's pointer and the stamp,
+        // all of it `session/start.ts`'s, so the two doors into a session
+        // cannot come to mean different things. With a night already open this
+        // is skipped entirely: running a second encounter tonight must not
+        // manufacture a session for it.
+        const sessionId =
+          session === undefined ? yield* startSession(campaignId, opening)(client) : session.id;
 
-        if (session === undefined) {
-          const created = yield* client.sessions.create({
-            params: { campaignId },
-            payload: { number },
-          });
-          sessionId = created.id;
-          started = created.startedAt !== null;
-          // The prep screen reads the night off the campaign, so the pointer
-          // has to move with the session or the two screens disagree about
-          // which night this is. Fatal on purpose: a session nothing points at
-          // is a night the DM cannot find again.
-          yield* client.campaigns.update({
-            params: { campaignId },
-            payload: { currentSessionId: sessionId },
-          });
-        } else {
-          sessionId = session.id;
-          started = session.startedAt !== null;
-        }
-
-        // The thing the DM actually pressed the button for, before any
-        // bookkeeping — so a fight is never lost to a failure in the paperwork
-        // around it.
+        // The thing the DM actually pressed the button for.
         const run = yield* client.runs.start({
           params: { campaignId, sessionId },
           payload: {
@@ -147,22 +138,6 @@ export function StartRunDialog({
             visibility,
           },
         });
-
-        // `Session.ts` calls the lifecycle planned → running → ended, and a
-        // fight on the table is what "running" means. **Best effort**: the
-        // stamp is a record of something that has already happened, and a DM
-        // standing at a table should not be told the fight did not start
-        // because a timestamp did not save. Anything that would genuinely deny
-        // this write has already denied `runs.start` above.
-        if (!started) {
-          const now = yield* DateTime.now;
-          yield* Effect.ignore(
-            client.sessions.update({
-              params: { campaignId, sessionId },
-              payload: { startedAt: now },
-            }),
-          );
-        }
 
         return { sessionId, run };
       }),
@@ -180,25 +155,38 @@ export function StartRunDialog({
           <DialogTitle>Put an encounter on the table</DialogTitle>
           <DialogDescription>
             {needsSession
-              ? highest.state === "ready"
-                ? `This starts session ${String(highest.value + 1)} and opens the runner.`
+              ? number.state === "ready"
+                ? `This starts session ${String(number.value)} and opens the runner.`
                 : "This starts a new session and opens the runner."
               : `This runs in session ${String(session.number)} and opens the runner.`}
           </DialogDescription>
         </DialogHeader>
 
-        {highest.state === "loading" && (
+        {number.state === "loading" && (
           <div className="px-gutter py-gutter">
             <Loading label="Counting the sessions…" />
           </div>
         )}
-        {highest.state === "failed" && (
+        {number.state === "failed" && (
           <div className="px-gutter py-gutter">
-            <FailureNotice failure={highest.failure} onRetry={reload} />
+            <FailureNotice failure={number.failure} onRetry={reload} />
           </div>
         )}
 
-        {highest.state === "ready" && (
+        {/* Nothing to put on the table, said out loud rather than left as a
+            select with no options and a button that will not press. It is
+            reachable from the campaign row now: opening a night no longer needs
+            an encounter, so a DM can be one press from here with none built. */}
+        {number.state === "ready" && encounters.length === 0 && (
+          <div className="px-gutter py-3">
+            <p className="text-body-s leading-body text-muted-foreground">
+              Nothing is built for this table yet. Write an encounter with{" "}
+              <span className="text-heading">New encounter</span> and it can go on the table.
+            </p>
+          </div>
+        )}
+
+        {number.state === "ready" && encounters.length > 0 && (
           <div className="flex max-h-[60vh] flex-col gap-5 overflow-y-auto px-gutter py-3">
             <Field
               label="Encounter"
@@ -267,7 +255,7 @@ export function StartRunDialog({
           </Button>
           <Button
             size="sm"
-            disabled={busy || highest.state !== "ready" || encounters.length === 0}
+            disabled={busy || number.state !== "ready" || encounters.length === 0}
             onClick={() => void start()}
           >
             {busy ? "Starting…" : "Start the fight"}

@@ -5,6 +5,14 @@ import { provenanceFields, Visibility } from "./Provenance.js";
 /**
  * One night at the table. `startedAt`/`endedAt` are the whole lifecycle:
  * planned (neither set) → running (started) → ended (both).
+ *
+ * **"Running" means the DM has started the night, not that a fight is on the
+ * table.** Those were one act until the captain separated them: a session can
+ * open in a tavern with no encounter built, and an encounter goes on the table
+ * when the party reaches it. So `startedAt` is stamped when the session is
+ * opened — `apps/web/src/session/start.ts`, the one place a client writes it —
+ * and a running session with `activeEncounterRunId` null is the ordinary state
+ * of an evening rather than a night nobody has played.
  */
 export class Session extends Schema.Class<Session>("Session")({
   id: SessionId,

@@ -31,12 +31,24 @@ export function SessionCard({
   readonly liveRun: EncounterRun | undefined;
   readonly onFinish: () => void;
 }) {
+  /**
+   * **The third line used to say "Not started yet", and that stopped being
+   * true.** A night was once opened only by putting a fight on the table, so an
+   * unstamped session was one nobody had played and the card said so. A session
+   * can be started with nothing on the table now, and the stamp goes on when it
+   * opens (`session/start.ts`) — so `startedAt === null` no longer means the
+   * night has not begun. What it means is that the stamp did not save, which is
+   * the accepted cost of it being best effort, or that the row predates the
+   * change. Either way the campaign points at this night, so the card says what
+   * it can still see is true — it is open, and nothing is on the table — rather
+   * than a start time it does not have or a claim it can no longer make.
+   */
   const state =
     liveRun !== undefined
       ? `${liveRun.encounterName} is on the table.`
       : session.startedAt !== null
-        ? `Playing since ${clockOf(session.startedAt)}.`
-        : "Not started yet — nothing has been run in it.";
+        ? `Playing since ${clockOf(session.startedAt)}. Nothing is on the table.`
+        : "Open. Nothing has been put on the table yet.";
 
   return (
     <Card tone="sunken">

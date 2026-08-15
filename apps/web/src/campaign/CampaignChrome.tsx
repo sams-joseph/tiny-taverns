@@ -1,6 +1,6 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
 import { useNavigate, type LinkProps } from "@tanstack/react-router";
-import { Badge, Button, Icon } from "@taverns/ui";
+import { Badge, Button, Icon, type IconName } from "@taverns/ui";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
@@ -12,6 +12,7 @@ import { FinishSessionDialog } from "./FinishSessionDialog";
 import { InviteDialog } from "./InviteDialog";
 import { loadCampaignView, type CampaignView } from "./load";
 import { StartRunDialog } from "./StartRunDialog";
+import { StartSessionDialog } from "./StartSessionDialog";
 
 /**
  * Everything the three campaign destinations have in common, once.
@@ -50,18 +51,43 @@ import { StartRunDialog } from "./StartRunDialog";
  * when they open a table.
  */
 
+/**
+ * The one press the campaign offers, whichever of its three things it is.
+ *
+ * **It is drawn twice** — on the campaign row, where it follows the DM across
+ * all six of the campaign's screens, and in the Overview's *Next session* card,
+ * which is the delivery's contextual, primary one. Both are the delivery's, and
+ * both must say the same thing: two controls computing the same three-way branch
+ * independently is two controls that can differ, and with three states rather
+ * than two that stopped being a theoretical risk. So it is computed once, here,
+ * and both call sites render it.
+ */
+export interface CampaignAct {
+  readonly label: string;
+  readonly icon: IconName;
+  readonly press: () => void;
+}
+
 /** What a destination is handed: the campaign, and the acts that belong to it. */
 export interface CampaignChromeSlots {
   readonly view: CampaignView;
   /** Re-read the whole view — what every structural write here ends with. */
   readonly reload: () => void;
   /**
-   * Start a night, or walk back into the fight already on the table.
+   * Put an encounter on the table, or walk back into the fight already on it.
    *
    * One function for both because it is one press to a DM, and which of the two
-   * it is depends on `view.run`, which lives here.
+   * it is depends on `view.run`, which lives here. **It opens a night if there
+   * is not one** — `StartRunDialog`'s cold branch — so an encounter card's *Run*
+   * still works in one step on a campaign that has never played.
    */
   readonly run: (encounterId?: EncounterId) => void;
+  /**
+   * The primary press for this campaign, in whichever of its three states —
+   * including opening the night, which is why no screen is handed a
+   * `startSession` of its own. One press computed once; see `CampaignAct`.
+   */
+  readonly act: CampaignAct;
   /** Open the confirmation that ends the night. */
   readonly finishSession: () => void;
   /**
@@ -75,6 +101,26 @@ export interface CampaignChromeSlots {
 
 /** The campaign-wide dialogs, which any of the three screens may raise. */
 type CampaignEditing = { readonly what: "campaign" } | { readonly what: "invites" };
+
+/**
+ * The three states, and the words for each.
+ *
+ * They used to be two — `live === undefined ? "Start session" : "Back to the
+ * fight"` — and that was wrong the moment a night could be open with nothing on
+ * the table: `live` is still undefined there, so the campaign would offer *Start
+ * session* for a session already running and the press would try to open a
+ * second one. **The session and the run are two questions and are asked
+ * separately.**
+ */
+const actFor = (view: CampaignView, onRun: () => void, onStartSession: () => void): CampaignAct =>
+  view.run !== undefined
+    ? { label: "Back to the fight", icon: "swords", press: onRun }
+    : view.session === undefined
+      ? { label: "Start session", icon: "play", press: onStartSession }
+      : // The night is open. What is left to do is the DM's discretion — an
+        // encounter goes on the table when the party reaches one — so the press
+        // is the fight rather than a second night.
+        { label: "Start an encounter", icon: "swords", press: onRun };
 
 export function CampaignChrome({
   campaignId,
@@ -104,6 +150,8 @@ export function CampaignChrome({
   const [editing, setEditing] = useState<CampaignEditing | undefined>();
   /** The encounter the DM pressed Run on, while the start dialog is open. */
   const [starting, setStarting] = useState<{ readonly encounterId: EncounterId | undefined }>();
+  /** Whether the "open the night" confirmation is up. */
+  const [opening, setOpening] = useState(false);
   /** Whether the "end the night" confirmation is up. */
   const [finishing, setFinishing] = useState(false);
 
@@ -171,6 +219,7 @@ export function CampaignChrome({
     [live, navigate],
   );
 
+  const startSession = useCallback(() => setOpening(true), []);
   const finishSession = useCallback(() => setFinishing(true), []);
   const openSettings = useCallback(
     (what: "campaign" | "invites") => setEditing({ what } as CampaignEditing),
@@ -178,7 +227,16 @@ export function CampaignChrome({
   );
 
   const slots: CampaignChromeSlots | undefined =
-    view === undefined ? undefined : { view, reload, run, finishSession, openSettings };
+    view === undefined
+      ? undefined
+      : {
+          view,
+          reload,
+          run,
+          act: actFor(view, () => run(), startSession),
+          finishSession,
+          openSettings,
+        };
 
   return (
     <AppShell
@@ -193,13 +251,13 @@ export function CampaignChrome({
       /* The delivery puts *Start session* on the campaign row, pushed right, and
          it belongs to the campaign rather than to whichever screen is open —
          which is exactly why it moved off the per-screen bar. It says which of
-         the two things it is: starting a night, or walking back into one already
-         running (`CampaignHome.jsx:41`). */
+         the three things it is (`actFor`), and the Overview's card renders the
+         same value rather than branching again. */
       campaignActions={
-        view === undefined ? undefined : (
-          <Button size="sm" onClick={() => run()}>
-            <Icon name={live === undefined ? "play" : "swords"} size={13} />
-            {live === undefined ? "Start session" : "Back to the fight"}
+        slots === undefined ? undefined : (
+          <Button size="sm" onClick={slots.act.press}>
+            <Icon name={slots.act.icon} size={13} />
+            {slots.act.label}
           </Button>
         )
       }
@@ -238,6 +296,22 @@ export function CampaignChrome({
             // is null now, so the checklist, the session card and the campaign
             // row's "Start session" all have a different answer. One re-read,
             // the same rule every structural write here follows.
+            reload();
+          }}
+        />
+      )}
+      {opening && view !== undefined && (
+        <StartSessionDialog
+          campaign={view.campaign}
+          onClose={() => setOpening(false)}
+          onStarted={() => {
+            setOpening(false);
+            // The night is on the screen now: `campaign.currentSessionId` names
+            // it, so the checklist, the session card and the campaign row's own
+            // button all have a different answer. There is no run to navigate
+            // to — that is the whole point of this door — so the DM stays where
+            // they are and the screen catches up. One re-read, the same rule
+            // every structural write here follows.
             reload();
           }}
         />

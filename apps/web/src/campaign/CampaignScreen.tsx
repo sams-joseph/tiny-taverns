@@ -6,6 +6,7 @@ import { EmptyState } from "../ui/states";
 import {
   CampaignChrome,
   CampaignSettingsButtons,
+  type CampaignAct,
   type CampaignChromeSlots,
 } from "./CampaignChrome";
 import { CharacterDialog } from "./CharacterDialog";
@@ -77,10 +78,15 @@ const sectionLink = "text-caption leading-none font-medium text-accent-ink hover
  *
  * Drawn with the accent border the delivery gives it, because it is the one
  * card on the page that is about *now* rather than about the campaign's
- * contents. With no session it says so and offers the same button — which is
- * what creates one (`StartRunDialog`).
+ * contents. With no session it says so and offers the button that opens one
+ * (`StartSessionDialog`); with one open and nothing on the table it offers the
+ * fight instead.
+ *
+ * **The button is `slots.act` rather than a branch of its own.** The campaign
+ * row draws the same press, and two controls computing the same three-way
+ * question independently is two controls that can differ — see `CampaignAct`.
  */
-function NextSession({ view, onRun }: { readonly view: CampaignView; readonly onRun: () => void }) {
+function NextSession({ view, act }: { readonly view: CampaignView; readonly act: CampaignAct }) {
   const live = view.run;
   const encounters = view.encounters.length;
   // The unticked half of tonight's checklist — the same substitution the
@@ -124,9 +130,9 @@ function NextSession({ view, onRun }: { readonly view: CampaignView; readonly on
                 : (view.session.title ?? `Session ${String(view.session.number)}`)}
             </CardTitle>
           </div>
-          <Button className="shrink-0" onClick={onRun}>
-            <Icon name={live === undefined ? "play" : "swords"} size={14} />
-            {live === undefined ? "Start session" : "Back to the fight"}
+          <Button className="shrink-0" onClick={act.press}>
+            <Icon name={act.icon} size={14} />
+            {act.label}
           </Button>
         </div>
       </CardHeader>
@@ -240,7 +246,7 @@ type Editing =
   | { readonly what: "character"; readonly character: Character | undefined };
 
 function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
-  const { view, reload, run, finishSession } = slots;
+  const { view, reload, run, act, finishSession } = slots;
   const [editing, setEditing] = useState<Editing | undefined>();
 
   // Counted over every note, as the encounter list does: a card's count is a
@@ -263,7 +269,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
           place: 340 for it, 32 for the gap, and 524 left for the body. */}
       <div className="flex flex-col gap-8 @4xl:flex-row @4xl:items-start">
         <div className="@container flex min-w-0 flex-1 flex-col gap-6">
-          <NextSession view={view} onRun={() => run()} />
+          <NextSession view={view} act={act} />
 
           <div>
             <SectionHead title="Encounters on deck">

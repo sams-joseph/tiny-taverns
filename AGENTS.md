@@ -2451,15 +2451,48 @@ already listed the characters, for the roster). `campaign/CharacterDialog.tsx` i
 line, and building for that shape early would mean either a column that does not exist or a display
 string parsed back into fields — which is the thing that decision exists to prevent.
 
-**A session is created by _Start session_, in `campaign/StartRunDialog.tsx`, and nowhere else.**
-The prep checklist hangs off `session`, so with `campaign.currentSessionId` null it says so and
-offers no Add row; the dialog is what fills that in. One `submit` makes three tables agree —
-create the session (numbered one past the highest `sessions.list` returns), point
-`campaign.currentSessionId` at it, start the run — and then stamps `session.startedAt` **best
-effort**, with `Effect.ignore`. That last one is deliberate and was found by testing: stamping
-first meant a fight the DM had pressed the button for could be lost to a timestamp that would
-not save, and anything that would genuinely deny the stamp has already denied `runs.start` one
-line above.
+**Opening the night is `apps/web/src/session/start.ts`, and every door goes through it** — the
+mirror of `finish.ts` below, and there for the same reason. The prep checklist hangs off
+`session`, so with `campaign.currentSessionId` null it says so and offers no Add row; opening a
+night is what fills that in. Three statements in order, and only the last is best effort: create
+the session (numbered one past the highest `sessions.list` returns), point
+`campaign.currentSessionId` at it — fatal, because a session nothing points at is a night the DM
+cannot find again — then stamp `session.startedAt` with `Effect.ignore`. That last one was found
+by testing: stamping first meant a night the DM had pressed the button for could be lost to a
+timestamp that would not save, and anything that would genuinely deny the stamp has already
+denied the two writes above it.
+
+**Starting the night and putting a fight on the table are two acts, by the captain's decision of
+2026-08-15**, in their own words: _"a session can start in the middle of a tavern and there may
+not be an encounter yet"_. They were one act, and the consequence was that an evening opening
+over roleplay could not be recorded at all — no session, no checklist to tick, no night for a
+beat to hang off. **So there are two doors, and the second was added rather than the first
+moved:**
+
+- **`campaign/StartSessionDialog.tsx`** opens a night and stops. There is no run to navigate to,
+  so the DM stays on the campaign screen and it ends with the screen's `reload()`, the rule every
+  structural write here follows.
+- **`campaign/StartRunDialog.tsx`** puts an encounter on the table, and **keeps its cold branch**:
+  a DM who goes straight from a campaign that has never played to a fight must not be made to open
+  the night first. With a night already open it invents nothing — running a second encounter
+  tonight must not manufacture "Session 13" for it.
+
+**`startedAt` therefore belongs to the night, not to the fight.** `Session.ts` calls the lifecycle
+planned → running → ended, and "running" now means _the DM has started the night_ — a running
+session with `activeEncounterRunId` null is the ordinary state of an evening, not a night nobody
+has played. Do not restore the superseded reading; it is what made the encounter a precondition.
+Its one visible consequence is on `SessionCard`, whose third line no longer says _"Not started
+yet"_ for an unstamped session: with the stamp best effort, `startedAt === null` means the stamp
+did not save or the row predates the change, so the card says what it can still see — the campaign
+points at this night, and nothing is on its table.
+
+**The campaign's own button has three states, not two, and they are computed once.** `CampaignAct`
+in `campaign/CampaignChrome.tsx` asks the session and the run **separately** — a fight on the
+table is _Back to the fight_, no session is _Start session_, and a night open with nothing on the
+table is _Start an encounter_. The middle case is the trap: `view.run` is undefined there too, so
+the old two-way `run === undefined` branch offered _Start session_ for a session already running.
+The press is drawn twice (the campaign row's, and the Overview's _Next session_ card), and both
+render that one value rather than branching again.
 
 **Ending one is the mirror image and is _not_ written here**: it is `session/finish.ts`, shared
 with the runner's own dialog, reached from the session card in this screen's aside. See

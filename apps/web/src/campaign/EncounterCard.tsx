@@ -124,10 +124,16 @@ export function EncounterCard({
         {/* Every row defaults to `dm`, so the exception is what is worth marking:
             this one is visible to players. */}
         {encounter.visibility === "shared" && <Badge variant="info">Shared</Badge>}
+        {/* Named for its encounter, as the pencil beside it already is: a grid
+            of these is a page of identical *Run* buttons otherwise, and which
+            fight goes on the table is exactly what the name has to say. The
+            visible word leads, verbatim, so the accessible name still contains
+            what a voice-control user would say. */}
         <Button
           variant={running ? "default" : "outline"}
           size="sm"
           className="ml-auto"
+          aria-label={running ? `On the table now — ${encounter.name}` : `Run ${encounter.name}`}
           onClick={onRun}
         >
           <Icon name="swords" size={13} />

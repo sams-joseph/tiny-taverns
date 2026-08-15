@@ -340,6 +340,10 @@ export const fullCampaign = (): Map<string, Answer> =>
       `GET /campaigns/${campaignId}/encounters/${encounterId}/creatures`,
       { status: 200, body: [rosterRow] },
     ],
+    // The nights this table has had — read by both doors into a session, and
+    // only ever to work out the next number. Session 12 is the highest, so the
+    // next one is 13 wherever it is opened from.
+    [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: [session] }],
     [`GET /campaigns/${campaignId}/sessions/${sessionId}`, { status: 200, body: session }],
     [
       `PATCH /campaigns/${campaignId}/sessions/${sessionId}`,

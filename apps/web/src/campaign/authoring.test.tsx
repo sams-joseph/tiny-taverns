@@ -631,34 +631,130 @@ describe("authoring the checklist", () => {
 });
 
 /**
- * *Start session* — the only way into the runner, and the one form in the app
- * that has to make three tables agree in a single submit.
+ * The two doors into a night, and the three states the campaign's own button has
+ * between them.
+ *
+ * **Opening the night and putting a fight on the table used to be one act.** The
+ * captain separated them: *"a session can start in the middle of a tavern and
+ * there may not be an encounter yet"*. So there are two doors —
+ * `StartSessionDialog`, which opens a night and stops, and `StartRunDialog`,
+ * which is still one press from a cold campaign to a fight — and the tests below
+ * are as much about the pair not drifting as about either one.
  */
 describe("starting a session", () => {
   const runsPath = `/campaigns/${campaignId}/sessions/${sessionId}/runs`;
 
+  /** A campaign that has never played: no night open, and its nights listed. */
+  const coldCampaign = () => {
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/sessions`, { status: 200, body: session });
+    server.routes.set(`PATCH /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: sessionId },
+    });
+  };
+
   /**
-   * *Start session* is drawn twice on the Overview, and both are the delivery's:
+   * The campaign's own press, whichever of its three things it is.
+   *
+   * It is drawn twice on the Overview, and both are the delivery's:
    * `AppShell.jsx` puts one on the campaign row (where it belongs to the
    * campaign and follows you across all six of its screens) and `CampOverview`
-   * puts one in the "Next session" card (the contextual, primary one). They call
-   * the same thing, so a test takes the first — the row's, which is the one that
-   * exists on every campaign screen.
+   * puts one in the "Next session" card (the contextual, primary one). They are
+   * one value now — `CampaignAct` — so a test takes the first and the assertion
+   * on the pair being identical is below.
    */
-  const startSession = async () =>
-    userEvent.click((await screen.findAllByRole("button", { name: "Start session" }))[0]!);
+  const pressAct = async (name: string) =>
+    userEvent.click((await screen.findAllByRole("button", { name }))[0]!);
 
-  it("runs an encounter in the session that already exists", async () => {
+  it("opens the night with no encounter at all, and stops there", async () => {
+    coldCampaign();
+    await renderScreen(mintingSession());
+
+    await pressAct("Start session");
+    // The number is the one fact worth confirming before agreeing to it: it is
+    // what the chronicle, the recap and every beat of the evening file under.
+    await screen.findByText("Start session 13?");
+    await userEvent.click(screen.getByRole("button", { name: "Start the night" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/campaigns/${campaignId}/sessions`)).toEqual({ number: 13 }),
+    );
+    // The prep screen reads the night off the campaign, so the pointer moves
+    // with it or the two screens disagree about which night this is.
+    expect(bodyOf(server, "PATCH", `/campaigns/${campaignId}`)).toEqual({
+      currentSessionId: sessionId,
+    });
+    // `startedAt` belongs to the night now, not to the fight — a session opened
+    // this way is running, with nothing on the table.
+    expect(
+      (bodyOf(server, "PATCH", `/sessions/${sessionId}`) as { startedAt: string }).startedAt,
+    ).toMatch(/^\d{4}-/);
+    // And nothing was put on the table. That is the whole point of this door.
+    expect(
+      server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/runs")),
+    ).toBe(false);
+    // The night is on the screen from under the DM, so the view is re-read —
+    // the same rule every structural write on these screens follows.
+    await waitFor(() =>
+      expect(
+        server.calls.filter(
+          (call) => call.method === "GET" && call.pathname === `/campaigns/${campaignId}`,
+        ).length,
+      ).toBeGreaterThan(1),
+    );
+  });
+
+  it("opens the night on a campaign with nothing built for it", async () => {
+    // The case the captain's report is really about: a table that starts in a
+    // tavern. There is no encounter to choose, so the old door was shut.
+    coldCampaign();
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] });
+    await renderScreen(mintingSession());
+
+    expect(await screen.findByText("No encounters yet")).toBeInTheDocument();
+
+    await pressAct("Start session");
+    await userEvent.click(await screen.findByRole("button", { name: "Start the night" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/campaigns/${campaignId}/sessions`)).toEqual({ number: 13 }),
+    );
+  });
+
+  it("offers the fight rather than a second night once one is open", async () => {
+    // The state the old two-way branch got wrong: `view.run` is undefined here
+    // *and* the night is already open, so it would have offered *Start session*
+    // for a session that is already running.
+    await renderScreen(mintingSession());
+
+    const both = await screen.findAllByRole("button", { name: "Start an encounter" });
+    // The row's and the card's, which is what makes the pair one answer rather
+    // than two controls that can differ.
+    expect(both).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
+
+    await userEvent.click(both[0]!);
+    // The run dialog, not a second night.
+    expect(await screen.findByText("Put an encounter on the table")).toBeInTheDocument();
+    expect(screen.getByText(/This runs in session 12/)).toBeInTheDocument();
+  });
+
+  it("runs an encounter into the night already open, inventing no session", async () => {
     server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
     await renderScreen(mintingSession());
 
-    await startSession();
+    // Through the encounter card's own *Run* — the DM's-discretion path, and
+    // the one the captain describes: the party reaches the fight, and it joins
+    // the evening already under way.
+    await userEvent.click(await screen.findByRole("button", { name: "Run Ambush in the reeds" }));
     await screen.findByText("Put an encounter on the table");
     // No session is invented: the campaign already names one.
     expect(screen.getByText(/This runs in session 12/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("combobox"));
-    await userEvent.click(await screen.findByRole("option", { name: "Ambush in the reeds" }));
     await userEvent.click(screen.getByRole("button", { name: "Start the fight" }));
 
     await waitFor(() =>
@@ -675,42 +771,45 @@ describe("starting a session", () => {
     ).toBe(false);
   });
 
-  it("creates the session, points the campaign at it, and stamps it started", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}`, {
-      status: 200,
-      body: { ...campaign, currentSessionId: null },
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
-      status: 200,
-      body: [{ ...session, number: 12 }],
-    });
-    server.routes.set(`POST /campaigns/${campaignId}/sessions`, { status: 200, body: session });
-    server.routes.set(`PATCH /campaigns/${campaignId}`, {
-      status: 200,
-      body: { ...campaign, currentSessionId: sessionId },
-    });
+  it("still goes from a cold campaign to a fight in one step", async () => {
+    // The branch this change had to keep. A DM who goes straight to a fight
+    // must not be made to open the night first — so the run dialog opens one on
+    // the way, through the same `session/start.ts` the other door uses.
+    coldCampaign();
     server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
     await renderScreen(mintingSession());
 
-    await startSession();
+    await userEvent.click(await screen.findByRole("button", { name: "Run Ambush in the reeds" }));
     // One past the highest that exists, which is the only thing the list is read for.
     await screen.findByText(/This starts session 13/);
-
-    await userEvent.click(screen.getByRole("combobox"));
-    await userEvent.click(await screen.findByRole("option", { name: "Ambush in the reeds" }));
     await userEvent.click(screen.getByRole("button", { name: "Start the fight" }));
 
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/campaigns/${campaignId}/sessions`)).toEqual({ number: 13 }),
     );
-    // The prep screen reads the night off the campaign, so the pointer moves
-    // with it or the two screens disagree about which night this is.
     expect(bodyOf(server, "PATCH", `/campaigns/${campaignId}`)).toEqual({
       currentSessionId: sessionId,
     });
     expect(
       (bodyOf(server, "PATCH", `/sessions/${sessionId}`) as { startedAt: string }).startedAt,
     ).toMatch(/^\d{4}-/);
+    expect(bodyOf(server, "POST", `/sessions/${sessionId}/runs`)).toEqual({
+      encounterId,
+      visibility: "dm",
+    });
+  });
+
+  it("says so rather than offering a select with nothing in it", async () => {
+    // Reachable now in a way it was not: the night opens without an encounter,
+    // so a DM can be one press from the run dialog with none built.
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] });
+    await renderScreen(mintingSession());
+
+    await pressAct("Start an encounter");
+
+    expect(await screen.findByText(/Nothing is built for this table yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start the fight" })).toBeDisabled();
   });
 
   it("offers the way back rather than a second fight when one is on the table", async () => {
@@ -719,10 +818,9 @@ describe("starting a session", () => {
 
     // Exactly one encounter is live, so the campaign says which — the
     // fixtures' `active: true`.
-    // Both of them say the other thing — the row's and the card's, which is
-    // what makes the pair one answer rather than two controls that can differ.
     expect(await screen.findAllByRole("button", { name: "Back to the fight" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start an encounter" })).toBeNull();
     expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();
   });
 });
@@ -747,7 +845,32 @@ describe("finishing the night", () => {
     );
     expect(card).not.toBeNull();
     expect(within(card as HTMLElement).getByText("Session 12")).toBeInTheDocument();
-    expect(within(card as HTMLElement).getByText(/Not started yet/)).toBeInTheDocument();
+    // **It used to read "Not started yet", and that stopped being true.** A
+    // night with no stamp is not a night nobody has played now that opening one
+    // is its own act — see `SessionCard`. What the card can still see is that
+    // the campaign points at this night and nothing is on its table.
+    expect(
+      within(card as HTMLElement).getByText("Open. Nothing has been put on the table yet."),
+    ).toBeInTheDocument();
+  });
+
+  it("says the night is under way with nothing on the table", async () => {
+    // The ordinary state of an evening that opened in a tavern: `startedAt` is
+    // stamped because the night was started, and there is no fight.
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${sessionId}`, {
+      status: 200,
+      body: { ...session, startedAt: "2026-08-04T19:04:00.000Z" },
+    });
+    await renderScreen(mintingSession());
+
+    const card = (await screen.findByRole("button", { name: "Finish the night" })).closest(
+      "[data-slot='card']",
+    );
+    // The clock itself is `clockOf`'s and is rendered in the reader's own zone,
+    // so the assertion is on the shape and on the half this change added.
+    expect(
+      within(card as HTMLElement).getByText(/^Playing since \d\d:04\. Nothing is on the table\.$/),
+    ).toBeInTheDocument();
   });
 
   it("says what will happen, and does nothing until the DM confirms", async () => {
