@@ -384,7 +384,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates seventeen methods and leaves the other sixty-nine alone", () => {
+  it("gates seventeen methods and leaves the other seventy alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -500,7 +500,19 @@ describe("the scope, counted", () => {
     // equals a uuid. `library.test.ts` pins both, including the two that matter
     // most — one account's Library is neither readable nor writable by another,
     // and no path in the product writes a bundled row.
-    expect(ungated).toBe(69);
+    //
+    // The seventieth is `Campaigns.restore` — `POST /campaigns/:c/restore`, the
+    // mirror of `archive`. Ungated for the reason `Characters.assign` is: it is
+    // a **write**, so `campaignWritable` already requires `isDm`, and a proof on
+    // top would be a second answer to the question the predicate underneath
+    // answers first. It has no player projection to diverge either — the shelf
+    // is a fact about the campaign rather than about who is reading it.
+    //
+    // `Memberships.mine` taking a shelf did not move this count, which is the
+    // arithmetic worth noticing: `GET /me/campaigns/archived` is the same method
+    // with a different argument, so the second endpoint arrived without a second
+    // actor-scoped read for the gate to have an opinion about.
+    expect(ungated).toBe(70);
   });
 });
 

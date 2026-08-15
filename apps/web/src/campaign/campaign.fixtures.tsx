@@ -45,6 +45,21 @@ export const campaign = {
   ...stamps,
 };
 
+/**
+ * The same campaign, shelved — what `DELETE /campaigns/:c` answers and what
+ * `GET /me/campaigns/archived` lists.
+ *
+ * `archivedAt` is the *only* field that differs, which is the whole of the
+ * server-side decision: archiving stamps one column and touches nothing else,
+ * so `currentSessionId` still names the open night. A fixture that also cleared
+ * the pointer would quietly assert a behaviour the product deliberately does
+ * not have.
+ */
+export const archivedCampaign = {
+  ...campaign,
+  archivedAt: "2026-08-11T09:00:00.000Z",
+};
+
 export const session = {
   id: sessionId,
   campaignId,
@@ -327,6 +342,13 @@ export const fullCampaign = (): Map<string, Answer> =>
       "GET /me/campaigns",
       { status: 200, body: [{ campaign, role: "dm", joinedAt: stamps.createdAt }] },
     ],
+    // The other shelf, and empty is the ordinary answer. It is a *second URL*
+    // rather than a parameter on the read above, so a test that wants an
+    // archived campaign re-aims this one and cannot accidentally put one in the
+    // live list — which is the property the split exists for.
+    ["GET /me/campaigns/archived", { status: 200, body: [] }],
+    [`DELETE /campaigns/${campaignId}`, { status: 200, body: archivedCampaign }],
+    [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [encounter, sketch] }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: [readAloud] }],
     [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [character] }],
@@ -466,6 +488,22 @@ export const renderEncounters = async (hosted: HostedSession = noSession): Promi
 
 export const renderNotes = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/notes`, (screen) => (
+    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+  ));
+};
+
+/**
+ * The list of campaigns — the way in, and where a campaign is shelved and
+ * brought back.
+ *
+ * `"/play"` is the same screen answering the other question, which is what a
+ * test of the player side renders.
+ */
+export const renderCampaigns = async (
+  path: "/campaigns" | "/play" = "/campaigns",
+  hosted: HostedSession = noSession,
+): Promise<void> => {
+  await renderAt(path, (screen) => (
     <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
   ));
 };

@@ -115,6 +115,35 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       success: Campaign,
       error: NotFound,
     }),
+    /**
+     * Put it back — the exact mirror of `archive`, and the reason archiving is
+     * something a DM can be offered rather than warned about.
+     *
+     * **It clears one column and touches nothing else**, because `archive` set
+     * one column and touched nothing else. That is what makes *"restoring puts
+     * the campaign back exactly where it was"* a property of the statement
+     * rather than a promise: the current session, the fight on the table, the
+     * sharing toggle and every row hanging off the campaign are where they were
+     * left. See `repo/Campaigns.ts`.
+     *
+     * A `POST` to a segment rather than a `PATCH` of a field, for the reason
+     * `invites.revoke` and `runs.end` are: `archived_at` is on no update
+     * payload, so shelving and unshelving are two named acts and neither is
+     * something a client can do by sending a field.
+     *
+     * Idempotent, like `runs.end`: restoring a campaign that is not archived is
+     * a no-op success rather than a `Conflict`. There is nothing for the DM to
+     * reconcile — the campaign is on the list, which is what they asked for.
+     * `NotFound` is the ordinary refusal and covers somebody else's campaign,
+     * because `campaignWritable` matches no row for a player or a stranger and
+     * saying it exists but is not yours is itself a disclosure.
+     */
+    HttpApiEndpoint.post("restore", "/:campaignId/restore", {
+      params: { campaignId: CampaignId },
+      payload: Schema.Struct({}),
+      success: Campaign,
+      error: NotFound,
+    }),
   )
   .prefix("/campaigns")
   .middleware(Authorization) {}
@@ -132,7 +161,9 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * composes the identical predicate `campaigns.list` does (see
  * `CampaignMembership`), so the two cannot disagree about reach; what it adds is
  * the role, which is a fact about the pair and has nowhere on the campaign row
- * to live. `characters` composes the identical predicate `characters.list` does,
+ * to live. `archivedCampaigns` is that same read over the other shelf — one
+ * repository method, one query, one predicate, and the shelf as its argument.
+ * `characters` composes the identical predicate `characters.list` does,
  * narrowed to the caller's own rows — see `repo/visibility.ts`'s
  * `ownRowReadable`, which is `ownedRowReadable` *conjoined* with ownership and
  * therefore cannot be wider than it.
@@ -146,6 +177,34 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
 class MeGroup extends HttpApiGroup.make("me")
   .add(
     HttpApiEndpoint.get("campaigns", "/campaigns", {
+      success: Schema.Array(CampaignMembership),
+    }),
+    /**
+     * The same read, over the shelf — every table this account is at whose
+     * campaign has been archived.
+     *
+     * **A second path rather than a parameter on the read above, and the reason
+     * is which mistake each shape makes possible.** A `?shelf=` filter would put
+     * the default in a decoder: five call sites that have nothing to do with
+     * archiving (`campaign/load.ts` and `characters/load.ts` read memberships
+     * for the role and the campaign's name) would have to name a shelf to keep
+     * answering what they answer today, and the day one of them named the wrong
+     * one an archived campaign would appear in a live list with nothing failing.
+     * Two paths make *"no existing read returns an archived campaign"* a fact
+     * about which URL was asked for.
+     *
+     * **It is not a second answer**, which is the rule that would otherwise
+     * argue the other way: `repo/Memberships.ts`'s `mine` takes the shelf and
+     * there is one query, one join and one predicate behind both endpoints. The
+     * only thing that differs is whether `campaign.archived_at` is null.
+     *
+     * Ungated, like `campaigns` above and for the same reason — the tables a
+     * credential already reaches are not a disclosure to the credential that
+     * reaches them. It answers a player's archived table too; what a player is
+     * not offered is *restoring* one, which is `campaignWritable`'s answer and
+     * not this list's.
+     */
+    HttpApiEndpoint.get("archivedCampaigns", "/campaigns/archived", {
       success: Schema.Array(CampaignMembership),
     }),
     /**

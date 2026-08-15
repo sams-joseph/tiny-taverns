@@ -174,6 +174,199 @@ describe("campaign, session, character and note CRUD", () => {
     expect(seen.listed.map((campaign) => campaign.id)).not.toContain(seen.archived.id);
   }, 60_000);
 
+  /**
+   * The round trip, over the wire the browser uses.
+   *
+   * **The shelf is which URL you asked for.** `GET /me/campaigns` answers the
+   * live tables and `GET /me/campaigns/archived` the other ones, over one
+   * repository method with one predicate — so what is worth pinning is that the
+   * two are complements and that the *default* read never grew an archived row.
+   */
+  it("archives a campaign off the list, and restores it exactly where it was", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+
+        const campaign = yield* client.campaigns.create({ payload: { name: "The Long Winter" } });
+        const campaignId = campaign.id;
+        // A night in progress, so the restore has something to be exact about.
+        const session = yield* client.sessions.create({
+          params: { campaignId },
+          payload: { number: 1 },
+        });
+        yield* client.campaigns.update({
+          params: { campaignId },
+          payload: { currentSessionId: session.id },
+        });
+        const running = yield* client.campaigns.findById({ params: { campaignId } });
+
+        const beforeLive = yield* client.me.campaigns();
+        const beforeShelf = yield* client.me.archivedCampaigns();
+
+        const archived = yield* client.campaigns.archive({ params: { campaignId } });
+        const liveAfter = yield* client.me.campaigns();
+        const shelfAfter = yield* client.me.archivedCampaigns();
+        // Archiving is one column. The night it was in the middle of is still
+        // open and still the campaign's current one — which is what makes the
+        // restore below a restore rather than an approximation.
+        const whileShelved = yield* client.campaigns.findById({ params: { campaignId } });
+
+        const restored = yield* client.campaigns.restore({
+          params: { campaignId },
+          payload: {},
+        });
+        const liveBack = yield* client.me.campaigns();
+        const shelfBack = yield* client.me.archivedCampaigns();
+        // Idempotent: restoring one that is on the list is a no-op success, not
+        // an error for pressing a button twice.
+        const again = yield* client.campaigns.restore({
+          params: { campaignId },
+          payload: {},
+        });
+
+        return {
+          campaignId,
+          sessionId: session.id,
+          running,
+          beforeLive,
+          beforeShelf,
+          archived,
+          liveAfter,
+          shelfAfter,
+          whileShelved,
+          restored,
+          liveBack,
+          shelfBack,
+          again,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    const ids = (rows: ReadonlyArray<{ readonly campaign: { readonly id: string } }>) =>
+      rows.map((row) => row.campaign.id);
+
+    // Before: on the live list, on no shelf.
+    expect(ids(seen.beforeLive)).toContain(seen.campaignId);
+    expect(ids(seen.beforeShelf)).not.toContain(seen.campaignId);
+    expect(seen.running.currentSessionId).toBe(seen.sessionId);
+
+    // Archived: it swaps lists, and the live read did not have to be asked for
+    // anything to keep answering what it answered.
+    expect(seen.archived.archivedAt).not.toBeNull();
+    expect(ids(seen.liveAfter)).not.toContain(seen.campaignId);
+    expect(ids(seen.shelfAfter)).toContain(seen.campaignId);
+    // The role travels with it — it is the same membership read.
+    expect(seen.shelfAfter.map((row) => row.role)).toContain("dm");
+    // Nothing else moved. Archiving did not end the night.
+    expect(seen.whileShelved.currentSessionId).toBe(seen.sessionId);
+    expect(seen.whileShelved.name).toBe("The Long Winter");
+
+    // Restored: back where it was, current session and all.
+    expect(seen.restored.archivedAt).toBeNull();
+    expect(seen.restored.currentSessionId).toBe(seen.sessionId);
+    expect(ids(seen.liveBack)).toContain(seen.campaignId);
+    expect(ids(seen.shelfBack)).not.toContain(seen.campaignId);
+    expect(seen.again.archivedAt).toBeNull();
+  }, 60_000);
+
+  /**
+   * Somebody else's campaign, through both new endpoints.
+   *
+   * The shared guard is `campaignWritable`, the same one `update` and `archive`
+   * already compose — but a guard that is assumed is one refactor from being
+   * absent, so both directions are driven rather than argued.
+   *
+   * **The interesting refusal is the player's, not the stranger's.** A stranger
+   * fails the read predicate as well, so it proves little; a real player member
+   * of a `shared` campaign passes `campaignReadable` and reads the table
+   * perfectly well. They must still not be able to shelve it or take it back
+   * off the shelf, and this is the only test that says so.
+   */
+  it("refuses to archive or restore a campaign this account only sits at", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const dm = yield* clientFor(token);
+        const campaign = yield* dm.campaigns.create({
+          payload: { name: "Not Yours", visibility: "shared" },
+        });
+        const campaignId = campaign.id;
+
+        // A real player, through a real invitation — the only way this product
+        // mints one, so the refusal is about a person who can exist.
+        const accounts = yield* Accounts;
+        const issued = yield* dm.invites.create({
+          params: { campaignId },
+          payload: { label: "Pim" },
+        });
+        const player = yield* clientFor((yield* accounts.issue("Pim")).token);
+        yield* player.join.redeem({ payload: { token: issued.token } });
+        const stranger = yield* clientFor((yield* accounts.issue("Bo")).token);
+
+        // They reach it: it is on their live list and they can read the row.
+        const playersLive = yield* player.me.campaigns();
+
+        const playerArchive = yield* Effect.result(
+          player.campaigns.archive({ params: { campaignId } }),
+        );
+        const strangerArchive = yield* Effect.result(
+          stranger.campaigns.archive({ params: { campaignId } }),
+        );
+
+        // Archived by its own DM, so the restores below are refused for being
+        // somebody else's rather than for being un-archived.
+        yield* dm.campaigns.archive({ params: { campaignId } });
+        const playerRestore = yield* Effect.result(
+          player.campaigns.restore({ params: { campaignId }, payload: {} }),
+        );
+        const strangerRestore = yield* Effect.result(
+          stranger.campaigns.restore({ params: { campaignId }, payload: {} }),
+        );
+
+        // The shelf is the ordinary membership read, so a player's archived
+        // table is on it — what they are refused is the way back, which is
+        // `campaignWritable`'s question and not this list's. A stranger reaches
+        // neither.
+        const playersShelf = yield* player.me.archivedCampaigns();
+        const strangersShelf = yield* stranger.me.archivedCampaigns();
+        const stillArchived = yield* dm.campaigns.findById({ params: { campaignId } });
+
+        return {
+          campaignId,
+          playersLive,
+          playerArchive,
+          strangerArchive,
+          playerRestore,
+          strangerRestore,
+          playersShelf,
+          strangersShelf,
+          stillArchived,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    const tagOf = (result: {
+      readonly _tag: string;
+      readonly failure?: { readonly _tag: string };
+    }) => (result._tag === "Failure" ? result.failure?._tag : "Success");
+
+    // The player really is at the table.
+    expect(seen.playersLive.map((row) => [row.campaign.id, row.role])).toEqual([
+      [seen.campaignId, "player"],
+    ]);
+
+    // `NotFound`, not `Forbidden`: saying it exists but is not yours is itself
+    // a disclosure, which is the rule every refusal in this product follows.
+    expect(tagOf(seen.playerArchive)).toBe("NotFound");
+    expect(tagOf(seen.strangerArchive)).toBe("NotFound");
+    expect(tagOf(seen.playerRestore)).toBe("NotFound");
+    expect(tagOf(seen.strangerRestore)).toBe("NotFound");
+
+    expect(seen.playersShelf.map((row) => row.campaign.id)).toEqual([seen.campaignId]);
+    expect(seen.strangersShelf).toEqual([]);
+    // Neither refused write changed anything.
+    expect(seen.stillArchived.archivedAt).not.toBeNull();
+  }, 60_000);
+
   it("deletes a note", async () => {
     const result = await runtime.runPromise(
       Effect.gen(function* () {

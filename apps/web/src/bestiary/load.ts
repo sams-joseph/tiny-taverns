@@ -126,10 +126,15 @@ export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
 
     return {
       creatures,
+      // `role === "dm"` and nothing else: `derive` writes through `rowWritable`,
+      // so a table you only sit at is not somewhere a copy can land. There is no
+      // `archivedAt === null` filter beside it any more — `GET /me/campaigns` is
+      // the live shelf by the URL it is, and `repo/Memberships.ts` holds that
+      // clause once. The filter that used to be here answered a question the
+      // server had already answered, which is how a second answer starts.
       campaigns: memberships
         .filter((membership) => membership.role === "dm")
-        .map((membership) => membership.campaign)
-        .filter((campaign) => campaign.archivedAt === null),
+        .map((membership) => membership.campaign),
     } satisfies LibraryView;
   });
 

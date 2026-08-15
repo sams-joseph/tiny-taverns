@@ -10,6 +10,8 @@ import { Hob, useHobPanel } from "../hob";
 import { useMode } from "../shell/location";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { ArchiveDialog } from "./ArchiveDialog";
+import { ArchivedDialog } from "./ArchivedDialog";
 
 /**
  * The way in: every table this credential reaches, and what you are at each.
@@ -43,6 +45,25 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
  * screen**, so it happens here — at the only place that knows the role — rather
  * than being discovered by the screen underneath.
  *
+ * ### It is also where a campaign leaves the list, and comes back
+ *
+ * The captain asked to *delete* campaigns; what this product has is archiving,
+ * which it has argued for since `0001` — *a campaign is somebody's two years of
+ * Thursday nights*. `DELETE /campaigns/:c` stamps `archived_at` and nothing
+ * else, and `POST /campaigns/:c/restore` clears it, so the round trip is exact.
+ *
+ * Both halves hang off this screen because a campaign list is where you notice
+ * a table you have stopped running, and neither is on the row alone: *Archive*
+ * opens `ArchiveDialog`, which names the campaign before it does anything, and
+ * the shelf is `ArchivedDialog` behind one muted line at the foot. The rule
+ * `CampaignDialog` set — archiving does not share a button with renaming —
+ * still holds; what it has now is a deliberate home rather than none.
+ *
+ * **Archiving is the DM's, read off the row and not off the mode.** `onArchive`
+ * is undefined unless `membership.role === "dm"`, so a player at a table sees
+ * neither the control nor the shelf, and `campaignWritable` refuses the write
+ * underneath either way.
+ *
  * This screen used to *offer* the switch too, on the reasoning that only a
  * reader of `GET /me/campaigns` knows whether there is a player side at all.
  * The reasoning was sound and the conclusion was the bug: it made the pill
@@ -55,7 +76,14 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
 
 const listMemberships = (client: TavernsClient) => client.me.campaigns();
 
-function CampaignRow({ membership }: { readonly membership: CampaignMembership }) {
+function CampaignRow({
+  membership,
+  onArchive,
+}: {
+  readonly membership: CampaignMembership;
+  /** Undefined at a table you only sit at — see the archiving note above. */
+  readonly onArchive: (() => void) | undefined;
+}) {
   const campaign = membership.campaign;
   // A mode, not a filter: the row goes to the screen for the role you are at
   // this table in, and there is exactly one such screen.
@@ -89,16 +117,26 @@ function CampaignRow({ membership }: { readonly membership: CampaignMembership }
             {campaign.partyName}
           </span>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto text-link"
-          nativeButton={false}
-          render={<Link {...open} />}
-        >
-          Open
-          <Icon name="chevron-right" size={15} />
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          {/* Deliberate rather than prominent: the press opens a confirmation
+              that names the campaign, which is the check a row cannot make.
+              `ArchiveDialog` is where the reasoning lives. */}
+          {onArchive !== undefined && (
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onArchive}>
+              Archive
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-link"
+            nativeButton={false}
+            render={<Link {...open} />}
+          >
+            Open
+            <Icon name="chevron-right" size={15} />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -157,6 +195,9 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
 
 export function CampaignsScreen() {
   const [resource, reload] = useApiResource(listMemberships);
+  /** The campaign a confirmation is open over, and the shelf's own dialog. */
+  const [archiving, setArchiving] = useState<CampaignMembership | undefined>();
+  const [shelfOpen, setShelfOpen] = useState(false);
   // Closed, against the hook's own `true` default, and its doc says why the
   // choice is the shell's: a 400px panel that opens itself is worse than a
   // button that opens it when you ask. This screen passes no campaign either —
@@ -166,11 +207,16 @@ export function CampaignsScreen() {
 
   const player = useMode() === "player";
 
-  const live =
+  // No `archivedAt === null` filter here any more, and its absence is the
+  // point: `GET /me/campaigns` is the live shelf by the URL it is, and
+  // `repo/Memberships.ts` is the one place that clause is written. The filter
+  // that used to be here was dead weight sitting on top of the server's — a
+  // second answer to which campaigns are on the list, which is exactly what the
+  // archived list would have had to reach around.
+  const memberships =
     resource.state === "ready"
-      ? resource.value.filter((row) => row.campaign.archivedAt === null)
+      ? resource.value.filter((row) => (player ? row.role === "player" : row.role === "dm"))
       : undefined;
-  const memberships = live?.filter((row) => (player ? row.role === "player" : row.role === "dm"));
 
   return (
     <AppShell
@@ -224,13 +270,51 @@ export function CampaignsScreen() {
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (
-                  <CampaignRow key={membership.campaign.id} membership={membership} />
+                  <CampaignRow
+                    key={membership.campaign.id}
+                    membership={membership}
+                    // A fact about the row rather than about the mode: only the
+                    // DM of a table may shelve it, and `campaignWritable` is
+                    // what refuses anyone else. Reading the role here means a
+                    // player never sees the control even if this list ever
+                    // carries a mixed set again.
+                    onArchive={
+                      membership.role === "dm" ? () => setArchiving(membership) : undefined
+                    }
+                  />
                 ))}
               </div>
+            )}
+            {/* The way back, and deliberately the quietest thing on the page:
+                somebody who has archived nothing should barely notice it. It is
+                the DM's shelf, so it is absent on the player side — and it
+                requests nothing until it is opened. */}
+            {!player && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start text-muted-foreground"
+                onClick={() => setShelfOpen(true)}
+              >
+                <Icon name="history" size={14} />
+                Archived campaigns
+              </Button>
             )}
           </>
         )}
       </div>
+
+      {archiving !== undefined && (
+        <ArchiveDialog
+          campaign={archiving.campaign}
+          onClose={() => setArchiving(undefined)}
+          onArchived={() => {
+            setArchiving(undefined);
+            reload();
+          }}
+        />
+      )}
+      {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} onRestored={reload} />}
     </AppShell>
   );
 }

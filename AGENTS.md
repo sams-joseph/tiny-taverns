@@ -2498,6 +2498,51 @@ render that one value rather than branching again.
 with the runner's own dialog, reached from the session card in this screen's aside. See
 "Finishing a session: one write, two surfaces, and a fight that carries" below.
 
+### Deleting a campaign is archiving it, and archiving is exactly one column
+
+The captain asked to _delete_ campaigns; what shipped is the reversible soft delete this schema
+has argued for since `0001` — _a campaign is somebody's two years of Thursday nights_.
+**Permanent deletion is out of scope by decision: do not write one, and do not put a "delete
+forever" on the archived view.** `DELETE /campaigns/:c` (`campaigns.archive`) stamps `archived_at`;
+`POST /campaigns/:c/restore` clears it. Both compose `campaignWritable`, so both refuse a player of
+that table with the ordinary `NotFound` — driven from a real invited player rather than argued, in
+`apps/server/test/api.test.ts`.
+
+- **Archiving moves one column and nothing else, and that is what makes restore exact.** It does
+  not clear `current_session_id`, end a live fight or unshare the table. The alternative —
+  finishing the night on the way out — is the one side effect that could not be undone, because
+  `campaign_current_session_id_fkey` (`0006_session_finished.ts`) makes a finished session
+  unpointable: a reversible act would have had an irreversible half. So the confirmation **names
+  the open night** instead, the way `FinishSessionDialog` names the fight it is about to carry.
+  Measured across a real round trip: `archivedAt` back to null with `currentSessionId` still on the
+  same unended session, and only `updatedAt` moved.
+- **No predicate in `repo/visibility.ts` consults `archived_at`**, so an archived campaign is still
+  readable and writable at its own URL. That is the soft delete working rather than a gap — what
+  the column narrows is the two lists that answer _"what am I running"_, and pushing it into the
+  seam would add a second question to every predicate in the product for a shelf.
+- **The shelf is a second URL, not a parameter.** `GET /me/campaigns` is the live list and
+  `GET /me/campaigns/archived` the other one, over **one** repository method —
+  `Memberships.mine(shelf)`, one query, one predicate, one mapper. A `?shelf=` filter would have
+  put the default in a decoder that five unrelated readers (`campaign/load.ts`,
+  `characters/load.ts`, …) would each have had to name correctly to keep answering what they
+  answer today. Two paths make _"no existing read returns an archived campaign"_ a fact about
+  which URL was asked for.
+- **`repo/Memberships.ts` is the only place the `archived_at` clause is written.** `apps/web` used
+  to re-filter `archivedAt === null` in `CampaignsScreen` **and** in `bestiary/load.ts`; both were
+  dead weight on top of the server's clause and both are gone rather than tripled. A third one
+  appearing is the signal somebody has forgotten which read they are on.
+- **The affordances are the DM's, read off the membership's `role` rather than off the mode** —
+  `CampaignsScreen` passes `onArchive` only for a `dm` row, so a player sees neither the control
+  nor the shelf whatever the list ever carries. _Archive_ on the row opens
+  `campaign/ArchiveDialog.tsx` (which names the campaign — the check a row-level button cannot
+  make, and the rule `CampaignDialog`'s doc block set); the shelf is `campaign/ArchivedDialog.tsx`
+  behind one muted line at the foot, shaped after `InviteDialog` and **requesting nothing until it
+  is opened**. A count beside the opener would cost a second request on every load of the campaign
+  list for a number that is `0` for almost everybody.
+- **The shelf answers a player's archived table and offers no way back for it.** That is the
+  membership read being the membership read; `ArchivedDialog` narrows to `role === "dm"` because
+  its one verb is a write, and a _Restore_ that 404s is worse than none.
+
 ## The live session: what is durable, what is fan-out, and how a stream comes back
 
 `packages/design-system/ui_kits/dm-screen/EncounterRunner.jsx` is the specification. Step 4 of

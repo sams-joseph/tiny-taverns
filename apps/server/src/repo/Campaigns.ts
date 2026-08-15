@@ -60,6 +60,7 @@ export class Campaigns extends Context.Service<
       patch: CampaignUpdate,
     ) => Effect.Effect<Campaign, NotFound | Conflict, CurrentActor>;
     readonly archive: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
+    readonly restore: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
   }
 >()("Campaigns") {
   static readonly layer = Layer.effect(this)(
@@ -196,12 +197,66 @@ export class Campaigns extends Context.Service<
             }),
           ),
 
+        /**
+         * Off the list, and nothing else.
+         *
+         * **One column moves, and that is the whole design.** Nothing here
+         * clears `current_session_id`, ends a live fight, unshares the campaign
+         * or touches a row hanging off it — so a night in progress is still in
+         * progress and `restore` below can put the campaign back *exactly* where
+         * it was rather than approximately. The alternative, finishing the night
+         * on the way out, is the one thing that could not be undone:
+         * `campaign_current_session_id_fkey` (`0006_session_finished.ts`) makes
+         * a finished session unpointable, so an archive that ended the night
+         * would be a reversible act with an irreversible side effect. The
+         * confirmation names the open night instead — see
+         * `apps/web/src/campaign/ArchiveDialog.tsx`.
+         *
+         * No predicate in `repo/visibility.ts` consults `archived_at`, so an
+         * archived campaign stays readable and writable at its own URL. That is
+         * a soft delete working rather than a gap: the two lists that answer
+         * *"what am I running"* — `list` above and `Memberships.mine` — are what
+         * the column narrows, and pushing it into the seam instead would put a
+         * second question into every predicate in the product for a shelf.
+         *
+         * Idempotent in the harmless direction: archiving an archived campaign
+         * re-stamps `archived_at`, which is the same shelf a moment later.
+         */
         archive: (id) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<CampaignRow>`
                 update campaign set archived_at = now(), updated_at = now()
+                where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
+                returning *
+              `;
+              return yield* one(rows, id);
+            }),
+          ),
+
+        /**
+         * Back on the list — `archive` read backwards, deliberately down to the
+         * shape of the statement.
+         *
+         * Same predicate, same `one`, same `NotFound`: a campaign somebody else
+         * runs matches no row here for exactly the reason it matches none there,
+         * so the refusal is not a second rule that could come to disagree with
+         * the first. `campaignWritable` does not test `archived_at`, which is
+         * what makes an archived campaign reachable by the one act that is about
+         * being archived.
+         *
+         * Restoring one that is not archived is a no-op success. There is
+         * nothing for a DM to reconcile — the campaign is on the list, which is
+         * what they asked for — and a `Conflict` here would be an error for
+         * pressing a button twice.
+         */
+        restore: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<CampaignRow>`
+                update campaign set archived_at = null, updated_at = now()
                 where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
                 returning *
               `;

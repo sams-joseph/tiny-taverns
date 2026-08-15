@@ -7,7 +7,7 @@ import {
   type MemberRole,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import type { SqlError } from "effect/unstable/sql";
+import type { SqlError, Statement } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
 import { type CampaignRow, toCampaign } from "./Campaigns.js";
 import type { DmActor } from "./DmActor.js";
@@ -30,7 +30,9 @@ import { campaignReadable, campaignWritableById } from "./visibility.js";
  *
  * The **service** answers a request, and it now answers the same row from both
  * ends. `mine` is `GET /me/campaigns` — *which tables am I at* — and carries
- * `CurrentActor` like every other read in the product. `list` is
+ * `CurrentActor` like every other read in the product; it takes a shelf, which
+ * is what makes `GET /me/campaigns/archived` the same read rather than a second
+ * one. `list` is
  * `GET /campaigns/:c/members` — *who is at this table* — and takes a `DmActor`,
  * which makes this the **fifth gated repository** and the second, after `Recap`,
  * that is gated in part. Membership got a service the moment it got an endpoint,
@@ -174,6 +176,21 @@ interface MembershipRow extends CampaignRow {
   readonly joined_at: Date;
 }
 
+/**
+ * Which shelf `mine` reads — the live tables, or the archived ones.
+ *
+ * **Not on the wire, and that is the point.** `GET /me/campaigns` and
+ * `GET /me/campaigns/archived` are two paths over this one argument, so which
+ * shelf a caller gets is decided by the URL they asked for rather than by a
+ * decoded default that five unrelated readers would have to keep naming
+ * correctly. See the `me` group in `packages/api/src/Api.ts`.
+ *
+ * A union rather than a boolean so the two call sites in `handlers.ts` read as
+ * what they are — `mine("archived")` says which list it is answering, and
+ * `mine(true)` would not.
+ */
+export type CampaignShelf = "live" | "archived";
+
 interface MemberRow {
   readonly account_id: AccountId;
   readonly name: string;
@@ -195,8 +212,20 @@ export class Memberships extends Context.Service<
      * has joined a campaign the DM has not shared sees nothing here. That is the
      * master toggle working, not a bug, and it is why `InviteRedeemed` carries
      * `shared` — the moment to explain it is the moment of joining.
+     *
+     * **The shelf is the argument, and it is the only thing that differs
+     * between the two endpoints over this read.** `GET /me/campaigns` asks for
+     * `"live"` and `GET /me/campaigns/archived` for `"archived"`; the join, the
+     * predicate, the ordering and the mapper are one, so the two lists cannot
+     * come to disagree about reach — only about which side of
+     * `campaign.archived_at is null` a row is on. That clause is **the** answer
+     * to whether an archived campaign appears in a list: `apps/web` used to
+     * filter `archivedAt === null` a second time after this one and it was dead
+     * weight, so it is gone rather than tripled.
      */
-    readonly mine: Effect.Effect<ReadonlyArray<CampaignMembership>, never, CurrentActor>;
+    readonly mine: (
+      shelf: CampaignShelf,
+    ) => Effect.Effect<ReadonlyArray<CampaignMembership>, never, CurrentActor>;
     /**
      * Who is at this table, live members only — the roster the party screen
      * draws, and the DM's own read.
@@ -231,32 +260,45 @@ export class Memberships extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
+      /**
+       * The one clause that decides which shelf a campaign is on.
+       *
+       * Written once and chosen by the argument, rather than as two spellings
+       * of `archived_at` a few lines apart: the pair has to stay exact
+       * complements, and two literals cannot be.
+       */
+      const onShelf = (shelf: CampaignShelf): Statement.Fragment =>
+        shelf === "archived"
+          ? sql`campaign.archived_at is not null`
+          : sql`campaign.archived_at is null`;
+
       return {
-        mine: dieOnSqlError(
-          Effect.gen(function* () {
-            const actor = yield* CurrentActor;
-            const rows = yield* sql<MembershipRow>`
-              select campaign.*,
-                     campaign_member.role,
-                     campaign_member.created_at as joined_at
-              from campaign
-              join campaign_member
-                on campaign_member.campaign_id = campaign.id
-               and campaign_member.account_id = ${actor.accountId}
-               and campaign_member.revoked_at is null
-              where ${campaignReadable(sql, actor)} and campaign.archived_at is null
-              order by campaign.created_at desc
-            `;
-            return rows.map(
-              (row) =>
-                new CampaignMembership({
-                  campaign: toCampaign(row),
-                  role: row.role,
-                  joinedAt: DateTime.fromDateUnsafe(row.joined_at),
-                }),
-            );
-          }),
-        ),
+        mine: (shelf) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<MembershipRow>`
+                select campaign.*,
+                       campaign_member.role,
+                       campaign_member.created_at as joined_at
+                from campaign
+                join campaign_member
+                  on campaign_member.campaign_id = campaign.id
+                 and campaign_member.account_id = ${actor.accountId}
+                 and campaign_member.revoked_at is null
+                where ${campaignReadable(sql, actor)} and ${onShelf(shelf)}
+                order by campaign.created_at desc
+              `;
+              return rows.map(
+                (row) =>
+                  new CampaignMembership({
+                    campaign: toCampaign(row),
+                    role: row.role,
+                    joinedAt: DateTime.fromDateUnsafe(row.joined_at),
+                  }),
+              );
+            }),
+          ),
 
         list: (dm) =>
           dieOnSqlError(

@@ -502,7 +502,7 @@ describe("the tables I am at", () => {
     );
 
     const beforeSharing = await runtime.runPromise(
-      Effect.flatMap(Memberships, (repo) => as(player)(repo.mine)).pipe(Effect.orDie),
+      Effect.flatMap(Memberships, (repo) => as(player)(repo.mine("live"))).pipe(Effect.orDie),
     );
 
     await runtime.runPromise(
@@ -512,7 +512,7 @@ describe("the tables I am at", () => {
     );
 
     const afterSharing = await runtime.runPromise(
-      Effect.flatMap(Memberships, (repo) => as(player)(repo.mine)).pipe(Effect.orDie),
+      Effect.flatMap(Memberships, (repo) => as(player)(repo.mine("live"))).pipe(Effect.orDie),
     );
 
     expect(redeemed.shared).toBe(false);
@@ -524,10 +524,12 @@ describe("the tables I am at", () => {
 
   it("shows a DM every table they run, and a stranger none of them", async () => {
     const mine = await runtime.runPromise(
-      Effect.flatMap(Memberships, (repo) => as(fixture.dm)(repo.mine)).pipe(Effect.orDie),
+      Effect.flatMap(Memberships, (repo) => as(fixture.dm)(repo.mine("live"))).pipe(Effect.orDie),
     );
     const theirs = await runtime.runPromise(
-      Effect.flatMap(Memberships, (repo) => as(fixture.stranger)(repo.mine)).pipe(Effect.orDie),
+      Effect.flatMap(Memberships, (repo) => as(fixture.stranger)(repo.mine("live"))).pipe(
+        Effect.orDie,
+      ),
     );
 
     expect([...mine.map((row) => row.campaign.name)].sort()).toEqual([
@@ -545,7 +547,7 @@ describe("the tables I am at", () => {
     // apply here, exactly as they do to every other read.
     const scoped = scopedTo(fixture.dm, fixture.campaign.id);
     const seen = await runtime.runPromise(
-      Effect.flatMap(Memberships, (repo) => as(scoped)(repo.mine)).pipe(Effect.orDie),
+      Effect.flatMap(Memberships, (repo) => as(scoped)(repo.mine("live"))).pipe(Effect.orDie),
     );
 
     expect(seen.map((row) => row.campaign.name)).toEqual(["The Salt Road"]);

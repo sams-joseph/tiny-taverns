@@ -88,7 +88,8 @@ const CampaignsLive = HttpApiBuilder.group(
       .handle("create", ({ payload }) => campaigns.create(payload))
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
-      .handle("archive", ({ params }) => campaigns.archive(params.campaignId));
+      .handle("archive", ({ params }) => campaigns.archive(params.campaignId))
+      .handle("restore", ({ params }) => campaigns.restore(params.campaignId));
   }),
 );
 
@@ -114,12 +115,18 @@ const MeLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const memberships = yield* Memberships;
     const characters = yield* Characters;
-    return handlers
-      .handle("campaigns", () => memberships.mine)
-      .handle("characters", () => characters.mine)
-      .handle("updateCharacter", ({ params, payload }) =>
-        characters.updateOwn(params.characterId, payload),
-      );
+    return (
+      handlers
+        // Two paths, one read, and the shelf named at each of them — which is
+        // what makes "no existing read answers an archived campaign" a fact about
+        // the URL rather than about a decoded default. See `repo/Memberships.ts`.
+        .handle("campaigns", () => memberships.mine("live"))
+        .handle("archivedCampaigns", () => memberships.mine("archived"))
+        .handle("characters", () => characters.mine)
+        .handle("updateCharacter", ({ params, payload }) =>
+          characters.updateOwn(params.characterId, payload),
+        )
+    );
   }),
 );
 
