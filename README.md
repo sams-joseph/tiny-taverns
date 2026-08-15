@@ -100,7 +100,7 @@ pnpm --filter web dev   # http://localhost:5173
 
 ## Prerequisites
 
-- **Node** >= 20 (developed on Node 26)
+- **Node** >= 22.13 (pnpm's own floor; developed on Node 26, CI runs Node 24)
 - **pnpm** (version is pinned via the root `package.json` `packageManager` field; run
   `corepack enable` to have the right version selected automatically)
 - **Docker**, for the development database
