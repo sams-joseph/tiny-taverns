@@ -239,10 +239,37 @@ export interface Call {
   readonly search: string;
 }
 
-/** A campaign with two nights on the record and a fight across both. */
+/**
+ * A campaign with two nights on the record and a fight across both.
+ *
+ * **The first six are `CampaignChrome`'s, not the Chronicle's.** The screen is
+ * one of the campaign's destinations and wears the shared frame — which is what
+ * gives it the session badge and the campaign action it used to draw neither of
+ * — so it makes the frame's reads too. They are spelled out here rather than
+ * borrowed from `campaign/campaign.fixtures.tsx`'s `fullCampaign()` because this
+ * file's campaign is a *different* one: two nights, and a fight that crosses
+ * them, which is the whole point of the fixture and is not what the shared one
+ * describes. The empty lists are honest — nothing on this screen draws an
+ * encounter, a note or a character.
+ */
 export const fullChronicle = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+    [
+      "GET /me/campaigns",
+      { status: 200, body: [{ campaign, role: "dm", joinedAt: stamps.createdAt }] },
+    ],
+    [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/notes`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] }],
+    // The night being prepared, which the campaign row names in its badge.
+    [`GET /campaigns/${campaignId}/sessions/${session12Id}`, { status: 200, body: session12 }],
+    // The fight session 12 picked up is still on the table, so the campaign
+    // action reads *Back to the fight* — the same run `recap12` links to.
+    [
+      `GET /campaigns/${campaignId}/sessions/${session12Id}/runs`,
+      { status: 200, body: [resumedRun] },
+    ],
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
     [
       `GET /campaigns/${campaignId}/sessions/${session12Id}/prep`,

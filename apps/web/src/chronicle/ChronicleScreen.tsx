@@ -14,11 +14,10 @@ import {
 } from "@taverns/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
-import { Hob, useHobPanel } from "../hob";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { useApiResource, type Resource } from "../api/resource";
+import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { loadChronicle } from "./load";
+import { loadChronicleSpine, type ChronicleSpine } from "./load";
 import { RecapBody } from "./RecapBody";
 import { searchCampaign, type SearchAnswer, type SearchScope } from "./search";
 import { SearchResults } from "./SearchResults";
@@ -55,6 +54,16 @@ import { SessionEntry } from "./SessionEntry";
  * - **"Import the old notebook."** There is no importer. The spine still says
  *   where the record begins, because that is a fact about the sessions that are
  *   here; it does not offer to fix it.
+ *
+ * ### It is one of the campaign's destinations, so it wears the campaign's frame
+ *
+ * It composed `AppShell` itself for as long as it predated the sixth delivery's
+ * split — and that is how it came to draw no session badge and no campaign
+ * action, since both are props of a shell this screen was assembling by hand.
+ * `CampaignChrome` computes them once for every destination. What is left here
+ * is the spine (`loadChronicleSpine`), the search — which is its own resource
+ * because it re-runs on every settled keystroke and the frame must not reload
+ * with it — and the screen's own three controls.
  */
 
 /** Long enough that typing a name is one request rather than eight — see the bestiary. */
@@ -88,10 +97,9 @@ export function ChronicleScreen() {
   }, [term]);
 
   const load = useCallback(
-    (client: TavernsClient) => loadChronicle(campaignId)(client),
+    (client: TavernsClient) => loadChronicleSpine(campaignId)(client),
     [campaignId],
   );
-  const [resource, reload] = useApiResource(load);
 
   // Memoised on what is actually sent, for the reason every `useApiResource`
   // callback is: its identity is the instruction to load again.
@@ -101,6 +109,13 @@ export function ChronicleScreen() {
     (client: TavernsClient) => searchCampaign(campaignId, query)(client),
     [campaignId, query],
   );
+  /**
+   * The search is deliberately its **own** resource rather than part of the
+   * frame's load: it re-runs on every settled keystroke, and composing it into
+   * `CampaignChrome`'s Effect would re-read the whole campaign each time and
+   * blank the spine underneath. It is the one thing on this screen that is not
+   * a fact about the campaign.
+   */
   const [hits] = useApiResource(runSearch);
 
   /**
@@ -116,36 +131,23 @@ export function ChronicleScreen() {
     if (hits.state === "ready") setAnswered(hits.value);
   }, [hits]);
 
-  // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
-  const hob = useHobPanel({ initialOpen: false });
-
-  const view = resource.state === "ready" ? resource.value : undefined;
-  const sessions = view?.sessions ?? [];
-  const newest = sessions[0];
-  const open = openId === undefined ? newest?.id : openId;
-  // The record begins where the numbering does, which is not always 1: the
-  // delivery's own footer says sessions 1–8 are elsewhere. Said as a fact, with
-  // no offer to import them, because there is no importer.
-  const earliest = sessions[sessions.length - 1];
-
   /** The answer to the query that is in the box now, or nothing yet. */
   const settled = answered !== undefined && answered.q === q.trim() ? answered : undefined;
 
-  const subtitle = searching
-    ? settled === undefined
-      ? "Searching…"
-      : `${String(settled.hits.length)} ${settled.hits.length === 1 ? "result" : "results"} for “${settled.q}”`
-    : view === undefined
-      ? undefined
-      : `${String(sessions.length)} ${sessions.length === 1 ? "night" : "nights"} on the record`;
-
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} campaignId={campaignId} />}
-      campaignName={view?.campaign.name}
-      topBar={
-        <TopBar title="Chronicle" subtitle={subtitle}>
+    <CampaignChrome<ChronicleSpine>
+      campaignId={campaignId}
+      title="Chronicle"
+      load={load}
+      subtitle={({ extra }) =>
+        searching
+          ? settled === undefined
+            ? "Searching…"
+            : `${String(settled.hits.length)} ${settled.hits.length === 1 ? "result" : "results"} for “${settled.q}”`
+          : `${String(extra.sessions.length)} ${extra.sessions.length === 1 ? "night" : "nights"} on the record`
+      }
+      actions={() => (
+        <>
           <Input
             aria-label="Search the record"
             placeholder="Search the record"
@@ -175,17 +177,79 @@ export function ChronicleScreen() {
             <Icon name="megaphone" size={13} />
             Read aloud
           </Toggle>
-        </TopBar>
-      }
-    >
-      {resource.state === "loading" && <Loading label="Opening the chronicle…" />}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
+        </>
       )}
+    >
+      {(slots) => (
+        <Chronicle
+          slots={slots}
+          readAloud={readAloud}
+          searching={searching}
+          hits={hits}
+          answered={answered}
+          openId={openId}
+          onOpen={setOpenId}
+          onClearSearch={() => {
+            setTerm("");
+            setQ("");
+          }}
+        />
+      )}
+    </CampaignChrome>
+  );
+}
 
-      {view !== undefined && searching && (
+/**
+ * The record itself: the spine, or what a search found in it.
+ *
+ * Split out so the screen above holds only what the top bar sets — the search
+ * term, the scope, the *Read aloud* toggle and which night is open — which is
+ * the rule `EncountersScreen` and `NotesScreen` already follow, and the reason
+ * none of it can be two answers.
+ */
+function Chronicle({
+  slots,
+  readAloud,
+  searching,
+  hits,
+  answered,
+  openId,
+  onOpen,
+  onClearSearch,
+}: {
+  readonly slots: CampaignChromeSlots<ChronicleSpine>;
+  readonly readAloud: boolean;
+  readonly searching: boolean;
+  readonly hits: Resource<SearchAnswer>;
+  readonly answered: SearchAnswer | undefined;
+  readonly openId: SessionId | null | undefined;
+  readonly onOpen: (id: SessionId | null | undefined) => void;
+  readonly onClearSearch: () => void;
+}) {
+  const { view, extra } = slots;
+  const campaignId = view.campaign.id;
+  const sessions = extra.sessions;
+  const newest = sessions[0];
+  const open = openId === undefined ? newest?.id : openId;
+  // The record begins where the numbering does, which is not always 1: the
+  // delivery's own footer says sessions 1–8 are elsewhere. Said as a fact, with
+  // no offer to import them, because there is no importer.
+  const earliest = sessions[sessions.length - 1];
+
+  /**
+   * *"Threads still open"* — the unticked half of the night being prepared.
+   *
+   * Both halves are the frame's: `CampaignView.session` is the night
+   * `campaign.currentSessionId` names, and `CampaignView.prep` is that night's
+   * checklist. This screen used to read both itself, which was a second answer
+   * to a question the frame was already asking in the same round.
+   */
+  const current = view.session;
+  const openThreads = view.prep.filter((item) => !item.done);
+
+  return (
+    <>
+      {searching && (
         <div className="flex max-w-4xl flex-col gap-3">
           {hits.state === "failed" && <FailureNotice failure={hits.failure} />}
           {/* The previous answer stays on screen while the next is fetched, so
@@ -208,16 +272,15 @@ export function ChronicleScreen() {
                 q={answered.q}
                 sessions={sessions}
                 onOpenSession={(session) => {
-                  setOpenId(session.id);
-                  setTerm("");
-                  setQ("");
+                  onOpen(session.id);
+                  onClearSearch();
                 }}
               />
             ))}
         </div>
       )}
 
-      {view !== undefined && !searching && sessions.length === 0 && (
+      {!searching && sessions.length === 0 && (
         // The state a new DM sees first, and bounded to the same width as a
         // failure notice — a card the whole width of a 1440px window reads as a
         // page that failed to load rather than one with nothing in it yet.
@@ -231,7 +294,7 @@ export function ChronicleScreen() {
         </div>
       )}
 
-      {view !== undefined && !searching && sessions.length > 0 && (
+      {!searching && sessions.length > 0 && (
         // `@4xl` (896px) is the *column's* width — `main` is the container —
         // and it is where the 340px aside earns its place beside prose that
         // wants a measure. Same threshold the campaign view docks its aside at.
@@ -244,9 +307,7 @@ export function ChronicleScreen() {
                 latest={session.id === newest?.id}
                 open={session.id === open}
                 readAloud={readAloud}
-                onToggle={() =>
-                  setOpenId((current) => (current === session.id ? null : session.id))
-                }
+                onToggle={() => onOpen(open === session.id ? null : session.id)}
               >
                 <RecapBody campaignId={campaignId} sessionId={session.id} readAloud={readAloud} />
               </SessionEntry>
@@ -284,20 +345,20 @@ export function ChronicleScreen() {
                       Threads still open
                     </span>
                     <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
-                      {view.openThreads.length}
+                      {openThreads.length}
                     </span>
                   </div>
-                  {view.current === undefined ? (
+                  {current === undefined ? (
                     <p className="text-body-s leading-body text-faint">
                       No night is being prepared, so there is no checklist to read this from.
                     </p>
-                  ) : view.openThreads.length === 0 ? (
+                  ) : openThreads.length === 0 ? (
                     <p className="text-body-s leading-body text-faint">
-                      Everything on session {view.current.number}&rsquo;s checklist is ticked.
+                      Everything on session {current.number}&rsquo;s checklist is ticked.
                     </p>
                   ) : (
                     <ul className="flex flex-col gap-3">
-                      {view.openThreads.map((item) => (
+                      {openThreads.map((item) => (
                         <li key={item.id} className="flex gap-2">
                           <Icon
                             name="help-circle"
@@ -311,12 +372,12 @@ export function ChronicleScreen() {
                       ))}
                     </ul>
                   )}
-                  {view.current !== undefined && (
+                  {current !== undefined && (
                     // Named rather than implied: these are the unticked lines of
                     // one night's checklist, not authored loose ends, and the
                     // aside says which night so the claim stays checkable.
                     <p className="text-caption leading-body text-faint">
-                      Unticked on session {view.current.number}&rsquo;s checklist.
+                      Unticked on session {current.number}&rsquo;s checklist.
                     </p>
                   )}
                 </CardContent>
@@ -325,6 +386,6 @@ export function ChronicleScreen() {
           )}
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

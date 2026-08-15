@@ -2016,11 +2016,11 @@ re-deriving them. (The Chronicle keeps all five and adds one qualification to th
 its own section below: the recap of a night is loaded by the card that shows it, because one
 `Effect` per screen would mean one recap per night just to draw a list.)
 
-**Several screens over one campaign share a frame, and the frame is not an exception to the
-first rule.** The sixth delivery split the campaign view into Overview / Encounters / Notes, and
-`campaign/CampaignChrome.tsx` is what they have in common: the name in the bar, the way home, the
-session badge, whether the table is shared, who is invited, and starting or finishing the night
-are facts about the _campaign_ rather than about whichever of its screens is open. Each
+**Every screen the campaign row can reach shares a frame, and the frame is not an exception to
+the first rule.** The sixth delivery split the campaign view into Overview / Encounters / Notes,
+and `campaign/CampaignChrome.tsx` is what they have in common: the name in the bar, the way home,
+the session badge, whether the table is shared, who is invited, and starting or finishing the
+night are facts about the _campaign_ rather than about whichever of its screens is open. Each
 destination still composes `loadCampaignView` **once** and still has three states, so the cost is
 honest and stated: moving between Encounters and Notes re-reads the campaign. That is the price of
 one source of truth — every write on these screens changes something the screen did not send
@@ -2028,6 +2028,36 @@ one source of truth — every write on these screens changes something the scree
 card), so a cache would be right until the first write it did not hear about. A screen's own
 search term and open dialog live **above** the frame, because the top bar sets them and the body
 reads them and they are two slots of one screen.
+
+**Party and Chronicle were the two that did not, and it shipped as a bug nobody could describe.**
+Both predated the split and each composed `AppShell` itself, passing `campaignName` and nothing
+else — so on two of the five destinations the campaign row silently had no session badge and no
+_Start session_, whatever the night and whatever the width. It reads as intermittent (same night,
+same window, different tab), which is why it was reported as flakiness rather than as a missing
+prop. **The badge and the action are props of the shell**: a screen that builds its own row cannot
+draw them, and the omission fails nothing, warns about nothing and renders nothing odd.
+`campaign/campaignRow.test.tsx` is what fails now instead, and it is deliberately an
+_enumeration_ — it reads the destinations out of the rendered campaign row and visits each, so a
+sixth screen that hand-builds a shell fails the suite with no edit to the test.
+
+**A screen that needs more than the campaign view passes `load` to the frame, and does not open a
+second resource.** `CampaignChromeSlots.extra` is the answer, composed into the frame's own
+`Effect` — two `useApiResource`s on one screen is four combinations of loading and failed, and two
+`reload`s for one write. It is also what keeps the cost honest: a screen's own loader drops
+everything the frame already answers, so the Party's four reads became two (`members`, `invites`;
+its characters are `CampaignView.party`) and the Chronicle's three became one (`sessions.list`; the
+night and its checklist are `CampaignView.session` and `.prep`). **The Chronicle's search stays its
+own resource** — it re-runs on every settled keystroke, and composing it in would re-read the whole
+campaign each time and blank the spine underneath.
+
+**The player's two campaign screens are consistent with each other and are deliberately left
+alone.** `play/PlayerCampaignScreen.tsx` and `chronicle/PlayerChronicleScreen.tsx` both pass
+`campaignName` only, so there is no same-night-different-tab inconsistency there to fix — and the
+frame is not portable to them: `loadCampaignView` calls `runs.list`, which is behind the `DmActor`
+gate, so a player composing it gets a `NotFound` and the whole screen fails. `CampaignChrome`'s
+`wrongSide` effect exists to bounce a player _off_ these routes in the first place. Whether a
+player should see the night at all, and what (if anything) replaces _Start session_ for them, is a
+product decision nobody has made.
 
 - **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
   (two rounds, concurrent within a round, because the checklist hangs off
@@ -2444,8 +2474,8 @@ screen** — _New encounter_ on Encounters, _New note_ on Notes, and **_Add char
 screen**, which is where the Party tab's authoring went when the delivery's campaign row collapsed
 it into the single _Party_ destination. Collapsing the tab without carrying its dialog would have
 deleted the only way to write a character; `party/PartyScreen.tsx` now answers _"who is at this
-table"_ in both senses, over two labelled regions, at the cost of no extra read (`loadParty`
-already listed the characters, for the roster). `campaign/CharacterDialog.tsx` is deliberately the `character` row
+table"_ in both senses, over two labelled regions, at the cost of no extra read (the characters
+are `CampaignView.party`, which the frame reads anyway). `campaign/CharacterDialog.tsx` is deliberately the `character` row
 **as it stands today** (name, player, descriptor, AC, max HP, visibility): the table is due to gain
 `level`, `species` and `class_name` as real columns, at which point `descriptor` stops being a free
 line, and building for that shape early would mean either a column that does not exist or a display
@@ -3281,8 +3311,10 @@ Five more things this screen settled:
 
 - **The spine loads; the recaps do not.** This is the one screen where "one `Effect`, six calls"
   would be wrong: a recap reaches five tables, and a twenty-night campaign would fire twenty of
-  them to draw a list. `load.ts` loads the campaign, `sessions.list` and the current night's
-  checklist; `RecapBody` is mounted only while its card is open and reads that one recap. Only one
+  them to draw a list. `load.ts` loads `sessions.list` and nothing else — the campaign and the
+  current night's checklist are `CampaignChrome`'s, since the screen wears the frame like every
+  other campaign destination; `RecapBody` is mounted only while its card is open and reads that
+  one recap. Only one
   card opens at a time (the delivery's own behaviour), so it is one request, and a collapsed row
   costs none — pinned by a test. The stated cost: **a collapsed card cannot show a summary**,
   because a summary _is_ a recap and nothing stores one.
@@ -3409,9 +3441,11 @@ the third invitation surface and the first reader `GET /campaigns/:c/members` ev
 The derivation table it implements is the one under "Membership is the model, and there is no
 seat" — three statuses from three lists, and no fourth. Four things about it are decisions:
 
-- **One `Effect`, four calls, one round** (`load.ts`). Nothing here depends on another response,
-  and three of the four reads only mean anything joined to the others, so four hooks would give
-  the screen sixteen states to say one sentence about a roster.
+- **One `Effect`, and the screen's own half of it is two calls** (`load.ts`'s
+  `loadPartyRoster`). Nothing here depends on another response, and neither read means anything
+  except joined to the campaign view's characters, so separate hooks would give the screen sixteen
+  states to say one sentence about a roster. It read four until it moved onto `CampaignChrome`;
+  the campaign and the characters are the frame's now, asked once.
 - **The DM is a row**, badged `crown`/`DM` and carrying no character status, because the endpoint
   returns them and a roster that silently drops a person is one you cannot trust. It deliberately
   does **not** claim "You": today the single `dm` member must be the viewer, but that is an

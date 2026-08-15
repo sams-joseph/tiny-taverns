@@ -1,31 +1,37 @@
-import type { Campaign, CampaignId, CampaignInvite, CampaignMember, Character } from "@taverns/api";
+import type { CampaignId, CampaignInvite, CampaignMember } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
 /**
- * What the party screen reads: four calls, one round, one value.
+ * What the party screen reads **beyond the campaign view**: two calls, one round.
  *
  * The rule every screen here follows — one `Effect`, not one hook per endpoint —
- * and this is the case it was written for. Three of these four reads only mean
- * anything joined to the others: a member with no `Character` whose `accountId`
- * is theirs is the *"joined but has no character"* state, and a member is
- * distinguished from an invitation only by which list they came out of. Four
- * independent hooks would give this screen sixteen combinations of loading and
- * failed to render, to say one sentence about a roster.
+ * and this is the case it was written for. These two reads only mean anything
+ * joined to the campaign view's characters: a member with no `Character` whose
+ * `accountId` is theirs is the *"joined but has no character"* state, and a
+ * member is distinguished from an invitation only by which list they came out
+ * of. Independent hooks would give this screen sixteen combinations of loading
+ * and failed to render, to say one sentence about a roster.
+ *
+ * **It used to read four things and now reads two**, because the screen sits on
+ * `CampaignChrome` — which is what carries the session badge and the campaign
+ * action this screen was missing. The frame already asks for the campaign and
+ * for `characters.list` (as `CampaignView.party`), so asking again here would be
+ * two answers to one question in one round; `CampaignChrome` composes this into
+ * the same Effect and hands it back as `slots.extra`.
  *
  * **One round, unbounded concurrency**: nothing here depends on anything else's
  * answer. `campaign/load.ts` needs two rounds because the prep checklist hangs
  * off `campaign.currentSessionId`; nothing on this screen hangs off a value in
  * another response.
  *
- * `members.list` and `invites.list` are both behind the `DmActor` gate and the
+ * `members.list` and `invites.list` are behind the `DmActor` gate and the
  * ordinary `campaignWritable` predicate respectively, so a player who reaches
  * this URL gets the ordinary `NotFound` and the screen says *"Not here"* — which
  * is the correct answer and not a case to special-case.
  */
 
-export interface PartyView {
-  readonly campaign: Campaign;
+export interface PartyRoster {
   /**
    * Who is at the table, live memberships only — the server drops a revoked one
    * rather than flagging it, because somebody who has left the table is not at
@@ -40,26 +46,17 @@ export interface PartyView {
    * this screen must not restate.
    */
   readonly invites: ReadonlyArray<CampaignInvite>;
-  /**
-   * Every character in the campaign, not only the assigned ones.
-   *
-   * The unassigned half is what `AssignDialog` offers, so filtering here would
-   * cost a second read to get them back.
-   */
-  readonly characters: ReadonlyArray<Character>;
 }
 
-export const loadParty = (campaignId: CampaignId) => (client: TavernsClient) =>
+export const loadPartyRoster = (campaignId: CampaignId) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [campaign, members, invites, characters] = yield* Effect.all(
+    const [members, invites] = yield* Effect.all(
       [
-        client.campaigns.findById({ params: { campaignId } }),
         client.members.list({ params: { campaignId } }),
         client.invites.list({ params: { campaignId } }),
-        client.characters.list({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     );
 
-    return { campaign, members, invites, characters } satisfies PartyView;
+    return { members, invites } satisfies PartyRoster;
   });

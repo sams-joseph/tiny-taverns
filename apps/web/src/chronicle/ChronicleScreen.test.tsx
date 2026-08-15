@@ -30,8 +30,11 @@ describe("the spine", () => {
   it("lists every night, newest first, and opens the newest", async () => {
     await renderChronicle();
 
-    await screen.findByText("Session 12");
-    expect(screen.getByText("Session 11")).toBeInTheDocument();
+    // By role, not by text: the campaign row's own badge says "Session 12"
+    // too, because the Chronicle wears `CampaignChrome` like every other
+    // campaign destination. The spine's nights are the buttons.
+    await screen.findByRole("button", { name: /Session 12/ });
+    expect(screen.getByRole("button", { name: /Session 11/ })).toBeInTheDocument();
     expect(await screen.findByText("2 nights on the record")).toBeInTheDocument();
 
     // Only the open card's recap is read. A collapsed row costs no request —
@@ -109,7 +112,7 @@ describe("read aloud", () => {
 describe("searching the record", () => {
   it("asks the server, and shows hits from more than one source", async () => {
     await renderChronicle();
-    await screen.findByText("Session 12");
+    await screen.findByRole("button", { name: /Session 12/ });
 
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
 
@@ -128,7 +131,7 @@ describe("searching the record", () => {
 
   it("sends source as one scalar value, never as a list", async () => {
     await renderChronicle();
-    await screen.findByText("Session 12");
+    await screen.findByRole("button", { name: /Session 12/ });
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
     await screen.findByText("Beat");
 
@@ -154,7 +157,7 @@ describe("searching the record", () => {
 
   it("renders an excerpt as text, never as markup", async () => {
     await renderChronicle();
-    await screen.findByText("Session 12");
+    await screen.findByRole("button", { name: /Session 12/ });
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
 
     // The note hit's snippet carries `<b>…</b>`. The API promises plain text, so
@@ -167,7 +170,7 @@ describe("searching the record", () => {
   it("says nothing matches, and says what to do about it", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/search`, { status: 200, body: [] });
     await renderChronicle();
-    await screen.findByText("Session 12");
+    await screen.findByRole("button", { name: /Session 12/ });
 
     await userEvent.type(screen.getByLabelText("Search the record"), "quokka");
 
@@ -178,7 +181,7 @@ describe("searching the record", () => {
 
   it("opens the night a beat came from", async () => {
     await renderChronicle();
-    await screen.findByText("Session 12");
+    await screen.findByRole("button", { name: /Session 12/ });
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
 
     const beatHit = (await screen.findByText("Beat")).closest("li");

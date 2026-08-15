@@ -184,15 +184,25 @@ describe("the states a real screen has", () => {
     expect(await screen.findByText("Not here")).toBeInTheDocument();
   });
 
-  it("reads the roster, the invitations and the characters in one round", async () => {
+  it("reads the roster, the invitations and the characters once each", async () => {
     await renderParty();
     await screen.findByText("Ilse Vantar");
 
     expect(called("GET", "/members")).toBe(true);
     expect(called("GET", "/invites")).toBe(true);
     expect(called("GET", "/characters")).toBe(true);
-    // Nothing is read per row: the join is done here, from three lists.
-    expect(server.calls.filter((call) => call.method === "GET")).toHaveLength(4);
+
+    // **Nothing is read per row**: the join is done here, from three lists, and
+    // that is what this test is for. The three the screen needs are read
+    // exactly once — `characters.list` in particular, which both this screen
+    // and `CampaignChrome` want and which must not be asked twice in one round
+    // now that the party wears the shared frame. See `loadPartyRoster`.
+    const reads = (fragment: string) =>
+      server.calls.filter((call) => call.method === "GET" && call.pathname.endsWith(fragment));
+    expect(reads("/members")).toHaveLength(1);
+    expect(reads("/invites")).toHaveLength(1);
+    expect(reads("/characters")).toHaveLength(1);
+    expect(reads(`/campaigns/${campaignId}`)).toHaveLength(1);
   });
 
   it("does not read anything Hob's panel would, because it is closed", async () => {

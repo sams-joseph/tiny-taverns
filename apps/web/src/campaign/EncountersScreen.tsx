@@ -36,7 +36,7 @@ export function EncountersScreen() {
     <CampaignChrome
       campaignId={campaignId}
       title="Encounters"
-      subtitle={(view) =>
+      subtitle={({ view }) =>
         `${String(view.encounters.length)} ${
           view.encounters.length === 1 ? "encounter" : "encounters"
         } built for ${view.campaign.name}`

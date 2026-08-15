@@ -1,6 +1,8 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
 import { useNavigate, type LinkProps } from "@tanstack/react-router";
 import { Badge, Button, Icon, type IconName } from "@taverns/ui";
+import { Effect } from "effect";
+import type { HttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { TavernsClient } from "../api/client";
 import { useApiResource } from "../api/resource";
@@ -15,14 +17,14 @@ import { StartRunDialog } from "./StartRunDialog";
 import { StartSessionDialog } from "./StartSessionDialog";
 
 /**
- * Everything the three campaign destinations have in common, once.
+ * Everything the campaign's five destinations have in common, once.
  *
  * **The campaign view was one screen with three tabs; the sixth delivery makes
  * it three screens.** `CampaignScreens.jsx` splits `CampaignHome.jsx` into
  * `CampOverview`, `CampEncounters` and `CampNotes`, because the delivery's
  * second nav row is a row of URLs and a tab is not one — see `routes.tsx`.
  *
- * What the split must not do is give the campaign three answers to what it is.
+ * What the split must not do is give the campaign several answers to what it is.
  * The name in the bar, the way home, the session badge, whether the table is
  * shared, who is invited, and starting or finishing the night are facts about
  * the *campaign* rather than about whichever of its screens is open, so they
@@ -30,16 +32,47 @@ import { StartSessionDialog } from "./StartSessionDialog";
  * title, its own top-bar controls and its own body, which is the same seam the
  * shell already has with every other screen in the product.
  *
+ * ### Party and the Chronicle are destinations too, and the rule cost something
+ *
+ * Both were built before the split and both composed `AppShell` themselves,
+ * passing `campaignName` and nothing else. That is not a stylistic difference:
+ * the badge and the campaign action are props of the shell, so a screen that
+ * builds its own row simply has no way to draw them, **and the campaign row on
+ * two of its five destinations silently lost the night it is preparing and the
+ * one press it offers.** It reads as intermittent — same night, same width,
+ * different tab — which is what took it so long to be reported as a bug rather
+ * than as a layout quirk. `campaignRow.test.tsx` is what fails now instead: it
+ * enumerates the DM row's own destinations, so a sixth screen that hand-builds a
+ * shell cannot ship.
+ *
  * ### One `Effect`, per screen, still
  *
  * Each destination composes `loadCampaignView` once, so it has the three states
- * `useApiResource` gives and not sixty-four. Three screens over one loader is
- * three loads where there used to be one — a real cost, and the honest one:
+ * `useApiResource` gives and not sixty-four. Five screens over one loader is
+ * five loads where there used to be one — a real cost, and the honest one:
  * moving between Encounters and Notes now re-reads the campaign. The
  * alternative is a cache that is right until the first write it did not hear
  * about, and every write on these screens changes something the screen did not
  * send (`Encounter.creatureCount` is computed per read, a note's attachment
  * moves a count on a different card). One re-read is one source of truth.
+ *
+ * ### What a screen reads *on top* of the campaign view
+ *
+ * The Party needs the roster and the invitations; the Chronicle needs the whole
+ * spine of nights. Both used to have loaders of their own, and the obvious way
+ * to keep them — a second `useApiResource` beside the frame's — is the thing
+ * this file exists to refuse: two resources is four combinations of loading and
+ * failed for one screen, and two `reload`s for one write. So `load` composes
+ * into the *same* Effect and arrives as `slots.extra`, which keeps every
+ * destination at one call, three states and one re-read.
+ *
+ * It is also what keeps the cost to what it really is. Read alongside their own
+ * loaders the two screens would ask for the campaign twice, the characters twice
+ * and the current night's checklist twice; composed, each asks the frame's
+ * questions once and adds only what the frame does not already answer — the
+ * Party two calls, the Chronicle one. The frame's own reads are still added to
+ * screens that did not make them before, and that is the stated price of one
+ * source of truth rather than something to cache away.
  *
  * ### The sharing control is on the Overview and nowhere else
  *
@@ -68,9 +101,31 @@ export interface CampaignAct {
   readonly press: () => void;
 }
 
+/**
+ * What a screen reads on top of the campaign view.
+ *
+ * The error channel is `unknown` on purpose: `useApiResource` narrows whatever
+ * arrives through `classifyFailure`, which reads the decoded tag rather than a
+ * declared type, so widening here costs a screen nothing and saves every caller
+ * from restating the union of what six endpoints can fail with.
+ */
+export type CampaignExtraLoad<Extra> = (
+  client: TavernsClient,
+) => Effect.Effect<Extra, unknown, HttpClient.HttpClient>;
+
+/** The default: a destination that needs nothing beyond the campaign view. */
+const nothingElse = () => Effect.succeed(undefined);
+
 /** What a destination is handed: the campaign, and the acts that belong to it. */
-export interface CampaignChromeSlots {
+export interface CampaignChromeSlots<Extra = undefined> {
   readonly view: CampaignView;
+  /**
+   * What this screen's own `load` answered, in the same round as the view.
+   *
+   * `undefined` for a destination that passed no `load` — the three the frame
+   * was written for, which render `CampaignView` and nothing else.
+   */
+  readonly extra: Extra;
   /** Re-read the whole view — what every structural write here ends with. */
   readonly reload: () => void;
   /**
@@ -122,28 +177,53 @@ const actFor = (view: CampaignView, onRun: () => void, onStartSession: () => voi
         // is the fight rather than a second night.
         { label: "Start an encounter", icon: "swords", press: onRun };
 
-export function CampaignChrome({
+export function CampaignChrome<Extra = undefined>({
   campaignId,
   title,
   subtitle,
   actions,
+  load,
   children,
 }: {
   readonly campaignId: CampaignId;
-  /** The per-screen top bar's title — *Overview*, *Encounters*, *Notes*. */
+  /** The per-screen top bar's title — *Overview*, *Party*, *Chronicle*, … */
   readonly title: string;
-  readonly subtitle?: (view: CampaignView) => string | undefined;
+  readonly subtitle?: (slots: CampaignChromeSlots<Extra>) => string | undefined;
   /** This screen's own top-bar controls: its search box and its create button. */
-  readonly actions?: (slots: CampaignChromeSlots) => ReactNode;
-  readonly children: (slots: CampaignChromeSlots) => ReactNode;
+  readonly actions?: (slots: CampaignChromeSlots<Extra>) => ReactNode;
+  /**
+   * What this screen reads beyond the campaign view — see `CampaignExtraLoad`.
+   *
+   * **Must be `useCallback`-stable**, for the reason every `useApiResource`
+   * callback is: its identity is what says "load again", so an inline closure
+   * here loads forever.
+   */
+  readonly load?: CampaignExtraLoad<Extra>;
+  readonly children: (slots: CampaignChromeSlots<Extra>) => ReactNode;
 }) {
-  // Memoised on the id alone: its identity is what tells `useApiResource` to
-  // load again, so an unmemoised closure here would load forever.
-  const load = useCallback(
-    (client: TavernsClient) => loadCampaignView(campaignId)(client),
-    [campaignId],
+  /**
+   * Stable without a memo: `nothingElse` is module-level, and a screen that
+   * passes one has already memoised it. The `as` is the one thing the compiler
+   * cannot see — with `load` omitted `Extra` really is its `undefined` default,
+   * and there is no way to say so from inside the generic.
+   */
+  const readExtra: CampaignExtraLoad<Extra> =
+    load ?? (nothingElse as unknown as CampaignExtraLoad<Extra>);
+
+  // Memoised on the id and the screen's own loader: their identity is what
+  // tells `useApiResource` to load again, so an unmemoised closure here would
+  // load forever.
+  const read = useCallback(
+    (client: TavernsClient) =>
+      // One round: nothing a screen adds depends on the view's answer, and the
+      // view's own two rounds are inside `loadCampaignView` where the real
+      // dependency is.
+      Effect.all([loadCampaignView(campaignId)(client), readExtra(client)], {
+        concurrency: "unbounded",
+      }),
+    [campaignId, readExtra],
   );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiResource(read);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
   const hob = useHobPanel({ initialOpen: false });
   const navigate = useNavigate();
@@ -155,7 +235,8 @@ export function CampaignChrome({
   /** Whether the "end the night" confirmation is up. */
   const [finishing, setFinishing] = useState(false);
 
-  const loaded = resource.state === "ready" ? resource.value : undefined;
+  const loaded = resource.state === "ready" ? resource.value[0] : undefined;
+  const extra = resource.state === "ready" ? resource.value[1] : undefined;
 
   /**
    * **A player who arrives here is handed the screen that works.**
@@ -226,11 +307,14 @@ export function CampaignChrome({
     [],
   );
 
-  const slots: CampaignChromeSlots | undefined =
+  const slots: CampaignChromeSlots<Extra> | undefined =
     view === undefined
       ? undefined
       : {
           view,
+          // Read out of the same `ready` value the view came from, so a screen
+          // never sees one half of one load.
+          extra: extra as Extra,
           reload,
           run,
           act: actFor(view, () => run(), startSession),
@@ -262,7 +346,7 @@ export function CampaignChrome({
         )
       }
       topBar={
-        <TopBar title={title} subtitle={view === undefined ? undefined : subtitle?.(view)}>
+        <TopBar title={title} subtitle={slots === undefined ? undefined : subtitle?.(slots)}>
           {slots !== undefined && actions?.(slots)}
         </TopBar>
       }

@@ -362,7 +362,7 @@ export function CampaignScreen() {
     <CampaignChrome
       campaignId={campaignId}
       title="Overview"
-      subtitle={subtitleFor}
+      subtitle={({ view }) => subtitleFor(view)}
       actions={(slots) => <CampaignSettingsButtons view={slots.view} onOpen={slots.openSettings} />}
     >
       {(slots) => <Overview slots={slots} />}

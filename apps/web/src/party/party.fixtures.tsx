@@ -2,10 +2,10 @@ import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
 import {
-  campaign,
   campaignId,
   character,
   dmMember,
+  fullCampaign,
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
@@ -108,30 +108,42 @@ export const takenInvite = {
   redeemedByName: "Ilse Vantar",
 };
 
-/** A table with a DM, two players and somebody invited. */
-export const fullParty = (): Map<string, Answer> =>
-  new Map<string, Answer>([
-    [`GET ${base}`, { status: 200, body: campaign }],
-    [`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] }],
-    [`GET ${base}/invites`, { status: 200, body: [liveInvite, takenInvite] }],
-    [`GET ${base}/characters`, { status: 200, body: [brannocOwned, spareCharacter, secondSpare] }],
-    [
-      `POST ${base}/characters/${spareCharacter.id}/assign`,
-      { status: 200, body: { ...spareCharacter, accountId: kofiAccountId } },
-    ],
-    [
-      `POST ${base}/characters/${brannocOwned.id}/assign`,
-      { status: 200, body: { ...brannocOwned, accountId: null } },
-    ],
-    [`POST ${base}/invites`, { status: 200, body: { invite: liveInvite, token: "a-token" } }],
-    [
-      `POST ${base}/invites/${inviteId}/revoke`,
-      {
-        status: 200,
-        body: { ...liveInvite, status: "revoked", revokedAt: "2026-08-13T10:00:00Z" },
-      },
-    ],
-  ]);
+/**
+ * A table with a DM, two players and somebody invited.
+ *
+ * **Built on `fullCampaign()` rather than beside it**, because the party is one
+ * of the campaign's destinations and wears `CampaignChrome` — so the screen
+ * makes every read the frame does, and a map that answered only the roster's
+ * three would 404 the campaign out from under it. The overrides below are the
+ * roster's own half: this file's members, invitations and characters in place of
+ * the shared fixture's, and the writes those two dialogs make.
+ */
+export const fullParty = (): Map<string, Answer> => {
+  const routes = fullCampaign();
+  routes.set(`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] });
+  routes.set(`GET ${base}/invites`, { status: 200, body: [liveInvite, takenInvite] });
+  routes.set(`GET ${base}/characters`, {
+    status: 200,
+    body: [brannocOwned, spareCharacter, secondSpare],
+  });
+  routes.set(`POST ${base}/characters/${spareCharacter.id}/assign`, {
+    status: 200,
+    body: { ...spareCharacter, accountId: kofiAccountId },
+  });
+  routes.set(`POST ${base}/characters/${brannocOwned.id}/assign`, {
+    status: 200,
+    body: { ...brannocOwned, accountId: null },
+  });
+  routes.set(`POST ${base}/invites`, {
+    status: 200,
+    body: { invite: liveInvite, token: "a-token" },
+  });
+  routes.set(`POST ${base}/invites/${inviteId}/revoke`, {
+    status: 200,
+    body: { ...liveInvite, status: "revoked", revokedAt: "2026-08-13T10:00:00Z" },
+  });
+  return routes;
+};
 
 /** A campaign nobody has joined and nobody has been invited to. */
 export const emptyParty = (): Map<string, Answer> => {
