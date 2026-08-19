@@ -13,6 +13,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 
@@ -194,36 +195,42 @@ export function CreatureForm({
         })),
     };
 
-    const saved = await submit((client) =>
-      creature === undefined
-        ? client.library.create({
-            payload: {
-              name: name.trim(),
-              ...(trimmedSize === "" ? {} : { size: trimmedSize }),
-              type: type.trim(),
-              cr: cr.trim(),
-              ac,
-              hp,
-              ...(list.length === 0 ? {} : { environments: list }),
-              statBlock,
-            },
-          })
-        : client.library.update({
-            params: { creatureId: creature.id },
-            payload: {
-              name: name.trim(),
-              // Nullable on update alone, so a cleared box is a null rather than
-              // an omission — omitting it would leave the old value, which is
-              // not what emptying a box means.
-              size: trimmedSize === "" ? null : trimmedSize,
-              type: type.trim(),
-              cr: cr.trim(),
-              ac,
-              hp,
-              environments: list,
-              statBlock,
-            },
-          }),
+    const saved = await submit(
+      (client) =>
+        creature === undefined
+          ? client.library.create({
+              payload: {
+                name: name.trim(),
+                ...(trimmedSize === "" ? {} : { size: trimmedSize }),
+                type: type.trim(),
+                cr: cr.trim(),
+                ac,
+                hp,
+                ...(list.length === 0 ? {} : { environments: list }),
+                statBlock,
+              },
+            })
+          : client.library.update({
+              params: { creatureId: creature.id },
+              payload: {
+                name: name.trim(),
+                // Nullable on update alone, so a cleared box is a null rather than
+                // an omission — omitting it would leave the old value, which is
+                // not what emptying a box means.
+                size: trimmedSize === "" ? null : trimmedSize,
+                type: type.trim(),
+                cr: cr.trim(),
+                ac,
+                hp,
+                environments: list,
+                statBlock,
+              },
+            }),
+      // The Library, and only the Library. **Editing an original does not
+      // reach the copies a campaign already holds** — that is the captain's
+      // model, so a campaign bestiary that is stale after this write is not
+      // stale, it is a snapshot.
+      [reads.library],
     );
 
     if (Result.isSuccess(saved)) onSaved();
@@ -231,8 +238,12 @@ export function CreatureForm({
 
   const remove = async () => {
     if (creature === undefined) return;
-    const gone = await submit((client) =>
-      client.library.remove({ params: { creatureId: creature.id } }),
+    // **Copies already in campaigns stay where they are** — the line beside
+    // this button says so, and it is why no campaign's bestiary is named here.
+    // `derived_from` goes null and the copy stands.
+    const gone = await submit(
+      (client) => client.library.remove({ params: { creatureId: creature.id } }),
+      [reads.library],
     );
     if (Result.isSuccess(gone)) onSaved();
   };

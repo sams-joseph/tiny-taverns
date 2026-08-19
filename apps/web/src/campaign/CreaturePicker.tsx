@@ -3,6 +3,7 @@ import { Badge, Button, Icon, Input } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { FailureNotice, Loading } from "../ui/states";
 
 /**
@@ -50,11 +51,13 @@ const SEARCH_SETTLE_MS = 250;
  */
 const pickerAtom = Atom.family(
   ({ campaignId, query }: { readonly campaignId: CampaignId; readonly query: string }) =>
-    apiAtom((client) =>
-      client.creatures.list({
-        params: { campaignId },
-        query: { q: query, sort: "name", limit: SHOWN },
-      }),
+    apiAtom(
+      (client) =>
+        client.creatures.list({
+          params: { campaignId },
+          query: { q: query, sort: "name", limit: SHOWN },
+        }),
+      [reads.creatures(campaignId)],
     ),
 );
 

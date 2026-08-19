@@ -78,7 +78,15 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
  * it structurally — so the `useMemo` above stops being load-bearing for the
  * read (it still is for `useRunState`, which takes the same object).
  */
-const runViewAtom = Atom.family((path: RunPath) => apiAtom(loadRunView(path)));
+const runViewAtom = Atom.family((path: RunPath) =>
+  // **It names no reads, and that is load-bearing rather than an oversight.**
+  // This atom's value is the controller's starting point (`initial`, below), so
+  // a refresh of it *resets the optimistic layer* — the pending hit points, the
+  // server-wins reconciliation, all of it. The live half of this screen is
+  // `run/state.ts`'s own loop and `run/stream.ts`'s doorbell; a reactivity key
+  // here would be a second thing re-reading a fight, fighting the first.
+  apiAtom(loadRunView(path), []),
+);
 
 export function RunScreen() {
   const { campaignId, sessionId, runId } = useParams({
@@ -148,8 +156,12 @@ export function RunScreen() {
 
   const advance = useCallback(async () => {
     if (state === undefined || turn.busy) return;
-    const moved = await turn.submit((client) =>
-      client.runs.nextTurn({ params: path, payload: { requestId: newRequestId() } }),
+    // Nothing outside this screen is a function of whose turn it is, so this
+    // names no reads — and must not name the fight itself: the runner learns
+    // what it just did from the write's own answer, which is `applyRun` below.
+    const moved = await turn.submit(
+      (client) => client.runs.nextTurn({ params: path, payload: { requestId: newRequestId() } }),
+      [],
     );
     if (Result.isSuccess(moved)) {
       controller.applyRun(moved.success);
@@ -182,16 +194,20 @@ export function RunScreen() {
   const rollInitiative = async () => {
     if (state === undefined) return;
     const monsters = state.combatants.filter((combatant) => combatant.kind === "npc");
-    const rolled = await turn.submit((client) =>
-      Effect.all(
-        monsters.map((combatant) =>
-          client.combatants.update({
-            params: { ...path, combatantId: combatant.id },
-            payload: { initiative: 1 + Math.floor(Math.random() * 20) },
-          }),
+    const rolled = await turn.submit(
+      (client) =>
+        Effect.all(
+          monsters.map((combatant) =>
+            client.combatants.update({
+              params: { ...path, combatantId: combatant.id },
+              payload: { initiative: 1 + Math.floor(Math.random() * 20) },
+            }),
+          ),
+          { concurrency: "unbounded" },
         ),
-        { concurrency: "unbounded" },
-      ),
+      // Initiative is the fight's alone, and the fight is re-read by the
+      // controller below rather than by an atom.
+      [],
     );
     // The list reorders, so this is a re-read rather than a merge — the same
     // rule the campaign screen follows for anything that changes a list's shape.
@@ -200,15 +216,21 @@ export function RunScreen() {
 
   const setShared = async (shared: boolean) => {
     if (state === undefined) return;
-    const saved = await share.submit((client) =>
-      client.runs.update({ params: path, payload: { visibility: shared ? "shared" : "dm" } }),
+    const saved = await share.submit(
+      (client) =>
+        client.runs.update({ params: path, payload: { visibility: shared ? "shared" : "dm" } }),
+      // What this changes is what a *player* sees, in another browser. There is
+      // nothing of this DM's to refresh.
+      [],
     );
     if (Result.isSuccess(saved)) controller.applyRun(saved.success);
   };
 
   const setActive = async (combatant: Combatant) => {
-    const saved = await share.submit((client) =>
-      client.runs.update({ params: path, payload: { activeCombatantId: combatant.id } }),
+    const saved = await share.submit(
+      (client) =>
+        client.runs.update({ params: path, payload: { activeCombatantId: combatant.id } }),
+      [],
     );
     if (Result.isSuccess(saved)) controller.applyRun(saved.success);
   };

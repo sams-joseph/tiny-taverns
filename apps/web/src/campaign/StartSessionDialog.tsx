@@ -11,6 +11,7 @@ import {
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { nextSessionNumber, startSession } from "../session/start";
 import { SaveFailure } from "../ui/form";
@@ -49,7 +50,7 @@ import { FailureNotice, Loading } from "../ui/states";
  * the `useCallback` here used to answer, in a shape that cannot be forgotten.
  */
 const nextNumberAtom = Atom.family((campaignId: Campaign["id"]) =>
-  apiAtom(nextSessionNumber(campaignId)),
+  apiAtom(nextSessionNumber(campaignId), [reads.sessions(campaignId)]),
 );
 
 export function StartSessionDialog({
@@ -70,7 +71,15 @@ export function StartSessionDialog({
 
   const start = async () => {
     if (number.state !== "ready") return;
-    const opened = await submit(startSession(campaignId, number.value));
+    // Three statements — create the night, point the campaign at it, stamp it
+    // — so two reads move: the campaign's `currentSessionId`, and the spine of
+    // nights the Chronicle draws. The night's own checklist and fights are
+    // atoms keyed on a session id that did not exist a moment ago, so there is
+    // nothing of theirs to invalidate.
+    const opened = await submit(startSession(campaignId, number.value), [
+      reads.campaign(campaignId),
+      reads.sessions(campaignId),
+    ]);
     if (Result.isSuccess(opened)) onStarted();
   };
 

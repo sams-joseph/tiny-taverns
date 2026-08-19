@@ -12,6 +12,7 @@ import {
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { finishSession } from "../session/finish";
 import { SaveFailure } from "../ui/form";
@@ -55,19 +56,30 @@ export function EndRunDialog({
   const { busy, failure, submit } = useMutation();
 
   const end = async () => {
-    const ended = await submit((client) =>
-      Effect.gen(function* () {
-        // One `submit`, two writes, exactly as the encounter form composes its
-        // roster: two submits in a row would give this dialog two busy flags
-        // and a half-ended night to explain.
-        const run = yield* client.runs.end({ params: path, payload: {} });
-        // The fight comes off the table first, and that is what makes this the
-        // *smaller* ending even when both switches are on: ending it here is
-        // `resolved`, deliberately, where a night finished over a live fight
-        // carries it. A DM who chose "End the fight" chose the first.
-        if (finishNight) yield* finishSession(path.campaignId, session)(client);
-        return run;
-      }),
+    const ended = await submit(
+      (client) =>
+        Effect.gen(function* () {
+          // One `submit`, two writes, exactly as the encounter form composes its
+          // roster: two submits in a row would give this dialog two busy flags
+          // and a half-ended night to explain.
+          const run = yield* client.runs.end({ params: path, payload: {} });
+          // The fight comes off the table first, and that is what makes this the
+          // *smaller* ending even when both switches are on: ending it here is
+          // `resolved`, deliberately, where a night finished over a live fight
+          // carries it. A DM who chose "End the fight" chose the first.
+          if (finishNight) yield* finishSession(path.campaignId, session)(client);
+          return run;
+        }),
+      // The night's fights, so the campaign screen stops saying *"on the table
+      // now"*; and when the switch is on, the campaign row and the spine too —
+      // finishing a night clears `campaign.current_session_id` server-side.
+      finishNight
+        ? [
+            reads.runs(path.sessionId),
+            reads.campaign(path.campaignId),
+            reads.sessions(path.campaignId),
+          ]
+        : [reads.runs(path.sessionId)],
     );
 
     if (Result.isSuccess(ended)) onEnded();

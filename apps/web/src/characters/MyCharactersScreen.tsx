@@ -2,6 +2,7 @@ import type { Character } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadMyCharacters, type MyCharactersView } from "./load";
@@ -142,7 +143,7 @@ function NothingYet({ view }: { readonly view: MyCharactersView }) {
  * campaign — `GET /me/characters` is the one read on `character` that does not
  * — so there is one of it, shared by whatever asks.
  */
-const myCharactersAtom = apiAtom(loadMyCharacters);
+const myCharactersAtom = apiAtom(loadMyCharacters, [reads.myCharacters]);
 
 export function MyCharactersScreen() {
   const [resource, reload] = useApiAtom(myCharactersAtom);

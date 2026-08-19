@@ -9,10 +9,12 @@ import type {
   Note,
   PrepItem,
   Session,
+  SessionId,
   PageCursor,
 } from "@taverns/api";
-import { Effect } from "effect";
-import type { TavernsClient } from "../api/client";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { apiAtom, combine } from "../api/atoms";
+import { reads, type Invalidation } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";
 
 /** Everything the campaign view renders, in one shape. */
@@ -52,65 +54,200 @@ export interface CampaignView {
 }
 
 /**
- * One Effect for the whole screen, not one hook per endpoint.
+ * The campaign view, as eight atoms rather than one Effect — and why.
  *
- * Six endpoints behind six `useState`s would give the screen sixty-four
- * combinations of loading and failed to render; composed here it has three.
- * The two rounds are a real data dependency — the checklist hangs off
- * `campaign.currentSessionId`, which the first call is what tells us — and
- * everything within a round is concurrent, so the shape of the load is the
- * shape of the model rather than a waterfall.
+ * **This file is the worked example of the narrowing, and it reverses a
+ * decision that was argued at length in `CampaignChrome.tsx`.** It used to be
+ * one `loadCampaignView` composing six-to-eight endpoints, on the rule that one
+ * Effect per screen is three states rather than sixty-four. The rule was right
+ * about rendering and expensive about writing: every structural write ended in
+ * `reload()`, so adding one line to the checklist cost **one write and eight
+ * reads** — measured, twice, in a real browser.
+ *
+ * What splits it without giving the screen sixty-four states is that the parts
+ * are combined *in an atom*, once, here. `assemble` is the same two rounds the
+ * Effect had — the checklist genuinely hangs off `campaign.currentSessionId`,
+ * which the first round is what tells us — expressed as a dependency between
+ * atoms instead of a `yield*`. A destination still reads one value and renders
+ * three states; what changed is that a write can now refresh one eighth of it.
+ *
+ * Each part names the resource it answers (`api/keys.ts`), and every write on
+ * these screens names the same resource. Adding a checklist line is one write
+ * and **one** read.
+ *
+ * ### Two things about this shape that are not obvious
+ *
+ *  - **`combine` is what stops it blanking when a night opens.** The night's
+ *    three atoms are keyed on a session id, so opening a session makes them
+ *    atoms that have never been read — `Initial`, which `AsyncResult.all`
+ *    propagates and a screen renders as a blank body. `api/atoms.ts` says the
+ *    rest.
+ *  - **Refreshing the view atom does nothing, and must not be relied on.** It
+ *    is derived: re-running its read hands back the same cached parts. Re-read
+ *    it by invalidating the keys instead — `campaignViewKeys` is that list, and
+ *    it is what the failure notice's *Try again* fires.
  */
-export const loadCampaignView = (campaignId: CampaignId) => (client: TavernsClient) =>
-  Effect.gen(function* () {
-    const campaign = yield* client.campaigns.findById({ params: { campaignId } });
 
-    const [encounters, notes, party, memberships] = yield* Effect.all(
-      [
-        // Whole lists, followed to the end: this screen's search box filters
-        // what the frame loaded, and a filter applied to one page is not a
-        // filter on the list. See `api/page.ts`.
-        collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
-          client.encounters.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
-        ),
-        collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
-          client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
-        ),
-        client.characters.list({ params: { campaignId } }),
-        // In the round that was already running, so it costs no round trip. A
-        // campaign this actor can read is a campaign they are a member of —
-        // `campaignInScope` is membership — so the row is there; defaulting to
-        // `dm` if it somehow is not keeps the screen it is on rather than
-        // bouncing somebody out of their own table.
-        client.me.campaigns(),
-      ],
-      { concurrency: "unbounded" },
-    );
+/** The pair a night's three reads are keyed on. */
+interface Night {
+  readonly campaignId: CampaignId;
+  readonly sessionId: SessionId;
+}
 
-    const sessionId = campaign.currentSessionId;
-    const live =
-      sessionId === null
-        ? undefined
-        : yield* Effect.all(
-            [
-              client.sessions.findById({ params: { campaignId, sessionId } }),
-              client.prep.list({ params: { campaignId, sessionId } }),
-              client.runs.list({ params: { campaignId, sessionId } }),
-            ],
-            { concurrency: "unbounded" },
-          );
+export const campaignAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.campaigns.findById({ params: { campaignId } }),
+    [reads.campaign(campaignId)],
+  ),
+);
 
-    return {
-      campaign,
-      role: memberships.find((row) => row.campaign.id === campaignId)?.role ?? "dm",
-      session: live?.[0],
-      encounters,
-      notes,
-      party,
-      prep: live?.[1] ?? [],
-      run: live?.[2].find((row) => row.endedAt === null),
-    } satisfies CampaignView;
+/**
+ * Which tables this account sits at, and as what.
+ *
+ * **One atom for the whole app**, not one per screen: the campaign list, the
+ * campaign frame's role check and the Library's *copy into…* select all ask the
+ * same question, and two of them are commonly mounted at once.
+ */
+export const membershipsAtom = apiAtom((client) => client.me.campaigns(), [reads.myCampaigns]);
+
+export const encountersAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) =>
+      // Whole lists, followed to the end: this screen's search box filters what
+      // the frame loaded, and a filter applied to one page is not a filter on
+      // the list. See `api/page.ts`.
+      collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
+        client.encounters.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+      ),
+    [reads.encounters(campaignId)],
+  ),
+);
+
+export const notesAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) =>
+      collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
+        client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+      ),
+    [reads.notes(campaignId)],
+  ),
+);
+
+export const partyAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.characters.list({ params: { campaignId } }),
+    [reads.characters(campaignId)],
+  ),
+);
+
+const sessionAtom = Atom.family((night: Night) =>
+  apiAtom(
+    (client) => client.sessions.findById({ params: night }),
+    [reads.sessions(night.campaignId)],
+  ),
+);
+
+const prepAtom = Atom.family((night: Night) =>
+  apiAtom((client) => client.prep.list({ params: night }), [reads.prep(night.sessionId)]),
+);
+
+const runsAtom = Atom.family((night: Night) =>
+  apiAtom((client) => client.runs.list({ params: night }), [reads.runs(night.sessionId)]),
+);
+
+/**
+ * Two campaign reads that are not part of the view, and live here for the same
+ * reason the eight above do: **one resource, one atom.**
+ *
+ * The invitations are read by the DM's invitation dialog *and* by the party
+ * roster, which are commonly on screen together — the dialog opens over the
+ * roster. Two atoms for one list would be two requests and, worse, two things a
+ * mint would have to remember to refresh.
+ */
+export const invitesAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom((client) => client.invites.list({ params: { campaignId } }), [reads.invites(campaignId)]),
+);
+
+export const membersAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom((client) => client.members.list({ params: { campaignId } }), [reads.members(campaignId)]),
+);
+
+/**
+ * Everything the eight parts answer, as one list.
+ *
+ * The one caller is the frame's *Try again*, and it is spelled in the same
+ * vocabulary a write is because it is the same act: a derived atom cannot be
+ * refreshed, so "read the whole campaign again" is "invalidate everything the
+ * campaign is made of". The night is optional because a campaign between
+ * sessions has none, and because a read that failed may not have got far enough
+ * to say which one it is.
+ */
+export const campaignViewKeys = (
+  campaignId: CampaignId,
+  sessionId: SessionId | undefined,
+): Invalidation => [
+  reads.campaign(campaignId),
+  reads.myCampaigns,
+  reads.encounters(campaignId),
+  reads.notes(campaignId),
+  reads.characters(campaignId),
+  reads.sessions(campaignId),
+  ...(sessionId === undefined ? [] : [reads.prep(sessionId), reads.runs(sessionId)]),
+];
+
+const assemble = (
+  get: Atom.AtomContext,
+  campaignId: CampaignId,
+): AsyncResult.AsyncResult<CampaignView, unknown> => {
+  const base = AsyncResult.all({
+    campaign: get(campaignAtom(campaignId)),
+    memberships: get(membershipsAtom),
+    encounters: get(encountersAtom(campaignId)),
+    notes: get(notesAtom(campaignId)),
+    party: get(partyAtom(campaignId)),
   });
+
+  return AsyncResult.flatMap(base, (round, previous) => {
+    // A campaign this actor can read is a campaign they are a member of —
+    // `campaignInScope` is membership — so the row is there; defaulting to `dm`
+    // if it somehow is not keeps the screen it is on rather than bouncing
+    // somebody out of their own table.
+    const role =
+      round.memberships.find((row) => row.campaign.id === campaignId)?.role ?? ("dm" as MemberRole);
+    const settled = {
+      campaign: round.campaign,
+      role,
+      encounters: round.encounters,
+      notes: round.notes,
+      party: round.party,
+    };
+
+    const sessionId = round.campaign.currentSessionId;
+    if (sessionId === null) {
+      return AsyncResult.success<CampaignView, unknown>(
+        { ...settled, session: undefined, prep: [], run: undefined },
+        { waiting: previous.waiting },
+      );
+    }
+
+    const night: Night = { campaignId, sessionId };
+    const live = AsyncResult.all({
+      session: get(sessionAtom(night)),
+      prep: get(prepAtom(night)),
+      runs: get(runsAtom(night)),
+    });
+    return AsyncResult.map(live, (tonight) => ({
+      ...settled,
+      session: tonight.session,
+      prep: tonight.prep,
+      run: tonight.runs.find((row) => row.endedAt === null),
+    })) as AsyncResult.AsyncResult<CampaignView, unknown>;
+  });
+};
+
+export const campaignViewAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable((get: Atom.AtomContext) => combine(get, assemble(get, campaignId))),
+);
 
 /** Case-insensitive substring match over the fields a DM would search by. */
 export const matches = (needle: string, ...haystack: ReadonlyArray<string | null>): boolean => {

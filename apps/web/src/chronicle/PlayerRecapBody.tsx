@@ -2,6 +2,7 @@ import type { CampaignId, PlayerCombatant, PlayerRecapFight, SessionId } from "@
 import { Badge, Card, Icon, type IconName } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { FailureNotice, Loading } from "../ui/states";
 import { fightStory, playerStanding } from "./fight";
 import { loadPlayerRecap } from "./load";
@@ -170,7 +171,7 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<PlayerRecapFight> }
  */
 const playerRecapAtom = Atom.family(
   ({ campaignId, sessionId }: { readonly campaignId: CampaignId; readonly sessionId: SessionId }) =>
-    apiAtom(loadPlayerRecap(campaignId, sessionId)),
+    apiAtom(loadPlayerRecap(campaignId, sessionId), [reads.recap(sessionId)]),
 );
 
 export function PlayerRecapBody({

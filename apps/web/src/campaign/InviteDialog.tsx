@@ -12,11 +12,12 @@ import {
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
+import { invitesAtom } from "./load";
 import { useRouter, type RegisteredRouter } from "@tanstack/react-router";
 import { Field, SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -125,38 +126,24 @@ const linkFor = (router: RegisteredRouter, token: string): string => {
   return new URL(href, globalThis.location.href).toString();
 };
 
-/**
- * This campaign's invitations, as an atom.
- *
- * **Module scope and `Atom.family`, because an atom is its own identity.** Built
- * inside the component it would be a fresh atom on every render and therefore an
- * infinite loop — the sharper form of the rule the hook this replaced stated as
- * "`use` must be `useCallback`-stable". See `api/atoms.ts` for what makes a
- * usable key.
- */
-const invitesAtom = Atom.family((campaignId: Campaign["id"]) =>
-  apiAtom((client) => client.invites.list({ params: { campaignId } })),
-);
-
-function InviteRow({
-  invite,
-  onRevoked,
-}: {
-  readonly invite: CampaignInvite;
-  readonly onRevoked: () => void;
-}) {
+function InviteRow({ invite }: { readonly invite: CampaignInvite }) {
   const { busy, failure, submit } = useMutation();
   const status = STATUS[invite.status];
   const gone = invite.status === "revoked" || invite.status === "expired";
 
   const withdraw = async () => {
-    const revoked = await submit((client) =>
-      client.invites.revoke({
-        params: { campaignId: invite.campaignId, inviteId: invite.id },
-        payload: {},
-      }),
+    await submit(
+      (client) =>
+        client.invites.revoke({
+          params: { campaignId: invite.campaignId, inviteId: invite.id },
+          payload: {},
+        }),
+      // **Withdrawing an accepted invitation revokes the membership it granted,
+      // in the same transaction** — so this write moves a row on a screen it
+      // has never seen. The party roster is the one that draws it, and naming
+      // the resource rather than the screen is what reaches it.
+      [reads.invites(invite.campaignId), reads.members(invite.campaignId)],
     );
-    if (Result.isSuccess(revoked)) onRevoked();
   };
 
   return (
@@ -182,15 +169,12 @@ function InviteRow({
 export function InviteDialog({
   campaign,
   onClose,
-  onChanged,
 }: {
   readonly campaign: Campaign;
   readonly onClose: () => void;
-  /** Re-reads the campaign view: a revoke can change who is at the table. */
-  readonly onChanged: () => void;
 }) {
   const campaignId = campaign.id;
-  const [resource, reload] = useApiAtom(invitesAtom(campaignId));
+  const [resource, retry] = useApiAtom(invitesAtom(campaignId));
   const router = useRouter();
   const { busy, failure, submit } = useMutation();
   const [label, setLabel] = useState("");
@@ -198,19 +182,17 @@ export function InviteDialog({
   const [link, setLink] = useState<string | undefined>();
 
   const mint = async () => {
-    const issued = await submit((client) =>
-      client.invites.create({ params: { campaignId }, payload: { label: label.trim() } }),
+    const issued = await submit(
+      (client) =>
+        client.invites.create({ params: { campaignId }, payload: { label: label.trim() } }),
+      // Only the list. A link nobody has followed grants nothing, so there is
+      // no member, no character and no campaign of anybody's that moved.
+      [reads.invites(campaignId)],
     );
     if (Result.isSuccess(issued)) {
       setLink(linkFor(router, issued.success.token));
       setLabel("");
-      reload();
     }
-  };
-
-  const revoked = () => {
-    reload();
-    onChanged();
   };
 
   const invites = resource.state === "ready" ? resource.value : undefined;
@@ -268,7 +250,7 @@ export function InviteDialog({
             </span>
             {resource.state === "loading" && <Loading label="Reading your invitations…" />}
             {resource.state === "failed" && (
-              <FailureNotice failure={resource.failure} onRetry={reload} />
+              <FailureNotice failure={resource.failure} onRetry={retry} />
             )}
             {invites !== undefined &&
               (invites.length === 0 ? (
@@ -277,9 +259,7 @@ export function InviteDialog({
                   back.
                 </span>
               ) : (
-                invites.map((invite) => (
-                  <InviteRow key={invite.id} invite={invite} onRevoked={revoked} />
-                ))
+                invites.map((invite) => <InviteRow key={invite.id} invite={invite} />)
               ))}
           </div>
 

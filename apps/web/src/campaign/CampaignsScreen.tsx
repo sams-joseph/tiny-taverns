@@ -4,7 +4,8 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } 
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { runApiResult } from "../api/client";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useApiAtom, useInvalidate } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { Hob, useHobPanel } from "../hob";
 import { useMode } from "../shell/location";
@@ -12,6 +13,7 @@ import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { ArchiveDialog } from "./ArchiveDialog";
 import { ArchivedDialog } from "./ArchivedDialog";
+import { membershipsAtom } from "./load";
 
 /**
  * The way in: every table this credential reaches, and what you are at each.
@@ -75,11 +77,10 @@ import { ArchivedDialog } from "./ArchivedDialog";
  */
 
 /**
- * Every table this account is at, as an atom. No key: the read names no
- * campaign, so there is one of it — and both modes of the list read the same
- * one, narrowed in the browser by role.
+ * Every table this account is at. It lives in `campaign/load.ts` with the rest
+ * of the campaign reads, because the campaign frame asks the same question to
+ * find the reader's role — one resource, one atom.
  */
-const membershipsAtom = apiAtom((client) => client.me.campaigns());
 
 function CampaignRow({
   membership,
@@ -148,8 +149,9 @@ function CampaignRow({
 }
 
 /** Names a new campaign. Everything else about it has a column default. */
-function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
+function NewCampaign() {
   const fetchCredential = useCredential();
+  const invalidate = useInvalidate();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -162,6 +164,7 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
       (client) => client.campaigns.create({ payload: { name: name.trim() } }),
       token,
     );
+
     setBusy(false);
     if (Result.isFailure(result)) {
       setError(
@@ -172,8 +175,11 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
       return;
     }
     setName("");
-    onCreated();
-  }, [fetchCredential, name, onCreated]);
+    // One of the three writes in the app that are not a `useMutation` — this
+    // one keeps its own busy flag and its own two sentences — so it names its
+    // key by hand. It is the same key and the same seam.
+    invalidate([reads.myCampaigns]);
+  }, [fetchCredential, invalidate, name]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -199,7 +205,7 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
 }
 
 export function CampaignsScreen() {
-  const [resource, reload] = useApiAtom(membershipsAtom);
+  const [resource, retry] = useApiAtom(membershipsAtom);
   /** The campaign a confirmation is open over, and the shelf's own dialog. */
   const [archiving, setArchiving] = useState<CampaignMembership | undefined>();
   const [shelfOpen, setShelfOpen] = useState(false);
@@ -245,7 +251,7 @@ export function CampaignsScreen() {
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your campaigns…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <FailureNotice failure={resource.failure} onRetry={retry} />
         )}
         {memberships !== undefined && (
           <>
@@ -253,7 +259,7 @@ export function CampaignsScreen() {
                 the owner's `dm` row in the same transaction — so the one write
                 on the way in belongs to the DM side and nowhere else. Offering
                 it here would be offering to leave the mode. */}
-            {!player && <NewCampaign onCreated={reload} />}
+            {!player && <NewCampaign />}
             {memberships.length === 0 ? (
               player ? (
                 // Two states behind one card, and neither can be told apart
@@ -313,13 +319,10 @@ export function CampaignsScreen() {
         <ArchiveDialog
           campaign={archiving.campaign}
           onClose={() => setArchiving(undefined)}
-          onArchived={() => {
-            setArchiving(undefined);
-            reload();
-          }}
+          onArchived={() => setArchiving(undefined)}
         />
       )}
-      {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} onRestored={reload} />}
+      {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
     </AppShell>
   );
 }

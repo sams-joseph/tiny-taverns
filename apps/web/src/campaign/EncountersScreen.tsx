@@ -61,7 +61,7 @@ export function EncountersScreen() {
         </>
       )}
     >
-      {({ view, reload, run }) => {
+      {({ view, run }) => {
         const shown = view.encounters.filter((encounter) =>
           matches(search, encounter.name, ...encounter.tags),
         );
@@ -118,10 +118,7 @@ export function EncountersScreen() {
                 campaignId={view.campaign.id}
                 encounter={editing.encounter}
                 onClose={() => setEditing(undefined)}
-                onSaved={() => {
-                  setEditing(undefined);
-                  reload();
-                }}
+                onSaved={() => setEditing(undefined)}
               />
             )}
           </>

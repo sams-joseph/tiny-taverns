@@ -11,6 +11,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 
@@ -91,18 +92,23 @@ export function CampaignDialog({
     setShowProblems(true);
     if (refused) return;
 
-    const saved = await submit((client) =>
-      client.campaigns.update({
-        params: { campaignId: campaign.id },
-        payload: {
-          name: name.trim(),
-          // `partyName` is `optional(NullOr(String))` on update: a party that
-          // has no name is a null, which is what clearing the field means.
-          partyName: partyName.trim() === "" ? null : partyName.trim(),
-          playerCount,
-          visibility,
-        },
-      }),
+    const saved = await submit(
+      (client) =>
+        client.campaigns.update({
+          params: { campaignId: campaign.id },
+          payload: {
+            name: name.trim(),
+            // `partyName` is `optional(NullOr(String))` on update: a party that
+            // has no name is a null, which is what clearing the field means.
+            partyName: partyName.trim() === "" ? null : partyName.trim(),
+            playerCount,
+            visibility,
+          },
+        }),
+      // The row itself, and the two lists that draw its name — `GET /me/campaigns`
+      // renders the campaign, not just the membership, so a rename here is a
+      // rename on the campaign list behind this dialog.
+      [reads.campaign(campaign.id), reads.myCampaigns],
     );
 
     if (Result.isSuccess(saved)) onSaved();

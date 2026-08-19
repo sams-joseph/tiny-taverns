@@ -46,7 +46,7 @@ export function NotesScreen() {
         </>
       )}
     >
-      {({ view, reload }) => {
+      {({ view }) => {
         const shown = view.notes.filter((note) => matches(search, note.title, note.body));
 
         return (
@@ -76,10 +76,7 @@ export function NotesScreen() {
                 note={editing.note}
                 encounters={view.encounters}
                 onClose={() => setEditing(undefined)}
-                onSaved={() => {
-                  setEditing(undefined);
-                  reload();
-                }}
+                onSaved={() => setEditing(undefined)}
               />
             )}
           </>

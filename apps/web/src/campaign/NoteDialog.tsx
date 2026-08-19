@@ -16,6 +16,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 
@@ -88,18 +89,24 @@ export function NoteDialog({
       visibility,
     };
 
-    const saved = await submit((client) =>
-      note === undefined
-        ? client.notes.create({
-            params: { campaignId },
-            // `NoteCreate.attachedTo` is `optional(NoteAttachment)` and takes no
-            // null: a note that is attached to nothing simply does not say so.
-            payload: attachedTo === null ? payload : { ...payload, attachedTo },
-          })
-        : client.notes.update({
-            params: { campaignId, noteId: note.id },
-            payload: { ...payload, attachedTo },
-          }),
+    const saved = await submit(
+      (client) =>
+        note === undefined
+          ? client.notes.create({
+              params: { campaignId },
+              // `NoteCreate.attachedTo` is `optional(NoteAttachment)` and takes no
+              // null: a note that is attached to nothing simply does not say so.
+              payload: attachedTo === null ? payload : { ...payload, attachedTo },
+            })
+          : client.notes.update({
+              params: { campaignId, noteId: note.id },
+              payload: { ...payload, attachedTo },
+            }),
+      // The notes, and nothing else — **including when the attachment moves.**
+      // An encounter card's *"· 1 note"* is counted in the browser over this
+      // list, so the card redraws because the notes did; the encounter row
+      // itself never carried the number and does not have to be re-read.
+      [reads.notes(campaignId)],
     );
 
     if (Result.isSuccess(saved)) onSaved();

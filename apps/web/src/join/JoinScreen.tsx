@@ -5,6 +5,7 @@ import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { readMachineToken } from "../auth/credential";
 import { useHostedSession } from "../auth/hostedSession";
@@ -109,7 +110,11 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
  * links are two invitations.
  */
 const previewAtom = Atom.family((token: string) =>
-  apiAtom((client) => client.invitePreview.read({ payload: { token } })),
+  // **It names no reads, and that is a real answer rather than an omission.**
+  // Nothing in the product writes an invitation this reader can reach — the DM
+  // who minted it is a different account in a different browser — so there is
+  // no resource here for a write to invalidate.
+  apiAtom((client) => client.invitePreview.read({ payload: { token } }), []),
 );
 
 export function JoinScreen() {
@@ -126,7 +131,14 @@ export function JoinScreen() {
   const hostedAvailable = publishableKey() !== undefined;
 
   const join = async () => {
-    const result = await submit((client) => client.join.redeem({ payload: { token } }));
+    // The tables this account sits at, which is the whole of what joining
+    // changes for the person doing it. The DM's invitation list moves too, and
+    // is deliberately not named: it is a different account in a different
+    // browser, and nothing here can reach it.
+    const result = await submit(
+      (client) => client.join.redeem({ payload: { token } }),
+      [reads.myCampaigns],
+    );
     if (Result.isSuccess(result)) setRedeemed(result.success);
   };
 

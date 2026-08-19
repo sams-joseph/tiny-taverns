@@ -9,8 +9,8 @@ import {
   DialogTitle,
   Icon,
 } from "@taverns/ui";
-import { Result } from "effect";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure } from "../ui/form";
@@ -51,21 +51,17 @@ import { FailureNotice, Loading } from "../ui/states";
  * adding one would be a new decision rather than a missing affordance.
  */
 
-function ArchivedRow({
-  membership,
-  onRestored,
-}: {
-  readonly membership: CampaignMembership;
-  readonly onRestored: () => void;
-}) {
+function ArchivedRow({ membership }: { readonly membership: CampaignMembership }) {
   const campaign = membership.campaign;
   const { busy, failure, submit } = useMutation();
 
   const restore = async () => {
-    const done = await submit((client) =>
-      client.campaigns.restore({ params: { campaignId: campaign.id }, payload: {} }),
+    // The mirror of the archive, and the same one key for both lists: this row
+    // leaves the shelf and lands back on the campaign list behind the dialog.
+    await submit(
+      (client) => client.campaigns.restore({ params: { campaignId: campaign.id }, payload: {} }),
+      [reads.myCampaigns, reads.campaign(campaign.id)],
     );
-    if (Result.isSuccess(done)) onRestored();
   };
 
   return (
@@ -92,23 +88,15 @@ function ArchivedRow({
 /**
  * The shelf, as an atom. No key: the read names no campaign — it is every
  * campaign this account has archived — so there is one of it.
+ *
+ * `reads.myCampaigns` is deliberately the same key the live list answers, for
+ * the reason `api/keys.ts` gives: archiving moves a row from one list to the
+ * other, so naming them separately would be a write that has to remember both.
  */
-const archivedAtom = apiAtom((client) => client.me.archivedCampaigns());
+const archivedAtom = apiAtom((client) => client.me.archivedCampaigns(), [reads.myCampaigns]);
 
-export function ArchivedDialog({
-  onClose,
-  onRestored,
-}: {
-  readonly onClose: () => void;
-  /** Re-reads the campaign list: a restored campaign belongs on it. */
-  readonly onRestored: () => void;
-}) {
-  const [resource, reload] = useApiAtom(archivedAtom);
-
-  const restored = () => {
-    reload();
-    onRestored();
-  };
+export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
+  const [resource, retry] = useApiAtom(archivedAtom);
 
   // The list is the DM's own, for the reason in this file's doc block: the one
   // verb on a row is a write, and a write is `campaignWritable`'s question.
@@ -129,7 +117,7 @@ export function ArchivedDialog({
         <div className="flex max-h-[60vh] flex-col overflow-y-auto px-gutter py-3">
           {resource.state === "loading" && <Loading label="Reading the shelf…" />}
           {resource.state === "failed" && (
-            <FailureNotice failure={resource.failure} onRetry={reload} />
+            <FailureNotice failure={resource.failure} onRetry={retry} />
           )}
           {mine !== undefined &&
             (mine.length === 0 ? (
@@ -139,11 +127,7 @@ export function ArchivedDialog({
               </span>
             ) : (
               mine.map((membership) => (
-                <ArchivedRow
-                  key={membership.campaign.id}
-                  membership={membership}
-                  onRestored={restored}
-                />
+                <ArchivedRow key={membership.campaign.id} membership={membership} />
               ))
             ))}
         </div>

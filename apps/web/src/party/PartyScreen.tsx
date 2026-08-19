@@ -1,17 +1,15 @@
-import type { CampaignId, CampaignMember, Character } from "@taverns/api";
+import type { CampaignMember, Character } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { DateTime } from "effect";
-import { Atom } from "effect/unstable/reactivity";
 import { useMemo, useState } from "react";
-import { apiAtom } from "../api/atoms";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { CharacterDialog } from "../campaign/CharacterDialog";
 import { InviteDialog } from "../campaign/InviteDialog";
 import { PartyList } from "../campaign/PartyList";
 import { EmptyState } from "../ui/states";
 import { AssignDialog } from "./AssignDialog";
-import { loadPartyRoster, type PartyRoster } from "./load";
+import { rosterAtom, type PartyRoster } from "./load";
 import { needsOf, rosterOf, summaryOf } from "./roster";
 import { RosterCard } from "./RosterCard";
 
@@ -63,13 +61,6 @@ import { RosterCard } from "./RosterCard";
  * *Needs you* is kept whole, because it is the best thing on the drawn screen
  * and every line of it derives from rows that exist. See `needsOf`.
  */
-
-/**
- * The roster's own two lists, keyed on the campaign — the members and the live
- * invitations. The frame already reads the campaign and its characters, so this
- * adds only what it does not.
- */
-const rosterAtom = Atom.family((campaignId: CampaignId) => apiAtom(loadPartyRoster(campaignId)));
 
 export function PartyScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
@@ -134,7 +125,7 @@ function Party({
   readonly inviting: boolean;
   readonly onInvite: (inviting: boolean) => void;
 }) {
-  const { view, extra, reload } = slots;
+  const { view, extra } = slots;
   const [assigning, setAssigning] = useState<CampaignMember | undefined>();
 
   /**
@@ -273,24 +264,22 @@ function Party({
           campaignId={view.campaign.id}
           character={editing.character}
           onClose={() => onEdit(undefined)}
-          onSaved={() => {
-            onEdit(undefined);
-            // A character is half of what the roster derives from — writing one
-            // can flip a member from `no-character` to `playing` and drop a line
-            // out of *Needs you*. One re-read, the rule every structural write
-            // in this app follows.
-            reload();
-          }}
+          // A character is half of what the roster derives from — writing one
+          // can flip a member from `no-character` to `playing` and drop a line
+          // out of *Needs you*. The dialog says so by naming `reads.characters`;
+          // this screen only has to put the form away.
+          onSaved={() => onEdit(undefined)}
         />
       )}
 
       {inviting && (
-        // The invitation surface, reused whole. `onChanged` rather than
-        // `onSaved`: it stays open across several writes — minting one, then
-        // withdrawing another — and a revoke changes this screen's roster
-        // underneath it, because revoking a spent invitation takes the
-        // membership it granted in the same transaction.
-        <InviteDialog campaign={view.campaign} onClose={() => onInvite(false)} onChanged={reload} />
+        // The invitation surface, reused whole. It stays open across several
+        // writes — minting one, then withdrawing another — and both reach this
+        // screen's roster without a callback: it reads the same invitations
+        // atom the dialog does, and a revoke names `reads.members` because
+        // revoking a spent invitation takes the membership it granted in the
+        // same transaction.
+        <InviteDialog campaign={view.campaign} onClose={() => onInvite(false)} />
       )}
       {assigning !== undefined && (
         <AssignDialog
@@ -299,7 +288,7 @@ function Party({
           member={assigning}
           characters={view.party}
           onClose={() => setAssigning(undefined)}
-          onSaved={reload}
+          onSaved={() => setAssigning(undefined)}
         />
       )}
     </>

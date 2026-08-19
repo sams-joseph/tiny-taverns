@@ -11,6 +11,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
 
@@ -65,14 +66,20 @@ export function CopyIntoCampaign({
   const copy = async () => {
     const campaign = campaigns.find((entry) => entry.id === target);
     if (campaign === undefined) return;
-    const made = await submit((client) =>
-      client.creatures.derive({
-        params: { campaignId: campaign.id, creatureId: creature.id },
-        // Nothing to change on the way in: this is *use it as it is*, and the
-        // payload's fields are all optional. Editing a copy afterwards is the
-        // campaign's own business, which is what a copied state means.
-        payload: {},
-      }),
+    const made = await submit(
+      (client) =>
+        client.creatures.derive({
+          params: { campaignId: campaign.id, creatureId: creature.id },
+          // Nothing to change on the way in: this is *use it as it is*, and the
+          // payload's fields are all optional. Editing a copy afterwards is the
+          // campaign's own business, which is what a copied state means.
+          payload: {},
+        }),
+      // The campaign gains a row; **the Library does not lose one.** A copy is
+      // a new creature owned by the campaign, and the original stays exactly
+      // where it was — which is the whole of what "a snapshot" means here, and
+      // why this list is one key rather than two.
+      [reads.creatures(campaign.id)],
     );
     if (Result.isSuccess(made)) setCopiedInto(campaign);
   };

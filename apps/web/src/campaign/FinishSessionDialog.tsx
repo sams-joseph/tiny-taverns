@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@taverns/ui";
 import { Result } from "effect";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { finishSession } from "../session/finish";
 import { SaveFailure } from "../ui/form";
@@ -62,13 +63,22 @@ export function FinishSessionDialog({
   readonly session: Session;
   readonly liveRun: EncounterRun | undefined;
   readonly onClose: () => void;
-  /** Re-reads the campaign. The session is gone from under the screen. */
+  /** Put the confirmation away. The night leaves the screen on its own. */
   readonly onFinished: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
 
   const finish = async () => {
-    const done = await submit(finishSession(campaign.id, session));
+    // **The server does more than this write says**, and that is the reason the
+    // key list is longer than the request: finishing a night clears
+    // `campaign.current_session_id` and takes a live fight off the table, both
+    // in the same transaction (`repo/Sessions.ts`). So the campaign row and the
+    // night's fights move without either being sent.
+    const done = await submit(finishSession(campaign.id, session), [
+      reads.campaign(campaign.id),
+      reads.sessions(campaign.id),
+      reads.runs(session.id),
+    ]);
     if (Result.isSuccess(done)) onFinished();
   };
 

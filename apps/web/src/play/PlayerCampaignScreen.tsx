@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
@@ -116,7 +117,15 @@ function Section({
  * A table this account only sits at, keyed on the campaign.
  */
 const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom(loadPlayerCampaignView(campaignId)),
+  // One atom rather than three, and the keys are the three it reads: a player
+  // writes nothing here, so this list exists to keep the screen honest if a DM
+  // in another tab does — and to say which reads it is, which is the question
+  // every atom in this app answers.
+  apiAtom(loadPlayerCampaignView(campaignId), [
+    reads.campaign(campaignId),
+    reads.characters(campaignId),
+    reads.notes(campaignId),
+  ]),
 );
 
 export function PlayerCampaignScreen() {

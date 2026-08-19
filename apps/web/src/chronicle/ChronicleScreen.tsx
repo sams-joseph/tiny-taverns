@@ -15,6 +15,7 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import type { Resource } from "../api/failure";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
@@ -100,7 +101,12 @@ const searchAtom = Atom.family(
     readonly campaignId: CampaignId;
     readonly q: string;
     readonly scope: SearchScope;
-  }) => apiAtom(searchCampaign(campaignId, { q, scope })),
+    // **A ranking rather than a corpus, and it names nothing.** It reaches four
+    // tables at once, so keying it on all four would re-run every settled
+    // keystroke's search whenever anything in the campaign was written — for a
+    // list the DM has already read. It re-runs when the term changes, which is
+    // what a search box means.
+  }) => apiAtom(searchCampaign(campaignId, { q, scope }), []),
 );
 
 /**
@@ -108,7 +114,9 @@ const searchAtom = Atom.family(
  * `RecapBody`'s own atoms — one per card the DM opens, which is the whole
  * reason this screen does not compose them.
  */
-const spineAtom = Atom.family((campaignId: CampaignId) => apiAtom(loadChronicleSpine(campaignId)));
+const spineAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(loadChronicleSpine(campaignId), [reads.sessions(campaignId)]),
+);
 
 export function ChronicleScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });

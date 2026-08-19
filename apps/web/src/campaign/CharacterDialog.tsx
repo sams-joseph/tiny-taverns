@@ -12,6 +12,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 
@@ -148,44 +149,50 @@ export function CharacterDialog({
     const base: CharacterSheet = character?.sheet ?? emptyCharacterSheet;
     const sheet: CharacterSheet = { ...base, notes: notes.trim() };
 
-    const saved = await submit((client) =>
-      character === undefined
-        ? // `CharacterCreate`'s optional fields take no null: a character with
-          // no player named simply does not say so, exactly as an unrated
-          // encounter omits its difficulty rather than sending one.
-          client.characters.create({
-            params: { campaignId },
-            payload: {
-              name: name.trim(),
-              ...(trimmedPlayer === "" ? {} : { playerName: trimmedPlayer }),
-              ...(level === null ? {} : { level }),
-              ...(trimmedSpecies === "" ? {} : { species: trimmedSpecies }),
-              ...(trimmedClass === "" ? {} : { className: trimmedClass }),
-              ...(ac === null ? {} : { ac }),
-              ...(hpMax === null ? {} : { hpMax }),
-              ...(trimmedUrl === "" ? {} : { sheetUrl: trimmedUrl }),
-              ...(sheet.notes === "" ? {} : { sheet }),
-              visibility,
-            },
-          })
-        : // On update every one of them is nullable, and a cleared field is a
-          // null rather than an omission — omitting it would leave the old
-          // value, which is not what emptying a box means.
-          client.characters.update({
-            params: { campaignId, characterId: character.id },
-            payload: {
-              name: name.trim(),
-              playerName: trimmedPlayer === "" ? null : trimmedPlayer,
-              level,
-              species: trimmedSpecies === "" ? null : trimmedSpecies,
-              className: trimmedClass === "" ? null : trimmedClass,
-              ac,
-              hpMax,
-              sheetUrl: trimmedUrl === "" ? null : trimmedUrl,
-              sheet,
-              visibility,
-            },
-          }),
+    const saved = await submit(
+      (client) =>
+        character === undefined
+          ? // `CharacterCreate`'s optional fields take no null: a character with
+            // no player named simply does not say so, exactly as an unrated
+            // encounter omits its difficulty rather than sending one.
+            client.characters.create({
+              params: { campaignId },
+              payload: {
+                name: name.trim(),
+                ...(trimmedPlayer === "" ? {} : { playerName: trimmedPlayer }),
+                ...(level === null ? {} : { level }),
+                ...(trimmedSpecies === "" ? {} : { species: trimmedSpecies }),
+                ...(trimmedClass === "" ? {} : { className: trimmedClass }),
+                ...(ac === null ? {} : { ac }),
+                ...(hpMax === null ? {} : { hpMax }),
+                ...(trimmedUrl === "" ? {} : { sheetUrl: trimmedUrl }),
+                ...(sheet.notes === "" ? {} : { sheet }),
+                visibility,
+              },
+            })
+          : // On update every one of them is nullable, and a cleared field is a
+            // null rather than an omission — omitting it would leave the old
+            // value, which is not what emptying a box means.
+            client.characters.update({
+              params: { campaignId, characterId: character.id },
+              payload: {
+                name: name.trim(),
+                playerName: trimmedPlayer === "" ? null : trimmedPlayer,
+                level,
+                species: trimmedSpecies === "" ? null : trimmedSpecies,
+                className: trimmedClass === "" ? null : trimmedClass,
+                ac,
+                hpMax,
+                sheetUrl: trimmedUrl === "" ? null : trimmedUrl,
+                sheet,
+                visibility,
+              },
+            }),
+      // The party at this table. A character is also half of what the party
+      // screen's roster derives from — writing one flips a member from
+      // `no-character` to `playing` — and that derivation is over this same
+      // list, so naming the resource reaches the roster without naming it.
+      [reads.characters(campaignId)],
     );
 
     if (Result.isSuccess(saved)) onSaved();

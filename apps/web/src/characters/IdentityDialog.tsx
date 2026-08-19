@@ -13,7 +13,7 @@ import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure } from "../ui/form";
-import { saveOwnCharacter } from "./write";
+import { ownCharacterWrites, saveOwnCharacter } from "./write";
 
 /**
  * A player editing the durable half of their own character.
@@ -123,23 +123,27 @@ export function IdentityDialog({
     const trimmedClass = className.trim();
     const trimmedUrl = sheetUrl.trim();
 
-    const saved = await submit((client) =>
-      // Every field is nullable, so a cleared box is a `null` rather than an
-      // omission — omitting it would leave the old value, which is not what
-      // emptying a box means. `sheet` is absent from this payload entirely: the
-      // document is written by the surfaces that draw it, and sending it from
-      // here would make a name change carry a stale document over a backstory
-      // saved a moment earlier in another tab.
-      saveOwnCharacter(client, character, {
-        name: name.trim(),
-        playerName: trimmedPlayer === "" ? null : trimmedPlayer,
-        level,
-        species: trimmedSpecies === "" ? null : trimmedSpecies,
-        className: trimmedClass === "" ? null : trimmedClass,
-        ac,
-        hpMax,
-        sheetUrl: trimmedUrl === "" ? null : trimmedUrl,
-      }),
+    const saved = await submit(
+      (client) =>
+        // Every field is nullable, so a cleared box is a `null` rather than an
+        // omission — omitting it would leave the old value, which is not what
+        // emptying a box means. `sheet` is absent from this payload entirely: the
+        // document is written by the surfaces that draw it, and sending it from
+        // here would make a name change carry a stale document over a backstory
+        // saved a moment earlier in another tab.
+        saveOwnCharacter(client, character, {
+          name: name.trim(),
+          playerName: trimmedPlayer === "" ? null : trimmedPlayer,
+          level,
+          species: trimmedSpecies === "" ? null : trimmedSpecies,
+          className: trimmedClass === "" ? null : trimmedClass,
+          ac,
+          hpMax,
+          sheetUrl: trimmedUrl === "" ? null : trimmedUrl,
+        }),
+      // A level, a species or a class moves the generated `descriptor` — which
+      // the DM's party strip draws. See `ownCharacterWrites`.
+      ownCharacterWrites(character),
     );
 
     if (Result.isSuccess(saved)) onSaved();

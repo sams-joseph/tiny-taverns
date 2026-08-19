@@ -16,7 +16,7 @@ import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure } from "../ui/form";
-import { saveOwnCharacter, sheetWith } from "./write";
+import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
 
 /**
  * What they are carrying — `sheet.inventory`, behind the Gear tab's *Add*.
@@ -132,8 +132,10 @@ export function GearDialog({
         };
       });
 
-    const saved = await submit((client) =>
-      saveOwnCharacter(client, character, { sheet: sheetWith(character, { inventory }) }),
+    const saved = await submit(
+      (client) =>
+        saveOwnCharacter(client, character, { sheet: sheetWith(character, { inventory }) }),
+      ownCharacterWrites(character),
     );
     if (Result.isSuccess(saved)) onSaved();
   };

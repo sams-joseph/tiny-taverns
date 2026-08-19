@@ -1,12 +1,13 @@
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { TavernsApi } from "@taverns/api";
 import { Cause, Effect, Option } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { AsyncResult, Atom, AtomHttpApi } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { fetchCredential } from "../auth/credential";
 import type { TavernsClient } from "./client";
 import { failureFromCause, type Resource } from "./failure";
+import type { Invalidation } from "./keys";
 
 /**
  * How a screen loads from the API: one atom, one loading state, one failure.
@@ -14,8 +15,9 @@ import { failureFromCause, type Resource } from "./failure";
  * **This is the one way a screen reads.** It replaced a hand-rolled
  * `useApiResource` (`useEffect` + `useState` + `Effect.result`), which is gone
  * rather than deprecated — every one of its eighteen call sites moved, so there
- * is no second idiom to copy by accident. Writes are still `api/mutation.ts`;
- * see `AGENTS.md` for what that means and what is left.
+ * is no second idiom to copy by accident. Writing is `api/mutation.ts`, over
+ * the same client and the same invalidation vocabulary; `api/keys.ts` is the
+ * map that joins the two.
  *
  * What an atom gives that the hook did not, in this codebase specifically:
  *
@@ -31,6 +33,10 @@ import { failureFromCause, type Resource } from "./failure";
  *    `CampaignChrome` stop re-reading the campaign on every move between its
  *    five destinations — a cost its own doc block used to state as the price of
  *    one source of truth.
+ *  - **A read says what it answers, and a write says what it changed.** Both
+ *    say it in the vocabulary of `api/keys.ts`, and a write refreshes exactly
+ *    the reads that named the same resource. That is the whole of what made
+ *    adding one checklist line cost one read instead of eight.
  *  - **Failures stay typed.** An endpoint's error is its *declared* union
  *    rather than `unknown`, and `failureFromCause` is the whole adapter.
  *
@@ -100,12 +106,27 @@ class Api extends AtomHttpApi.Service<Api>()("TavernsAtomApi", {
 /**
  * One screen's read, as an atom.
  *
- * Takes the same callback `useApiResource` takes — `(client) => Effect` — so a
- * ported call site keeps its loader unchanged and only changes how the result
- * reaches the component. Compose *within* the Effect rather than building
- * several atoms per screen, for the reason `useApiResource` gave: one
- * `Effect.all` over four endpoints is one loading state and one error, where
- * four are sixteen combinations to render.
+ * Takes a loader — `(client) => Effect` — and **the reads it answers**, in the
+ * vocabulary of `api/keys.ts`. Compose *within* the Effect where the parts of a
+ * read are only ever wanted together: one `Effect.all` over four endpoints is
+ * one loading state and one error, where four atoms are sixteen combinations to
+ * render.
+ *
+ * ### `answers` is required, and empty is a real answer
+ *
+ * A write refreshes the atoms that named the resource it changed, so this list
+ * is the other half of every `submit`. It is a required argument because the
+ * alternative is a default, and a default here means a read that silently never
+ * refreshes — which is exactly the failure this design has to be careful about.
+ * `[]` says *nothing writes this*: the invitation preview a stranger reads
+ * before they have an account, a picker that lives as long as a dialog.
+ *
+ * **Split a read only where a write wants to refresh half of it.** The campaign
+ * view is split into eight because adding a checklist line should re-read the
+ * checklist and nothing else; the character sheet is one atom because every
+ * write on that screen changes all of it. `AsyncResult.all` is how a screen
+ * built from several atoms still renders three states — see
+ * `campaign/load.ts`, which is the worked example.
  *
  * ### Build it inside an `Atom.family`, keyed on what it closes over
  *
@@ -117,7 +138,9 @@ class Api extends AtomHttpApi.Service<Api>()("TavernsAtomApi", {
  *
  * ```ts
  * const invitesAtom = Atom.family((campaignId: CampaignId) =>
- *   apiAtom((client) => client.invites.list({ params: { campaignId } })),
+ *   apiAtom((client) => client.invites.list({ params: { campaignId } }), [
+ *     reads.invites(campaignId),
+ *   ]),
  * );
  * ```
  *
@@ -136,7 +159,47 @@ class Api extends AtomHttpApi.Service<Api>()("TavernsAtomApi", {
  */
 export const apiAtom = <A, E>(
   use: (client: TavernsClient) => Effect.Effect<A, E>,
-): Atom.Atom<AsyncResult.AsyncResult<A, E>> => Api.runtime.atom(Effect.flatMap(Api, use));
+  answers: Invalidation,
+): Atom.Atom<AsyncResult.AsyncResult<A, E>> => {
+  const atom = Api.runtime.atom(Effect.flatMap(Api, use));
+  // Registering on nothing is a real answer — a preview read before anybody has
+  // an account, a one-shot picker — and `withReactivity` on an empty list would
+  // wrap the atom in a subscription that can never fire.
+  return answers.length === 0 ? atom : Atom.withReactivity(answers)(atom);
+};
+
+/**
+ * Tells every read that named one of these resources to read it again.
+ *
+ * **This is the seam between the two verbs, and it is one line of library.**
+ * `Atom.withReactivity` (above, in `apiAtom`) registers an atom's refresh
+ * against a set of keys on the `Reactivity` service; this fires them. Both
+ * resolve the *same* service instance — `Atom.runtime` memoises `Reactivity.layer`
+ * in `Atom.defaultMemoMap`, and `AtomHttpApi.Service` builds `Api.runtime` from
+ * that same default factory — so a read and a write naming one key cannot end
+ * up talking to two different registries.
+ *
+ * It is an atom rather than a plain function for the same reason the client is:
+ * the service lives in the runtime's context, which is reachable from an effect
+ * the runtime runs and from nowhere else. Its own `AsyncResult` is never read —
+ * this atom exists for what it does, not for what it answers — and it is
+ * `concurrent` so that two writes landing together both fire rather than one
+ * interrupting the other.
+ */
+const invalidateAtom = Api.runtime.fn<Invalidation>()((keys) => Reactivity.invalidate(keys), {
+  concurrent: true,
+});
+
+/**
+ * The write side of the seam, as a hook.
+ *
+ * `api/mutation.ts` calls this and nothing else does; a screen invalidates by
+ * naming keys on its `submit`, never by reaching for this directly. It is
+ * exported rather than inlined there because `Api` may not cross a module
+ * boundary — see the TS7056 note above — so anything that needs the runtime
+ * lives in this file and leaves through a narrow door.
+ */
+export const useInvalidate = (): ((keys: Invalidation) => void) => useAtomSet(invalidateAtom);
 
 /**
  * Reads an atom as the three states a screen renders, plus a refresh.
@@ -194,6 +257,39 @@ export const useApiAtom = <A, E>(
  */
 export const asResource = <A, E>(result: AsyncResult.AsyncResult<A, E>): Resource<A> =>
   toResource(result);
+
+/**
+ * Several atoms read as one value, without losing the one already on screen.
+ *
+ * **`AsyncResult.all` alone is not enough here, and the case it gets wrong is
+ * exactly the one this port exists for.** `all` returns the first part that is
+ * not a success, verbatim — so a part that has never been read at all makes the
+ * whole `Initial`, which a screen renders as *Loading…* over a blank body. That
+ * is right on the first load and wrong every time afterwards: when a DM opens a
+ * night, the checklist and the fight list become atoms **keyed on a session id
+ * that did not exist a moment ago**, and a screen full of unchanged encounters
+ * and notes would blank while two new reads landed.
+ *
+ * So a whole that is still assembling renders as the last whole, waiting — the
+ * same stale-while-revalidate `AsyncResult` gives one atom, extended to a set
+ * of them. A **failure** is passed through rather than swallowed: a part that
+ * 401'd is something a screen has to say, and quietly showing rows underneath
+ * it would be the worse answer (see `toResource`, which makes the same call).
+ *
+ * Only usable inside an atom's own read function, because "the last whole" is
+ * `get.self()` — which is also what makes it free of a ref somebody has to keep
+ * in step.
+ */
+export const combine = <A, E>(
+  get: Atom.AtomContext,
+  next: AsyncResult.AsyncResult<A, E>,
+): AsyncResult.AsyncResult<A, E> => {
+  if (!AsyncResult.isInitial(next)) return next;
+  const previous = get.self<AsyncResult.AsyncResult<A, E>>();
+  return Option.isSome(previous) && AsyncResult.isSuccess(previous.value)
+    ? AsyncResult.success(previous.value.value, { waiting: true })
+    : next;
+};
 
 const toResource = <A, E>(result: AsyncResult.AsyncResult<A, E>): Resource<A> => {
   if (AsyncResult.isSuccess(result)) {

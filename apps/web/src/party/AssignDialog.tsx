@@ -17,6 +17,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure } from "../ui/form";
 
@@ -73,14 +74,20 @@ export function AssignDialog({
   const pick = spare.find((character) => character.id === chosen);
 
   const assign = async (characterId: CharacterId, accountId: AccountId | null) => {
-    const saved = await submit((client) =>
-      client.characters.assign({
-        params: { campaignId, characterId },
-        // The account is the member's, never a value this form composed: the
-        // server refuses one that is not a live member of this campaign, and
-        // there is nowhere here to type a different one.
-        payload: { accountId },
-      }),
+    const saved = await submit(
+      (client) =>
+        client.characters.assign({
+          params: { campaignId, characterId },
+          // The account is the member's, never a value this form composed: the
+          // server refuses one that is not a live member of this campaign, and
+          // there is nowhere here to type a different one.
+          payload: { accountId },
+        }),
+      // The characters, and nothing else. **The roster's `playing` status is
+      // derived from this list joined to the members** — assigning flips a row
+      // without any member row changing — so refreshing the characters is what
+      // redraws it, and the members do not have to be re-read to say so.
+      [reads.characters(campaignId)],
     );
     if (Result.isSuccess(saved)) onSaved();
   };

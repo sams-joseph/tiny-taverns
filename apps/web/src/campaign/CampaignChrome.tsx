@@ -4,14 +4,14 @@ import { Badge, Button, Icon, type IconName } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { apiAtom, asResource } from "../api/atoms";
+import { asResource, useInvalidate } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { CampaignDialog } from "./CampaignDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
 import { InviteDialog } from "./InviteDialog";
-import { loadCampaignView, type CampaignView } from "./load";
+import { campaignAtom, campaignViewAtom, campaignViewKeys, type CampaignView } from "./load";
 import { StartRunDialog } from "./StartRunDialog";
 import { StartSessionDialog } from "./StartSessionDialog";
 
@@ -44,25 +44,38 @@ import { StartSessionDialog } from "./StartSessionDialog";
  * enumerates the DM row's own destinations, so a sixth screen that hand-builds a
  * shell cannot ship.
  *
- * ### One read, three states — and since the atom port, one read *shared*
+ * ### One value, three states — and eight atoms underneath it
  *
  * Every destination names the same `campaignViewAtom`, so it has the three
- * states a screen has and not sixty-four. **The cost this file used to state
- * honestly is gone**: it read *"five screens over one loader is five loads …
- * moving between Encounters and Notes now re-reads the campaign"*, because each
- * destination composed `loadCampaignView` into a hook of its own. An atom is
- * identified by its key, so the second destination is answered from the
- * registry without a request.
+ * states a screen has and not sixty-four, and the second destination is
+ * answered from the registry without a request.
  *
- * What has **not** changed is how much one read is, or when it happens again.
- * `loadCampaignView` is still six-to-eight endpoints in two rounds, and every
- * structural write here still ends in `reload()` — so adding one checklist line
- * still costs one write and eight reads. That is deliberate and is the same
- * argument as before: a narrower cache is right until the first write it did
- * not hear about, and every write on these screens changes something the screen
- * did not send (`Encounter.creatureCount` is computed per read, a note's
- * attachment moves a count on a different card). One re-read is one source of
- * truth. Narrowing it is its own piece of work, and it reverses that.
+ * **What this file used to argue for, and no longer does.** It read: *"every
+ * write on these screens changes something the screen did not send … one
+ * re-read is one source of truth"*, and every structural write therefore ended
+ * in a `reload()` that re-read the whole campaign. That was not wrong — a
+ * narrower cache is right until the first write it did not hear about — and it
+ * cost **one write and eight reads to add one line to a checklist**, measured
+ * in a real browser. The captain took the trade on 2026-08-19: a write now says
+ * which reads it changed, and adding a line costs one write and one read.
+ *
+ * So `loadCampaignView` is gone and `campaign/load.ts` is eight atoms combined
+ * into one value — read that file for the shape, and `api/keys.ts` for what
+ * bounds the risk this swapped in. The two failures the old argument named are
+ * both still real and both answered by naming the resource rather than the
+ * screen: `Encounter.creatureCount` is computed per read, so a roster write
+ * refreshes `reads.encounters`; a note's attachment moves a count on an
+ * encounter card, which is counted over the notes and so redraws when the notes
+ * do.
+ *
+ * **`slots` therefore has no `reload`, and that is the point of the change
+ * rather than an omission.** There is no way for a screen to say "something
+ * happened, read everything again"; it says what it changed and the atoms that
+ * answer it read themselves. The one re-read-everything left is the failure
+ * notice's *Try again*, which is this file's own and is spelled in the same
+ * vocabulary a write is (`campaignViewKeys`) — because a derived atom cannot be
+ * refreshed, and "read the campaign again" really is "invalidate everything the
+ * campaign is made of".
  *
  * ### What a screen reads *on top* of the campaign view
  *
@@ -70,18 +83,15 @@ import { StartSessionDialog } from "./StartSessionDialog";
  * spine of nights. Both used to have loaders of their own, and the obvious way
  * to keep them — a second resource beside the frame's — is the thing this file
  * exists to refuse: two of them is four combinations of loading and failed for
- * one screen, and two `reload`s for one write. So a destination hands over an
- * *atom*, the frame combines it with the view through `AsyncResult.all` and it
- * arrives as `slots.extra` — which keeps every destination at one round, three
- * states and one re-read, exactly as composing into one `Effect` did.
+ * one screen. So a destination hands over an *atom*, the frame combines it with
+ * the view through `AsyncResult.all` and it arrives as `slots.extra` — which
+ * keeps every destination at one round and three states.
  *
  * It is also what keeps the cost to what it really is. Read alongside their own
  * loaders the two screens would ask for the campaign twice, the characters twice
  * and the current night's checklist twice; composed, each asks the frame's
  * questions once and adds only what the frame does not already answer — the
- * Party two calls, the Chronicle one. The frame's own reads are still added to
- * screens that did not make them before, and that is the stated price of one
- * source of truth rather than something to cache away.
+ * Party two calls, the Chronicle one.
  *
  * ### The sharing control is on the Overview and nowhere else
  *
@@ -131,25 +141,6 @@ const NOTHING_ELSE: Atom.Atom<AsyncResult.AsyncResult<undefined, never>> = Atom.
   AsyncResult.success<undefined>(undefined),
 );
 
-/**
- * The campaign view, keyed on the campaign — **one atom, shared by all five
- * destinations**.
- *
- * This is the thing the port bought this file. Its own doc block above records
- * the price it used to pay: *"moving between Encounters and Notes re-reads the
- * campaign"*, because each destination composed `loadCampaignView` into a hook
- * of its own. They now name the same atom, so the registry answers the second
- * one without a request.
- *
- * What has **not** changed is how much one read is: `loadCampaignView` is still
- * six-to-eight endpoints in two rounds, and a write here still re-reads all of
- * it. Narrowing that is its own piece of work and reverses the decision argued
- * at the top of this file.
- */
-const campaignViewAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom(loadCampaignView(campaignId)),
-);
-
 /** What a destination is handed: the campaign, and the acts that belong to it. */
 export interface CampaignChromeSlots<Extra = undefined> {
   readonly view: CampaignView;
@@ -160,8 +151,6 @@ export interface CampaignChromeSlots<Extra = undefined> {
    * was written for, which render `CampaignView` and nothing else.
    */
   readonly extra: Extra;
-  /** Re-read the whole view — what every structural write here ends with. */
-  readonly reload: () => void;
   /**
    * Put an encounter on the table, or walk back into the fight already on it.
    *
@@ -242,7 +231,6 @@ export function CampaignChrome<Extra = undefined>({
    */
   const extraAtom: CampaignExtraAtom<Extra> =
     extraFrom ?? (NOTHING_ELSE as unknown as CampaignExtraAtom<Extra>);
-  const viewAtom = campaignViewAtom(campaignId);
 
   /**
    * Two atoms, one screen, three states.
@@ -252,23 +240,39 @@ export function CampaignChrome<Extra = undefined>({
    * combining first and mapping once means a destination still renders three
    * states rather than the sixteen two independent resources would give it. It
    * is still one round — nothing a screen adds depends on the view's answer, and
-   * the view's own two rounds are inside `loadCampaignView`, where the real
-   * dependency is.
+   * the view's own two rounds are inside `campaign/load.ts`, where the real
+   * dependency between the campaign row and the night hanging off it is.
    */
-  const viewResult = useAtomValue(viewAtom);
+  const viewResult = useAtomValue(campaignViewAtom(campaignId));
   const extraResult = useAtomValue(extraAtom);
   const resource = useMemo(
     () => asResource(AsyncResult.all([viewResult, extraResult] as const)),
     [viewResult, extraResult],
   );
 
-  const refreshView = useAtomRefresh(viewAtom);
+  /**
+   * *Try again*, and it is the only re-read-everything left in the campaign.
+   *
+   * **The night's id comes from the campaign atom rather than from the view**,
+   * and that is the whole reason this line exists: when the *checklist* is what
+   * failed, the view is a failure and has no session to name — so a retry built
+   * from `view.session` would refresh everything except the read that broke.
+   * The campaign row is a part of its own and still has the answer.
+   *
+   * The view is derived, so it is retried by invalidating what it is made of
+   * (`campaignViewKeys`); the screen's own `extra` is a real atom and is
+   * refreshed directly, because the frame does not know what it reads.
+   */
+  const campaignResult = useAtomValue(campaignAtom(campaignId));
+  const nightId = AsyncResult.isSuccess(campaignResult)
+    ? (campaignResult.value.currentSessionId ?? undefined)
+    : undefined;
+  const invalidate = useInvalidate();
   const refreshExtra = useAtomRefresh(extraAtom);
-  /** Re-read both, because a write here can change either. */
-  const reload = useCallback(() => {
-    refreshView();
+  const retry = useCallback(() => {
+    invalidate(campaignViewKeys(campaignId, nightId));
     refreshExtra();
-  }, [refreshView, refreshExtra]);
+  }, [invalidate, campaignId, nightId, refreshExtra]);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
   const hob = useHobPanel({ initialOpen: false });
   const navigate = useNavigate();
@@ -312,10 +316,6 @@ export function CampaignChrome<Extra = undefined>({
   const view = wrongSide ? undefined : loaded;
 
   const close = useCallback(() => setEditing(undefined), []);
-  const saved = useCallback(() => {
-    setEditing(undefined);
-    reload();
-  }, [reload]);
 
   /**
    * Where the runner is, when there is a fight to go back to.
@@ -360,7 +360,6 @@ export function CampaignChrome<Extra = undefined>({
           // Read out of the same `ready` value the view came from, so a screen
           // never sees one half of one load.
           extra: extra as Extra,
-          reload,
           run,
           act: actFor(view, () => run(), startSession),
           finishSession,
@@ -399,19 +398,20 @@ export function CampaignChrome<Extra = undefined>({
       {resource.state === "loading" && <Loading label="Reading the campaign…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <FailureNotice failure={resource.failure} onRetry={retry} />
         </div>
       )}
       {slots !== undefined && children(slots)}
 
       {editing?.what === "campaign" && view !== undefined && (
-        <CampaignDialog campaign={view.campaign} onClose={close} onSaved={saved} />
+        <CampaignDialog campaign={view.campaign} onClose={close} onSaved={close} />
       )}
       {editing?.what === "invites" && view !== undefined && (
-        // `onChanged` rather than `onSaved`: this dialog stays open across
-        // several writes — minting a link, then withdrawing another — so it
-        // re-reads the view underneath without closing itself.
-        <InviteDialog campaign={view.campaign} onClose={close} onChanged={reload} />
+        // It stays open across several writes — minting a link, then
+        // withdrawing another — so it has no `onSaved` at all: what a revoke
+        // changes about the table underneath is `reads.members`, which the
+        // dialog itself names.
+        <InviteDialog campaign={view.campaign} onClose={close} />
       )}
       {finishing && view?.session !== undefined && (
         <FinishSessionDialog
@@ -419,30 +419,20 @@ export function CampaignChrome<Extra = undefined>({
           session={view.session}
           liveRun={view.run}
           onClose={() => setFinishing(false)}
-          onFinished={() => {
-            setFinishing(false);
-            // The night is gone from under the screen: `campaign.currentSessionId`
-            // is null now, so the checklist, the session card and the campaign
-            // row's "Start session" all have a different answer. One re-read,
-            // the same rule every structural write here follows.
-            reload();
-          }}
+          // The night is gone from under the screen — `campaign.currentSessionId`
+          // is null now — and the dialog says so by naming `reads.campaign` and
+          // `reads.sessions`. The frame only has to put the confirmation away.
+          onFinished={() => setFinishing(false)}
         />
       )}
       {opening && view !== undefined && (
         <StartSessionDialog
           campaign={view.campaign}
           onClose={() => setOpening(false)}
-          onStarted={() => {
-            setOpening(false);
-            // The night is on the screen now: `campaign.currentSessionId` names
-            // it, so the checklist, the session card and the campaign row's own
-            // button all have a different answer. There is no run to navigate
-            // to — that is the whole point of this door — so the DM stays where
-            // they are and the screen catches up. One re-read, the same rule
-            // every structural write here follows.
-            reload();
-          }}
+          // There is no run to navigate to — that is the whole point of this
+          // door — so the DM stays where they are and the screen catches up on
+          // the two reads the dialog named.
+          onStarted={() => setOpening(false)}
         />
       )}
       {starting !== undefined && view !== undefined && (

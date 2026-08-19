@@ -4,6 +4,7 @@ import { Icon, Toggle } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerChronicle } from "./load";
@@ -49,7 +50,10 @@ import { SessionEntry } from "./SessionEntry";
  * themselves are `PlayerRecapBody`'s own atoms — one per card that is open.
  */
 const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom(loadPlayerChronicle(campaignId)),
+  apiAtom(loadPlayerChronicle(campaignId), [
+    reads.campaign(campaignId),
+    reads.sessions(campaignId),
+  ]),
 );
 
 export function PlayerChronicleScreen() {

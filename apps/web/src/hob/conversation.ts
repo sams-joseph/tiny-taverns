@@ -9,7 +9,9 @@ import type {
 import { Effect, Fiber, Result, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useInvalidate } from "../api/atoms";
 import { makeClient, runApiResult } from "../api/client";
+import { reads } from "../api/keys";
 import { classifyFailure, type ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
 import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } from "./transcript";
@@ -208,6 +210,7 @@ export function useHobConversation(
   const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
   const credentialRef = useRef(fetchCredential);
   credentialRef.current = fetchCredential;
+  const invalidate = useInvalidate();
   /**
    * The conversation being continued.
    *
@@ -396,10 +399,19 @@ export function useHobConversation(
    * what makes the `origin: "assistant"` it records worth having, and it is why
    * this takes an artifact and reads nothing off it but its id.
    *
-   * The screen behind the panel is not reloaded, because the panel does not
-   * know what is behind it — a DM who accepts an encounter while looking at the
-   * campaign screen sees it on their next visit. Wiring a reload through the
-   * shell is a bigger seam than this feature earns.
+   * **The screen behind the panel catches up now, and that is a limitation this
+   * file used to state and no longer has.** It read: *"the screen behind the
+   * panel is not reloaded, because the panel does not know what is behind it —
+   * a DM who accepts an encounter while looking at the campaign screen sees it
+   * on their next visit. Wiring a reload through the shell is a bigger seam
+   * than this feature earns."* Naming a resource is not a seam through the
+   * shell: the panel knows its campaign, an accepted proposal is a note or an
+   * encounter in it, and whichever screen is drawing those reads itself again.
+   * The panel still does not know what is behind it — it does not have to.
+   *
+   * Both are named because the artifact's kind is the model's and this write
+   * does not branch on it. Over-naming costs a request nobody was going to
+   * make; under-naming costs a card that quietly says the wrong number.
    */
   const save = useCallback(
     (artifact: HobArtifact) => {
@@ -415,6 +427,7 @@ export function useHobConversation(
         );
         if (Result.isSuccess(result)) {
           setSaved((current) => [...current, turnId]);
+          invalidate([reads.notes(campaignId), reads.encounters(campaignId)]);
           return;
         }
         // In the thread, where the card is, for the reason `SaveFailure` sits
@@ -426,7 +439,7 @@ export function useHobConversation(
         });
       })();
     },
-    [append, campaignId],
+    [append, campaignId, invalidate],
   );
 
   const reset = useCallback(() => {

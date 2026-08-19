@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
 import { apiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -81,7 +82,10 @@ const countOf = (n: number, narrowed: boolean, more: boolean): string => {
  */
 const bestiaryAtom = Atom.family(
   ({ campaignId, query }: { readonly campaignId: CampaignId; readonly query: CorpusQuery }) =>
-    apiAtom(loadBestiary(campaignId, query)),
+    // Every query over one campaign's bestiary is registered on one key, so a
+    // copy landing refreshes whichever pages are on screen — including the
+    // chip vocabulary, which is read in the same Effect.
+    apiAtom(loadBestiary(campaignId, query), [reads.creatures(campaignId)]),
 );
 
 export function BestiaryScreen() {

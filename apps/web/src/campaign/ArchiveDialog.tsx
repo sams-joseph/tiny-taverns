@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@taverns/ui";
 import { Result } from "effect";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
 
@@ -62,14 +63,19 @@ export function ArchiveDialog({
 }: {
   readonly campaign: Campaign;
   readonly onClose: () => void;
-  /** Re-reads the list. The row is gone from under the screen. */
+  /** Put the confirmation away. The row leaves the list on its own. */
   readonly onArchived: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
 
   const archive = async () => {
-    const done = await submit((client) =>
-      client.campaigns.archive({ params: { campaignId: campaign.id } }),
+    const done = await submit(
+      (client) => client.campaigns.archive({ params: { campaignId: campaign.id } }),
+      // The shelf and the live list are one key — archiving moves a row from
+      // one to the other, so a key per list would be a write that has to
+      // remember both. The campaign row goes too: `archivedAt` is on it, and a
+      // campaign screen left open behind this dialog draws from it.
+      [reads.myCampaigns, reads.campaign(campaign.id)],
     );
     if (Result.isSuccess(done)) onArchived();
   };

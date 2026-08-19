@@ -11,10 +11,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@taverns/ui";
-import { Result } from "effect";
+
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { SaveFailure } from "../ui/form";
@@ -35,7 +36,7 @@ import {
   SheetSection,
   StatPill,
 } from "./SheetParts";
-import { saveOwnCharacter, sheetWith } from "./write";
+import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
 
 /**
  * One character, whole — `ui_kits/dm-screen/CharacterSheet.jsx` against the real
@@ -560,13 +561,7 @@ function SheetBody({
   );
 }
 
-function IdentityColumn({
-  character,
-  onSaved,
-}: {
-  readonly character: Character;
-  readonly onSaved: () => void;
-}) {
+function IdentityColumn({ character }: { readonly character: Character }) {
   const identity = character.sheet.identity;
   // Absent is nought up and nought down, and on a writable sheet the row is
   // drawn either way: a player whose character has never gone down still has to
@@ -585,12 +580,13 @@ function IdentityColumn({
    * document goes with it, which is `sheetWith`'s rule and its race.
    */
   const mark = async (part: "successes" | "failures", next: number) => {
-    const saved = await submit((client) =>
-      saveOwnCharacter(client, character, {
-        sheet: sheetWith(character, { deathSaves: { ...deathSaves, [part]: next } }),
-      }),
+    await submit(
+      (client) =>
+        saveOwnCharacter(client, character, {
+          sheet: sheetWith(character, { deathSaves: { ...deathSaves, [part]: next } }),
+        }),
+      ownCharacterWrites(character),
     );
-    if (Result.isSuccess(saved)) onSaved();
   };
   const meta = [identity?.background, identity?.alignment].filter(
     (part): part is string => part !== undefined && part !== "",
@@ -779,7 +775,11 @@ function LiveTableBanner({ banner }: { readonly banner: LiveBanner }) {
  * rather than degrade to a missing banner.
  */
 const sheetAtom = Atom.family((characterId: CharacterId) =>
-  apiAtom(loadCharacterSheet(characterId)),
+  // One key for both rounds, because both are a function of the same write: a
+  // sheet save re-reads the roster this screen picks its character out of, and
+  // the live banner beside it is read in the round that follows. Nothing on
+  // this screen writes the table, so there is no second key to name.
+  apiAtom(loadCharacterSheet(characterId), [reads.myCharacters]),
 );
 
 export function CharacterSheetScreen() {
@@ -822,10 +822,6 @@ export function CharacterSheetScreen() {
   /** Which tab is open — above the resource, for the reason `SheetBody` gives. */
   const [openTab, setOpenTab] = useState<string | undefined>();
   const close = () => setEditing(undefined);
-  const saved = () => {
-    setEditing(undefined);
-    reload();
-  };
 
   return (
     <AppShell
@@ -915,7 +911,7 @@ export function CharacterSheetScreen() {
                 without the window moving. */}
             <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
               <div className="@3xl:w-rail @3xl:shrink-0">
-                <IdentityColumn character={character} onSaved={reload} />
+                <IdentityColumn character={character} />
               </div>
               <div className="min-w-0 flex-1">
                 <SheetBody
@@ -931,13 +927,13 @@ export function CharacterSheetScreen() {
         ))}
 
       {character !== undefined && editing === "identity" && (
-        <IdentityDialog character={character} onClose={close} onSaved={saved} />
+        <IdentityDialog character={character} onClose={close} onSaved={close} />
       )}
       {character !== undefined && editing === "backstory" && (
-        <BackstoryDialog character={character} onClose={close} onSaved={saved} />
+        <BackstoryDialog character={character} onClose={close} onSaved={close} />
       )}
       {character !== undefined && editing === "gear" && (
-        <GearDialog character={character} onClose={close} onSaved={saved} />
+        <GearDialog character={character} onClose={close} onSaved={close} />
       )}
     </AppShell>
   );

@@ -16,6 +16,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import type { RunPath } from "./load";
@@ -181,41 +182,47 @@ export function CombatantDialog({
     const hpCurrent = parseNumber(draft.hpCurrent);
     const ac = parseNumber(draft.ac);
 
-    const saved = await submit((client) =>
-      combatant === undefined
-        ? client.combatants.create({
-            params: path,
-            payload: {
-              displayName,
-              kind: draft.kind,
-              visibility: draft.visibility,
-              // Absent rather than null: a field the DM left blank is one the
-              // column default should decide, and `CombatantCreate` has no
-              // nullable members to say it with.
-              ...(subtitle === "" ? {} : { subtitle }),
-              ...(playerName === "" ? {} : { playerName }),
-              ...(initiative === undefined ? {} : { initiative }),
-              ...(hpMax === undefined ? {} : { hpMax }),
-              ...(hpCurrent === undefined ? {} : { hpCurrent }),
-              ...(ac === undefined ? {} : { ac }),
-              ...(conditions.length === 0 ? {} : { conditions }),
-            },
-          })
-        : client.combatants.update({
-            params: { ...path, combatantId: combatant.id },
-            payload: {
-              displayName,
-              // On update the blanks *are* expressible, and mean "clear it".
-              subtitle: subtitle === "" ? null : subtitle,
-              playerName: playerName === "" ? null : playerName,
-              ac: ac ?? null,
-              conditions,
-              visibility: draft.visibility,
-              ...(initiative === undefined ? {} : { initiative }),
-              ...(hpMax === undefined ? {} : { hpMax }),
-              ...(hpCurrent === undefined ? {} : { hpCurrent }),
-            },
-          }),
+    const saved = await submit(
+      (client) =>
+        combatant === undefined
+          ? client.combatants.create({
+              params: path,
+              payload: {
+                displayName,
+                kind: draft.kind,
+                visibility: draft.visibility,
+                // Absent rather than null: a field the DM left blank is one the
+                // column default should decide, and `CombatantCreate` has no
+                // nullable members to say it with.
+                ...(subtitle === "" ? {} : { subtitle }),
+                ...(playerName === "" ? {} : { playerName }),
+                ...(initiative === undefined ? {} : { initiative }),
+                ...(hpMax === undefined ? {} : { hpMax }),
+                ...(hpCurrent === undefined ? {} : { hpCurrent }),
+                ...(ac === undefined ? {} : { ac }),
+                ...(conditions.length === 0 ? {} : { conditions }),
+              },
+            })
+          : client.combatants.update({
+              params: { ...path, combatantId: combatant.id },
+              payload: {
+                displayName,
+                // On update the blanks *are* expressible, and mean "clear it".
+                subtitle: subtitle === "" ? null : subtitle,
+                playerName: playerName === "" ? null : playerName,
+                ac: ac ?? null,
+                conditions,
+                visibility: draft.visibility,
+                ...(initiative === undefined ? {} : { initiative }),
+                ...(hpMax === undefined ? {} : { hpMax }),
+                ...(hpCurrent === undefined ? {} : { hpCurrent }),
+              },
+            }),
+      // **`conditions` is written through to the `character` row** — one
+      // transaction, `repo/vitals.ts` — so a condition typed here moves what
+      // the DM's party list says in another tab. That is the one thing this
+      // dialog changes outside the fight it is in.
+      [reads.characters(path.campaignId)],
     );
 
     if (Result.isSuccess(saved)) onSaved();
@@ -223,8 +230,12 @@ export function CombatantDialog({
 
   const remove = async () => {
     if (combatant === undefined) return;
-    const gone = await submit((client) =>
-      client.combatants.remove({ params: { ...path, combatantId: combatant.id } }),
+    // A combatant is the fight's own row and its `character_id` is provenance
+    // rather than a write-through, so removing one reaches nothing outside this
+    // screen. The list's new shape comes back through `onSaved`'s re-read.
+    const gone = await submit(
+      (client) => client.combatants.remove({ params: { ...path, combatantId: combatant.id } }),
+      [],
     );
     if (Result.isSuccess(gone)) onSaved();
   };

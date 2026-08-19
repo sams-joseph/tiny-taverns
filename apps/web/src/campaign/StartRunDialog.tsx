@@ -28,6 +28,7 @@ import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { nextSessionNumber, startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
@@ -85,8 +86,10 @@ const runNumberAtom = Atom.family(
     readonly campaignId: CampaignId;
     readonly known: number | undefined;
   }) =>
-    apiAtom((client) =>
-      known === undefined ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(known),
+    apiAtom(
+      (client) =>
+        known === undefined ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(known),
+      [reads.sessions(campaignId)],
     ),
 );
 
@@ -129,31 +132,39 @@ export function StartRunDialog({
     if (chosen === undefined || number.state !== "ready") return;
     const opening = number.value;
 
-    const started = await submit((client) =>
-      Effect.gen(function* () {
-        // Opening the night — numbering, the campaign's pointer and the stamp,
-        // all of it `session/start.ts`'s, so the two doors into a session
-        // cannot come to mean different things. With a night already open this
-        // is skipped entirely: running a second encounter tonight must not
-        // manufacture a session for it.
-        const sessionId =
-          session === undefined ? yield* startSession(campaignId, opening)(client) : session.id;
+    const started = await submit(
+      (client) =>
+        Effect.gen(function* () {
+          // Opening the night — numbering, the campaign's pointer and the stamp,
+          // all of it `session/start.ts`'s, so the two doors into a session
+          // cannot come to mean different things. With a night already open this
+          // is skipped entirely: running a second encounter tonight must not
+          // manufacture a session for it.
+          const sessionId =
+            session === undefined ? yield* startSession(campaignId, opening)(client) : session.id;
 
-        // The thing the DM actually pressed the button for.
-        const run = yield* client.runs.start({
-          params: { campaignId, sessionId },
-          payload: {
-            encounterId: chosen.id,
-            // Absent means "yes" — the server's own default, and a fight
-            // without the party in initiative is not a fight. Only the
-            // deliberate no is worth sending.
-            ...(includeParty ? {} : { includeParty: false }),
-            visibility,
-          },
-        });
+          // The thing the DM actually pressed the button for.
+          const run = yield* client.runs.start({
+            params: { campaignId, sessionId },
+            payload: {
+              encounterId: chosen.id,
+              // Absent means "yes" — the server's own default, and a fight
+              // without the party in initiative is not a fight. Only the
+              // deliberate no is worth sending.
+              ...(includeParty ? {} : { includeParty: false }),
+              visibility,
+            },
+          });
 
-        return { sessionId, run };
-      }),
+          return { sessionId, run };
+        }),
+      // The night's fights either way, and the campaign and its spine only when
+      // this is also the door that opened the night — which is what `session`
+      // being undefined means. Naming them unconditionally would re-read the
+      // campaign every time a DM put a second encounter on tonight's table.
+      session === undefined
+        ? [reads.campaign(campaignId), reads.sessions(campaignId)]
+        : [reads.runs(session.id)],
     );
 
     if (Result.isSuccess(started)) {

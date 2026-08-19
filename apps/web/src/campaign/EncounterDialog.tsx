@@ -29,6 +29,7 @@ import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { collectPages, WHOLE_LIST } from "../api/page";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
@@ -227,64 +228,71 @@ function EncounterForm({
     if (refused) return;
 
     const trimmed = draft.name.trim();
-    const saved = await submit((client) =>
-      Effect.gen(function* () {
-        const written =
-          encounter === undefined
-            ? // `difficulty` is `optional(Difficulty)` on create and
-              // `optional(NullOr(Difficulty))` on update: an encounter has never
-              // been rated, so unrated is an absent field rather than a null.
-              yield* client.encounters.create({
-                params: { campaignId },
-                payload: {
-                  name: trimmed,
-                  ...(draft.difficulty === null ? {} : { difficulty: draft.difficulty }),
-                  tags: draft.tags,
-                  visibility: draft.visibility,
-                },
-              })
-            : yield* client.encounters.update({
-                params: { campaignId, encounterId: encounter.id },
-                payload: {
-                  name: trimmed,
-                  difficulty: draft.difficulty,
-                  tags: draft.tags,
-                  visibility: draft.visibility,
-                },
-              });
+    const saved = await submit(
+      (client) =>
+        Effect.gen(function* () {
+          const written =
+            encounter === undefined
+              ? // `difficulty` is `optional(Difficulty)` on create and
+                // `optional(NullOr(Difficulty))` on update: an encounter has never
+                // been rated, so unrated is an absent field rather than a null.
+                yield* client.encounters.create({
+                  params: { campaignId },
+                  payload: {
+                    name: trimmed,
+                    ...(draft.difficulty === null ? {} : { difficulty: draft.difficulty }),
+                    tags: draft.tags,
+                    visibility: draft.visibility,
+                  },
+                })
+              : yield* client.encounters.update({
+                  params: { campaignId, encounterId: encounter.id },
+                  payload: {
+                    name: trimmed,
+                    difficulty: draft.difficulty,
+                    tags: draft.tags,
+                    visibility: draft.visibility,
+                  },
+                });
 
-        const encounterId = written.id;
+          const encounterId = written.id;
 
-        // Removals first: a line dropped and the same creature re-added in one
-        // sitting would otherwise be a 409 against the row on its way out.
-        yield* Effect.all(
-          removed.map((encounterCreatureId) =>
-            client.encounterCreatures.remove({
-              params: { campaignId, encounterId, encounterCreatureId },
-            }),
-          ),
-          { concurrency: "unbounded" },
-        );
-
-        yield* Effect.all(
-          lines
-            .filter((line) => line.id === undefined || line.count !== line.savedCount)
-            .map((line) =>
-              line.id === undefined
-                ? client.encounterCreatures.create({
-                    params: { campaignId, encounterId },
-                    payload: { creatureId: line.creatureId, count: line.count },
-                  })
-                : client.encounterCreatures.update({
-                    params: { campaignId, encounterId, encounterCreatureId: line.id },
-                    payload: { count: line.count },
-                  }),
+          // Removals first: a line dropped and the same creature re-added in one
+          // sitting would otherwise be a 409 against the row on its way out.
+          yield* Effect.all(
+            removed.map((encounterCreatureId) =>
+              client.encounterCreatures.remove({
+                params: { campaignId, encounterId, encounterCreatureId },
+              }),
             ),
-          { concurrency: "unbounded" },
-        );
+            { concurrency: "unbounded" },
+          );
 
-        return written;
-      }),
+          yield* Effect.all(
+            lines
+              .filter((line) => line.id === undefined || line.count !== line.savedCount)
+              .map((line) =>
+                line.id === undefined
+                  ? client.encounterCreatures.create({
+                      params: { campaignId, encounterId },
+                      payload: { creatureId: line.creatureId, count: line.count },
+                    })
+                  : client.encounterCreatures.update({
+                      params: { campaignId, encounterId, encounterCreatureId: line.id },
+                      payload: { count: line.count },
+                    }),
+              ),
+            { concurrency: "unbounded" },
+          );
+
+          return written;
+        }),
+      // **`Encounter.creatureCount` is `sum(encounter_creature.count)`,
+      // computed per read.** So the roster half of this save moves a number on
+      // the encounter card without the encounter row ever being sent — which is
+      // exactly the shape of write this design has to be careful about, and why
+      // the roster and the encounter are one key rather than two.
+      [reads.encounters(campaignId)],
     );
 
     if (Result.isSuccess(saved)) onSaved();
@@ -450,34 +458,40 @@ const rosterAtom = Atom.family(
     readonly campaignId: CampaignId;
     readonly encounterId: EncounterId | undefined;
   }) =>
-    apiAtom((client) =>
-      encounterId === undefined
-        ? Effect.succeed<ReadonlyArray<RosterLine>>([])
-        : Effect.gen(function* () {
-            const [rows, creatures] = yield* Effect.all(
-              [
-                client.encounterCreatures.list({ params: { campaignId, encounterId } }),
-                collectPages((cursor: PageCursor<CreatureSort> | undefined) =>
-                  client.creatures.list({
-                    params: { campaignId },
-                    query: { limit: WHOLE_LIST, cursor },
-                  }),
-                ),
-              ],
-              { concurrency: "unbounded" },
-            );
-            const byId = new Map(creatures.map((creature) => [creature.id, creature]));
-            return rows.map((row): RosterLine => ({
-              key: row.id,
-              id: row.id,
-              creatureId: row.creatureId,
-              // A line whose creature this actor cannot read is still a line.
-              // Say so rather than dropping it and silently shrinking the roster.
-              name: byId.get(row.creatureId)?.name ?? "A creature you cannot see",
-              count: row.count,
-              savedCount: row.count,
-            }));
-          }),
+    apiAtom(
+      (client) =>
+        encounterId === undefined
+          ? Effect.succeed<ReadonlyArray<RosterLine>>([])
+          : Effect.gen(function* () {
+              const [rows, creatures] = yield* Effect.all(
+                [
+                  client.encounterCreatures.list({ params: { campaignId, encounterId } }),
+                  collectPages((cursor: PageCursor<CreatureSort> | undefined) =>
+                    client.creatures.list({
+                      params: { campaignId },
+                      query: { limit: WHOLE_LIST, cursor },
+                    }),
+                  ),
+                ],
+                { concurrency: "unbounded" },
+              );
+              const byId = new Map(creatures.map((creature) => [creature.id, creature]));
+              return rows.map((row): RosterLine => ({
+                key: row.id,
+                id: row.id,
+                creatureId: row.creatureId,
+                // A line whose creature this actor cannot read is still a line.
+                // Say so rather than dropping it and silently shrinking the roster.
+                name: byId.get(row.creatureId)?.name ?? "A creature you cannot see",
+                count: row.count,
+                savedCount: row.count,
+              }));
+            }),
+      // This encounter's own roster, and the campaign's creatures behind it.
+      // `reads.encounters` is what a roster write already names — for the
+      // `creatureCount` on the card — so a save reaching this list too costs
+      // nothing and keeps a reopened dialog honest.
+      encounterId === undefined ? [] : [reads.encounters(campaignId), reads.creatures(campaignId)],
     ),
 );
 

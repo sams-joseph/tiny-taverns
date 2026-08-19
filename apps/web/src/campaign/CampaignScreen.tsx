@@ -246,7 +246,7 @@ type Editing =
   | { readonly what: "character"; readonly character: Character | undefined };
 
 function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
-  const { view, reload, run, act, finishSession } = slots;
+  const { view, run, act, finishSession } = slots;
   const [editing, setEditing] = useState<Editing | undefined>();
 
   // Counted over every note, as the encounter list does: a card's count is a
@@ -312,7 +312,6 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
             campaignId={view.campaign.id}
             sessionId={view.session?.id}
             items={view.prep}
-            onChanged={reload}
           />
           {view.session !== undefined && (
             <SessionCard session={view.session} liveRun={view.run} onFinish={finishSession} />
@@ -333,10 +332,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
           campaignId={view.campaign.id}
           encounter={editing.encounter}
           onClose={() => setEditing(undefined)}
-          onSaved={() => {
-            setEditing(undefined);
-            reload();
-          }}
+          onSaved={() => setEditing(undefined)}
         />
       )}
       {editing?.what === "character" && (
@@ -345,10 +341,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
           campaignId={view.campaign.id}
           character={editing.character}
           onClose={() => setEditing(undefined)}
-          onSaved={() => {
-            setEditing(undefined);
-            reload();
-          }}
+          onSaved={() => setEditing(undefined)}
         />
       )}
     </>

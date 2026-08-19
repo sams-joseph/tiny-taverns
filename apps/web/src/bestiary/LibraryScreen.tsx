@@ -3,6 +3,7 @@ import { Button, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
 import { apiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -77,7 +78,9 @@ const countOf = (n: number, narrowed: boolean, more: boolean): string => {
  * of this read is that it names no campaign, so the query is the whole key and
  * the family can be handed to `useCorpus` bare.
  */
-const libraryAtom = Atom.family((query: CorpusQuery) => apiAtom(loadLibrary(query)));
+const libraryAtom = Atom.family((query: CorpusQuery) =>
+  apiAtom(loadLibrary(query), [reads.library]),
+);
 
 export function LibraryScreen() {
   const [opened, setOpened] = useState<CreatureId | undefined>();

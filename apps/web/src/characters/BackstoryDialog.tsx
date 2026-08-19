@@ -12,7 +12,7 @@ import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea } from "../ui/form";
-import { saveOwnCharacter, sheetWith } from "./write";
+import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
 
 /**
  * The backstory — `sheet.notes`, and the drawing's own *Edit* on the Story tab.
@@ -48,10 +48,12 @@ export function BackstoryDialog({
   const { busy, failure, submit } = useMutation();
 
   const save = async () => {
-    const saved = await submit((client) =>
-      saveOwnCharacter(client, character, {
-        sheet: sheetWith(character, { notes: notes.trim() }),
-      }),
+    const saved = await submit(
+      (client) =>
+        saveOwnCharacter(client, character, {
+          sheet: sheetWith(character, { notes: notes.trim() }),
+        }),
+      ownCharacterWrites(character),
     );
     if (Result.isSuccess(saved)) onSaved();
   };

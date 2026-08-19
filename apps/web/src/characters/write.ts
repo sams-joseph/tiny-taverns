@@ -1,5 +1,6 @@
 import type { Character, CharacterOwnUpdate, CharacterSheet } from "@taverns/api";
 import type { TavernsClient } from "../api/client";
+import { reads, type Invalidation } from "../api/keys";
 
 /**
  * How a player writes their own character — **the one call, written once.**
@@ -39,6 +40,30 @@ export const saveOwnCharacter = (
   character: Character,
   payload: CharacterOwnUpdate,
 ) => client.me.updateCharacter({ params: { characterId: character.id }, payload });
+
+/**
+ * What a player's write to their own sheet changes — **two reads, and the
+ * second one is the interesting half.**
+ *
+ * `reads.myCharacters` is the obvious one: it is the read this screen is built
+ * on, and the roster behind it.
+ *
+ * `reads.characters` is the campaign's party list — **a DM's screen, which this
+ * write has never seen and cannot reach.** A level-up moves `descriptor` on the
+ * party strip and the party screen; a name change moves a row on the roster the
+ * DM is looking at in another tab. That is exactly the shape of write this
+ * design has to be careful about, and it is answered by naming the *resource*
+ * rather than the screen — nobody has to know which screens exist.
+ *
+ * It is one function rather than four spellings for the reason `api/keys.ts`
+ * exists at all: the four surfaces that write a sheet (identity, backstory,
+ * gear, a death save) all change the same two things, and four copies of a list
+ * is four chances for one of them to fall behind.
+ */
+export const ownCharacterWrites = (character: Character): Invalidation => [
+  reads.myCharacters,
+  reads.characters(character.campaignId),
+];
 
 /**
  * The whole document, with one part replaced.

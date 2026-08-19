@@ -12,6 +12,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { runApiResult } from "../api/client";
 import { useCredential } from "../auth/credential";
@@ -27,19 +28,28 @@ import { SaveFailure } from "../ui/form";
  *
  * ### Two write idioms, on purpose
  *
- * **The tick is optimistic and reverts on failure.** A checkbox that waits for a
- * round trip before it moves feels broken at a table, and the worst case is one
- * boolean going back with a line saying so. Its state is a **map of overrides
- * keyed by id**, not a copy of the rows: copying them would mean rebuilding
- * `PrepItem` instances out of spreads, and the copy would go stale the moment
- * the screen reloads. The override map layers over whatever the server last
- * said.
+ * **The tick is optimistic, reverts on failure, and invalidates nothing.** A
+ * checkbox that waits for a round trip before it moves feels broken at a table,
+ * and the worst case is one boolean going back with a line saying so. Its state
+ * is a **map of overrides keyed by id**, not a copy of the rows: copying them
+ * would mean rebuilding `PrepItem` instances out of spreads, and the copy would
+ * go stale the moment the screen re-reads. The override map layers over
+ * whatever the server last said — which is exactly why this write names no
+ * reads. It has already rendered its own answer, and a refresh would only be a
+ * request whose result the override is sitting on top of.
  *
- * **Adding, renaming and removing wait, and then reload the screen.** They
+ * **Adding, renaming and removing wait, and then re-read the list.** They
  * change the shape of the list rather than one field of one row, and a list that
  * grew a line locally would be a second answer to a question the server already
- * answers — the first reload would be where the two disagreed. They are also
- * rare: a DM writes the checklist once and ticks it all night.
+ * answers. They are also rare: a DM writes the checklist once and ticks it all
+ * night.
+ *
+ * **This card is where the narrowing was measured.** It used to end each of the
+ * three in `onChanged()`, which was the campaign frame's `reload()` — one write
+ * and *eight* reads to add one line, because the frame had one read for the
+ * whole campaign. Naming `reads.prep` makes it one write and one read; nothing
+ * else on the screen is a function of the checklist, so nothing else has to be
+ * named.
  *
  * A prep item carries a `visibility` and this card does not offer it. That is
  * the column default — `dm` — applying untouched, which is what makes "the
@@ -51,13 +61,10 @@ export function PrepChecklist({
   campaignId,
   sessionId,
   items,
-  onChanged,
 }: {
   readonly campaignId: CampaignId;
   readonly sessionId: SessionId | undefined;
   readonly items: ReadonlyArray<PrepItem>;
-  /** Re-reads the campaign. Called after a line is added, renamed or removed. */
-  readonly onChanged: () => void;
 }) {
   const fetchCredential = useCredential();
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map());
@@ -84,6 +91,9 @@ export function PrepChecklist({
       override(item.id, done);
 
       const token = await fetchCredential();
+      // Straight through `runApiResult` and not `submit`: this is the one write
+      // in the product that names no reads, so it wants none of the busy flag,
+      // the shared failure line or the invalidation a `submit` carries.
       const result = await runApiResult(
         (client) =>
           client.prep.update({
@@ -104,13 +114,11 @@ export function PrepChecklist({
   const add = async () => {
     const label = draft.trim();
     if (sessionId === undefined || label === "") return;
-    const saved = await submit((client) =>
-      client.prep.create({ params: { campaignId, sessionId }, payload: { label } }),
+    const saved = await submit(
+      (client) => client.prep.create({ params: { campaignId, sessionId }, payload: { label } }),
+      [reads.prep(sessionId)],
     );
-    if (Result.isSuccess(saved)) {
-      setDraft("");
-      onChanged();
-    }
+    if (Result.isSuccess(saved)) setDraft("");
   };
 
   const rename = async (item: PrepItem) => {
@@ -121,26 +129,25 @@ export function PrepChecklist({
       setEditing(undefined);
       return;
     }
-    const saved = await submit((client) =>
-      client.prep.update({
-        params: { campaignId, sessionId, prepItemId: item.id },
-        payload: { label },
-      }),
+    const saved = await submit(
+      (client) =>
+        client.prep.update({
+          params: { campaignId, sessionId, prepItemId: item.id },
+          payload: { label },
+        }),
+      [reads.prep(sessionId)],
     );
-    if (Result.isSuccess(saved)) {
-      setEditing(undefined);
-      onChanged();
-    }
+    if (Result.isSuccess(saved)) setEditing(undefined);
   };
 
   const remove = async (item: PrepItem) => {
     if (sessionId === undefined) return;
     // 204, so the success carries nothing — which is exactly why `submit`
     // answers with a `Result` rather than the value or `undefined`.
-    const gone = await submit((client) =>
-      client.prep.remove({ params: { campaignId, sessionId, prepItemId: item.id } }),
+    await submit(
+      (client) => client.prep.remove({ params: { campaignId, sessionId, prepItemId: item.id } }),
+      [reads.prep(sessionId)],
     );
-    if (Result.isSuccess(gone)) onChanged();
   };
 
   const isDone = (item: PrepItem): boolean => overrides.get(item.id) ?? item.done;
