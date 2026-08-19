@@ -8,6 +8,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(Accounts.layer, Campaigns.layer, Invites.layer, Notes.layer).pipe(
@@ -142,9 +143,9 @@ describe("a player actor", () => {
   });
 
   it("sees only the shared note when listing", async () => {
-    const asDm = await runtime.runPromise(withActor(fixture.dm)(notes.list(fixture.campaign.id)));
+    const asDm = await runtime.runPromise(withActor(fixture.dm)(items(notes.list(fixture.campaign.id, {}))));
     const asPlayer = await runtime.runPromise(
-      withActor(fixture.player)(notes.list(fixture.campaign.id)),
+      withActor(fixture.player)(items(notes.list(fixture.campaign.id, {}))),
     );
 
     expect(asDm.length).toBeGreaterThan(1);
@@ -183,14 +184,14 @@ describe("a player actor", () => {
       ),
     );
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(notes.list(fixture.closed.id))),
+      Effect.flip(withActor(fixture.player)(items(notes.list(fixture.closed.id, {})))),
     );
 
     expect(note._tag).toBe("NotFound");
     expect(listed._tag).toBe("NotFound");
 
     // …and the DM still sees it, so the note really is there to be missed.
-    const asDm = await runtime.runPromise(withActor(fixture.dm)(notes.list(fixture.closed.id)));
+    const asDm = await runtime.runPromise(withActor(fixture.dm)(items(notes.list(fixture.closed.id, {}))));
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedInClosed.id]);
   });
 
@@ -232,7 +233,7 @@ describe("membership and credential scope narrow independently, and both apply",
       ),
     );
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(notes.list(fixture.otherTable.id))),
+      Effect.flip(withActor(fixture.player)(items(notes.list(fixture.otherTable.id, {})))),
     );
 
     expect(campaign._tag).toBe("NotFound");
@@ -241,7 +242,7 @@ describe("membership and credential scope narrow independently, and both apply",
 
     // …and the second table's shared note really is there and really is shared,
     // so the assertions above are about reach and not about a missing fixture.
-    const asDm = await runtime.runPromise(withActor(fixture.dm)(notes.list(fixture.otherTable.id)));
+    const asDm = await runtime.runPromise(withActor(fixture.dm)(items(notes.list(fixture.otherTable.id, {}))));
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
   });

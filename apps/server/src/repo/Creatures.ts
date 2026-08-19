@@ -14,6 +14,7 @@ import {
   CurrentActor,
   type LibraryFilterValues,
   NotFound,
+  type Page,
   type StatBlock,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
@@ -26,6 +27,15 @@ import {
   provenanceOf,
   setClause,
 } from "./rows.js";
+import {
+  orderClause,
+  orderColumn,
+  type Ordering,
+  pageClauses,
+  pageLimit,
+  pageOfRows,
+  timeColumn,
+} from "./paging.js";
 import {
   copyableIntoCampaign,
   corpusRowReadable,
@@ -168,22 +178,67 @@ const narrowedBy = (
 };
 
 /**
+ * The chip row's vocabulary: every environment named by a creature the given
+ * predicate reaches.
+ *
+ * The predicate is the caller's — the campaign bestiary's or the Library's — so
+ * there is exactly one place a reach clause is decided and this is not it. The
+ * cap is a sanity bound rather than a page: this is a vocabulary, not a corpus,
+ * and a table whose DM has typed two hundred distinct environments has a
+ * different problem.
+ */
+const environmentsIn = (
+  sql: SqlClient.SqlClient,
+  readable: Statement.Fragment,
+): Effect.Effect<ReadonlyArray<string>, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly environment: string }>`
+      select distinct environment
+      from creature, unnest(creature.environments) as environment
+      where ${readable}
+      order by environment asc
+      limit 200
+    `,
+    (rows) => rows.map((row) => row.environment),
+  );
+
+/**
  * `Bestiary.jsx:22-24`'s three orderings. Built from a closed literal union and
  * never from a client string, so there is no ordering to inject.
  *
- * CR and name both fall back to the name, so a list of six creatures at CR 1
+ * CR and recent both fall back to the name, so a list of six creatures at CR 1
  * comes back in the same order every time — an unstable sort reads as the page
  * shuffling itself when nothing changed.
+ *
+ * **Every one of them ends in the id**, which paging requires rather than
+ * prefers: none of the natural keys is unique — two campaigns hold a Goblin
+ * Boss, a whole import shares one `created_at` — and a cursor over a
+ * non-unique key names a position several rows wide, so a page boundary either
+ * repeats a row or loses one. See `repo/paging.ts`.
  */
-const orderBy = (sql: SqlClient.SqlClient, sort: CreatureSort): Statement.Fragment => {
-  switch (sort) {
-    case "name":
-      return sql`creature.name asc`;
-    case "recent":
-      return sql`creature.created_at desc, creature.name asc`;
-    case "cr":
-      return sql`creature.cr_sort asc, creature.name asc`;
-  }
+const orderingsOf = (
+  sql: SqlClient.SqlClient,
+): Record<CreatureSort, Ordering<CreatureRow>> => {
+  const name = orderColumn<CreatureRow>(sql, sql`creature.name`, "text", (row) => row.name);
+  const id = orderColumn<CreatureRow>(sql, sql`creature.id`, "uuid", (row) => row.id);
+  return {
+    name: [name, id],
+    recent: [
+      timeColumn<CreatureRow>(sql, sql`creature.created_at`, (row) => row.created_at, "desc"),
+      name,
+      id,
+    ],
+    cr: [
+      orderColumn<CreatureRow>(
+        sql,
+        sql`creature.cr_sort`,
+        "double precision",
+        (row) => row.cr_sort,
+      ),
+      name,
+      id,
+    ],
+  };
 };
 
 /**
@@ -251,7 +306,17 @@ export class Creatures extends Context.Service<
     readonly list: (
       campaignId: CampaignId,
       filter: CreatureFilterValues,
-    ) => Effect.Effect<ReadonlyArray<Creature>, NotFound, CurrentActor>;
+    ) => Effect.Effect<Page<Creature, CreatureSort>, NotFound, CurrentActor>;
+    /**
+     * Every environment the creatures this campaign can reach are tagged with.
+     *
+     * A read of its own because the chip row is a fact about the corpus and a
+     * page is a fact about fifty rows of it — see `Api.ts`. Same predicate as
+     * `list`, so a chip can never name something the list will not return.
+     */
+    readonly environments: (
+      campaignId: CampaignId,
+    ) => Effect.Effect<ReadonlyArray<string>, NotFound, CurrentActor>;
     /**
      * The Library — **originals only**: the bundled corpus and the creatures
      * this account has authored, with no campaign in the path and no campaign
@@ -268,7 +333,9 @@ export class Creatures extends Context.Service<
      */
     readonly library: (
       filter: LibraryFilterValues,
-    ) => Effect.Effect<ReadonlyArray<Creature>, never, CurrentActor>;
+    ) => Effect.Effect<Page<Creature, CreatureSort>, never, CurrentActor>;
+    /** The chip row's vocabulary, over this Library — see `environments`. */
+    readonly libraryEnvironments: () => Effect.Effect<ReadonlyArray<string>, never, CurrentActor>;
     readonly libraryFindById: (id: CreatureId) => Effect.Effect<Creature, NotFound, CurrentActor>;
     /**
      * Author a monster. **The only create in the product that names no
@@ -314,6 +381,22 @@ export class Creatures extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      // Built once: an ordering is a property of the table, not of a request.
+      const orderings = orderingsOf(sql);
+
+      /**
+       * Which ordering a page is read in.
+       *
+       * **The cursor decides**, and `sort` beside it is ignored when one is
+       * present — see `packages/api/src/Page.ts`. A key taken in one order and
+       * compared against the columns of another is a coherent-looking answer
+       * that is simply wrong, and the ordering name is on the cursor precisely
+       * so this lookup is total.
+       */
+      const orderingFor = (filter: LibraryFilterValues): [CreatureSort, Ordering<CreatureRow>] => {
+        const sort = filter.cursor?.o ?? filter.sort ?? "cr";
+        return [sort, orderings[sort]];
+      };
 
       const readable = (campaignId: CampaignId, id: CreatureId) =>
         Effect.gen(function* () {
@@ -368,17 +451,37 @@ export class Creatures extends Context.Service<
               // A 404 rather than an empty list, so an unreachable campaign
               // does not read as "your bestiary is empty".
               yield* ensureCampaignReadable(sql, campaignId, actor);
+              const [sort, ordering] = orderingFor(filter);
+              // Every one of these is a clause of the *same* `where`: the
+              // visibility predicate, what the client narrowed, and where the
+              // previous page stopped. Nothing is filtered after the query,
+              // which is what makes a paged read neither a leak nor a short
+              // page — see `repo/paging.ts`.
               const clauses = [
                 corpusRowReadable(sql, "creature", campaignId, actor),
                 inScope(sql, filter.scope ?? "all"),
                 ...narrowedBy(sql, filter),
+                ...pageClauses(sql, ordering, filter.cursor),
               ];
               const rows = yield* sql<CreatureRow>`
                 select * from creature
                 where ${sql.and(clauses)}
-                order by ${orderBy(sql, filter.sort ?? "cr")}
+                order by ${orderClause(sql, ordering)}
+                limit ${pageLimit(filter.limit)}
               `;
-              return rows.map(toCreature);
+              return pageOfRows(rows, filter.limit, ordering, sort, toCreature);
+            }),
+          ),
+
+        environments: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              return yield* environmentsIn(
+                sql,
+                corpusRowReadable(sql, "creature", campaignId, actor),
+              );
             }),
           ),
 
@@ -386,15 +489,26 @@ export class Creatures extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
+              const [sort, ordering] = orderingFor(filter);
               const rows = yield* sql<CreatureRow>`
                 select * from creature
                 where ${sql.and([
                   libraryRowReadable(sql, "creature", actor),
                   ...narrowedBy(sql, filter),
+                  ...pageClauses(sql, ordering, filter.cursor),
                 ])}
-                order by ${orderBy(sql, filter.sort ?? "cr")}
+                order by ${orderClause(sql, ordering)}
+                limit ${pageLimit(filter.limit)}
               `;
-              return rows.map(toCreature);
+              return pageOfRows(rows, filter.limit, ordering, sort, toCreature);
+            }),
+          ),
+
+        libraryEnvironments: () =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              return yield* environmentsIn(sql, libraryRowReadable(sql, "creature", actor));
             }),
           ),
 

@@ -29,6 +29,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 /**
  * Membership: the base case every predicate in the product composes, and the
@@ -335,11 +336,11 @@ const READS: Record<
   campaign: () => Effect.flatMap(Campaigns, (r) => r.list),
   session: (f) => Effect.flatMap(Sessions, (r) => r.list(f.campaign.id)),
   character: (f) => Effect.flatMap(Characters, (r) => r.list(f.campaign.id)),
-  note: (f) => Effect.flatMap(Notes, (r) => r.list(f.campaign.id)),
-  beat: (f) => Effect.flatMap(Beats, (r) => r.list(f.campaign.id, f.session.id)),
+  note: (f) => items(Effect.flatMap(Notes, (r) => r.list(f.campaign.id, {}))),
+  beat: (f) => items(Effect.flatMap(Beats, (r) => r.list(f.campaign.id, f.session.id, {}))),
   prep_item: (f) => Effect.flatMap(PrepItems, (r) => r.list(f.campaign.id, f.session.id)),
-  creature: (f) => Effect.flatMap(Creatures, (r) => r.list(f.campaign.id, {})),
-  encounter: (f) => Effect.flatMap(Encounters, (r) => r.list(f.campaign.id)),
+  creature: (f) => items(Effect.flatMap(Creatures, (r) => r.list(f.campaign.id, {}))),
+  encounter: (f) => items(Effect.flatMap(Encounters, (r) => r.list(f.campaign.id, {}))),
   encounter_creature: (f) =>
     Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),
   // The three DM-gated tables. The proof is obtained the same way `src` obtains

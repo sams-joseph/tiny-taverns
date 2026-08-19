@@ -12,6 +12,7 @@ import { PrepItems } from "../src/repo/PrepItems.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 /**
  * The same properties `visibility.test.ts` establishes for `note`, for the two
@@ -190,10 +191,10 @@ describe("a player actor, on encounters", () => {
 
   it("sees only the shared encounter when listing", async () => {
     const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(encounters.list(fixture.campaign.id)),
+      withActor(fixture.dm)(items(encounters.list(fixture.campaign.id, {}))),
     );
     const asPlayer = await runtime.runPromise(
-      withActor(fixture.player)(encounters.list(fixture.campaign.id)),
+      withActor(fixture.player)(items(encounters.list(fixture.campaign.id, {}))),
     );
 
     expect(asDm.map((e) => e.id)).toContain(fixture.encounter.id);
@@ -350,7 +351,7 @@ describe("a campaign-scoped actor", () => {
       ),
     );
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(encounters.list(fixture.otherTable.id))),
+      Effect.flip(withActor(fixture.player)(items(encounters.list(fixture.otherTable.id, {})))),
     );
 
     expect(found._tag).toBe("NotFound");
@@ -358,7 +359,7 @@ describe("a campaign-scoped actor", () => {
 
     // …and it really is there and really is shared.
     const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(encounters.list(fixture.otherTable.id)),
+      withActor(fixture.dm)(items(encounters.list(fixture.otherTable.id, {}))),
     );
     expect(asDm.map((e) => e.id)).toEqual([fixture.encounterElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
@@ -396,7 +397,7 @@ describe("a campaign-scoped actor", () => {
     const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(encounters.list(fixture.otherTable.id))),
+      Effect.flip(withActor(scopedDm)(items(encounters.list(fixture.otherTable.id, {})))),
     );
     const written = await runtime.runPromise(
       Effect.flip(

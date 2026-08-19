@@ -16,6 +16,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 /**
  * Beats: one line of prose about what happened, filed against the night.
@@ -183,7 +184,7 @@ describe("jotting one down", () => {
     await as(beats.create(fixture.campaign.id, night.id, { body: "Then: the hag begged." }));
     await as(beats.create(fixture.campaign.id, night.id, { body: "Last: Wren let her go." }));
 
-    const listed = await as(beats.list(fixture.campaign.id, night.id));
+    const listed = await as(items(beats.list(fixture.campaign.id, night.id, {})));
     expect(listed.map((beat) => beat.body)).toEqual([
       "First: they took the ford.",
       "Then: the hag begged.",
@@ -284,7 +285,7 @@ describe("correcting one — the reason beats are not log lines", () => {
 
     await as(beats.remove(fixture.campaign.id, night.id, drop.id));
 
-    const listed = await as(beats.list(fixture.campaign.id, night.id));
+    const listed = await as(items(beats.list(fixture.campaign.id, night.id, {})));
     expect(listed.map((beat) => beat.id)).toEqual([keep.id]);
     const gone = await as(Effect.flip(beats.findById(fixture.campaign.id, night.id, drop.id)));
     expect(gone).toBeInstanceOf(NotFound);
@@ -350,7 +351,7 @@ describe("a player actor", () => {
     const asPlayer = <A, E, R extends Services>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
       runtime.runPromise(withActor(fixture.player)(effect).pipe(Effect.orDie));
 
-    const listed = await asPlayer(beats.list(fixture.campaign.id, night.id));
+    const listed = await asPlayer(items(beats.list(fixture.campaign.id, night.id, {})));
     expect(listed.map((beat) => beat.id)).toEqual([shown.id]);
 
     const denied = await asPlayer(
@@ -398,10 +399,10 @@ describe("a campaign-scoped actor", () => {
     // which is the shape that would work if the predicate trusted the session
     // it was handed instead of containing it.
     const honest = await asScoped(
-      Effect.flip(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id)),
+      Effect.flip(items(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id, {}))),
     );
     const smuggled = await asScoped(
-      Effect.flip(beats.list(fixture.campaign.id, fixture.sessionElsewhere.id)),
+      Effect.flip(items(beats.list(fixture.campaign.id, fixture.sessionElsewhere.id, {}))),
     );
     const smuggledBeat = await asScoped(
       Effect.flip(
@@ -415,7 +416,7 @@ describe("a campaign-scoped actor", () => {
 
     // …and it really is there and really is shared, so the three refusals
     // above are about scope rather than about an empty table.
-    const asDm = await as(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id));
+    const asDm = await as(items(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id, {})));
     expect(asDm.map((beat) => beat.id)).toEqual([fixture.beatElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
   }, 60_000);
@@ -433,7 +434,7 @@ describe("a campaign-scoped actor", () => {
     );
     const listed = await runtime.runPromise(
       withActor(scopedDm)(
-        Effect.flip(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id)),
+        Effect.flip(items(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id, {}))),
       ).pipe(Effect.orDie),
     );
 

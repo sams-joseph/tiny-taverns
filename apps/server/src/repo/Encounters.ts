@@ -1,6 +1,8 @@
 import {
   type Actor,
   type CampaignId,
+  type CreatedOrder,
+  type CreatedPageFilterValues,
   CurrentActor,
   type Difficulty,
   Encounter,
@@ -8,9 +10,11 @@ import {
   type EncounterId,
   type EncounterUpdate,
   NotFound,
+  type Page,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
+import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -91,9 +95,11 @@ const creatureCount = (
 export class Encounters extends Context.Service<
   Encounters,
   {
+    /** Paged, oldest first — see `repo/paging.ts`. */
     readonly list: (
       campaignId: CampaignId,
-    ) => Effect.Effect<ReadonlyArray<Encounter>, NotFound, CurrentActor>;
+      filter: CreatedPageFilterValues,
+    ) => Effect.Effect<Page<Encounter, CreatedOrder>, NotFound, CurrentActor>;
     readonly findById: (
       campaignId: CampaignId,
       id: EncounterId,
@@ -118,19 +124,24 @@ export class Encounters extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const ordering = createdOrdering<EncounterRow>(sql, "encounter");
 
       return {
-        list: (campaignId) =>
+        list: (campaignId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<EncounterRow>`
                 select encounter.*, ${creatureCount(sql, campaignId, actor)} from encounter
-                where ${rowReadable(sql, "encounter", campaignId, actor)}
-                order by encounter.created_at asc
+                where ${sql.and([
+                  rowReadable(sql, "encounter", campaignId, actor),
+                  ...pageClauses(sql, ordering, filter.cursor),
+                ])}
+                order by ${orderClause(sql, ordering)}
+                limit ${pageLimit(filter.limit)}
               `;
-              return rows.map(toEncounter);
+              return pageOfRows(rows, filter.limit, ordering, "created", toEncounter);
             }),
           ),
 

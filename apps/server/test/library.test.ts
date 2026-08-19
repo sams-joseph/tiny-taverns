@@ -10,6 +10,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 /**
  * The Library: **where a monster is authored**, and the originals a campaign
@@ -83,7 +84,7 @@ interface LibraryQuery {
 
 /** The Library, as this credential reads it. */
 const libraryFor = (token: string, query: LibraryQuery = {}) =>
-  as(token, (client) => client.library.list({ query }));
+  as(token, (client) => Effect.map(client.library.list({ query }), (page) => page.items));
 
 const named = (creatures: ReadonlyArray<Creature>): ReadonlyArray<string> =>
   creatures.map((creature) => creature.name);
@@ -231,7 +232,10 @@ describe("the Library shows originals only", () => {
     // the campaign bestiary is where it lives.
     const library = await libraryFor(fixture.jo.token);
     const bestiary = await as(fixture.jo.token, (client) =>
-      client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+      Effect.map(
+        client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+        (page) => page.items,
+      ),
     );
 
     expect(named(library)).not.toContain(CREATURES.inHerCampaign);
@@ -307,7 +311,7 @@ describe("the Library shows originals only", () => {
     // `AGENTS.md`'s list of what the captain has not been asked.
     const scoped = new Actor({ accountId: fixture.jo.accountId, campaignId: fixture.saltRoad.id });
     const seen = await runtime.runPromise(
-      Effect.flatMap(Creatures, (creatures) => creatures.library({})).pipe(
+      Effect.flatMap(Creatures, (creatures) => items(creatures.library({}))).pipe(
         Effect.provideService(CurrentActor, scoped),
         Effect.orDie,
       ),
@@ -331,7 +335,10 @@ describe("the Library shows originals only", () => {
     // it, and the assertion below is the pair.
     const library = await libraryFor(fixture.pim.token);
     const bestiary = await as(fixture.pim.token, (client) =>
-      client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+      Effect.map(
+        client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+        (page) => page.items,
+      ),
     );
 
     expect(named(library)).toContain("Goblin Boss");
@@ -606,7 +613,10 @@ describe("a campaign takes a copy", () => {
     expect(library.filter((creature) => creature.name === CREATURES.hers)).toHaveLength(1);
     // And the campaign now has the copy, under its own id.
     const bestiary = await as(fixture.jo.token, (client) =>
-      client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+      Effect.map(
+        client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+        (page) => page.items,
+      ),
     );
     expect(bestiary.map((creature) => creature.id)).toContain(copy.id);
     expect(bestiary.map((creature) => creature.id)).not.toContain(fixture.hers.id);
@@ -787,23 +797,24 @@ describe("the controls", () => {
     }
   });
 
-  it("is refused a one-element environment filter, exactly as the bestiary is", async () => {
-    // **A known defect of the wire contract, pinned rather than worked around.**
-    // The derived client encodes `["Cave"]` as a single `?environments=Cave`;
-    // the server's query decoder reads one occurrence of a key as a scalar, and
-    // `Schema.Array` refuses it — a 400. It is `CreatureFilter`'s behaviour
-    // today and `LibraryFilter` inherits it by being the same fields, which is
-    // the point: one contract, one bug, one fix.
-    //
-    // The fix belongs in `packages/api` or upstream in `effect`, not in a second
-    // client-side workaround and not in a special case here.
-    const result = await runtime.runPromise(
-      Effect.flatMap(clientFor(fixture.jo.token), (client) =>
-        client.library.list({ query: { environments: ["Cave"] } }),
-      ).pipe(Effect.result),
-    );
+  it("takes a one-element environment filter, exactly as the bestiary does", async () => {
+    // **The defect this list used to pin, now the other way round.** The derived
+    // client encodes `["Cave"]` as a single `?environments=Cave`; the server's
+    // query decoder reads one occurrence of a key as a scalar, and a bare
+    // `Schema.Array` refused it — a 400 on the commonest case there is, one chip
+    // pressed. `LibraryFilter` inherited it by being the same fields, which was
+    // the point: one contract, one bug, one fix. The fix is `queryArray` in
+    // `packages/api`, not a client-side workaround and not a special case here.
+    const narrowed = await libraryFor(fixture.jo.token, { environments: ["Cave"] });
 
-    expect(result._tag).toBe("Failure");
+    expect(narrowed.length).toBeGreaterThan(0);
+    for (const creature of narrowed) {
+      expect(creature.environments, `${creature.name} does not live in a cave`).toContain("Cave");
+    }
+  });
+
+  it("answers an empty list for an environment nothing wears", async () => {
+    expect(await libraryFor(fixture.jo.token, { environments: ["Moon"] })).toEqual([]);
   });
 
   it("has no scope, and naming one anyway reaches nothing", async () => {
@@ -823,7 +834,7 @@ describe("the controls", () => {
         return yield* response.json;
       }).pipe(Effect.orDie),
     );
-    const names = (body as ReadonlyArray<{ readonly name: string }>).map(
+    const names = (body as { readonly items: ReadonlyArray<{ readonly name: string }> }).items.map(
       (creature) => creature.name,
     );
 

@@ -252,7 +252,7 @@ const NotesLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const notes = yield* Notes;
     return handlers
-      .handle("list", ({ params }) => notes.list(params.campaignId))
+      .handle("list", ({ params, query }) => notes.list(params.campaignId, query))
       .handle("create", ({ params, payload }) => notes.create(params.campaignId, payload))
       .handle("findById", ({ params }) => notes.findById(params.campaignId, params.noteId))
       .handle("update", ({ params, payload }) =>
@@ -268,7 +268,7 @@ const EncountersLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const encounters = yield* Encounters;
     return handlers
-      .handle("list", ({ params }) => encounters.list(params.campaignId))
+      .handle("list", ({ params, query }) => encounters.list(params.campaignId, query))
       .handle("create", ({ params, payload }) => encounters.create(params.campaignId, payload))
       .handle("findById", ({ params }) =>
         encounters.findById(params.campaignId, params.encounterId),
@@ -287,6 +287,7 @@ const CreaturesLive = HttpApiBuilder.group(
     const creatures = yield* Creatures;
     return handlers
       .handle("list", ({ params, query }) => creatures.list(params.campaignId, query))
+      .handle("environments", ({ params }) => creatures.environments(params.campaignId))
       .handle("create", ({ params, payload }) => creatures.create(params.campaignId, payload))
       .handle("findById", ({ params }) => creatures.findById(params.campaignId, params.creatureId))
       .handle("update", ({ params, payload }) =>
@@ -319,6 +320,7 @@ const LibraryLive = HttpApiBuilder.group(
     const creatures = yield* Creatures;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
+      .handle("environments", () => creatures.libraryEnvironments())
       .handle("create", ({ payload }) => creatures.libraryCreate(payload))
       .handle("findById", ({ params }) => creatures.libraryFindById(params.creatureId))
       .handle("update", ({ params, payload }) =>
@@ -375,7 +377,9 @@ const BeatsLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const beats = yield* Beats;
     return handlers
-      .handle("list", ({ params }) => beats.list(params.campaignId, params.sessionId))
+      .handle("list", ({ params, query }) =>
+        beats.list(params.campaignId, params.sessionId, query),
+      )
       .handle("create", ({ params, payload }) =>
         beats.create(params.campaignId, params.sessionId, payload),
       )

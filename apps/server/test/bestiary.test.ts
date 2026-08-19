@@ -11,6 +11,7 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 /**
  * The bestiary's own visibility properties.
@@ -100,7 +101,7 @@ const makeFixture = Effect.gen(function* () {
 
   // The global corpus, found by name rather than by id — there is no endpoint
   // that mints one, which is the point of `bestiary/import.ts`.
-  const corpus = yield* as(creatures.list(campaign.id, { scope: "system" }));
+  const corpus = yield* as(items(creatures.list(campaign.id, { scope: "system" })));
   const goblinBoss = corpus.find((creature) => creature.name === "Goblin Boss")!;
 
   const outsider = yield* anAccount("Someone else");
@@ -244,10 +245,10 @@ describe("the new tables fail closed", () => {
 describe("the global system corpus", () => {
   it("is reachable from every campaign the actor can read", async () => {
     const here = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { scope: "system" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { scope: "system" }))),
     );
     const there = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.otherTable.id, { scope: "system" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.otherTable.id, { scope: "system" }))),
     );
 
     expect(here.map((creature) => creature.name)).toContain("Goblin Boss");
@@ -261,10 +262,10 @@ describe("the global system corpus", () => {
     // The crisp pair: the same actor, the same corpus, two campaigns — and the
     // campaign's own creatures do not travel between them.
     const here = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, {})),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {}))),
     );
     const there = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.otherTable.id, {})),
+      withActor(fixture.dm)(items(creatures.list(fixture.otherTable.id, {}))),
     );
 
     expect(here.map((creature) => creature.id)).toContain(fixture.authored.id);
@@ -281,7 +282,7 @@ describe("the global system corpus", () => {
     // and a path is a claim.
     const listed = await runtime.runPromise(
       Effect.flip(
-        withActor(fixture.dm)(creatures.list(fixture.outsiderCampaign.id, { scope: "system" })),
+        withActor(fixture.dm)(items(creatures.list(fixture.outsiderCampaign.id, { scope: "system" }))),
       ),
     );
     const found = await runtime.runPromise(
@@ -308,7 +309,7 @@ describe("the global system corpus", () => {
     // players. A stat block is exactly what the product says a player must not
     // have — the hag's legendary actions are the example.
     const listed = await runtime.runPromise(
-      withActor(fixture.player)(creatures.list(fixture.campaign.id, {})),
+      withActor(fixture.player)(items(creatures.list(fixture.campaign.id, {}))),
     );
     const found = await runtime.runPromise(
       Effect.flip(
@@ -393,7 +394,7 @@ describe("the global system corpus", () => {
     expect(again.updated).toBeGreaterThan(0);
 
     const corpus = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { scope: "system" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { scope: "system" }))),
     );
     expect(corpus.filter((creature) => creature.name === "Goblin Boss")).toHaveLength(1);
   });
@@ -464,7 +465,7 @@ describe("deriving a copy — the reskin", () => {
 describe("a campaign-scoped actor", () => {
   it("cannot read the other campaign's creatures, by either path", async () => {
     const honest = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(creatures.list(fixture.otherTable.id, {}))),
+      Effect.flip(withActor(fixture.player)(items(creatures.list(fixture.otherTable.id, {})))),
     );
     // Naming this campaign while asking for a creature that lives in the other
     // one — the shape that would work if the predicate trusted the id.
@@ -492,12 +493,12 @@ describe("a campaign-scoped actor", () => {
     const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(creatures.list(fixture.otherTable.id, {}))),
+      Effect.flip(withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, {})))),
     );
     // The global corpus is no way around it either: it is reachable *through a
     // readable campaign*, and this credential does not reach that campaign.
     const corpus = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(creatures.list(fixture.otherTable.id, { scope: "system" }))),
+      Effect.flip(withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, { scope: "system" })))),
     );
 
     expect(listed._tag).toBe("NotFound");
@@ -716,10 +717,10 @@ describe("an encounter's roster", () => {
 describe("the bestiary's filters", () => {
   it("finds a creature by a substring of its name and by a word only the document has", async () => {
     const substring = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { q: "gob" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { q: "gob" }))),
     );
     const fullText = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { q: "nimble escape" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { q: "nimble escape" }))),
     );
 
     // `Bestiary.jsx:11` is `name.includes(q)`, so half a word has to work…
@@ -732,7 +733,7 @@ describe("the bestiary's filters", () => {
     // `websearch_to_tsquery` rather than `to_tsquery`, and the `ILIKE`
     // wildcards escaped — a search box is not an expression language.
     const results = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { q: "100% & _boss_ | (" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { q: "100% & _boss_ | (" }))),
     );
 
     expect(results).toEqual([]);
@@ -741,14 +742,14 @@ describe("the bestiary's filters", () => {
   it("matches any of the environment toggles, and orders by the sort the client asked for", async () => {
     const marsh = await runtime.runPromise(
       withActor(fixture.dm)(
-        creatures.list(fixture.campaign.id, { environments: ["Marsh"], scope: "system" }),
+        items(creatures.list(fixture.campaign.id, { environments: ["Marsh"], scope: "system" })),
       ),
     );
     const byCr = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { sort: "cr", scope: "system" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { sort: "cr", scope: "system" }))),
     );
     const byName = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { sort: "name", scope: "system" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { sort: "name", scope: "system" }))),
     );
 
     expect(marsh.map((creature) => creature.name).sort()).toEqual([
@@ -775,13 +776,13 @@ describe("the bestiary's filters", () => {
     // "Save your own creatures next to the official ones" — one list by
     // default, and the two halves nameable when a DM wants one of them.
     const all = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, {})),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {}))),
     );
     const mine = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { scope: "campaign" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { scope: "campaign" }))),
     );
     const official = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.list(fixture.campaign.id, { scope: "system" })),
+      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { scope: "system" }))),
     );
 
     expect(mine.every((creature) => creature.campaignId === fixture.campaign.id)).toBe(true);

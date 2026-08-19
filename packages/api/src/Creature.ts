@@ -1,6 +1,8 @@
 import { Schema } from "effect";
 import { AccountId, CampaignId, CreatureId } from "./Ids.js";
+import { pageFilter } from "./Page.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
+import { queryArray } from "./Query.js";
 
 /**
  * A creature has a **document form and a row form**, and neither derives from
@@ -265,6 +267,19 @@ const crSort = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1000 
 const environments = Schema.Array(shortLabel).check(Schema.isLengthBetween(0, 16));
 
 /**
+ * The same vocabulary **as a query parameter**, which is a different schema and
+ * has to be.
+ *
+ * A JSON payload really does carry an array; a URL carries a repeated key, and
+ * one occurrence of it is indistinguishable from a scalar. `queryArray` is what
+ * reconciles the two — see `Query.ts`, which is also the rule that a bare
+ * `Schema.Array` in a `query:` position is a bug wherever it appears. This is
+ * the parameter the defect was found on: `?environments=Cave` was a 400 and
+ * `?environments=Cave&environments=River` was a 200.
+ */
+const environmentsFilter = queryArray(shortLabel).check(Schema.isLengthBetween(0, 16));
+
+/**
  * Everything a creature is, as a client may state it — and the whole of what a
  * **Library** entity has, because a Library entity is in no campaign and
  * `visibility` is a statement about players at a table.
@@ -373,9 +388,18 @@ export type CreatureScope = typeof CreatureScope.Type;
  */
 export const LibraryFilter = {
   q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
-  /** Any-of, like the toggle row: a creature matches if it lives in any of them. */
-  environments: Schema.optional(environments),
+  /**
+   * Any-of, like the toggle row: a creature matches if it lives in any of them.
+   *
+   * **It narrows the query**, as a Postgres `&&` array overlap, and no client
+   * re-filters what comes back. It could not: a page is a page of the narrowed
+   * corpus, so a chip applied to the answer would filter one page and call it
+   * the list. That is why the array-decoding defect and pagination are one
+   * change rather than two.
+   */
+  environments: Schema.optional(environmentsFilter),
   sort: Schema.optional(CreatureSort),
+  ...pageFilter(CreatureSort),
 } as const;
 
 /** The decoded Library filter, as a repository sees it. */

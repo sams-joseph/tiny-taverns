@@ -424,7 +424,8 @@ describe("the prep surface", () => {
           },
         });
 
-        const encounters = yield* client.encounters.list({ params: { campaignId } });
+        const encounters = (yield* client.encounters.list({ params: { campaignId }, query: {} }))
+          .items;
         const checklist = yield* client.prep.list({
           params: { campaignId, sessionId: session.id },
         });
@@ -594,6 +595,57 @@ describe("the bestiary", () => {
     expect(seen.readBack.campaignId).toBe(seen.creature.campaignId);
   }, 60_000);
 
+  it("pages the bestiary over the wire, and refuses a cursor it did not mint", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({ payload: { name: "Pages" } });
+        const campaignId = campaign.id;
+
+        const first = yield* client.creatures.list({
+          params: { campaignId },
+          query: { scope: "system", sort: "name", limit: 2 },
+        });
+        const second = yield* client.creatures.list({
+          params: { campaignId },
+          query: { scope: "system", sort: "name", limit: 2, cursor: first.nextCursor ?? undefined },
+        });
+        // The chip vocabulary is its own route under the same prefix as
+        // `/:creatureId`. A static segment wins over a parameter in the router,
+        // and this is where that is checked rather than assumed.
+        const vocabulary = yield* client.creatures.environments({ params: { campaignId } });
+
+        // A cursor is base64url of a small JSON object, so a forged one fails
+        // the *schema* — which is what keeps a bad cursor a 400 with no error
+        // member on any endpoint.
+        const http = yield* HttpClient.HttpClient;
+        const forged = yield* http
+          .get(`/campaigns/${campaignId}/creatures?cursor=not-a-cursor`, {
+            headers: { authorization: `Bearer ${token}` },
+          })
+          .pipe(
+            Effect.map((response) => response.status),
+            Effect.orDie,
+          );
+
+        return { first, second, vocabulary, forged };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.first.items.length).toBe(2);
+    expect(seen.first.nextCursor).not.toBeNull();
+    expect(seen.second.items.length).toBe(2);
+    // No row appears on both pages — the property a page boundary is about.
+    expect(
+      seen.second.items.filter((creature) =>
+        seen.first.items.some((earlier) => earlier.id === creature.id),
+      ),
+    ).toEqual([]);
+    expect(seen.vocabulary.length).toBeGreaterThan(0);
+    expect(seen.vocabulary).toEqual([...seen.vocabulary].sort());
+    expect(seen.forged).toBe(400);
+  }, 60_000);
+
   it("carries the filters as query parameters, arrays included", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
@@ -601,21 +653,36 @@ describe("the bestiary", () => {
         const campaign = yield* client.campaigns.create({ payload: { name: "Filters" } });
         const campaignId = campaign.id;
 
-        const byName = yield* client.creatures.list({
+        const byName = (yield* client.creatures.list({
           params: { campaignId },
           query: { q: "gob", scope: "system" },
-        });
-        const byTrait = yield* client.creatures.list({
+        })).items;
+        const byTrait = (yield* client.creatures.list({
           params: { campaignId },
           query: { q: "nimble escape" },
-        });
-        // Repeated `?environments=` — the one encoding worth proving end to end.
-        const byEnvironment = yield* client.creatures.list({
+        })).items;
+        // Repeated `?environments=` — and, beside it, the **single** occurrence
+        // that used to be a 400. `UrlParams.fromInput` emits one `?environments=`
+        // for a one-element array and the server read it as a scalar; one chip
+        // pressed is the shape a real user meets first. See `Query.ts`.
+        const byEnvironment = (yield* client.creatures.list({
           params: { campaignId },
           query: { environments: ["River", "Cave"], sort: "name" },
-        });
+        })).items;
+        const byOneEnvironment = (yield* client.creatures.list({
+          params: { campaignId },
+          query: { environments: ["Cave"], sort: "name" },
+        })).items;
+        const byNoEnvironment = (yield* client.creatures.list({
+          params: { campaignId },
+          query: { environments: [], sort: "name", scope: "system" },
+        })).items;
+        const byUnknownEnvironment = (yield* client.creatures.list({
+          params: { campaignId },
+          query: { environments: ["Moon"], sort: "name" },
+        })).items;
 
-        return { byName, byTrait, byEnvironment };
+        return { byName, byTrait, byEnvironment, byOneEnvironment, byNoEnvironment, byUnknownEnvironment };
       }).pipe(Effect.orDie),
     );
 
@@ -625,6 +692,11 @@ describe("the bestiary", () => {
       "Ferryman's Shade",
       "Goblin Boss",
     ]);
+    expect(seen.byOneEnvironment.map((creature) => creature.name)).toEqual(["Goblin Boss"]);
+    // No chips is not a filter at all, so the whole corpus comes back.
+    expect(seen.byNoEnvironment.length).toBeGreaterThan(2);
+    // A chip nothing wears is an empty list, not an error and not everything.
+    expect(seen.byUnknownEnvironment).toEqual([]);
   }, 60_000);
 
   it("derives a campaign copy of a system creature, and refuses to edit the original", async () => {
@@ -634,10 +706,10 @@ describe("the bestiary", () => {
         const campaign = yield* client.campaigns.create({ payload: { name: "Reskins" } });
         const campaignId = campaign.id;
 
-        const corpus = yield* client.creatures.list({
+        const corpus = (yield* client.creatures.list({
           params: { campaignId },
           query: { scope: "system", q: "Goblin Boss" },
-        });
+        })).items;
         const original = corpus[0]!;
 
         const copy = yield* client.creatures.derive({
@@ -685,10 +757,10 @@ describe("the bestiary", () => {
         });
         const encounterId = encounter.id;
 
-        const corpus = yield* client.creatures.list({
+        const corpus = (yield* client.creatures.list({
           params: { campaignId },
           query: { scope: "system", q: "Goblin Boss" },
-        });
+        })).items;
         const archer = yield* client.creatures.create({
           params: { campaignId },
           payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
@@ -874,7 +946,7 @@ describe("declared errors reach the client as declared errors", () => {
         // Branded, so the id has to be decoded rather than written — a plain
         // string is a compile error here, which is the point of the brand.
         const campaignId = Schema.decodeSync(CampaignId)("00000000-0000-4000-8000-000000000000");
-        return yield* Effect.flip(client.notes.list({ params: { campaignId } }));
+        return yield* Effect.flip(client.notes.list({ params: { campaignId }, query: {} }));
       }).pipe(Effect.orDie),
     );
 

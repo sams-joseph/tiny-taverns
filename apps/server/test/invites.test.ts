@@ -19,6 +19,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount, asDm, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { items } from "./support/paging.js";
 
 /**
  * The invitation, and **the first player actor the product has ever been able to
@@ -240,7 +241,7 @@ describe("the first player actor, and what it reaches", () => {
     const { account: player } = await joinAs("Sova", issued.token, fixture.campaign.id);
 
     const notes = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(player)(repo.list(fixture.campaign.id))).pipe(
+      Effect.flatMap(Notes, (repo) => as(player)(items(repo.list(fixture.campaign.id, {})))).pipe(
         Effect.orDie,
       ),
     );
@@ -248,7 +249,7 @@ describe("the first player actor, and what it reaches", () => {
     // player at one is a stranger at the other, exactly as an account with no
     // membership is.
     const elsewhere = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(player)(repo.list(fixture.otherTable.id))).pipe(
+      Effect.flatMap(Notes, (repo) => as(player)(items(repo.list(fixture.otherTable.id, {})))).pipe(
         Effect.result,
       ),
     );
@@ -423,7 +424,7 @@ describe("the lifetime rules", () => {
     const { account: wrongPerson } = await joinAs("Nem", issued.token, fixture.campaign.id);
 
     const before = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(wrongPerson)(repo.list(fixture.campaign.id))).pipe(
+      Effect.flatMap(Notes, (repo) => as(wrongPerson)(items(repo.list(fixture.campaign.id, {})))).pipe(
         Effect.result,
       ),
     );
@@ -440,7 +441,7 @@ describe("the lifetime rules", () => {
     );
 
     const after = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(wrongPerson)(repo.list(fixture.campaign.id))).pipe(
+      Effect.flatMap(Notes, (repo) => as(wrongPerson)(items(repo.list(fixture.campaign.id, {})))).pipe(
         Effect.result,
       ),
     );

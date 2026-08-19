@@ -19,6 +19,7 @@ import {
   CreatureFilter,
   CreatureLibraryCreate,
   CreatureLibraryUpdate,
+  CreatureSort,
   CreatureUpdate,
   LibraryFilter,
 } from "./Creature.js";
@@ -71,6 +72,7 @@ import {
 } from "./Invite.js";
 import { CampaignMember, CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
+import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
 import { PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
@@ -521,9 +523,17 @@ class CharactersGroup extends HttpApiGroup.make("characters")
 
 class NotesGroup extends HttpApiGroup.make("notes")
   .add(
+    /**
+     * Paged, oldest first — see `Page.ts` for the keyset and for what
+     * `nextCursor` means. There is no `q`: the notes screen filters what the
+     * campaign frame already loaded, deliberately, and `notes.list` gaining a
+     * search box would be a second answer to a question `campaigns/:c/search`
+     * already answers over four tables at once.
+     */
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
-      success: Schema.Array(Note),
+      query: createdPageFilter,
+      success: createdPageOf(Note),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {
@@ -563,7 +573,8 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
   .add(
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
-      success: Schema.Array(Encounter),
+      query: createdPageFilter,
+      success: createdPageOf(Encounter),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {
@@ -617,7 +628,26 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
       query: CreatureFilter,
-      success: Schema.Array(Creature),
+      success: pageOf(Creature, CreatureSort),
+      error: NotFound,
+    }),
+    /**
+     * Every environment the creatures this list can reach are tagged with.
+     *
+     * Its own read rather than a field on the page, because the chip row is a
+     * fact about **the corpus** and a page is a fact about fifty rows of it.
+     * Derived from the answers instead, a chip would exist only for an
+     * environment that happened to be on the first page — and pressing one
+     * narrows the query now, so later pages are narrower still and the row could
+     * never grow back. A control that can filter itself out of existence is the
+     * shape this codebase refuses.
+     *
+     * Same predicate as `list`, so a chip cannot name something the list will
+     * not return.
+     */
+    HttpApiEndpoint.get("environments", "/environments", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(Schema.String),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {
@@ -724,7 +754,11 @@ class LibraryGroup extends HttpApiGroup.make("library")
      */
     HttpApiEndpoint.get("list", "/creatures", {
       query: LibraryFilter,
-      success: Schema.Array(Creature),
+      success: pageOf(Creature, CreatureSort),
+    }),
+    /** The chip row's vocabulary, over this Library — see `creatures.environments`. */
+    HttpApiEndpoint.get("environments", "/creatures/environments", {
+      success: Schema.Array(Schema.String),
     }),
     /**
      * Author a monster. **No campaign, and no `origin`** — the column default
@@ -877,7 +911,8 @@ class BeatsGroup extends HttpApiGroup.make("beats")
   .add(
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId, sessionId: SessionId },
-      success: Schema.Array(Beat),
+      query: createdPageFilter,
+      success: createdPageOf(Beat),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {

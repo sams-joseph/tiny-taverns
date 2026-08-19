@@ -5,14 +5,18 @@ import {
   type BeatId,
   type BeatUpdate,
   type CampaignId,
+  type CreatedOrder,
+  type CreatedPageFilterValues,
   CurrentActor,
   type EncounterRunId,
   NotFound,
+  type Page,
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
+import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import { RUNS } from "./liveTables.js";
 import {
   type AssistantOrigin,
@@ -110,10 +114,12 @@ const ensureRunWritable = (
 export class Beats extends Context.Service<
   Beats,
   {
+    /** Paged, oldest first — see `repo/paging.ts`. */
     readonly list: (
       campaignId: CampaignId,
       sessionId: SessionId,
-    ) => Effect.Effect<ReadonlyArray<Beat>, NotFound, CurrentActor>;
+      filter: CreatedPageFilterValues,
+    ) => Effect.Effect<Page<Beat, CreatedOrder>, NotFound, CurrentActor>;
     readonly findById: (
       campaignId: CampaignId,
       sessionId: SessionId,
@@ -143,9 +149,10 @@ export class Beats extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
+      const ordering = createdOrdering<BeatRow>(sql, "beat");
 
       return {
-        list: (campaignId, sessionId) =>
+        list: (campaignId, sessionId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
@@ -154,10 +161,14 @@ export class Beats extends Context.Service<
               // recap quotes them in, and the order the night happened in.
               const rows = yield* sql<BeatRow>`
                 select beat.* from beat
-                where ${nestedRowReadable(sql, BEATS, sessionId, campaignId, actor)}
-                order by beat.created_at asc, beat.id asc
+                where ${sql.and([
+                  nestedRowReadable(sql, BEATS, sessionId, campaignId, actor),
+                  ...pageClauses(sql, ordering, filter.cursor),
+                ])}
+                order by ${orderClause(sql, ordering)}
+                limit ${pageLimit(filter.limit)}
               `;
-              return rows.map(toBeat);
+              return pageOfRows(rows, filter.limit, ordering, "created", toBeat);
             }),
           ),
 

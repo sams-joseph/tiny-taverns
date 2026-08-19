@@ -523,7 +523,15 @@ describe("the scope, counted", () => {
     // spent by the audience the endpoint is for. What keeps it narrow is
     // `PlayerLiveTable`, which has no field for a hit-point total, a band or an
     // armour class — the *type*, exactly as it is for `Recap.readAsPlayer`.
-    expect(ungated).toBe(71);
+    //
+    // The seventy-second and seventy-third are `Creatures.environments` and
+    // `Creatures.libraryEnvironments` — the chip row's vocabulary over each of
+    // the two creature lists. Each composes the *same* predicate as the list it
+    // belongs to, so it can only ever name an environment that list will return,
+    // and it discloses strictly less than the rows do. Gating them would gate
+    // the bestiary itself, which is a creature read a player of a shared
+    // campaign is entitled to.
+    expect(ungated).toBe(73);
   });
 });
 
