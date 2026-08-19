@@ -656,15 +656,23 @@ answer when it does.
 
 **The web suite has its own load-sensitive flake, and it is the same trap wearing a different
 face.** `campaign/authoring.test.tsx`'s _"names it, rates it, tags it, and attaches a creature — in
-one save"_ drives a whole dialog through Base UI's keyboard-driven `Select`, and on a busy machine
-it lands near Vitest's default 5000ms. Measured across ten root runs on an unchanged tree it ranged
-**1963–4980ms** — twenty milliseconds from failing, with nothing changed — and it takes
-`sends shared only when the DM says so` down with it. Both times it has been seen, the change in
-flight was nowhere near it. **Check the same commit twice under different load before believing a
-web-suite failure is yours**, and measure the suspect file _in isolation_ rather than comparing
-whole-suite numbers taken minutes apart: this box runs several agents at once, load average swings
-from 2 to 12, and a same-commit A/B taken at two different moments will happily "prove" a doubling
-that is not there.
+one save"_ drives a whole dialog through Base UI's keyboard-driven `Select`, and its cost is almost
+entirely the machine rather than the code: **~0.6s idle and in isolation, 1963–4980ms across ten
+root runs on an unchanged tree, and 8599ms with the box deliberately oversubscribed.** Three other
+tests in that file and in `bestiary/LibraryScreen.test.tsx` drive the same control and track it.
+
+**So the budget is `testTimeout: 20_000` in `apps/web/vite.config.ts`, not the default**, and that
+is what a web-suite timeout now means. It was the default until CI's 2-core runner failed exactly
+those four at 5000ms while the server, package and build jobs were green — a runner with an order
+of magnitude fewer cores than this box, so no local number predicts it and the answer is a budget
+wide enough that the machine stops being the variable rather than a per-test annotation that leaves
+the next slowest test to fail the same way.
+
+None of that makes a slow test a fast one, so the diagnostic habit stands: **check the same commit
+twice under different load before believing a web-suite failure is yours**, and measure the suspect
+file _in isolation_ rather than comparing whole-suite numbers taken minutes apart — this box runs
+several agents at once, load average swings from 2 to 12, and a same-commit A/B taken at two
+different moments will happily "prove" a doubling that is not there.
 
 ## The actor and visibility contract
 

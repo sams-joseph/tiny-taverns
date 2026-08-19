@@ -31,5 +31,28 @@ export default defineConfig({
     env: {
       VITE_CLERK_PUBLISHABLE_KEY: "",
     },
+    /**
+     * Vitest's default 5000ms is a local-machine number, and this suite has
+     * tests that spend most of it.
+     *
+     * The four slowest drive Base UI's keyboard-driven `Select` through a
+     * whole dialog — see AGENTS.md, "The web suite has its own load-sensitive
+     * flake", which measured the worst of them across ten whole-suite runs on
+     * an unchanged tree and found it landing a hair under the default. That is
+     * a budget problem rather than a performance regression: idle and in
+     * isolation the same test finishes in well under a second, and what eats
+     * the rest is contention from the other workers Vitest sizes off the core
+     * count.
+     *
+     * CI's 2-core runner is where that ran out. It has an order of magnitude
+     * fewer cores than the machine those numbers were taken on, so its per-test
+     * wall clock is not comparable and the default cannot be tuned against a
+     * local measurement at all — the honest move is a budget big enough that
+     * the machine stops being the variable. 20s is four times the measured
+     * local ceiling under load, and roughly thirty times the isolated cost of
+     * the slowest test. It is still short enough that a genuinely hung test
+     * fails the run rather than sitting on the runner's job timeout.
+     */
+    testTimeout: 20_000,
   },
 });
