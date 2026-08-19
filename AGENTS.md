@@ -1591,6 +1591,38 @@ Four things about it that are decisions rather than details:
 - **Subclass is in `sheet.identity` and not in `descriptor`.** A fifth column on the generated
   expression would be a migration for a string only the header draws.
 
+#### `GET /me`: who is asking, and the two fields that earned their place
+
+The one read in the product that is about the **account** rather than about what it has —
+`AccountIdentity` (`packages/api/src/Account.ts`), served by `Accounts.identity`
+(`apps/server/src/Accounts.ts`), consumed by `characters/load.ts` for the roster subtitle above.
+
+**It answers `{ id, name }` and the two are there for different reasons.** `name` is the ask.
+`id` is the join key: `CampaignMember.accountId` and `Character.accountId` are already on the
+wire and a client has no other way to tell which of those rows is the reader's — which is why the
+party screen declines to badge a roster row _You_. It discloses nothing new; it is the value every
+one of those rows already carries. **`createdAt` (no reader), `clerkUserId` (the vendor's subject,
+which lives below the identity seam) and anything a provider knows but this schema does not store
+are deliberately out** — see the class, where each absence is written down.
+
+Three things about it that are decisions rather than details:
+
+- **It is safe by shape, not by predicate.** It takes no path parameter, no query and no payload,
+  so there is nowhere for a caller to name an account; the row is `CurrentActor`'s, read by primary
+  key. That is `me.updateCharacter`'s argument — _it names no campaign, so there is none for a
+  caller to claim_ — with one fewer thing to claim, and it is the reason this endpoint needs
+  nothing from `repo/visibility.ts`. `Api.test.ts` fails if a parameter or a query appears on it,
+  and `apps/server/test/whoami.test.ts` drives two accounts, a scoped credential and a player.
+- **It is not a lookup and must not grow into one.** Other people's names are `members.list`,
+  which is behind the `DmActor` gate precisely because a roster is the DM's to enumerate. An id
+  parameter here would be a second answer to that, with no gate.
+- **It declares no error, and cannot fail.** An actor exists by the time a handler runs, so the
+  account it points at does too; a missing row is a defect and dies, the way `actorForIdentity`'s
+  impossible re-read does. **It lives in `Accounts` rather than in `repo/`** because that is the
+  module that owns the `account` table — the two `join account` reads in `repo/Memberships.ts` and
+  `repo/Invites.ts` are about somebody else, behind a gate or behind a token, and neither could
+  answer this.
+
 #### `GET /me/characters`: the one read on `character` that names no campaign
 
 Every character this account plays, across every table it is at — `Characters.mine`,
@@ -3511,8 +3543,11 @@ silently.
 - **The empty roster tells its two silences apart** — invited nowhere, or at a table with nothing
   handed to you — off `tableCount`, which is why the load reads memberships even when the campaign
   names are not needed. Neither is papered over with a friendlier sentence.
-- **The subtitle is counted, never named.** The delivery's _"Ilse Vantar · playing in 2
-  campaigns"_ cannot be built: no `GET /me/…` answers who the account _is_, only what it has.
+- **The subtitle names the reader and then counts.** The delivery's _"Ilse Vantar · playing in 2
+  campaigns"_ is half buildable and is built that way: `GET /me` answers the name (see below), and
+  the number stays `tableCount`, because _campaigns played in_ is not _tables sat at_ and the
+  second is the one that makes an empty roster legible. `rosterSummary` in `characters/sheet.ts`
+  is the whole of it and the only caller.
 
 **What comes out of the drawing, and why** — report these rather than reinventing them:
 

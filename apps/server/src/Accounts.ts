@@ -1,9 +1,10 @@
-import { type AccountId, Actor } from "@taverns/api";
+import { type AccountId, AccountIdentity, Actor, CurrentActor } from "@taverns/api";
 import { Context, Effect, Layer, Option } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
 import { createHash, randomBytes } from "node:crypto";
 import type { VerifiedIdentity } from "./IdentityProvider.js";
+import { dieOnSqlError } from "./repo/rows.js";
 
 /**
  * What a provisioned account is called when the identity provider offered no
@@ -73,6 +74,31 @@ export class Accounts extends Context.Service<
     readonly actorForIdentity: (
       identity: VerifiedIdentity,
     ) => Effect.Effect<Actor, SqlError.SqlError>;
+    /**
+     * Who the current credential belongs to — `GET /me`.
+     *
+     * **It lives here rather than in `repo/` because the `account` table does**,
+     * and one table gets one module that reads it. The two joins in
+     * `repo/Memberships.ts` and `repo/Invites.ts` are the exceptions that prove
+     * it: each reads a *name* alongside a row of its own table, and neither
+     * could answer this question — they are about somebody else, behind a gate
+     * or behind a token.
+     *
+     * **It takes `CurrentActor` and no argument at all.** That is the whole
+     * safety property, and it is a fact about the signature rather than
+     * something the `where` clause has to get right: there is no id to pass, so
+     * the row is the actor's or it is nothing. Every other read in the product
+     * needs `repo/visibility.ts` because it is asked about a row a caller
+     * named; this one is asked about the caller.
+     *
+     * **It cannot fail, and the type says so.** The actor was resolved from a
+     * row that this read selects again by primary key, so `NotFound` would name
+     * a state the middleware already ruled out — and the endpoint declares no
+     * error to match. A broken query is `dieOnSqlError`'s business, like every
+     * read in `repo/`, and a row that has gone missing between the two is the
+     * impossible case `actorForIdentity` already dies on.
+     */
+    readonly identity: Effect.Effect<AccountIdentity, never, CurrentActor>;
   }
 >()("Accounts") {
   static readonly layer = Layer.effect(this)(
@@ -104,6 +130,28 @@ export class Accounts extends Context.Service<
                 // sets it, and none is minted here yet.
                 Option.some(accountActor(row.id));
           }),
+
+        identity: dieOnSqlError(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            const rows = yield* sql<{ readonly id: AccountId; readonly name: string }>`
+              select id, name from account where id = ${actor.accountId}
+            `;
+            const row = rows[0];
+            if (row === undefined) {
+              // The actor came out of this table one request ago. Missing it now
+              // means the row was deleted underneath a live credential, which is
+              // a defect rather than an answer — the same call `actorForIdentity`
+              // makes about its own impossible re-read.
+              return yield* Effect.die(
+                new Error(
+                  "no account row for a resolved actor: the account was deleted mid-request",
+                ),
+              );
+            }
+            return new AccountIdentity({ id: row.id, name: row.name });
+          }),
+        ),
 
         actorForIdentity: (identity) =>
           Effect.gen(function* () {

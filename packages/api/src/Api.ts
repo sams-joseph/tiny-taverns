@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
+import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
@@ -168,6 +169,11 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * `ownRowReadable`, which is `ownedRowReadable` *conjoined* with ownership and
  * therefore cannot be wider than it.
  *
+ * `identity` is the one read here that is about the account rather than about
+ * what it has, and it is where the group's own property is at its plainest: it
+ * takes nothing at all, so the account it answers about is the credential's by
+ * construction.
+ *
  * `updateCharacter` is the group's first write and the product's first player
  * write. It follows the same rule from the other side: its predicate is
  * conjoined with ownership too, so it can only ever reach rows `characters`
@@ -176,6 +182,33 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  */
 class MeGroup extends HttpApiGroup.make("me")
   .add(
+    /**
+     * Who is asking — the display name, and the id every row about this account
+     * already carries.
+     *
+     * **The narrowest read in the product, and it is narrow by shape rather
+     * than by predicate.** There is no parameter, no payload and no row id, so
+     * there is nothing a caller could name but themselves; the row is
+     * `CurrentActor`'s, which the middleware resolved. That is the same
+     * property that puts `updateCharacter` in this group — *it names no
+     * campaign, so there is none for a caller to claim* — with one fewer thing
+     * to claim: it names no row either.
+     *
+     * It follows that there is **no error type**. Every other read here can be
+     * empty and this one cannot be missing: an actor exists by the time a
+     * handler runs, so the account it points at exists too, and a `NotFound`
+     * would describe a state the schema cannot reach.
+     *
+     * **It is not a way to look anybody else up, and there is no shape it
+     * could grow into one by accident.** A read that took an id would be a
+     * second answer to `members.list`, which is behind the `DmActor` gate
+     * precisely because other people's names are the DM's to enumerate. What
+     * `AccountIdentity` carries and what it deliberately leaves out is written
+     * down on the class.
+     */
+    HttpApiEndpoint.get("identity", "/", {
+      success: AccountIdentity,
+    }),
     HttpApiEndpoint.get("campaigns", "/campaigns", {
       success: Schema.Array(CampaignMembership),
     }),

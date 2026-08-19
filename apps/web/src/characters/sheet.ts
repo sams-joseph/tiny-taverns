@@ -134,24 +134,36 @@ export const sheetTabs = (sheet: CharacterSheet, writable = false): SheetTabs =>
 };
 
 /**
- * The line under *Your characters*: what is true, counted.
+ * The line under *Your characters*: who is reading, and then what is true.
  *
- * Deliberately not the delivery's *"Ilse Vantar · playing in 2 campaigns"* — the
- * API has no read that names the signed-in account (`GET /me/…` answers what an
- * account *has*, never who it is), and a name invented here would be the stubbed
- * field the screens rule forbids. `tableCount` is the memberships, which is a
- * different number from the campaigns played in and is the one that makes the
- * empty roster legible.
+ * **The delivery's *"Ilse Vantar · playing in 2 campaigns"*, with the half that
+ * is real.** The name is now real: `GET /me` answers who the credential belongs
+ * to, which is the one thing every other `/me` read declines to say, and
+ * `load.ts` asks for it in the round it was already making. The number stays
+ * counted rather than copied — *campaigns played in* is not *tables sat at*, and
+ * `tableCount` is the one that makes an empty roster legible, so the two are
+ * kept apart instead of collapsed into the drawn phrase.
+ *
+ * The name leads and is never punctuated into nothing: `AccountIdentity.name` is
+ * `not null` at the column and defaults to `DEFAULT_ACCOUNT_NAME` when the
+ * identity provider offered none, so there is no absent case to design for —
+ * only a name we do not yet know, which is that default's own business.
  */
-export const rosterSummary = (characters: ReadonlyArray<Character>, tableCount: number): string => {
+export const rosterSummary = (
+  characters: ReadonlyArray<Character>,
+  tableCount: number,
+  accountName: string,
+): string => {
   const tables = new Set(characters.map((character) => character.campaignId)).size;
   const plural = (count: number, one: string, many: string) =>
     `${String(count)} ${count === 1 ? one : many}`;
 
-  if (characters.length === 0) {
-    return tableCount === 0
-      ? "You are not at a table yet."
-      : `No characters yet, at ${plural(tableCount, "table", "tables")}.`;
-  }
-  return `${plural(characters.length, "character", "characters")}, at ${plural(tables, "table", "tables")}.`;
+  const counted =
+    characters.length === 0
+      ? tableCount === 0
+        ? "not at a table yet."
+        : `no characters yet, at ${plural(tableCount, "table", "tables")}.`
+      : `${plural(characters.length, "character", "characters")}, at ${plural(tables, "table", "tables")}.`;
+
+  return `${accountName} · ${counted}`;
 };

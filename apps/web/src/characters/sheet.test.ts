@@ -102,9 +102,22 @@ describe("which tabs the document can fill", () => {
 describe("the roster's own line", () => {
   const at = (campaignId: string) => ({ campaignId }) as never;
 
-  it("counts characters and the tables they are at", () => {
-    expect(rosterSummary([at("a"), at("b")], 2)).toBe("2 characters, at 2 tables.");
-    expect(rosterSummary([at("a"), at("a")], 3)).toBe("2 characters, at 1 table.");
+  it("names the reader, then counts characters and the tables they are at", () => {
+    expect(rosterSummary([at("a"), at("b")], 2, "Ilse Vantar")).toBe(
+      "Ilse Vantar · 2 characters, at 2 tables.",
+    );
+    expect(rosterSummary([at("a"), at("a")], 3, "Ilse Vantar")).toBe(
+      "Ilse Vantar · 2 characters, at 1 table.",
+    );
+  });
+
+  /**
+   * The name is the real one or it is the provisioning default — never a blank
+   * and never invented here. `DEFAULT_ACCOUNT_NAME` is what an account is called
+   * before the identity provider has offered a name, and it renders as itself.
+   */
+  it("renders whatever the account is called, including the default", () => {
+    expect(rosterSummary([at("a")], 1, "Someone")).toBe("Someone · 1 character, at 1 table.");
   });
 
   /**
@@ -112,7 +125,9 @@ describe("the roster's own line", () => {
    * which is what stops the empty state being a friendlier lie than the truth.
    */
   it("says which kind of empty it is", () => {
-    expect(rosterSummary([], 0)).toBe("You are not at a table yet.");
-    expect(rosterSummary([], 2)).toBe("No characters yet, at 2 tables.");
+    expect(rosterSummary([], 0, "Ilse Vantar")).toBe("Ilse Vantar · not at a table yet.");
+    expect(rosterSummary([], 2, "Ilse Vantar")).toBe(
+      "Ilse Vantar · no characters yet, at 2 tables.",
+    );
   });
 });

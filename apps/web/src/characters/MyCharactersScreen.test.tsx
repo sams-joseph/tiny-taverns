@@ -22,16 +22,23 @@ beforeEach(() => server.reset());
 afterEach(() => document.body.replaceChildren());
 
 describe("your characters", () => {
-  it("reads the two endpoints that have no campaign in their path", async () => {
+  it("reads the three endpoints that have no campaign in their path", async () => {
     await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
 
     const paths = server.calls.map((call) => call.pathname);
     expect(paths).toContain("/me/characters");
     expect(paths).toContain("/me/campaigns");
-    // One round of two, not a call per character: the campaign a row belongs to
-    // is a name looked up here, never a second read per card.
-    expect(server.calls).toHaveLength(2);
+    // Who is reading, which the other two decline to say. It carries no
+    // parameter and no search string, so there is nothing in the request that
+    // could name an account but the credential's own.
+    expect(paths).toContain("/me");
+    const whoami = server.calls.find((call) => call.pathname === "/me");
+    expect(whoami?.search).toBe("");
+    expect(whoami?.body).toBe("");
+    // One round of three, not a call per character: the campaign a row belongs
+    // to is a name looked up here, never a second read per card.
+    expect(server.calls).toHaveLength(3);
   });
 
   it("draws every character it was given, at the table it is at", async () => {
@@ -96,7 +103,7 @@ describe("your characters", () => {
 
     await screen.findByText("No characters yet");
     expect(screen.getByText(/Your DM writes the characters/)).toBeTruthy();
-    expect(screen.getByText("No characters yet, at 2 tables.")).toBeTruthy();
+    expect(screen.getByText("Ilse Vantar · no characters yet, at 2 tables.")).toBeTruthy();
 
     document.body.replaceChildren();
     server.routes = noTables();
@@ -104,7 +111,7 @@ describe("your characters", () => {
 
     await screen.findByText("No characters yet");
     expect(screen.getByText(/Nobody has invited you to a table/)).toBeTruthy();
-    expect(screen.getByText("You are not at a table yet.")).toBeTruthy();
+    expect(screen.getByText("Ilse Vantar · not at a table yet.")).toBeTruthy();
   });
 
   it("says the server did not answer rather than an empty roster", async () => {

@@ -149,7 +149,9 @@ export function MyCharactersScreen() {
         <TopBar
           title="Your characters"
           subtitle={
-            view === undefined ? undefined : rosterSummary(view.characters, view.tableCount)
+            view === undefined
+              ? undefined
+              : rosterSummary(view.characters, view.tableCount, view.accountName)
           }
         />
       }

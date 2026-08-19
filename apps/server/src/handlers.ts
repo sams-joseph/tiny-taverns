@@ -9,6 +9,7 @@ import {
 } from "@taverns/api";
 import { Duration, Effect, Layer, Schedule, Stream } from "effect";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
 import { liveHeartbeatSeconds } from "./Config.js";
 import { Health } from "./Health.js";
@@ -94,8 +95,9 @@ const CampaignsLive = HttpApiBuilder.group(
 );
 
 /**
- * The endpoints that name no campaign — which tables this account is at, which
- * characters it plays across them, and the one write a player may make.
+ * The endpoints that name no campaign — who this account is, which tables it is
+ * at, which characters it plays across them, and the one write a player may
+ * make.
  *
  * The two reads are `mine` on their repository and neither takes a proof: what a
  * credential already reaches is not a disclosure to the credential reaching it.
@@ -113,10 +115,15 @@ const MeLive = HttpApiBuilder.group(
   TavernsApi,
   "me",
   Effect.fnUntraced(function* (handlers) {
+    const accounts = yield* Accounts;
     const memberships = yield* Memberships;
     const characters = yield* Characters;
     return (
       handlers
+        // The whole handler, and there is nothing for it to pass: `identity`
+        // takes `CurrentActor` and no argument, so which account it answers
+        // about is not a decision made here.
+        .handle("identity", () => accounts.identity)
         // Two paths, one read, and the shelf named at each of them — which is
         // what makes "no existing read answers an archived campaign" a fact about
         // the URL rather than about a decoded default. See `repo/Memberships.ts`.

@@ -153,9 +153,24 @@ export const sorrel = {
 
 const membership = (of: unknown, joinedAt: string) => ({ campaign: of, role: "player", joinedAt });
 
+/**
+ * Who is reading — `GET /me`, the one read in the round that is about the
+ * account rather than about what it has.
+ *
+ * The name is the delivery's own, because the subtitle it draws is what this
+ * endpoint exists to make buildable. The id is the account id every
+ * `Character.accountId` and `CampaignMember.accountId` already carries, and is
+ * here for the same reason it is on the wire: it is the join key, not a secret.
+ */
+export const account = {
+  id: "2b1f2a1e-0000-4000-8000-0000000000a1",
+  name: "Ilse Vantar",
+};
+
 /** Two characters, two tables. */
 export const twoTables = (): Map<string, Answer> =>
   new Map<string, Answer>([
+    ["GET /me", { status: 200, body: account }],
     ["GET /me/characters", { status: 200, body: [brannoc, sorrel] }],
     [
       "GET /me/campaigns",

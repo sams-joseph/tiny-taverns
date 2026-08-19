@@ -27,7 +27,14 @@ interface GroupShape {
   readonly identifier: string;
   readonly endpoints: Record<
     string,
-    { readonly identifier: string; readonly middlewares: ReadonlySet<unknown> }
+    {
+      readonly identifier: string;
+      readonly method: string;
+      readonly path: string;
+      readonly params?: unknown;
+      readonly query?: unknown;
+      readonly middlewares: ReadonlySet<unknown>;
+    }
   >;
 }
 
@@ -58,6 +65,39 @@ describe("the API declaration", () => {
     // and a deadline. See `Invite.ts` for the trade and `repo/Invites.ts` for
     // the read. Adding a third name here should be at least as hard.
     expect(unauthenticated).toEqual(["health.check", "invitePreview.read"]);
+  });
+
+  /**
+   * `GET /me` answers who is asking, and the guarantee that it cannot answer
+   * about anybody else is a property of the declaration rather than of the
+   * handler behind it.
+   *
+   * A path parameter, a query parameter or a payload would each be a place for
+   * a caller to name an account, and none of the three exists: the account is
+   * `CurrentActor`'s, resolved by the group's middleware from the bearer token.
+   * That is the same argument the `me` group makes about `updateCharacter` —
+   * *it names no campaign, so there is none for a caller to claim* — with one
+   * fewer thing to claim. Other people's identities are `members.list`, which
+   * is behind the `DmActor` gate for exactly that reason.
+   */
+  it("gives `me.identity` nothing a caller could name an account with", () => {
+    const me = groups.find((group) => group.identifier === "me");
+    const identity = endpointsOf(me as GroupShape).find(
+      (endpoint) => endpoint.identifier === "identity",
+    );
+
+    expect(identity?.method).toBe("GET");
+    expect(identity?.path).toBe("/me");
+    expect(identity?.params).toBeUndefined();
+    expect(identity?.query).toBeUndefined();
+    // And it is not a lookup wearing another name: the one endpoint in the
+    // whole group that takes a path parameter is the character write, whose
+    // parameter is a row of the caller's own.
+    expect(
+      endpointsOf(me as GroupShape)
+        .filter((endpoint) => endpoint.params !== undefined)
+        .map((endpoint) => endpoint.identifier),
+    ).toEqual(["updateCharacter"]);
   });
 
   it("declares the groups the product has today, and no more", () => {

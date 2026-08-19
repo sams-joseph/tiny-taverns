@@ -1,3 +1,4 @@
+export * from "./Account.js";
 export * from "./Actor.js";
 export * from "./Api.js";
 export * from "./Beat.js";

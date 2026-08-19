@@ -33,12 +33,21 @@ export interface MyCharactersView {
   readonly campaignNames: ReadonlyMap<CampaignId, string>;
   /** How many tables this account sits at at all — which is not how many it plays at. */
   readonly tableCount: number;
+  /**
+   * What the signed-in account is called — `GET /me`, the one read here that is
+   * about the reader rather than about what they have.
+   *
+   * It is the third call in the round and it is the reason the subtitle can
+   * name somebody: until this endpoint existed the screen could only count, and
+   * `rosterSummary` says so at length. See `AccountIdentity`.
+   */
+  readonly accountName: string;
 }
 
 export const loadMyCharacters = (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [characters, memberships] = yield* Effect.all(
-      [client.me.characters(), client.me.campaigns()],
+    const [characters, memberships, me] = yield* Effect.all(
+      [client.me.characters(), client.me.campaigns(), client.me.identity()],
       { concurrency: "unbounded" },
     );
 
@@ -48,5 +57,6 @@ export const loadMyCharacters = (client: TavernsClient) =>
         memberships.map((membership) => [membership.campaign.id, membership.campaign.name]),
       ),
       tableCount: memberships.length,
+      accountName: me.name,
     } satisfies MyCharactersView;
   });
