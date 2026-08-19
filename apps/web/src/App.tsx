@@ -13,9 +13,9 @@ import { router } from "./routes";
  * rather than an inheritance.
  *
  * Nothing here asks whether anyone is signed in. Every screen loads through
- * `useApiResource`, which resolves whichever credential exists — hosted session
- * or pasted machine token — and renders the `unauthorized` notice when neither
- * does. That is what keeps `pnpm -F web dev` working for a developer who has
+ * `api/atoms.ts`, whose client resolves whichever credential exists — hosted
+ * session or pasted machine token — per request, and renders the `unauthorized`
+ * notice when neither does. That is what keeps `pnpm -F web dev` working for a developer who has
  * never opened the Clerk dashboard.
  */
 export function App() {

@@ -1,9 +1,10 @@
-import type { CampaignMember, Character } from "@taverns/api";
+import type { CampaignId, CampaignMember, Character } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { DateTime } from "effect";
-import { useCallback, useMemo, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { Atom } from "effect/unstable/reactivity";
+import { useMemo, useState } from "react";
+import { apiAtom } from "../api/atoms";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { CharacterDialog } from "../campaign/CharacterDialog";
 import { InviteDialog } from "../campaign/InviteDialog";
@@ -63,26 +64,24 @@ import { RosterCard } from "./RosterCard";
  * and every line of it derives from rows that exist. See `needsOf`.
  */
 
+/**
+ * The roster's own two lists, keyed on the campaign — the members and the live
+ * invitations. The frame already reads the campaign and its characters, so this
+ * adds only what it does not.
+ */
+const rosterAtom = Atom.family((campaignId: CampaignId) => apiAtom(loadPartyRoster(campaignId)));
+
 export function PartyScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [inviting, setInviting] = useState(false);
   /** The character being written or edited — the old Party tab's one dialog. */
   const [editing, setEditing] = useState<{ readonly character: Character | undefined }>();
 
-  // Memoised on the id alone: its identity is what tells the frame's
-  // `useApiResource` to load again, so an unmemoised closure here would load
-  // forever. The frame already reads the campaign and its characters, so this
-  // adds only the two lists it does not.
-  const load = useCallback(
-    (client: TavernsClient) => loadPartyRoster(campaignId)(client),
-    [campaignId],
-  );
-
   return (
     <CampaignChrome<PartyRoster>
       campaignId={campaignId}
       title="Party"
-      load={load}
+      extra={rosterAtom(campaignId)}
       subtitle={({ view, extra }) => summaryOf(rosterOf(extra.members, view.party, extra.invites))}
       actions={() => (
         <>

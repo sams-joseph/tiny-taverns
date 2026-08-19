@@ -46,7 +46,7 @@ export const runApi = <A, E>(
  *
  * The promise-shaped half of the API surface: `api/mutation.ts` writes through
  * it, the runner's stream and optimistic layers drive it directly, and the
- * retiring `useApiResource` reads through it. The atom path in `api/atoms.ts`
+ * the corpus hook appends a page through it. The atom path in `api/atoms.ts`
  * does not — an atom carries a `Cause` rather than a `Result`, and
  * `failureFromCause` is its adapter — but both end at the same
  * `classifyFailure`, which is the point of keeping the taxonomy in one module.

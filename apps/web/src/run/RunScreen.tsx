@@ -40,7 +40,7 @@ import { useLiveStream } from "./stream";
  * **The route carries all three ids**, so a reload mid-fight lands back in the
  * fight. Nothing is kept in local storage and nothing has to be looked up.
  *
- * **The initial load and the live updates are separate.** `useApiResource` does
+ * **The initial load and the live updates are separate.** The atom does
  * the first read and owns the loading and failed states, exactly as every other
  * screen does. After that the stream's doorbell drives `useRunState.refresh`,
  * which re-reads only the run and its combatants and never puts the screen back

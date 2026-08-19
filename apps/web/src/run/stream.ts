@@ -184,7 +184,7 @@ export function useLiveStream({
       // Fetched per attempt, never held: a hosted session token lives 60
       // seconds and a fight lasts hours, so the token that opened the first
       // connection is expired long before the third one. Same rule as
-      // `useApiResource`; `auth/credential.ts` says why.
+      // every other read and write in the app; `auth/credential.ts` says why.
       const token = yield* Effect.promise(() => credentialRef.current());
       const client = yield* makeClient(token);
       const stream = yield* client.live.events({

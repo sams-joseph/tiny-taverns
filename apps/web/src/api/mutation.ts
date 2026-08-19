@@ -8,12 +8,17 @@ import type { ApiFailure } from "./failure";
 /**
  * How a screen *writes*: one call, one busy flag, one failure.
  *
- * The read side is `useApiResource`, and the two are deliberately shaped
- * differently. A read runs because its inputs changed, so its callback's
- * identity is the trigger and must be `useCallback`-stable. A write runs
- * because the DM clicked, so there is nothing to key on — the Effect is handed
- * over at `submit` time, and no memoisation rule applies to it. Getting that
- * backwards is how a form ends up saving on every render.
+ * The read side is `api/atoms.ts`, and the two are deliberately shaped
+ * differently. A read runs because its inputs changed, so it is an *atom* —
+ * identified by the key it was built from, and re-read when that key changes.
+ * A write runs because the DM clicked, so there is nothing to key on: the
+ * Effect is handed over at `submit` time and no memoisation rule applies to
+ * it. Getting that backwards is how a form ends up saving on every render.
+ *
+ * **Writes have not been ported and are the next piece of work.** Reads moved
+ * to atoms so a screen stops blanking on every re-read; a write's own
+ * invalidation — which key a save should refresh, rather than the caller
+ * hand-wiring `onSaved → reload()` — is the change after that.
  *
  * What it does *not* do is decide anything about the screen. It returns the
  * saved row (or `undefined` when the call failed) and leaves closing the
@@ -59,7 +64,7 @@ export function useMutation(): Mutation {
       setFailure(undefined);
       // Fetched here, per submit, never held: a hosted session token lives 60
       // seconds and a dialog can sit open longer than that. Same rule as
-      // `useApiResource`, and `auth/credential.ts` says why.
+      // the atom client, and `auth/credential.ts` says why.
       const token = await fetchCredential();
       const result = await runApiResult(use, token);
       setBusy(false);

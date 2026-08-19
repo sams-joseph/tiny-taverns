@@ -115,21 +115,35 @@ describe("CampaignScreen", () => {
     expect(screen.getByText("0/1")).toBeInTheDocument();
   });
 
-  it("fetches a fresh session token for every round of calls", async () => {
+  /**
+   * Hosted session tokens live 60 seconds, so a token read once and held works
+   * for under a minute and then 401s silently — for a page left open at a
+   * table, that is most of the session.
+   *
+   * **The atom port made this stricter rather than looser, and the numbers say
+   * which.** `useApiResource` fetched one token per *load* and handed it to
+   * `makeClient`, so the eight requests of one campaign read shared a token.
+   * The atom client resolves the credential inside `mapRequestEffect`, which
+   * runs per **request** — so a load mints as many tokens as it makes calls,
+   * and nothing is held even for the length of one screen's read. Counted
+   * against the requests rather than written down as a literal, so this keeps
+   * meaning what it says if `loadCampaignView` grows a round.
+   */
+  it("fetches a fresh session token for every call, not one per screen", async () => {
     const hosted = mintingSession();
     await renderScreen(hosted);
 
     const item = await screen.findByRole("checkbox", { name: "Reread the reeds ambush" });
-    expect(hosted.minted()).toBe(1);
+    const reads = server.calls.length;
+    expect(reads).toBeGreaterThan(1);
+    expect(hosted.minted()).toBe(reads);
 
-    // Hosted session tokens live 60 seconds. A token read once at mount works
-    // until the first refresh and then 401s silently, so the write must reach
-    // for a new one rather than reuse the one the load used.
+    // …and the write reaches for a new one rather than reusing any of them.
     await userEvent.click(item);
-    await waitFor(() => expect(hosted.minted()).toBe(2));
+    await waitFor(() => expect(hosted.minted()).toBe(reads + 1));
 
     const patch = server.calls.find((call) => call.method === "PATCH");
-    expect(patch?.authorization).toBe("Bearer session-token-2");
+    expect(patch?.authorization).toBe(`Bearer session-token-${reads + 1}`);
   });
 
   it("falls back to the pasted machine token when nobody is signed in", async () => {

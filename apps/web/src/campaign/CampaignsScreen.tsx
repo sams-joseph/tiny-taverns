@@ -34,7 +34,7 @@ import { ArchivedDialog } from "./ArchivedDialog";
  *
  * **The role switch is a mode**, so this file answers two questions rather than
  * one: *the tables I run* at `#/campaigns`, and *the tables I sit at* at
- * `#/play`. One `useApiResource` and one endpoint serve both — `role` is on
+ * `#/play`. One atom and one endpoint serve both — `role` is on
  * every row already — and the split is a filter over the answer plus different
  * copy, different affordances and a different destination per row.
  *

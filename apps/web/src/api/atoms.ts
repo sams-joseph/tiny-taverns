@@ -3,6 +3,7 @@ import { TavernsApi } from "@taverns/api";
 import { Cause, Effect, Option } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { AsyncResult, Atom, AtomHttpApi } from "effect/unstable/reactivity";
+import { useMemo } from "react";
 import { fetchCredential } from "../auth/credential";
 import type { TavernsClient } from "./client";
 import { failureFromCause, type Resource } from "./failure";
@@ -10,23 +11,28 @@ import { failureFromCause, type Resource } from "./failure";
 /**
  * How a screen loads from the API: one atom, one loading state, one failure.
  *
- * **This is the idiom to copy.** `api/resource.ts`'s `useApiResource` is the
- * one being retired; a new screen written on it will have to be ported again.
- * See `AGENTS.md` for which call sites have moved and which have not.
+ * **This is the one way a screen reads.** It replaced a hand-rolled
+ * `useApiResource` (`useEffect` + `useState` + `Effect.result`), which is gone
+ * rather than deprecated — every one of its eighteen call sites moved, so there
+ * is no second idiom to copy by accident. Writes are still `api/mutation.ts`;
+ * see `AGENTS.md` for what that means and what is left.
  *
- * What an atom gives that the hook does not, in this codebase specifically:
+ * What an atom gives that the hook did not, in this codebase specifically:
  *
  *  - **It keeps the value it has while it re-reads.** `AsyncResult` is
  *    stale-while-revalidate by construction — a refresh keeps the `Success` and
- *    raises `waiting`, where `useApiResource` sets `{state: "loading"}` at the
- *    top of every run and throws the last good answer away. That is the blank
- *    screen a DM sees for half a second on a real connection every time a write
- *    reloads a screen, and it is gone for a ported call site.
+ *    raises `waiting`, where `useApiResource` set `{state: "loading"}` at the
+ *    top of every run and threw the last good answer away. That is the blank
+ *    screen a DM saw for about half a second on a real connection every time a
+ *    write reloaded a screen.
  *  - **One read is shared by everything that asks for it.** An atom is
  *    identified by object identity and memoised in the registry, so two
- *    components naming the same atom make one request.
- *  - **Failures stay typed.** `Api.query`'s error is the endpoint's *declared*
- *    union rather than `unknown`, and `failureFromCause` is the whole adapter.
+ *    components naming the same atom make one request. That is what let
+ *    `CampaignChrome` stop re-reading the campaign on every move between its
+ *    five destinations — a cost its own doc block used to state as the price of
+ *    one source of truth.
+ *  - **Failures stay typed.** An endpoint's error is its *declared* union
+ *    rather than `unknown`, and `failureFromCause` is the whole adapter.
  *
  * ### The client is derived from `TavernsApi`, exactly as `client.ts` is
  *
@@ -155,14 +161,39 @@ export const apiAtom = <A, E>(
  *    It reads as still-loading, which is what it is.
  *  - **`Initial` is `loading`**, whether or not it is waiting: nothing has been
  *    read yet, so there is no value to keep.
+ *
+ * **The `Resource` is memoised on the `AsyncResult`, and that is load-bearing
+ * rather than an optimisation.** `useApiResource` returned React state, so its
+ * `Resource` kept its identity between renders and a screen could write
+ * `useEffect(…, [resource])`. `toResource` allocates, so an unmemoised version
+ * changes identity every render and any such effect re-runs every render —
+ * which, for an effect that sets state to a fresh value (`setExtra([])` in
+ * `bestiary/corpus.ts` does exactly that), is an infinite loop rather than
+ * wasted work. The `AsyncResult` itself is stable per registry value, so
+ * keying on it restores the property the hook it replaces had.
  */
 export const useApiAtom = <A, E>(
   atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>,
 ): readonly [Resource<A>, () => void] => {
   const result = useAtomValue(atom);
   const refresh = useAtomRefresh(atom);
-  return [toResource(result), refresh] as const;
+  const resource = useMemo(() => toResource(result), [result]);
+  return [resource, refresh] as const;
 };
+
+/**
+ * The same mapping, for a screen that has an `AsyncResult` in hand rather than
+ * an atom to read.
+ *
+ * There is exactly one such screen and it is `campaign/CampaignChrome.tsx`: the
+ * frame reads the campaign view *and* whichever destination-specific atom the
+ * screen handed it, and combines the two with `AsyncResult.all` — which is the
+ * atom-shaped counterpart of the `Effect.all` it used to compose. Combining
+ * first and mapping once is what keeps the frame's own rule intact: one screen,
+ * three states, not sixty-four.
+ */
+export const asResource = <A, E>(result: AsyncResult.AsyncResult<A, E>): Resource<A> =>
+  toResource(result);
 
 const toResource = <A, E>(result: AsyncResult.AsyncResult<A, E>): Resource<A> => {
   if (AsyncResult.isSuccess(result)) {

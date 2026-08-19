@@ -130,9 +130,9 @@ const linkFor = (router: RegisteredRouter, token: string): string => {
  *
  * **Module scope and `Atom.family`, because an atom is its own identity.** Built
  * inside the component it would be a fresh atom on every render and therefore an
- * infinite loop — the sharper form of the rule `useApiResource` stated as "`use`
- * must be `useCallback`-stable". The key is the campaign id, a string, which is
- * what `Atom.family`'s map can actually compare (see `api/atoms.ts`).
+ * infinite loop — the sharper form of the rule the hook this replaced stated as
+ * "`use` must be `useCallback`-stable". See `api/atoms.ts` for what makes a
+ * usable key.
  */
 const invitesAtom = Atom.family((campaignId: Campaign["id"]) =>
   apiAtom((client) => client.invites.list({ params: { campaignId } })),

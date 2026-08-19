@@ -5,11 +5,10 @@ import { Cause } from "effect";
  * distinguish — and the three states every data-backed screen has.
  *
  * This is the vocabulary, and it is deliberately in a module of its own rather
- * than in either loading hook. **Two idioms load data here while the port to
- * `@effect/atom-react` runs** (`api/atoms.ts` is the one that stays,
- * `api/resource.ts` the one being retired), and the whole point of the
- * taxonomy is that a screen says the same thing about a 401 whichever of them
- * fetched it. `ui/states.tsx` is the one place its copy is written.
+ * than in whichever hook happens to fetch. **Reads go through `api/atoms.ts`
+ * and writes through `api/mutation.ts`**, and the whole point of the taxonomy
+ * is that a screen says the same thing about a 401 whichever of them fetched
+ * it. `ui/states.tsx` is the one place its copy is written.
  *
  * `runApi` in `client.ts` rejects its promise, which is right for the Server
  * panel's one-shot buttons and wrong for a screen — a rejected promise loses
@@ -137,12 +136,12 @@ export const failureFromCause = <E>(cause: Cause.Cause<E>): ApiFailure =>
  * The three states a data-backed screen renders, and the one flag that says
  * which idiom fetched it.
  *
- * `refreshing` is what `@effect/atom-react` supplies and the retiring hook
- * cannot: an atom keeps the value it has while it re-reads
- * (`AsyncResult.waiting`), where `useApiResource` throws it away and paints
- * "Loading…" over a screen the DM was reading. So `refreshing` is honestly
- * always `false` on the `useApiResource` path — that hook has no state in
- * which it is true — and it is the visible half of why the port exists.
+ * `refreshing` is what `@effect/atom-react` supplies and the hand-rolled hook
+ * it replaced could not: an atom keeps the value it has while it re-reads
+ * (`AsyncResult.waiting`), where `useApiResource` set `{state: "loading"}` at
+ * the top of every run and painted "Loading…" over a screen the DM was
+ * reading. That is the blank this port was for, and the flag is the state that
+ * used to be unrepresentable.
  */
 export type Resource<A> =
   | { readonly state: "loading" }

@@ -1,11 +1,10 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
 import { useNavigate, type LinkProps } from "@tanstack/react-router";
 import { Badge, Button, Icon, type IconName } from "@taverns/ui";
-import { Effect } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
+import { apiAtom, asResource } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
@@ -45,26 +44,36 @@ import { StartSessionDialog } from "./StartSessionDialog";
  * enumerates the DM row's own destinations, so a sixth screen that hand-builds a
  * shell cannot ship.
  *
- * ### One `Effect`, per screen, still
+ * ### One read, three states — and since the atom port, one read *shared*
  *
- * Each destination composes `loadCampaignView` once, so it has the three states
- * `useApiResource` gives and not sixty-four. Five screens over one loader is
- * five loads where there used to be one — a real cost, and the honest one:
- * moving between Encounters and Notes now re-reads the campaign. The
- * alternative is a cache that is right until the first write it did not hear
- * about, and every write on these screens changes something the screen did not
- * send (`Encounter.creatureCount` is computed per read, a note's attachment
- * moves a count on a different card). One re-read is one source of truth.
+ * Every destination names the same `campaignViewAtom`, so it has the three
+ * states a screen has and not sixty-four. **The cost this file used to state
+ * honestly is gone**: it read *"five screens over one loader is five loads …
+ * moving between Encounters and Notes now re-reads the campaign"*, because each
+ * destination composed `loadCampaignView` into a hook of its own. An atom is
+ * identified by its key, so the second destination is answered from the
+ * registry without a request.
+ *
+ * What has **not** changed is how much one read is, or when it happens again.
+ * `loadCampaignView` is still six-to-eight endpoints in two rounds, and every
+ * structural write here still ends in `reload()` — so adding one checklist line
+ * still costs one write and eight reads. That is deliberate and is the same
+ * argument as before: a narrower cache is right until the first write it did
+ * not hear about, and every write on these screens changes something the screen
+ * did not send (`Encounter.creatureCount` is computed per read, a note's
+ * attachment moves a count on a different card). One re-read is one source of
+ * truth. Narrowing it is its own piece of work, and it reverses that.
  *
  * ### What a screen reads *on top* of the campaign view
  *
  * The Party needs the roster and the invitations; the Chronicle needs the whole
  * spine of nights. Both used to have loaders of their own, and the obvious way
- * to keep them — a second `useApiResource` beside the frame's — is the thing
- * this file exists to refuse: two resources is four combinations of loading and
- * failed for one screen, and two `reload`s for one write. So `load` composes
- * into the *same* Effect and arrives as `slots.extra`, which keeps every
- * destination at one call, three states and one re-read.
+ * to keep them — a second resource beside the frame's — is the thing this file
+ * exists to refuse: two of them is four combinations of loading and failed for
+ * one screen, and two `reload`s for one write. So a destination hands over an
+ * *atom*, the frame combines it with the view through `AsyncResult.all` and it
+ * arrives as `slots.extra` — which keeps every destination at one round, three
+ * states and one re-read, exactly as composing into one `Effect` did.
  *
  * It is also what keeps the cost to what it really is. Read alongside their own
  * loaders the two screens would ask for the campaign twice, the characters twice
@@ -104,17 +113,42 @@ export interface CampaignAct {
 /**
  * What a screen reads on top of the campaign view.
  *
- * The error channel is `unknown` on purpose: `useApiResource` narrows whatever
+ * The error channel is `unknown` on purpose: `asResource` narrows whatever
  * arrives through `classifyFailure`, which reads the decoded tag rather than a
  * declared type, so widening here costs a screen nothing and saves every caller
  * from restating the union of what six endpoints can fail with.
  */
-export type CampaignExtraLoad<Extra> = (
-  client: TavernsClient,
-) => Effect.Effect<Extra, unknown, HttpClient.HttpClient>;
+export type CampaignExtraAtom<Extra> = Atom.Atom<AsyncResult.AsyncResult<Extra, unknown>>;
 
-/** The default: a destination that needs nothing beyond the campaign view. */
-const nothingElse = () => Effect.succeed(undefined);
+/**
+ * The default: a destination that needs nothing beyond the campaign view.
+ *
+ * An atom that is already a success rather than one that reads nothing, so the
+ * combination below has something to combine and the three destinations that
+ * pass no `extra` cost no request at all.
+ */
+const NOTHING_ELSE: Atom.Atom<AsyncResult.AsyncResult<undefined, never>> = Atom.make(
+  AsyncResult.success<undefined>(undefined),
+);
+
+/**
+ * The campaign view, keyed on the campaign — **one atom, shared by all five
+ * destinations**.
+ *
+ * This is the thing the port bought this file. Its own doc block above records
+ * the price it used to pay: *"moving between Encounters and Notes re-reads the
+ * campaign"*, because each destination composed `loadCampaignView` into a hook
+ * of its own. They now name the same atom, so the registry answers the second
+ * one without a request.
+ *
+ * What has **not** changed is how much one read is: `loadCampaignView` is still
+ * six-to-eight endpoints in two rounds, and a write here still re-reads all of
+ * it. Narrowing that is its own piece of work and reverses the decision argued
+ * at the top of this file.
+ */
+const campaignViewAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(loadCampaignView(campaignId)),
+);
 
 /** What a destination is handed: the campaign, and the acts that belong to it. */
 export interface CampaignChromeSlots<Extra = undefined> {
@@ -182,7 +216,7 @@ export function CampaignChrome<Extra = undefined>({
   title,
   subtitle,
   actions,
-  load,
+  extra: extraFrom,
   children,
 }: {
   readonly campaignId: CampaignId;
@@ -192,38 +226,49 @@ export function CampaignChrome<Extra = undefined>({
   /** This screen's own top-bar controls: its search box and its create button. */
   readonly actions?: (slots: CampaignChromeSlots<Extra>) => ReactNode;
   /**
-   * What this screen reads beyond the campaign view — see `CampaignExtraLoad`.
+   * What this screen reads beyond the campaign view — see `CampaignExtraAtom`.
    *
-   * **Must be `useCallback`-stable**, for the reason every `useApiResource`
-   * callback is: its identity is what says "load again", so an inline closure
-   * here loads forever.
+   * An **atom**, built by the destination with an `Atom.family` at module
+   * scope. The `useCallback`-stability this used to demand is gone: an atom is
+   * its own identity, so there is nothing left for a caller to forget.
    */
-  readonly load?: CampaignExtraLoad<Extra>;
+  readonly extra?: CampaignExtraAtom<Extra>;
   readonly children: (slots: CampaignChromeSlots<Extra>) => ReactNode;
 }) {
   /**
-   * Stable without a memo: `nothingElse` is module-level, and a screen that
-   * passes one has already memoised it. The `as` is the one thing the compiler
-   * cannot see — with `load` omitted `Extra` really is its `undefined` default,
-   * and there is no way to say so from inside the generic.
+   * The `as` is the one thing the compiler cannot see — with `extra` omitted
+   * `Extra` really is its `undefined` default, and there is no way to say so
+   * from inside the generic.
    */
-  const readExtra: CampaignExtraLoad<Extra> =
-    load ?? (nothingElse as unknown as CampaignExtraLoad<Extra>);
+  const extraAtom: CampaignExtraAtom<Extra> =
+    extraFrom ?? (NOTHING_ELSE as unknown as CampaignExtraAtom<Extra>);
+  const viewAtom = campaignViewAtom(campaignId);
 
-  // Memoised on the id and the screen's own loader: their identity is what
-  // tells `useApiResource` to load again, so an unmemoised closure here would
-  // load forever.
-  const read = useCallback(
-    (client: TavernsClient) =>
-      // One round: nothing a screen adds depends on the view's answer, and the
-      // view's own two rounds are inside `loadCampaignView` where the real
-      // dependency is.
-      Effect.all([loadCampaignView(campaignId)(client), readExtra(client)], {
-        concurrency: "unbounded",
-      }),
-    [campaignId, readExtra],
+  /**
+   * Two atoms, one screen, three states.
+   *
+   * `AsyncResult.all` is the atom-shaped counterpart of the `Effect.all` this
+   * used to compose, and it keeps the rule this file argues for at the top:
+   * combining first and mapping once means a destination still renders three
+   * states rather than the sixteen two independent resources would give it. It
+   * is still one round — nothing a screen adds depends on the view's answer, and
+   * the view's own two rounds are inside `loadCampaignView`, where the real
+   * dependency is.
+   */
+  const viewResult = useAtomValue(viewAtom);
+  const extraResult = useAtomValue(extraAtom);
+  const resource = useMemo(
+    () => asResource(AsyncResult.all([viewResult, extraResult] as const)),
+    [viewResult, extraResult],
   );
-  const [resource, reload] = useApiResource(read);
+
+  const refreshView = useAtomRefresh(viewAtom);
+  const refreshExtra = useAtomRefresh(extraAtom);
+  /** Re-read both, because a write here can change either. */
+  const reload = useCallback(() => {
+    refreshView();
+    refreshExtra();
+  }, [refreshView, refreshExtra]);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
   const hob = useHobPanel({ initialOpen: false });
   const navigate = useNavigate();

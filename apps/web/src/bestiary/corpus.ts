@@ -1,11 +1,11 @@
 import type { Creature, CreatureSort, Page, PageCursor } from "@taverns/api";
 import { Effect, Result } from "effect";
 import type { HttpClient } from "effect/unstable/http";
+import type { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { TavernsClient } from "../api/client";
-import { runApiResult } from "../api/client";
+import { useApiAtom } from "../api/atoms";
+import { runApiResult, type TavernsClient } from "../api/client";
 import type { ApiFailure, Resource } from "../api/failure";
-import { useApiResource } from "../api/resource";
 import { useCredential } from "../auth/credential";
 import { NO_QUERY, type CorpusQuery, type CorpusView } from "./load";
 
@@ -93,20 +93,21 @@ export interface Corpus<V> {
 const SEARCH_SETTLE_MS = 250;
 
 /**
- * `load` is given the settled query and must be **`useCallback`-stable** on
- * everything else it closes over — its identity is what says "load again", so an
- * inline closure loads forever and the debounce buys nothing.
+ * `first` turns a settled query into the atom that reads its first page. The
+ * caller builds it with an `Atom.family` at module scope — one per screen, keyed
+ * on the query and on whatever else the read names — so **nothing here has to be
+ * `useCallback`-stable**: this hook keys on the atom it is handed, and the atom
+ * is the identity. That is the one thing the port simplified rather than moved.
  *
- * `more` is the same query one page on. It is a second function rather than an
- * optional cursor on the first because the two answer different shapes: the
- * first page comes with the campaign (or the tables to copy into) and the chip
- * vocabulary, and asking for those again with every page would be three requests
- * to add twenty-four rows.
+ * `more` is the same query one page on, and stays a plain call because appending
+ * a page is not a resource: it adds to what is on screen rather than replacing
+ * it. It is a second function rather than an optional cursor on the first
+ * because the two answer different shapes — the first page comes with the
+ * campaign (or the tables to copy into) and the chip vocabulary, and asking for
+ * those again with every page would be three requests to add twenty-four rows.
  */
 export function useCorpus<V extends CorpusView, E, E2>(
-  load: (
-    query: CorpusQuery,
-  ) => (client: TavernsClient) => Effect.Effect<V, E, HttpClient.HttpClient>,
+  first: (query: CorpusQuery) => Atom.Atom<AsyncResult.AsyncResult<V, E>>,
   more: (
     query: CorpusQuery,
     cursor: PageCursor<CreatureSort>,
@@ -125,12 +126,12 @@ export function useCorpus<V extends CorpusView, E, E2>(
   }, [term]);
 
   // The chips are in here now: they are a clause of the query, so pressing one
-  // is a load exactly as typing is. Keyed on the array's identity, which is
-  // state and so changes only when a chip is actually toggled — the same
-  // property that makes `use` below stable across an unrelated re-render.
+  // is a load exactly as typing is. The memo is no longer what keeps the read
+  // stable — `Atom.family` compares the query structurally, so an equal query
+  // is the same atom however this object was built — but it is still what keeps
+  // the *key* cheap to compare on an unrelated re-render.
   const query = useMemo<CorpusQuery>(() => ({ q, sort, environments }), [q, sort, environments]);
-  const use = useCallback((client: TavernsClient) => load(query)(client), [load, query]);
-  const [resource, reload] = useApiResource(use);
+  const [resource, reload] = useApiAtom(first(query));
 
   const [shown, setShown] = useState<V>();
   const [barren, setBarren] = useState<boolean>();
@@ -177,7 +178,7 @@ export function useCorpus<V extends CorpusView, E, E2>(
     setLoadingMore(true);
     setMoreFailure(undefined);
     void (async () => {
-      // Per call, never held — the rule `useApiResource` and `useMutation` both
+      // Per call, never held — the rule the atom client and `useMutation` both
       // follow, and `auth/credential.ts` says why.
       const token = await fetchCredential();
       const result = await runApiResult((client) => more(query, cursor)(client), token);

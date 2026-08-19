@@ -1,6 +1,8 @@
-import type { CreatureId, CreatureSort, PageCursor } from "@taverns/api";
+import type { CampaignId, CreatureId, CreatureSort, PageCursor } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
+import { apiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -67,20 +69,31 @@ const countOf = (n: number, narrowed: boolean, more: boolean): string => {
     : `${creatures} — this campaign's own, and the shared corpus`;
 };
 
+/**
+ * One page of this campaign's reachable bestiary, keyed on the campaign and the
+ * whole settled query.
+ *
+ * `CorpusQuery` carries an array of environment chips, and `Atom.family`
+ * compares it structurally all the way down — measured, and pinned in
+ * `api/atoms.test.tsx` — so an equal query is the same atom however the object
+ * was built. That is what lets `useCorpus` take a plain arrow rather than a
+ * `useCallback`.
+ */
+const bestiaryAtom = Atom.family(
+  ({ campaignId, query }: { readonly campaignId: CampaignId; readonly query: CorpusQuery }) =>
+    apiAtom(loadBestiary(campaignId, query)),
+);
+
 export function BestiaryScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [opened, setOpened] = useState<CreatureId | undefined>();
 
-  const load = useCallback(
-    (query: CorpusQuery) => (client: TavernsClient) => loadBestiary(campaignId, query)(client),
-    [campaignId],
-  );
   const more = useCallback(
     (query: CorpusQuery, cursor: PageCursor<CreatureSort>) => (client: TavernsClient) =>
       moreOfBestiary(campaignId, query, cursor)(client),
     [campaignId],
   );
-  const corpus = useCorpus(load, more);
+  const corpus = useCorpus((query) => bestiaryAtom({ campaignId, query }), more);
 
   const opening = corpus.creatures.find((creature) => creature.id === opened);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.

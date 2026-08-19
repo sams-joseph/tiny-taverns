@@ -15,8 +15,10 @@ import { NO_HOSTED_SESSION, useHostedSession, type HostedSession } from "./hoste
  * silently — for a page left open on a table, that is most of the session. The
  * machine token is read from storage per call for the same shape of reason:
  * pasting one into the Server panel takes effect on the next call rather than
- * on the next reload. `useApiResource` calls this immediately before each
- * request, and `ServerPanel.test.tsx` pins the property for the hosted half.
+ * on the next reload. The atom client resolves a credential inside
+ * `HttpClient.mapRequestEffect`, so it is asked immediately before each
+ * request; `ServerPanel.test.tsx` and `campaign/CampaignScreen.test.tsx` pin
+ * the property for the hosted half.
  */
 
 const MACHINE_TOKEN_KEY = "taverns.token";

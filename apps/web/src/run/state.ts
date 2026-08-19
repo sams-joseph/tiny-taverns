@@ -108,7 +108,7 @@ export function useRunState(path: RunPath, initial: LiveState | undefined): RunC
 
   // A fresh load — a different run, or a Try-again — replaces everything.
   // `initial`'s identity is what says "this is a new answer", exactly as it is
-  // for `useApiResource`'s callback.
+  // for an atom's key.
   useEffect(() => {
     setState(initial);
     setPending(new Map());

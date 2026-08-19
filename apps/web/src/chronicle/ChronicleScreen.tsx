@@ -13,9 +13,8 @@ import {
   Toggle,
 } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
-import type { TavernsClient } from "../api/client";
 import type { Resource } from "../api/failure";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
@@ -104,6 +103,13 @@ const searchAtom = Atom.family(
   }) => apiAtom(searchCampaign(campaignId, { q, scope })),
 );
 
+/**
+ * The spine of nights, keyed on the campaign. The recaps themselves are
+ * `RecapBody`'s own atoms — one per card the DM opens, which is the whole
+ * reason this screen does not compose them.
+ */
+const spineAtom = Atom.family((campaignId: CampaignId) => apiAtom(loadChronicleSpine(campaignId)));
+
 export function ChronicleScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [term, setTerm] = useState("");
@@ -122,11 +128,6 @@ export function ChronicleScreen() {
     const timer = setTimeout(() => setQ(term), SEARCH_SETTLE_MS);
     return () => clearTimeout(timer);
   }, [term]);
-
-  const load = useCallback(
-    (client: TavernsClient) => loadChronicleSpine(campaignId)(client),
-    [campaignId],
-  );
 
   const searching = q.trim() !== "";
   /**
@@ -158,7 +159,7 @@ export function ChronicleScreen() {
     <CampaignChrome<ChronicleSpine>
       campaignId={campaignId}
       title="Chronicle"
-      load={load}
+      extra={spineAtom(campaignId)}
       subtitle={({ extra }) =>
         searching
           ? settled === undefined

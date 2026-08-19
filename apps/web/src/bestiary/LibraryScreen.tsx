@@ -1,6 +1,8 @@
 import type { Creature, CreatureId, CreatureSort, PageCursor } from "@taverns/api";
 import { Button, Icon } from "@taverns/ui";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
+import { apiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -70,24 +72,24 @@ const countOf = (n: number, narrowed: boolean, more: boolean): string => {
   return n === 0 ? "Nothing here yet" : `${creatures} — yours, and the bundled corpus`;
 };
 
+/**
+ * One page of the Library, keyed on the query and nothing else — the whole point
+ * of this read is that it names no campaign, so the query is the whole key and
+ * the family can be handed to `useCorpus` bare.
+ */
+const libraryAtom = Atom.family((query: CorpusQuery) => apiAtom(loadLibrary(query)));
+
 export function LibraryScreen() {
   const [opened, setOpened] = useState<CreatureId | undefined>();
   /** `undefined` closed, `null` writing a new one, a row editing that one. */
   const [editing, setEditing] = useState<Creature | null | undefined>();
 
-  // Nothing to close over — the whole point of this read is that it names no
-  // campaign — so the identity is stable by construction and the corpus hook's
-  // "load again" is driven by the query alone.
-  const load = useCallback(
-    (query: CorpusQuery) => (client: TavernsClient) => loadLibrary(query)(client),
-    [],
-  );
   const more = useCallback(
     (query: CorpusQuery, cursor: PageCursor<CreatureSort>) => (client: TavernsClient) =>
       moreOfLibrary(query, cursor)(client),
     [],
   );
-  const corpus = useCorpus(load, more);
+  const corpus = useCorpus(libraryAtom, more);
 
   const opening = corpus.creatures.find((creature) => creature.id === opened);
   const campaigns = corpus.shown?.campaigns ?? [];
