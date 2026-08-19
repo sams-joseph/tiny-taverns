@@ -412,6 +412,14 @@ export function useHobConversation(
    * Both are named because the artifact's kind is the model's and this write
    * does not branch on it. Over-naming costs a request nobody was going to
    * make; under-naming costs a card that quietly says the wrong number.
+   *
+   * **The third target, a beat, is deliberately not named**, and the residue is
+   * small and stated: a beat is assembled into a *recap*, whose key is the
+   * night's session id — which this panel does not have, because the beat's
+   * session is resolved server-side from `campaign.current_session_id`. So a
+   * recap card left open on the Chronicle while a beat is accepted stays as it
+   * was until it is reopened. It did that before this too, when accepting
+   * refreshed nothing at all.
    */
   const save = useCallback(
     (artifact: HobArtifact) => {
