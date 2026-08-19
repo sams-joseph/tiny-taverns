@@ -2167,6 +2167,13 @@ Four things about it that are decisions rather than configuration:
   — `buildLocation(…).href` is the route as the router thinks of it (`/join/<token>`), and pasting
   _that_ after an origin would put the invitation secret in the **path**. `campaign/InviteDialog.tsx`
   is the one caller and says so.
+- **The invitation link is the one URL read outside the running app, so it is resolved against the
+  page rather than glued to the origin** — `new URL(createHref(…), location.href)`. At
+  `@tanstack/history@1.162.1` `createHref` already begins with `location.pathname` (and its
+  `search`), so a link minted from `example.com/taverns/` keeps the prefix; resolving rather than
+  concatenating is what stops that being incidental, since it is right for a bare `#…` too.
+  `campaign/invites.test.tsx` pins **both hosting shapes** and the fragment property — and a
+  root-absolute builder fails two of them, which is the check the pin exists to be.
 
 Two smaller traps, both found by driving it:
 
