@@ -137,6 +137,27 @@ describe("the live stream", () => {
     expect(server.cursors).toHaveLength(attempts);
   });
 
+  it("replays nothing on a duplicate reconnect, because the cursor has moved", async () => {
+    const { hook, seen } = render();
+    await waitFor(() => expect(server.cursors).toEqual([0]));
+
+    server.emit(sessionEvent(6, "combatant-damaged"));
+    await waitFor(() => expect(seen).toHaveLength(1));
+
+    // Two reconnects with nothing in between. The second is redundant, and the
+    // cursor is what makes it free: it asks from the same place and the server
+    // has nothing past it to send. That is why this screen can afford to
+    // reconnect eagerly — on `online`, on a tab becoming visible — rather than
+    // carefully.
+    hook.result.current.reconnect();
+    await waitFor(() => expect(server.cursors).toHaveLength(2), { timeout: 5000 });
+    hook.result.current.reconnect();
+    await waitFor(() => expect(server.cursors).toHaveLength(3), { timeout: 5000 });
+
+    expect(server.cursors).toEqual([0, 6, 6]);
+    expect(seen).toHaveLength(1);
+  });
+
   it("reopens on demand, from where it left off", async () => {
     const { hook, seen } = render();
     await waitFor(() => expect(server.cursors).toHaveLength(1));

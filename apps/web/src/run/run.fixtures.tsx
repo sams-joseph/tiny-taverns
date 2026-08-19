@@ -116,6 +116,21 @@ export interface RunStubServer {
   transportDown: boolean;
   /** The stream answers 404, the way a run this credential cannot see does. */
   denyStream: boolean;
+  /**
+   * Hold every answer whose `"METHOD /path"` contains `match`, until released.
+   *
+   * The one thing an optimistic layer cannot be characterised without: every
+   * rule in `run/state.ts` is about the window *between* a write leaving and
+   * its answer landing, and a stub that answers in the same tick has no such
+   * window. The returned function releases what is waiting — all of it, or the
+   * first `n` — and releasing everything also stops holding whatever comes
+   * next.
+   *
+   * The answer is read from `routes` at **release** time, so a test can re-aim
+   * a route while its request is in flight; that is how "the server applied the
+   * hit and a re-read landed first" is expressible at all.
+   */
+  readonly hold: (match: string) => (n?: number) => void;
   readonly reset: () => void;
 }
 
@@ -131,6 +146,8 @@ const encoder = new TextEncoder();
  */
 export const installRunServer = (): RunStubServer => {
   let controllers: Array<ReadableStreamDefaultController<Uint8Array>> = [];
+  /** Matches currently gated, each with the requests waiting behind it. */
+  const gates = new Map<string, Array<() => void>>();
 
   const server: RunStubServer = {
     routes: liveFight(),
@@ -138,6 +155,15 @@ export const installRunServer = (): RunStubServer => {
     cursors: [],
     transportDown: false,
     denyStream: false,
+    hold: (match) => {
+      gates.set(match, []);
+      return (n) => {
+        const waiting = gates.get(match) ?? [];
+        const released = n === undefined ? waiting.splice(0) : waiting.splice(0, n);
+        if (n === undefined) gates.delete(match);
+        for (const resume of released) resume();
+      };
+    },
     open: () => controllers.length,
     emit: (row) => {
       const frame = `id: ${String(row["seq"])}\nevent: session-event\ndata: ${JSON.stringify(row)}\n\n`;
@@ -163,6 +189,8 @@ export const installRunServer = (): RunStubServer => {
       server.cursors.length = 0;
       server.transportDown = false;
       server.denyStream = false;
+      for (const [, waiting] of gates) for (const resume of waiting.splice(0)) resume();
+      gates.clear();
       for (const controller of controllers) {
         try {
           controller.close();
@@ -213,16 +241,26 @@ export const installRunServer = (): RunStubServer => {
       );
     }
 
-    const answer = server.routes.get(`${method} ${pathname}`) ?? {
-      status: 404,
-      body: { _tag: "NotFound", resource: "encounter_run", id: runIdRaw },
-    };
-    return Promise.resolve(
-      new Response(answer.status === 204 ? null : JSON.stringify(answer.body), {
-        status: answer.status,
+    // Read at *answer* time rather than at request time, so a route re-aimed
+    // while a held request is in flight answers with the new body.
+    const answer = () => {
+      const found = server.routes.get(`${method} ${pathname}`) ?? {
+        status: 404,
+        body: { _tag: "NotFound", resource: "encounter_run", id: runIdRaw },
+      };
+      return new Response(found.status === 204 ? null : JSON.stringify(found.body), {
+        status: found.status,
         headers: { "content-type": "application/json" },
-      }),
-    );
+      });
+    };
+
+    const key = `${method} ${pathname}`;
+    for (const [match, waiting] of gates) {
+      if (key.includes(match)) {
+        return new Promise<void>((resume) => waiting.push(resume)).then(answer);
+      }
+    }
+    return Promise.resolve(answer());
   });
 
   return server;
