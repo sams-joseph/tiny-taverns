@@ -2216,13 +2216,17 @@ the first rule.** The sixth delivery split the campaign view into Overview / Enc
 and `campaign/CampaignChrome.tsx` is what they have in common: the name in the bar, the way home,
 the session badge, whether the table is shared, who is invited, and starting or finishing the
 night are facts about the _campaign_ rather than about whichever of its screens is open. Each
-destination still composes `loadCampaignView` **once** and still has three states, so the cost is
-honest and stated: moving between Encounters and Notes re-reads the campaign. That is the price of
-one source of truth — every write on these screens changes something the screen did not send
-(`Encounter.creatureCount` is computed per read, a note's attachment moves a count on a different
-card), so a cache would be right until the first write it did not hear about. A screen's own
-search term and open dialog live **above** the frame, because the top bar sets them and the body
-reads them and they are two slots of one screen.
+destination names the **same `campaignViewAtom`** and still has three states. **The cost this
+used to state is gone**: it read _"moving between Encounters and Notes re-reads the campaign"_,
+because each destination composed `loadCampaignView` into a hook of its own. An atom is
+identified by its key, so the second destination is answered from the registry — measured in
+Chromium, a cold campaign read is 5 requests and the three moves after it are **0**. What has
+not changed is the re-read after a **write**: every write on these screens changes something the
+screen did not send (`Encounter.creatureCount` is computed per read, a note's attachment moves a
+count on a different card), so `reload()` still re-reads the whole view and a narrower cache
+would be right until the first write it did not hear about. A screen's own search term and open
+dialog live **above** the frame, because the top bar sets them and the body reads them and they
+are two slots of one screen.
 
 **Party and Chronicle were the two that did not, and it shipped as a bug nobody could describe.**
 Both predated the split and each composed `AppShell` itself, passing `campaignName` and nothing
@@ -2235,10 +2239,11 @@ draw them, and the omission fails nothing, warns about nothing and renders nothi
 _enumeration_ — it reads the destinations out of the rendered campaign row and visits each, so a
 sixth screen that hand-builds a shell fails the suite with no edit to the test.
 
-**A screen that needs more than the campaign view passes `load` to the frame, and does not open a
-second resource.** `CampaignChromeSlots.extra` is the answer, composed into the frame's own
-`Effect` — two `useApiResource`s on one screen is four combinations of loading and failed, and two
-`reload`s for one write. It is also what keeps the cost honest: a screen's own loader drops
+**A screen that needs more than the campaign view passes an `extra` atom to the frame, and does
+not open a second resource.** `CampaignChromeSlots.extra` is the answer, combined with the view
+through `AsyncResult.all` — the counterpart of the `Effect.all` the frame used to compose, and it
+keeps the same property: two resources on one screen is four combinations of loading and failed,
+and two `reload`s for one write. It is also what keeps the cost honest: a screen's own loader drops
 everything the frame already answers, so the Party's four reads became two (`members`, `invites`;
 its characters are `CampaignView.party`) and the Chronicle's three became one (`sessions.list`; the
 night and its checklist are `CampaignView.session` and `.prep`). **The Chronicle's search stays its
@@ -2254,20 +2259,20 @@ gate, so a player composing it gets a `NotFound` and the whole screen fails. `Ca
 player should see the night at all, and what (if anything) replaces _Start session_ for them, is a
 product decision nobody has made.
 
-- **One `Effect` per screen, not one hook per endpoint.** `campaign/load.ts` composes six calls
+- **One `Effect` per screen, not one atom per endpoint.** `campaign/load.ts` composes six calls
   (two rounds, concurrent within a round, because the checklist hangs off
-  `campaign.currentSessionId`) into one value, and `api/resource.ts`'s `useApiResource` turns
-  that into exactly three states. Six independent hooks would give a screen sixty-four
-  combinations of loading and failed to render. **The callback passed to `useApiResource` must
-  be `useCallback`-stable** — its identity is what says "load again", so an inline closure
-  loads forever.
+  `campaign.currentSessionId`) into one value, and `api/atoms.ts`'s `useApiAtom` turns that into
+  exactly three states. Six independent atoms would give a screen sixty-four combinations of
+  loading and failed to render. **The atom is built by an `Atom.family` at module scope, keyed
+  on what the read closes over** — see "Reads are atoms" below, which is the whole of the rule.
 - **`runApi` rejects; `runApiResult` does not.** A rejected promise throws away the _typed_
   error the contract declares and leaves every caller rendering `String(cause)`.
-  `api/resource.ts` runs through `Effect.result` and narrows to four kinds a screen can say
-  something useful about — `unauthorized`, `missing`, `unreachable`, `unknown` — matched on
-  `_tag`, not on status codes. `ui/states.tsx` is the only place their copy lives. Note
-  `unreachable` is `HttpClientError` with `reason._tag === "TransportError"`, plus a bare
-  `TypeError` for the browsers that surface a raw `fetch` rejection.
+  `api/client.ts`'s `runApiResult` runs through `Effect.result` and `api/failure.ts` narrows to
+  the kinds a screen can say something useful about — `unauthorized`, `missing`, `conflict`,
+  `unavailable`, `invalid`, `unreachable`, `unknown` — matched on `_tag`, not on status codes.
+  `ui/states.tsx` is the only place their copy lives. Note `unreachable` is `HttpClientError`
+  with `reason._tag === "TransportError"`, plus a bare `TypeError` for the browsers that surface
+  a raw `fetch` rejection.
 - **The credential is resolved per call, by `auth/credential.ts`, and never held.** It prefers
   a hosted session token and falls back to the machine token in `localStorage` — the same key
   the Server panel writes, which is what makes that panel the credential source for a
@@ -2589,14 +2594,154 @@ pill at all, and `#/play` typed by hand gave the honest empty state plus the pil
 the same credential got 404 from `runs.list`, `members.list` and `recap.read` at the table it plays
 at, and 200 from `notes.list` and `characters.list` with only the shared rows.
 
+## Reads are atoms: `@effect/atom-react`, and what the port did and did not do
+
+**`apps/web/src/api/atoms.ts` is the one way a screen reads.** It replaced a hand-rolled
+`useApiResource` (`useEffect` + `useState` + `Effect.result`), and that file is **deleted** rather
+than deprecated — all eighteen of its call sites moved in one branch, so there is no second idiom
+for a new screen to copy from its neighbour. **Writes are still `api/mutation.ts` and have not
+been ported**; that is the next piece of work, and the shape of it is below.
+
+The four modules and what each owns:
+
+| module            | owns                                                                   |
+| ----------------- | ---------------------------------------------------------------------- |
+| `api/atoms.ts`    | the atom client, `apiAtom`, `useApiAtom`, `asResource` — **reads**     |
+| `api/failure.ts`  | `ApiFailure`, `classifyFailure`, `failureFromCause`, `Resource`        |
+| `api/client.ts`   | `makeClient`, `TavernsClient`, `runApi`, `runApiResult` — the promises |
+| `api/mutation.ts` | `useMutation` — **writes**, unported                                   |
+
+### The rule a call site has to follow, and why it is safer than the one it replaced
+
+**Build the atom with `Atom.family` at module scope, keyed on what the read closes over.**
+
+```ts
+const invitesAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom((client) => client.invites.list({ params: { campaignId } })),
+);
+// in the component:
+const [resource, reload] = useApiAtom(invitesAtom(campaignId));
+```
+
+It is the same rule `useApiResource` stated as _"`use` must be `useCallback`-stable"_, in a shape
+that cannot be forgotten: **an atom is its own identity**, so an atom built inside a component is a
+new one every render and the symptom is an infinite render loop rather than a request that quietly
+never settles. A family also _shares_ the read — two components naming one key make one request.
+
+**A record key works, and that was measured rather than assumed.** Effect v4's `Equal` and `Hash`
+are structural for plain objects _and_ arrays all the way down, so `{campaignId, sessionId}` and
+even `bestiary/corpus.ts`'s `{q, sort, environments}` are one key and one atom.
+`api/atoms.test.tsx` pins it, because if a bump made it reference equality the symptom would be a
+hanging screen rather than a type error. Keep keys to primitives — the key is hashed on every
+render, and a function or class instance in one puts the loop back.
+
+### Three things that are not derivable from reading the library
+
+- **The service class must not be exported.** `TavernsApi` is 23 groups and 90 endpoints, and
+  `AtomHttpApiClient` layers `query`/`mutation` overloads on that whole client type; exported, the
+  inferred type has to cross a module boundary and `tsc` gives up with **TS7056**, whose suggested
+  "explicit type annotation" is not writable by hand. So `api/atoms.ts` keeps `Api` module-local
+  and exports only the narrow things built from it. `apps/web`'s existing `TavernsClient` exports
+  fine — this is specifically the atom wrapper's extra type surface.
+- **`AtomHttpApi` turns a `SchemaError` and an `HttpClientError` into _defects_** (`catchErrors`,
+  in its own source) so that only an endpoint's declared errors stay in the atom's `E`. So
+  `invalid` and `unreachable` — a payload the contract rejected before it left the browser, and a
+  server that never answered — arrive in the `Cause` as `Die`, not `Fail`. `failureFromCause` uses
+  `Cause.squash`, which reads both; a classifier over the typed failures alone would render the
+  two commonest failures as _"That did not work"_ with a stack frame in them.
+- **An interrupted read is not a failure.** A refresh landing while one is in flight interrupts it,
+  and `Cause.squash` of an interrupt-only cause is the string _"All fibers interrupted without
+  error"_. `useApiAtom` maps it to loading (or back to the previous value), which is what it is.
+
+### `useApiAtom` memoises its `Resource`, and that is load-bearing
+
+`useApiResource` returned React state, so its `Resource` kept its identity between renders and a
+screen could write `useEffect(…, [resource])`. `asResource` allocates, so the hook memoises on the
+`AsyncResult` — which is stable per registry value. Without that memo any such effect re-runs every
+render, and for one that sets state to a fresh value (`setExtra([])` in `bestiary/corpus.ts` does
+exactly that) it is an infinite loop rather than wasted work.
+
+### The auth seam: the session is published out of React, never a token
+
+**This was the one genuine design problem, and the shape of the fix is the whole of it.**
+`useCredential` is a hook; an atom's client layer is built outside React, where no hook can be
+called. The invariant that had to survive is the one `ServerPanel.test.tsx` pins: _the token is
+fetched immediately before each call and never held in state_, because Clerk's session tokens live
+60 seconds.
+
+So `auth/credential.ts` publishes the **`HostedSession`**, not a token — a slot holding a token
+would be the held credential the rule forbids — and `api/atoms.ts` resolves one per request through
+`HttpClient.mapRequestEffect`. `credentialFrom` is the single description of which credential wins,
+used by both the hook and the module-level `fetchCredential`. Three things about it:
+
+- **`HostedSessionScope` publishes during render**, deliberately: an atom's first read happens
+  while a component renders (`useSyncExternalStore`'s snapshot), so a publish in an effect — layout
+  or passive — runs after the subtree has already asked. It is a derived value, so writing it every
+  render is idempotent.
+- **The slot's default is `NO_HOSTED_SESSION`, the same value `HostedSessionContext` defaults to.**
+  That is what makes an unpublished slot _correct_ rather than merely harmless: with no provider
+  both readers resolve the pasted machine token and agree, which is most development and every test.
+- **A test fixture must wrap in `HostedSessionScope`, not in `HostedSessionContext`.** The raw
+  context gives React a session the atom layer cannot see, and the two then disagree about who is
+  signed in — the exact drift `credentialFrom` exists to prevent. Every screen fixture was moved
+  onto the real component for this reason.
+
+**The port made the freshness property stricter, not looser.** `useApiResource` fetched one token
+per _load_ and handed it to `makeClient`, so the eight requests of one campaign read shared a
+token; `mapRequestEffect` runs per **request**, so a load now mints as many tokens as it makes
+calls. `campaign/CampaignScreen.test.tsx` counts mints against the request count rather than
+against a literal, so it keeps meaning what it says if `loadCampaignView` grows a round.
+
+### The test harness: `RegistryContext` defaults to a module-level registry
+
+**This is a trap of the same class as the `FetchHttpClient.Fetch` `Context.Reference` memoisation
+already recorded here, arriving by a new door, and it fails the same way — silently, and green.**
+`@effect/atom-react`'s `RegistryContext` has a _module-level_ standalone registry as its default,
+so atoms read with no provider above them share one cache across every test in a file and across
+files in one worker: the second test passes on the first test's data. `Atom.family` memoises atoms
+globally by key, which is what lets the leak reach that far — the _atom_ is shared on purpose, the
+registry holding its value must not be. `test/renderRoute.tsx` and `main.tsx` both render an
+explicit `RegistryProvider`, so the harness and the app are the same tree.
+
+Two timing behaviours to expect in jsdom: `defaultIdleTTL` is 400 ms (atoms disposed that long
+after nothing reads them) and provider unmount disposes the registry after a 500 ms delay.
+
+### What the port fixed, what it did not, and the numbers for both
+
+**Measured in Chromium at Fast 4G against a real server and a real Postgres**, not reasoned:
+
+- **The blank is gone.** Minting an invitation, sampling every frame: on the old hook 10 frames
+  blank, 10 showing _"Reading your invitations…"_, and the row's DOM node disconnected for 370 of
+  383 frames. On the atom: **0, 0 and 0** across 384 frames.
+- **Adding a checklist line — the case this was reported for — still costs 1 write and 8 reads.**
+  Over 301 frames at 1440: no blank, no `Loading…`, the existing row never unmounted, the campaign
+  name, the session badge and _Start an encounter_ never left the row, and the scroll position
+  kept. **The request count is unchanged and that is expected**: coarse invalidation is a property
+  of `loadCampaignView` + one `reload()`, not of the library.
+- **Moving between a campaign's destinations is now free.** Cold read of a campaign: 5 requests.
+  The three moves after it: **0**.
+
+**Narrowing the write-side invalidation is the next piece of work and is deliberately not done
+here.** It means splitting `loadCampaignView` into per-endpoint atoms with reactivity keys, and it
+reverses the "one re-read is one source of truth" reasoning argued in `CampaignChrome.tsx` — a
+reactivity key is still a name somebody has to remember to invalidate, which is exactly the failure
+mode that doc block names. `AtomHttpApi` supplies `query({reactivityKeys})` and `mutation()` for
+it, neither of which this port uses.
+
+**`run/stream.ts` and `run/state.ts` were left alone on purpose.** Neither used `useApiResource` —
+they drive `runApiResult` with their own loops — and both are a different problem: a doorbell with
+reconnect semantics, and an optimistic overlay. `Atom.pull` and `Atom.makeRefreshOnSignal` would
+fit "the doorbell rang, refresh these atoms", but that is a rewrite of a subtle, measured file
+rather than a migration step.
+
 ## Authoring in `apps/web`: forms, mutations, and the traps in them
 
 The campaign view writes as well as reads, and the runner comes next. These are settled;
 follow them rather than inventing a second style. `api/mutation.ts`, `ui/form.tsx` and
 `campaign/EncounterDialog.tsx` are the worked examples.
 
-- **`useMutation` is the write side of `useApiResource`, and the two are shaped differently
-  on purpose.** A read runs because its inputs changed, so its callback's identity is the
+- **`useMutation` is the write side, and it is the one thing not yet ported to atoms** — see
+  "Reads are atoms" above. It and the read side are shaped differently on purpose. A read runs because its inputs changed, so its callback's identity is the
   trigger and must be `useCallback`-stable; a write runs because the DM clicked, so the Effect
   is handed over at `submit` time and no memoisation rule applies. Getting that backwards is
   how a form saves on every render. `submit` resolves a **`Result`**, not `A | undefined`: a
