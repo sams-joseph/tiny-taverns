@@ -1,4 +1,4 @@
-import type { SessionId } from "@taverns/api";
+import type { CampaignId, SessionId } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import {
   Card,
@@ -12,10 +12,11 @@ import {
   SelectValue,
   Toggle,
 } from "@taverns/ui";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Atom } from "effect/unstable/reactivity";
+import { useCallback, useEffect, useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import type { Resource } from "../api/failure";
-import { useApiResource } from "../api/resource";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadChronicleSpine, type ChronicleSpine } from "./load";
@@ -78,6 +79,31 @@ const SCOPES: ReadonlyArray<{ readonly value: SearchScope; readonly label: strin
   { value: "character", label: "Party" },
 ];
 
+/**
+ * A campaign-wide search, keyed on exactly what is sent.
+ *
+ * **Its own atom rather than part of the frame's load**, which is the decision
+ * this screen already made: it re-runs on every settled keystroke, and
+ * composing it into `CampaignChrome`'s Effect would re-read the whole campaign
+ * each time and blank the spine underneath. It is the one thing on this screen
+ * that is not a fact about the campaign.
+ *
+ * The key is the record the request is built from, which `Atom.family` compares
+ * structurally — so the `useMemo` this replaced is no longer load-bearing, and
+ * a search the DM has run before is answered from the registry.
+ */
+const searchAtom = Atom.family(
+  ({
+    campaignId,
+    q,
+    scope,
+  }: {
+    readonly campaignId: CampaignId;
+    readonly q: string;
+    readonly scope: SearchScope;
+  }) => apiAtom(searchCampaign(campaignId, { q, scope })),
+);
+
 export function ChronicleScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [term, setTerm] = useState("");
@@ -102,14 +128,7 @@ export function ChronicleScreen() {
     [campaignId],
   );
 
-  // Memoised on what is actually sent, for the reason every `useApiResource`
-  // callback is: its identity is the instruction to load again.
-  const query = useMemo(() => ({ q, scope }), [q, scope]);
   const searching = q.trim() !== "";
-  const runSearch = useCallback(
-    (client: TavernsClient) => searchCampaign(campaignId, query)(client),
-    [campaignId, query],
-  );
   /**
    * The search is deliberately its **own** resource rather than part of the
    * frame's load: it re-runs on every settled keystroke, and composing it into
@@ -117,7 +136,7 @@ export function ChronicleScreen() {
    * blank the spine underneath. It is the one thing on this screen that is not
    * a fact about the campaign.
    */
-  const [hits] = useApiResource(runSearch);
+  const [hits] = useApiAtom(searchAtom({ campaignId, q, scope }));
 
   /**
    * The last answer that arrived, kept so the list does not blank between

@@ -1,4 +1,4 @@
-import type { Character, InventoryItem, Trait } from "@taverns/api";
+import type { Character, CharacterId, InventoryItem, Trait } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import {
   Badge,
@@ -12,10 +12,10 @@ import {
   TabsTrigger,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { Atom } from "effect/unstable/reactivity";
+import { useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -770,6 +770,18 @@ function LiveTableBanner({ banner }: { readonly banner: LiveBanner }) {
   );
 }
 
+/**
+ * One character's sheet and the live table behind its banner, keyed on the id.
+ *
+ * Two rounds, because the live read hangs off `/campaigns/:campaignId` and
+ * which campaign that is arrives in the first — see `characters/load.ts`, which
+ * is also where a `NotFound` from the second is argued to fail the screen
+ * rather than degrade to a missing banner.
+ */
+const sheetAtom = Atom.family((characterId: CharacterId) =>
+  apiAtom(loadCharacterSheet(characterId)),
+);
+
 export function CharacterSheetScreen() {
   const { characterId } = useParams({ from: "/play/characters/$characterId" });
   /**
@@ -784,13 +796,7 @@ export function CharacterSheetScreen() {
    * to say about it is what the server says about everything it will not show:
    * *not here*.
    */
-  const load = useCallback(
-    // Memoised on the id: its identity is what tells `useApiResource` to load
-    // again, so an inline closure would load forever.
-    (client: TavernsClient) => loadCharacterSheet(characterId)(client),
-    [characterId],
-  );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(sheetAtom(characterId));
   const view = resource.state === "ready" ? resource.value : undefined;
   const character = view?.characters.find((row) => row.id === characterId);
   const campaignName =

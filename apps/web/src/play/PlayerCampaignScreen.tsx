@@ -1,9 +1,8 @@
-import type { Character, Note } from "@taverns/api";
+import type { CampaignId, Character, Note } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
-import { useCallback } from "react";
-import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
+import { Atom } from "effect/unstable/reactivity";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
@@ -113,13 +112,16 @@ function Section({
   );
 }
 
+/**
+ * A table this account only sits at, keyed on the campaign.
+ */
+const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(loadPlayerCampaignView(campaignId)),
+);
+
 export function PlayerCampaignScreen() {
   const { campaignId } = useParams({ from: "/play/campaigns/$campaignId" });
-  const load = useCallback(
-    (client: TavernsClient) => loadPlayerCampaignView(campaignId)(client),
-    [campaignId],
-  );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(playerCampaignAtom(campaignId));
 
   const view = resource.state === "ready" ? resource.value : undefined;
   const empty = view !== undefined && view.party.length === 0 && view.notes.length === 0;

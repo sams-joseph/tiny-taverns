@@ -3,9 +3,8 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
 import { runApiResult } from "../api/client";
-import { useApiResource } from "../api/resource";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useCredential } from "../auth/credential";
 import { Hob, useHobPanel } from "../hob";
 import { useMode } from "../shell/location";
@@ -75,7 +74,12 @@ import { ArchivedDialog } from "./ArchivedDialog";
  * honest empty state below. See `TopNav` in `shell/AppShell.tsx`.
  */
 
-const listMemberships = (client: TavernsClient) => client.me.campaigns();
+/**
+ * Every table this account is at, as an atom. No key: the read names no
+ * campaign, so there is one of it — and both modes of the list read the same
+ * one, narrowed in the browser by role.
+ */
+const membershipsAtom = apiAtom((client) => client.me.campaigns());
 
 function CampaignRow({
   membership,
@@ -195,7 +199,7 @@ function NewCampaign({ onCreated }: { readonly onCreated: () => void }) {
 }
 
 export function CampaignsScreen() {
-  const [resource, reload] = useApiResource(listMemberships);
+  const [resource, reload] = useApiAtom(membershipsAtom);
   /** The campaign a confirmation is open over, and the shelf's own dialog. */
   const [archiving, setArchiving] = useState<CampaignMembership | undefined>();
   const [shelfOpen, setShelfOpen] = useState(false);

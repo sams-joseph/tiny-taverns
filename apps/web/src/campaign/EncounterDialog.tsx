@@ -5,6 +5,7 @@ import type {
   Difficulty,
   Encounter,
   EncounterCreatureId,
+  EncounterId,
   Visibility,
   PageCursor,
 } from "@taverns/api";
@@ -25,11 +26,11 @@ import {
   SelectValue,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { collectPages, WHOLE_LIST } from "../api/page";
-import { useApiResource } from "../api/resource";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { CreaturePicker } from "./CreaturePicker";
@@ -433,31 +434,23 @@ function EncounterForm({
   );
 }
 
-export function EncounterDialog({
-  campaignId,
-  encounter,
-  onClose,
-  onSaved,
-}: {
-  readonly campaignId: CampaignId;
-  /** Absent for a new one. Present, and this edits it. */
-  readonly encounter: Encounter | undefined;
-  readonly onClose: () => void;
-  readonly onSaved: () => void;
-}) {
-  const encounterId = encounter?.id;
-
-  /**
-   * The roster, and the names to render it by.
-   *
-   * Two calls rather than one: `encounter_creature` carries a `creatureId` and
-   * no name — it is a roster line, not a copy of the creature — so the bestiary
-   * is what turns an id into a row a DM recognises. Composed into one Effect for
-   * the reason `campaign/load.ts` gives: two hooks here would be four states to
-   * render inside a dialog that has room for one.
-   */
-  const load = useCallback(
-    (client: TavernsClient) =>
+/**
+ * An encounter's roster with each line's creature named, keyed on the campaign
+ * and the encounter — or on `undefined`, which is a new encounter and an empty
+ * list rather than a request.
+ *
+ * Composed into one Effect for the reason `campaign/load.ts` gives: two atoms
+ * here would be four states to render inside a dialog that has room for one.
+ */
+const rosterAtom = Atom.family(
+  ({
+    campaignId,
+    encounterId,
+  }: {
+    readonly campaignId: CampaignId;
+    readonly encounterId: EncounterId | undefined;
+  }) =>
+    apiAtom((client) =>
       encounterId === undefined
         ? Effect.succeed<ReadonlyArray<RosterLine>>([])
         : Effect.gen(function* () {
@@ -485,9 +478,33 @@ export function EncounterDialog({
               savedCount: row.count,
             }));
           }),
-    [campaignId, encounterId],
-  );
-  const [roster, reload] = useApiResource(load);
+    ),
+);
+
+export function EncounterDialog({
+  campaignId,
+  encounter,
+  onClose,
+  onSaved,
+}: {
+  readonly campaignId: CampaignId;
+  /** Absent for a new one. Present, and this edits it. */
+  readonly encounter: Encounter | undefined;
+  readonly onClose: () => void;
+  readonly onSaved: () => void;
+}) {
+  const encounterId = encounter?.id;
+
+  /**
+   * The roster, and the names to render it by.
+   *
+   * Two calls rather than one: `encounter_creature` carries a `creatureId` and
+   * no name — it is a roster line, not a copy of the creature — so the bestiary
+   * is what turns an id into a row a DM recognises. Composed into one Effect for
+   * the reason `campaign/load.ts` gives: two hooks here would be four states to
+   * render inside a dialog that has room for one.
+   */
+  const [roster, reload] = useApiAtom(rosterAtom({ campaignId, encounterId }));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>

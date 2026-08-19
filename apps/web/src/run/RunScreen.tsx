@@ -14,10 +14,10 @@ import {
   toast,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
@@ -71,6 +71,15 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target.closest("button, input, textarea, select, [role='switch'], [contenteditable='true']") !==
     null;
 
+/**
+ * One fight, keyed on the three ids that name it.
+ *
+ * `RunPath` is already the record the route carries, and `Atom.family` compares
+ * it structurally — so the `useMemo` above stops being load-bearing for the
+ * read (it still is for `useRunState`, which takes the same object).
+ */
+const runViewAtom = Atom.family((path: RunPath) => apiAtom(loadRunView(path)));
+
 export function RunScreen() {
   const { campaignId, sessionId, runId } = useParams({
     from: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
@@ -80,10 +89,7 @@ export function RunScreen() {
     [campaignId, sessionId, runId],
   );
 
-  // Memoised on the path alone: its identity is what tells `useApiResource` to
-  // load again, so an unmemoised closure here would load forever.
-  const load = useCallback((client: TavernsClient) => loadRunView(path)(client), [path]);
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(runViewAtom(path));
   const view = resource.state === "ready" ? resource.value : undefined;
 
   // The half the fight changes, handed to the controller as its starting point.

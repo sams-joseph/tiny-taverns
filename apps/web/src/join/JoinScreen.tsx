@@ -2,10 +2,10 @@ import type { InviteRedeemed } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Result } from "effect";
-import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { Atom } from "effect/unstable/reactivity";
+import { useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { readMachineToken } from "../auth/credential";
 import { useHostedSession } from "../auth/hostedSession";
 import { publishableKey } from "../auth/config";
@@ -100,15 +100,21 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
   );
 }
 
+/**
+ * The invitation behind a link, keyed on the token.
+ *
+ * The one read in the product made with no credential at all — `invitePreview`
+ * is unauthenticated by design, because it answers before its reader has an
+ * account. The token is the key as well as the payload, which is right: two
+ * links are two invitations.
+ */
+const previewAtom = Atom.family((token: string) =>
+  apiAtom((client) => client.invitePreview.read({ payload: { token } })),
+);
+
 export function JoinScreen() {
   const { token } = useParams({ from: "/join/$token" });
-  // Memoised on the token alone: its identity is what tells `useApiResource` to
-  // load again, so an inline closure would load forever.
-  const load = useCallback(
-    (client: TavernsClient) => client.invitePreview.read({ payload: { token } }),
-    [token],
-  );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(previewAtom(token));
   const { signedIn } = useHostedSession();
   const { busy, failure, submit } = useMutation();
   const [redeemed, setRedeemed] = useState<InviteRedeemed | undefined>();

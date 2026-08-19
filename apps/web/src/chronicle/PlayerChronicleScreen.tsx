@@ -1,9 +1,9 @@
-import type { SessionId } from "@taverns/api";
+import type { CampaignId, SessionId } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Icon, Toggle } from "@taverns/ui";
-import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
+import { Atom } from "effect/unstable/reactivity";
+import { useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerChronicle } from "./load";
@@ -44,6 +44,14 @@ import { SessionEntry } from "./SessionEntry";
  *   quote, the loot, the XP, the *Recap session N* button. None of them is a
  *   column anywhere in the product.
  */
+/**
+ * The spine of nights a player may read, keyed on the campaign. The recaps
+ * themselves are `PlayerRecapBody`'s own atoms — one per card that is open.
+ */
+const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(loadPlayerChronicle(campaignId)),
+);
+
 export function PlayerChronicleScreen() {
   const { campaignId } = useParams({ from: "/play/campaigns/$campaignId" });
   const [readAloud, setReadAloud] = useState(false);
@@ -55,11 +63,7 @@ export function PlayerChronicleScreen() {
    */
   const [openId, setOpenId] = useState<SessionId | null | undefined>(undefined);
 
-  const load = useCallback(
-    (client: TavernsClient) => loadPlayerChronicle(campaignId)(client),
-    [campaignId],
-  );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(playerChronicleAtom(campaignId));
 
   const view = resource.state === "ready" ? resource.value : undefined;
   const sessions = view?.sessions ?? [];
