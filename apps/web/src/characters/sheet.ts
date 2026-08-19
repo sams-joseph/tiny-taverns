@@ -64,12 +64,21 @@ export const coins = (
 /**
  * Which tabs the document can fill.
  *
- * **A tab is drawn when it has something in it and not otherwise**, which is the
+ * **A tab is drawn when it has something in it, or somewhere to write** — the
  * screens rule (*do not render a field the API does not have*) applied to a
- * container: the sheet is thirteen optional keys on one `jsonb` document, and a
- * character created through `CharacterDialog` today has none of them. Five empty
- * tabs over an empty sheet would say the data exists and is blank, when what is
- * true is that nobody has written it.
+ * container, and then relaxed by exactly the amount the player write bought.
+ * The sheet is thirteen optional keys on one `jsonb` document and a character
+ * created through `CharacterDialog` has none of them, so five empty tabs over
+ * an empty sheet would say the data exists and is blank when what is true is
+ * that nobody has written it.
+ *
+ * `writable` is what the player's own sheet passes. Under it Gear and Story are
+ * drawn whether or not they hold anything, because each carries an affordance
+ * that *creates* the thing the tab is for — and a tab that appears only once
+ * its contents exist is a first line of backstory nobody can type. The other
+ * three stay content-driven: nothing on this screen writes an ability cell, an
+ * attack or a level-up, so an empty Stats tab would still be a promise with
+ * nothing behind it.
  */
 export interface SheetTabs {
   readonly stats: boolean;
@@ -77,7 +86,11 @@ export interface SheetTabs {
   readonly gear: boolean;
   readonly story: boolean;
   readonly log: boolean;
-  /** Nothing in the document at all — the state every row written before it is in. */
+  /**
+   * Nothing in the document at all — the state every row written before it is
+   * in, and one a writable sheet is never in: Gear and Story are always drawn
+   * there, so there is always somewhere to start.
+   */
   readonly empty: boolean;
 }
 
@@ -86,7 +99,7 @@ const some = (list: ReadonlyArray<unknown> | undefined): boolean =>
 
 const written = (text: string | undefined): boolean => text !== undefined && text.trim() !== "";
 
-export const sheetTabs = (sheet: CharacterSheet): SheetTabs => {
+export const sheetTabs = (sheet: CharacterSheet, writable = false): SheetTabs => {
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
 
@@ -105,8 +118,11 @@ export const sheetTabs = (sheet: CharacterSheet): SheetTabs => {
           written(spellcasting.save) ||
           written(spellcasting.attack))),
     gear:
-      some(sheet.inventory) || (sheet.currency !== undefined && coins(sheet.currency).length > 0),
+      writable ||
+      some(sheet.inventory) ||
+      (sheet.currency !== undefined && coins(sheet.currency).length > 0),
     story:
+      writable ||
       written(sheet.notes) ||
       some(sheet.journal) ||
       (story !== undefined &&

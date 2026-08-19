@@ -11,9 +11,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "@taverns/ui";
+import { Result } from "effect";
+import { useState } from "react";
+import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
 import { AppShell, TopBar } from "../shell/AppShell";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { SaveFailure } from "../ui/form";
+import { FailureNotice, Loading } from "../ui/states";
+import { BackstoryDialog } from "./BackstoryDialog";
+import { GearDialog } from "./GearDialog";
+import { IdentityDialog } from "./IdentityDialog";
 import { loadMyCharacters } from "./load";
 import { coins, sheetTabs } from "./sheet";
 import {
@@ -26,10 +33,12 @@ import {
   SheetSection,
   StatPill,
 } from "./SheetParts";
+import { saveOwnCharacter, sheetWith } from "./write";
 
 /**
  * One character, whole — `ui_kits/dm-screen/CharacterSheet.jsx` against the real
- * API, **read-only**.
+ * API, and **the one screen in the product where somebody who is not a DM
+ * writes.**
  *
  * ### Where each thing on it comes from
  *
@@ -41,22 +50,42 @@ import {
  * once, under the name — never recomputed here, because a second implementation
  * of it is exactly what the generated column exists to prevent.
  *
- * ### What is deliberately absent
+ * ### What it writes, and where the boundary is
+ *
+ * Four surfaces, one endpoint — `PATCH /me/characters/:characterId` through
+ * `write.ts`, which is where the endpoint is named once and where the
+ * whole-document race is written down. The durable columns are the top bar's
+ * *Edit*; the backstory and the carried list are their sections' own headers;
+ * a death save is the pip itself. **Every one of them re-reads the screen
+ * afterwards** rather than patching what it holds, because a write here changes
+ * something it did not send: `descriptor` is a generated column, so editing the
+ * level rewrites the line under the name.
+ *
+ * The boundary is not enforced here and must not be restated here. Which rows
+ * is `ownRowWritable` on the server; which columns is `CharacterOwnUpdate`,
+ * which has no field for `hpCurrent`, `tempHp`, `conditions`, `visibility` or
+ * `accountId`. A control for one of those would not compile.
+ *
+ * ### What is still deliberately absent
  *
  * - **The live banner.** *"The Salt Road is playing right now · session 12 ·
  *   round 3 · Brannoc is up next"* and the *Go to the table* button beside it
  *   **have no read behind them**: they need the player projection of a fight,
  *   which does not exist, and a `session`/`run` pair a player is refused. That
- *   is step 12's decision and this screen does not get to make it by accident.
- * - **Everything that writes.** Rolling a check or an attack "to your DM's dice
- *   tray", spending a spell slot, marking a death save, preparing a spell,
- *   uploading a portrait, adding gear, editing the backstory, adding a journal
- *   entry. A player cannot write anything yet, and every one of those controls
- *   would fail. They are drawn as the values they are instead — the same call
- *   `bestiary/StatBlock.tsx` made about a rollable trait.
- * - **A tab with nothing in it.** The document is thirteen optional keys and a
- *   character written through `CharacterDialog` has none of them, so the tab
- *   strip carries what the sheet holds. An entirely empty sheet says so, once.
+ *   is its own piece of work and this screen does not get to settle it by
+ *   accident.
+ * - **The live half of the row.** Current hit points, temporary hit points and
+ *   conditions are drawn and are not editable — they are `0014`'s live trio and
+ *   the DM's to move, which is why the payload has no field for any of them.
+ * - **Rolling, spending, preparing, uploading, journalling.** A check rolled
+ *   "to your DM's dice tray" has no endpoint at all; a spent spell slot, a
+ *   prepared spell, a portrait and a journal entry are document keys with no
+ *   drawn control behind them in this build. They are drawn as the values they
+ *   are — the same call `bestiary/StatBlock.tsx` made about a rollable trait.
+ * - **A tab with nothing to read *and* nothing to write.** Stats, Actions and
+ *   Log are still drawn only when the document fills them. Gear and Story are
+ *   always drawn, because each carries the affordance that creates its own
+ *   contents — see `sheetTabs`.
  */
 
 function Attack({ attack }: { readonly attack: Trait }) {
@@ -129,9 +158,25 @@ function InventoryLine({ item, first }: { readonly item: InventoryItem; readonly
   );
 }
 
-function SheetBody({ character }: { readonly character: Character }) {
+function SheetBody({
+  character,
+  open,
+  onOpen,
+  onEditBackstory,
+  onEditGear,
+}: {
+  readonly character: Character;
+  /** Which tab is open, held above the screen's own resource — see `onOpen`. */
+  readonly open: string | undefined;
+  readonly onOpen: (tab: string) => void;
+  readonly onEditBackstory: () => void;
+  readonly onEditGear: () => void;
+}) {
   const sheet = character.sheet;
-  const tabs = sheetTabs(sheet);
+  // Writable, so Gear and Story are drawn whether or not they hold anything —
+  // otherwise the affordance that fills a tab would live behind the tab it
+  // fills, and a sheet nobody has written could never be started.
+  const tabs = sheetTabs(sheet, true);
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
   const storyLines: ReadonlyArray<{ readonly label: string; readonly value: string }> = [
@@ -142,29 +187,26 @@ function SheetBody({ character }: { readonly character: Character }) {
   ].flatMap(({ label, value }) => (value === undefined || value === "" ? [] : [{ label, value }]));
   const purse = sheet.currency === undefined ? [] : coins(sheet.currency);
 
-  // The first tab that exists. `defaultValue` must name a tab that is rendered,
-  // or the strip opens on nothing.
-  const first = tabs.stats
-    ? "stats"
-    : tabs.actions
-      ? "actions"
-      : tabs.gear
-        ? "gear"
-        : tabs.story
-          ? "story"
-          : "log";
-
-  if (tabs.empty) {
-    return (
-      <EmptyState icon="scroll-text" title="Nothing written on the sheet yet">
-        Abilities, skills, gear, spells and the backstory all live on the sheet, and your DM has not
-        filled any of it in. Whatever they write appears here.
-      </EmptyState>
-    );
-  }
+  // The first tab that exists. The value must name a tab that is rendered, or
+  // the strip opens on nothing — which is also why the lifted value falls back
+  // here rather than being trusted: a tab can stop being drawn between renders.
+  const drawn = (["stats", "actions", "gear", "story", "log"] as const).filter(
+    (name) => tabs[name],
+  );
+  const first = drawn[0] ?? "story";
+  const value = open !== undefined && drawn.some((name) => name === open) ? open : first;
 
   return (
-    <Tabs defaultValue={first}>
+    /**
+     * **Controlled, and the value is held above the resource.** Every write
+     * here re-reads, and a re-read passes through `loading` — which unmounts
+     * this subtree, so an uncontrolled strip would throw the reader back to
+     * Stats every time they saved. Measured: *Add*, then *Save gear*, landed on
+     * Stats with the new line one click away and invisible. It is the same rule
+     * the campaign screens follow for a search term and an open dialog, and the
+     * same reason: the state belongs to the screen, not to what it is showing.
+     */
+    <Tabs value={value} onValueChange={(next) => onOpen(String(next))}>
       <TabsList className="mb-gutter">
         {tabs.stats && (
           <TabsTrigger value="stats">
@@ -359,13 +401,26 @@ function SheetBody({ character }: { readonly character: Character }) {
       {tabs.gear && (
         <TabsContent value="gear">
           <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            {sheet.inventory !== undefined && sheet.inventory.length > 0 && (
-              <SheetSection title="Carried" className="min-w-0 flex-1">
-                {sheet.inventory.map((item, index) => (
+            <SheetSection
+              title="Carried"
+              className="min-w-0 flex-1"
+              action={
+                <Button variant="outline" size="sm" onClick={onEditGear}>
+                  <Icon name="plus" size={13} />
+                  Add
+                </Button>
+              }
+            >
+              {sheet.inventory === undefined || sheet.inventory.length === 0 ? (
+                <p className="text-caption leading-body text-muted-foreground">
+                  A rope, a lantern, the thing you were given last session.
+                </p>
+              ) : (
+                sheet.inventory.map((item, index) => (
                   <InventoryLine key={item.name} item={item} first={index === 0} />
-                ))}
-              </SheetSection>
-            )}
+                ))
+              )}
+            </SheetSection>
             {purse.length > 0 && (
               <SheetSection title="Coin" className="@3xl:w-aside @3xl:shrink-0">
                 <div className="flex flex-col gap-2">
@@ -390,9 +445,31 @@ function SheetBody({ character }: { readonly character: Character }) {
         <TabsContent value="story">
           <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
             <div className="flex min-w-0 flex-1 flex-col gap-gutter">
-              {sheet.notes.trim() !== "" && (
-                <SheetSection title="Backstory">
-                  {sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
+              <SheetSection
+                title="Backstory"
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    /* The bar carries an *Edit* too, for the columns. Two
+                       buttons with one name on one screen is a real ambiguity
+                       and not only a test's problem, so this one says what it
+                       edits — with the visible word kept as the prefix, so
+                       anything driving by the label it can see still matches. */
+                    aria-label="Edit backstory"
+                    onClick={onEditBackstory}
+                  >
+                    <Icon name="pencil" size={13} />
+                    Edit
+                  </Button>
+                }
+              >
+                {sheet.notes.trim() === "" ? (
+                  <p className="text-caption leading-body text-muted-foreground">
+                    Where they came from, and what they are still carrying about it.
+                  </p>
+                ) : (
+                  sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
                     <p
                       key={paragraph.slice(0, 32) + String(index)}
                       className={
@@ -403,9 +480,9 @@ function SheetBody({ character }: { readonly character: Character }) {
                     >
                       {paragraph}
                     </p>
-                  ))}
-                </SheetSection>
-              )}
+                  ))
+                )}
+              </SheetSection>
               {sheet.journal !== undefined && sheet.journal.length > 0 && (
                 <SheetSection title="Journal">
                   <div className="flex flex-col gap-4">
@@ -469,9 +546,38 @@ function SheetBody({ character }: { readonly character: Character }) {
   );
 }
 
-function IdentityColumn({ character }: { readonly character: Character }) {
+function IdentityColumn({
+  character,
+  onSaved,
+}: {
+  readonly character: Character;
+  readonly onSaved: () => void;
+}) {
   const identity = character.sheet.identity;
-  const deathSaves = character.sheet.deathSaves;
+  // Absent is nought up and nought down, and on a writable sheet the row is
+  // drawn either way: a player whose character has never gone down still has to
+  // be able to mark the first save on the night they do.
+  const deathSaves = character.sheet.deathSaves ?? { successes: 0, failures: 0 };
+  const { busy, failure, submit } = useMutation();
+
+  /**
+   * One mark, written straight through — **not optimistic, and deliberately.**
+   *
+   * The optimistic rule this app follows is the runner's: a single boolean the
+   * DM flips every few seconds moves before the round trip, and everything that
+   * changes the shape of what is on screen waits and re-reads. A death save is
+   * neither frequent nor a boolean, and it is the kind of number somebody reads
+   * back out loud, so it waits — the pips are disabled while it does. The whole
+   * document goes with it, which is `sheetWith`'s rule and its race.
+   */
+  const mark = async (part: "successes" | "failures", next: number) => {
+    const saved = await submit((client) =>
+      saveOwnCharacter(client, character, {
+        sheet: sheetWith(character, { deathSaves: { ...deathSaves, [part]: next } }),
+      }),
+    );
+    if (Result.isSuccess(saved)) onSaved();
+  };
   const meta = [identity?.background, identity?.alignment].filter(
     (part): part is string => part !== undefined && part !== "",
   );
@@ -578,14 +684,39 @@ function IdentityColumn({ character }: { readonly character: Character }) {
         </CardContent>
       </Card>
 
-      {deathSaves !== undefined && (
-        <SheetSection title="Death saves">
-          <div className="flex flex-col gap-2">
-            <DeathSaveRow label="Successes" count={deathSaves.successes} tone="success" />
-            <DeathSaveRow label="Failures" count={deathSaves.failures} tone="danger" />
-          </div>
-        </SheetSection>
-      )}
+      <SheetSection title="Death saves">
+        <div className="flex flex-col gap-2">
+          <DeathSaveRow
+            label="Successes"
+            count={deathSaves.successes}
+            tone="success"
+            busy={busy}
+            onMark={(next) => void mark("successes", next)}
+          />
+          <DeathSaveRow
+            label="Failures"
+            count={deathSaves.failures}
+            tone="danger"
+            busy={busy}
+            onMark={(next) => void mark("failures", next)}
+          />
+          {/* **The drawing's promise, corrected rather than repeated.**
+              `CharacterSheet.jsx` says these "show on your DM's initiative row
+              straight away" and nothing reads them: no delivery of the runner
+              draws a death save, which is exactly why they are a document key
+              and not a column. Saying so here is the honest version of the
+              same line, and the DM-side read is a separate piece of work. */}
+          {failure === undefined ? (
+            <p className="mt-1 text-micro leading-body text-faint">
+              Kept on your sheet. Your DM&rsquo;s screen does not show these yet.
+            </p>
+          ) : (
+            <div className="mt-1">
+              <SaveFailure failure={failure} />
+            </div>
+          )}
+        </div>
+      </SheetSection>
     </div>
   );
 }
@@ -609,6 +740,20 @@ export function CharacterSheetScreen() {
   const character = view?.characters.find((row) => row.id === characterId);
   const campaignName =
     character === undefined ? undefined : view?.campaignNames.get(character.campaignId);
+  /**
+   * Which write is open — one at a time, and above the sheet rather than inside
+   * it, because the dialog outlives the section that opened it: a save re-reads
+   * the screen, and a dialog owned by a subtree that re-renders under it would
+   * be closed by its own success.
+   */
+  const [editing, setEditing] = useState<"identity" | "backstory" | "gear" | undefined>();
+  /** Which tab is open — above the resource, for the reason `SheetBody` gives. */
+  const [openTab, setOpenTab] = useState<string | undefined>();
+  const close = () => setEditing(undefined);
+  const saved = () => {
+    setEditing(undefined);
+    reload();
+  };
 
   return (
     <AppShell
@@ -642,6 +787,16 @@ export function CharacterSheetScreen() {
             <Icon name="chevron-left" size={14} />
             Characters
           </Button>
+          {/* The durable columns, and the one write with no drawn home of its
+              own — the delivery gives the identity card no edit affordance, so
+              it goes where a screen's own action goes. It is absent until the
+              row is loaded, because there is nothing to edit until then. */}
+          {character !== undefined && (
+            <Button size="sm" onClick={() => setEditing("identity")}>
+              <Icon name="pencil" size={14} />
+              Edit
+            </Button>
+          )}
         </TopBar>
       }
     >
@@ -665,13 +820,29 @@ export function CharacterSheetScreen() {
           // window moving.
           <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
             <div className="@3xl:w-rail @3xl:shrink-0">
-              <IdentityColumn character={character} />
+              <IdentityColumn character={character} onSaved={reload} />
             </div>
             <div className="min-w-0 flex-1">
-              <SheetBody character={character} />
+              <SheetBody
+                character={character}
+                open={openTab}
+                onOpen={setOpenTab}
+                onEditBackstory={() => setEditing("backstory")}
+                onEditGear={() => setEditing("gear")}
+              />
             </div>
           </div>
         ))}
+
+      {character !== undefined && editing === "identity" && (
+        <IdentityDialog character={character} onClose={close} onSaved={saved} />
+      )}
+      {character !== undefined && editing === "backstory" && (
+        <BackstoryDialog character={character} onClose={close} onSaved={saved} />
+      )}
+      {character !== undefined && editing === "gear" && (
+        <GearDialog character={character} onClose={close} onSaved={saved} />
+      )}
     </AppShell>
   );
 }

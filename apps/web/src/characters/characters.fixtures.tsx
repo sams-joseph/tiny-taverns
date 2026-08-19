@@ -236,6 +236,23 @@ export const installCharacterServer = (): CharacterStubServer => {
   return server;
 };
 
+/** The JSON body of the last call matching a method and a path fragment. */
+export const bodyOf = (server: CharacterStubServer, method: string, fragment: string): unknown => {
+  const call = [...server.calls]
+    .reverse()
+    .find((entry) => entry.method === method && entry.pathname.includes(fragment));
+  return call === undefined || call.body === "" ? undefined : JSON.parse(call.body);
+};
+
+/**
+ * What the server answers a save with — the row as it now stands.
+ *
+ * The screen re-reads after every write rather than trusting this, because
+ * `descriptor` is generated and comes back rewritten; the answer is here so the
+ * mutation succeeds and the dialog closes.
+ */
+export const savedAs = (character: unknown): Answer => ({ status: 200, body: character });
+
 export const noSession: HostedSession = {
   configured: false,
   signedIn: false,

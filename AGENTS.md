@@ -3478,7 +3478,7 @@ the dialog sat at `z-dialog` 110 over `z-scrim` 100 at 460px with the click land
 the `--aside-w` aside docked at 1440 and 1000 and stacked at 760 with no sideways scroll at any
 width.
 
-### The player's character screens: read-only, and the two routes that name no campaign
+### The player's character screens, and the sheet they can write
 
 `apps/web/src/characters/` is `ui_kits/dm-screen/MyCharacters.jsx` and `CharacterSheet.jsx` against
 the real API — `#/play/characters` and `#/play/characters/:characterId`, with a `user` nav item in
@@ -3494,9 +3494,13 @@ silently.
   through the wider `ownedRowReadable` rather than the `ownRowReadable` narrowing. So _"this
   character is not in the answer"_ and _"it is not yours"_ are the same fact, and the screen says
   `NotFound`'s own sentence about it.
-- **A tab is drawn when the document fills it, and an entirely empty sheet says so once.**
+- **A tab is drawn when the document fills it _or_ when there is somewhere to write.**
   Thirteen optional keys, and a character written through `CharacterDialog` has none of them; five
-  empty tabs would claim the data exists and is blank. `sheetTabs` is the whole rule.
+  empty tabs would claim the data exists and is blank. `sheetTabs(sheet, writable)` is the whole
+  rule, and `writable` is the sheet screen's own: Gear and Story are drawn either way, because
+  each carries the affordance that creates its own contents and a tab that appeared only once its
+  contents existed would be a first line of backstory nobody could type. Stats, Actions and Log
+  stay content-driven — nothing here writes an ability cell, an attack or a level-up.
 - **The empty roster tells its two silences apart** — invited nowhere, or at a table with nothing
   handed to you — off `tableCount`, which is why the load reads memberships even when the campaign
   names are not needed. Neither is papered over with a friendlier sentence.
@@ -3508,13 +3512,17 @@ silently.
 - **The live banner** (_"…session 12 · round 3 · Brannoc is up next"_) and _Take your turn_ / _Go to
   the table_ have **no read behind them**. They need the player projection of a fight, which is
   step 12's decision; drawing one here would settle it by accident.
-- **Every control that writes**: rolling a check or an attack into the DM's dice tray, spending a
-  slot, marking a death save, preparing a spell, uploading a portrait, adding gear, editing the
-  backstory, _New character_, _Join a game_, _Claim a seat_. A player cannot write anything —
-  `ownedRowWritable` deliberately does not exist — and rolling has no endpoint at all. Each is
-  drawn as the value it is, the call `bestiary/StatBlock.tsx` already made about a rollable trait.
-  **The tab strip, the back link and the `sheetUrl` anchor are the only pressable things on either
-  screen**, and `CharacterSheetScreen.test.tsx` walks all five tabs asserting exactly that.
+- **Every control the payload cannot carry**: rolling a check or an attack into the DM's dice
+  tray, spending a slot, preparing a spell, uploading a portrait, adding a journal entry, _New
+  character_, _Join a game_, _Claim a seat_. Rolling has no endpoint at all and the rest are
+  document keys no delivery has drawn a control for. Each is drawn as the value it is, the call
+  `bestiary/StatBlock.tsx` already made about a rollable trait. **The live half of the row —
+  current hit points, temp, conditions — is drawn and is not editable**, because it is `0014`'s
+  trio and the DM's; that is not a check here, it is that `CharacterOwnUpdate` has no field for
+  any of them. `CharacterSheetScreen.test.tsx` walks the tabs asserting the absences and
+  `sheetWrites.test.tsx` asserts the five refused fields at compile time, one object literal each
+  (an excess-property check reports the **first** offending key and stops, so five in one literal
+  would leave four `@ts-expect-error` directives unused).
 - **The unassigned card** (_"Not in a campaign yet"_) and the join card. `character.campaign_id` is
   `not null`, so the first is not representable; the second is `#/join/<token>`, which already
   exists and reads the invitation before anyone signs in.
@@ -3529,6 +3537,59 @@ tabs off the document with the identity column at exactly `--rail-w` 260px; a ch
 `hpMax` drew no bar, no pills and no invented pair; a character id that is not this account's gave
 _"Not here"_; both empty rosters rendered with **zero** controls in `main`; and no page scrolled
 sideways at 1440 or 900. Clerk was unconfigured throughout, which is the supported mode.
+
+#### The sheet writes, and the one thing about it that is not obvious
+
+**`PATCH /me/characters/:characterId` — four surfaces, one endpoint, named once in
+`apps/web/src/characters/write.ts`.** The top bar's _Edit_ is the durable columns
+(`IdentityDialog`); the Story tab's _Edit_ is the backstory (`BackstoryDialog`, `sheet.notes`);
+the Gear tab's _Add_ is the carried list (`GearDialog`, `sheet.inventory`, opening with a blank
+line and editing the whole array the way `CreatureForm`'s trait editor does); and a death-save pip
+is its own write, straight through. Both boundaries stay where they are and are not restated in
+`apps/web`: **which rows** is `ownRowWritable`, **which columns** is `CharacterOwnUpdate`, so a
+control for `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId` does not compile.
+
+- **Everything this screen reads is writable, by construction.** `ownRowReadable` is
+  `ownedRowReadable` conjoined with ownership, and once `account_id` is the actor's own the
+  row-level `visibility` disjunct it relaxes is already satisfied — what is left on both sides is
+  the pair of clauses `ownRowWritable` names. So no screen ever asks whether a row may be edited.
+- **The open tab must be held above the resource, and this is the trap.** Every write re-reads
+  (`descriptor` is generated, so a level edit rewrites the line under the name) and a re-read
+  passes through `loading`, which **unmounts the sheet body**. An uncontrolled `Tabs` therefore
+  threw the reader back to Stats on every save — measured in Chromium: _Add_, then _Save gear_,
+  landed on Stats with the new line one click away and invisible. `Tabs` is controlled from
+  `CharacterSheetScreen`, falling back when the named tab is not drawn. Any screen that both
+  re-reads and holds tab state has this; `sheetWrites.test.tsx` pins it.
+- **A sheet write is whole-document and races**, exactly as `CharacterUpdate.sheet` does for the
+  DM. Two edits from two tabs do not merge — the second save carries the document the second
+  editor loaded. Accepted, as `Character.ts` accepts it at `SpellSlot`; the fix when it matters is
+  a patch grain or an `updatedAt` precondition, never a merge invented in the client. What
+  `sheetWith` **does** prevent is the likelier loss: a form sending only the keys it drew would
+  erase every ability, skill, spell and feature it was never shown.
+- **The drawing's death-save promise is corrected rather than repeated.**
+  `CharacterSheet.jsx` says a mark _"shows on your DM's initiative row straight away"_ and nothing
+  reads one — no delivery of `EncounterRunner.jsx` draws a death save, which is exactly why it is
+  a document key and not a column. The screen says _"Kept on your sheet. Your DM's screen does not
+  show these yet."_ instead. **The DM-side read is unbuilt and is its own piece of work**; when a
+  delivery draws it, `Character.ts` already states the shape (two `smallint`s and a `vitals.ts`
+  write-through).
+- **Two buttons named _Edit_ on one screen is a real ambiguity**, so the backstory's carries
+  `aria-label="Edit backstory"` with the visible word kept as the prefix — anything driving by the
+  label it can see still matches.
+- A dialog is portalled to the body, so a test whose `afterEach` wipes the body must call RTL's
+  `cleanup()` **first**; otherwise React unmounts into nothing and throws _"the node to be removed
+  is not a child of this node"_, reported against whichever test happened to end with a dialog
+  open. Half of `sheetWrites.test.tsx`'s do, deliberately — a refused save keeps it.
+
+Measured in Chromium against a real server, a real Postgres, a DM and a player joined through a
+real invitation: the backstory, a gear line (with its `equipped` switch), the level, the AC and the
+species all round-tripped and survived a reload, with `descriptor` following to _"Level 6 Goliath
+Paladin"_; a death save persisted with `hpCurrent` unmoved; `hpCurrent`, `tempHp`, `conditions`,
+`visibility` and `accountId` were **untouched by every write**, and a payload naming all five sent
+by hand answered `200` with the row unchanged; another player's `shared` character answered
+`404 {"_tag":"NotFound","resource":"character"}` and drew _"Not here"_ with no controls at all; the
+gear dialog sat at `z-dialog` 110 over `z-scrim` 100 at 460px with the click landing inside it; and
+nothing scrolled sideways at 1440, 1024, 900 or 760.
 
 ## Hob: the chat surface, and what it is now attached to
 

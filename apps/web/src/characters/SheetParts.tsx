@@ -4,17 +4,18 @@ import type { ReactNode } from "react";
 import { hpFraction, initialsOf } from "./sheet";
 
 /**
- * `ui_kits/dm-screen/PlayerParts.jsx` in shipped components and theme names —
- * **and read-only, which is the one thing that separates these from the
- * drawing.**
+ * `ui_kits/dm-screen/PlayerParts.jsx` in shipped components and theme names.
  *
- * The prototype's `AbilityBlock` is a `<button>` that rolls, its `DeathSaves`
- * are six buttons a player clicks, its `Portrait` carries an upload affordance
- * and its spell pips are spent by pressing them. None of that has anywhere to
- * go: a player cannot write anything yet (`ownedRowWritable` deliberately does
- * not exist), and rolling has no endpoint in the product at all. A control that
- * looks live and does nothing is worse than an absent one, so every one of them
- * is the same information drawn as what it is — a value the sheet holds.
+ * **A control here is drawn live exactly when there is a write behind it, and
+ * drawn as a value when there is not.** Since `PATCH /me/characters/:id` landed
+ * that line runs through the middle of the drawing rather than around it: the
+ * document is writable, so the prototype's clickable `DeathSaves` are real
+ * buttons here — but its `AbilityBlock` rolls a check into a dice tray the
+ * product has no endpoint for, its `Portrait` uploads to nowhere, and spending
+ * a spell pip has no drawn place to put the result, so those three stay the
+ * information they carry. A control that looks live and does nothing is worse
+ * than an absent one, and that has not changed; what changed is which ones are
+ * live.
  *
  * `Portrait` and `Seat` are two different plates in the delivery: a character's
  * and a person's. Only the first is here, because these two screens draw
@@ -33,12 +34,21 @@ import { hpFraction, initialsOf } from "./sheet";
 export function SheetSection({
   title,
   aside,
+  action,
   children,
   className,
 }: {
   readonly title: string;
   /** The muted right-hand note — a spell save DC, a count. Never a control. */
   readonly aside?: ReactNode;
+  /**
+   * The delivery's own header slot, and the one place a section's write lives:
+   * *Edit* on the backstory, *Add* on the carried list. Kept apart from `aside`
+   * because the two are different promises — one is something to read, the
+   * other something to press — and a section that offered both would put them
+   * in the same 2.5 gap and let the eye pick.
+   */
+  readonly action?: ReactNode;
   readonly children: ReactNode;
   readonly className?: string;
 }) {
@@ -49,6 +59,7 @@ export function SheetSection({
           {title}
         </h2>
         {aside}
+        {action}
       </div>
       <div className="p-card">{children}</div>
     </Card>
@@ -233,41 +244,80 @@ export function Mark({
 }
 
 /**
- * Three up, three down — **and read-only, though the drawing says otherwise.**
+ * Three up, three down — **pressable, because a death save is the player's own
+ * to mark.**
  *
- * `CharacterSheet.jsx` makes them clickable and promises the marks *"show on
- * your DM's initiative row straight away"*. Neither half exists: a player cannot
- * write, and no delivery of `EncounterRunner.jsx` draws a death save, which is
- * exactly why `DeathSaves` is a document key and not a column. So this renders
- * what the document holds and claims nothing about who else can see it.
+ * It is a `deathSaves` key on the sheet document rather than a column, and that
+ * has not moved: `Character.ts` argues it at length, and the reason is still
+ * that **no delivery of `EncounterRunner.jsx` draws one**, so there is no second
+ * holder for a column to be kept in step with. What did move is who may write
+ * the document — `PATCH /me/characters/:id` — so the drawing's buttons are real
+ * here where the rest of its write affordances still are not.
+ *
+ * **The drawing's promise beside them is not repeated.** `CharacterSheet.jsx`
+ * says the marks *"show on your DM's initiative row straight away"* and nothing
+ * reads them, so the screen says what is true instead. The DM-side read is its
+ * own piece of work; a sentence here cannot stand in for it.
+ *
+ * Pressing the pip that is already the last filled one clears it, which is
+ * `PlayerParts.jsx`'s own rule and the only way back from a mis-tap: with three
+ * pips and no undo, a fourth control would be a fourth thing to hit by mistake.
  */
 export function DeathSaveRow({
   label,
   count,
   tone,
+  onMark,
+  busy = false,
 }: {
   readonly label: string;
   readonly count: number;
   readonly tone: "success" | "danger";
+  /** Absent, and the row is what the document holds and nothing more. */
+  readonly onMark?: (next: number) => void;
+  readonly busy?: boolean;
 }) {
+  const fill = (pip: number) =>
+    cn(
+      "size-4 rounded-pill border",
+      pip <= count
+        ? tone === "success"
+          ? "border-success bg-success"
+          : "border-danger bg-danger"
+        : "border-strong bg-transparent",
+    );
+
   return (
     <div className="flex items-center gap-2">
       <span className="w-16 text-micro leading-none text-muted-foreground">{label}</span>
-      <span className="flex gap-1.5" aria-hidden="true">
-        {[1, 2, 3].map((pip) => (
-          <span
-            key={pip}
-            className={cn(
-              "size-4 rounded-pill border",
-              pip <= count
-                ? tone === "success"
-                  ? "border-success bg-success"
-                  : "border-danger bg-danger"
-                : "border-strong bg-transparent",
-            )}
-          />
-        ))}
-      </span>
+      {onMark === undefined ? (
+        <span className="flex gap-1.5" aria-hidden="true">
+          {[1, 2, 3].map((pip) => (
+            <span key={pip} className={fill(pip)} />
+          ))}
+        </span>
+      ) : (
+        <span className="flex gap-1.5">
+          {[1, 2, 3].map((pip) => (
+            <button
+              key={pip}
+              type="button"
+              disabled={busy}
+              // Named rather than marked: the pips carry no text, so the label
+              // is the only thing a screen reader has, and `aria-pressed` is
+              // what says which of the three are filled.
+              aria-label={`${label} ${String(pip)}`}
+              aria-pressed={pip <= count}
+              onClick={() => onMark(pip === count ? pip - 1 : pip)}
+              className={cn(
+                fill(pip),
+                "cursor-pointer transition-control hover:border-strong disabled:cursor-not-allowed disabled:opacity-50",
+                "focus-visible:outline-none focus-visible:ring-focus",
+              )}
+            />
+          ))}
+        </span>
+      )}
       <span className="sr-only">
         {count} of 3 {label.toLowerCase()}
       </span>

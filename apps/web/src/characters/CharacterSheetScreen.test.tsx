@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -45,19 +45,26 @@ describe("a character sheet", () => {
 
   /**
    * Death saves live in the document by decision — no delivery of the runner
-   * draws one, so a column would have no reader but the row that owns it. The
-   * drawing's promise that they "show on your DM's initiative row straight
-   * away" is not made here, because it is not true.
+   * draws one, so a column would have no reader but the row that owns it. They
+   * are pressable since the player write landed; what is still not true is the
+   * drawing's promise that a mark *"shows on your DM's initiative row straight
+   * away"*, so the copy beside them says what actually happens instead.
    */
-  it("shows death saves as marks and offers no way to change them", async () => {
+  it("draws death saves as marks a player can press, and does not promise the DM sees them", async () => {
     await renderSheet();
     await screen.findByText("Death saves");
 
     expect(screen.getByText("1 of 3 successes")).toBeTruthy();
     expect(screen.getByText("2 of 3 failures")).toBeTruthy();
-    const section = screen.getByText("Death saves").closest("div[data-slot=card]");
-    expect(within(section as HTMLElement).queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Successes 1" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Successes 2" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+
     expect(screen.queryByText(/initiative row/i)).toBeNull();
+    expect(screen.getByText(/does not show these yet/)).toBeTruthy();
   });
 
   it("draws the tabs the document fills, and only those", async () => {
@@ -110,28 +117,45 @@ describe("a character sheet", () => {
   });
 
   /**
-   * Read-only is the whole point of the step, so the assertion is about what is
-   * *not* there: every affordance the drawing has writes, and a player cannot
-   * write anything — `ownedRowWritable` deliberately does not exist.
+   * **The writes are exactly the payload's, so the assertion is about what is
+   * still not there.** `CharacterOwnUpdate` names the durable columns and the
+   * document; everything the drawing offers beyond that either has no endpoint
+   * at all (rolling into the DM's dice tray) or is somebody else's to say
+   * (`0014`'s live trio). A control that looks live and does nothing is worse
+   * than an absent one, which was the rule when the screen was read-only and is
+   * the rule that decided which affordances landed.
    */
-  it("offers no control that would fail", async () => {
+  it("offers no control the payload cannot carry", async () => {
     await renderSheet();
     await screen.findByRole("tab", { name: /Stats/ });
 
-    const controls = () =>
+    const pressable = () =>
       screen
         .queryAllByRole("button")
         .map((node) => node.textContent ?? "")
-        .concat(screen.queryAllByRole("tab").map(() => ""));
+        .filter((text) => text !== "" && !text.includes("Characters"));
 
-    for (const label of ["Stats", "Actions", "Gear", "Story", "Log"]) {
-      await tab(label);
-      // The only pressable things on any tab are the tab strip itself and the
-      // back link in the bar. Nothing rolls, spends, prepares, adds or edits.
-      const pressable = controls().filter((text) => text !== "" && !text.includes("Characters"));
-      expect(pressable).toEqual([]);
-      expect(screen.queryByRole("textbox")).toBeNull();
-    }
+    // Stats: six ability cells and a skill list, none of which rolls.
+    await tab("Stats");
+    expect(pressable()).toEqual(["Edit"]);
+
+    // Actions: attacks and spell pips. Nothing rolls and nothing is spent.
+    await tab("Actions");
+    expect(pressable()).toEqual(["Edit"]);
+
+    // Log: level-ups are a document key with no drawn control behind it.
+    await tab("Log");
+    expect(pressable()).toEqual(["Edit"]);
+
+    // Story: the backstory is writable; the journal beside it is not, and the
+    // four bond/ideal/flaw lines are still read-only.
+    await tab("Story");
+    expect(pressable().filter((text) => text !== "Edit")).toEqual([]);
+    expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
+
+    // The live half of the row is drawn and is nobody's to change here.
+    expect(screen.queryByRole("button", { name: /temp/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Blessed/ })).toBeNull();
 
     // And the two the drawing puts in the bar beside the name.
     expect(screen.queryByRole("button", { name: /Go to the table/i })).toBeNull();
@@ -148,18 +172,26 @@ describe("a character sheet", () => {
   });
 
   /**
-   * The state every character `CharacterDialog` has ever written is in. The
-   * numbers the columns hold still draw; the document says it is empty once,
-   * rather than five tabs saying it five times.
+   * The state every character `CharacterDialog` has ever written is in — and
+   * the one the read-only screen used to answer with *"nothing written on the
+   * sheet yet"*, full stop.
+   *
+   * That sentence is the wrong answer now: a player can write, so the empty
+   * sheet has to be the place they start rather than a notice about somebody
+   * else. Gear and Story are drawn on an empty document for exactly that
+   * reason; Stats, Actions and Log are not, because nothing on this screen
+   * writes an ability cell, an attack or a level-up.
    */
-  it("says an empty sheet is empty, once", async () => {
+  it("gives an unwritten sheet somewhere to start, and no tab it cannot fill", async () => {
     await renderSheet(sorrelId);
     await screen.findByRole("heading", { name: "Sorrel Ash" });
 
-    expect(screen.getByText("Nothing written on the sheet yet")).toBeTruthy();
-    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.getAllByRole("tab").map((node) => node.textContent)).toEqual(["Gear", "Story"]);
+    expect(screen.getByRole("button", { name: /Add/ })).toBeTruthy();
     // A character with no maximum has no bar and no invented pair.
     expect(screen.queryByText(/hp/)).toBeNull();
+    // And death saves are markable from nought, which is where they start.
+    expect(screen.getByText("0 of 3 successes")).toBeTruthy();
   });
 
   /**
