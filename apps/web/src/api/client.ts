@@ -1,7 +1,8 @@
 import { TavernsApi } from "@taverns/api";
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
+import { classifyFailure, type ApiFailure } from "./failure";
 
 /**
  * The typed client, derived from the same `TavernsApi` declaration the server
@@ -38,3 +39,28 @@ export const runApi = <A, E>(
   Effect.runPromise(
     Effect.flatMap(makeClient(token), use).pipe(Effect.provide(FetchHttpClient.layer)),
   );
+
+/**
+ * Runs a client call and returns its outcome, never rejecting for a declared
+ * error.
+ *
+ * The promise-shaped half of the API surface: `api/mutation.ts` writes through
+ * it, the runner's stream and optimistic layers drive it directly, and the
+ * retiring `useApiResource` reads through it. The atom path in `api/atoms.ts`
+ * does not — an atom carries a `Cause` rather than a `Result`, and
+ * `failureFromCause` is its adapter — but both end at the same
+ * `classifyFailure`, which is the point of keeping the taxonomy in one module.
+ */
+export const runApiResult = <A, E>(
+  use: (client: TavernsClient) => Effect.Effect<A, E, HttpClient.HttpClient>,
+  token?: string,
+): Promise<Result.Result<A, ApiFailure>> =>
+  Effect.runPromise(
+    Effect.flatMap(makeClient(token), use).pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.result,
+      Effect.map(Result.mapError(classifyFailure)),
+    ),
+    // A defect (a schema the server broke, say) still rejects; catching it here
+    // is what keeps a screen from being stuck on "Loading…" forever.
+  ).catch((cause: unknown) => Result.fail(classifyFailure(cause)));

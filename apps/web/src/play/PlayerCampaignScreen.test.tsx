@@ -1,7 +1,8 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { HostedSessionContext } from "../auth/hostedSession";
+
 import {
   campaign,
   campaignId,
@@ -31,7 +32,7 @@ const session = mintingSession();
 
 const renderScreen = async (): Promise<void> => {
   await renderAt(`/play/campaigns/${campaignId}`, (screen) => (
-    <HostedSessionContext value={session}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={session}>{screen}</HostedSessionScope>
   ));
 };
 

@@ -4,7 +4,8 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } 
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
-import { runApiResult, useApiResource } from "../api/resource";
+import { runApiResult } from "../api/client";
+import { useApiResource } from "../api/resource";
 import { useCredential } from "../auth/credential";
 import { Hob, useHobPanel } from "../hob";
 import { useMode } from "../shell/location";

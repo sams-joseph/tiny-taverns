@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { EncounterRunId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 import {
   brannoc,
   campaign,
@@ -241,7 +242,7 @@ const noSession: HostedSession = {
  */
 export const renderRunner = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`, (screen) => (
-    <HostedSessionContext value={noSession}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
   ));
 };
 

@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 
 /**
  * Following an invitation — the first screen a stranger sees.
@@ -105,7 +106,7 @@ const signedOut: HostedSession = {
 const renderJoin = async (hosted: HostedSession = signedIn): Promise<void> => {
   await renderAt(
     `/join/${TOKEN}`,
-    (screen) => <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>,
+    (screen) => <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>,
     "none",
   );
 };

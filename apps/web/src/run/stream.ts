@@ -3,7 +3,7 @@ import { Duration, Effect, Fiber, Result, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { makeClient } from "../api/client";
-import { classifyFailure } from "../api/resource";
+import { classifyFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
 import type { RunPath } from "./load";
 

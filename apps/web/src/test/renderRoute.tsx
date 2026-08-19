@@ -1,3 +1,4 @@
+import { RegistryProvider } from "@effect/atom-react";
 import { createHashHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -41,6 +42,20 @@ export const TEST_MACHINE_TOKEN = "a-test-token";
  * these tests assert is an `href`, and only the hash history builds the `#/…`
  * the product actually renders. `window.location.hash` is set first because
  * that is where a hash history reads its initial location from.
+ *
+ * **A fresh `RegistryProvider` per render, and this one is a trap rather than a
+ * tidiness.** `@effect/atom-react`'s `RegistryContext` defaults to a
+ * *module-level* standalone registry, so atoms read with no provider above them
+ * share one cache — across every test in a file, and across files in one
+ * worker. It is the same shape as the `FetchHttpClient.Fetch`
+ * `Context.Reference` memoisation this repo already documents, arriving by a
+ * new door, and it fails the same way: **silently, and green**, because the
+ * second test passes on the first test's data. `Atom.family` memoises atoms
+ * globally by key, which is what makes the leak reach across files — the *atom*
+ * is shared on purpose; the registry holding its value must not be.
+ *
+ * It is also the composition `main.tsx` renders, so this is the real tree
+ * rather than a harness of its own.
  */
 export const renderAt = async (
   path: string,
@@ -67,7 +82,11 @@ export const renderAt = async (
   // than "the router had not matched yet". Loading first makes the first paint
   // the screen.
   await router.load();
-  const tree = <RouterProvider router={router} />;
+  const tree = (
+    <RegistryProvider>
+      <RouterProvider router={router} />
+    </RegistryProvider>
+  );
   render(<>{wrap === undefined ? tree : wrap(tree)}</>);
 };
 

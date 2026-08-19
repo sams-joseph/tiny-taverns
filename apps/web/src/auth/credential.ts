@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useSyncExternalStore } from "react";
-import { useHostedSession } from "./hostedSession";
+import { useLayoutEffect, useMemo, useSyncExternalStore } from "react";
+import { NO_HOSTED_SESSION, useHostedSession, type HostedSession } from "./hostedSession";
 
 /**
  * The credential for the *next* API call, whichever kind the developer has.
@@ -229,19 +229,86 @@ export const useSignOutForgetsMachineToken = (): void => {
 /** Resolves a bearer token, or `undefined` when the app has no credential at all. */
 export type FetchCredential = () => Promise<string | undefined>;
 
-export const useCredential = (): FetchCredential => {
-  const { signedIn, fetchToken } = useHostedSession();
+/** The half of a hosted session that decides a credential, and the only half. */
+type SessionCredential = Pick<HostedSession, "signedIn" | "fetchToken">;
 
-  return useCallback(async () => {
+/**
+ * Which credential wins, written once.
+ *
+ * Both readers below go through this — the hook React screens use, and the
+ * module-level `fetchCredential` the atom client layer uses — so "hosted
+ * session first, then the pasted machine token" is one sentence rather than two
+ * that can drift. It is the rule this whole file is about; see the header.
+ */
+const credentialFrom =
+  (session: SessionCredential): FetchCredential =>
+  async () => {
     // The hosted session wins when there is one: it is a real person, and its
     // account is the one just-in-time provisioning created for them.
-    if (signedIn) {
-      const session = await fetchToken();
-      if (session !== undefined && session !== "") {
-        return session;
+    if (session.signedIn) {
+      const token = await session.fetchToken();
+      if (token !== undefined && token !== "") {
+        return token;
       }
     }
     const machine = readMachineToken();
     return machine === "" ? undefined : machine;
-  }, [signedIn, fetchToken]);
+  };
+
+/**
+ * The hosted session, published out of React so a layer built outside it can
+ * still resolve a credential.
+ *
+ * **This is the one design problem the atom port had, and this slot is the
+ * decision taken.** `useCredential` below is a hook — it reads the vendor's
+ * state through React context — and `api/atoms.ts` builds its HTTP client
+ * *layer* outside any component, where no hook can be called. The invariant
+ * that had to survive is the one `ServerPanel.test.tsx` pins:
+ *
+ * > *The token is fetched immediately before each call, never held in state.*
+ *
+ * So what is published here is the **session**, not a token: a slot holding a
+ * token would be the held credential the rule forbids, and one holding a
+ * resolver would be a second spelling of `credentialFrom`. `fetchCredential`
+ * calls `session.fetchToken()` afresh on every request, which is what the
+ * vendor's 60-second tokens require and what `mapRequestEffect` in
+ * `api/atoms.ts` arranges.
+ *
+ * **The default is `NO_HOSTED_SESSION` — the same value `HostedSessionContext`
+ * defaults to — and that is what makes an unpublished slot correct rather than
+ * merely harmless.** With no provider mounted, both readers resolve the pasted
+ * machine token and agree; a build with no publishable key (which is most
+ * development, and every test) never needs the publish to have happened.
+ */
+let publishedSession: SessionCredential = NO_HOSTED_SESSION;
+
+/**
+ * Publishes the current hosted session for readers outside React.
+ *
+ * Called by `HostedSessionScope`, which is the component that publishes the
+ * same value *into* React — one act, two audiences, so the context and the slot
+ * cannot disagree about who is signed in.
+ */
+export const publishHostedSession = (session: SessionCredential): void => {
+  publishedSession = session;
+};
+
+/** Puts the slot back to "no provider", so a torn-down tree leaves nothing behind. */
+export const forgetHostedSession = (): void => {
+  publishedSession = NO_HOSTED_SESSION;
+};
+
+/**
+ * The credential for the next request, resolved without React.
+ *
+ * `api/atoms.ts` is the caller, once per request. It is deliberately a
+ * function and not a value: reading it returns a promise for a *fresh* token,
+ * and there is nowhere in this shape to keep one.
+ */
+export const fetchCredential: FetchCredential = () => credentialFrom(publishedSession)();
+
+export const useCredential = (): FetchCredential => {
+  const { signedIn, fetchToken } = useHostedSession();
+
+  return useMemo(() => credentialFrom({ signedIn, fetchToken }), [signedIn, fetchToken]);
 };

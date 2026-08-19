@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
-import { HostedSessionContext, NO_HOSTED_SESSION } from "../auth/hostedSession";
+import { NO_HOSTED_SESSION } from "../auth/hostedSession";
 import { page } from "../campaign/campaign.fixtures";
 
 /**
@@ -324,6 +325,6 @@ export const installChronicleServer = (): StubServer => {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
 export const renderChronicle = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
-    <HostedSessionContext value={NO_HOSTED_SESSION}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={NO_HOSTED_SESSION}>{screen}</HostedSessionScope>
   ));
 };

@@ -3,7 +3,9 @@ import { Effect, Result } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TavernsClient } from "../api/client";
-import { runApiResult, useApiResource, type ApiFailure, type Resource } from "../api/resource";
+import { runApiResult } from "../api/client";
+import type { ApiFailure, Resource } from "../api/failure";
+import { useApiResource } from "../api/resource";
 import { useCredential } from "../auth/credential";
 import { NO_QUERY, type CorpusQuery, type CorpusView } from "./load";
 

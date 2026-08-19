@@ -1,7 +1,7 @@
 import type { Visibility } from "@taverns/api";
 import { Label, Switch, cn } from "@taverns/ui";
 import type { ComponentProps, ReactNode } from "react";
-import type { ApiFailure } from "../api/resource";
+import type { ApiFailure } from "../api/failure";
 
 /**
  * The furniture every authoring form in this app is built from.

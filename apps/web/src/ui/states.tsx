@@ -1,6 +1,6 @@
 import { Button, Card, Icon, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
-import type { ApiFailure } from "../api/resource";
+import type { ApiFailure } from "../api/failure";
 import { useHostedSession } from "../auth/hostedSession";
 
 /**

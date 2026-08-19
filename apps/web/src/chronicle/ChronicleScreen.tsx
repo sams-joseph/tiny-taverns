@@ -14,7 +14,8 @@ import {
 } from "@taverns/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
-import { useApiResource, type Resource } from "../api/resource";
+import type { Resource } from "../api/failure";
+import { useApiResource } from "../api/resource";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadChronicleSpine, type ChronicleSpine } from "./load";

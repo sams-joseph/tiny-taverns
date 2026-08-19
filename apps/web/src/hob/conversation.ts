@@ -9,8 +9,8 @@ import type {
 import { Effect, Fiber, Result, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { makeClient } from "../api/client";
-import { type ApiFailure, classifyFailure, runApiResult } from "../api/resource";
+import { makeClient, runApiResult } from "../api/client";
+import { classifyFailure, type ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
 import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } from "./transcript";
 

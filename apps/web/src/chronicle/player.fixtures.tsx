@@ -1,6 +1,7 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
-import { HostedSessionContext, NO_HOSTED_SESSION } from "../auth/hostedSession";
+import { NO_HOSTED_SESSION } from "../auth/hostedSession";
 import {
   beat,
   campaign,
@@ -182,6 +183,6 @@ export const installPlayerChronicleServer = (): StubServer => {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
 export const renderPlayerChronicle = async (): Promise<void> => {
   await renderAt(`/play/campaigns/${campaignId}/chronicle`, (screen) => (
-    <HostedSessionContext value={NO_HOSTED_SESSION}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={NO_HOSTED_SESSION}>{screen}</HostedSessionScope>
   ));
 };

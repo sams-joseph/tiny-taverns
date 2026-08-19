@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import type { CampaignId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 import { campaignId } from "../campaign/campaign.fixtures";
 import { Hob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
@@ -217,12 +218,12 @@ const panelState = (open: boolean): HobPanelState => ({
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 const renderHob = (options?: { readonly open?: boolean; readonly campaign?: boolean }): void => {
   render(
-    <HostedSessionContext value={noSession}>
+    <HostedSessionScope session={noSession}>
       <Hob
         hob={panelState(options?.open ?? true)}
         campaignId={options?.campaign === false ? undefined : (campaignId as CampaignId)}
       />
-    </HostedSessionContext>,
+    </HostedSessionScope>,
   );
 };
 

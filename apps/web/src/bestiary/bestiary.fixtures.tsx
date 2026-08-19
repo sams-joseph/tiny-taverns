@@ -1,7 +1,8 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { renderAt } from "../test/renderRoute";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 import {
   campaign,
   campaignId,
@@ -124,13 +125,13 @@ export const bothMemberships = [
 
 export const renderBestiary = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/bestiary`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
 /** The Library names no campaign — that is the whole shape of the read behind it. */
 export const renderLibrary = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt("/library", (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

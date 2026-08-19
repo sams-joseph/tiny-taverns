@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 
 /**
  * The campaign view's test wire: fixtures, a stub server, and one way in.
@@ -485,7 +486,7 @@ export const noSession: HostedSession = {
  */
 export const renderScreen = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
@@ -500,13 +501,13 @@ export const renderScreen = async (hosted: HostedSession = noSession): Promise<v
  */
 export const renderEncounters = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/encounters`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
 export const renderNotes = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/notes`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
@@ -522,14 +523,14 @@ export const renderCampaigns = async (
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(path, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
 /** The party screen, which is where a character is written since the split. */
 export const renderParty = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 

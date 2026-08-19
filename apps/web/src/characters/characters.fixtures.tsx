@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { CharacterId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 import {
   campaign,
   campaignId,
@@ -347,7 +348,7 @@ export const noSession: HostedSession = {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderRoster = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt("/play/characters", (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
@@ -356,6 +357,6 @@ export const renderSheet = async (
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(`/play/characters/${characterId}`, (screen) => (
-    <HostedSessionContext value={hosted}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

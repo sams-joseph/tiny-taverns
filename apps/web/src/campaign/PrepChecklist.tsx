@@ -13,7 +13,7 @@ import {
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { useMutation } from "../api/mutation";
-import { runApiResult } from "../api/resource";
+import { runApiResult } from "../api/client";
 import { useCredential } from "../auth/credential";
 import { SaveFailure } from "../ui/form";
 

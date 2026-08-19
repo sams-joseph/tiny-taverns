@@ -2,8 +2,8 @@ import { Effect, Result } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import { useCallback, useState } from "react";
 import { useCredential } from "../auth/credential";
-import type { TavernsClient } from "./client";
-import { runApiResult, type ApiFailure } from "./resource";
+import { runApiResult, type TavernsClient } from "./client";
+import type { ApiFailure } from "./failure";
 
 /**
  * How a screen *writes*: one call, one busy flag, one failure.

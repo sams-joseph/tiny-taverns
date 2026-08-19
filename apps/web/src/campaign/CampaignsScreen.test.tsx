@@ -1,7 +1,8 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 
 /**
  * The way in, now that an account can be at a table it does not run **and the
@@ -68,7 +69,7 @@ const session: HostedSession = {
 /** The DM's list by default; `/play` is the same screen answering the other question. */
 const renderList = async (path = "/campaigns"): Promise<void> => {
   await renderAt(path, (screen) => (
-    <HostedSessionContext value={session}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={session}>{screen}</HostedSessionScope>
   ));
 };
 

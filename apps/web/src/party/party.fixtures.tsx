@@ -1,6 +1,7 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 import {
   campaignId,
   character,
@@ -217,6 +218,6 @@ export const noSession: HostedSession = {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderParty = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
-    <HostedSessionContext value={noSession}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
   ));
 };

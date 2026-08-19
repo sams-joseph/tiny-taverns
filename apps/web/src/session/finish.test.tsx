@@ -1,8 +1,9 @@
+import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import { type HostedSession } from "../auth/hostedSession";
 import {
   brannoc,
   campaign,
@@ -78,7 +79,7 @@ const noSession: HostedSession = {
 
 const renderCampaign = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
-    <HostedSessionContext value={noSession}>{screen}</HostedSessionContext>
+    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
   ));
 };
 

@@ -1,7 +1,11 @@
 import { ClerkProvider, useAuth } from "@clerk/react";
-import { useMemo, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useMemo, type PropsWithChildren, type ReactNode } from "react";
 import { publishableKey } from "./config";
-import { useSignOutForgetsMachineToken } from "./credential";
+import {
+  forgetHostedSession,
+  publishHostedSession,
+  useSignOutForgetsMachineToken,
+} from "./credential";
 import { HostedSessionContext, type HostedSession } from "./hostedSession";
 
 /**
@@ -40,6 +44,16 @@ export function HostedSessionScope({
   session,
   children,
 }: PropsWithChildren<{ readonly session: HostedSession }>): ReactNode {
+  // Published *during render*, and that is the load-bearing part rather than a
+  // shortcut. `api/atoms.ts` builds its client layer outside React and reads
+  // the session through this slot; an atom's first read happens while a
+  // component renders (`useSyncExternalStore`'s snapshot), so a publish in an
+  // effect — layout or passive — runs after the subtree has already asked. It
+  // is a derived value rather than state, so writing the same thing on every
+  // render is idempotent and safe under `StrictMode`'s double render.
+  publishHostedSession(session);
+  useEffect(() => forgetHostedSession, []);
+
   return (
     <HostedSessionContext value={session}>
       <SignOutForgetsMachineToken />

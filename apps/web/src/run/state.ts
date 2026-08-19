@@ -1,7 +1,8 @@
 import type { Combatant, CombatantId, EncounterRun } from "@taverns/api";
 import { Result } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { runApiResult, type ApiFailure } from "../api/resource";
+import { runApiResult } from "../api/client";
+import type { ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
 import { loadLiveState, type LiveState, type RunPath } from "./load";
 
