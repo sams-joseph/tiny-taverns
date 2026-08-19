@@ -2220,13 +2220,13 @@ destination names the **same `campaignViewAtom`** and still has three states. **
 used to state is gone**: it read _"moving between Encounters and Notes re-reads the campaign"_,
 because each destination composed `loadCampaignView` into a hook of its own. An atom is
 identified by its key, so the second destination is answered from the registry — measured in
-Chromium, a cold campaign read is 5 requests and the three moves after it are **0**. What has
-not changed is the re-read after a **write**: every write on these screens changes something the
-screen did not send (`Encounter.creatureCount` is computed per read, a note's attachment moves a
-count on a different card), so `reload()` still re-reads the whole view and a narrower cache
-would be right until the first write it did not hear about. A screen's own search term and open
-dialog live **above** the frame, because the top bar sets them and the body reads them and they
-are two slots of one screen.
+Chromium, a cold campaign read is 8 requests and the three moves after it are **0**. **The
+re-read after a write is gone too, and that is the second phase**: `campaignViewAtom` is now
+_eight_ atoms combined into one value (`campaign/load.ts`) and a write names the ones it changed,
+so adding a checklist line costs one write and **one** read where it cost eight. `slots` has no
+`reload`; see "Writes name what they changed" below for what bounds the risk that swapped in. A
+screen's own search term and open dialog live **above** the frame, because the top bar sets them
+and the body reads them and they are two slots of one screen.
 
 **Party and Chronicle were the two that did not, and it shipped as a bug nobody could describe.**
 Both predated the split and each composed `AppShell` itself, passing `campaignName` and nothing
@@ -2259,12 +2259,14 @@ gate, so a player composing it gets a `NotFound` and the whole screen fails. `Ca
 player should see the night at all, and what (if anything) replaces _Start session_ for them, is a
 product decision nobody has made.
 
-- **One `Effect` per screen, not one atom per endpoint.** `campaign/load.ts` composes six calls
-  (two rounds, concurrent within a round, because the checklist hangs off
-  `campaign.currentSessionId`) into one value, and `api/atoms.ts`'s `useApiAtom` turns that into
-  exactly three states. Six independent atoms would give a screen sixty-four combinations of
-  loading and failed to render. **The atom is built by an `Atom.family` at module scope, keyed
-  on what the read closes over** — see "Reads are atoms" below, which is the whole of the rule.
+- **One _value_ per screen, and three states — but not necessarily one `Effect`.** A screen
+  renders one `Resource`, because six independent resources would be sixty-four combinations of
+  loading and failed. **How many atoms are underneath it is a separate question, and the answer
+  is "one per thing a write wants to refresh on its own".** Most screens are one atom over one
+  composed `Effect`, because every write on them changes all of it; the campaign view is eight,
+  combined with `AsyncResult.all` in `campaign/load.ts`, because adding a checklist line should
+  re-read the checklist and nothing else. **Either way the atom is built by an `Atom.family` at
+  module scope, keyed on what the read closes over** — see "Reads are atoms" below.
 - **`runApi` rejects; `runApiResult` does not.** A rejected promise throws away the _typed_
   error the contract declares and leaves every caller rendering `String(cause)`.
   `api/client.ts`'s `runApiResult` runs through `Effect.result` and `api/failure.ts` narrows to
@@ -2599,17 +2601,18 @@ at, and 200 from `notes.list` and `characters.list` with only the shared rows.
 **`apps/web/src/api/atoms.ts` is the one way a screen reads.** It replaced a hand-rolled
 `useApiResource` (`useEffect` + `useState` + `Effect.result`), and that file is **deleted** rather
 than deprecated — all eighteen of its call sites moved in one branch, so there is no second idiom
-for a new screen to copy from its neighbour. **Writes are still `api/mutation.ts` and have not
-been ported**; that is the next piece of work, and the shape of it is below.
+for a new screen to copy from its neighbour. **The write side moved in the phase after it**, over
+the same client and the same vocabulary; see "Writes name what they changed" below.
 
-The four modules and what each owns:
+The five modules and what each owns:
 
-| module            | owns                                                                   |
-| ----------------- | ---------------------------------------------------------------------- |
-| `api/atoms.ts`    | the atom client, `apiAtom`, `useApiAtom`, `asResource` — **reads**     |
-| `api/failure.ts`  | `ApiFailure`, `classifyFailure`, `failureFromCause`, `Resource`        |
-| `api/client.ts`   | `makeClient`, `TavernsClient`, `runApi`, `runApiResult` — the promises |
-| `api/mutation.ts` | `useMutation` — **writes**, unported                                   |
+| module            | owns                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| `api/atoms.ts`    | the atom client, `apiAtom`, `useApiAtom`, `asResource`, `combine`, `useInvalidate` |
+| `api/keys.ts`     | `reads` — the resource vocabulary both verbs speak                                 |
+| `api/failure.ts`  | `ApiFailure`, `classifyFailure`, `failureFromCause`, `Resource`                    |
+| `api/client.ts`   | `makeClient`, `TavernsClient`, `runApi`, `runApiResult` — the promises             |
+| `api/mutation.ts` | `useMutation` — **writes**                                                         |
 
 ### The rule a call site has to follow, and why it is safer than the one it replaced
 
@@ -2706,33 +2709,137 @@ explicit `RegistryProvider`, so the harness and the app are the same tree.
 Two timing behaviours to expect in jsdom: `defaultIdleTTL` is 400 ms (atoms disposed that long
 after nothing reads them) and provider unmount disposes the registry after a 500 ms delay.
 
-### What the port fixed, what it did not, and the numbers for both
+### What the read port fixed, and what it left for the write port
 
 **Measured in Chromium at Fast 4G against a real server and a real Postgres**, not reasoned:
 
 - **The blank is gone.** Minting an invitation, sampling every frame: on the old hook 10 frames
   blank, 10 showing _"Reading your invitations…"_, and the row's DOM node disconnected for 370 of
   383 frames. On the atom: **0, 0 and 0** across 384 frames.
-- **Adding a checklist line — the case this was reported for — still costs 1 write and 8 reads.**
-  Over 301 frames at 1440: no blank, no `Loading…`, the existing row never unmounted, the campaign
-  name, the session badge and _Start an encounter_ never left the row, and the scroll position
-  kept. **The request count is unchanged and that is expected**: coarse invalidation is a property
-  of `loadCampaignView` + one `reload()`, not of the library.
-- **Moving between a campaign's destinations is now free.** Cold read of a campaign: 5 requests.
-  The three moves after it: **0**.
+- **Adding a checklist line — the case this was reported for — still cost 1 write and 8 reads.**
+  No blank, no `Loading…`, no unmount, scroll kept, and **the request count unchanged**: coarse
+  invalidation was a property of `loadCampaignView` + one `reload()`, not of the library. That is
+  what the write port answered.
+- **Moving between a campaign's destinations is free.** The three moves after a cold read: **0**.
 
-**Narrowing the write-side invalidation is the next piece of work and is deliberately not done
-here.** It means splitting `loadCampaignView` into per-endpoint atoms with reactivity keys, and it
-reverses the "one re-read is one source of truth" reasoning argued in `CampaignChrome.tsx` — a
-reactivity key is still a name somebody has to remember to invalidate, which is exactly the failure
-mode that doc block names. `AtomHttpApi` supplies `query({reactivityKeys})` and `mutation()` for
-it, neither of which this port uses.
+**`run/stream.ts` and `run/state.ts` were left alone on purpose, and still are.** Neither used
+`useApiResource` — they drive `runApiResult` with their own loops — and both are a different
+problem: a doorbell with reconnect semantics, and an optimistic overlay. `Atom.pull` and
+`Atom.makeRefreshOnSignal` would fit "the doorbell rang, refresh these atoms", but that is a
+rewrite of a subtle, measured file rather than a migration step.
 
-**`run/stream.ts` and `run/state.ts` were left alone on purpose.** Neither used `useApiResource` —
-they drive `runApiResult` with their own loops — and both are a different problem: a doorbell with
-reconnect semantics, and an optimistic overlay. `Atom.pull` and `Atom.makeRefreshOnSignal` would
-fit "the doorbell rang, refresh these atoms", but that is a rewrite of a subtle, measured file
-rather than a migration step.
+## Writes name what they changed: `api/keys.ts`, and the risk it swapped in
+
+**A write says which reads it changed, and the atoms that named the same resource read themselves
+again.** `api/keys.ts` is the whole vocabulary and is the file to read first; `api/atoms.ts`'s
+`useInvalidate` is the seam, and `Mutation.submit` is the one caller of it.
+
+It replaced `onSaved → reload()`, which every one of the twenty-seven write sites hand-wired and
+which on the campaign's five screens meant re-reading the whole campaign — **one write and eight
+reads to add one line to a checklist**, measured twice in a real browser. `CampaignChrome.tsx`
+argued for that in writing (_"one re-read is one source of truth"_), and the argument was not
+wrong: a narrower cache is right until the first write it did not hear about. **The captain took
+the trade on 2026-08-19**, and everything below is what bounds it.
+
+### Three things are structural, and they are the whole guard
+
+A reactivity key is still a name somebody has to remember, so what can be made structural is that
+the question gets asked:
+
+- **`apiAtom` and `submit` both take the key list as a required argument.** A new read or a new
+  write does not compile until its author has said what it answers or changes. `[]` is a visible
+  answer — the invitation preview a stranger reads, the optimistic prep tick — and not a silence.
+- **The names are functions over ids** (`reads.notes(campaignId)`), so a resource cannot be
+  misspelled or pointed at the wrong id shape, and one grep names every reader and every writer
+  of it.
+- **`CampaignChromeSlots` has no `reload`.** There is no longer a way for a campaign screen to
+  say "something happened, read everything again". The one re-read-everything left is the failure
+  notice's _Try again_, which is the frame's own and is spelled in the same vocabulary
+  (`campaignViewKeys`).
+
+### The rule for a new write, and the four cases already in the product
+
+**Ask what the write changes that is _not_ in its own response.** That is the discipline, and it
+is the failure the old design made impossible. Four instances, each named where it happens:
+
+| the write                  | what moves that it never sent                                                |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| an encounter's roster line | `Encounter.creatureCount`, `sum()`-computed per read                         |
+| a note's attachment        | the _"· 1 note"_ on an encounter card, counted over the notes                |
+| a player's own sheet       | `descriptor` on the **DM's** party list (`ownCharacterWrites`)               |
+| a combatant's `conditions` | the same party list, written through by `repo/vitals.ts` (`combatantWrites`) |
+
+Prefer over-naming to under-naming: a key nobody is listening on costs nothing, because
+`withReactivity` only registers an atom something is reading, and a key nobody named is a card
+that quietly says the wrong number.
+
+### Four things that are not derivable from the library
+
+- **`Atom.withReactivity` and the invalidator must resolve the same `Reactivity` instance**, and
+  they do because `Atom.runtime` memoises `Reactivity.layer` in `Atom.defaultMemoMap` and
+  `AtomHttpApi.Service` builds `Api.runtime` from that same default factory. If a bump ever split
+  them nothing would fail to compile and no screen would error — writes would simply stop
+  refreshing reads, everywhere at once. `api/invalidation.test.tsx` asserts it rather than arguing
+  it.
+- **A _derived_ atom cannot be refreshed.** `registry.refresh` re-runs its read, which hands back
+  the same cached parts. Either invalidate the keys its parts named (`campaignViewKeys`, because
+  three of the eight are keyed on a session id only the campaign's own answer supplies), or give
+  `Atom.readable` its **second argument** — a refresh callback naming the parts, which is what
+  `party/load.ts`'s roster does.
+- **`AsyncResult.all` alone blanks the screen when a key changes.** It propagates the first
+  non-success verbatim, so an atom that has never been read makes the whole `Initial` — which
+  happens every time a DM opens a night, because the checklist and the fights become atoms keyed
+  on a session id that did not exist a moment ago. `api/atoms.ts`'s `combine` keeps the last whole
+  while a part is assembling; a **failure** still passes through, because a part that 401'd is
+  something a screen has to say.
+- **`AtomHttpApi`'s own `mutation` is not used, and cannot be.** It is one atom per endpoint, and
+  this app's rule is that a form composing several writes passes one `Effect` (the encounter and
+  its roster). Its `busy`/`failure` would also be _shared_: two dialogs writing one table would
+  share a spinner, and two `submit`s in flight through one atom resolve to each other's answer.
+  So the transport and the invalidation are the atom runtime's, and the three things belonging to
+  one open form stay React state.
+
+### The runner is out, and one of its atoms names nothing on purpose
+
+`run/state.ts` and `run/stream.ts` are untouched — the optimistic protocol and the doorbell are
+not plain writes. Three files under `run/` do make ordinary writes and are ported
+(`CombatantDialog`, `EndRunDialog`, `RunScreen`), and **`runViewAtom` deliberately names no
+reads**: its value is `useRunState`'s starting point, so refreshing it would reset the pending hit
+points and the server-wins reconciliation. A reactivity key there would be a second thing
+re-reading a fight, fighting the first.
+
+### What it cost, measured
+
+Chromium at 1440×900 against a real server, a real Postgres and a campaign of 6 encounters,
+5 notes, 3 characters and a session with 4 prep items:
+
+| journey                           | before | after |
+| --------------------------------- | -----: | ----: |
+| cold campaign read                |      8 |     8 |
+| Overview → Encounters → Notes     |      0 |     0 |
+| Overview → Party                  |      2 |     2 |
+| **add one checklist line**        |  **9** | **2** |
+| mint an invitation (Overview)     |      2 |     2 |
+| withdraw an invitation (Overview) |     10 |     2 |
+| withdraw an invitation (Party)    |     11 |     3 |
+
+The add-one-line case sampled 653 frames: no blank, no `Loading…`, the campaign name never gone,
+`<main>` and its first child never swapped, the checklist card never disconnected. Cross-resource,
+in the browser: a roster save redrew the card as _"2 creatures"_, and attaching a note on the
+Notes screen made the Encounters card read _"2 creatures · 1 note"_ with **zero** requests on
+arriving there.
+
+**Two costs are real and stated rather than hidden.** Saving an encounter's roster fires two reads
+the dialog no longer needs, because its own roster atom is registered on `reads.encounters` and is
+still alive when the invalidation lands — the price of a reopened dialog not being stale. And a
+`{table: [id]}`-shaped key would have been simpler; the array form with a composed
+`"notes:<id>"` string is used instead so a write at one campaign cannot refresh another's, which
+`api/invalidation.test.tsx` pins.
+
+**One improvement the port made possible and took**: Hob's accept used to say in a comment that
+_"the screen behind the panel is not reloaded, because the panel does not know what is behind
+it"_. Naming a resource is not a seam through the shell, so it now refreshes the notes and the
+encounters and the comment is gone.
 
 ## Authoring in `apps/web`: forms, mutations, and the traps in them
 
@@ -2740,25 +2847,29 @@ The campaign view writes as well as reads, and the runner comes next. These are 
 follow them rather than inventing a second style. `api/mutation.ts`, `ui/form.tsx` and
 `campaign/EncounterDialog.tsx` are the worked examples.
 
-- **`useMutation` is the write side, and it is the one thing not yet ported to atoms** — see
-  "Reads are atoms" above. It and the read side are shaped differently on purpose. A read runs because its inputs changed, so its callback's identity is the
-  trigger and must be `useCallback`-stable; a write runs because the DM clicked, so the Effect
-  is handed over at `submit` time and no memoisation rule applies. Getting that backwards is
-  how a form saves on every render. `submit` resolves a **`Result`**, not `A | undefined`: a
-  `delete` succeeds with `void`, so "the row is gone" and "the call failed" would otherwise be
-  the same value and a dialog would close on a failure it never noticed.
+- **`useMutation` is the write side, and it takes the reads it changed** — see "Writes name
+  what they changed" above, which is the whole of that half. It and the read side are shaped
+  differently on purpose. A read runs because its inputs changed, so it is an atom identified by
+  its key; a write runs because the DM clicked, so the Effect is handed over at `submit` time
+  and no memoisation rule applies. Getting that backwards is how a form saves on every render.
+  `submit` resolves a **`Result`**, not `A | undefined`: a `delete` succeeds with `void`, so
+  "the row is gone" and "the call failed" would otherwise be the same value and a dialog would
+  close on a failure it never noticed. **The invalidation fires only on success**: a refused
+  write leaves every screen showing what the server still holds.
 - **A form that writes two tables composes one `Effect`, exactly as `campaign/load.ts`
   composes six reads.** The encounter dialog creates the encounter and then its roster lines
   inside one `submit`; two submits in a row would give the form two busy flags and a
   half-saved encounter to explain. There is no transaction across requests, so a mid-way
   failure leaves the encounter saved and the roster short — that is the honest outcome, and
   rolling back with more requests would fail the same way one call later.
-- **A structural write re-reads the screen; only a single boolean is optimistic.** The prep
-  tick moves before the round trip and reverts on failure, because a checkbox that waits feels
-  broken at a table. Everything that changes the _shape_ of a list waits and then calls the
-  screen's `reload`, because a write here changes things the screen did not send —
-  `Encounter.creatureCount` is computed per read, and a note's attachment moves a count on a
-  different card.
+- **A structural write names the reads it changed; only a single boolean is optimistic.** The
+  prep tick moves before the round trip and reverts on failure, because a checkbox that waits
+  feels broken at a table — and it names **no** reads, because it has already rendered its own
+  answer and a refresh would be a request the override is sitting on top of. Everything that
+  changes the _shape_ of a list waits, and then names the resource rather than calling a
+  screen's `reload`: a write changes things the screen did not send (`Encounter.creatureCount`
+  is computed per read, a note's attachment moves a count on a different card) and naming the
+  resource is what reaches them without knowing which screens exist.
 - **Validate in the form as well as in the contract, and know why both.** The derived client
   encodes through the same schema the handler decodes with, so a bad payload **never reaches
   the network** — it fails locally with a `SchemaError`. That is the good outcome, but it

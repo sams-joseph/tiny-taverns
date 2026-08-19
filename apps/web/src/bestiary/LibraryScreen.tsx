@@ -101,11 +101,18 @@ export function LibraryScreen() {
   // campaign list, and for the same reason.
   const hob = useHobPanel({ initialOpen: false });
 
-  /** A write changes the shape of the list, so it re-reads. `EncounterDialog`'s rule. */
+  /**
+   * A write changes the shape of the list, and the list re-reads itself.
+   *
+   * There is no `corpus.reload()` here any more: `CreatureForm` names
+   * `reads.library` on its save and its delete, so every page of every query
+   * over this account's originals reads itself again — including ones this
+   * screen is not currently showing. Calling both would be two requests for one
+   * answer, the second interrupting the first.
+   */
   const saved = () => {
     setEditing(undefined);
     setOpened(undefined);
-    corpus.reload();
   };
 
   return (
