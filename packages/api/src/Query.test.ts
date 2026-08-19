@@ -90,7 +90,8 @@ describe("the query parameters this contract declares", () => {
       "library.list.environments",
     ]);
     for (const field of arrays) {
-      const one = Schema.decodeUnknownSync(Schema.make<Schema.Top>(field.type as never))("Cave");
+      const field_ = Schema.make(field.type as never) as Schema.Codec<unknown, unknown>;
+      const one = Schema.decodeUnknownSync(field_)("Cave");
       expect(one, `${field.endpoint}.${field.name}`).toEqual(["Cave"]);
     }
   });

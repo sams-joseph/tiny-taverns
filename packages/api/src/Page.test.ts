@@ -62,13 +62,12 @@ describe("the page filter", () => {
   // real thing rather than on the declaration, because that wrapping is exactly
   // where the array defect lived.
   it("reads a limit and a cursor off a real query string", () => {
-    const endpoint = (
-      TavernsApi.groups as unknown as Record<
-        string,
-        { readonly endpoints: Record<string, { readonly query: Schema.Top }> }
-      >
-    ).creatures.endpoints.list;
-    const wire = Schema.decodeUnknownSync(endpoint.query)({
+    const groups = TavernsApi.groups as unknown as Record<
+      string,
+      { readonly endpoints: Record<string, { readonly query: unknown }> } | undefined
+    >;
+    const query = groups.creatures?.endpoints.list?.query as Schema.Codec<unknown, unknown>;
+    const wire = Schema.decodeUnknownSync(query)({
       limit: "25",
       cursor: encodeCursor({ o: "name", k: ["Goblin Boss", "5f4e"] }),
       environments: "Cave",

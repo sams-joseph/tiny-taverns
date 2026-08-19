@@ -1695,6 +1695,95 @@ just fails, or worse, passes for the wrong reason. Provide a provider explicitly
 placed _outermost_ so it also covers layer construction. See the environment tests in
 `apps/server/test/identity-disabled.test.ts`.
 
+## Pagination and list filters: the keyset, and the query array that made it possible
+
+Two changes that had to be one. The bestiary asked for **every** creature and threw away the
+non-matching rows in the browser, because the chips could not be sent; fixing only the sending
+would have preserved exactly the shape pagination has to undo, and pagination without the fix
+would have left a filter applied to fifty rows calling itself a filter on the list.
+
+### The defect: a URL cannot tell a scalar from a one-element list
+
+`UrlParams.toRecord` — what `HttpApiBuilder` hands a query decoder — folds a repeated key into
+`Record<string, string | NonEmptyArray<string>>`, so **one occurrence arrives as a scalar and two
+arrive as an array**. A bare `Schema.Array` therefore refused precisely the common case: the
+derived client encodes `["Cave"]` as a single `?environments=Cave` and the server answered
+`400 Expected array | undefined, got "Cave"`. Two chips worked; one did not.
+
+The client is not wrong to do that — one occurrence _is_ what a one-element list looks like on the
+wire — so the schema is the only place the two can be reconciled. **`packages/api/src/Query.ts`'s
+`queryArray` is the fix, and every array-valued query parameter in the contract goes through it.
+A bare `Schema.Array` in a `query:` position is the bug wherever it appears.** `Query.test.ts`
+sweeps every declared endpoint for one, so the next array filter cannot reintroduce it quietly.
+
+**The sweep, endpoint by endpoint, as of this change**: `creatures.list.environments` and
+`library.list.environments` are the only array-valued query parameters in the whole contract, and
+both are fixed. `search.search.source` and `live.log`/`live.events`' `since`+`limit` are scalars;
+every other list endpoint declares no query at all. `SearchFilter.source` was made a scalar
+_because_ of this defect and stays one by choice now that it needn't be.
+
+### Keyset, not offset — and it is a `where` clause
+
+`packages/api/src/Page.ts` is the wire shape and carries the full reasoning; `apps/server/src/repo/paging.ts`
+is the SQL. The decisive argument is not speed: **a keyset is one more clause in the same
+`sql.and([...])` the visibility predicate is in.** The actor and visibility contract calls
+post-filtering in a handler the leak pattern, and paging has the identical failure mode one step
+on — narrow after the predicate and a player asking for five rows both sees rows they may not have
+and gets a page of two. `paging.test.ts` walks a mixed `dm`/`shared` corpus as a real player one
+page at a time and asserts **full** pages, which is the evidence the database did the narrowing.
+
+Four rules a caller has to know, all stated in `Page.ts`:
+
+- **A page is `{ items, nextCursor }`**, and `nextCursor` is `null` on the last one. It is
+  answered by asking the database for one row more than will be returned. **There is no total
+  count** — counting a visibility-predicated corpus is a second full scan for a number no screen
+  draws.
+- **The cursor decides the ordering.** It carries the ordering it was minted for, so page two of a
+  CR-sorted bestiary is CR-sorted whatever `sort` says beside it. It is parametrised on that
+  list's own ordering literal, which is what makes an unknown ordering a **400 from the schema**
+  and keeps the repository's lookup total — no endpoint carries an error member for a bad cursor.
+- **Filters are the caller's to resend.** A cursor is a position, not a saved query.
+- **Every ordering ends in the row's id.** None of the natural keys is unique — two campaigns hold
+  a Goblin Boss, a whole import shares one `created_at` — and a cursor over a non-unique key names
+  a position several rows wide, so a page boundary repeats a row or loses one. A `timestamptz`
+  ordering is additionally truncated to milliseconds **on both sides** (`timeColumn`), because the
+  driver hands the column back as a `Date` and a cursor built from the truncated value compared
+  against the full-precision column silently skips rows.
+
+Paged today: `creatures.list`, `library.list`, `notes.list`, `encounters.list`, `beats.list`.
+Deliberately not: the lists that are bounded by what they hang off — a session's combatants, a
+campaign's members, a night's checklist — and `search`, which has a `limit` and whose result set
+is a ranking rather than a corpus.
+
+### What it cost the screens, and what was deliberately not done
+
+- **`apps/web/src/api/page.ts`'s `collectPages` follows the cursor to the end**, for the lists a
+  screen genuinely needs whole: the campaign frame filters its notes and encounters in the
+  browser (deliberately — see the screens section), and the creature pickers turn roster ids into
+  names. The cost is stated rather than hidden: two requests where there was one on a big
+  campaign, and a bounded endpoint either way.
+- **The bestiary and the Library page incrementally**, with a _Show more_ button and a subtitle
+  that says "The first 24" rather than a count that would read as the size of the corpus.
+- **`notes.list` and `encounters.list` gained no `q`.** Those screens filter what the frame
+  loaded, with a reason already written down, and campaign-wide prose search is
+  `campaigns/:c/search` over four tables at once. A second search path over one corpus is the
+  thing `repo/Search.ts` exists to prevent.
+- **The chip vocabulary became its own read** (`creatures.environments`, `library.environments`),
+  over the same predicate as the list it belongs to. Folded out of the answers — which is what
+  the screen used to do — it would offer only what page one mentioned and, once the chips narrow
+  the query, could never grow back the chip you would press to get out of a filter.
+- **A trap worth knowing in the hook**: `useCorpus` reads `narrowed` through a ref rather than
+  depending on it. `narrowed` changes one render _before_ the answer for the new query lands, so
+  as a dependency the effect re-runs against the **previous** answer and discards the extra pages
+  while the old first page is still on screen — a list that is neither the old one nor the new
+  one. Measured; `BestiaryScreen.test.tsx` pins it.
+
+Verified in Chromium against a real server, a real Postgres and 36 reachable creatures:
+`?environments=Cave` (one occurrence) narrowed 36 to 11, `?environments=Cave&environments=River`
+to 22, clearing went back to a first page of 24 with _Show more_, one press appended the
+remaining 12 and took the button away, and the cursor the server minted went back byte-identical.
+No horizontal scroll at 1440. A campaign of 60 notes drew all 60 in one `?limit=200` request.
+
 ## Authentication: two credential kinds, one seam
 
 A bearer token is either a **machine token** (`token:issue`, SHA-256 → `account.token_hash`)
@@ -3039,9 +3128,12 @@ campaign …)` returns rows for any authenticated request naming any campaign id
   `sessionId` exists only on a beat hit and `title` only on the two things that have one — the
   same rule the screens follow: do not render a field the API does not have. A hit is a pointer
   plus a result line, not a copy of the row; provenance is absent until something writes it.
-- **`source` is a scalar query param, not an array.** A one-element array does not survive the
-  wire at `effect@4.0.0-beta.102` (see the bestiary section), and "only the beats" is exactly the
-  one-element case.
+- **`source` is a scalar query param, not an array**, and it stays one now for the reason it was
+  originally chosen rather than the reason it was forced. It was forced: a one-element array did
+  not decode at all until `queryArray` (see "Pagination and list filters" below), and "only the
+  beats" is exactly the one-element case. That is fixed and the constraint is gone — widening it
+  is now possible and is still not wanted, because no surface asks for two-of-four and a scalar
+  is what a single-choice control means.
 
 Two smaller traps, both measured:
 
@@ -3182,19 +3274,15 @@ Five things it settled that the next screen over this contract should not re-der
   instead, and that is a _second_ screen rather than this one relocated**: the Library is
   originals (the bundle plus what you authored) and this is what a campaign holds (copies, plus
   the bundle). Both exist now; see the section below for the pair.
-- **The search and the sort are query parameters; the environment chips are not.** The search
-  has to be the server's, because `ILIKE` on the name is only half of it and the other half is
-  full text over the stat block — measured against a running server, `"nimble escape"` returns
-  the Goblin Boss _and_ the reskin derived from it, by a trait that is in no column. The sort
-  goes with it because `cr` orders by `crSort`. The chips do not, and that is not a shortcut:
-  **a one-element array does not survive the wire at `effect@4.0.0-beta.102`.** The derived
-  client encodes `["Cave"]` as one `?environments=Cave`; the server's query decoder reads a
-  single occurrence of a key as a scalar, and `Schema.Array` refuses it — `Expected array |
-undefined, got "Cave"`, a 400. Verified by hand against the running server:
-  `?environments=Cave` is 400 and `?environments=Cave&environments=River` is 200. Applying the
-  any-of in the client loses nothing (every row carries its own `environments`, the two filters
-  are conjunctive, the server's order is untouched) and costs no request — but the _contract_ is
-  still wrong, and a fix belongs in `packages/api`/upstream, not in a second client workaround.
+- **Every control is a query parameter, and the grid is a page.** The search has to be the
+  server's, because `ILIKE` on the name is only half of it and the other half is full text over
+  the stat block — measured against a running server, `"nimble escape"` returns the Goblin Boss
+  _and_ the reskin derived from it, by a trait that is in no column. The sort goes with it
+  because `cr` orders by `crSort`. **The chips did not, for a year, and now do** — see
+  "Pagination and list filters" below, which is also why the two changes were one change: a chip
+  applied to the answer would be applied to a _page_. The chip row's vocabulary is therefore a
+  read of its own (`creatures.environments`), because one folded out of paged, narrowed answers
+  could never grow back the chip you would press to get out of a filter.
 - **The card is the row half and the panel is the document half, and both are rendered.**
   `AC 17` / `21 hp` on the card are the integers that filter and sort; `"17 (chain shirt,
 shield)"`, `"21 (6d6)"`, `"1 (200 XP)"` are what the stat block shows.
@@ -3211,9 +3299,8 @@ shield)"`, `"21 (6d6)"`, `"1 (200 XP)"` are what the stat block shows.
 - **Two empty states behind one drawn card.** `EmptyState` renders the designers' _"Nothing
   lives here"_ either way; the second sentence is _"Loosen a filter"_ when the DM narrowed
   something and names `pnpm -F server bestiary:import` when the campaign's whole reach is empty.
-  Telling them apart needs the screen to remember whether an _unsearched_ answer was empty —
-  which is exact, because the chips never reach the server. The chip vocabulary is accumulated
-  across loads rather than recomputed, so a search cannot take the chips off the row.
+  Telling them apart needs the screen to remember whether an answer that **narrowed nothing** was
+  empty — the search box clear _and_ no chip pressed, since both reach the server now.
 
 The last good list stays on screen while the next one loads (`shown`), so a grid does not blank
 to "Loading…" on every keystroke. Measured in Chromium against a real server and a real corpus:
@@ -3230,9 +3317,9 @@ belongs to an **account**"; this section is only what the screens do with it.
 **It lives in `bestiary/` beside the campaign bestiary, and that is the decision the pair turns
 on** — the same argument `chronicle/PlayerChronicleScreen.tsx` makes from the other side. Two
 lists over one table, so the parts where they must not disagree are **files**: `corpus.ts` is the
-reading behaviour (debounced server-side search, the CR sort, the client-side any-of chips, the
-accumulated chip vocabulary, the last-good list, the "empty at all vs empty for this filter"
-flag), `CorpusParts.tsx` is the controls, the chip row and the grid, and `provenance.ts`,
+reading behaviour (debounced server-side search, the CR sort, the server-side any-of chips, the
+pages and the cursor, the last-good list, the "empty at all vs empty for this filter" flag),
+`CorpusParts.tsx` is the controls, the chip row, the grid and _Show more_, and `provenance.ts`,
 `CreatureCard`, `CreatureDialog` and `StatBlock` are shared whole. What differs between the two
 screens is the endpoint, the copy and the verbs — which is all that should.
 
@@ -3378,9 +3465,9 @@ Five more things this screen settled:
   is debounced, so `q` moves before the request that follows it lands; rendering a count beside the
   _current_ `q` says "0 results for quokka" about a search for `quokk` — measured, in those words,
   before the field existed. It is also the string the excerpt highlighting is computed against.
-- **`source` is one scalar or absent**, and the control is single-choice for that reason alone —
-  see `Search.ts` and the bestiary's environment chips, the same wire defect met from the other
-  side. Confirmed at the network layer in Chromium: `?q=ferryman` with no `source`, then
+- **`source` is one scalar or absent**, and the control is single-choice because that is what the
+  screen wants — see `Search.ts`, where the wire defect that used to force it is recorded as
+  fixed. Confirmed at the network layer in Chromium: `?q=ferryman` with no `source`, then
   `?q=ferryman&source=beat`, one occurrence, 3 hits narrowing to 1. Do not widen it to an array.
 - **The excerpt is plain text and is rendered as elements, never as markup.** `search.ts`'s
   `segments` splits the snippet against the query's terms — minus the operators
