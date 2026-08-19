@@ -1,5 +1,6 @@
 import type {
   Campaign,
+  CampaignId,
   Encounter,
   EncounterId,
   EncounterRunId,
@@ -24,10 +25,10 @@ import {
   Switch,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
-import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { Atom } from "effect/unstable/reactivity";
+import { useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { nextSessionNumber, startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -67,6 +68,28 @@ import { FailureNotice, Loading } from "../ui/states";
 /** The one value the encounter select takes that is not an encounter. */
 const NONE = "";
 
+/**
+ * The number this fight's night will carry.
+ *
+ * **Read from the server only when a session has to be invented**, because that
+ * is the only thing the answer is for; with one already open it is that
+ * session's, and no request. That branch is in the *key* rather than in the
+ * component, so "already known" and "must be asked" are two different atoms
+ * rather than one atom that changes its mind.
+ */
+const runNumberAtom = Atom.family(
+  ({
+    campaignId,
+    known,
+  }: {
+    readonly campaignId: CampaignId;
+    readonly known: number | undefined;
+  }) =>
+    apiAtom((client) =>
+      known === undefined ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(known),
+    ),
+);
+
 export function StartRunDialog({
   campaign,
   session,
@@ -87,17 +110,7 @@ export function StartRunDialog({
   const campaignId = campaign.id;
   const needsSession = session === undefined;
 
-  /**
-   * The number this fight's night will carry — read from the server only when a
-   * session has to be invented, because that is the only thing the answer is
-   * for. With a session already open it is that session's, and no request.
-   */
-  const load = useCallback(
-    (client: TavernsClient) =>
-      needsSession ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(session.number),
-    [campaignId, needsSession, session],
-  );
-  const [number, reload] = useApiResource(load);
+  const [number, reload] = useApiAtom(runNumberAtom({ campaignId, known: session?.number }));
 
   const [encounterId, setEncounterId] = useState<string>(preselected ?? NONE);
   const [includeParty, setIncludeParty] = useState(true);

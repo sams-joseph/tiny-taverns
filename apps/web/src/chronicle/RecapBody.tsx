@@ -1,8 +1,7 @@
 import type { CampaignId, RecapFight, SessionId } from "@taverns/api";
 import { Badge, Card, Icon } from "@taverns/ui";
-import { useCallback } from "react";
-import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
+import { Atom } from "effect/unstable/reactivity";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { FailureNotice, Loading } from "../ui/states";
 import { fightStory, standing } from "./fight";
 import { loadRecap } from "./load";
@@ -77,6 +76,18 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<RecapFight> }) {
   );
 }
 
+/**
+ * One night, read back — the DM's projection, keyed on the pair that names it.
+ *
+ * A **record** key, which `Atom.family` compares structurally (see
+ * `api/atoms.ts`). Module scope, because an atom is its own identity: built in
+ * the component it would be a fresh one every render and load forever.
+ */
+const recapAtom = Atom.family(
+  ({ campaignId, sessionId }: { readonly campaignId: CampaignId; readonly sessionId: SessionId }) =>
+    apiAtom(loadRecap(campaignId, sessionId)),
+);
+
 export function RecapBody({
   campaignId,
   sessionId,
@@ -86,13 +97,7 @@ export function RecapBody({
   readonly sessionId: SessionId;
   readonly readAloud: boolean;
 }) {
-  // Memoised on the ids: its identity is what tells `useApiResource` to load
-  // again, so an inline closure would load forever.
-  const load = useCallback(
-    (client: TavernsClient) => loadRecap(campaignId, sessionId)(client),
-    [campaignId, sessionId],
-  );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(recapAtom({ campaignId, sessionId }));
 
   if (resource.state === "loading") return <Loading label="Reading the night back…" />;
   if (resource.state === "failed") {

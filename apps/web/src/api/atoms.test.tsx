@@ -88,6 +88,34 @@ describe("an atom as a screen's three states", () => {
 });
 
 /**
+ * The rule every ported call site has to follow, and the reason it is safe to
+ * state it as "key it on what the read closes over".
+ *
+ * An atom is identified by object identity, so `Atom.family` is what keeps a
+ * component from building a fresh one on every render — which is an infinite
+ * loop, not a wasted request. Whether a *record* key works at all rests on
+ * Effect's `Equal`/`Hash` being structural for a plain object; it is, in v4,
+ * and this is the pin, because the failure mode if a bump changed it is a
+ * hanging screen rather than a type error.
+ */
+describe("Atom.family, as the port keys its reads", () => {
+  it("gives one atom per key, for a record as well as for a string", () => {
+    let built = 0;
+    const family = Atom.family((key: { readonly campaignId: string; readonly q: string }) => {
+      built += 1;
+      return Atom.make(`${key.campaignId}/${key.q}`);
+    });
+
+    expect(family({ campaignId: "c1", q: "gob" })).toBe(family({ campaignId: "c1", q: "gob" }));
+    expect(built).toBe(1);
+
+    // A different key really is a different read.
+    expect(family({ campaignId: "c1", q: "orc" })).not.toBe(family({ campaignId: "c1", q: "gob" }));
+    expect(built).toBe(2);
+  });
+});
+
+/**
  * `failureFromCause` is the whole of what the taxonomy needed to survive the
  * port, and its one non-obvious half is the defects.
  *

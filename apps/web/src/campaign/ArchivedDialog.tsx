@@ -10,10 +10,8 @@ import {
   Icon,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useCallback } from "react";
-import type { TavernsClient } from "../api/client";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -91,6 +89,12 @@ function ArchivedRow({
   );
 }
 
+/**
+ * The shelf, as an atom. No key: the read names no campaign — it is every
+ * campaign this account has archived — so there is one of it.
+ */
+const archivedAtom = apiAtom((client) => client.me.archivedCampaigns());
+
 export function ArchivedDialog({
   onClose,
   onRestored,
@@ -99,8 +103,7 @@ export function ArchivedDialog({
   /** Re-reads the campaign list: a restored campaign belongs on it. */
   readonly onRestored: () => void;
 }) {
-  const load = useCallback((client: TavernsClient) => client.me.archivedCampaigns(), []);
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(archivedAtom);
 
   const restored = () => {
     reload();

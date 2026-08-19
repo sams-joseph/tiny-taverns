@@ -1,7 +1,7 @@
 import type { Character } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
-import { useApiResource } from "../api/resource";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadMyCharacters, type MyCharactersView } from "./load";
@@ -137,10 +137,15 @@ function NothingYet({ view }: { readonly view: MyCharactersView }) {
   );
 }
 
+/**
+ * Every character this account plays, as an atom. No key: the read names no
+ * campaign — `GET /me/characters` is the one read on `character` that does not
+ * — so there is one of it, shared by whatever asks.
+ */
+const myCharactersAtom = apiAtom(loadMyCharacters);
+
 export function MyCharactersScreen() {
-  // `loadMyCharacters` is module-level and closes over nothing, so it is already
-  // the stable identity `useApiResource` needs — no `useCallback` to key.
-  const [resource, reload] = useApiResource(loadMyCharacters);
+  const [resource, reload] = useApiAtom(myCharactersAtom);
   const view = resource.state === "ready" ? resource.value : undefined;
 
   return (

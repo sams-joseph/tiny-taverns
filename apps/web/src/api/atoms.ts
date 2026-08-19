@@ -115,10 +115,18 @@ class Api extends AtomHttpApi.Service<Api>()("TavernsAtomApi", {
  * );
  * ```
  *
- * Key it on a **string** (an id, or ids joined). `Atom.family`'s map compares
- * keys with Effect's `Equal`, which is value equality for a string and
- * reference equality for a plain object — so an object key silently misses on
- * every render and builds a new atom each time.
+ * **A record key works, and is the right shape for a read with more than one
+ * input** — a campaign and a search term, say. `Atom.family` memoises through
+ * `MutableHashMap`, which compares with Effect's `Equal` and hashes with
+ * `Hash`, and v4 makes both *structural* for a plain object: two records with
+ * the same fields are one key and therefore one atom. Measured rather than
+ * assumed, and pinned in `atoms.test.tsx` — because if it were reference
+ * equality instead, every render would build a fresh atom and the failure would
+ * be an infinite loop rather than a wasted request.
+ *
+ * Keep the key to primitives, though. It is hashed on every render, and a value
+ * that is not structurally comparable (a function, a class instance) puts the
+ * loop back.
  */
 export const apiAtom = <A, E>(
   use: (client: TavernsClient) => Effect.Effect<A, E>,

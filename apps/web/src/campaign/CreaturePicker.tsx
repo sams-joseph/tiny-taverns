@@ -1,8 +1,8 @@
 import type { CampaignId, CreatureId } from "@taverns/api";
 import { Badge, Button, Icon, Input } from "@taverns/ui";
-import { useCallback, useEffect, useState } from "react";
-import type { TavernsClient } from "../api/client";
-import { useApiResource } from "../api/resource";
+import { Atom } from "effect/unstable/reactivity";
+import { useEffect, useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { FailureNotice, Loading } from "../ui/states";
 
 /**
@@ -39,6 +39,25 @@ const SHOWN = 25;
  */
 const SEARCH_SETTLE_MS = 250;
 
+/**
+ * One page of the campaign's reachable bestiary, keyed on the campaign and the
+ * settled search term.
+ *
+ * A **record** key, compared structurally (see `api/atoms.ts`), and at module
+ * scope because an atom is its own identity — built in the component it would
+ * be a new one on every keystroke's render and never settle. It also means two
+ * pickers open on the same campaign and the same term share one request.
+ */
+const pickerAtom = Atom.family(
+  ({ campaignId, query }: { readonly campaignId: CampaignId; readonly query: string }) =>
+    apiAtom((client) =>
+      client.creatures.list({
+        params: { campaignId },
+        query: { q: query, sort: "name", limit: SHOWN },
+      }),
+    ),
+);
+
 export function CreaturePicker({
   campaignId,
   chosen,
@@ -57,17 +76,9 @@ export function CreaturePicker({
     return () => clearTimeout(timer);
   }, [term]);
 
-  // Memoised on the settled query, not the keystroke: its identity is what says
-  // "load again", so the debounce above is what the request count follows.
-  const load = useCallback(
-    (client: TavernsClient) =>
-      client.creatures.list({
-        params: { campaignId },
-        query: { q: query, sort: "name", limit: SHOWN },
-      }),
-    [campaignId, query],
-  );
-  const [resource, reload] = useApiResource(load);
+  // Keyed on the settled query, not the keystroke: the key is what says "a
+  // different read", so the debounce above is what the request count follows.
+  const [resource, reload] = useApiAtom(pickerAtom({ campaignId, query }));
 
   return (
     <div className="flex flex-col gap-2">

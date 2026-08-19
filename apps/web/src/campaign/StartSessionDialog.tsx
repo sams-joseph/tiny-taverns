@@ -9,10 +9,9 @@ import {
   DialogTitle,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useCallback } from "react";
-import type { TavernsClient } from "../api/client";
+import { Atom } from "effect/unstable/reactivity";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { nextSessionNumber, startSession } from "../session/start";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -42,6 +41,17 @@ import { FailureNotice, Loading } from "../ui/states";
  * filed under. It is also not undoable from here: finishing the night is its own
  * confirmation, on the session card.
  */
+/**
+ * What the next night would be numbered, as an atom keyed on the campaign.
+ *
+ * Module scope, because an atom *is* its identity: built inside the component
+ * it would be a new one every render and load forever. That is the same hazard
+ * the `useCallback` here used to answer, in a shape that cannot be forgotten.
+ */
+const nextNumberAtom = Atom.family((campaignId: Campaign["id"]) =>
+  apiAtom(nextSessionNumber(campaignId)),
+);
+
 export function StartSessionDialog({
   campaign,
   onClose,
@@ -54,13 +64,7 @@ export function StartSessionDialog({
 }) {
   const campaignId = campaign.id;
 
-  // Memoised on the id alone: its identity is what tells `useApiResource` to
-  // load again, so an unmemoised closure here would load forever.
-  const load = useCallback(
-    (client: TavernsClient) => nextSessionNumber(campaignId)(client),
-    [campaignId],
-  );
-  const [number, reload] = useApiResource(load);
+  const [number, reload] = useApiAtom(nextNumberAtom(campaignId));
 
   const { busy, failure, submit } = useMutation();
 
