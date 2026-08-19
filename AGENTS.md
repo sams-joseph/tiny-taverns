@@ -299,6 +299,70 @@ it must come back empty.
 injected at runtime that appears in no source file has no rule either — so a browser probe that
 invents a class to test the theme measures nothing. Probe with a class the codebase actually uses.)
 
+#### The visual sweep is finished, and it found two token pairs and nothing else
+
+The Mocha pass was stopped early; it was completed on 2026-08-19 by driving a real browser over
+every screen at **1440 / 1200 / 1024 / 900 / 760**, both roles, signed in and signed out, plus
+every authoring dialog, the select popups, the Hob panel either side of its threshold, both
+Chronicles in both modes, and hover/press/disabled — and re-run over the character sheet and the
+player screens once the live banner had landed, so it covers that surface too. **Nothing was
+changed, because nothing was broken**: zero horizontal overflow anywhere (`documentElement.scrollWidth` equalled the viewport
+in every combination), no light-on-light, and every overlay on the rung the layering scale says.
+
+What the sweep is worth remembering for is the arithmetic, so the next palette delivery does not
+re-derive it. Every contrast finding in the whole product collapses into **two token pairs**, and
+the swap's effect on each is the opposite of what "the palette broke it" would predict:
+
+| pair                               | before Mocha   | after          | verdict                                     |
+| ---------------------------------- | -------------- | -------------- | ------------------------------------------- |
+| `--text-faint` on sunken/page/card | 3.65/3.54/3.27 | 3.84/3.59/3.36 | **pre-existing**, and improved              |
+| `--text-faint` on raised           | 2.89           | 2.57           | pre-existing, slightly worse                |
+| `--text-muted` on sunken/page/card | 5.80/5.62/5.19 | 6.64/6.22/5.81 | improved                                    |
+| `--text-muted` on **raised**       | 4.60           | 4.45           | **the only pair the swap pushed under 4.5** |
+
+So `--text-faint` was already under 4.5 on every surface before the palette changed, exactly as
+the character sheet's wrapping SPEED pill is pre-existing — it is the delivered system's quiet
+tier, not damage. And the one genuine crossing is 0.15 of a ratio point, on 12.5px card
+subtitles. **Both live in the read-only delivered `tokens/colors.css`**, so neither is fixable
+without either editing that package (which nothing we author may do) or swapping a component's
+semantic token, which is a design judgment rather than a defect.
+
+**`--text-muted` on `--surface-raised` at 4.45 is a settled state, accepted by the captain on
+2026-08-19: do not change the token, do not swap the subtitles, do not touch the delivered
+package.** A future sweep that measures 4.45 there is measuring the agreed answer and should
+report it as settled rather than raising it again. What earns a fresh report is a _different_
+number — a later delivery moving that pair again, or a new surface putting `--text-muted` on
+`--surface-raised` at a size where 4.45 reads worse than it does on a 12.5px starter-card
+subtitle.
+
+**That decision covers this one pair and nothing else.** The `--text-faint` tier — 2.57 on
+raised, 3.36–3.84 elsewhere — was explicitly _not_ in scope of it: it predates Mocha, so it was
+never the palette's to answer, and it remains an open question about the delivered system that
+nobody has put to the designers. Do not read the accepted 4.45 as blessing the quiet tier, and
+do not "fix" either by editing `packages/design-system`.
+
+**Disabled controls render at `opacity: 0.5`** and therefore compute far below 4.5 (a ghost
+button lands at 3.36). That is the delivered disabled state, is unchanged by the palette, and
+WCAG 1.4.3 exempts inactive components — do not "fix" it.
+
+**The ramp-step rule above is not actually clean, and that is a maintainability debt rather than
+a visual one.** `slate-*`/`crimson-*` steps are reached for directly in eight files outside
+`gallery/Foundations.tsx` — `button.tsx`, `tooltip.tsx`, `switch.tsx`, `InitiativeList.tsx`,
+`states.tsx`, `recapParts.tsx`, `CharacterSheetScreen.tsx`, `MarketingScreen.tsx`. Every one of
+them renders correctly today (measured 7.37–11.12:1), which is why the sweep changed none of
+them: swapping a ramp step for a semantic token moves the rendered colour, so it is a restyle.
+It is what the _next_ palette delivery will pay for, and it is where to look first when one lands.
+
+Two things that cost time when driving this app and will cost it again:
+
+- **A `Page.navigate` to a URL that differs only in the fragment does not reload the document**,
+  so React state survives what looks like a fresh page — a panel left open stays open and a
+  toggle sweep silently measures alternating states. Navigate somewhere else first (`#/gallery`)
+  and then to the target.
+- **The Chronicle's recap body needs ~6s**, not the ~2s the other screens settle in: the spine
+  loads first and each card fetches its own recap. Screenshot it too early and the card looks
+  collapsed when it is merely loading.
+
 ### The sixth delivery: navigation has two tiers, and the campaign view is three screens
 
 Measured the same way as the others, and back to the usual answer: **not one token changed** —
