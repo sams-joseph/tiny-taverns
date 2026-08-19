@@ -1,4 +1,4 @@
-import type { Creature, CreatureId } from "@taverns/api";
+import type { Creature, CreatureId, CreatureSort, PageCursor } from "@taverns/api";
 import { Button, Icon } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
@@ -6,11 +6,11 @@ import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CopyIntoCampaign } from "./CopyIntoCampaign";
-import { CorpusControls, CreatureGrid, EnvironmentChips } from "./CorpusParts";
+import { CorpusControls, CreatureGrid, EnvironmentChips, MorePages } from "./CorpusParts";
 import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
 import { CreatureForm } from "./CreatureForm";
-import { loadLibrary, type CorpusQuery } from "./load";
+import { loadLibrary, moreOfLibrary, type CorpusQuery } from "./load";
 import { isLibraryEntity } from "./provenance";
 
 /**
@@ -61,8 +61,11 @@ import { isLibraryEntity } from "./provenance";
  * campaign holding it.
  */
 
-const countOf = (n: number, narrowed: boolean): string => {
+/** The list is a page, so an unqualified count would name the wrong thing —
+    see `BestiaryScreen`'s own `countOf`, which this mirrors. */
+const countOf = (n: number, narrowed: boolean, more: boolean): string => {
   const creatures = `${n} ${n === 1 ? "creature" : "creatures"}`;
+  if (more) return narrowed ? `The first ${creatures} that match` : `The first ${creatures}`;
   if (narrowed) return `${creatures} ${n === 1 ? "matches" : "match"} what you're looking for`;
   return n === 0 ? "Nothing here yet" : `${creatures} — yours, and the bundled corpus`;
 };
@@ -79,7 +82,12 @@ export function LibraryScreen() {
     (query: CorpusQuery) => (client: TavernsClient) => loadLibrary(query)(client),
     [],
   );
-  const corpus = useCorpus(load);
+  const more = useCallback(
+    (query: CorpusQuery, cursor: PageCursor<CreatureSort>) => (client: TavernsClient) =>
+      moreOfLibrary(query, cursor)(client),
+    [],
+  );
+  const corpus = useCorpus(load, more);
 
   const opening = corpus.creatures.find((creature) => creature.id === opened);
   const campaigns = corpus.shown?.campaigns ?? [];
@@ -105,7 +113,7 @@ export function LibraryScreen() {
           subtitle={
             corpus.shown === undefined
               ? undefined
-              : countOf(corpus.creatures.length, corpus.narrowed)
+              : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
           }
         >
           <CorpusControls corpus={corpus} label="Search the library" />
@@ -165,6 +173,8 @@ export function LibraryScreen() {
               onOpen={setOpened}
             />
           )}
+
+          <MorePages corpus={corpus} />
         </div>
       )}
 

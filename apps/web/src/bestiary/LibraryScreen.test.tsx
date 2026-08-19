@@ -7,6 +7,7 @@ import {
   installMemoryStorage,
   installStubServer,
   mintingSession,
+  page,
 } from "../campaign/campaign.fixtures";
 import {
   bandit,
@@ -39,10 +40,14 @@ const server = installStubServer();
 installMemoryStorage();
 
 const LIST = "GET /library/creatures";
+const VOCABULARY = "GET /library/creatures/environments";
 
 /** What the endpoint answers: this account's two originals, and the bundled two. */
 const wholeLibrary = () => {
-  server.routes.set(LIST, { status: 200, body: [owlbear, sexton, goblin, hag] });
+  server.routes.set(LIST, { status: 200, body: page([owlbear, sexton, goblin, hag]) });
+  // The chip row is its own read now, over the corpus rather than over an
+  // answer — see `bestiary/load.ts`. It is the same shape on both lists.
+  server.routes.set(VOCABULARY, { status: 200, body: ["Barrow", "Marsh"] });
   server.routes.set("GET /me/campaigns", { status: 200, body: bothMemberships });
 };
 
@@ -97,7 +102,15 @@ describe("LibraryScreen", () => {
     // product — because a Library entity is in no campaign. There is nothing
     // here for a caller to claim and nothing for a path to carry.
     expect(libraryCalls()[0]?.pathname).toBe("/library/creatures");
-    expect(server.calls.some((call) => call.pathname.includes("/creatures/"))).toBe(false);
+    // The chip vocabulary is the one other path this screen reads, and it names
+    // no campaign either.
+    expect(
+      server.calls.some(
+        (call) =>
+          call.pathname.includes("/creatures/") &&
+          call.pathname !== "/library/creatures/environments",
+      ),
+    ).toBe(false);
   });
 
   it("adds no filter of its own — which rows are originals is the predicate's answer", async () => {
@@ -106,7 +119,7 @@ describe("LibraryScreen", () => {
     // client-side "originals only" on top would be a second answer to a settled
     // question, and the one that could disagree. Same rule `GET /me/characters`
     // states for its own narrowing.
-    server.routes.set(LIST, { status: 200, body: [owlbear, bandit] });
+    server.routes.set(LIST, { status: 200, body: page([owlbear, bandit]) });
     await renderLibrary(mintingSession());
 
     expect(await screen.findByText("Saltmarsh Bandit")).toBeInTheDocument();
@@ -146,7 +159,7 @@ describe("LibraryScreen", () => {
     await renderLibrary(mintingSession());
     await screen.findByText("Bog Owlbear");
 
-    server.routes.set(LIST, { status: 200, body: [goblin] });
+    server.routes.set(LIST, { status: 200, body: page([goblin]) });
     await userEvent.type(screen.getByRole("textbox", { name: "Search the library" }), "nimble");
 
     // Same reason as the campaign bestiary: "nimble escape" is a trait, in no
@@ -157,19 +170,38 @@ describe("LibraryScreen", () => {
     expect(screen.getByText("1 creature matches what you're looking for")).toBeInTheDocument();
   });
 
-  it("filters by environment any-of, without asking the server again", async () => {
+  it("sends one environment chip to the server, exactly as the bestiary does", async () => {
     await renderLibrary(mintingSession());
     await screen.findByText("Bog Owlbear");
 
-    const requests = server.calls.length;
+    // The chips were applied to the answer here too, and for the same reason:
+    // a one-element array did not survive the wire. `queryArray` fixed it, and
+    // once the list is a page there is no honest way to keep them local.
+    server.routes.set(LIST, { status: 200, body: page([owlbear, sexton]) });
     await userEvent.click(screen.getByRole("button", { name: "Barrow" }));
 
+    await waitFor(() => expect(lastQuery().getAll("environments")).toEqual(["Barrow"]));
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
     expect(screen.getByText("Barrow Sexton")).toBeInTheDocument();
     expect(screen.getByText("Bog Owlbear")).toBeInTheDocument();
-    // A one-element array does not survive the wire (`load.ts`), and it does not
-    // need to: every row carries its own `environments`.
-    expect(server.calls.length).toBe(requests);
+  });
+
+  it("reads the next page of the Library when asked", async () => {
+    const cursor = "eyJvIjoiY3IiLCJrIjpbMywiQm9nIE93bGJlYXIiLCJ4Il19";
+    server.routes.set(LIST, { status: 200, body: page([owlbear, sexton], cursor) });
+    await renderLibrary(mintingSession());
+    await screen.findByText("Bog Owlbear");
+
+    expect(screen.getByText("The first 2 creatures")).toBeInTheDocument();
+    expect(screen.queryByText("Goblin Boss")).toBeNull();
+
+    server.routes.set(LIST, { status: 200, body: page([goblin, hag]) });
+    await userEvent.click(screen.getByRole("button", { name: /Show more/ }));
+
+    await waitFor(() => expect(lastQuery().get("cursor")).toBe(cursor));
+    expect(await screen.findByText("Goblin Boss")).toBeInTheDocument();
+    expect(screen.getByText("Bog Owlbear")).toBeInTheDocument();
+    expect(screen.getByText("4 creatures — yours, and the bundled corpus")).toBeInTheDocument();
   });
 
   it("orders through the server, because the CR sort is on a key the client has not got", async () => {
@@ -398,7 +430,7 @@ describe("LibraryScreen", () => {
   });
 
   it("says what fills an empty Library, which is writing something", async () => {
-    server.routes.set(LIST, { status: 200, body: [] });
+    server.routes.set(LIST, { status: 200, body: page([]) });
     await renderLibrary(mintingSession());
 
     expect(await screen.findByText("Nothing lives here")).toBeInTheDocument();
@@ -413,7 +445,7 @@ describe("LibraryScreen", () => {
     await renderLibrary(mintingSession());
     await screen.findByText("Bog Owlbear");
 
-    server.routes.set(LIST, { status: 200, body: [] });
+    server.routes.set(LIST, { status: 200, body: page([]) });
     await userEvent.type(screen.getByRole("textbox", { name: "Search the library" }), "dragon");
 
     expect(await screen.findByText(/Loosen a filter/)).toBeInTheDocument();

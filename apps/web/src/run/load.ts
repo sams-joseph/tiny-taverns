@@ -4,13 +4,16 @@ import type {
   Combatant,
   Creature,
   CreatureId,
+  CreatureSort,
   EncounterRun,
   EncounterRunId,
   Session,
   SessionId,
+  PageCursor,
 } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
+import { collectPages, WHOLE_LIST } from "../api/page";
 
 /**
  * What the runner reads, split by how often it changes.
@@ -95,7 +98,11 @@ export const loadRunView = (path: RunPath) => (client: TavernsClient) =>
         client.campaigns.findById({ params: { campaignId } }),
         client.sessions.findById({ params: { campaignId, sessionId } }),
         loadLiveState(path)(client),
-        client.creatures.list({ params: { campaignId }, query: {} }),
+        // The whole reachable bestiary, because this is a lookup table from a
+        // combatant's `creatureId` to a row — a page of it would leave holes.
+        collectPages((cursor: PageCursor<CreatureSort> | undefined) =>
+          client.creatures.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+        ),
       ],
       { concurrency: "unbounded" },
     );

@@ -1,6 +1,7 @@
-import type { Campaign, CampaignId, Character, Note } from "@taverns/api";
+import type { Campaign, CampaignId, Character, CreatedOrder, Note, PageCursor } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
+import { collectPages, WHOLE_LIST } from "../api/page";
 
 /** Everything the player's view of a table renders, in one shape. */
 export interface PlayerCampaignView {
@@ -37,7 +38,9 @@ export const loadPlayerCampaignView = (campaignId: CampaignId) => (client: Taver
       [
         client.campaigns.findById({ params: { campaignId } }),
         client.characters.list({ params: { campaignId } }),
-        client.notes.list({ params: { campaignId } }),
+        collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
+          client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+        ),
       ],
       { concurrency: "unbounded" },
     );

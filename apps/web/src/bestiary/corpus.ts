@@ -1,14 +1,15 @@
-import type { Creature, CreatureSort } from "@taverns/api";
-import type { Effect } from "effect";
+import type { Creature, CreatureSort, Page, PageCursor } from "@taverns/api";
+import { Effect, Result } from "effect";
 import type { HttpClient } from "effect/unstable/http";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TavernsClient } from "../api/client";
-import { useApiResource, type Resource } from "../api/resource";
-import { inEnvironments, NO_QUERY, type CorpusQuery } from "./load";
+import { runApiResult, useApiResource, type ApiFailure, type Resource } from "../api/resource";
+import { useCredential } from "../auth/credential";
+import { NO_QUERY, type CorpusQuery, type CorpusView } from "./load";
 
 /**
- * Reading a list of creatures: the controls, the debounce, and the two things a
- * screen can only know by remembering what it has been told.
+ * Reading a list of creatures: the controls, the debounce, the pages, and the
+ * one thing a screen can only know by remembering what it has been told.
  *
  * **Two screens read one corpus** — the campaign bestiary and the Library — and
  * everything about *how* they read it is the same, because the server takes the
@@ -20,20 +21,24 @@ import { inEnvironments, NO_QUERY, type CorpusQuery } from "./load";
  * than a second copy of thirty lines for the same reason `chronicle/fight.ts` is
  * one function: the parts where two screens must not disagree are files.
  *
- * ### The two things it remembers, and why neither can be recomputed
+ * ### Every control is the server's, and the list is a page
  *
- * - **`vocabulary`** is accumulated across answers, never derived from the list
- *   in hand. Typing "goblin" narrows what comes back, and a chip row computed
- *   from *that* would take every environment the goblins do not live in off the
- *   row — including the one you would press to get back out. The first answer is
- *   unsearched, so it is the whole vocabulary, and later ones can only add.
- * - **`barren`** is whether the list is empty *at all*, as opposed to empty for
- *   this filter, and only an **unsearched** answer settles it. It is what lets a
- *   screen tell its two silences apart, which is the difference between "loosen
- *   a filter" and "here is what fills this".
+ * The search and the sort always were. **The chips are now**, and the two
+ * changes are one change: the wire could not carry a one-element array
+ * (`packages/api`'s `queryArray` is the fix), and a chip applied to *the answer*
+ * would have been applied to a page — narrowing twenty-four rows and calling the
+ * result the list. `load.ts` argues both halves.
  *
- * The chips never reach the server (see `inEnvironments`), so an answer with no
- * `q` really is the whole reachable set and nothing else can have narrowed it.
+ * What that cost is the two things this hook used to work out for itself:
+ *
+ * - **the chip vocabulary** is a read of its own now (`CorpusView.vocabulary`),
+ *   because a row accumulated from answers would offer only what page one
+ *   happened to mention and could never grow back the chip you would press to
+ *   get out of a filter;
+ * - **`barren`** — empty *at all*, as opposed to empty for this filter — is
+ *   still worked out here, and is still settled only by an answer that narrowed
+ *   nothing. It now needs the chips clear as well as the search, which is
+ *   exactly what "narrowed nothing" means once the chips reach the server.
  *
  * **`shown` is the last good answer, kept so a re-query does not blank the
  * grid.** A DM typing a name would otherwise flicker through "Loading…" once per
@@ -46,7 +51,7 @@ export interface Corpus<V> {
   readonly setTerm: (term: string) => void;
   readonly sort: CreatureSort;
   readonly setSort: (sort: CreatureSort) => void;
-  /** The pressed chips. Any-of, and applied to the answer rather than sent. */
+  /** The pressed chips. Any-of, and sent rather than applied to the answer. */
   readonly environments: ReadonlyArray<string>;
   readonly toggleEnvironment: (environment: string) => void;
   /** Empties the search and the chips — the way back out of a filter. */
@@ -58,14 +63,22 @@ export interface Corpus<V> {
    * and an empty answer under a different sort is still an empty corpus.
    */
   readonly narrowed: boolean;
-  /** Every environment any answer has mentioned, alphabetical. */
+  /** Every environment the corpus mentions, from the server, alphabetical. */
   readonly vocabulary: ReadonlyArray<string>;
-  /** Empty *at all*, rather than empty for this filter. `undefined` until an unsearched answer lands. */
+  /** Empty *at all*, rather than empty for this filter. `undefined` until an unnarrowed answer lands. */
   readonly barren: boolean | undefined;
   /** The last good answer, whole — a screen reads its own extra fields off this. */
   readonly shown: V | undefined;
-  /** That answer's creatures, with the pressed chips applied. */
+  /** Every row read for this query: the first page, plus whatever was asked for after it. */
   readonly creatures: ReadonlyArray<Creature>;
+  /** Whether the server said there is another page. */
+  readonly hasMore: boolean;
+  /** Asks for it. A no-op while one is in flight, or when there is none. */
+  readonly loadMore: () => void;
+  /** A page is being fetched. The first page is `resource.state`, not this. */
+  readonly loadingMore: boolean;
+  /** What went wrong asking for one more page. The rows already read stay on screen. */
+  readonly moreFailure: ApiFailure | undefined;
   readonly resource: Resource<V>;
   readonly reload: () => void;
 }
@@ -81,11 +94,23 @@ const SEARCH_SETTLE_MS = 250;
  * `load` is given the settled query and must be **`useCallback`-stable** on
  * everything else it closes over — its identity is what says "load again", so an
  * inline closure loads forever and the debounce buys nothing.
+ *
+ * `more` is the same query one page on. It is a second function rather than an
+ * optional cursor on the first because the two answer different shapes: the
+ * first page comes with the campaign (or the tables to copy into) and the chip
+ * vocabulary, and asking for those again with every page would be three requests
+ * to add twenty-four rows.
  */
-export function useCorpus<V extends { readonly creatures: ReadonlyArray<Creature> }, E>(
+export function useCorpus<V extends CorpusView, E, E2>(
   load: (
     query: CorpusQuery,
   ) => (client: TavernsClient) => Effect.Effect<V, E, HttpClient.HttpClient>,
+  more: (
+    query: CorpusQuery,
+    cursor: PageCursor<CreatureSort>,
+  ) => (
+    client: TavernsClient,
+  ) => Effect.Effect<Page<Creature, CreatureSort>, E2, HttpClient.HttpClient>,
 ): Corpus<V> {
   const [term, setTerm] = useState("");
   const [q, setQ] = useState("");
@@ -97,34 +122,72 @@ export function useCorpus<V extends { readonly creatures: ReadonlyArray<Creature
     return () => clearTimeout(timer);
   }, [term]);
 
-  // The environments are deliberately absent: they are applied to what comes
-  // back rather than sent. Memoised on what *is* sent, because its identity is
-  // what tells `useApiResource` to load again.
-  const query = useMemo<CorpusQuery>(() => ({ q, sort }), [q, sort]);
+  // The chips are in here now: they are a clause of the query, so pressing one
+  // is a load exactly as typing is. Keyed on the array's identity, which is
+  // state and so changes only when a chip is actually toggled — the same
+  // property that makes `use` below stable across an unrelated re-render.
+  const query = useMemo<CorpusQuery>(() => ({ q, sort, environments }), [q, sort, environments]);
   const use = useCallback((client: TavernsClient) => load(query)(client), [load, query]);
   const [resource, reload] = useApiResource(use);
 
   const [shown, setShown] = useState<V>();
-  const [vocabulary, setVocabulary] = useState<ReadonlyArray<string>>([]);
   const [barren, setBarren] = useState<boolean>();
+  /** The pages after the first, for the query `shown` came from. */
+  const [extra, setExtra] = useState<ReadonlyArray<Creature>>([]);
+  const [cursor, setCursor] = useState<PageCursor<CreatureSort> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailure, setMoreFailure] = useState<ApiFailure>();
+
+  const narrowed = q.trim() !== "" || environments.length > 0;
+  /**
+   * Read inside the effect below rather than depended on, and that is
+   * load-bearing rather than tidy.
+   *
+   * `narrowed` changes one render *before* the answer for the new query lands —
+   * the moment the debounce settles — so as a dependency it re-runs the effect
+   * against the **previous** answer and throws away the extra pages while the
+   * old first page is still on screen. Measured: after typing a search, the
+   * second page vanished and the first stayed, which is a list that is neither
+   * the old one nor the new one. A ref is read at the moment the answer arrives,
+   * by which time the two agree.
+   */
+  const narrowing = useRef(narrowed);
+  narrowing.current = narrowed;
 
   useEffect(() => {
     if (resource.state !== "ready") return;
     const value = resource.value;
     setShown(value);
-    setVocabulary((current) => {
-      const merged = new Set(current);
-      for (const creature of value.creatures) {
-        for (const environment of creature.environments) merged.add(environment);
+    // A new first page replaces everything read after the old one: those rows
+    // belong to a query nobody is looking at any more.
+    setExtra([]);
+    setCursor(value.nextCursor);
+    setMoreFailure(undefined);
+    // An answer that narrowed nothing *is* the corpus, so an empty one means
+    // there is nothing to find. Any narrowing at all and this says nothing,
+    // which is what keeps "loosen a filter" and "here is what fills this" apart.
+    if (!narrowing.current) setBarren(value.creatures.length === 0 && value.nextCursor === null);
+  }, [resource]);
+
+  const fetchCredential = useCredential();
+  const loadMore = useCallback(() => {
+    if (cursor === null || loadingMore) return;
+    setLoadingMore(true);
+    setMoreFailure(undefined);
+    void (async () => {
+      // Per call, never held — the rule `useApiResource` and `useMutation` both
+      // follow, and `auth/credential.ts` says why.
+      const token = await fetchCredential();
+      const result = await runApiResult((client) => more(query, cursor)(client), token);
+      setLoadingMore(false);
+      if (Result.isFailure(result)) {
+        setMoreFailure(result.failure);
+        return;
       }
-      return merged.size === current.length
-        ? current
-        : [...merged].sort((left, right) => left.localeCompare(right));
-    });
-    // An unsearched answer *is* the whole reachable set — the chips never reach
-    // the server, so nothing else can have narrowed it.
-    if (q.trim() === "") setBarren(value.creatures.length === 0);
-  }, [resource, q]);
+      setExtra((rows) => [...rows, ...result.success.items]);
+      setCursor(result.success.nextCursor);
+    })();
+  }, [cursor, loadingMore, query, more, fetchCredential]);
 
   const toggleEnvironment = useCallback(
     (environment: string) =>
@@ -142,8 +205,9 @@ export function useCorpus<V extends { readonly creatures: ReadonlyArray<Creature
     setEnvironments([]);
   }, []);
 
-  const creatures = (shown?.creatures ?? []).filter((creature) =>
-    inEnvironments(creature, environments),
+  const creatures = useMemo(
+    () => [...(shown?.creatures ?? []), ...extra],
+    [shown?.creatures, extra],
   );
 
   return {
@@ -154,11 +218,15 @@ export function useCorpus<V extends { readonly creatures: ReadonlyArray<Creature
     environments,
     toggleEnvironment,
     clear,
-    narrowed: q.trim() !== "" || environments.length > 0,
-    vocabulary,
+    narrowed,
+    vocabulary: shown?.vocabulary ?? [],
     barren,
     shown,
     creatures,
+    hasMore: cursor !== null,
+    loadMore,
+    loadingMore,
+    moreFailure,
     resource,
     reload,
   };

@@ -9,6 +9,7 @@ import {
   installStubServer,
   mintingSession,
   readAloud,
+  page,
 } from "../campaign/campaign.fixtures";
 
 /**
@@ -91,7 +92,7 @@ describe("a table you sit at", () => {
 
   it("says what an empty table means rather than looking broken", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] });
-    server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: [] });
+    server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) });
 
     await renderScreen();
 

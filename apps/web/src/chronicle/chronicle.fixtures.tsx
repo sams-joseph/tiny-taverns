@@ -3,6 +3,7 @@ import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { HostedSessionContext, NO_HOSTED_SESSION } from "../auth/hostedSession";
+import { page } from "../campaign/campaign.fixtures";
 
 /**
  * The Chronicle's test wire: two nights, one fight that crosses them, and a
@@ -259,8 +260,8 @@ export const fullChronicle = (): Map<string, Answer> =>
       "GET /me/campaigns",
       { status: 200, body: [{ campaign, role: "dm", joinedAt: stamps.createdAt }] },
     ],
-    [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] }],
-    [`GET /campaigns/${campaignId}/notes`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) }],
+    [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) }],
     [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] }],
     // The night being prepared, which the campaign row names in its badge.
     [`GET /campaigns/${campaignId}/sessions/${session12Id}`, { status: 200, body: session12 }],

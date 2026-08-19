@@ -30,6 +30,23 @@ export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
 
+/**
+ * A list endpoint's body: one page, and no more.
+ *
+ * Every paged list answers `{ items, nextCursor }` — see `packages/api`'s
+ * `Page.ts`. A test that wants a second page re-aims the route at
+ * `page(rows, cursor)` and answers the follow-up separately; `nextCursor: null`
+ * is what "this is the whole list" looks like on the wire, and it is what almost
+ * every fixture here means.
+ */
+export const page = (
+  items: ReadonlyArray<unknown>,
+  nextCursor: unknown = null,
+): { readonly items: ReadonlyArray<unknown>; readonly nextCursor: unknown } => ({
+  items,
+  nextCursor,
+});
+
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
 const provenance = { origin: "authored", assistantTurnId: null };
 
@@ -349,15 +366,16 @@ export const fullCampaign = (): Map<string, Answer> =>
     ["GET /me/campaigns/archived", { status: 200, body: [] }],
     [`DELETE /campaigns/${campaignId}`, { status: 200, body: archivedCampaign }],
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
-    [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [encounter, sketch] }],
-    [`GET /campaigns/${campaignId}/notes`, { status: 200, body: [readAloud] }],
+    [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
+    [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
     [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [character] }],
     // The Party screen's own two reads. A campaign with only its DM in it and
     // nothing outstanding — `party/party.fixtures.tsx` is where a populated
     // roster lives, and it re-aims both.
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
     [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
-    [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: [goblin, hag] }],
+    [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
+    [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
     [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/creatures`,
       { status: 200, body: [rosterRow] },

@@ -10,8 +10,10 @@ import {
   SelectValue,
   Toggle,
 } from "@taverns/ui";
+import { FailureNotice } from "../ui/states";
 import { CreatureCard } from "./CreatureCard";
 import type { Corpus } from "./corpus";
+import type { CorpusView } from "./load";
 
 /**
  * The three pieces of furniture both creature lists draw, written once.
@@ -41,7 +43,7 @@ const SORTS: ReadonlyArray<{ readonly value: CreatureSort; readonly label: strin
  * and "Search the library" are the same control asking about different sets and
  * a reader should be told which.
  */
-export function CorpusControls<V extends { readonly creatures: ReadonlyArray<Creature> }>({
+export function CorpusControls<V extends CorpusView>({
   corpus,
   label,
 }: {
@@ -79,18 +81,15 @@ export function CorpusControls<V extends { readonly creatures: ReadonlyArray<Cre
 }
 
 /**
- * The environment chips: the vocabulary the answers actually use, not the
+ * The environment chips: the vocabulary the corpus actually uses, not the
  * prototype's hard-coded four (`Bestiary.jsx:4`).
  *
- * Pressing one costs no request — see `inEnvironments` — which is also why the
- * row cannot narrow itself out of existence. Renders nothing at all until some
- * answer has mentioned an environment.
+ * **Pressing one is a request now**, and the row is read separately for exactly
+ * that reason — a vocabulary derived from a narrowed, paged answer could not
+ * offer the chip you would press to get back out. See `load.ts`'s `CorpusView`.
+ * Renders nothing at all until the corpus has mentioned an environment.
  */
-export function EnvironmentChips<V extends { readonly creatures: ReadonlyArray<Creature> }>({
-  corpus,
-}: {
-  readonly corpus: Corpus<V>;
-}) {
+export function EnvironmentChips<V extends CorpusView>({ corpus }: { readonly corpus: Corpus<V> }) {
   if (corpus.vocabulary.length === 0) return null;
 
   return (
@@ -156,6 +155,40 @@ export function CreatureGrid({
           onOpen={() => onOpen(creature.id)}
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * The rest of the list, when there is one.
+ *
+ * A button rather than an infinite scroll: the grid is inside a scrolling
+ * column that a DM also scrolls to read a card, and a list that grows under the
+ * thumb is a list you cannot get to the bottom of. It says how many are already
+ * on screen because the subtitle counts the same rows, and a reader who asked
+ * for more should be able to see that they arrived.
+ *
+ * A failed page keeps everything already read on screen and offers the same
+ * press again — the rows in hand are still good, which is the difference
+ * between this and the screen's own `FailureNotice`.
+ */
+export function MorePages<V extends CorpusView>({ corpus }: { readonly corpus: Corpus<V> }) {
+  if (!corpus.hasMore && corpus.moreFailure === undefined) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {corpus.moreFailure !== undefined && (
+        <div className="w-full max-w-3xl">
+          <FailureNotice failure={corpus.moreFailure} onRetry={corpus.loadMore} />
+        </div>
+      )}
+      {corpus.hasMore && (
+        <Button variant="secondary" onClick={corpus.loadMore} disabled={corpus.loadingMore}>
+          {corpus.loadingMore
+            ? "Reading…"
+            : `Show more (${String(corpus.creatures.length)} so far)`}
+        </Button>
+      )}
     </div>
   );
 }

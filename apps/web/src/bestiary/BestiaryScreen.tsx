@@ -1,14 +1,14 @@
-import type { CreatureId } from "@taverns/api";
+import type { CreatureId, CreatureSort, PageCursor } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { CorpusControls, CreatureGrid, EnvironmentChips } from "./CorpusParts";
+import { CorpusControls, CreatureGrid, EnvironmentChips, MorePages } from "./CorpusParts";
 import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
-import { loadBestiary, type CorpusQuery } from "./load";
+import { loadBestiary, moreOfBestiary, type CorpusQuery } from "./load";
 
 /**
  * The bestiary — `ui_kits/dm-screen/Bestiary.jsx`, against the real API.
@@ -35,20 +35,30 @@ import { loadBestiary, type CorpusQuery } from "./load";
  * link somebody bookmarked still lands on a screen that works, and the campaign
  * row's title is still the way back. See `AGENTS.md`.
  *
- * ### The search is the server's answer; the chips are not
+ * ### Every control is the server's, and the grid is a page
  *
- * `load.ts` argues both halves and `corpus.ts` implements the reading behaviour
- * this shares with the Library — the debounce, the accumulated chip vocabulary,
- * the last-good list that keeps the grid from blanking on every keystroke, and
- * the "is it empty *at all*" flag that tells the two silences apart. In short:
- * the search reaches the stat block's full text as well as the name, which a
- * substring match over an already-loaded list cannot, and the CR sort orders by
- * `crSort` so `"1/4"` lands where it reads — while the chips are an any-of over
- * a field every row already carries.
+ * `load.ts` argues it and `corpus.ts` implements the reading behaviour this
+ * shares with the Library — the debounce, the chip vocabulary, the pages, the
+ * last-good list that keeps the grid from blanking on every keystroke, and the
+ * "is it empty *at all*" flag that tells the two silences apart. In short: the
+ * search reaches the stat block's full text as well as the name, which a
+ * substring match over an already-loaded list cannot; the CR sort orders by
+ * `crSort` so `"1/4"` lands where it reads; and the chips are a Postgres array
+ * overlap rather than a `.filter` over what came back, which they had to become
+ * the moment the list stopped arriving whole.
  */
 
-const countOf = (n: number, narrowed: boolean): string => {
+/**
+ * What the top bar says about the list.
+ *
+ * **`more` is why this takes three arguments.** The grid is a page, so `n` is
+ * what has been read rather than what there is, and a bare count would read as
+ * the size of the corpus. Saying "the first 24" is the honest version and is
+ * also the sentence that makes the *Show more* button below make sense.
+ */
+const countOf = (n: number, narrowed: boolean, more: boolean): string => {
   const creatures = `${n} ${n === 1 ? "creature" : "creatures"}`;
+  if (more) return narrowed ? `The first ${creatures} that match` : `The first ${creatures}`;
   if (narrowed) return `${creatures} ${n === 1 ? "matches" : "match"} what you're looking for`;
   // "0 creatures — this campaign's own, and the shared corpus" is a sentence
   // about a list that is not there. The card below says the rest.
@@ -65,7 +75,12 @@ export function BestiaryScreen() {
     (query: CorpusQuery) => (client: TavernsClient) => loadBestiary(campaignId, query)(client),
     [campaignId],
   );
-  const corpus = useCorpus(load);
+  const more = useCallback(
+    (query: CorpusQuery, cursor: PageCursor<CreatureSort>) => (client: TavernsClient) =>
+      moreOfBestiary(campaignId, query, cursor)(client),
+    [campaignId],
+  );
+  const corpus = useCorpus(load, more);
 
   const opening = corpus.creatures.find((creature) => creature.id === opened);
   // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
@@ -82,7 +97,7 @@ export function BestiaryScreen() {
           subtitle={
             corpus.shown === undefined
               ? undefined
-              : countOf(corpus.creatures.length, corpus.narrowed)
+              : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
           }
         >
           <CorpusControls corpus={corpus} label="Search creatures" />
@@ -127,6 +142,8 @@ export function BestiaryScreen() {
                same word on every card. The Library is where that changes. */
             <CreatureGrid creatures={corpus.creatures} onOpen={setOpened} />
           )}
+
+          <MorePages corpus={corpus} />
         </div>
       )}
 

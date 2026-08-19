@@ -424,9 +424,9 @@ describe("the lifetime rules", () => {
     const { account: wrongPerson } = await joinAs("Nem", issued.token, fixture.campaign.id);
 
     const before = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(wrongPerson)(items(repo.list(fixture.campaign.id, {})))).pipe(
-        Effect.result,
-      ),
+      Effect.flatMap(Notes, (repo) =>
+        as(wrongPerson)(items(repo.list(fixture.campaign.id, {}))),
+      ).pipe(Effect.result),
     );
     const listedBefore = await runtime.runPromise(
       Effect.flatMap(Invites, (invites) => as(fixture.dm)(invites.list(fixture.campaign.id))).pipe(
@@ -441,9 +441,9 @@ describe("the lifetime rules", () => {
     );
 
     const after = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(wrongPerson)(items(repo.list(fixture.campaign.id, {})))).pipe(
-        Effect.result,
-      ),
+      Effect.flatMap(Notes, (repo) =>
+        as(wrongPerson)(items(repo.list(fixture.campaign.id, {}))),
+      ).pipe(Effect.result),
     );
 
     expect(before._tag).toBe("Success");

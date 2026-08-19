@@ -6,6 +6,7 @@ import {
   installMemoryStorage,
   installStubServer,
   mintingSession,
+  page,
 } from "../campaign/campaign.fixtures";
 import { bandit, goblin, hag, renderBestiary } from "./bestiary.fixtures";
 
@@ -25,13 +26,18 @@ const server = installStubServer();
 installMemoryStorage();
 
 const LIST = `GET /campaigns/${campaignId}/creatures`;
+const VOCABULARY = `GET /campaigns/${campaignId}/creatures/environments`;
 
 /** What the whole reachable set answers with: the DM's own, then the bundled two. */
-const wholeBestiary = () => server.routes.set(LIST, { status: 200, body: [bandit, goblin, hag] });
+const wholeBestiary = () =>
+  server.routes.set(LIST, { status: 200, body: page([bandit, goblin, hag]) });
 
 beforeEach(() => {
   server.reset();
   wholeBestiary();
+  // The chip row is its own read now — over the corpus rather than over an
+  // answer, which is what a paged list forced. See `bestiary/load.ts`.
+  server.routes.set(VOCABULARY, { status: 200, body: ["Marsh", "River"] });
   window.localStorage.clear();
 });
 
@@ -86,7 +92,7 @@ describe("BestiaryScreen", () => {
     await renderBestiary(mintingSession());
     await screen.findByText("Goblin Boss");
 
-    server.routes.set(LIST, { status: 200, body: [goblin] });
+    server.routes.set(LIST, { status: 200, body: page([goblin]) });
     await userEvent.type(screen.getByRole("textbox", { name: "Search creatures" }), "nimble");
 
     // The whole point: "nimble escape" is a *trait*, in no column, and only the
@@ -98,25 +104,31 @@ describe("BestiaryScreen", () => {
     expect(screen.getByText("1 creature matches what you're looking for")).toBeInTheDocument();
   });
 
-  it("filters by environment any-of, without asking the server again", async () => {
+  it("sends one environment chip to the server — the case the wire used to refuse", async () => {
     await renderBestiary(mintingSession());
     await screen.findByText("Goblin Boss");
 
-    // The chips are the vocabulary the loaded creatures actually use, not the
-    // prototype's hard-coded four. `bandit` is the only River row.
-    const requests = server.calls.length;
+    // **The defect, from the client's side.** `UrlParams.fromInput` emits one
+    // `?environments=River` for a one-element array and the server read it as a
+    // scalar, so a single chip was a 400 and the screen filtered what it already
+    // had instead. `queryArray` in `packages/api` is the fix, and it had to
+    // arrive with pagination: a chip applied to a *page* filters twenty-four
+    // rows and calls the result the list.
+    server.routes.set(LIST, { status: 200, body: page([bandit]) });
     await userEvent.click(screen.getByRole("button", { name: "River" }));
 
+    await waitFor(() => expect(lastQuery().getAll("environments")).toEqual(["River"]));
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
     expect(screen.getByText("Saltmarsh Bandit")).toBeInTheDocument();
     expect(screen.getByText("1 creature matches what you're looking for")).toBeInTheDocument();
-    // The chips do not reach the wire — a one-element array does not survive it
-    // (`load.ts`), and it does not need to: every row carries its own
-    // `environments`, so this costs no request at all.
-    expect(server.calls.length).toBe(requests);
 
-    // Any-of, so a second chip widens rather than narrows.
+    // Any-of, so a second chip widens rather than narrows — and reaches the wire
+    // as two occurrences of the same key.
+    server.routes.set(LIST, { status: 200, body: page([bandit, goblin, hag]) });
     await userEvent.click(screen.getByRole("button", { name: "Marsh" }));
+    await waitFor(() =>
+      expect([...lastQuery().getAll("environments")].sort()).toEqual(["Marsh", "River"]),
+    );
     expect(await screen.findByText("Goblin Boss")).toBeInTheDocument();
     expect(screen.getByText("Saltmarsh Bandit")).toBeInTheDocument();
   });
@@ -126,13 +138,59 @@ describe("BestiaryScreen", () => {
     await screen.findByText("Goblin Boss");
 
     // Only the bandit is left, and it lives in River alone — but the row must
-    // still offer Marsh, or there is no way back out of the filter.
+    // still offer Marsh, or there is no way back out of the filter. That is why
+    // the vocabulary is a read over the corpus rather than a fold over the
+    // answers: the narrowed answer no longer mentions Marsh at all.
+    server.routes.set(LIST, { status: 200, body: page([bandit]) });
     await userEvent.click(screen.getByRole("button", { name: "River" }));
 
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
     for (const environment of ["Marsh", "River"]) {
       expect(screen.getByRole("button", { name: environment })).toBeInTheDocument();
     }
+  });
+
+  it("reads the next page when asked, and says the list is only the first of them", async () => {
+    const cursor = "eyJvIjoiY3IiLCJrIjpbMSwiR29ibGluIEJvc3MiLCJ4Il19";
+    server.routes.set(LIST, { status: 200, body: page([bandit, goblin], cursor) });
+    await renderBestiary(mintingSession());
+    await screen.findByText("Goblin Boss");
+
+    expect(screen.getByText("The first 2 creatures")).toBeInTheDocument();
+    expect(screen.queryByText("Marsh Hag")).toBeNull();
+
+    server.routes.set(LIST, { status: 200, body: page([hag]) });
+    await userEvent.click(screen.getByRole("button", { name: /Show more/ }));
+
+    // The cursor the server minted goes back exactly as it came, and the rows
+    // are appended rather than replacing what is on screen.
+    await waitFor(() => expect(lastQuery().get("cursor")).toBe(cursor));
+    expect(await screen.findByText("Marsh Hag")).toBeInTheDocument();
+    expect(screen.getByText("Goblin Boss")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Show more/ })).toBeNull();
+    expect(
+      screen.getByText("3 creatures — this campaign's own, and the shared corpus"),
+    ).toBeInTheDocument();
+  });
+
+  it("throws away the pages it read when the query changes", async () => {
+    const cursor = "eyJvIjoiY3IiLCJrIjpbMSwiR29ibGluIEJvc3MiLCJ4Il19";
+    server.routes.set(LIST, { status: 200, body: page([bandit, goblin], cursor) });
+    await renderBestiary(mintingSession());
+    await screen.findByText("Goblin Boss");
+
+    server.routes.set(LIST, { status: 200, body: page([hag]) });
+    await userEvent.click(screen.getByRole("button", { name: /Show more/ }));
+    expect(await screen.findByText("Marsh Hag")).toBeInTheDocument();
+
+    // A page belongs to the query it was read for. Typing a new one must not
+    // leave the old rows underneath the new list.
+    server.routes.set(LIST, { status: 200, body: page([goblin]) });
+    await userEvent.type(screen.getByRole("textbox", { name: "Search creatures" }), "gob");
+
+    await waitFor(() => expect(screen.queryByText("Marsh Hag")).toBeNull());
+    expect(screen.getByText("Goblin Boss")).toBeInTheDocument();
+    expect(screen.queryByText("Saltmarsh Bandit")).toBeNull();
   });
 
   it("orders through the server, because the CR sort is on a key the client has not got", async () => {
@@ -181,7 +239,8 @@ describe("BestiaryScreen", () => {
   });
 
   it("draws the designers' empty state, and names how the corpus arrives", async () => {
-    server.routes.set(LIST, { status: 200, body: [] });
+    server.routes.set(LIST, { status: 200, body: page([]) });
+    server.routes.set(VOCABULARY, { status: 200, body: [] });
     await renderBestiary(mintingSession());
 
     expect(await screen.findByText("Nothing lives here")).toBeInTheDocument();
@@ -193,7 +252,7 @@ describe("BestiaryScreen", () => {
     await renderBestiary(mintingSession());
     await screen.findByText("Goblin Boss");
 
-    server.routes.set(LIST, { status: 200, body: [] });
+    server.routes.set(LIST, { status: 200, body: page([]) });
     await userEvent.type(screen.getByRole("textbox", { name: "Search creatures" }), "dragon");
 
     expect(await screen.findByText(/Loosen a filter/)).toBeInTheDocument();

@@ -682,7 +682,14 @@ describe("the bestiary", () => {
           query: { environments: ["Moon"], sort: "name" },
         })).items;
 
-        return { byName, byTrait, byEnvironment, byOneEnvironment, byNoEnvironment, byUnknownEnvironment };
+        return {
+          byName,
+          byTrait,
+          byEnvironment,
+          byOneEnvironment,
+          byNoEnvironment,
+          byUnknownEnvironment,
+        };
       }).pipe(Effect.orDie),
     );
 

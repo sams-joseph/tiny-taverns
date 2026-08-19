@@ -377,9 +377,7 @@ const BeatsLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const beats = yield* Beats;
     return handlers
-      .handle("list", ({ params, query }) =>
-        beats.list(params.campaignId, params.sessionId, query),
-      )
+      .handle("list", ({ params, query }) => beats.list(params.campaignId, params.sessionId, query))
       .handle("create", ({ params, payload }) =>
         beats.create(params.campaignId, params.sessionId, payload),
       )

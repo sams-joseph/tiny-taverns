@@ -2,15 +2,18 @@ import type {
   Campaign,
   CampaignId,
   Character,
+  CreatedOrder,
   Encounter,
   EncounterRun,
   MemberRole,
   Note,
   PrepItem,
   Session,
+  PageCursor,
 } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
+import { collectPages, WHOLE_LIST } from "../api/page";
 
 /** Everything the campaign view renders, in one shape. */
 export interface CampaignView {
@@ -64,8 +67,15 @@ export const loadCampaignView = (campaignId: CampaignId) => (client: TavernsClie
 
     const [encounters, notes, party, memberships] = yield* Effect.all(
       [
-        client.encounters.list({ params: { campaignId } }),
-        client.notes.list({ params: { campaignId } }),
+        // Whole lists, followed to the end: this screen's search box filters
+        // what the frame loaded, and a filter applied to one page is not a
+        // filter on the list. See `api/page.ts`.
+        collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
+          client.encounters.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+        ),
+        collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
+          client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+        ),
         client.characters.list({ params: { campaignId } }),
         // In the round that was already running, so it costs no round trip. A
         // campaign this actor can read is a campaign they are a member of —

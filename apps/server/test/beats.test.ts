@@ -416,7 +416,9 @@ describe("a campaign-scoped actor", () => {
 
     // …and it really is there and really is shared, so the three refusals
     // above are about scope rather than about an empty table.
-    const asDm = await as(items(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id, {})));
+    const asDm = await as(
+      items(beats.list(fixture.otherTable.id, fixture.sessionElsewhere.id, {})),
+    );
     expect(asDm.map((beat) => beat.id)).toEqual([fixture.beatElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
   }, 60_000);

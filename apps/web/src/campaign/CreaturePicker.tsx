@@ -21,7 +21,17 @@ import { FailureNotice, Loading } from "../ui/states";
  *
  * This is not the bestiary screen. There is no sort control, no environment
  * chips and no stat block: picking is one question, and browsing is its own view.
+ *
+ * **It reads one page and says so when there are more.** A picker is a list you
+ * look down, so a corpus that does not fit in one is a corpus to narrow rather
+ * than to scroll — and following the cursor here would spend round trips
+ * building a list nobody reads to the end. The line under it is what keeps that
+ * honest: the alternative is a DM concluding a creature is not in the bestiary
+ * because it sorted past the fiftieth.
  */
+
+/** As many as are worth looking down before typing another letter. */
+const SHOWN = 25;
 
 /**
  * Long enough that typing a name is one request rather than eight, short enough
@@ -51,7 +61,10 @@ export function CreaturePicker({
   // "load again", so the debounce above is what the request count follows.
   const load = useCallback(
     (client: TavernsClient) =>
-      client.creatures.list({ params: { campaignId }, query: { q: query, sort: "name" } }),
+      client.creatures.list({
+        params: { campaignId },
+        query: { q: query, sort: "name", limit: SHOWN },
+      }),
     [campaignId, query],
   );
   const [resource, reload] = useApiResource(load);
@@ -69,13 +82,13 @@ export function CreaturePicker({
       {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
 
       {resource.state === "ready" &&
-        (resource.value.length === 0 ? (
+        (resource.value.items.length === 0 ? (
           <p className="text-body-s leading-body text-muted-foreground">
             Nothing in the bestiary answers to that. Try a shorter word, or a trait.
           </p>
         ) : (
           <ul className="flex max-h-56 flex-col overflow-y-auto rounded-md border border-hairline">
-            {resource.value.map((creature, index) => {
+            {resource.value.items.map((creature, index) => {
               const already = chosen.has(creature.id);
               return (
                 <li
@@ -110,6 +123,13 @@ export function CreaturePicker({
             })}
           </ul>
         ))}
+
+      {resource.state === "ready" && resource.value.nextCursor !== null && (
+        <p className="text-body-s leading-body text-muted-foreground">
+          More match than fit here. Type another word — the search reads the stat blocks too, so a
+          trait works.
+        </p>
+      )}
     </div>
   );
 }

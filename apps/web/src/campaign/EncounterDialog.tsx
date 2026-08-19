@@ -1,10 +1,12 @@
 import type {
   CampaignId,
   CreatureId,
+  CreatureSort,
   Difficulty,
   Encounter,
   EncounterCreatureId,
   Visibility,
+  PageCursor,
 } from "@taverns/api";
 import {
   Button,
@@ -26,6 +28,7 @@ import { Effect, Result } from "effect";
 import { useCallback, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
+import { collectPages, WHOLE_LIST } from "../api/page";
 import { useApiResource } from "../api/resource";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -461,7 +464,12 @@ export function EncounterDialog({
             const [rows, creatures] = yield* Effect.all(
               [
                 client.encounterCreatures.list({ params: { campaignId, encounterId } }),
-                client.creatures.list({ params: { campaignId }, query: {} }),
+                collectPages((cursor: PageCursor<CreatureSort> | undefined) =>
+                  client.creatures.list({
+                    params: { campaignId },
+                    query: { limit: WHOLE_LIST, cursor },
+                  }),
+                ),
               ],
               { concurrency: "unbounded" },
             );

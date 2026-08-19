@@ -143,7 +143,9 @@ describe("a player actor", () => {
   });
 
   it("sees only the shared note when listing", async () => {
-    const asDm = await runtime.runPromise(withActor(fixture.dm)(items(notes.list(fixture.campaign.id, {}))));
+    const asDm = await runtime.runPromise(
+      withActor(fixture.dm)(items(notes.list(fixture.campaign.id, {}))),
+    );
     const asPlayer = await runtime.runPromise(
       withActor(fixture.player)(items(notes.list(fixture.campaign.id, {}))),
     );
@@ -191,7 +193,9 @@ describe("a player actor", () => {
     expect(listed._tag).toBe("NotFound");
 
     // …and the DM still sees it, so the note really is there to be missed.
-    const asDm = await runtime.runPromise(withActor(fixture.dm)(items(notes.list(fixture.closed.id, {}))));
+    const asDm = await runtime.runPromise(
+      withActor(fixture.dm)(items(notes.list(fixture.closed.id, {}))),
+    );
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedInClosed.id]);
   });
 
@@ -242,7 +246,9 @@ describe("membership and credential scope narrow independently, and both apply",
 
     // …and the second table's shared note really is there and really is shared,
     // so the assertions above are about reach and not about a missing fixture.
-    const asDm = await runtime.runPromise(withActor(fixture.dm)(items(notes.list(fixture.otherTable.id, {}))));
+    const asDm = await runtime.runPromise(
+      withActor(fixture.dm)(items(notes.list(fixture.otherTable.id, {}))),
+    );
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
   });

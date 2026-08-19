@@ -282,7 +282,9 @@ describe("the global system corpus", () => {
     // and a path is a claim.
     const listed = await runtime.runPromise(
       Effect.flip(
-        withActor(fixture.dm)(items(creatures.list(fixture.outsiderCampaign.id, { scope: "system" }))),
+        withActor(fixture.dm)(
+          items(creatures.list(fixture.outsiderCampaign.id, { scope: "system" })),
+        ),
       ),
     );
     const found = await runtime.runPromise(
@@ -498,7 +500,9 @@ describe("a campaign-scoped actor", () => {
     // The global corpus is no way around it either: it is reachable *through a
     // readable campaign*, and this credential does not reach that campaign.
     const corpus = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, { scope: "system" })))),
+      Effect.flip(
+        withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, { scope: "system" }))),
+      ),
     );
 
     expect(listed._tag).toBe("NotFound");
@@ -746,10 +750,14 @@ describe("the bestiary's filters", () => {
       ),
     );
     const byCr = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { sort: "cr", scope: "system" }))),
+      withActor(fixture.dm)(
+        items(creatures.list(fixture.campaign.id, { sort: "cr", scope: "system" })),
+      ),
     );
     const byName = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { sort: "name", scope: "system" }))),
+      withActor(fixture.dm)(
+        items(creatures.list(fixture.campaign.id, { sort: "name", scope: "system" })),
+      ),
     );
 
     expect(marsh.map((creature) => creature.name).sort()).toEqual([

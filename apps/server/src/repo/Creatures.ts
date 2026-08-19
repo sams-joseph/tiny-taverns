@@ -216,9 +216,7 @@ const environmentsIn = (
  * non-unique key names a position several rows wide, so a page boundary either
  * repeats a row or loses one. See `repo/paging.ts`.
  */
-const orderingsOf = (
-  sql: SqlClient.SqlClient,
-): Record<CreatureSort, Ordering<CreatureRow>> => {
+const orderingsOf = (sql: SqlClient.SqlClient): Record<CreatureSort, Ordering<CreatureRow>> => {
   const name = orderColumn<CreatureRow>(sql, sql`creature.name`, "text", (row) => row.name);
   const id = orderColumn<CreatureRow>(sql, sql`creature.id`, "uuid", (row) => row.id);
   return {

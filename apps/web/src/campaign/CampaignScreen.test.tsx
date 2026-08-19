@@ -12,6 +12,7 @@ import {
   renderNotes,
   renderScreen,
   sessionId,
+  page,
 } from "./campaign.fixtures";
 
 /**
@@ -165,8 +166,8 @@ describe("CampaignScreen", () => {
       status: 200,
       body: { ...campaign, name: "The Reed Marches", partyName: null, currentSessionId: null },
     });
-    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] });
-    server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: [] });
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) });
+    server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) });
     server.routes.set(`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] });
     await renderScreen(mintingSession());
 

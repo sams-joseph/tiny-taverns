@@ -1,4 +1,4 @@
-import type { Campaign, CampaignId, Creature, CreatureSort } from "@taverns/api";
+import type { Campaign, CampaignId, Creature, CreatureSort, PageCursor } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -24,8 +24,8 @@ import type { TavernsClient } from "../api/client";
  */
 
 /**
- * The two controls that are worth a round trip. The same pair on both lists,
- * because the server's `LibraryFilter` is literally the same declaration.
+ * Everything a creature list asks the server. **All three controls are the
+ * server's**, and that is what the paged read forced.
  *
  * **The search goes to the server**, for the reason `CreaturePicker` records:
  * the server matches the name by `ILIKE` *and* the stat block by full text, so
@@ -36,56 +36,93 @@ import type { TavernsClient } from "../api/client";
  * **The sort goes with it** because `cr` orders by `crSort`, the key derived
  * from `"1/4"` on write, and a client sorting on the displayed string would put
  * 1/4 after 1.
+ *
+ * **And so do the chips, now.** They were applied to the answer, deliberately
+ * and with the reason written down: a one-element array did not survive the wire
+ * at `effect@4.0.0-beta.102`, so `?environments=Cave` was a 400 while
+ * `?environments=Cave&environments=River` was a 200. That is fixed —
+ * `packages/api`'s `queryArray` — and the fix had to arrive with pagination
+ * rather than before it, because a chip applied to *a page* is not a filter on
+ * the list: it would narrow fifty rows and call the result the answer.
  */
 export interface CorpusQuery {
   readonly q: string;
   readonly sort: CreatureSort;
+  /** Any-of. Empty means no narrowing at all, and reaches the wire as no key. */
+  readonly environments: ReadonlyArray<string>;
 }
 
-export const NO_QUERY: CorpusQuery = { q: "", sort: "cr" };
+export const NO_QUERY: CorpusQuery = { q: "", sort: "cr", environments: [] };
 
-export interface BestiaryView {
-  readonly campaign: Campaign;
+/**
+ * How many rows a page of the grid holds.
+ *
+ * A multiple of three, which is the widest the grid ever is, so a page fills
+ * whole rows at every breakpoint.
+ */
+export const PAGE_SIZE = 24;
+
+/** The filter as the wire takes it — one place, so the two lists cannot drift. */
+const asQuery = (query: CorpusQuery, cursor: PageCursor<CreatureSort> | undefined) => ({
+  q: query.q.trim(),
+  sort: query.sort,
+  environments: query.environments,
+  limit: PAGE_SIZE,
+  cursor,
+});
+
+/** What both creature screens read: one page, and the chip row's vocabulary. */
+export interface CorpusView {
   /**
-   * The campaign's own creatures *and* the global `system` corpus, in one list
-   * — see `Api.ts`. There is no client-side union: the path is what reaches the
-   * global rows, so this is the whole set this credential can see through this
-   * campaign and nothing more.
+   * The first page. Later ones are appended by `corpus.ts`, which is also where
+   * `nextCursor` is spent.
    */
   readonly creatures: ReadonlyArray<Creature>;
+  readonly nextCursor: PageCursor<CreatureSort> | null;
+  /**
+   * Every environment this list's corpus mentions — **from the server**, over
+   * the same predicate the list composes.
+   *
+   * It used to be accumulated from the answers, which worked only while an
+   * unsearched answer was the whole corpus. A page is not, and the chips now
+   * narrow the query, so a row built from what came back would offer only the
+   * environments on page one and could never grow back the one you would press
+   * to get out of a filter. See `Api.ts`'s `creatures.environments`.
+   */
+  readonly vocabulary: ReadonlyArray<string>;
+}
+
+export interface BestiaryView extends CorpusView {
+  readonly campaign: Campaign;
 }
 
 export const loadBestiary =
   (campaignId: CampaignId, query: CorpusQuery) => (client: TavernsClient) =>
     Effect.gen(function* () {
-      const [campaign, creatures] = yield* Effect.all(
+      const [campaign, page, vocabulary] = yield* Effect.all(
         [
           client.campaigns.findById({ params: { campaignId } }),
-          client.creatures.list({
-            params: { campaignId },
-            query: { q: query.q.trim(), sort: query.sort },
-          }),
+          client.creatures.list({ params: { campaignId }, query: asQuery(query, undefined) }),
+          client.creatures.environments({ params: { campaignId } }),
         ],
         { concurrency: "unbounded" },
       );
 
-      return { campaign, creatures } satisfies BestiaryView;
+      return {
+        campaign,
+        creatures: page.items,
+        nextCursor: page.nextCursor,
+        vocabulary,
+      } satisfies BestiaryView;
     });
 
-export interface LibraryView {
-  /**
-   * **Originals only** — the bundle, plus what this account has authored. Never
-   * a campaign's copy of anything, which is statement 4 of the captain's model.
-   *
-   * `repo/visibility.ts`'s `libraryRowReadable` is
-   * `campaign_id is null and (account_id is null or account_id = <me>)`, and it
-   * composes no campaign gate at all: a Library entity is in no campaign, so
-   * there is no membership to check and nothing for a credential's scope to
-   * narrow. The owner is the entire question, and it is compared to the actor's
-   * own account and to nothing a caller supplied — so the only non-null
-   * `accountId` any reader ever sees here is its own.
-   */
-  readonly creatures: ReadonlyArray<Creature>;
+/** The page after the one in hand. See `corpus.ts` for where the cursor lives. */
+export const moreOfBestiary =
+  (campaignId: CampaignId, query: CorpusQuery, cursor: PageCursor<CreatureSort>) =>
+  (client: TavernsClient) =>
+    client.creatures.list({ params: { campaignId }, query: asQuery(query, cursor) });
+
+export interface LibraryView extends CorpusView {
   /**
    * The tables this account **runs**, for the one action on this screen that
    * needs a campaign: copying an entity into one.
@@ -116,16 +153,19 @@ export interface LibraryView {
  */
 export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [creatures, memberships] = yield* Effect.all(
+    const [page, vocabulary, memberships] = yield* Effect.all(
       [
-        client.library.list({ query: { q: query.q.trim(), sort: query.sort } }),
+        client.library.list({ query: asQuery(query, undefined) }),
+        client.library.environments(),
         client.me.campaigns(),
       ],
       { concurrency: "unbounded" },
     );
 
     return {
-      creatures,
+      creatures: page.items,
+      nextCursor: page.nextCursor,
+      vocabulary,
       // `role === "dm"` and nothing else: `derive` writes through `rowWritable`,
       // so a table you only sit at is not somewhere a copy can land. There is no
       // `archivedAt === null` filter beside it any more — `GET /me/campaigns` is
@@ -138,34 +178,7 @@ export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
     } satisfies LibraryView;
   });
 
-/**
- * The environment chips, applied here rather than sent.
- *
- * `CreatureFilter.environments` exists and the repository implements it as a
- * Postgres `&&` overlap — but **a one-element array does not survive the wire at
- * `effect@4.0.0-beta.102`**. The derived client encodes `["Cave"]` as a single
- * `?environments=Cave`, and the server's query decoder reads one occurrence of a
- * key as a scalar string, which `Schema.Array` then refuses: `Expected array |
- * undefined, got "Cave"`, a 400. Two chips work; one does not. Measured against
- * a running server — `?environments=Cave` is 400 and
- * `?environments=Cave&environments=River` is 200 — so this is the wire, not the
- * screen. See `AGENTS.md`.
- *
- * Doing it here costs nothing and loses nothing, which is why it is a fix and
- * not a workaround: every row already carries its own `environments` on the
- * wire, the test is the same any-of, and the two filters are conjunctive — the
- * server narrows by `q`, this narrows what came back, and the result is the set
- * the server would have returned had it been asked for both. The order is the
- * server's, untouched. That is *not* true of the search, which is why the search
- * is still a round trip.
- *
- * It also means pressing a chip costs no request, and the chip row cannot narrow
- * itself out of existence.
- *
- * **One function for both lists**, so the Library and the bestiary cannot come
- * to mean different things by a pressed chip — the client-side half of the same
- * guarantee `LibraryFilter` gives the server-side half of.
- */
-export const inEnvironments = (creature: Creature, environments: ReadonlyArray<string>): boolean =>
-  environments.length === 0 ||
-  creature.environments.some((environment) => environments.includes(environment));
+/** The page after the one in hand, for the Library — see `moreOfBestiary`. */
+export const moreOfLibrary =
+  (query: CorpusQuery, cursor: PageCursor<CreatureSort>) => (client: TavernsClient) =>
+    client.library.list({ query: asQuery(query, cursor) });

@@ -125,9 +125,7 @@ const makeFixture = Effect.gen(function* () {
     );
     yield* as(notes.create(campaign.id, { title: `Note ${String(index)}`, visibility }));
     yield* as(encounters.create(campaign.id, { name: `Encounter ${String(index)}`, visibility }));
-    yield* as(
-      beats.create(campaign.id, night.id, { body: `Beat ${String(index)}`, visibility }),
-    );
+    yield* as(beats.create(campaign.id, night.id, { body: `Beat ${String(index)}`, visibility }));
   }
 
   const player = yield* aPlayerAt(campaign.id, "Sova");
@@ -168,8 +166,11 @@ const walk = <A, O extends string>(
 const creaturesOf = (actor: Actor, campaignId: CampaignId) =>
   Effect.flatMap(Creatures, (repo) =>
     Effect.succeed(
-      (sort: CreatureSort, limit: number | undefined, cursor: PageCursor<CreatureSort> | undefined) =>
-        withActor(actor)(repo.list(campaignId, { sort, limit, cursor })).pipe(Effect.orDie),
+      (
+        sort: CreatureSort,
+        limit: number | undefined,
+        cursor: PageCursor<CreatureSort> | undefined,
+      ) => withActor(actor)(repo.list(campaignId, { sort, limit, cursor })).pipe(Effect.orDie),
     ),
   );
 
@@ -245,9 +246,7 @@ describe("walking a paged list", () => {
                 repo.list(fixture.campaign.id, { q: "Aardvark", limit: 1 }),
               ).pipe(
                 Effect.flatMap((page) =>
-                  withActor(fixture.dm)(
-                    repo.remove(fixture.campaign.id, page.items[0]!.id),
-                  ),
+                  withActor(fixture.dm)(repo.remove(fixture.campaign.id, page.items[0]!.id)),
                 ),
                 Effect.orDie,
               ),
@@ -330,9 +329,9 @@ describe("visibility on a paged read", () => {
       Effect.gen(function* () {
         const notes = yield* Notes;
         const dm = withActor(fixture.dm);
-        const whole = yield* dm(
-          notes.list(fixture.campaign.id, { limit: MAX_PAGE_SIZE }),
-        ).pipe(Effect.orDie);
+        const whole = yield* dm(notes.list(fixture.campaign.id, { limit: MAX_PAGE_SIZE })).pipe(
+          Effect.orDie,
+        );
         const walked = yield* walk<Note, CreatedOrder>((cursor) =>
           dm(notes.list(fixture.campaign.id, { limit: 4, cursor })).pipe(Effect.orDie),
         );

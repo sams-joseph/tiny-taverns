@@ -11,6 +11,7 @@ import {
   goblinBoss,
   hag,
   liveRun,
+  page,
   runId as runIdRaw,
   session,
   sessionId as sessionIdRaw,
@@ -77,7 +78,7 @@ export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET ${base}`, { status: 200, body: campaign }],
     [`GET ${base}/sessions/${sessionIdRaw}`, { status: 200, body: runningSession }],
-    [`GET ${base}/creatures`, { status: 200, body: [goblin, hag] }],
+    [`GET ${base}/creatures`, { status: 200, body: page([goblin, hag]) }],
     [`GET ${runBase}`, { status: 200, body: liveRun }],
     [`GET ${runBase}/combatants`, { status: 200, body: [brannoc, goblinBoss] }],
     // Damage is a delta, so the answer a test wants back depends on the test.

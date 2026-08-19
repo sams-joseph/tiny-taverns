@@ -23,6 +23,7 @@ import {
   rosterRowId,
   session,
   sessionId,
+  page,
 } from "./campaign.fixtures";
 
 /**
@@ -712,7 +713,7 @@ describe("starting a session", () => {
     // The case the captain's report is really about: a table that starts in a
     // tavern. There is no encounter to choose, so the old door was shut.
     coldCampaign();
-    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] });
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) });
     await renderScreen(mintingSession());
 
     expect(await screen.findByText("No encounters yet")).toBeInTheDocument();
@@ -802,7 +803,7 @@ describe("starting a session", () => {
   it("says so rather than offering a select with nothing in it", async () => {
     // Reachable now in a way it was not: the night opens without an encounter,
     // so a DM can be one press from the run dialog with none built.
-    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: [] });
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) });
     await renderScreen(mintingSession());
 
     await pressAct("Start an encounter");
