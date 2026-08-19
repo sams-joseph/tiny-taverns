@@ -27,6 +27,7 @@ import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
@@ -422,6 +423,24 @@ const RecapLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * What is on this table right now, to a player.
+ *
+ * The thinnest handler in the file, and deliberately so: everything this read
+ * decides is decided in `repo/PlayerTable.ts` (which rows) and in
+ * `PlayerLiveTable` (which fields). There is no branch on who is asking — a DM
+ * calling it gets the same narrow answer, which is how *"what will my players
+ * see"* stays one implementation.
+ */
+const PlayerTableLive = HttpApiBuilder.group(
+  TavernsApi,
+  "table",
+  Effect.fnUntraced(function* (handlers) {
+    const table = yield* PlayerTable;
+    return handlers.handle("read", ({ params }) => table.read(params.campaignId));
+  }),
+);
+
 const SearchLive = HttpApiBuilder.group(
   TavernsApi,
   "search",
@@ -701,5 +720,6 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CombatantsLive,
     LiveLive,
     RecapLive,
+    PlayerTableLive,
   ]),
 );

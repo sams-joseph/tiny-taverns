@@ -157,7 +157,11 @@ describe("a character sheet", () => {
     expect(screen.queryByRole("button", { name: /temp/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Blessed/ })).toBeNull();
 
-    // And the two the drawing puts in the bar beside the name.
+    // And the two the drawing puts at the top: absent here because **nothing is
+    // running**, which is the fixture's default and the common case. They have a
+    // read behind them now — see `liveBanner.test.tsx`, which drives the state
+    // where they appear — so this is the quiet half of that pair rather than a
+    // feature that does not exist.
     expect(screen.queryByRole("button", { name: /Go to the table/i })).toBeNull();
     expect(screen.queryByText(/playing right now/i)).toBeNull();
   });

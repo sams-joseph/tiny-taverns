@@ -512,7 +512,18 @@ describe("the scope, counted", () => {
     // arithmetic worth noticing: `GET /me/campaigns/archived` is the same method
     // with a different argument, so the second endpoint arrived without a second
     // actor-scoped read for the gate to have an opinion about.
-    expect(ungated).toBe(70);
+    //
+    // The seventy-first is `PlayerTable.read` — `GET /campaigns/:c/table`, the
+    // live banner's read. It is the second instance of the rule `Recap` is the
+    // first of, and it landed on the right side of it from the start: the gate
+    // is for a read whose *player projection diverges from the DM's*, and this
+    // read has no DM projection at all. A DM has the runner, `runs.list` and
+    // `sessions.list`, every one of which says more than this and is gated or
+    // DM-only already, so a proof here would buy nothing and would have to be
+    // spent by the audience the endpoint is for. What keeps it narrow is
+    // `PlayerLiveTable`, which has no field for a hit-point total, a band or an
+    // armour class — the *type*, exactly as it is for `Recap.readAsPlayer`.
+    expect(ungated).toBe(71);
   });
 });
 

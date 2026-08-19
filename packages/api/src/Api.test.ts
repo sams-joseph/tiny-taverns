@@ -128,6 +128,10 @@ describe("the API declaration", () => {
       "runs",
       "search",
       "sessions",
+      // What is live at one table, to a player: the read behind the character
+      // sheet's banner. Its own group for the reason `recap` is one — it is
+      // neither a session nor a run, and its answer is narrower than either.
+      "table",
     ]);
   });
 });

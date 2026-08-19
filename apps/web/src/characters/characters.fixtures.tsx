@@ -3,7 +3,14 @@ import { CharacterId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
-import { campaign, character, type Answer, type Call } from "../campaign/campaign.fixtures";
+import {
+  campaign,
+  campaignId,
+  character,
+  sessionId,
+  type Answer,
+  type Call,
+} from "../campaign/campaign.fixtures";
 
 /**
  * The character screens' test wire.
@@ -167,11 +174,73 @@ export const account = {
   name: "Ilse Vantar",
 };
 
+export const liveRunId = "2b1f2a1e-0000-4000-8000-000000000c09";
+export const yourCombatantId = "2b1f2a1e-0000-4000-8000-000000000d09";
+export const hagCombatantId = "2b1f2a1e-0000-4000-8000-000000000d0a";
+
+/**
+ * `GET /campaigns/:c/table` — **the answer every fixture starts on.**
+ *
+ * `null` is the common case and is a success, so a screen that never mentions
+ * the banner still exercises the request the sheet now makes. A route left
+ * unstubbed would 404 and fail the whole screen, which is exactly what the
+ * load's own doc says a `NotFound` here means.
+ */
+export const quiet = (of: string): [string, Answer] => [
+  `GET /campaigns/${of}/table`,
+  { status: 200, body: null },
+];
+
+/**
+ * A night on, and a fight on the table — the JSON `PlayerLiveTable` decodes.
+ *
+ * Written out rather than built from a DM type, which is the point of the
+ * endpoint: there is no armour class, no hit-point total and no band anywhere in
+ * this shape, and a fixture that could carry one would mean the schema could.
+ */
+export const playing = (
+  of: string,
+  fight: {
+    readonly upNext?: { readonly combatantId: string; readonly displayName: string } | null;
+    readonly seats?: ReadonlyArray<{
+      readonly characterId: string;
+      readonly combatantId: string;
+    }>;
+    readonly round?: number;
+  } | null = {},
+): [string, Answer] => [
+  `GET /campaigns/${of}/table`,
+  {
+    status: 200,
+    body: {
+      campaignId: of,
+      sessionId,
+      sessionNumber: 12,
+      fight:
+        fight === null
+          ? null
+          : {
+              id: liveRunId,
+              round: fight.round ?? 3,
+              upNext:
+                fight.upNext === undefined
+                  ? { combatantId: yourCombatantId, displayName: "Brannoc Duskharrow" }
+                  : fight.upNext,
+              seats: fight.seats ?? [{ characterId: brannocId, combatantId: yourCombatantId }],
+            },
+    },
+  },
+];
+
 /** Two characters, two tables. */
 export const twoTables = (): Map<string, Answer> =>
   new Map<string, Answer>([
     ["GET /me", { status: 200, body: account }],
     ["GET /me/characters", { status: 200, body: [brannoc, sorrel] }],
+    // Neither table is playing: the quiet state, which is what most of these
+    // tests are about and the one the banner draws nothing for.
+    quiet(campaignId),
+    quiet(otherCampaignId),
     [
       "GET /me/campaigns",
       {

@@ -35,6 +35,7 @@ import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
@@ -191,6 +192,7 @@ export const servicesOver = <E>(
   | LiveEvents
   | Memberships
   | Notes
+  | PlayerTable
   | PrepItems
   | Proposals
   | Recap
@@ -238,6 +240,11 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     Memberships.layer,
     Notes.layer,
+    // What is live at one table, to a player — the character sheet's banner.
+    // A view over three tables and a writer of none, so it needs no
+    // `LiveEvents` for the reason `Recap` does not: reading a night's state
+    // does not change it.
+    PlayerTable.layer,
     PrepItems.layer,
     // The accept path: the only writer of `origin = 'assistant'`. It composes
     // the ordinary create methods, so an accepted row is made by the same
@@ -322,6 +329,7 @@ export const applicationOver = <E>(
     | LiveEvents
     | Memberships
     | Notes
+    | PlayerTable
     | PrepItems
     | Proposals
     | Recap

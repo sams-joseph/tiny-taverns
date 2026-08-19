@@ -12,7 +12,8 @@ import {
   TabsTrigger,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { useApiResource } from "../api/resource";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -21,7 +22,8 @@ import { FailureNotice, Loading } from "../ui/states";
 import { BackstoryDialog } from "./BackstoryDialog";
 import { GearDialog } from "./GearDialog";
 import { IdentityDialog } from "./IdentityDialog";
-import { loadMyCharacters } from "./load";
+import { type LiveBanner, liveBanner } from "./live";
+import { loadCharacterSheet } from "./load";
 import { coins, sheetTabs } from "./sheet";
 import {
   AbilityCell,
@@ -66,14 +68,26 @@ import { saveOwnCharacter, sheetWith } from "./write";
  * which has no field for `hpCurrent`, `tempHp`, `conditions`, `visibility` or
  * `accountId`. A control for one of those would not compile.
  *
+ * ### The live banner, and where it stops
+ *
+ * *"The Salt Road is playing right now · session 12 · round 3 · Brannoc is up"*
+ * and the *Go to the table* action beside it read `GET /campaigns/:c/table` —
+ * `PlayerLiveTable`, a distinct schema on a distinct endpoint, which is the
+ * rule `PlayerSessionRecap` set and the reason a monster's numbers cannot
+ * arrive here even by mistake. What it says in each of its four states, and why
+ * it draws nothing at all in the commonest of them, is `live.ts`.
+ *
+ * It is a **snapshot**, read with the rest of the screen and re-read whenever
+ * the screen is. There is no stream behind it and that is deliberate: the live
+ * stream is scoped to one run and what a player may watch of a fight is the
+ * player fight view's decision, which a banner must not settle by accident.
+ *
+ * *Go to the table* goes to `/play/campaigns/:c`, the table's own screen, which
+ * is the truthful destination this build has. When the player fight view ships
+ * it is the one line here that changes.
+ *
  * ### What is still deliberately absent
  *
- * - **The live banner.** *"The Salt Road is playing right now · session 12 ·
- *   round 3 · Brannoc is up next"* and the *Go to the table* button beside it
- *   **have no read behind them**: they need the player projection of a fight,
- *   which does not exist, and a `session`/`run` pair a player is refused. That
- *   is its own piece of work and this screen does not get to settle it by
- *   accident.
  * - **The live half of the row.** Current hit points, temporary hit points and
  *   conditions are drawn and are not editable — they are `0014`'s live trio and
  *   the DM's to move, which is why the payload has no field for any of them.
@@ -721,6 +735,41 @@ function IdentityColumn({
   );
 }
 
+/**
+ * *"The Salt Road is playing right now"*, and the way there.
+ *
+ * The delivery's card (`MyCharacters.jsx:83-91`): an accented border, a live dot
+ * and two lines. It is drawn only when there is something to say — `liveBanner`
+ * returns `undefined` otherwise, which is most of the time — so there is no
+ * quiet state to design.
+ *
+ * **The card carries no button, and the delivery's own drawing is why.** The
+ * roster's banner ends in *Take your turn* because the roster has no other
+ * place to put it; the sheet's *Go to the table* is drawn in the **bar**
+ * (`CharacterSheet.jsx:90`), which is where this screen's own actions already
+ * live. Drawing both would put two controls with one name and one destination
+ * on one screen, which is the ambiguity the backstory's *Edit* already had to
+ * be labelled out of. So the card says what is happening and the bar is how you
+ * get there.
+ *
+ * The dot is `--success` and carries `aria-hidden`: it repeats the headline's
+ * own *"right now"* rather than adding to it, so a screen reader that read it
+ * would be reading punctuation.
+ */
+function LiveTableBanner({ banner }: { readonly banner: LiveBanner }) {
+  return (
+    <Card className="mb-gutter border-accent">
+      <CardContent className="flex flex-wrap items-center gap-x-gutter gap-y-3 pt-card">
+        <span aria-hidden className="size-2 shrink-0 rounded-pill bg-success" />
+        <div className="min-w-0 flex-1">
+          <p className="text-body-s leading-snug font-semibold text-heading">{banner.headline}</p>
+          <p className="text-caption leading-body text-muted-foreground">{banner.detail}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function CharacterSheetScreen() {
   const { characterId } = useParams({ from: "/play/characters/$characterId" });
   /**
@@ -735,11 +784,28 @@ export function CharacterSheetScreen() {
    * to say about it is what the server says about everything it will not show:
    * *not here*.
    */
-  const [resource, reload] = useApiResource(loadMyCharacters);
+  const load = useCallback(
+    // Memoised on the id: its identity is what tells `useApiResource` to load
+    // again, so an inline closure would load forever.
+    (client: TavernsClient) => loadCharacterSheet(characterId)(client),
+    [characterId],
+  );
+  const [resource, reload] = useApiResource(load);
   const view = resource.state === "ready" ? resource.value : undefined;
   const character = view?.characters.find((row) => row.id === characterId);
   const campaignName =
     character === undefined ? undefined : view?.campaignNames.get(character.campaignId);
+  /**
+   * What the banner says, or nothing.
+   *
+   * `undefined` covers both silences the endpoint deliberately does not tell
+   * apart — nobody is playing, and the DM has not shared tonight — and the
+   * screen draws neither a card nor an action for either. See `live.ts`.
+   */
+  const banner =
+    character === undefined || view === undefined
+      ? undefined
+      : liveBanner(view.live, character, campaignName);
   /**
    * Which write is open — one at a time, and above the sheet rather than inside
    * it, because the dialog outlives the section that opened it: a save re-reads
@@ -787,6 +853,27 @@ export function CharacterSheetScreen() {
             <Icon name="chevron-left" size={14} />
             Characters
           </Button>
+          {/* **The way to the table, in the bar the delivery draws it in**
+              (`CharacterSheet.jsx:90`) — and absent unless there is a table to
+              go to. A control that led to a screen with nothing on it would be
+              the stubbed field this product refuses everywhere else, and the
+              banner below is the sentence saying why this one is here. */}
+          {character !== undefined && banner !== undefined && (
+            <Button
+              variant="secondary"
+              size="sm"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/play/campaigns/$campaignId"
+                  params={{ campaignId: character.campaignId }}
+                />
+              }
+            >
+              <Icon name="swords" size={14} />
+              Go to the table
+            </Button>
+          )}
           {/* The durable columns, and the one write with no drawn home of its
               own — the delivery gives the identity card no edit affordance, so
               it goes where a screen's own action goes. It is absent until the
@@ -813,25 +900,28 @@ export function CharacterSheetScreen() {
             <FailureNotice failure={{ kind: "missing", resource: "character" }} />
           </div>
         ) : (
-          // The delivery's 260px identity column beside the sheet body, and
-          // `--rail-w` is that measurement — the token the rail used to spend,
-          // still bridged. A container query rather than a breakpoint: `main` is
-          // the container, and the Hob panel takes 400px out of it without the
-          // window moving.
-          <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            <div className="@3xl:w-rail @3xl:shrink-0">
-              <IdentityColumn character={character} onSaved={reload} />
+          <>
+            {banner !== undefined && <LiveTableBanner banner={banner} />}
+            {/* The delivery's 260px identity column beside the sheet body, and
+                `--rail-w` is that measurement — the token the rail used to
+                spend, still bridged. A container query rather than a breakpoint:
+                `main` is the container, and the Hob panel takes 400px out of it
+                without the window moving. */}
+            <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
+              <div className="@3xl:w-rail @3xl:shrink-0">
+                <IdentityColumn character={character} onSaved={reload} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <SheetBody
+                  character={character}
+                  open={openTab}
+                  onOpen={setOpenTab}
+                  onEditBackstory={() => setEditing("backstory")}
+                  onEditGear={() => setEditing("gear")}
+                />
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <SheetBody
-                character={character}
-                open={openTab}
-                onOpen={setOpenTab}
-                onEditBackstory={() => setEditing("backstory")}
-                onEditGear={() => setEditing("gear")}
-              />
-            </div>
-          </div>
+          </>
         ))}
 
       {character !== undefined && editing === "identity" && (

@@ -1,4 +1,4 @@
-import type { CampaignId, Character } from "@taverns/api";
+import type { CampaignId, Character, CharacterId, PlayerLiveTable } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -59,4 +59,46 @@ export const loadMyCharacters = (client: TavernsClient) =>
       tableCount: memberships.length,
       accountName: me.name,
     } satisfies MyCharactersView;
+  });
+
+/**
+ * The sheet's own view: the roster's, plus what is live at that character's
+ * table.
+ *
+ * **Two rounds, and the second one cannot be folded into the first.** The live
+ * read hangs off `/campaigns/:campaignId`, and which campaign that is is a fact
+ * about the character — which arrives in the first round. `campaign/load.ts`
+ * already pays the same cost for the same reason (its checklist hangs off
+ * `campaign.currentSessionId`), and paying it here keeps the screen at one
+ * `Effect` and three states rather than two resources and four combinations of
+ * loading and failed.
+ *
+ * **A character this account does not have costs no second request.** The
+ * roster is the narrowing — `ownRowReadable` — so *"not in the answer"* and
+ * *"not yours"* are the same fact, and there is nothing to ask about.
+ *
+ * **A `NotFound` from the live read fails the screen rather than being
+ * swallowed into `null`, and that is deliberate.** The first round already
+ * answered a character in that campaign, which means the campaign was readable
+ * a moment ago; the only way the second round refuses it is a membership
+ * revoked between the two. That is a real disagreement about whether this table
+ * is still yours, and the sheet under it is no longer trustworthy — so it is
+ * shown, in `FailureNotice`'s own words, rather than hidden behind a banner
+ * that quietly stops appearing.
+ */
+export interface CharacterSheetView extends MyCharactersView {
+  /** What is on that character's table right now — `null` when nothing is. */
+  readonly live: PlayerLiveTable | null;
+}
+
+export const loadCharacterSheet = (characterId: CharacterId) => (client: TavernsClient) =>
+  Effect.gen(function* () {
+    const view = yield* loadMyCharacters(client);
+    const character = view.characters.find((row) => row.id === characterId);
+    const live =
+      character === undefined
+        ? null
+        : yield* client.table.read({ params: { campaignId: character.campaignId } });
+
+    return { ...view, live } satisfies CharacterSheetView;
   });

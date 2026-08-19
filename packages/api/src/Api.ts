@@ -71,6 +71,7 @@ import {
 } from "./Invite.js";
 import { CampaignMember, CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
+import { PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
@@ -955,6 +956,49 @@ class RecapGroup extends HttpApiGroup.make("recap")
   .middleware(Authorization) {}
 
 /**
+ * What is on this table **right now**, to somebody sitting at it.
+ *
+ * The read behind the player's live banner — *"The Salt Road is playing right
+ * now · session 12 · round 3 · Brannoc is up"* — and behind the *Go to the
+ * table* action beside it. Both were drawn on `CharacterSheet.jsx` and
+ * `MyCharacters.jsx` from the fourth delivery onwards with nothing behind
+ * either; this is what they read.
+ *
+ * **Its own group with one endpoint, for the reason `recap` is its own group**:
+ * it is not a session and it is not a run. It answers *"is anything happening,
+ * and what"* across three tables at once, and a client asking it is asking a
+ * question neither row can answer alone.
+ *
+ * **`null` is the ordinary success, not a failure.** Most of the time nobody is
+ * playing, and a 404 for the common case would make the banner's absence
+ * indistinguishable from a campaign this actor cannot reach. The 404 is kept
+ * for exactly that second thing — a campaign a non-member, a revoked member or
+ * a mis-scoped credential named — which is the ordinary refusal every other
+ * campaign-scoped read gives.
+ *
+ * **It is not gated by `DmActor`, and it does not need to be**, which is the
+ * distinction `repo/DmActor.ts` draws: the gate is for a read whose *player
+ * projection diverges from the DM's*. This read has no DM projection at all —
+ * a DM has the runner, `sessions.list` and `runs.list`, all of which say more
+ * than this and are gated or DM-only already. What bounds it is
+ * `PlayerLiveTable`, which cannot carry a number the DM was keeping, and
+ * `repo/visibility.ts`, which decides whether there is a night, a fight or a
+ * combatant to speak of at all. A DM may call it too, and gets the same narrow
+ * answer — which is how *"what does the banner say to my players"* is one
+ * request rather than a second implementation.
+ */
+class PlayerTableGroup extends HttpApiGroup.make("table")
+  .add(
+    HttpApiEndpoint.get("read", "/table", {
+      params: { campaignId: CampaignId },
+      success: Schema.NullOr(PlayerLiveTable),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId")
+  .middleware(Authorization) {}
+
+/**
  * Searching one campaign's record — its notes, its beats and its bestiary.
  *
  * **Campaign-scoped in the path, and that is a security property rather than a
@@ -1280,4 +1324,5 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(RunsGroup)
   .add(CombatantsGroup)
   .add(LiveGroup)
-  .add(RecapGroup) {}
+  .add(RecapGroup)
+  .add(PlayerTableGroup) {}
