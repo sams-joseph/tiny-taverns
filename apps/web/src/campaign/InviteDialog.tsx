@@ -12,10 +12,10 @@ import {
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useCallback, useState } from "react";
-import type { TavernsClient } from "../api/client";
+import { Atom } from "effect/unstable/reactivity";
+import { useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { useApiResource } from "../api/resource";
 import { dayOf } from "../chronicle/format";
 import { useRouter, type RegisteredRouter } from "@tanstack/react-router";
 import { Field, SaveFailure } from "../ui/form";
@@ -125,6 +125,19 @@ const linkFor = (router: RegisteredRouter, token: string): string => {
   return new URL(href, globalThis.location.href).toString();
 };
 
+/**
+ * This campaign's invitations, as an atom.
+ *
+ * **Module scope and `Atom.family`, because an atom is its own identity.** Built
+ * inside the component it would be a fresh atom on every render and therefore an
+ * infinite loop — the sharper form of the rule `useApiResource` stated as "`use`
+ * must be `useCallback`-stable". The key is the campaign id, a string, which is
+ * what `Atom.family`'s map can actually compare (see `api/atoms.ts`).
+ */
+const invitesAtom = Atom.family((campaignId: Campaign["id"]) =>
+  apiAtom((client) => client.invites.list({ params: { campaignId } })),
+);
+
 function InviteRow({
   invite,
   onRevoked,
@@ -177,11 +190,7 @@ export function InviteDialog({
   readonly onChanged: () => void;
 }) {
   const campaignId = campaign.id;
-  const load = useCallback(
-    (client: TavernsClient) => client.invites.list({ params: { campaignId } }),
-    [campaignId],
-  );
-  const [resource, reload] = useApiResource(load);
+  const [resource, reload] = useApiAtom(invitesAtom(campaignId));
   const router = useRouter();
   const { busy, failure, submit } = useMutation();
   const [label, setLabel] = useState("");

@@ -186,6 +186,46 @@ describe("inviting a player", () => {
     expect(screen.getByText(/Good until 18 August 2026, and only once\./)).toBeTruthy();
   });
 
+  /**
+   * The invariant the whole atom port had to preserve, now over the atom path.
+   *
+   * A hosted session token lives 60 seconds and this dialog stays open across
+   * several writes, so a token resolved once when the client layer was built
+   * would 401 the second read. The layer is constructed outside React — no hook
+   * can be called there — so `auth/credential.ts` publishes the *session* and
+   * `HttpClient.mapRequestEffect` resolves a token per request. This counts the
+   * mints: two reads, two tokens.
+   */
+  it("fetches a fresh session token for every read the dialog makes", async () => {
+    const hosted = mintingSession();
+    server.routes.set(`GET ${invitesPath}`, { status: 200, body: [waiting] });
+    server.routes.set(`POST ${invitesPath}`, {
+      status: 200,
+      body: { invite: waiting, token: TOKEN },
+    });
+
+    await renderScreen(hosted);
+    await screen.findByRole("heading", { name: "Overview" });
+    await userEvent.click(await screen.findByRole("button", { name: "Invite" }));
+    await screen.findByText(/Good until 18 August 2026, and only once\./);
+
+    const readsOf = () =>
+      server.calls.filter((call) => call.method === "GET" && call.pathname === invitesPath);
+    expect(readsOf()).toHaveLength(1);
+    const first = readsOf()[0]!.authorization;
+
+    await userEvent.click(screen.getByRole("button", { name: "Make a link" }));
+    await waitFor(() => expect(readsOf()).toHaveLength(2));
+
+    // Two reads through the atom client, two distinct hosted tokens — and both
+    // of them the hosted session's rather than the pasted machine token, which
+    // is what says the publish out of React reached the layer at all.
+    const second = readsOf()[1]!.authorization;
+    expect(first).toMatch(/^Bearer session-token-\d+$/);
+    expect(second).toMatch(/^Bearer session-token-\d+$/);
+    expect(second).not.toBe(first);
+  });
+
   it("warns that a private campaign shows a new player nothing", async () => {
     // The master toggle, named where it matters: a player who joins an unshared
     // campaign reads nothing in it, and an invitation sent before it is shared
