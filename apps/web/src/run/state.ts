@@ -1,10 +1,13 @@
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Combatant, CombatantId, EncounterRun } from "@taverns/api";
-import { Result } from "effect";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Option, Result } from "effect";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { asResource } from "../api/atoms";
 import { runApiResult } from "../api/client";
 import type { ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
-import { loadLiveState, type LiveState, type RunPath } from "./load";
+import { liveStateAtom, type LiveState, type RunPath } from "./load";
 
 /**
  * The fight, as this screen holds it: the server's rows, plus the hits that
@@ -45,6 +48,53 @@ import { loadLiveState, type LiveState, type RunPath } from "./load";
  * rather than merely quick: "the ogre hits for 12" stays true whatever anyone's
  * screen last showed, so a hit computed from a stale row still applies the
  * right amount. An absolute `hpCurrent` write would not.
+ *
+ * `run/optimistic.test.tsx` pins every one of those rules through the screen.
+ *
+ * ### The rows are the registry's; the pending map is this screen's
+ *
+ * **The fight lives in `liveStateAtom` and nowhere else.** This hook used to
+ * hold a `useState` copy of it, seeded from the screen's own read and re-read by
+ * a request loop of its own — two copies of one fight, which is the divergence a
+ * registry exists to prevent. What it holds now is the half that is genuinely
+ * local: **which of this browser's writes have not been answered yet.** That is
+ * form state, not shared state, for the reason `api/mutation.ts` gives about its
+ * busy flag — and one step further, because an optimistic value that outlived
+ * the mount would show a hit on a fight the DM had navigated away from and back
+ * to.
+ *
+ * The three things the atom could not do on its own, and how each is expressed:
+ *
+ *  - **The doorbell must not multiply requests.** `useAtomRefresh` interrupts
+ *    the read in flight and starts another, so six events arriving in one
+ *    network chunk would be six requests where the contract is one, and at most
+ *    one behind it. `refresh` below is that coalescer, over `AsyncResult`'s own
+ *    `waiting` rather than over a hand-rolled in-flight flag.
+ *  - **A failed re-read has to heal itself.** An atom does not retry, and the
+ *    doorbell and the re-read travel over different connections — an established
+ *    stream keeps delivering while a new request cannot leave at all, which is
+ *    exactly what a browser does the moment its wifi goes. Measured in Chromium.
+ *    So a failure schedules the next attempt, doubling to a ceiling.
+ *  - **A write's own answer is newer than any read.** `applyRun` and `merge`
+ *    write it straight into the atom; see `writableApiAtom` for why the atom is
+ *    writable at all.
+ *
+ * ### `Atom.optimistic` is the library's own answer here, and it is the wrong one
+ *
+ * Checked against the four rules above rather than assumed, because it is the
+ * first thing anyone will reach for next time. It holds two of them — the
+ * pending value composes over the optimistic current rather than the server's
+ * row, and a failure rolls back with nothing to replace it — and misses the two
+ * that make this screen work at a table:
+ *
+ *  - **It settles a transition by refreshing the source atom.** The runner
+ *    settles by *using the answer it already has*, which is what keeps hit
+ *    points right with the stream down. Under `optimistic` every hit would cost
+ *    a re-read on top of the one the doorbell is already about to cause, and
+ *    with the connection down it would cost a re-read that fails.
+ *  - **It has no per-row pending flag**, because its value is the whole atom.
+ *    `isPending` is per combatant, and so is the rule it states: two hits on two
+ *    monsters are two independent windows, not one.
  */
 
 /** One combatant's unanswered hit points, and how many writes are outstanding. */
@@ -100,38 +150,101 @@ export interface RunController {
   readonly staleness: ApiFailure | undefined;
 }
 
-export function useRunState(path: RunPath, initial: LiveState | undefined): RunController {
+export function useRunState(path: RunPath): RunController {
   const fetchCredential = useCredential();
-  const [state, setState] = useState<LiveState | undefined>(initial);
-  const [pending, setPending] = useState<ReadonlyMap<CombatantId, Pending>>(() => new Map());
-  const [staleness, setStaleness] = useState<ApiFailure | undefined>();
+  const atom = liveStateAtom(path);
+  const live = useAtomValue(atom);
+  const write = useAtomSet(atom);
+  const refreshLive = useAtomRefresh(atom);
 
-  // A fresh load — a different run, or a Try-again — replaces everything.
-  // `initial`'s identity is what says "this is a new answer", exactly as it is
-  // for an atom's key.
-  useEffect(() => {
-    setState(initial);
-    setPending(new Map());
-    setStaleness(undefined);
-  }, [initial]);
+  const [pending, setPending] = useState<ReadonlyMap<CombatantId, Pending>>(() => new Map());
+
+  /**
+   * The rows, and whether they are as new as they should be — two questions,
+   * two answers, and the difference between them is this screen's whole
+   * failure story.
+   *
+   * `AsyncResult.value` is the *last good* fight, so a failed re-read keeps the
+   * initiative list on screen: a fight the DM can still read beats an error
+   * card where the list was. `asResource` is then what says the read failed at
+   * all, and it is the one place an interrupted read — a refresh that landed on
+   * top of another — is told apart from a real failure. Memoised on the
+   * `AsyncResult`, which is stable per registry value, because the retry effect
+   * keys on it and an identity that changed every render would restart the
+   * timer every render. Same rule `useApiAtom` follows.
+   */
+  const state = useMemo(() => Option.getOrUndefined(AsyncResult.value(live)), [live]);
+  const resource = useMemo(() => asResource(live), [live]);
+  const staleness = resource.state === "failed" ? resource.failure : undefined;
 
   /**
    * One re-read at a time, and at most one more queued behind it.
    *
    * A burst of events — six goblins seeded, or a DM holding the space bar —
-   * would otherwise open six identical requests whose answers could land out of
-   * order and put an older list on screen than the one already there.
+   * would otherwise open six identical requests. The registry answers a refresh
+   * during a read by interrupting it and starting again, so those six would be
+   * six round trips of which five are abandoned; the contract is one, plus one.
    *
-   * **A failed re-read retries itself**, and that is not belt-and-braces. The
-   * doorbell and the re-read travel over different connections: an established
-   * stream can keep delivering events while a *new* request cannot get out at
-   * all, which is exactly what a browser does the moment its wifi goes. Measured
-   * in Chromium with the network cut: the event arrived, the re-read failed, and
-   * without this the screen sat behind the server until something else happened
-   * to ring the bell. Retrying makes it heal on its own instead.
+   * `busy` is set on the way *in* rather than read off the last render, because
+   * a chunk carrying several events rings this six times before React renders
+   * once.
    */
-  const inFlight = useRef(false);
+  const busy = useRef(false);
   const again = useRef(false);
+
+  const refresh = useCallback(() => {
+    if (busy.current) {
+      again.current = true;
+      return;
+    }
+    busy.current = true;
+    refreshLive();
+  }, [refreshLive]);
+
+  useEffect(() => {
+    if (live.waiting) return;
+    busy.current = false;
+    if (!again.current) return;
+    again.current = false;
+    refresh();
+  }, [live, refresh]);
+
+  /**
+   * A failed re-read retries itself, and that is not belt-and-braces.
+   *
+   * The doorbell and the re-read travel over different connections: an
+   * established stream can keep delivering events while a *new* request cannot
+   * get out at all, which is exactly what a browser does the moment its wifi
+   * goes. Measured in Chromium with the network cut: the event arrived, the
+   * re-read failed, and without this the screen sat behind the server until
+   * something else happened to ring the bell. Retrying makes it heal on its own.
+   *
+   * Only a *settled* failure schedules one — a failure that is `waiting` is the
+   * attempt already under way — and only a success clears the count, so the
+   * backoff grows across a run of failures rather than restarting on each.
+   */
+  const failures = useRef(0);
+  useEffect(() => {
+    if (AsyncResult.isSuccess(live)) {
+      failures.current = 0;
+      return;
+    }
+    if (!AsyncResult.isFailure(live) || live.waiting) return;
+    failures.current += 1;
+    const wait = Math.min(RETRY_CEILING_MS, RETRY_BASE_MS * 2 ** (failures.current - 1));
+    const timer = setTimeout(refresh, wait);
+    return () => clearTimeout(timer);
+  }, [live, refresh]);
+
+  /**
+   * Edit the rows in place, keeping whatever state the read is in.
+   *
+   * Guarded on the mount because a write outlives the screen: a DM who leaves
+   * mid-hit still has a damage response to land, and `useAtomSet` reads the
+   * atom to apply a functional update — which on an atom the registry has
+   * already disposed would *rebuild* it, so leaving the fight would cost a
+   * request nobody is watching. It was a no-op through `setState` before.
+   */
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -140,55 +253,28 @@ export function useRunState(path: RunPath, initial: LiveState | undefined): RunC
     };
   }, []);
 
-  const refresh = useCallback(() => {
-    if (inFlight.current) {
-      again.current = true;
-      return;
-    }
-    inFlight.current = true;
+  const edit = useCallback(
+    (update: (current: LiveState) => LiveState) => {
+      if (!mounted.current) return;
+      write((current) => AsyncResult.map(current, update));
+    },
+    [write],
+  );
 
-    void (async () => {
-      let failures = 0;
-      do {
-        again.current = false;
-        const token = await fetchCredential();
-        const result = await runApiResult(loadLiveState(path), token);
-        if (!mounted.current) break;
-
-        if (Result.isSuccess(result)) {
-          failures = 0;
-          setState(result.success);
-          setStaleness(undefined);
-        } else {
-          // Keep what is on screen. A fight the DM can still read is better
-          // than an error card where the initiative list was.
-          setStaleness(result.failure);
-          failures += 1;
-          await new Promise((resume) =>
-            setTimeout(resume, Math.min(RETRY_CEILING_MS, RETRY_BASE_MS * 2 ** (failures - 1))),
-          );
-          again.current = mounted.current;
-        }
-      } while (again.current);
-      inFlight.current = false;
-    })();
-  }, [path, fetchCredential]);
-
-  const applyRun = useCallback((run: EncounterRun) => {
-    setState((current) => (current === undefined ? current : { ...current, run }));
-  }, []);
+  const applyRun = useCallback(
+    (run: EncounterRun) => edit((current) => ({ ...current, run })),
+    [edit],
+  );
 
   /** Swap one row in place — what our own write's answer is worth. */
-  const merge = useCallback((row: Combatant) => {
-    setState((current) =>
-      current === undefined
-        ? current
-        : {
-            ...current,
-            combatants: current.combatants.map((other) => (other.id === row.id ? row : other)),
-          },
-    );
-  }, []);
+  const merge = useCallback(
+    (row: Combatant) =>
+      edit((current) => ({
+        ...current,
+        combatants: current.combatants.map((other) => (other.id === row.id ? row : other)),
+      })),
+    [edit],
+  );
 
   const applyDamage = useCallback(
     async (combatant: Combatant, amount: number) => {

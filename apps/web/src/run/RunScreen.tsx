@@ -14,9 +14,8 @@ import {
   toast,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
-import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -25,7 +24,7 @@ import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { EndRunDialog } from "./EndRunDialog";
 import { InitiativeList } from "./InitiativeList";
-import { loadRunView, type RunPath } from "./load";
+import { runViewAtom, type RunPath } from "./load";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
@@ -40,13 +39,14 @@ import { useLiveStream } from "./stream";
  * **The route carries all three ids**, so a reload mid-fight lands back in the
  * fight. Nothing is kept in local storage and nothing has to be looked up.
  *
- * **The initial load and the live updates are separate.** The atom does
- * the first read and owns the loading and failed states, exactly as every other
- * screen does. After that the stream's doorbell drives `useRunState.refresh`,
- * which re-reads only the run and its combatants and never puts the screen back
- * into "Loading…" — an initiative list that blinks away every time a goblin
- * takes a hit would be unusable, and a failed *re*-read leaves the last good
- * list on screen with a line saying it may be behind.
+ * **The initial load and the live updates are separate, and the split is where
+ * the atoms are cut.** `runFrameAtom` reads the campaign, the night and the
+ * bestiary once; `liveStateAtom` is the fight, and is the only thing the
+ * doorbell re-reads — which is why a hit costs two requests and not five.
+ * `runViewAtom` derives this screen's one value from both, and never puts the
+ * screen back into "Loading…": an initiative list that blinks away every time a
+ * goblin takes a hit would be unusable, and a failed *re*-read leaves the last
+ * good list on screen with a line saying it may be behind. See `run/load.ts`.
  *
  * **Writes do not wait for the stream.** Every mutation here uses its own
  * answer to update the screen — the damage response, the run `nextTurn`
@@ -71,23 +71,6 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target.closest("button, input, textarea, select, [role='switch'], [contenteditable='true']") !==
     null;
 
-/**
- * One fight, keyed on the three ids that name it.
- *
- * `RunPath` is already the record the route carries, and `Atom.family` compares
- * it structurally — so the `useMemo` above stops being load-bearing for the
- * read (it still is for `useRunState`, which takes the same object).
- */
-const runViewAtom = Atom.family((path: RunPath) =>
-  // **It names no reads, and that is load-bearing rather than an oversight.**
-  // This atom's value is the controller's starting point (`initial`, below), so
-  // a refresh of it *resets the optimistic layer* — the pending hit points, the
-  // server-wins reconciliation, all of it. The live half of this screen is
-  // `run/state.ts`'s own loop and `run/stream.ts`'s doorbell; a reactivity key
-  // here would be a second thing re-reading a fight, fighting the first.
-  apiAtom(loadRunView(path), []),
-);
-
 export function RunScreen() {
   const { campaignId, sessionId, runId } = useParams({
     from: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
@@ -100,13 +83,10 @@ export function RunScreen() {
   const [resource, reload] = useApiAtom(runViewAtom(path));
   const view = resource.state === "ready" ? resource.value : undefined;
 
-  // The half the fight changes, handed to the controller as its starting point.
-  // A new `view` — a fresh load, or Try again — resets everything it holds.
-  const initial = useMemo(
-    () => (view === undefined ? undefined : { run: view.run, combatants: view.combatants }),
-    [view],
-  );
-  const controller = useRunState(path, initial);
+  // The fight's own half, from the same atom the value above is built on — so
+  // the rows the screen renders and the rows the controller writes into cannot
+  // be two different answers.
+  const controller = useRunState(path);
   const state = controller.state;
 
   const [log, setLog] = useState<ReadonlyArray<SessionEvent>>([]);

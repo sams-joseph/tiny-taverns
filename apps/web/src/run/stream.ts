@@ -59,6 +59,30 @@ import type { RunPath } from "./load";
  * reconnect. A redundant reconnect costs one request that returns no rows —
  * the cursor makes it free — and that is what turns "the lid was shut for an
  * hour" into a page that is correct before the DM has finished sitting down.
+ *
+ * ### Why this is still a hook, when the rows it re-reads are an atom
+ *
+ * The fight is `run/load.ts`'s `liveStateAtom` now, and this hook's two
+ * callbacks are what refresh it — which is the whole of what the doorbell was
+ * ever for. The connection itself stayed here, and the reason is measured
+ * rather than argued (`stream.test.ts`, the last test in the file):
+ *
+ *  - **A stream atom's value is the *latest* element, not every element.**
+ *    `Atom.make` accepts a `Stream` and sets its value to the last item of each
+ *    pulled chunk, so three rows arriving in one network chunk — which is
+ *    exactly what a reconnect replaying a log looks like — reach an atom as
+ *    one. Measured: `[101, 102, 103]` through this hook, `[103]` through an
+ *    atom over the same stream. Every event is a row in the log panel, so two
+ *    of them would go missing with nothing to notice.
+ *  - **The cursor and the accumulated log would have to survive a refresh**,
+ *    and a refresh is how an atom reopens. `cursorRef` survives because it is a
+ *    ref outside the effect; an atom's read starts again from the top, so the
+ *    cursor would reset to 0 and the panel's rows would be replaced by whatever
+ *    the replay carried rather than added to.
+ *
+ * Neither is a limit of the library so much as the wrong question asked of it:
+ * an atom models a *value*, and a connection delivering a sequence of events is
+ * not one. What is a value — the run and its combatants — is an atom.
  */
 
 /** What the screen tells the DM about the connection. */

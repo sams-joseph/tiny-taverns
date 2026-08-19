@@ -110,6 +110,8 @@ export interface RunStubServer {
   readonly emit: (row: Record<string, unknown>) => void;
   /** A heartbeat: no `id`, so it must not move the client's cursor. */
   readonly beat: (seq: number) => void;
+  /** Several rows in **one** network chunk, the way a reconnect replays a log. */
+  readonly burst: (rows: ReadonlyArray<Record<string, unknown>>) => void;
   /** Close every open stream, the way a dropped connection does. */
   readonly drop: () => void;
   /** Every request rejects, the way an unreachable API does. */
@@ -172,6 +174,15 @@ export const installRunServer = (): RunStubServer => {
     beat: (seq) => {
       const frame = `event: heartbeat\ndata: ${JSON.stringify({ _tag: "Heartbeat", seq })}\n\n`;
       for (const controller of controllers) controller.enqueue(encoder.encode(frame));
+    },
+    burst: (rows) => {
+      const frames = rows
+        .map(
+          (row) =>
+            `id: ${String(row["seq"])}\nevent: session-event\ndata: ${JSON.stringify(row)}\n\n`,
+        )
+        .join("");
+      for (const controller of controllers) controller.enqueue(encoder.encode(frames));
     },
     drop: () => {
       for (const controller of controllers) {

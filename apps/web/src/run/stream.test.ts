@@ -1,6 +1,12 @@
+import { RegistryProvider, useAtomValue } from "@effect/atom-react";
 import type { SessionEvent } from "@taverns/api";
 import { renderHook, waitFor } from "@testing-library/react";
+import { Effect, Stream } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { makeClient } from "../api/client";
 import { campaignId, installRunServer, runId, sessionEvent, sessionId } from "./run.fixtures";
 import { useLiveStream } from "./stream";
 
@@ -14,6 +20,9 @@ import { useLiveStream } from "./stream";
  *
  * These are logic, not layout, so jsdom is the right place for them — unlike
  * the two properties that had to be driven in Chromium (see `AGENTS.md`).
+ *
+ * The last test in this file is a different kind: it is the measurement that
+ * says why this hook is still a hook while the rows it re-reads are an atom.
  */
 
 const server = installRunServer();
@@ -168,5 +177,89 @@ describe("the live stream", () => {
     hook.result.current.reconnect();
 
     await waitFor(() => expect(resumedFrom()).toBe(12), { timeout: 5000 });
+  });
+});
+
+/**
+ * Why the doorbell is a hook and not an atom, measured rather than argued.
+ *
+ * `Atom.make` accepts a `Stream` and exposes it as an `AsyncResult`, so the
+ * shape *looks* like the natural home for this file — and the rows this stream
+ * causes to be re-read **are** an atom now (`run/load.ts`). The reason the
+ * connection itself is not is one line of the library: a stream atom sets its
+ * value to `Arr.lastNonEmpty` of each pulled chunk, so it is the *latest*
+ * element rather than every element.
+ *
+ * That is not a theoretical difference here. Every event is a row in the log
+ * panel, and a reconnect replays a run's log — several rows in one network
+ * chunk is exactly what coming back from a dropped wifi looks like.
+ */
+describe("the doorbell as an atom's value", () => {
+  const wrap = ({ children }: { children: ReactNode }) =>
+    createElement(RegistryProvider, null, children);
+
+  const eventsAtom = Atom.make(
+    Stream.provide(
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const client = yield* makeClient();
+          return yield* client.live.events({
+            params: { campaignId, sessionId, runId },
+            query: { since: 0 },
+            headers: {},
+          });
+        }),
+      ),
+      FetchHttpClient.layer,
+    ),
+  );
+
+  it("keeps only the last row of a chunk, where the hook delivers all of them", async () => {
+    const rows = [
+      sessionEvent(101, "combatant-damaged"),
+      sessionEvent(102, "turn-advanced"),
+      sessionEvent(103, "combatant-damaged"),
+    ];
+
+    const seen: Array<SessionEvent> = [];
+    const hook = renderHook(() =>
+      useLiveStream({
+        campaignId,
+        sessionId,
+        runId,
+        enabled: true,
+        onEvent: (event) => seen.push(event),
+      }),
+    );
+    mounted.push(hook);
+    await waitFor(() => expect(server.cursors).toHaveLength(1));
+    server.burst(rows);
+    await waitFor(() => expect(seen).toHaveLength(3));
+    expect(seen.map((event) => event.seq)).toEqual([101, 102, 103]);
+
+    server.drop();
+    server.reset();
+
+    const values: Array<number> = [];
+    const atom = renderHook(
+      () => {
+        const result = useAtomValue(eventsAtom);
+        const event = AsyncResult.value(result);
+        if (event._tag === "Some" && event.value.event === "session-event") {
+          if (values.at(-1) !== event.value.data.seq) values.push(event.value.data.seq);
+        }
+        return result;
+      },
+      { wrapper: wrap },
+    );
+    mounted.push(atom);
+    await waitFor(() => expect(server.cursors).toHaveLength(1));
+    server.burst(rows);
+    await new Promise((resume) => setTimeout(resume, 200));
+
+    // Two rows gone, silently. The log panel would lose them and only the last
+    // one would ring the bell — harmless for the re-read, which is idempotent,
+    // and a hole in the one panel that tells the DM the stream is alive.
+    expect(values).toEqual([103]);
   });
 });

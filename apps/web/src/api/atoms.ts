@@ -169,6 +169,50 @@ export const apiAtom = <A, E>(
 };
 
 /**
+ * The same read, as an atom a screen may also **write into**.
+ *
+ * There is one of these and there should stay one: `run/load.ts`'s
+ * `liveStateAtom`, the two rows a live fight changes. The runner is the only
+ * screen whose writes carry an answer that is *newer than any read* — the run
+ * `nextTurn` returns, the combatant `damage` returns — and whose whole design
+ * rests on using it rather than waiting for the doorbell. Before this existed
+ * that answer had to go somewhere else, so the fight lived twice: once in the
+ * atom the screen read and once in a `useState` copy the controller merged
+ * into. Two copies of one fight is exactly the divergence a registry exists to
+ * prevent.
+ *
+ * **The write is the whole `AsyncResult`, not the value inside it**, and that is
+ * forced rather than chosen: `useAtomSet` treats a function argument as a
+ * functional update over `R`, so a write type that is itself a function is not
+ * expressible. It reads better anyway — a caller writes
+ * `set((current) => AsyncResult.map(current, edit))`, and `AsyncResult.map`
+ * carries the edit into a failure's *previous* success too, which is precisely
+ * the state a fight is in while a re-read is failing and the last good rows are
+ * still on screen.
+ *
+ * Everything else is `apiAtom`: same client, same credential per request, same
+ * required `answers`.
+ *
+ * **A write is not a refresh.** Setting the value does not touch the read that
+ * produced it, so the next refresh answers with whatever the server holds and
+ * the local edit is gone — which is what a merge of one row means and why the
+ * runner still re-reads on the doorbell.
+ */
+export const writableApiAtom = <A, E>(
+  use: (client: TavernsClient) => Effect.Effect<A, E>,
+  answers: Invalidation,
+): Atom.Writable<AsyncResult.AsyncResult<A, E>, AsyncResult.AsyncResult<A, E>> => {
+  const base = Api.runtime.atom(Effect.flatMap(Api, use));
+  const atom = Atom.writable<AsyncResult.AsyncResult<A, E>, AsyncResult.AsyncResult<A, E>>(
+    base.read,
+    (ctx, value) => ctx.setSelf(value),
+  );
+  // `Atom.transform` keeps a writable atom writable and forwards writes to it,
+  // so wrapping for reactivity costs the write nothing.
+  return answers.length === 0 ? atom : Atom.withReactivity(answers)(atom);
+};
+
+/**
  * Tells every read that named one of these resources to read it again.
  *
  * **This is the seam between the two verbs, and it is one line of library.**
