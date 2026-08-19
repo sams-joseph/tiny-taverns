@@ -2722,11 +2722,12 @@ after nothing reads them) and provider unmount disposes the registry after a 500
   what the write port answered.
 - **Moving between a campaign's destinations is free.** The three moves after a cold read: **0**.
 
-**`run/stream.ts` and `run/state.ts` were left alone on purpose, and still are.** Neither used
-`useApiResource` — they drive `runApiResult` with their own loops — and both are a different
-problem: a doorbell with reconnect semantics, and an optimistic overlay. `Atom.pull` and
-`Atom.makeRefreshOnSignal` would fit "the doorbell rang, refresh these atoms", but that is a
-rewrite of a subtle, measured file rather than a migration step.
+**`run/stream.ts` and `run/state.ts` were excluded by both earlier ports** — neither used
+`useApiResource`, and both are a different problem: a doorbell with reconnect semantics, and an
+optimistic overlay. **Half of that is settled now**: the fight's _rows_ are an atom and the
+doorbell refreshes it, while the connection stays a hook. See "The runner: the fight is one atom,
+and the doorbell refreshes it" below, which is also where the two library facts that decided the
+boundary are recorded.
 
 ## Writes name what they changed: `api/keys.ts`, and the risk it swapped in
 
@@ -2799,14 +2800,14 @@ that quietly says the wrong number.
   So the transport and the invalidation are the atom runtime's, and the three things belonging to
   one open form stay React state.
 
-### The runner is out, and one of its atoms names nothing on purpose
+### The runner's own atoms name nothing, and the reason has moved
 
-`run/state.ts` and `run/stream.ts` are untouched — the optimistic protocol and the doorbell are
-not plain writes. Three files under `run/` do make ordinary writes and are ported
-(`CombatantDialog`, `EndRunDialog`, `RunScreen`), and **`runViewAtom` deliberately names no
-reads**: its value is `useRunState`'s starting point, so refreshing it would reset the pending hit
-points and the server-wins reconciliation. A reactivity key there would be a second thing
-re-reading a fight, fighting the first.
+Three files under `run/` make ordinary writes and are ported (`CombatantDialog`, `EndRunDialog`,
+`RunScreen`). **None of the runner's three atoms names a read**, and it used to be because a
+refresh would reset the optimistic layer — that is no longer true, since the pending hit points
+are the controller's and survive a refresh. What is true now is that nothing in the product
+writes a fight except the runner itself, so a key would have no writer; `liveStateAtom` is where
+one goes if that ever changes.
 
 ### What it cost, measured
 
@@ -3471,7 +3472,88 @@ Two smaller traps, both measured:
 
 `apps/web/src/run/` is the client half of the section above, and the next live surface should
 copy its shape rather than re-derive it. `stream.ts` is the whole reconnect story; `state.ts`
-is the optimistic one.
+is the optimistic one; `load.ts` holds the three atoms under both.
+
+### The fight is one atom, and the doorbell refreshes it
+
+**`run/load.ts` is where the runner's reads are cut, and the cut is the split between what a
+fight changes and what it does not:**
+
+| atom            | what it is                                  | who re-reads it             |
+| --------------- | ------------------------------------------- | --------------------------- |
+| `runFrameAtom`  | the campaign, the night, the whole bestiary | nothing, after load         |
+| `liveStateAtom` | the run and its combatants — **writable**   | the doorbell, per ring      |
+| `runViewAtom`   | the screen's one value, derived from both   | _Try again_, by naming both |
+
+Before this the screen read all five endpoints through one atom **and** `useRunState` re-read the
+live half into a `useState` copy of its own — so the fight existed twice and the two copies could
+disagree about what the server last said. That is the divergence a registry exists to prevent, and
+it is the whole reason this changed.
+
+**`liveStateAtom` is writable, through `api/atoms.ts`'s `writableApiAtom`, and it is the only
+writable read in the product.** The runner learns what it just did from its own write's answer
+rather than from the doorbell — that is how it stays usable with the connection down — and that
+answer had nowhere to go but the second copy. Two things about the shape:
+
+- **The write is the whole `AsyncResult`, not the value inside it**, because `useAtomSet` treats a
+  function argument as a functional update over `R`; a write type that is itself a function is not
+  expressible. So a caller writes `set((current) => AsyncResult.map(current, edit))`, and
+  `AsyncResult.map` carries the edit into a _failure's previous success_ too — which is exactly the
+  state a fight is in while a re-read is failing and the last good rows are still on screen.
+- **A failure with a previous success is not an error card.** `runViewAtom` contributes that
+  previous success and `useRunState` renders the failure as _"this may be a moment behind"_; a
+  failure with **no** previous success is the first load failing, and that is the error card. The
+  two are told apart by `previousSuccess` and nothing else.
+
+**Three things stayed in React, and each is a measured limit rather than a preference:**
+
+- **The doorbell's coalescer.** `useAtomRefresh` **interrupts the read in flight and starts
+  another** — measured: five refreshes during one read produced six effect runs and zero
+  completions. Six events can arrive in one network chunk, so without coalescing that is six round
+  trips where the contract is one plus at most one queued. `refresh` in `state.ts` is that
+  coalescer, written over `AsyncResult`'s own `waiting` flag.
+- **The retry on a failed re-read.** An atom does not retry, and the doorbell and the re-read
+  travel over different connections.
+- **The pending map.** It is which of _this browser's_ writes are unanswered — form state, by the
+  reasoning `api/mutation.ts` gives about its busy flag, and one step further: an optimistic value
+  outliving the mount would show a hit on a fight the DM had navigated away from and back to.
+
+**`Atom.optimistic` is the library's own answer for the pending layer and does not fit**, checked
+against the four rules in `state.ts` rather than assumed. It holds two — the pending value composes
+over the optimistic current rather than the server's row, and a failure rolls back with nothing to
+replace it — and misses the two that matter at a table: it settles a transition by **refreshing the
+source atom** where the runner settles by using the answer it already has (an extra re-read per
+hit, and a failing one with the stream down), and it has **no per-row pending flag**, because its
+value is the whole atom.
+
+**The connection itself is still a hook, and this is the one thing a future session must not
+"finish".** `Atom.make` accepts a `Stream` and exposes it as an `AsyncResult`, so the shape looks
+right. It sets its value to `Arr.lastNonEmpty` of each pulled chunk — **the latest element, not
+every element** — and every event here is a row in the log panel. Measured against the real client
+and a real SSE body: three rows in one network chunk, which is exactly what a reconnect replaying a
+log looks like, reach `useLiveStream` as `[101, 102, 103]` and a stream atom as `[103]`. Two rows
+gone, silently. The second reason is the cursor: a refresh is how an atom reopens, and an atom's
+read starts from the top, so `cursorRef` would reset to 0 and the panel's accumulated rows would be
+replaced rather than added to. `stream.test.ts`'s last test pins the first of those.
+
+**Measured in Chromium** against a real server and a real Postgres, at Fast 4G where the round trip
+is visible: damage rendered `16/21` **3ms after the request went out and 172ms before its response
+landed**; the turn marker did **not** move for the whole 178ms of `next-turn` and changed 37ms
+_after_ the response; a blocked damage showed `29/38` and snapped back to `38/38` with the toast
+39ms later and **no retry**; a doorbell ring cost **exactly two requests** (`/runs/:id` and
+`/combatants`, concurrent) and never the campaign, session or bestiary; the first connection asked
+`?since=0` and every reconnect attempt asked `?since=6` with the rows kept on screen throughout;
+reconnecting re-read the rows with the same two requests and caught up a change written **straight
+into the database with no `session_event`**, which only `onReconnected` can do; and blocking the
+combatants re-read raised the staleness banner in 32ms, left the list up, let the turn advance from
+the write's own answer, and healed on its own after six attempts with no second ring — gaps of
+1161/2063/4071/5061/5060ms between request starts, doubling to the 5s ceiling.
+
+**One divergence that measurement found and this change closed**: `main.tsx` mounts the app in
+`StrictMode`, which invokes every effect twice in development, so a retry counter raised with a
+bare `+= 1` inside an effect climbs the backoff at double speed there and at single speed in a
+build. `useRunState` raises it once per _distinct_ `AsyncResult` instead. Any future counter kept
+in a ref and incremented from an effect has the same trap.
 
 **The stream is a doorbell on the client too.** The server publishes `{sessionId}` and re-reads
 the log from SQL; this screen receives a `SessionEvent` and re-reads the run and its combatants

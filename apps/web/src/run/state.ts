@@ -222,15 +222,27 @@ export function useRunState(path: RunPath): RunController {
    * Only a *settled* failure schedules one — a failure that is `waiting` is the
    * attempt already under way — and only a success clears the count, so the
    * backoff grows across a run of failures rather than restarting on each.
+   *
+   * **The count is raised once per distinct failure, not once per effect run**,
+   * and that is not defensive: `main.tsx` mounts the app in `StrictMode`, which
+   * invokes every effect twice in development, so a bare `+= 1` climbs the
+   * backoff at double speed there and at single speed in a build — a difference
+   * measured in a real browser before this line existed. Keying on the
+   * `AsyncResult` itself is what makes the step a property of the failure rather
+   * than of how many times React chose to run this.
    */
   const failures = useRef(0);
+  const counted = useRef<unknown>(undefined);
   useEffect(() => {
     if (AsyncResult.isSuccess(live)) {
       failures.current = 0;
       return;
     }
     if (!AsyncResult.isFailure(live) || live.waiting) return;
-    failures.current += 1;
+    if (counted.current !== live) {
+      counted.current = live;
+      failures.current += 1;
+    }
     const wait = Math.min(RETRY_CEILING_MS, RETRY_BASE_MS * 2 ** (failures.current - 1));
     const timer = setTimeout(refresh, wait);
     return () => clearTimeout(timer);
