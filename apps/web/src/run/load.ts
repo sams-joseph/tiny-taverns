@@ -13,6 +13,7 @@ import type {
 } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
+import { reads, type Invalidation } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";
 
 /**
@@ -122,3 +123,25 @@ export const subtitleOf = (combatant: Combatant): string | undefined => {
   );
   return parts.length === 0 ? undefined : parts.join(" · ");
 };
+
+/**
+ * What saving a combatant changes outside the fight it is in.
+ *
+ * **`conditions` is written through to the `character` row** — one transaction,
+ * `repo/vitals.ts` — so a condition typed on the initiative list moves what the
+ * DM's party strip and party screen say, on a screen this dialog has never
+ * seen. That is the one thing here that is not the fight's own.
+ *
+ * The fight itself is deliberately absent, and that is load-bearing rather than
+ * an omission: the runner learns what it just did from the write's own answer
+ * and from the stream, and refreshing `runViewAtom` would reset the optimistic
+ * layer (see `RunScreen.tsx`). Removing a combatant names nothing at all for
+ * the same reason — `combatant.character_id` is provenance, not a write-through.
+ *
+ * Named rather than inlined so the reason has somewhere to live and the list is
+ * assertable; `characters/write.ts`'s `ownCharacterWrites` is the same shape for
+ * the same reason.
+ */
+export const combatantWrites = (campaignId: CampaignId): Invalidation => [
+  reads.characters(campaignId),
+];

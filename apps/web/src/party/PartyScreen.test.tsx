@@ -6,6 +6,7 @@ import {
   campaignId,
   emptyParty,
   installPartyServer,
+  liveInvite,
   renderParty,
 } from "./party.fixtures";
 
@@ -129,6 +130,89 @@ describe("assigning a character", () => {
     expect(
       await screen.findByText(/No character in this campaign is unassigned/),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * **What the two invitation writes refresh, and what they do not.**
+ *
+ * Withdrawing is the write on this screen that moves a row the request never
+ * mentions: revoking a *spent* invitation revokes the membership it granted, in
+ * the same transaction (`repo/Invites.ts`), so the roster loses a person while
+ * the response carries only an invitation. That is why `InviteDialog` names
+ * `reads.members` beside `reads.invites`, and it is what this pins.
+ *
+ * Minting is the mirror and pins the other half: it names the invitations
+ * alone, so the members are *not* re-read. Both counts would have been the same
+ * before — the screen re-read everything either way — which is exactly why they
+ * are worth asserting now.
+ */
+describe("what an invitation write refreshes", () => {
+  const reads = (from: number, fragment: string): number =>
+    server.calls.filter(
+      (call, index) => index >= from && call.method === "GET" && call.pathname.endsWith(fragment),
+    ).length;
+
+  it("withdrawing one re-reads the members as well as the invitations", async () => {
+    await renderParty();
+    await screen.findByText("Ilse Vantar");
+    await userEvent.click(screen.getByRole("button", { name: /Invite a player/ }));
+    await screen.findByRole("button", { name: /Make a link/ });
+
+    const mark = server.calls.length;
+    await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+
+    await waitFor(() => expect(reads(mark, "/invites")).toBe(1));
+    // The row the write never sent.
+    expect(reads(mark, "/members")).toBe(1);
+    // And nothing wider: the campaign, its encounters and its notes are none of
+    // an invitation's business.
+    expect(reads(mark, "/encounters")).toBe(0);
+    expect(reads(mark, "/notes")).toBe(0);
+  });
+
+  it("minting one re-reads the invitations and leaves the members alone", async () => {
+    await renderParty();
+    await screen.findByText("Ilse Vantar");
+    await userEvent.click(screen.getByRole("button", { name: /Invite a player/ }));
+    await screen.findByRole("button", { name: /Make a link/ });
+
+    const mark = server.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: /Make a link/ }));
+
+    await waitFor(() => expect(reads(mark, "/invites")).toBe(1));
+    expect(reads(mark, "/members")).toBe(0);
+  });
+
+  /**
+   * The roster behind the dialog is the same atom the dialog reads, so a mint
+   * reaches it without a second request and without a callback — which the
+   * screen used to need and no longer passes.
+   */
+  it("shows a minted invitation on the roster underneath, from the one read", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] });
+    await renderParty();
+    await screen.findByText("Ilse Vantar");
+    await userEvent.click(screen.getByRole("button", { name: /Invite a player/ }));
+    await screen.findByRole("button", { name: /Make a link/ });
+
+    server.routes.set(`GET /campaigns/${campaignId}/invites`, {
+      status: 200,
+      body: [liveInvite],
+    });
+    const mark = server.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: /Make a link/ }));
+
+    await waitFor(() => expect(reads(mark, "/invites")).toBe(1));
+
+    // Closing the dialog reads nothing — the roster underneath was refreshed by
+    // the same invalidation the dialog's own list was, off one request.
+    const afterMint = server.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(
+      within(await screen.findByRole("region", { name: "Who is at the table" })).getByText("Hal"),
+    ).toBeInTheDocument();
+    expect(server.calls.length).toBe(afterMint);
   });
 });
 

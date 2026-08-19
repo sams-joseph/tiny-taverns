@@ -1,4 +1,4 @@
-import type { CharacterOwnUpdate } from "@taverns/api";
+import type { CampaignId, Character, CharacterOwnUpdate } from "@taverns/api";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +12,8 @@ import {
   sorrelId,
   strangerId,
 } from "./characters.fixtures";
+import { reads } from "../api/keys";
+import { ownCharacterWrites } from "./write";
 
 /**
  * The player's sheet *writing* — `PATCH /me/characters/:characterId`, which is
@@ -364,6 +366,27 @@ describe("what a player still cannot reach", () => {
     const owner: CharacterOwnUpdate = { accountId: null };
 
     expect([current, temp, conditions, visibility, owner]).toHaveLength(5);
+  });
+
+  /**
+   * **The one thing a sheet write changes that this screen cannot see.**
+   *
+   * A level, a species or a class moves the generated `descriptor`, and the
+   * DM's party strip and party screen both draw it — a different account, in a
+   * different browser, on a screen this dialog has never heard of. Naming the
+   * *resource* is what reaches it, so what is asserted is that the resource is
+   * named: `reads.myCharacters` is this screen's own, and `reads.characters` is
+   * the table's.
+   *
+   * It is a unit assertion because the two halves are two accounts and cannot
+   * be on screen at once. The mechanism the name relies on is pinned in
+   * `api/invalidation.test.tsx`.
+   */
+  it("names the DM's party list as well as its own roster", () => {
+    expect(ownCharacterWrites(brannoc as unknown as Character)).toEqual([
+      reads.myCharacters,
+      reads.characters(brannoc.campaignId as CampaignId),
+    ]);
   });
 
   it("offers nothing to edit on a character that is not yours", async () => {

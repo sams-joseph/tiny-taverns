@@ -4,12 +4,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   bodyOf,
   brannoc,
+  campaignId,
   goblinBoss,
   installRunServer,
   liveRun,
   renderRunner,
   sessionEvent,
 } from "./run.fixtures";
+import { reads } from "../api/keys";
+import { combatantWrites } from "./load";
 
 /**
  * The runner, against a stub server.
@@ -232,6 +235,41 @@ describe("the runner", () => {
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
     // Nothing was deleted: the order and the hit points are still readable.
     expect(rows()).toHaveLength(2);
+  });
+
+  /**
+   * **A combatant write reaches a row that is not in a fight.**
+   *
+   * `conditions` is written through to the `character` row in the same
+   * transaction (`repo/vitals.ts`), so a condition typed on the initiative list
+   * moves what the DM's party list says on a screen this dialog has never seen.
+   * That is why `CombatantDialog` names `reads.characters` — and it is the one
+   * key on this screen, because everything else a fight writes is the fight's.
+   *
+   * The fight itself is deliberately *not* named: the runner learns what it did
+   * from the write's own answer and from the stream, and an atom refreshing
+   * underneath it would reset the optimistic layer. So what is asserted here is
+   * both halves — the campaign's characters are invalidated, and no atom read
+   * of this run's own rows is triggered by the invalidation.
+   */
+  it("names the campaign's characters when a condition is written through", async () => {
+    await renderRunner();
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
+    await userEvent.click(rowFor("Goblin Boss"));
+    await userEvent.click(panel().getByRole("button", { name: "Edit" }));
+
+    const conditions = await screen.findByLabelText("Conditions");
+    await userEvent.clear(conditions);
+    await userEvent.type(conditions, "Prone");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", "/combatants/")).toMatchObject({ conditions: ["Prone"] }),
+    );
+    // Nothing here can observe the DM's party screen, so what is pinned is the
+    // list this write hands the seam. `api/invalidation.test.tsx` is what says
+    // the seam then does something with it.
+    expect(combatantWrites(campaignId)).toEqual([reads.characters(campaignId)]);
   });
 
   it("says where to get a credential rather than looking broken", async () => {

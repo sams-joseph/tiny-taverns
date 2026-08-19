@@ -16,10 +16,9 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
-import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
-import type { RunPath } from "./load";
+import { combatantWrites, type RunPath } from "./load";
 
 /**
  * Adding someone mid-fight, changing them, and taking them out.
@@ -218,11 +217,7 @@ export function CombatantDialog({
                 ...(hpCurrent === undefined ? {} : { hpCurrent }),
               },
             }),
-      // **`conditions` is written through to the `character` row** — one
-      // transaction, `repo/vitals.ts` — so a condition typed here moves what
-      // the DM's party list says in another tab. That is the one thing this
-      // dialog changes outside the fight it is in.
-      [reads.characters(path.campaignId)],
+      combatantWrites(path.campaignId),
     );
 
     if (Result.isSuccess(saved)) onSaved();
