@@ -16,6 +16,7 @@ import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { DmActors } from "../src/repo/DmActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
@@ -63,6 +64,7 @@ const services = Layer.mergeAll(
     Layer.provide([
       Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
       Campaigns.layer,
+      Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
       EncounterCreatures.layer,
       Encounters.layer,
       Notes.layer,
@@ -217,7 +219,7 @@ const accept = (
 ) =>
   runtime.runPromise(
     Effect.flatMap(Proposals, (proposals) =>
-      proposals.accept(options?.campaignId ?? fixture.campaign.id, threadId, turnId),
+      proposals.accept("dm", options?.campaignId ?? fixture.campaign.id, threadId, turnId),
     ).pipe(withActor(options?.actor ?? fixture.dm), Effect.result),
   );
 
@@ -230,10 +232,9 @@ describe("the conversation is kept", () => {
     const { threadId, turnId } = begunIn(events);
 
     const turns = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.turns(fixture.campaign.id, threadId)).pipe(
-        withActor(fixture.dm),
-        Effect.orDie,
-      ),
+      Effect.flatMap(HobThreads, (threads) =>
+        threads.turns("dm", fixture.campaign.id, threadId),
+      ).pipe(withActor(fixture.dm), Effect.orDie),
     );
 
     expect(turns.map((turn) => turn.who)).toEqual(["user", "hob"]);
@@ -284,7 +285,7 @@ describe("the conversation is kept", () => {
     const { threadId } = begunIn(events);
 
     const threads = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (repo) => repo.list(fixture.campaign.id)).pipe(
+      Effect.flatMap(HobThreads, (repo) => repo.list("dm", fixture.campaign.id)).pipe(
         withActor(fixture.dm),
         Effect.orDie,
       ),
@@ -320,10 +321,9 @@ describe("a proposal is not a row", () => {
     const { threadId, turnId } = begunIn(events);
 
     const turns = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.turns(fixture.campaign.id, threadId)).pipe(
-        withActor(fixture.dm),
-        Effect.orDie,
-      ),
+      Effect.flatMap(HobThreads, (threads) =>
+        threads.turns("dm", fixture.campaign.id, threadId),
+      ).pipe(withActor(fixture.dm), Effect.orDie),
     );
     const answer = turns.find((turn) => turn.id === turnId);
 
@@ -532,7 +532,7 @@ describe("the boundary, on both halves", () => {
 
     // The thread exists, in a campaign this credential does not reach.
     const listed = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.list(fixture.otherTable.id)).pipe(
+      Effect.flatMap(HobThreads, (threads) => threads.list("dm", fixture.otherTable.id)).pipe(
         withActor(fixture.scopedDm),
         Effect.result,
       ),
@@ -543,10 +543,9 @@ describe("the boundary, on both halves", () => {
     // And naming the thread directly, through the campaign it *can* reach, does
     // not smuggle it across: the id is a claim, and containment is checked.
     const smuggled = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.turns(fixture.campaign.id, threadId)).pipe(
-        withActor(fixture.scopedDm),
-        Effect.result,
-      ),
+      Effect.flatMap(HobThreads, (threads) =>
+        threads.turns("dm", fixture.campaign.id, threadId),
+      ).pipe(withActor(fixture.scopedDm), Effect.result),
     );
     expect(smuggled._tag).toBe("Failure");
   }, 60_000);

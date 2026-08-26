@@ -145,11 +145,22 @@ describe("the reach seam, enforced rather than asserted", () => {
     // an inference predicate that implies the index's own. It never assigns the
     // column — a bundled row has no owner, which is what
     // `creature_system_is_unowned` makes a fact about the schema.
+    //
+    // `repo/HobThreads.ts` is the sixth and arrived when the captain reversed
+    // *players do not talk to Hob*: `assistant_thread.account_id` (`0016`) is
+    // whose **conversation** this is, null for the campaign's own. It is the
+    // same shape as `character` and for the same reason — the column is written
+    // here from `CurrentActor` and compared nowhere, because
+    // `conversationReachable` in `repo/visibility.ts` is where the comparison
+    // lives. It is not a reach path into a campaign either: the campaign half of
+    // that predicate is the one every other predicate already composes, so a
+    // conversation is reachable exactly while the table it is at is.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "bestiary/import.ts",
       "repo/Campaigns.ts",
       "repo/Characters.ts",
       "repo/Creatures.ts",
+      "repo/HobThreads.ts",
       "repo/Memberships.ts",
       "repo/visibility.ts",
     ]);
@@ -277,9 +288,9 @@ const makeFixture = Effect.gen(function* () {
   const run = yield* as(runs.start(asDm, session.id, { encounterId: encounter.id }));
   yield* as(combatants.create(asDm, session.id, run.id, { displayName: "Croaker 1" }));
 
-  const thread = yield* as(hob.start(campaign.id, "Who is the ferryman?"));
+  const thread = yield* as(hob.start("dm", campaign.id, "Who is the ferryman?"));
   yield* as(
-    hob.append(campaign.id, thread.id, {
+    hob.append("dm", campaign.id, thread.id, {
       id: randomUUID() as AssistantTurnId,
       who: "user",
       text: "Who is the ferryman?",
@@ -358,8 +369,9 @@ const READS: Record<
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
       Effect.flatMap(SessionEvents, (r) => r.list(dm, f.session.id, {})),
     ),
-  assistant_thread: (f) => Effect.flatMap(HobThreads, (r) => r.list(f.campaign.id)),
-  assistant_turn: (f) => Effect.flatMap(HobThreads, (r) => r.turns(f.campaign.id, f.thread.id)),
+  assistant_thread: (f) => Effect.flatMap(HobThreads, (r) => r.list("dm", f.campaign.id)),
+  assistant_turn: (f) =>
+    Effect.flatMap(HobThreads, (r) => r.turns("dm", f.campaign.id, f.thread.id)),
 };
 
 beforeAll(async () => {

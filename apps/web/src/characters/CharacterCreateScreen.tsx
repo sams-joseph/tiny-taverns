@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
-import { useApiAtom } from "../api/atoms";
+import { useApiAtom, useInvalidate } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { Field, SaveFailure, Textarea } from "../ui/form";
@@ -15,8 +15,11 @@ import {
   payloadFrom,
   problemsIn,
   refused,
-  type CharacterDraft,
+  type CharacterDraft as FormDraft,
 } from "./create";
+import { DraftAside } from "./DraftAside";
+import { DraftCard } from "./DraftCard";
+import { STARTERS, useCharacterDraft } from "./draft";
 import { myCharactersAtom } from "./load";
 import { characterWritesAt, createOwnCharacter } from "./write";
 
@@ -108,12 +111,12 @@ export function CharacterCreateScreen() {
   const [resource, reload] = useApiAtom(myCharactersAtom);
   const view = resource.state === "ready" ? resource.value : undefined;
 
-  const [draft, setDraft] = useState<CharacterDraft>(emptyDraft);
+  const [draft, setDraft] = useState<FormDraft>(emptyDraft);
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
 
   const problems = problemsIn(draft);
-  const set = <K extends keyof CharacterDraft>(key: K, value: string) =>
+  const set = <K extends keyof FormDraft>(key: K, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   /**
@@ -134,6 +137,44 @@ export function CharacterCreateScreen() {
    */
   const membership = view?.memberships.find((row) => row.campaign.id === campaignId);
   const writable = membership !== undefined && membership.role === "player";
+
+  /**
+   * Which of the two paths this screen is on.
+   *
+   * `"describe"` is the drawing's step 1 minus its campaign question, which the
+   * URL has already settled; `"form"` is *Fill it in myself*, which is the
+   * spine. There is no third: the drawn step 2 is the draft card, drawn over
+   * `"describe"` once Hob has offered one, and the drawn step 3 is the shipped
+   * sheet on a row that exists.
+   *
+   * **`"form"` is where a reader ends up whenever Hob does not produce a
+   * draft**, and that is the common case rather than the sad one — with all
+   * tools offered, the captain's own configured 4B chose the propose tool one
+   * time in five. One press, no state lost, and the form is the thing that was
+   * always going to work.
+   */
+  const [stage, setStage] = useState<"describe" | "form">("describe");
+  const [prose, setProse] = useState("");
+  const [kept, setKept] = useState<string | undefined>(undefined);
+  const hob = useCharacterDraft(campaignId, writable);
+  const invalidate = useInvalidate();
+
+  const keep = async () => {
+    setKept(undefined);
+    const made = await hob.keep();
+    if (Result.isFailure(made)) {
+      setKept(made.failure);
+      return;
+    }
+    // The same two reads the form's own create names, and for the same reason:
+    // the row appears on the DM's party list, which this write has never seen.
+    invalidate(characterWritesAt(campaignId));
+    await navigate({
+      to: "/play/characters/$characterId",
+      params: { characterId: made.success.id },
+      replace: true,
+    });
+  };
 
   const create = async () => {
     setShowProblems(true);
@@ -201,8 +242,152 @@ export function CharacterCreateScreen() {
               your party screen, and that is where you write them down.
             </EmptyState>
           )
+        ) : stage === "describe" ? (
+          hob.draft !== undefined ? (
+            /* **The drawn step 2**, and the aside beside it — the sheet as Hob
+               wrote it, why, and the composer that asks for something else.
+               `@3xl` on the container rather than a viewport breakpoint,
+               because the question is how wide this column is and the Hob panel
+               can take 400px out of it without the window moving. */
+            <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
+              <div className="min-w-0 flex-1">
+                <DraftCard
+                  draft={hob.draft}
+                  keeping={hob.keeping}
+                  onKeep={() => void keep()}
+                  onRewrite={() => setStage("describe")}
+                />
+                {kept !== undefined && (
+                  <p role="alert" className="mt-4 text-body-s leading-body text-danger">
+                    {kept}
+                  </p>
+                )}
+                {/* Both ways out of a draft, said plainly. *Fill it in myself*
+                    is the same button as on the empty state and lands on the
+                    same form — a draft the player does not want costs them one
+                    press, not the feature. */}
+                <p className="mt-6 flex flex-wrap items-center gap-2 text-caption leading-body text-muted-foreground">
+                  Not what you meant?
+                  <Button variant="ghost" size="sm" onClick={() => setStage("form")}>
+                    Fill it in myself
+                  </Button>
+                </p>
+              </div>
+              <div className="@3xl:w-aside @3xl:shrink-0">
+                <DraftAside
+                  rationale={hob.draft.rationale}
+                  busy={hob.thinking || hob.keeping}
+                  onAsk={(text) => hob.ask(text)}
+                />
+              </div>
+            </div>
+          ) : (
+            /* **The drawn step 1**, minus its campaign question — the URL has
+               already settled that, by the captain's decision of 2026-08-26. */
+            <div className="flex max-w-measure flex-col gap-7">
+              <div className="flex gap-3">
+                <Icon name="sparkles" size={18} className="mt-0.5 shrink-0 text-accent-ink" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-body-m leading-body text-foreground">
+                    Who are they? A few sentences is plenty — where they are from, what they are
+                    good at, what they will not do.
+                  </p>
+                  {/* The one decorative line on this screen, in the one place
+                      the kit allows it: italic Alegreya at `--text-faint`,
+                      under the reply and never on a control. */}
+                  <p className="mt-2 font-display text-body-s leading-body italic text-faint">
+                    Don&rsquo;t give me a class. I&rsquo;d rather work it out from the person.
+                  </p>
+                </div>
+              </div>
+
+              <Textarea
+                aria-label="Describe your character"
+                rows={7}
+                placeholder="A wood elf who grew up in a river town, apprenticed to a herbalist who turned out to be feeding something in the cellar…"
+                value={prose}
+                disabled={hob.thinking}
+                onChange={(event) => setProse(event.target.value)}
+              />
+
+              <div>
+                <div className="mb-2.5 text-micro leading-none tracking-caps uppercase text-faint">
+                  Or start from one of these
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {STARTERS.map((starter) => (
+                    <Button
+                      key={starter}
+                      variant="outline"
+                      size="sm"
+                      disabled={hob.thinking}
+                      onClick={() => setProse(`${starter}. `)}
+                    >
+                      {starter}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  disabled={hob.available !== true || hob.thinking || prose.trim().length < 12}
+                  onClick={() => hob.ask(prose)}
+                >
+                  <Icon name="sparkles" size={13} />
+                  {hob.thinking ? "Hob is drafting…" : "Have Hob draft the sheet"}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setStage("form")}>
+                  Fill it in myself
+                </Button>
+              </div>
+
+              {/* The tool step, in words — the only moment Hob's whole claim,
+                  that a draft comes out of what the DM has actually shared, is
+                  visible on screen. */}
+              {hob.activity !== undefined && (
+                <p className="text-caption leading-body text-muted-foreground">{hob.activity}</p>
+              )}
+
+              {/* **Hob answered and offered nothing**, which is an ordinary
+                  outcome and not an error: measured at one propose call in five
+                  on a 4B. Whatever it said stands, and the way on is the form
+                  it was always an accelerator over. */}
+              {hob.said !== "" && hob.draft === undefined && !hob.thinking && (
+                <div className="flex flex-col gap-2 border-l-2 border-hairline pl-3.5">
+                  <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+                    {hob.said}
+                  </p>
+                  <p className="text-caption leading-body text-muted-foreground">
+                    No sheet came back this time. Ask again in different words, or fill it in
+                    yourself — you can always change any of it afterwards.
+                  </p>
+                </div>
+              )}
+
+              {hob.unavailable !== undefined && (
+                <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
+                  <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
+                  <span>{hob.unavailable}</span>
+                </p>
+              )}
+            </div>
+          )
         ) : (
           <div className="flex max-w-measure flex-col gap-7">
+            {/* The way back to Hob, and it is a link rather than a second
+                heading: *Fill it in myself* is a fork rather than a step, so
+                the only thing to say is that the other fork is still there. It
+                keeps whatever was typed on both sides — `prose` and `draft` are
+                separate pieces of state, so neither press loses the other. */}
+            <p className="flex flex-wrap items-center gap-2 text-caption leading-body text-muted-foreground">
+              Filling it in yourself.
+              <Button variant="ghost" size="sm" onClick={() => setStage("describe")}>
+                <Icon name="chevron-left" size={13} />
+                Have Hob draft it instead
+              </Button>
+            </p>
             <Card>
               <CardContent className="flex flex-col gap-5 pt-card">
                 <Field

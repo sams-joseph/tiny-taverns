@@ -410,6 +410,97 @@ export const ownRowWritable = (
   ]);
 
 /**
+ * Whose conversation with Hob this is.
+ *
+ * `"dm"` is the campaign's own thread — `assistant_thread.account_id is null`,
+ * the one the DM's panel resumes. `"own"` is this actor's, which is what a
+ * player drafting a character has. **It is not a role**: a DM asking Hob is
+ * `"dm"` because their conversation belongs to the campaign rather than to
+ * them, and the discrimination is made once per request from the `DmActor`
+ * proof rather than read off a row.
+ */
+export type ConversationReach = "dm" | "own";
+
+/**
+ * Threads of a conversation table this actor holds — **one fragment for reading
+ * and for writing, which is the thing about this table worth knowing.**
+ *
+ * Everywhere else in this file the read predicate and the write predicate are
+ * deliberately different, because a player may read a `shared` note and must
+ * not edit it. A conversation has no such middle state. `assistant_thread`
+ * carries a `visibility` column because `schema.test.ts` requires one on every
+ * content table, and **nothing writes it and nothing reads it**: there is no
+ * shared conversation in the product, and a thread you can see is one you are
+ * having. So one fragment answers both questions, and the alternative — two
+ * that are provably equal today — is two chances to disagree tomorrow.
+ *
+ * It is spelled with the *writable* halves for the same reason. If a `shared`
+ * thread ever came to mean something, `rowReadable` would start admitting a
+ * player to the DM's conversation and this would not; the fragment that cannot
+ * widen by accident is the one to build on.
+ *
+ * ### The two reaches are disjoint, and that is load-bearing
+ *
+ * `"dm"` adds `account_id is null`; `"own"` is `ownRowWritable`, whose
+ * `account_id = ${actor.accountId}` never matches a null. So no thread is
+ * reachable at both, which is what keeps three separate things true without a
+ * check anywhere: the DM's panel is never handed a player's conversation to
+ * resume, a DM can never accept a `character` proposal (and so can never come
+ * to own a character drafted for somebody else), and a player can never read
+ * the DM's prep conversation. See `0016_player_threads.ts`.
+ *
+ * The campaign half is `withinReadableCampaign` on the `"own"` side and
+ * `campaignWritableById` on the `"dm"` side, both inherited rather than
+ * restated — so a revoked membership, a credential minted for another table and
+ * an unshared campaign each take a player's conversation away exactly as they
+ * take their character away.
+ */
+export const conversationReachable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  reach: ConversationReach,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  reach === "own"
+    ? ownRowWritable(sql, table, campaignId, actor)
+    : sql.and([rowWritable(sql, table, campaignId, actor), sql`${sql(table)}.account_id is null`]);
+
+/**
+ * Turns of a conversation this actor holds.
+ *
+ * **A turn has no reach of its own**, which is why this composes the thread's
+ * rather than testing anything on the turn: `assistant_turn` has no
+ * `campaign_id` and no `account_id`, exactly as `prep_item` has no
+ * `campaign_id`, so there is one answer to whose conversation a line belongs to
+ * instead of a denormalised copy that can disagree with its parent.
+ *
+ * It deliberately does **not** apply the turn's own `visibility`, where
+ * `nestedRowReadable` would. That column defaults to `dm` and nothing ever
+ * writes it, so applying it would hide every turn of a player's own
+ * conversation from its author — a rule about players at a table, asked of a
+ * question that has no table in it. Same argument as `libraryRowReadable`.
+ *
+ * The foreign key is bound *and* correlated: the first clause pins the child to
+ * the parent the caller named, the second asks the reach question about that
+ * same column. Checking "the thread is mine" and "the turn is readable" as two
+ * independent questions is the hole `ensureNestedRowReadable` exists to close,
+ * and this closes it the same way.
+ */
+export const conversationTurnReachable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  reach: ConversationReach,
+  parentId: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
+    sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${sql(`${nested.table}.${nested.foreignKey}`)} and ${conversationReachable(sql, nested.parent, reach, campaignId, actor)})`,
+  ]);
+
+/**
  * Whether a row of `table` belongs to no campaign and to no account — the
  * **bundle**, the corpus `pnpm -F server bestiary:import` provisions.
  *
@@ -862,6 +953,30 @@ export const ensureCampaignReadable = (
     "campaign",
     campaignId,
     sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
+  );
+
+/**
+ * Fails with `NotFound` unless the named conversation exists and this actor
+ * holds it — the thread half of {@link conversationTurnReachable}, asked before
+ * a turn is inserted or listed.
+ *
+ * It names the **thread**, so an unreachable one is a 404 about the
+ * conversation rather than an empty transcript that reads as "you never asked
+ * Hob anything".
+ */
+export const ensureConversationReachable = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  reach: ConversationReach,
+  id: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    table,
+    id,
+    sql`exists (select 1 from ${sql(table)} where ${sql(`${table}.id`)} = ${id} and ${conversationReachable(sql, table, reach, campaignId, actor)})`,
   );
 
 /**

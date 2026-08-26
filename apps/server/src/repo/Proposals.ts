@@ -12,12 +12,14 @@ import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";
+import { Characters } from "./Characters.js";
 import { EncounterCreatures } from "./EncounterCreatures.js";
 import { Encounters } from "./Encounters.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
 import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
+import type { ConversationReach } from "./visibility.js";
 
 /**
  * Where a proposal becomes a row, and the only place `origin = 'assistant'` is
@@ -41,12 +43,24 @@ import { dieOnSqlError } from "./rows.js";
  *
  * ### It writes through the ordinary repositories
  *
- * `Notes.create`, `Beats.create`, `Encounters.create` and
- * `EncounterCreatures.create`, with one extra argument. No SQL for those tables
- * is written here, so an accepted row is produced by *literally the same
- * statement* that produces an authored one — which is what makes it
- * indistinguishable in usefulness (search finds it, the recap includes it, the
- * screens render it) and completely distinguishable in origin.
+ * `Notes.create`, `Beats.create`, `Encounters.create`,
+ * `EncounterCreatures.create` and `Characters.createOwn`, with one extra
+ * argument. No SQL for those tables is written here, so an accepted row is
+ * produced by *literally the same statement* that produces an authored one —
+ * which is what makes it indistinguishable in usefulness (search finds it, the
+ * recap includes it, the screens render it) and completely distinguishable in
+ * origin.
+ *
+ * ### The reach is the caller's, and it is what makes the fourth case safe
+ *
+ * `accept` takes a {@link ConversationReach} and hands it to
+ * `lockTurnForAccept`, so a DM reaches turns of the campaign's own thread and a
+ * player reaches turns of theirs — and the two sets are disjoint by predicate
+ * (`repo/visibility.ts`). That is what settles the question the character case
+ * would otherwise raise: a `character` proposal can only ever be produced by
+ * the player toolkit, into a player's own thread, so a DM cannot reach one and
+ * therefore cannot come to own a character drafted for somebody else. There is
+ * no role check in `materialise` because there is nothing for one to refuse.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
@@ -75,6 +89,7 @@ export class Proposals extends Context.Service<
   Proposals,
   {
     readonly accept: (
+      reach: ConversationReach,
       campaignId: CampaignId,
       threadId: AssistantThreadId,
       turnId: AssistantTurnId,
@@ -89,6 +104,7 @@ export class Proposals extends Context.Service<
       const beats = yield* Beats;
       const encounters = yield* Encounters;
       const encounterCreatures = yield* EncounterCreatures;
+      const characters = yield* Characters;
 
       const materialise = (
         campaignId: CampaignId,
@@ -148,18 +164,39 @@ export class Proposals extends Context.Service<
               const encounter = yield* encounters.findById(campaignId, created.id);
               return { accepted: "encounter" as const, encounter };
             });
+
+          case "character":
+            return Effect.map(
+              // `createOwn`, so `account_id` is the accepting credential's and
+              // there is nowhere in a proposal to name anybody else. `level`,
+              // `visibility` and the live trio are all absent for the reason
+              // `CharacterOwnCreate` has no field for them: a drafted character
+              // starts at level 1, `dm`, and unhurt, by column default rather
+              // than by a value this file chose.
+              characters.createOwn(
+                campaignId,
+                {
+                  name: proposal.name,
+                  ...(proposal.species === null ? {} : { species: proposal.species }),
+                  ...(proposal.className === null ? {} : { className: proposal.className }),
+                  sheet: proposal.sheet,
+                },
+                from,
+              ),
+              (character) => ({ accepted: "character" as const, character }),
+            );
         }
       };
 
       return {
-        accept: (campaignId, threadId, turnId) =>
+        accept: (reach, campaignId, threadId, turnId) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 // Takes the row lock as well as answering the question, so two
                 // taps of *Save to session* are one row and one 409 rather than
                 // a race for two.
-                const turn = yield* lockTurnForAccept(sql, campaignId, threadId, turnId);
+                const turn = yield* lockTurnForAccept(sql, reach, campaignId, threadId, turnId);
                 if (turn.proposal === null) {
                   // Nothing to accept is a `NotFound` about the proposal, not
                   // about the turn: the turn is right there, it just made no

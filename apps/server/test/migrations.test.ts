@@ -11,6 +11,7 @@ import characterSheet from "../src/migrations/0012_character_sheet.js";
 import invites from "../src/migrations/0013_invites.js";
 import characterLive from "../src/migrations/0014_character_live.js";
 import libraryCreatures from "../src/migrations/0015_library_creatures.js";
+import playerThreads from "../src/migrations/0016_player_threads.js";
 import prepSurface from "../src/migrations/0003_prep_surface.js";
 import bestiary from "../src/migrations/0004_bestiary.js";
 import liveSession from "../src/migrations/0005_live_session.js";
@@ -47,6 +48,10 @@ afterAll(() => liveRuntime.dispose());
 /** A seventh, for creatures written before a monster could belong to an account. */
 const libraryRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_library"));
 afterAll(() => libraryRuntime.dispose());
+
+/** An eighth, for conversations written before a player could have one. */
+const threadRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_threads"));
+afterAll(() => threadRuntime.dispose());
 
 const migrate = Effect.scoped(
   Layer.build(Layer.provide(Database.layerMigrator, NodeServices.layer)),
@@ -116,6 +121,7 @@ describe("migrations", () => {
       { migration_id: 13, name: "invites" },
       { migration_id: 14, name: "character_live" },
       { migration_id: 15, name: "library_creatures" },
+      { migration_id: 16, name: "player_threads" },
     ]);
   }, 60_000);
 
@@ -141,6 +147,7 @@ describe("migrations", () => {
       { migration_id: 13, name: "invites" },
       { migration_id: 14, name: "character_live" },
       { migration_id: 15, name: "library_creatures" },
+      { migration_id: 16, name: "player_threads" },
     ]);
   }, 60_000);
 });
@@ -699,5 +706,88 @@ describe("upgrading a database whose creatures predate the Library", () => {
     expect(promoted).toBe("Failure");
     expect(both).toBe("Failure");
     expect(stillUnique).toBe("Failure");
+  }, 60_000);
+});
+
+describe("upgrading a database whose conversations predate the player surface", () => {
+  it("leaves every existing thread the campaign's own, and none of them anybody's", async () => {
+    // **`0016` backfills nothing, and that is the whole of it.** Every thread
+    // written before it was a DM's — `HobThreads.start` composed
+    // `campaignWritable`, so no other kind could exist — and a null
+    // `account_id` is exactly what the DM's reach now looks for. So the upgrade
+    // is one nullable column and the rows already say the right thing.
+    //
+    // The property worth pinning is that it *stays* that way: the DM's reach
+    // adds `account_id is null`, so a thread that predates the column is still
+    // theirs, and a player's is a row that could not have existed. Stepped by
+    // hand for the reason the others are — an empty database cannot show it.
+    const { threads, cascaded } = await threadRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* init;
+        yield* prepSurface;
+        yield* bestiary;
+        yield* liveSession;
+        yield* sessionFinished;
+        yield* runCarryover;
+        yield* beats;
+        yield* searchIndex;
+        yield* assistantConversation;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
+        `)[0]!.id;
+        const campaign = (yield* sql<{ readonly id: string }>`
+          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
+          returning id
+        `)[0]!.id;
+        yield* sql`
+          insert into assistant_thread ${sql.insert({
+            campaign_id: campaign,
+            title: "Who is the ferryman?",
+          })}
+        `;
+
+        yield* membership;
+        yield* characterSheet;
+        yield* invites;
+        yield* characterLive;
+        yield* libraryCreatures;
+        yield* playerThreads;
+
+        const player = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Ilse", token_hash: "hash2" })} returning id
+        `)[0]!.id;
+        yield* sql`
+          insert into assistant_thread ${sql.insert({
+            campaign_id: campaign,
+            account_id: player,
+            title: "A wood elf who watches",
+          })}
+        `;
+
+        const threads = yield* sql<{
+          readonly title: string;
+          readonly account_id: string | null;
+        }>`select title, account_id from assistant_thread order by title`;
+
+        // The owner's account going takes their conversation with it and leaves
+        // the campaign's own standing — `on delete cascade`, which is what makes
+        // a thread whose owner is gone impossible rather than unreachable.
+        yield* sql`delete from account where id = ${player}`;
+        const cascaded = yield* sql<{
+          readonly title: string;
+        }>`select title from assistant_thread order by title`;
+
+        return { threads, cascaded };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(threads).toEqual([
+      { title: "A wood elf who watches", account_id: expect.any(String) as unknown as string },
+      { title: "Who is the ferryman?", account_id: null },
+    ]);
+    expect(cascaded.map((thread) => thread.title)).toEqual(["Who is the ferryman?"]);
   }, 60_000);
 });

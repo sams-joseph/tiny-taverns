@@ -4,12 +4,17 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Three kinds of artifact are produced now** — `encounter`, `note` and `beat`
- * — and they are exactly the three things an accept can materialise. The rest of
- * the union is the delivered specimen set, rendered only by the gallery: nothing
- * produces an `npc`, a `checklist` or a `rules` card, because there is no table
- * for one to be saved into and a *Save to session* button that could only fail
- * is worse than a kind that cannot be expressed.
+ * **Three kinds of artifact are produced here** — `encounter`, `note` and
+ * `beat` — and they are exactly the three things a *DM's* accept can
+ * materialise. The rest of the union is the delivered specimen set, rendered
+ * only by the gallery: nothing produces an `npc`, a `checklist` or a `rules`
+ * card, because there is no table for one to be saved into and a *Save to
+ * session* button that could only fail is worse than a kind that cannot be
+ * expressed.
+ *
+ * The fourth accept target — a **character**, which a player has Hob draft — is
+ * deliberately not one of these. It is offered into a player's own thread, this
+ * panel is the DM's, and the two are disjoint by predicate; see `artifactFrom`.
  *
  * It is written as data rather than as JSX because the delivered prototype
  * hard-codes each artifact body inline (`ChatParts.jsx`'s `EncounterBody`,
@@ -112,7 +117,10 @@ export type HobArtifact =
  * absent because no shipped column holds a creature's XP. The rule is the one
  * every screen here follows — do not render a field the API does not have.
  */
-export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): HobArtifact => {
+export const artifactFrom = (
+  turnId: AssistantTurnId,
+  proposal: HobProposal,
+): HobArtifact | undefined => {
   switch (proposal.target) {
     case "encounter": {
       const creatures = proposal.roster.reduce((total, line) => total + line.count, 0);
@@ -143,6 +151,23 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
       };
     case "beat":
       return { id: turnId, kind: "beat", chips: [], text: proposal.body };
+    /**
+     * **A character draft has no card here, and that is not an omission.**
+     *
+     * `HobProposal` grew a fourth member when the captain reversed *players do
+     * not talk to Hob*, so this switch has to be total — but a `character` is
+     * a player's own draft, offered by the player toolkit into a player's own
+     * thread, and this panel is the DM's. The two conversations are disjoint by
+     * predicate (`repo/visibility.ts`'s `conversationReachable`), so nothing
+     * reachable from here can produce one.
+     *
+     * Nor would drawing it as a generic artifact be right if one arrived: the
+     * delivered `ChatParts.jsx` has no character body, and *Save to session*
+     * means something else. The drafting surface draws its own card, on the
+     * screen the draft belongs to — `characters/DraftCard.tsx`.
+     */
+    case "character":
+      return undefined;
   }
 };
 

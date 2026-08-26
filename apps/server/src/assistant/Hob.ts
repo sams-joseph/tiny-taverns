@@ -17,13 +17,14 @@ import {
   HobUnavailable,
   type NotFound,
 } from "@taverns/api";
-import { Cause, Context, Effect, type Filter, Layer, Ref, Result, Schema, Stream } from "effect";
+import { Cause, Context, Effect, Layer, Ref, Result, Schema, Stream } from "effect";
 import {
   AiError,
   Chat,
   LanguageModel,
   type Prompt,
   type Response,
+  type Tool,
   type Toolkit,
 } from "effect/unstable/ai";
 import { Campaigns } from "../repo/Campaigns.js";
@@ -34,7 +35,13 @@ import { Recap } from "../repo/Recap.js";
 import { Search } from "../repo/Search.js";
 import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
-import { handlersFor, HobToolkit, type ProposalSlot } from "./toolkit.js";
+import {
+  dmHandlersFor,
+  HobToolkit,
+  playerHandlersFor,
+  PlayerToolkit,
+  type ProposalSlot,
+} from "./toolkit.js";
 
 /**
  * Hob answers.
@@ -194,21 +201,42 @@ export class Hob extends Context.Service<
               // answered as a 404 before the response body opens.
               const campaign = yield* campaigns.findById(campaignId);
 
-              // Asking is a write — a conversation is a row in the campaign —
-              // so the DM check below refuses exactly whom `threads.start`
-              // would, one line earlier and with the proof the toolkit needs.
-              const dm = yield* dmActors.of(campaignId);
+              /**
+               * Which of the two Hobs is answering, resolved once.
+               *
+               * The `DmActor` proof is what the DM's toolkit needs; its absence
+               * is what says this is a player, and the two are told apart by
+               * exactly one read. It is sound *because the campaign has already
+               * been resolved above*: `campaigns.findById` composes
+               * `campaignReadable`, so by the time this runs the actor is
+               * either the DM or a live member of a shared campaign, and
+               * `dmActors.of` failing means the second. A failure here is never
+               * "the campaign is not yours" — that answer has already been
+               * given.
+               *
+               * Before the captain reversed *players do not talk to Hob*, this
+               * line was the refusal: a player got the `NotFound` that
+               * `threads.start` would have given them one line later. What
+               * replaces the refusal is a narrower surface rather than a
+               * looser one — a two-tool toolkit, a thread of their own, and the
+               * same row-level predicate underneath.
+               */
+              const dm = yield* Effect.result(dmActors.of(campaignId));
+              const reach = Result.isSuccess(dm) ? ("dm" as const) : ("own" as const);
 
               // The conversation, resolved before a byte of stream exists — so
               // a thread this credential may not reach is a 404 exactly as an
-              // unreachable campaign is, and the model is never called.
+              // unreachable campaign is, and the model is never called. The
+              // reach is what makes a player's thread theirs and the DM's the
+              // campaign's; the two sets are disjoint by predicate, so neither
+              // can resume the other's evening.
               const thread =
                 ask.threadId === undefined
-                  ? yield* threads.start(campaignId, ask.text)
-                  : yield* threads.findById(campaignId, ask.threadId);
-              const history = yield* threads.turns(campaignId, thread.id);
+                  ? yield* threads.start(reach, campaignId, ask.text)
+                  : yield* threads.findById(reach, campaignId, ask.threadId);
+              const history = yield* threads.turns(reach, campaignId, thread.id);
 
-              yield* threads.append(campaignId, thread.id, {
+              yield* threads.append(reach, campaignId, thread.id, {
                 id: yield* freshTurnId,
                 who: "user",
                 text: ask.text,
@@ -226,13 +254,43 @@ export class Hob extends Context.Service<
 
               // Bound to *this* campaign and *this* actor, now — the stream
               // below is pulled after this effect has returned, so nothing may
-              // be left to the ambient context. The proof is resolved here
-              // rather than passed in because it is the pair, and one of the
-              // tools reads the combat log.
-              const handlers = yield* HobToolkit.toHandlers(
-                handlersFor(repositories, dm, proposal),
-              );
-              const toolkit = yield* Effect.provideContext(HobToolkit, handlers);
+              // be left to the ambient context. The proof is resolved above
+              // rather than passed in because it is the pair, and two of the
+              // DM's tools read a DM-only projection.
+              //
+              // **Two toolkits, not one narrowed at the handler.** A toolkit is
+              // what the provider is shown, so a player bound to the DM's would
+              // be *offered* `getCreature` — a stat block — whatever the
+              // handler behind it did. See `toolkit.ts`.
+              const answering: Stream.Stream<
+                HobEvent,
+                AiError.AiError | Schema.SchemaError,
+                LanguageModel.LanguageModel
+              > = Result.isSuccess(dm)
+                ? conversation(
+                    Effect.flatMap(
+                      HobToolkit.toHandlers(dmHandlersFor(repositories, dm.success, proposal)),
+                      (bound) => Effect.provideContext(HobToolkit, bound),
+                    ),
+                    dmPrompt(campaign),
+                    history,
+                    ask,
+                    finished,
+                    proposal,
+                  )
+                : conversation(
+                    Effect.flatMap(
+                      PlayerToolkit.toHandlers(
+                        playerHandlersFor(repositories, actor, campaignId, proposal),
+                      ),
+                      (bound) => Effect.provideContext(PlayerToolkit, bound),
+                    ),
+                    playerPrompt(campaign),
+                    history,
+                    ask,
+                    finished,
+                    proposal,
+                  );
 
               /**
                * Saves what Hob actually produced, however the stream ended.
@@ -251,7 +309,7 @@ export class Hob extends Context.Service<
                 const text = yield* Ref.get(written);
                 const offered = yield* Ref.get(proposal);
                 if (text === "" && offered === undefined) return;
-                yield* threads.append(campaignId, thread.id, {
+                yield* threads.append(reach, campaignId, thread.id, {
                   id: answerId,
                   who: "hob",
                   text,
@@ -315,13 +373,7 @@ export class Hob extends Context.Service<
                   data: new HobBegun({ threadId: thread.id, turnId: answerId }),
                 },
               ]).pipe(
-                Stream.concat(
-                  Stream.unwrap(
-                    Effect.map(Chat.fromPrompt(promptFor(campaign, history, ask)), (chat) =>
-                      round(chat, toolkit, MAX_ROUNDS, finished, proposal),
-                    ),
-                  ).pipe(Stream.tap((event) => note(written, broke, event))),
-                ),
+                Stream.concat(answering.pipe(Stream.tap((event) => note(written, broke, event)))),
                 Stream.concat(tail),
                 Stream.provideService(LanguageModel.LanguageModel, languageModel),
                 // A provider that dies mid-answer, a model that returns
@@ -343,6 +395,30 @@ export class Hob extends Context.Service<
       }),
     );
 }
+
+/**
+ * One question, over whichever toolkit is answering.
+ *
+ * It exists so that the DM's branch and the player's branch produce **the same
+ * type** — a `Stream<HobEvent>` — rather than two toolkits `round` would have
+ * to unify. Everything inside it is generic over the tool set for the reason
+ * {@link AnyTools} gives: the loop is about the protocol, not about which tools
+ * exist.
+ */
+const conversation = <Tools extends AnyTools>(
+  bind: Effect.Effect<Toolkit.WithHandler<Tools>>,
+  system: string,
+  history: ReadonlyArray<HobTurn>,
+  ask: HobAsk,
+  finished: Ref.Ref<string>,
+  proposal: ProposalSlot,
+): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
+  Stream.unwrap(
+    Effect.map(
+      Effect.all([bind, Chat.fromPrompt(promptFor(system, history, ask))]),
+      ([toolkit, chat]) => round(chat, toolkit, MAX_ROUNDS, finished, proposal),
+    ),
+  );
 
 /**
  * How many provider round-trips one question may cost.
@@ -368,7 +444,18 @@ export class Hob extends Context.Service<
  */
 const MAX_ROUNDS = 4;
 
-type HobTools = Toolkit.Tools<typeof HobToolkit>;
+/**
+ * The tools of *whichever* toolkit answered.
+ *
+ * `round`, `recover` and `toHobEvent` are generic over this rather than bound
+ * to `HobToolkit`, and that is the whole cost of a second toolkit here: the
+ * loop, the recovery and the part-to-event translation are about the protocol,
+ * not about which tools exist, so none of them has an opinion about the shape.
+ * The two toolkits are `HobToolkit` (the DM's nine) and `PlayerToolkit` (a
+ * player's two); see `toolkit.ts` for why a narrower toolkit rather than a
+ * narrower handler.
+ */
+type AnyTools = Record<string, Tool.Any>;
 
 /**
  * One round-trip, plus whatever further rounds its tool calls make necessary.
@@ -386,9 +473,9 @@ type HobTools = Toolkit.Tools<typeof HobToolkit>;
  *
  * The one reason that is *not* withheld is `length`. See `truncated`.
  */
-const round = (
+const round = <Tools extends AnyTools>(
   chat: Chat.Service,
-  toolkit: Toolkit.WithHandler<HobTools>,
+  toolkit: Toolkit.WithHandler<Tools>,
   budget: number,
   finished: Ref.Ref<string>,
   /**
@@ -412,25 +499,56 @@ const round = (
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
   Stream.unwrap(
     Effect.map(Ref.make(false), (calledTool) =>
-      chat.streamText({ prompt: say, toolkit }).pipe(
-        Stream.filterMapEffect((part: Response.StreamPart<HobTools>) =>
-          Effect.gen(function* () {
-            if (part.type === "tool-call") yield* Ref.set(calledTool, true);
-            if (part.type === "finish") {
-              // The provider's reason for stopping is recorded rather than
-              // emitted: `ask` puts `done` at the very end so the proposal
-              // cannot land after it. `length` is the exception — it is not a
-              // reason to record and move on, it is the end of the answer.
-              yield* Ref.set(finished, part.reason);
-              if (part.reason === "length") return Result.succeed(truncated);
-              if (yield* Ref.get(calledTool)) {
-                if (budget > 1) return Result.fail(part);
-                return (yield* gotNowhere(proposal)) ? Result.succeed(ranOut) : Result.fail(part);
+      // The one cast in this file, and what it asserts is checkable by reading
+      // `toolkit.ts`. `streamText`'s error and requirement channels are
+      // `AiError | HandlerError<Tools[keyof Tools]>` and `LanguageModel |
+      // HandlerServices<…> | ResultDecodingServices<…>`; over a *resolved*
+      // toolkit both extras compute to `never` — every tool's parameter,
+      // success and failure schema is plain (no encoding or decoding services)
+      // and every handler's requirements are discharged by `bind`'s `as`, which
+      // provides `CurrentActor` before the effect leaves the handler. Over an
+      // unresolved `Tools` those conditionals simply stay deferred, so TS
+      // cannot see the `never` it would compute a line later. It held for the
+      // one concrete toolkit that used to be here and it holds for both now;
+      // `hob.test.ts` drives each of them end to end.
+      (
+        chat.streamText({ prompt: say, toolkit }) as Stream.Stream<
+          Response.StreamPart<Tools>,
+          AiError.AiError | Schema.SchemaError,
+          LanguageModel.LanguageModel
+        >
+      ).pipe(
+        // The type arguments are named rather than inferred: `filterMapEffect`
+        // takes its element type from the stream through `NoInfer`, and
+        // `Response.StreamPart<Tools>` over an unresolved `Tools` gives it
+        // nothing to resolve against, so it picks one member of the union.
+        Stream.filterMapEffect<
+          Response.StreamPart<Tools>,
+          HobEvent,
+          Response.StreamPart<Tools>,
+          never,
+          never
+        >(
+          (
+            part: Response.StreamPart<Tools>,
+          ): Effect.Effect<Result.Result<HobEvent, Response.StreamPart<Tools>>> =>
+            Effect.gen(function* () {
+              if (part.type === "tool-call") yield* Ref.set(calledTool, true);
+              if (part.type === "finish") {
+                // The provider's reason for stopping is recorded rather than
+                // emitted: `ask` puts `done` at the very end so the proposal
+                // cannot land after it. `length` is the exception — it is not a
+                // reason to record and move on, it is the end of the answer.
+                yield* Ref.set(finished, part.reason);
+                if (part.reason === "length") return Result.succeed(truncated);
+                if (yield* Ref.get(calledTool)) {
+                  if (budget > 1) return Result.fail(part);
+                  return (yield* gotNowhere(proposal)) ? Result.succeed(ranOut) : Result.fail(part);
+                }
+                return Result.fail(part);
               }
-              return Result.fail(part);
-            }
-            return toHobEvent(part);
-          }),
+              return toHobEvent(part);
+            }),
         ),
         Stream.concat(
           Stream.unwrap(
@@ -528,9 +646,9 @@ const ranOut: HobEvent = {
  * rate limit — is re-raised untouched and becomes `ask`'s one `failed` event.
  * Retrying those here would spend the budget on a server that is not answering.
  */
-const recover = (
+const recover = <Tools extends AnyTools>(
   chat: Chat.Service,
-  toolkit: Toolkit.WithHandler<HobTools>,
+  toolkit: Toolkit.WithHandler<Tools>,
   budget: number,
   finished: Ref.Ref<string>,
   proposal: ProposalSlot,
@@ -707,7 +825,7 @@ const note = (
 };
 
 /**
- * What Hob is told about itself, and what it is not.
+ * What Hob is told about itself when a **DM** is asking, and what it is not.
  *
  * Short on purpose: this ships against locally hosted models, where every
  * sentence of preamble is context a small model spends instead of reading a
@@ -720,7 +838,7 @@ const note = (
  * material: it lets Hob say "the Salt Road" instead of "this campaign", and it
  * is already in the request path.
  */
-const systemPrompt = (campaign: Campaign): string =>
+const dmPrompt = (campaign: Campaign): string =>
   [
     "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for the person",
     `running a tabletop roleplaying game. You are helping them run "${campaign.name}".`,
@@ -742,6 +860,57 @@ const systemPrompt = (campaign: Campaign): string =>
     "",
     "You can see this one campaign and only what this credential is allowed to read.",
     "That is not a restriction you can work around, and you should not try.",
+  ].join("\n");
+
+/**
+ * What Hob is told when a **player** is asking, which is a different job.
+ *
+ * A second prompt rather than a conditional sentence in the first, for the
+ * reason there are two toolkits: the DM's is voiced throughout as *the person
+ * running the game*, and a prompt that said "the DM, or possibly not" would be
+ * a worse prompt for both. It is a distinct schema on a distinct path, applied
+ * to prose.
+ *
+ * Three things it says that the DM's does not, and each is a measured hazard:
+ *
+ * - **Draft, do not interview.** The one drawn interaction is a paragraph in,
+ *   a sheet out. A model that asks three clarifying questions first has spent
+ *   the round budget and produced no card, which reads on screen exactly like
+ *   the model failing to call the tool.
+ * - **Rank the abilities; do not write numbers.** The tool takes no scores at
+ *   all (`toolkit.ts`), and saying so in the prompt as well as in the tool
+ *   description is cheap next to a model that writes six numbers into a name
+ *   field.
+ * - **The record is the DM's, and mostly not shared.** `searchCampaign` for a
+ *   player composes `rowReadable`, so at a table whose DM shares nothing it
+ *   honestly returns nothing. The instruction not to invent is the same one the
+ *   DM's prompt carries and matters more here, because a character sheet is
+ *   exactly where a confidently invented setting detail would survive.
+ */
+const playerPrompt = (campaign: Campaign): string =>
+  [
+    "You are Hob, the assistant behind the bar in Tiny Taverns. You are helping a player",
+    `make a character for "${campaign.name}", a tabletop roleplaying game somebody else runs.`,
+    "",
+    "They will describe a person in their own words. Read it, and offer them a whole",
+    "character with proposeCharacter — a name, a species, a class, the six abilities",
+    "ranked most important first, up to four skills, a starting kit and a short",
+    "backstory in their register rather than yours. Do not ask clarifying questions",
+    "first: draft something, and let them correct it. Nothing you offer is saved until",
+    "they keep it.",
+    "",
+    "Do not write ability scores or modifiers. Rank the six and the standard array is",
+    "applied for you. Give a short reason for each real choice in `rationale` — the",
+    "player is shown those beside the sheet and they are what they will argue with.",
+    "",
+    "If they ask for a change — a different class, a harder background — offer a whole",
+    "character again, keeping everything they did not ask you to change.",
+    "",
+    "You may search this campaign's record with searchCampaign, and what you find there",
+    "is worth using: a character who fits the place reads better than one who does not.",
+    "You can only see what the DM has shared, which is often nothing at all. Never state",
+    "as fact a place, a person or an event you have not read — if the record does not",
+    "say, write the character without it.",
   ].join("\n");
 
 /**
@@ -774,8 +943,10 @@ const RECENT_TURNS = 40;
  * The roster carries its `creatureId`s because they are the one thing a
  * follow-up cannot re-derive without spending another round searching for
  * creatures the model has already been shown. `accepted` is here for the same
- * reason it is on the wire: an offer the DM kept and an offer still sitting
+ * reason it is on the wire: an offer that was kept and an offer still sitting
  * there are different facts, and only one of them is a row in the campaign.
+ *
+ * The `character` case is the one this matters most for; see it below.
  */
 const offered = (turn: HobTurn): string | undefined => {
   const proposal = turn.proposal;
@@ -796,15 +967,45 @@ const offered = (turn: HobTurn): string | undefined => {
         .join("; ");
       return `[You offered the DM an encounter called "${proposal.name}"${band}${tags} — ${kept}: ${roster}]`;
     }
+    /**
+     * **The redraft loop is this case**, and without it *"make her a ranger
+     * instead"* reaches a model that cannot see the druid it just wrote — so it
+     * drafts a fresh person from the original paragraph and silently loses
+     * every choice the player was happy with.
+     *
+     * It is the fullest of the four because a character draft is the one
+     * proposal a follow-up is *expected* to be about. The abilities are read
+     * back as the ranking rather than as six cells, because the ranking is what
+     * the tool takes: a model shown `STR 8 (-1)` and asked for scores it cannot
+     * send is a model one round from a schema error.
+     */
+    case "character": {
+      const line = [proposal.species, proposal.className].filter((part) => part !== null).join(" ");
+      const ranked = [...proposal.sheet.abilities]
+        .sort((a, b) => Number(b.score) - Number(a.score))
+        .map((ability) => ability.label)
+        .join(" > ");
+      const skills = (proposal.sheet.skills ?? []).map((skill) => skill.name).join(", ");
+      const identity = proposal.sheet.identity;
+      const parts = [
+        line === "" ? undefined : line,
+        ranked === "" ? undefined : `abilities ranked ${ranked}`,
+        skills === "" ? undefined : `skills ${skills}`,
+        identity?.subclass === undefined ? undefined : `subclass ${identity.subclass}`,
+        identity?.background === undefined ? undefined : `background ${identity.background}`,
+        proposal.sheet.notes === "" ? undefined : `backstory: ${proposal.sheet.notes}`,
+      ].filter((part) => part !== undefined);
+      return `[You offered the player a character called "${proposal.name}" — ${kept}: ${parts.join("; ")}]`;
+    }
   }
 };
 
 const promptFor = (
-  campaign: Campaign,
+  system: string,
   history: ReadonlyArray<HobTurn>,
   ask: HobAsk,
 ): Prompt.RawInput => [
-  { role: "system" as const, content: systemPrompt(campaign) },
+  { role: "system" as const, content: system },
   ...history.slice(-RECENT_TURNS).flatMap((turn) => {
     // A turn that carries neither words nor an offer has nothing a prompt can
     // use, and an empty message is a shape some providers reject outright.
@@ -906,7 +1107,9 @@ const detailOf = (value: unknown): string => {
  * model's chain of thought is not an answer, and putting it in the transcript
  * would make the panel's one honest voice into two.
  */
-const toHobEvent: Filter.Filter<Response.StreamPart<HobTools>, HobEvent> = (part) => {
+const toHobEvent = <Tools extends AnyTools>(
+  part: Response.StreamPart<Tools>,
+): Result.Result<HobEvent, Response.StreamPart<Tools>> => {
   switch (part.type) {
     case "text-delta":
       return Result.succeed({

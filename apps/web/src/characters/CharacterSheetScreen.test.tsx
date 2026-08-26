@@ -138,9 +138,11 @@ describe("a character sheet", () => {
     // Stats: six ability cells and a skill list. Neither rolls a check into a
     // dice tray — there is still no endpoint for that — but both are writable
     // now, so the two *Edit*s here are the payload carrying what it can rather
-    // than a control it cannot. The bar's is the third.
+    // than a control it cannot. The bar's *Edit* is the third, and *Delete* is
+    // the fourth: `DELETE /me/characters/:id` shipped with the create and got
+    // its first caller when Hob could draft a character somebody then abandons.
     await tab("Stats");
-    expect(pressable()).toEqual(["Edit", "Edit", "Edit"]);
+    expect(pressable()).toEqual(["Delete", "Edit", "Edit", "Edit"]);
     expect(screen.getByRole("button", { name: "Edit abilities" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
     // The cell is still not a roll button, which is what the drawing makes it.
@@ -148,16 +150,16 @@ describe("a character sheet", () => {
 
     // Actions: attacks and spell pips. Nothing rolls and nothing is spent.
     await tab("Actions");
-    expect(pressable()).toEqual(["Edit"]);
+    expect(pressable()).toEqual(["Delete", "Edit"]);
 
     // Log: level-ups are a document key with no drawn control behind it.
     await tab("Log");
-    expect(pressable()).toEqual(["Edit"]);
+    expect(pressable()).toEqual(["Delete", "Edit"]);
 
     // Story: the backstory is writable; the journal beside it is not, and the
     // four bond/ideal/flaw lines are still read-only.
     await tab("Story");
-    expect(pressable().filter((text) => text !== "Edit")).toEqual([]);
+    expect(pressable().filter((text) => text !== "Edit" && text !== "Delete")).toEqual([]);
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
 
     // The live half of the row is drawn and is nobody's to change here.

@@ -13,15 +13,13 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
 import {
+  type ConversationReach,
+  conversationReachable,
+  conversationTurnReachable,
   ensureCampaignReadable,
   ensureCampaignWritable,
-  ensureNestedParentReadable,
-  ensureNestedParentWritable,
+  ensureConversationReachable,
   type NestedTable,
-  nestedRowReadable,
-  nestedRowWritable,
-  rowReadable,
-  rowWritable,
 } from "./visibility.js";
 
 /**
@@ -29,10 +27,30 @@ import {
  *
  * A thread is campaign-scoped like a note and a turn hangs off a thread like a
  * prep item hangs off a session, so **this repository writes no predicate of its
- * own** — it is `rowReadable`/`rowWritable` and the existing `NestedTable`
- * machinery, applied to two more tables. A campaign-scoped credential cannot
- * reach another table's conversations for exactly the reason it cannot reach
- * another table's notes: `campaignInScope` is inside the clause it inherits.
+ * own** — it is `repo/visibility.ts`'s `conversationReachable` and the existing
+ * `NestedTable` machinery, applied to two more tables. A campaign-scoped
+ * credential cannot reach another table's conversations for exactly the reason
+ * it cannot reach another table's notes: `campaignInScope` is inside the clause
+ * it inherits.
+ *
+ * ### Every method takes a reach, and it is one argument rather than a twin
+ *
+ * A conversation belongs either to the campaign (the DM's, `account_id is
+ * null`) or to one account (a player's, drafting a character). `character`
+ * answers that shape with twins — `create`/`createOwn`, `update`/`updateOwn` —
+ * because its two paths differ in their *payload* as well as in whose row they
+ * reach. Here nothing differs but whose it is: the same thread, the same turn,
+ * the same insert. So `reach` is a parameter, the way `Memberships.mine` takes
+ * a shelf, and the choice between the two predicates is made once in
+ * `repo/visibility.ts` instead of five times here.
+ *
+ * The one method where the reaches genuinely diverge is `start`, and the
+ * difference is the gate: a DM's thread needs `ensureCampaignWritable`, which
+ * is exactly what made a player unable to ask at all, and a player's needs
+ * `ensureCampaignReadable` — the campaign half of `withinReadableCampaign`, so
+ * a thread started through it is reachable by its author afterwards by the same
+ * clauses rather than by two rules kept in step. That is `Characters.createOwn`
+ * verbatim, one table across.
  *
  * The one thing here that is not ordinary CRUD is that turn ids are **generated
  * in TypeScript** rather than by the column default. `Hob.ask` has to tell the
@@ -109,23 +127,28 @@ export class HobThreads extends Context.Service<
   {
     /** Newest first — the panel resumes the one at the front. */
     readonly list: (
+      reach: ConversationReach,
       campaignId: CampaignId,
     ) => Effect.Effect<ReadonlyArray<HobThread>, NotFound, CurrentActor>;
     readonly findById: (
+      reach: ConversationReach,
       campaignId: CampaignId,
       id: AssistantThreadId,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /** Starts one, named after the question that started it. */
     readonly start: (
+      reach: ConversationReach,
       campaignId: CampaignId,
       firstQuestion: string,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /** Oldest first: a conversation, read in the order it happened. */
     readonly turns: (
+      reach: ConversationReach,
       campaignId: CampaignId,
       threadId: AssistantThreadId,
     ) => Effect.Effect<ReadonlyArray<HobTurn>, NotFound, CurrentActor>;
     readonly append: (
+      reach: ConversationReach,
       campaignId: CampaignId,
       threadId: AssistantThreadId,
       draft: TurnDraft,
@@ -137,28 +160,28 @@ export class HobThreads extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
 
       return {
-        list: (campaignId) =>
+        list: (reach, campaignId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<ThreadRow>`
                 select assistant_thread.* from assistant_thread
-                where ${rowReadable(sql, "assistant_thread", campaignId, actor)}
+                where ${conversationReachable(sql, "assistant_thread", reach, campaignId, actor)}
                 order by assistant_thread.updated_at desc, assistant_thread.id desc
               `;
               return rows.map(toThread);
             }),
           ),
 
-        findById: (campaignId, id) =>
+        findById: (reach, campaignId, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<ThreadRow>`
                 select assistant_thread.* from assistant_thread
                 where assistant_thread.id = ${id}
-                  and ${rowReadable(sql, "assistant_thread", campaignId, actor)}
+                  and ${conversationReachable(sql, "assistant_thread", reach, campaignId, actor)}
               `;
               if (rows.length === 0) {
                 return yield* new NotFound({ resource: "assistant_thread", id });
@@ -167,45 +190,71 @@ export class HobThreads extends Context.Service<
             }),
           ),
 
-        start: (campaignId, firstQuestion) =>
+        /**
+         * The one place the two reaches differ by more than a `WHERE` — see the
+         * class doc. `account_id` is the actor's own and is written *here*,
+         * from the credential: `HobAsk` has no field for one and neither has
+         * any path, so there is no request shape that starts a conversation for
+         * somebody else. The `Invites.redeem` shape, a third time.
+         */
+        start: (reach, campaignId, firstQuestion) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              yield* ensureCampaignWritable(sql, campaignId, actor);
+              yield* reach === "own"
+                ? ensureCampaignReadable(sql, campaignId, actor)
+                : ensureCampaignWritable(sql, campaignId, actor);
               const rows = yield* sql<ThreadRow>`
-                insert into assistant_thread ${sql.insert({
-                  campaign_id: campaignId,
-                  title: titleFrom(firstQuestion),
-                })}
+                insert into assistant_thread ${sql.insert(
+                  defined({
+                    campaign_id: campaignId,
+                    account_id: reach === "own" ? actor.accountId : undefined,
+                    title: titleFrom(firstQuestion),
+                  }),
+                )}
                 returning *
               `;
               return toThread(rows[0]!);
             }),
           ),
 
-        turns: (campaignId, threadId) =>
+        turns: (reach, campaignId, threadId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               // Names the thread, so an unreachable one is a 404 about the
               // thread rather than an empty conversation that reads as "you
               // never asked Hob anything".
-              yield* ensureNestedParentReadable(sql, TURNS, threadId, campaignId, actor);
+              yield* ensureConversationReachable(
+                sql,
+                "assistant_thread",
+                reach,
+                threadId,
+                campaignId,
+                actor,
+              );
               const rows = yield* sql<TurnRow>`
                 select assistant_turn.* from assistant_turn
-                where ${nestedRowReadable(sql, TURNS, threadId, campaignId, actor)}
+                where ${conversationTurnReachable(sql, TURNS, reach, threadId, campaignId, actor)}
                 order by assistant_turn.created_at asc, assistant_turn.id asc
               `;
               return rows.map(toTurn);
             }),
           ),
 
-        append: (campaignId, threadId, draft) =>
+        append: (reach, campaignId, threadId, draft) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                yield* ensureNestedParentWritable(sql, TURNS, threadId, campaignId, actor);
+                yield* ensureConversationReachable(
+                  sql,
+                  "assistant_thread",
+                  reach,
+                  threadId,
+                  campaignId,
+                  actor,
+                );
                 const rows = yield* sql<TurnRow>`
                   insert into assistant_turn ${sql.insert(
                     defined({
@@ -230,7 +279,7 @@ export class HobThreads extends Context.Service<
                 yield* sql`
                   update assistant_thread set updated_at = now()
                   where assistant_thread.id = ${threadId}
-                    and ${rowWritable(sql, "assistant_thread", campaignId, actor)}
+                    and ${conversationReachable(sql, "assistant_thread", reach, campaignId, actor)}
                 `;
                 return toTurn(rows[0]!);
               }),
@@ -253,6 +302,7 @@ export class HobThreads extends Context.Service<
  */
 export const lockTurnForAccept = (
   sql: SqlClient.SqlClient,
+  reach: ConversationReach,
   campaignId: CampaignId,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
@@ -262,7 +312,7 @@ export const lockTurnForAccept = (
     const rows = yield* sql<TurnRow>`
       select assistant_turn.* from assistant_turn
       where assistant_turn.id = ${turnId}
-        and ${nestedRowWritable(sql, TURNS, threadId, campaignId, actor)}
+        and ${conversationTurnReachable(sql, TURNS, reach, threadId, campaignId, actor)}
       for update
     `;
     if (rows.length === 0) {

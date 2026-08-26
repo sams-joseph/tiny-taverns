@@ -183,11 +183,21 @@ const makeFixture = Effect.gen(function* () {
     campaigns.create({ name: "A different table", visibility: "shared" }),
   );
 
+  // A table with a real player membership and the master toggle off, which is
+  // the ordinary state of a campaign nobody has shared yet. It is what makes
+  // "a player's conversation is reachable exactly while the table is" a
+  // measurement rather than a reading of the predicate.
+  const unsharedCampaign = yield* as(campaigns.create({ name: "The quiet table" }));
+
   return {
     dm,
     /** A credential minted for the Salt Road and nothing else. */
     scopedDm: scopedTo(dm, campaign.id),
     player: yield* aPlayerAt(campaign.id, "Pim"),
+    /** A second player at the same table — one player is not two. */
+    otherPlayer: yield* aPlayerAt(campaign.id, "Wren"),
+    unsharedCampaign,
+    unsharedPlayer: yield* aPlayerAt(unsharedCampaign.id, "Odd"),
     campaign,
     otherTable,
     strangerCampaign,
@@ -254,6 +264,13 @@ const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify
 
 const texts = (events: ReadonlyArray<HobEvent>): ReadonlyArray<string> =>
   events.flatMap((event) => (event.event === "delta" ? [event.data.text] : []));
+
+/** The thread and the turn an answer was written into, said before a word of it. */
+const begunIn = (events: ReadonlyArray<HobEvent>) => {
+  const began = events.find((event) => event.event === "began");
+  if (began?.event !== "began") throw new Error("no began event");
+  return began.data;
+};
 
 /**
  * A scripted round with the fixture's real creature id in it.
@@ -911,13 +928,18 @@ describe("the boundary — proven, not argued", () => {
     expect(shown).not.toContain("took the coin after all");
   }, 60_000);
 
-  it("cannot be built for a player at all, and would show them nothing anyway", async () => {
-    // Two halves, and the first is newer than the second.
+  it("still cannot build the DM's tool surface for a player, and shows them nothing extra", async () => {
+    // **The captain reversed *players do not talk to Hob* on 2026-08-26, and
+    // this test is what that reversal moved rather than removed.** It used to
+    // read "cannot be built for a player at all": there was one `handlersFor`,
+    // it took the `DmActor`, and a player's tool surface was not something to
+    // refuse but something that could not be constructed.
     //
-    // `handlersFor` takes the `DmActor` — asking is a write and one of the
-    // tools reads the combat log — so a tool surface for a player is not
-    // something to refuse, it is something that cannot be constructed. That is
-    // the same shape as the campaign not being a tool parameter, one level up.
+    // What is still true is the half that was doing the work. `dmHandlersFor`
+    // still takes the proof, and a player still cannot obtain one — so the nine
+    // tools that include the combat log and a stat block remain unbuildable for
+    // them. What replaced the refusal is a *second, smaller* toolkit rather
+    // than a weaker proof, which is the distinction the block below measures.
     const refused = await runtime.runPromise(
       Effect.flip(asDm(fixture.player, fixture.campaign.id)).pipe(Effect.orDie),
     );
@@ -927,7 +949,7 @@ describe("the boundary — proven, not argued", () => {
     // read with this actor, so the row's own visibility applies inside the tool
     // exactly as it does inside the HTTP handler, because it is the same
     // `WHERE` clause. Driven straight at `Search` with the player's actor,
-    // which is what the tool would have called.
+    // which is what the tool *does* now call.
     const hits = await runtime.runPromise(
       Effect.flatMap(Search, (search) => search.search(fixture.campaign.id, { q: "crate" })).pipe(
         withActor(fixture.player),
@@ -940,18 +962,129 @@ describe("the boundary — proven, not argued", () => {
     expect(shown).not.toContain(fixture.crateNote.id);
   }, 60_000);
 
-  it("refuses a player outright, because asking writes to the record", async () => {
-    // A conversation is a row in the campaign, so `HobThreads.start` needs
-    // `campaignWritable` — the same predicate creating a note needs. Hob is the
-    // DM's sidekick and there is no player surface; a player asking gets the
-    // ordinary `NotFound`, not a conversation nobody could read back.
+  it("answers a player, and offers them two tools rather than nine", async () => {
+    // The reversal, measured at the one place it is visible: the toolkit is
+    // what the provider is *shown*, so a player who was bound to the DM's
+    // handlers with a narrower predicate underneath would still be offered
+    // `getCreature` — a stat block, which is precisely what the product says a
+    // player must not have.
+    const { events, requests } = await ask(fixture.player, fixture.campaign.id);
+    const tools = requests[0]?.tools ?? [];
+
+    expect(
+      tools.map((tool) => (tool.function as { name: string } | undefined)?.name).sort(),
+    ).toEqual(["proposeCharacter", "searchCampaign"]);
+    // The structural half of the boundary is identical on this side: the
+    // campaign is still closed over from the request path.
+    expect(JSON.stringify(tools).toLowerCase()).not.toContain("campaignid");
+
+    expect(events[0]?.event).toBe("began");
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("gives a player the shared half of the record and no more, inside the tool", async () => {
+    // `searchCampaign` is the one tool both toolkits have, and it is written
+    // once for exactly this reason: the predicate is what makes a DM's answer
+    // wide and a player's narrow, so there is no second, "player-safe" search
+    // to disagree with the first. Measured on what the *model* was shown, which
+    // is the only place a leak here would surface.
+    const { requests } = await ask(fixture.player, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("searchCampaign", { query: "ferryman" }),
+        textChunks("The ferryman is called Cazril."),
+      ] as never,
+    });
+    const shown = shownTo(requests.slice(1));
+
+    // The `shared` beat reached them; the `dm` note did not.
+    expect(shown).toContain("Cazril");
+    expect(shown).not.toContain("three teeth");
+    // And the other table is as far away as it is for a DM.
+    expect(shown).not.toContain("Sixpence");
+  }, 60_000);
+
+  it("keeps a player's conversation out of their DM's, in both directions", async () => {
+    // The disjointness `0016` bought, and the reason it is not a nicety: the
+    // panel resumes *the newest thread*, so without it a player asking Hob
+    // would change which conversation their DM is shown — and a DM reaching a
+    // player's turn could accept a `character` proposal into their own
+    // ownership.
+    const mine = await ask(fixture.player, fixture.campaign.id);
+    const { threadId: playerThread } = begunIn(mine.events);
+    const theirs = await ask(fixture.dm, fixture.campaign.id);
+    const { threadId: dmThread } = begunIn(theirs.events);
+
+    const threads = (actor: Actor, reach: "dm" | "own") =>
+      runtime.runPromise(
+        Effect.flatMap(HobThreads, (repo) => repo.list(reach, fixture.campaign.id)).pipe(
+          withActor(actor),
+          Effect.orDie,
+        ),
+      );
+
+    const dmSees = (await threads(fixture.dm, "dm")).map((thread) => thread.id);
+    const playerSees = (await threads(fixture.player, "own")).map((thread) => thread.id);
+
+    expect(dmSees).toContain(dmThread);
+    expect(dmSees).not.toContain(playerThread);
+    expect(playerSees).toContain(playerThread);
+    expect(playerSees).not.toContain(dmThread);
+
+    // And naming the other's thread directly does not smuggle it across, in
+    // either direction: the reach is a `WHERE` clause, not a list filter.
+    const reachedByDm = await runtime.runPromise(
+      Effect.flatMap(HobThreads, (repo) =>
+        repo.turns("dm", fixture.campaign.id, playerThread),
+      ).pipe(withActor(fixture.dm), Effect.result),
+    );
+    expect(reachedByDm._tag).toBe("Failure");
+
+    const reachedByPlayer = await runtime.runPromise(
+      Effect.flatMap(HobThreads, (repo) => repo.turns("own", fixture.campaign.id, dmThread)).pipe(
+        withActor(fixture.player),
+        Effect.result,
+      ),
+    );
+    expect(reachedByPlayer._tag).toBe("Failure");
+  }, 60_000);
+
+  it("keeps one player's conversation out of another's", async () => {
+    // `ownRowWritable` compares `account_id` to the actor's own account and to
+    // nothing a caller supplied, so there is no request shape that asks for
+    // somebody else's evening.
+    const mine = await ask(fixture.player, fixture.campaign.id);
+    const { threadId } = begunIn(mine.events);
+
+    const listed = await runtime.runPromise(
+      Effect.flatMap(HobThreads, (repo) => repo.list("own", fixture.campaign.id)).pipe(
+        withActor(fixture.otherPlayer),
+        Effect.orDie,
+      ),
+    );
+    expect(listed.map((thread) => thread.id)).not.toContain(threadId);
+
+    const smuggled = await runtime.runPromise(
+      Effect.flatMap(HobThreads, (repo) => repo.turns("own", fixture.campaign.id, threadId)).pipe(
+        withActor(fixture.otherPlayer),
+        Effect.result,
+      ),
+    );
+    expect(smuggled._tag).toBe("Failure");
+    expect(smuggled._tag === "Failure" && smuggled.failure).toBeInstanceOf(NotFound);
+  }, 60_000);
+
+  it("refuses a player at a table their DM has not shared", async () => {
+    // The campaign half of `ownRowWritable` is `withinReadableCampaign`, the
+    // same fragment `character` composes — so a player's conversation is
+    // reachable exactly while the table is, and the master toggle is untouched
+    // by the reversal. `unsharedCampaign` has a live player membership and
+    // `visibility: "dm"`.
     const result = await runtime.runPromise(
       Effect.gen(function* () {
         const hob = yield* Hob;
-        const stream = yield* hob.ask(fixture.campaign.id, { text: ASKED });
-        return yield* Stream.runCollect(stream);
+        return yield* hob.ask(fixture.unsharedCampaign.id, { text: ASKED });
       }).pipe(
-        withActor(fixture.player),
+        withActor(fixture.unsharedPlayer),
         Effect.provide(
           Hob.layer({ model: "scripted-local" }).pipe(
             Layer.provide(

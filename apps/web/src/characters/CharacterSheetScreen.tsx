@@ -1,5 +1,5 @@
 import type { Character, CharacterId, InventoryItem, Trait } from "@taverns/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   Badge,
   Button,
@@ -22,6 +22,7 @@ import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { AbilitiesDialog } from "./AbilitiesDialog";
 import { BackstoryDialog } from "./BackstoryDialog";
+import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { GearDialog } from "./GearDialog";
 import { IdentityDialog } from "./IdentityDialog";
 import { SkillsDialog } from "./SkillsDialog";
@@ -862,11 +863,12 @@ export function CharacterSheetScreen() {
    * be closed by its own success.
    */
   const [editing, setEditing] = useState<
-    "identity" | "abilities" | "skills" | "backstory" | "gear" | undefined
+    "identity" | "abilities" | "skills" | "backstory" | "gear" | "delete" | undefined
   >();
   /** Which tab is open — above the resource, for the reason `SheetBody` gives. */
   const [openTab, setOpenTab] = useState<string | undefined>();
   const close = () => setEditing(undefined);
+  const navigate = useNavigate();
 
   return (
     <AppShell
@@ -919,6 +921,24 @@ export function CharacterSheetScreen() {
             >
               <Icon name="swords" size={14} />
               Go to the table
+            </Button>
+          )}
+          {/* **The product's first character delete on screen**, and it is here
+              because Hob drafting one is what made an unwanted character cheap:
+              a player who describes somebody, keeps the draft and changes their
+              mind leaves a real row in their DM's party list. It is a confirm
+              rather than a press, because a character really goes — there is no
+              archive for one the way there is for a campaign. See
+              `DeleteCharacterDialog`. */}
+          {character !== undefined && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Delete ${character.name}`}
+              onClick={() => setEditing("delete")}
+            >
+              <Icon name="trash-2" size={14} />
+              Delete
             </Button>
           )}
           {/* The durable columns, and the one write with no drawn home of its
@@ -987,6 +1007,16 @@ export function CharacterSheetScreen() {
       )}
       {character !== undefined && editing === "gear" && (
         <GearDialog character={character} onClose={close} onSaved={close} />
+      )}
+      {character !== undefined && editing === "delete" && (
+        <DeleteCharacterDialog
+          character={character}
+          onClose={close}
+          /* The row is gone, so there is nothing left on this route to draw —
+             back to the roster, replacing the entry so *Back* does not land on
+             a sheet that no longer exists. */
+          onDeleted={() => void navigate({ to: "/play/characters", replace: true })}
+        />
       )}
     </AppShell>
   );

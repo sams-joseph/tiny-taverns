@@ -237,10 +237,27 @@ export const playing = (
   },
 ];
 
+/**
+ * Hob, configured and reachable, for one campaign.
+ *
+ * Every create-screen test gets this by default because the screen asks on
+ * mount, and a route that 404s would make *"the composer is offered"* an
+ * accident of which test ran. `available: false` is its own fixture
+ * (`hobUnconfigured`), which is the case the honest empty state is for.
+ */
+export const hobRoutes = (at: string = campaignId): ReadonlyArray<[string, Answer]> => [
+  [
+    `GET /campaigns/${at}/hob`,
+    { status: 200, body: { available: true, model: "scripted-local", campaign: campaign.name } },
+  ],
+  [`POST /campaigns/${at}/hob/ask`, drafted()],
+];
+
 /** Two characters, two tables. */
 export const twoTables = (): Map<string, Answer> =>
   new Map<string, Answer>([
     ["GET /me", { status: 200, body: account }],
+    ...hobRoutes(),
     ["GET /me/characters", { status: 200, body: [brannoc, sorrel] }],
     // Neither table is playing: the quiet state, which is what most of these
     // tests are about and the one the banner draws nothing for.
@@ -299,6 +316,84 @@ export const oneTable = (): Map<string, Answer> => {
   return routes;
 };
 
+/**
+ * A scripted Hob answer, as SSE — **the one route in this file that is not
+ * JSON.**
+ *
+ * `hob.ask` streams, so a stubbed answer has to be a real `ReadableStream` with
+ * real `event:`/`data:` framing or the derived client's decoder has nothing to
+ * do. It is written out rather than assembled by a helper for the reason the
+ * rest of this file is: what the wire says is the thing under test, and a
+ * builder that got the framing subtly wrong would make every one of these tests
+ * agree with it.
+ *
+ * The shape is the one `Hob.ask` really emits — `began` first, then whatever
+ * happened, then exactly one of `done` or `failed`.
+ */
+export const sseFrames = (
+  events: ReadonlyArray<{ readonly event: string; readonly data: unknown }>,
+): string =>
+  events.map((frame) => `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`).join("");
+
+export const draftThreadId = "2b1f2a1e-0000-4000-8000-00000000a001";
+export const draftTurnId = "2b1f2a1e-0000-4000-8000-00000000a002";
+
+/** The draft the scripted model offers, as the proposal the server stores. */
+export const characterProposal = {
+  target: "character",
+  name: "Sorrel Ash",
+  species: "Wood elf",
+  className: "Druid",
+  sheet: {
+    notes: "She left Ashfen with the herbal under her coat.",
+    abilities: [
+      { label: "STR", score: "8", modifier: "-1" },
+      { label: "DEX", score: "13", modifier: "+1" },
+      { label: "CON", score: "14", modifier: "+2" },
+      { label: "INT", score: "12", modifier: "+1" },
+      { label: "WIS", score: "15", modifier: "+2" },
+      { label: "CHA", score: "10", modifier: "+0" },
+    ],
+    traits: [],
+    identity: { subclass: "Circle of the Land (Marsh)", background: "Herbalist's apprentice" },
+    skills: [
+      { name: "Nature", proficient: true },
+      { name: "Perception", proficient: true },
+    ],
+    inventory: [{ name: "Herbalism kit" }],
+    story: { bond: "The herbal, half in a hand that is not hers." },
+  },
+  rationale: [
+    "Wisdom is highest because druid casting keys off it, and you described someone who watches.",
+  ],
+};
+
+/** Hob answered with a draft — the ordinary success. */
+export const drafted = (proposal: unknown = characterProposal): Answer => ({
+  status: 200,
+  sse: sseFrames([
+    { event: "began", data: { threadId: draftThreadId, turnId: draftTurnId } },
+    { event: "tool", data: { name: "searchCampaign", phase: "called", detail: "marsh" } },
+    { event: "delta", data: { text: "Here she is." } },
+    { event: "proposal", data: { turnId: draftTurnId, proposal } },
+    { event: "done", data: { reason: "stop" } },
+  ]),
+});
+
+/**
+ * Hob answered and offered nothing — **the measured common case**, not an edge
+ * one: with all tools offered, the captain's own configured 4B chose the propose
+ * tool one time in five.
+ */
+export const draftedNothing = (): Answer => ({
+  status: 200,
+  sse: sseFrames([
+    { event: "began", data: { threadId: draftThreadId, turnId: draftTurnId } },
+    { event: "delta", data: { text: "Tell me more about where she is from." } },
+    { event: "done", data: { reason: "stop" } },
+  ]),
+});
+
 export interface CharacterStubServer {
   routes: Map<string, Answer>;
   readonly calls: Array<Call>;
@@ -341,6 +436,20 @@ export const installCharacterServer = (): CharacterStubServer => {
       status: 404,
       body: { _tag: "NotFound", resource: "character", id: brannocId },
     };
+    if (answer.sse !== undefined) {
+      const frames = answer.sse;
+      return Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              controller.enqueue(new TextEncoder().encode(frames));
+              controller.close();
+            },
+          }),
+          { status: answer.status, headers: { "content-type": "text/event-stream" } },
+        ),
+      );
+    }
     return Promise.resolve(
       new Response(answer.status === 204 ? null : JSON.stringify(answer.body), {
         status: answer.status,

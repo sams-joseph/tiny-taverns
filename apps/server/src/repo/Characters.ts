@@ -18,7 +18,15 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import { requestAlreadyApplied, sessionRequestAlreadyApplied } from "./SessionEvents.js";
 import {
   appendCharacterUpdated,
@@ -223,6 +231,19 @@ export class Characters extends Context.Service<
     readonly createOwn: (
       campaignId: CampaignId,
       payload: CharacterOwnCreate,
+      /**
+       * The turn that drafted them, when a player accepted a Hob proposal.
+       *
+       * `Notes.create` and `Beats.create` have had this since the accept path
+       * shipped and this did not, which is the only reason a character was not
+       * an accept target. It is on `createOwn` rather than on `create` above
+       * because the *player's* create is the one an accept goes through: a
+       * character Hob drafted is drafted for the person who asked, and
+       * `account_id` therefore has to come from the credential rather than from
+       * a DM naming somebody. `repo/Proposals.ts` is the only caller that
+       * passes it, and the only place an `AssistantOrigin` can be constructed.
+       */
+      from?: AssistantOrigin,
     ) => Effect.Effect<Character, NotFound, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -459,7 +480,7 @@ export class Characters extends Context.Service<
          * owner reads through `ownRowReadable` and their DM through `isDm`, and
          * nobody else at the table until the DM says otherwise.
          */
-        createOwn: (campaignId, payload) =>
+        createOwn: (campaignId, payload, from) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
@@ -478,6 +499,13 @@ export class Characters extends Context.Service<
                     hp_max: payload.hpMax,
                     sheet_url: payload.sheetUrl,
                     body: payload.sheet && encodeSheet(payload.sheet),
+                    // Absent for an ordinary create, so `origin` falls to
+                    // `authored`. A character a player accepted out of a draft
+                    // is `assistant`, pointing at the turn that offered it —
+                    // the same statement that writes a typed one, which is what
+                    // makes the two indistinguishable in usefulness and
+                    // completely distinguishable in origin.
+                    ...assistantColumns(from),
                   }),
                 )}
                 returning *

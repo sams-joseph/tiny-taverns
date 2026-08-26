@@ -1,4 +1,8 @@
 import {
+  type Ability,
+  type Actor,
+  type CampaignId,
+  type CharacterSheet,
   Conflict,
   Creature,
   CreatureId,
@@ -13,6 +17,7 @@ import {
   SessionEvent,
   SessionId,
   SessionRecap,
+  type Skill,
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
@@ -37,12 +42,30 @@ import type { Sessions } from "../repo/Sessions.js";
  * and the second one is where the visibility seam gets re-derived slightly
  * wrong.
  *
- * **Nothing here writes to the campaign, including the three `propose*`
+ * **Nothing here writes to the campaign, including the four `propose*`
  * tools.** A proposal is stashed in a `Ref` and saved on the conversation turn;
- * a note, a beat or an encounter appears only when a human accepts it, in
- * `repo/Proposals.ts`. There is no write repository in this directory to reach
- * for — which is the captain's *generate with approval* decision made
+ * a note, a beat, an encounter or a character appears only when a human accepts
+ * it, in `repo/Proposals.ts`. There is no write repository in this directory to
+ * reach for — which is the captain's *generate with approval* decision made
  * structural rather than remembered.
+ *
+ * ### Two toolkits, because there are two people who may ask
+ *
+ * The captain reversed *players do not talk to Hob* on 2026-08-26 so that a
+ * player can have a character drafted for them. What that bought had to be a
+ * **second toolkit rather than a widened one**, because the toolkit is what the
+ * model is shown: a player offered `getCreature` would be offered a stat block,
+ * which is precisely what the product says a player must not have, whether or
+ * not the predicate underneath would refuse it.
+ *
+ * So {@link HobToolkit} is the DM's nine and {@link PlayerToolkit} is two —
+ * `searchCampaign`, which composes `rowReadable` and therefore reaches the
+ * `shared` notes and beats a player is entitled to and nothing else, and
+ * `proposeCharacter`. `dmHandlersFor` takes a `DmActor`; `playerHandlersFor`
+ * takes a plain `Actor` and the campaign, because there is no DM-ness to prove
+ * and the two tools it binds need none. **The campaign is closed over in both**,
+ * so the grounding property is untouched: it is still not a parameter of any
+ * tool, and a model still cannot express a call into another campaign.
  *
  * ### The campaign is not a parameter, and that is the point
  *
@@ -158,6 +181,33 @@ const optional = <S extends Schema.Top>(schema: S) =>
 
 /** `null` and absent are the same answer, and repositories take the latter. */
 const absent = <A>(value: A | null | undefined): A | undefined => value ?? undefined;
+
+/**
+ * An optional **free-text** parameter — and deliberately not {@link optional}.
+ *
+ * {@link ABSENT_WORDS} is safe only because no optional parameter reached
+ * through `optional` is prose: in an enum position the word "none" cannot be a
+ * value, so decoding it as absence loses nothing. `proposeCharacter` is the
+ * first tool with prose optionals — a background, a bond, an ideal, a flaw —
+ * and there "None" is a perfectly good answer somebody might mean. Swallowing
+ * it would be the sentinel doing exactly the damage it was written to avoid.
+ *
+ * So this arm accepts absent, `null`, or any string, and the *handler* treats a
+ * blank one as not given ({@link blank}). That is `searchCampaign.query`'s
+ * lesson applied a second time: a refusal the framework makes before a handler
+ * runs is a refusal the model cannot hear, so the schema is permissive and the
+ * rule is in the handler.
+ */
+const optionalText = (max: number) =>
+  Schema.optionalKey(
+    Schema.Union([Schema.String.check(Schema.isLengthBetween(0, max)), Schema.Null]),
+  );
+
+/** Whitespace, `""` and absent are one answer: nothing was said. */
+const blank = (value: string | null | undefined): string | undefined => {
+  const text = (value ?? "").trim();
+  return text === "" ? undefined : text;
+};
 
 /**
  * What a tool refuses with.
@@ -292,8 +342,8 @@ export const ReadSessionLog = Tool.make("sessionLog", {
 });
 
 /**
- * The three things Hob may offer to add to the campaign — and *offer* is the
- * whole of what these do.
+ * The four things Hob may offer to add — three to the DM's campaign, one to
+ * the player who asked — and *offer* is the whole of what these do.
  *
  * **A propose tool writes nothing.** It stashes what Hob drafted on the turn in
  * flight (`repo/HobThreads.ts` persists it) and hands the model back one
@@ -305,6 +355,8 @@ export const ReadSessionLog = Tool.make("sessionLog", {
  * One per accept target, rather than one tool over a tagged union, because a
  * flat parameter object is what a small local model can actually fill in. It is
  * also the honest count: these are three tables, not a proposal framework.
+ * `proposeCharacter` is the fourth and belongs to the other toolkit; it is
+ * declared further down, beside the arithmetic it does.
  */
 const proposalFailure = toolFailure;
 
@@ -363,6 +415,168 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
 });
 
 /**
+ * The six abilities, in the order every sheet in the product draws them.
+ *
+ * A closed enum rather than free text, and it is the one place in
+ * `proposeCharacter` where being strict pays: the published JSON schema becomes
+ * a six-word vocabulary, which an endpoint that compiles it into a grammar can
+ * hold the model to. A model that wrote `"Wisdom"` would otherwise produce an
+ * ability nothing on a sheet can match up with a saving throw.
+ */
+const AbilityKey = Schema.Literals(["STR", "DEX", "CON", "INT", "WIS", "CHA"]);
+type AbilityKey = typeof AbilityKey.Type;
+
+const ABILITY_KEYS: ReadonlyArray<AbilityKey> = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
+
+/**
+ * The array `proposeCharacter` assigns, and the reason the tool takes no
+ * numbers.
+ *
+ * `CharacterCreate.jsx:157` opens on the standard array and makes rolling an
+ * explicit second action, so this is the drawn default rather than a
+ * simplification. It is also what makes the tool call something a small model
+ * can get right: a measured 4B ranks six words reliably and miscounts 4d6
+ * routinely, and the arithmetic has one right answer, which is exactly the sort
+ * of thing this codebase keeps on the server. `apps/web/src/characters/abilities.ts`
+ * holds the same array for the sheet's own editor, where the *dice* live — a
+ * roll is the browser's by a decision already written down, and an assignment
+ * is not a roll.
+ */
+const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8] as const;
+
+/** `+4`, `-1`, `+0` — pre-signed, the way every number on a sheet is stored. */
+const signed = (value: number): string => (value < 0 ? String(value) : `+${String(value)}`);
+
+/**
+ * Six ability cells from a ranking — **the whole of the arithmetic, in one
+ * place.**
+ *
+ * `Ability.score` and `Ability.modifier` are *both* stored `NonEmptyString`s
+ * (`Creature.ts`: the document keeps what was written), so the one thing the
+ * document cannot survive is the two disagreeing. Every cell here is written in
+ * one object literal, which is what makes that structural rather than careful.
+ *
+ * The ranking is repaired rather than refused: a model that names four
+ * abilities, or names one twice, gets the rest appended in the canonical order
+ * and the array applied down the list. A tool call that is *nearly* right is the
+ * common case on a small model, and a `NotFound` for a duplicated "DEX" would
+ * cost a round to say something the server can simply resolve.
+ */
+const abilitiesFrom = (order: ReadonlyArray<AbilityKey>): ReadonlyArray<Ability> => {
+  const ranked: Array<AbilityKey> = [];
+  for (const key of [...order, ...ABILITY_KEYS]) {
+    if (!ranked.includes(key)) ranked.push(key);
+  }
+  const scores = new Map<AbilityKey, number>(
+    ranked.map((key, index) => [key, STANDARD_ARRAY[index] ?? 10]),
+  );
+  // Drawn in the canonical order whatever the ranking was: the ranking decides
+  // the numbers, not where a cell sits on the sheet.
+  return ABILITY_KEYS.map((label) => {
+    const score = scores.get(label) ?? 10;
+    return { label, score: String(score), modifier: signed(Math.floor((score - 10) / 2)) };
+  });
+};
+
+/** Named skills, as the sheet's own rows. Proficient, with no bonus invented. */
+const skillsFrom = (names: ReadonlyArray<string>): ReadonlyArray<Skill> => {
+  const seen = new Set<string>();
+  const rows: Array<Skill> = [];
+  for (const raw of names) {
+    const name = raw.trim();
+    // A bonus is the modifier plus a proficiency this document does not model,
+    // so deriving one would be a wrong number in a column somebody reads out at
+    // the table. The mark is what the sheet draws and the mark is all this
+    // claims. Same call `apps/web/src/characters/skills.ts` makes.
+    if (name !== "" && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      rows.push({ name, proficient: true });
+    }
+  }
+  return rows;
+};
+
+/**
+ * What Hob offers a **player**: a character, drafted from a paragraph they
+ * wrote.
+ *
+ * ### It takes no numbers, and that is the measured design
+ *
+ * The prior report drove the captain's own configured 4B model and measured it
+ * choosing `proposeEncounter` **one time in five** with all the tools offered.
+ * A character draft is a strictly harder call — the drawn sheet is fifteen
+ * fields including six ability scores — so every parameter here is one a small
+ * model is *good* at: labels, a ranking of six words, and prose. The scores,
+ * the modifiers and the sheet document are the server's, in `abilitiesFrom`
+ * above, which is why `HobProposal`'s character member carries a resolved
+ * `CharacterSheet` rather than the model's raw answer.
+ *
+ * `level` is not a parameter either: a new character is level 1, and levelling
+ * one up is somebody's later act rather than something a draft decides.
+ *
+ * ### Every optional is prose, so none of them goes through `optional`
+ *
+ * See {@link optionalText}. The sentinel that rescues an unset enum would eat a
+ * background genuinely called "None", so the free-text optionals take the
+ * permissive arm and the handler collapses a blank one.
+ */
+export const ProposeCharacter = Tool.make("proposeCharacter", {
+  description:
+    "Offer the player a character sheet built from what they described. Give " +
+    "them a name, a species and a class, rank the six abilities most important " +
+    "first, name up to four skills, and write a short backstory in their own " +
+    "register. Do not give scores or modifiers — rank the abilities and the " +
+    "standard array is applied for you. Only a suggestion: nothing is saved " +
+    "unless the player accepts it. Say one short line about it and stop.",
+  parameters: Schema.Struct({
+    name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    species: Schema.String.check(Schema.isLengthBetween(0, 60)),
+    className: Schema.String.check(Schema.isLengthBetween(0, 60)),
+    /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
+    subclass: optionalText(80),
+    background: optionalText(80),
+    /**
+     * Six ability keys, most important first — **a ranking, not scores.**
+     *
+     * Short of six is repaired rather than refused (see `abilitiesFrom`), which
+     * is why the check allows an empty array: a schema refusal here happens
+     * before any handler runs and cannot be read by the model.
+     */
+    abilityOrder: Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6)),
+    skills: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40))).check(
+        Schema.isLengthBetween(0, 8),
+      ),
+    ),
+    backstory: Schema.String.check(Schema.isLengthBetween(0, 4000)),
+    bond: optionalText(400),
+    ideal: optionalText(400),
+    flaw: optionalText(400),
+    /** Starting kit, as item names. It becomes `sheet.inventory`. */
+    kit: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 80))).check(
+        Schema.isLengthBetween(0, 20),
+      ),
+    ),
+    /**
+     * Why these choices — one short line each, the drawn *What Hob did* aside.
+     *
+     * Asked for explicitly rather than left to the reply, because it is the one
+     * part of a draft the player has to be able to argue with, and a sentence
+     * buried in prose above the card is not that.
+     */
+    rationale: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 400))).check(
+        Schema.isLengthBetween(0, 8),
+      ),
+    ),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+/**
  * Six reads and three proposals.
  *
  * The reads began as five — search, the session list, the recap, a creature and
@@ -380,8 +594,9 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
  * back as prose. `Creatures.list` was already shipped and already predicated;
  * only the tool was missing.
  *
- * The proposals are the three accept targets and nothing else. Both halves are
- * listed in `apps/server/test/hob.test.ts`, so a tenth tool is a visible edit.
+ * The proposals are the DM's three accept targets and nothing else. Both halves
+ * are listed in `apps/server/test/hob.test.ts`, so a tenth tool is a visible
+ * edit — and so is a third one on {@link PlayerToolkit}.
  */
 export const HobToolkit = Toolkit.make(
   SearchCampaign,
@@ -394,6 +609,38 @@ export const HobToolkit = Toolkit.make(
   ProposeBeat,
   ProposeEncounter,
 );
+
+/**
+ * What a **player** is offered: one read and one proposal.
+ *
+ * **A second toolkit rather than the first one narrowed at the handler**, and
+ * the difference is not style: a toolkit is what the provider is *shown*, so a
+ * tool bound to a handler that always refuses is still a tool the model spends
+ * its budget reaching for and still a capability the DM's product appears to
+ * offer their players. Two toolkits means a player's Hob has never heard of
+ * `getCreature`.
+ *
+ * Which two, and why nothing else:
+ *
+ * - **`searchCampaign`** composes `rowReadable`, so it reaches the `shared`
+ *   notes and beats their DM has opened up and nothing else — the same `WHERE`
+ *   clause the HTTP API answers them with, which is the property
+ *   `hob.test.ts` has measured since before there was a player surface. It is
+ *   what makes the drawn showcase line possible (*"your DM's campaign is on the
+ *   salt road"*), and at a table whose DM shares nothing it honestly returns
+ *   nothing.
+ * - **`proposeCharacter`** is the point of the surface.
+ *
+ * The other seven are out, each for its own reason rather than by omission.
+ * `getCreature` is a stat block, which is precisely what the product says a
+ * player must not have. `sessionRecap` and `sessionLog` need a `DmActor` and
+ * are two of the three DM-only projections. `listSessions`, `listCreatures`,
+ * `proposeNote`, `proposeBeat` and `proposeEncounter` are all the DM's campaign
+ * to shape — a player cannot write a note or an encounter through the API
+ * either, so offering to draft one would be a card whose *Save* could only
+ * fail.
+ */
+export const PlayerToolkit = Toolkit.make(SearchCampaign, ProposeCharacter);
 
 /** The repositories a Hob tool call may reach. **Read-only, every one.** */
 export interface HobRepositories {
@@ -432,27 +679,91 @@ const alreadyProposed = new Conflict({
  * time a tool runs. Naming it explicitly is what makes the actor a captured
  * value rather than a hope.
  *
- * It arrives as one proof rather than as two loose arguments for two reasons.
- * `sessionLog` reads the combat log, which is one of the three DM-only
- * projections and needs one anyway; and asking Hob is already a DM-only act —
- * a conversation is a row in the campaign, so `HobThreads.start` needs
- * `campaignWritable`. Taking the proof here means a tool surface cannot be
+ * It arrives as one proof rather than as two loose arguments because
+ * `sessionRecap` and `sessionLog` read two of the three DM-only projections and
+ * need one anyway. Taking the proof here means **this** tool surface cannot be
  * built for an actor whose DM-ness was never checked, which is the same idea as
  * the campaign not being a tool parameter, one level up.
+ *
+ * It used to mean more than that. Until the captain reversed *players do not
+ * talk to Hob*, a tool surface for a player was not something to refuse but
+ * something that could not be constructed, because there was only this
+ * function. That is no longer the boundary; {@link playerHandlersFor} is, and
+ * what keeps it honest is that it binds a strictly smaller toolkit rather than
+ * this one with a weaker proof. The `DmActor` is still what gates the two log
+ * reads, and it is still the only thing that can.
  */
-export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal: ProposalSlot) => {
-  const { actor, campaign: campaignId } = dm;
-
-  const as = <A, E>(effect: Effect.Effect<A, E, CurrentActor>): Effect.Effect<A, E> =>
-    Effect.provideService(effect, CurrentActor, actor);
+const bind = (actor: Actor, proposal: ProposalSlot) => ({
+  /**
+   * Every read a tool makes, with this actor named rather than inherited.
+   *
+   * The stream this feeds is pulled *after* the handler effect has returned, so
+   * the request's context is no longer ambient by the time a tool runs. Naming
+   * the actor makes it a captured value rather than a hope.
+   */
+  as: <A, E>(effect: Effect.Effect<A, E, CurrentActor>): Effect.Effect<A, E> =>
+    Effect.provideService(effect, CurrentActor, actor),
 
   /** Takes the slot if it is free, and tells the model what it now has. */
-  const offer = (made: HobProposal, said: string) =>
+  offer: (made: HobProposal, said: string) =>
     Effect.gen(function* () {
       if ((yield* Ref.get(proposal)) !== undefined) return yield* alreadyProposed;
       yield* Ref.set(proposal, made);
       return said;
-    });
+    }),
+});
+
+/**
+ * `searchCampaign`, bound — the one tool both toolkits have.
+ *
+ * Written once because it must mean the same thing on both sides: it is the
+ * shipped `Search.search` with whichever actor is asking, so the row-level
+ * predicate is what makes a DM's answer wide and a player's narrow. A second
+ * copy narrowed "for players" would be the second data path this whole
+ * directory exists to avoid.
+ */
+const searchWith =
+  (
+    repositories: HobRepositories,
+    campaignId: CampaignId,
+    as: <A, E>(effect: Effect.Effect<A, E, CurrentActor>) => Effect.Effect<A, E>,
+  ) =>
+  ({
+    query,
+    source,
+    limit,
+  }: {
+    readonly query: string;
+    readonly source?: SearchSource | null;
+    readonly limit?: number | null;
+  }) =>
+    query.trim() === ""
+      ? // The refusal the schema used to make, moved to where the model can
+        // hear it — and pointed at the tool that answers what an empty search
+        // was reaching for.
+        Effect.fail(
+          new Conflict({
+            message:
+              "searchCampaign needs a word to look for — it searches the record, it " +
+              "does not list it. To see what creatures this campaign can use, call " +
+              "listCreatures; for the nights it has played, listSessions.",
+          }),
+        )
+      : as(
+          repositories.search.search(campaignId, {
+            q: query,
+            source: absent(source),
+            limit: limit ?? SEARCH_LIMIT,
+          }),
+        );
+
+export const dmHandlersFor = (
+  repositories: HobRepositories,
+  dm: DmActor,
+  proposal: ProposalSlot,
+) => {
+  const { actor, campaign: campaignId } = dm;
+  const { as, offer } = bind(actor, proposal);
 
   /**
    * Every creature on a proposed roster, read through the same predicate a
@@ -491,26 +802,7 @@ export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal
     });
 
   return HobToolkit.of({
-    searchCampaign: ({ query, source, limit }) =>
-      query.trim() === ""
-        ? // The refusal the schema used to make, moved to where the model can
-          // hear it — and pointed at the tool that answers what an empty search
-          // was reaching for.
-          Effect.fail(
-            new Conflict({
-              message:
-                "searchCampaign needs a word to look for — it searches the record, it " +
-                "does not list it. To see what creatures this campaign can use, call " +
-                "listCreatures; for the nights it has played, listSessions.",
-            }),
-          )
-        : as(
-            repositories.search.search(campaignId, {
-              q: query,
-              source: absent(source),
-              limit: limit ?? SEARCH_LIMIT,
-            }),
-          ),
+    searchCampaign: searchWith(repositories, campaignId, as),
     listSessions: () => as(repositories.sessions.list(campaignId)),
     listCreatures: () =>
       Effect.map(
@@ -569,5 +861,92 @@ export const handlersFor = (repositories: HobRepositories, dm: DmActor, proposal
             "is already on their screen.",
         ),
       ),
+  });
+};
+
+/**
+ * The same idea for a player: one campaign, one plain `Actor`, two tools.
+ *
+ * **There is no proof to take, and none is missing.** A `DmActor` answers *is
+ * this account the DM of this campaign*, and the whole point of this surface is
+ * that its caller is not — the same reason `Characters.updateOwn` is the one
+ * ungated method where the gate would answer the wrong question. What bounds a
+ * player here is what bounds them everywhere: `searchCampaign` runs
+ * `Search.search` with their actor, so `rowReadable` gives them the `shared`
+ * rows and nothing else, and `proposeCharacter` writes nothing at all.
+ *
+ * The campaign arrives the same way it does above — closed over from the path
+ * segment the request was routed on, never a parameter — so the grounding
+ * property holds identically on both sides. `Hob.ask` resolves *which* of the
+ * two to build once per question, from the DM proof it already asks for.
+ */
+export const playerHandlersFor = (
+  repositories: HobRepositories,
+  actor: Actor,
+  campaignId: CampaignId,
+  proposal: ProposalSlot,
+) => {
+  const { as, offer } = bind(actor, proposal);
+
+  return PlayerToolkit.of({
+    searchCampaign: searchWith(repositories, campaignId, as),
+
+    proposeCharacter: ({
+      name,
+      species,
+      className,
+      subclass,
+      background,
+      abilityOrder,
+      skills,
+      backstory,
+      bond,
+      ideal,
+      flaw,
+      kit,
+      rationale,
+    }) => {
+      const identity = {
+        ...(blank(subclass) === undefined ? {} : { subclass: blank(subclass)! }),
+        ...(blank(background) === undefined ? {} : { background: blank(background)! }),
+      };
+      const story = {
+        ...(blank(bond) === undefined ? {} : { bond: blank(bond)! }),
+        ...(blank(ideal) === undefined ? {} : { ideal: blank(ideal)! }),
+        ...(blank(flaw) === undefined ? {} : { flaw: blank(flaw)! }),
+      };
+      const carried = (kit ?? []).map((item) => item.trim()).filter((item) => item !== "");
+      /**
+       * The document, assembled here so the card and the row cannot disagree.
+       *
+       * Every optional key is omitted rather than written empty, for the reason
+       * `emptyCharacterSheet` names only its three required keys: a sheet with
+       * `skills: []` on it draws a Skills section that says nothing, where a
+       * sheet without the key draws the section's own invitation to fill it in.
+       */
+      const sheet: CharacterSheet = {
+        notes: blank(backstory) ?? "",
+        abilities: abilitiesFrom(abilityOrder),
+        traits: [],
+        ...(Object.keys(identity).length === 0 ? {} : { identity }),
+        ...(Object.keys(story).length === 0 ? {} : { story }),
+        ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
+        ...(carried.length === 0 ? {} : { inventory: carried.map((item) => ({ name: item })) }),
+      };
+
+      return offer(
+        {
+          target: "character",
+          name,
+          species: blank(species) ?? null,
+          className: blank(className) ?? null,
+          sheet,
+          rationale: (rationale ?? []).map((line) => line.trim()).filter((line) => line !== ""),
+        },
+        `Offered ${name} to the player. They can keep them or ask for changes; ` +
+          "say one short line about the character and stop — the sheet is already " +
+          "on their screen.",
+      );
+    },
   });
 };

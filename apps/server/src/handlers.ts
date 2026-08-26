@@ -7,7 +7,7 @@ import {
   type SessionEvent,
   TavernsApi,
 } from "@taverns/api";
-import { Duration, Effect, Layer, Schedule, Stream } from "effect";
+import { Duration, Effect, Layer, Result, Schedule, Stream } from "effect";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
@@ -493,13 +493,46 @@ const HobLive = HttpApiBuilder.group(
     const hob = yield* Hob;
     const threads = yield* HobThreads;
     const proposals = yield* Proposals;
+    const dmActors = yield* DmActors;
+
+    /**
+     * Whose conversations this request reaches — **one read, and the same
+     * question `Hob.ask` asks itself.**
+     *
+     * A DM reaches the campaign's own thread and a player their own, and the
+     * two sets are disjoint by predicate (`repo/visibility.ts`), so the reach
+     * is not a filter over one set — it is which set exists for this caller.
+     * It is derived from the `DmActor` proof rather than from a role on the
+     * actor, because `Actor` carries no role and cannot: a person is the DM of
+     * one table and a player at another on one credential.
+     *
+     * A failure is `"own"` rather than an error, and that is safe because it is
+     * never the final answer: the predicate underneath refuses a caller who is
+     * neither, with the ordinary `NotFound`. So a stranger's campaign is a 404
+     * from the read, exactly as it was before there were two reaches.
+     */
+    const reachAt = (campaignId: CampaignId) =>
+      Effect.map(Effect.result(dmActors.of(campaignId)), (proof) =>
+        Result.isSuccess(proof) ? ("dm" as const) : ("own" as const),
+      );
+
     return handlers
       .handle("status", ({ params }) => hob.status(params.campaignId))
       .handle("ask", ({ params, payload }) => hob.ask(params.campaignId, payload))
-      .handle("threads", ({ params }) => threads.list(params.campaignId))
-      .handle("turns", ({ params }) => threads.turns(params.campaignId, params.threadId))
+      .handle("threads", ({ params }) =>
+        Effect.flatMap(reachAt(params.campaignId), (reach) =>
+          threads.list(reach, params.campaignId),
+        ),
+      )
+      .handle("turns", ({ params }) =>
+        Effect.flatMap(reachAt(params.campaignId), (reach) =>
+          threads.turns(reach, params.campaignId, params.threadId),
+        ),
+      )
       .handle("accept", ({ params }) =>
-        proposals.accept(params.campaignId, params.threadId, params.turnId),
+        Effect.flatMap(reachAt(params.campaignId), (reach) =>
+          proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
+        ),
       );
   }),
 );

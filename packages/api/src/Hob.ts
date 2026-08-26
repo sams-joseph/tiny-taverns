@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
+import { Character, CharacterSheet } from "./Character.js";
 import { Difficulty, Encounter } from "./Encounter.js";
 import { AssistantThreadId, AssistantTurnId, CampaignId, CreatureId } from "./Ids.js";
 import { Note, NoteKind } from "./Note.js";
@@ -30,8 +31,8 @@ import { Note, NoteKind } from "./Note.js";
  *
  * A **proposal is not a row in the campaign.** It is stored on the turn that
  * produced it and rendered for review; `accept` is the only thing that
- * materialises a note, a beat or an encounter, and it writes `origin:
- * "assistant"` with that turn's id. Nothing else in the server ever writes that
+ * materialises a note, a beat, an encounter or a character, and it writes
+ * `origin: "assistant"` with that turn's id. Nothing else in the server ever writes that
  * origin — Hob has no write tool and no `SqlClient`, so "nothing enters the
  * campaign without an explicit human accept" is a property of the wiring rather
  * than a rule someone has to keep. See the captain's decision in
@@ -108,20 +109,31 @@ export const HobRosterLine = Schema.Struct({
 export type HobRosterLine = typeof HobRosterLine.Type;
 
 /**
- * What Hob is offering to add to the campaign, if the DM says yes.
+ * What Hob is offering to add, if the person who asked says yes.
  *
- * **Three members, because there are three accept targets**, and each is one
+ * **Four members, because there are four accept targets**, and each is one
  * shipped table: a `note` (prep prose or read-aloud), a `beat` (the DM's line
- * about what happened), an `encounter` (a template and its roster). The union
- * is discriminated on `target` for the reason `SearchHit` is discriminated on
- * `source` — `roster` exists only on an encounter and `title` only on the thing
- * that has one, and a nullable field the client renders anyway is the failure
- * this schema style exists to prevent.
+ * about what happened), an `encounter` (a template and its roster), and a
+ * `character` (a player's own, drafted for them). The union is discriminated on
+ * `target` for the reason `SearchHit` is discriminated on `source` — `roster`
+ * exists only on an encounter and `title` only on the thing that has one, and a
+ * nullable field the client renders anyway is the failure this schema style
+ * exists to prevent.
+ *
+ * **Which of the four can be offered is decided by which toolkit answered, not
+ * by anything here.** A DM's Hob has `proposeNote`, `proposeBeat` and
+ * `proposeEncounter`; a player's has `proposeCharacter` and nothing else. So the
+ * two halves of this union are reachable from disjoint conversations, and the
+ * shape that would otherwise need guarding — a DM accepting a character into
+ * their own ownership, a player accepting an encounter into a campaign they
+ * cannot write — is not a check anywhere, it is a pair of threads neither can
+ * reach. See `assistant/toolkit.ts` and `repo/visibility.ts`'s
+ * `conversationReachable`.
  *
  * It is deliberately **not** a general artifact framework. The delivered
- * `ChatParts.jsx` draws eight kinds; the ones that are not one of these three
- * have nowhere to go, so proposing one would be a card whose *Save to session*
- * button could only lie.
+ * `ChatParts.jsx` draws eight kinds; the ones that are not one of these four
+ * have nowhere to go, so proposing one would be a card whose *Save* button
+ * could only lie.
  */
 export const HobProposal = Schema.Union([
   Schema.Struct({
@@ -140,6 +152,43 @@ export const HobProposal = Schema.Union([
     difficulty: Schema.NullOr(Difficulty),
     tags: Schema.Array(Schema.String),
     roster: Schema.Array(HobRosterLine),
+  }),
+  /**
+   * A character, drafted for the player who asked — **the fourth member, and
+   * the only one a DM can never be offered.**
+   *
+   * It is the whole of what an accept needs and nothing else: `name`, the two
+   * halves of the descriptor, and the sheet document. There is no `level`,
+   * because a new character is level 1 and levelling one up is an act somebody
+   * takes afterwards; and no `visibility`, `hpCurrent` or `accountId`, for the
+   * reason `CharacterOwnCreate` has none of them either — the row falls to its
+   * column defaults and is `dm` and unhurt.
+   *
+   * **`sheet` is resolved when the proposal is made, not when it is accepted.**
+   * The tool takes no numbers at all — it ranks the six abilities and the
+   * server applies the standard array and derives each modifier — so this is
+   * where that arithmetic has already happened, exactly as `roster` above is
+   * where a creature's name and rating have already been read out of the
+   * bestiary. A card and the row it becomes therefore cannot disagree, and the
+   * accept does no work a reader could not see coming.
+   *
+   * `rationale` is the drawing's *What Hob did* aside
+   * (`CharacterCreate.jsx:202-215`), and it is on the proposal rather than
+   * re-derived because it is a fact about *this* draft — "Wisdom is highest
+   * because you described someone who watches" — that nothing in the character
+   * row records. It survives a reload with the card, and it is deliberately
+   * **not** carried onto the accepted row: a character sheet has nowhere to
+   * keep an argument, and `origin = 'assistant'` is the provenance the row
+   * itself owes.
+   */
+  Schema.Struct({
+    target: Schema.Literal("character"),
+    name: Schema.String,
+    species: Schema.NullOr(Schema.String),
+    className: Schema.NullOr(Schema.String),
+    sheet: CharacterSheet,
+    /** Short lines, in the order Hob wrote them. Empty is legal and draws nothing. */
+    rationale: Schema.Array(Schema.String),
   }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
@@ -166,10 +215,10 @@ export class HobThread extends Schema.Class<HobThread>("HobThread")({
  *
  * `proposal` is null on every user turn and on most of Hob's — it is set only
  * when Hob offered something, and **its presence is not its acceptance**.
- * `acceptedAt` is the difference between a card the DM is looking at and a row
- * in their campaign, which is the whole safety property: an unkept proposal is
- * a turn with a `proposal` and no `acceptedAt`, and no note, beat or encounter
- * anywhere.
+ * `acceptedAt` is the difference between a card somebody is looking at and a
+ * row in the campaign, which is the whole safety property: an unkept proposal
+ * is a turn with a `proposal` and no `acceptedAt`, and no note, beat, encounter
+ * or character anywhere.
  *
  * There is no `origin` or `visibility` on the wire though the columns exist. A
  * turn's origin is `who` said it, and a conversation is DM-only by the column
@@ -336,6 +385,16 @@ export const HobAccepted = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("note"), note: Note }),
   Schema.Struct({ accepted: Schema.Literal("beat"), beat: Beat }),
   Schema.Struct({ accepted: Schema.Literal("encounter"), encounter: Encounter }),
+  /**
+   * The character a player accepted, owned by them and carrying
+   * `origin: "assistant"`.
+   *
+   * The whole row, like the three above, and here it earns its keep twice over:
+   * the screen navigates straight to `#/play/characters/:id` on the id, and
+   * every correction from that moment on is an ordinary `PATCH
+   * /me/characters/:id` against exactly this value.
+   */
+  Schema.Struct({ accepted: Schema.Literal("character"), character: Character }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 

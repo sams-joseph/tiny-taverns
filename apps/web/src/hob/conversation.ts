@@ -160,16 +160,14 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
   recorded.flatMap((turn) => {
     const said: ReadonlyArray<HobTurn> =
       turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }];
-    return turn.proposal === null
+    // `artifactFrom` answers `undefined` for a proposal this panel has no card
+    // for — today only a character draft, which is a player's and is offered
+    // into a thread this panel cannot reach. It cannot arrive; dropping it is
+    // what makes that true of the code rather than only of the predicate.
+    const card = turn.proposal === null ? undefined : artifactFrom(turn.id, turn.proposal);
+    return card === undefined
       ? said
-      : [
-          ...said,
-          {
-            id: `${turn.id}:card`,
-            who: "artifact" as const,
-            artifact: artifactFrom(turn.id, turn.proposal),
-          },
-        ];
+      : [...said, { id: `${turn.id}:card`, who: "artifact" as const, artifact: card }];
   });
 
 /**
@@ -335,14 +333,14 @@ export function useHobConversation(
               setActivity(activityFor(event.data.name, event.data.detail));
             }
             return;
-          case "proposal":
+          case "proposal": {
             setActivity(undefined);
-            append({
-              id: `${event.data.turnId}:card`,
-              who: "artifact",
-              artifact: artifactFrom(event.data.turnId, event.data.proposal),
-            });
+            const card = artifactFrom(event.data.turnId, event.data.proposal);
+            if (card !== undefined) {
+              append({ id: `${event.data.turnId}:card`, who: "artifact", artifact: card });
+            }
             return;
+          }
           case "failed":
             setActivity(undefined);
             append({ id: `hob-${nextId.current++}`, who: "hob", text: event.data.message });

@@ -253,6 +253,10 @@ export const servicesOver = <E>(
       Layer.provide([
         Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
         Campaigns.layer,
+        // A player accepting a character draft goes through `createOwn`, so the
+        // accept path holds `Characters` as well now — the same statement a
+        // typed one takes, with `assistant_turn_id` on it.
+        Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
         EncounterCreatures.layer,
         Encounters.layer,
         Notes.layer,

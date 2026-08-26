@@ -318,7 +318,16 @@ export const rosterRow = {
 
 export interface Answer {
   readonly status: number;
-  readonly body: unknown;
+  readonly body?: unknown;
+  /**
+   * A pre-framed `text/event-stream` body, for the one endpoint that streams.
+   *
+   * `hob.ask` is the only route any of these fixtures answers with a stream, and
+   * a JSON body cannot stand in for one: the derived client decodes SSE frames,
+   * so a stubbed answer has to carry real `event:`/`data:` framing. When it is
+   * set, `body` is ignored.
+   */
+  readonly sse?: string;
 }
 
 export interface Call {
