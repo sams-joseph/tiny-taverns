@@ -159,7 +159,11 @@ export const sorrel = {
   sheet: { notes: "", abilities: [], traits: [] },
 };
 
-const membership = (of: unknown, joinedAt: string) => ({ campaign: of, role: "player", joinedAt });
+const membership = (of: unknown, joinedAt: string, role = "player") => ({
+  campaign: of,
+  role,
+  joinedAt,
+});
 
 /**
  * Who is reading — `GET /me`, the one read in the round that is about the
@@ -268,6 +272,33 @@ export const noTables = (): Map<string, Answer> => {
   return routes;
 };
 
+/**
+ * One table, and it is one this account **runs** rather than plays at.
+ *
+ * The case the create control has to get right and the one a `length > 0` check
+ * would get wrong: a DM at their own table has a membership, so the roster is
+ * not empty of tables, and there is still nowhere a character *of their own*
+ * belongs — writing one there is `campaign/CharacterDialog.tsx`.
+ */
+export const onlyDmTables = (): Map<string, Answer> => {
+  const routes = noCharacters();
+  routes.set("GET /me/campaigns", {
+    status: 200,
+    body: [membership(campaign, "2026-07-02T10:00:00.000Z", "dm")],
+  });
+  return routes;
+};
+
+/** One player table, so the create control is a link rather than a picker. */
+export const oneTable = (): Map<string, Answer> => {
+  const routes = noCharacters();
+  routes.set("GET /me/campaigns", {
+    status: 200,
+    body: [membership(campaign, "2026-07-02T10:00:00.000Z")],
+  });
+  return routes;
+};
+
 export interface CharacterStubServer {
   routes: Map<string, Answer>;
   readonly calls: Array<Call>;
@@ -348,6 +379,22 @@ export const noSession: HostedSession = {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderRoster = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt("/play/characters", (screen) => (
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
+  ));
+};
+
+/**
+ * The create form, at a table this account is a player at.
+ *
+ * The campaign is the route's, because the choice happens before the route
+ * exists — see `CharacterCreateScreen`, which is where campaign-first is
+ * argued.
+ */
+export const renderCreate = async (
+  at: string = campaignId,
+  hosted: HostedSession = noSession,
+): Promise<void> => {
+  await renderAt(`/play/campaigns/${at}/characters/new`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

@@ -73,6 +73,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/play/$": "/play/nothing-like-a-route",
   "/play/campaigns/$campaignId/": `/play/campaigns/${campaignId}`,
   "/play/campaigns/$campaignId/$": `/play/campaigns/${campaignId}/a-section-we-do-not-serve`,
+  "/play/campaigns/$campaignId/characters/new": `/play/campaigns/${campaignId}/characters/new`,
   "/play/campaigns/$campaignId/chronicle": `/play/campaigns/${campaignId}/chronicle`,
   "/play/characters/": "/play/characters",
   "/play/characters/$": "/play/characters/not-a-uuid",
@@ -131,7 +132,7 @@ describe("the shell's top bar", () => {
     // Every player route, taken off the record above rather than listed again:
     // a player screen added tomorrow is covered by this the day it is routed.
     const playerRoutes = reachable.filter(([id]) => id.startsWith("/play"));
-    expect(playerRoutes).toHaveLength(8);
+    expect(playerRoutes).toHaveLength(9);
     for (const [, path] of playerRoutes) {
       await renderAt(path);
       expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();

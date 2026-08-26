@@ -12,6 +12,7 @@ import { CampaignScreen } from "./campaign/CampaignScreen";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
+import { CharacterCreateScreen } from "./characters/CharacterCreateScreen";
 import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
@@ -404,6 +405,31 @@ const playChronicleRoute = createRoute({
 });
 
 /**
+ * Writing down a character of your own — **the only player route that names a
+ * campaign, and the only one under `/play/campaigns` that writes.**
+ *
+ * It sits here rather than under `characters` beside the roster because the
+ * campaign is *step one*: `character.campaign_id` is `not null`, so a character
+ * has nowhere to live until a table is picked, and the captain's decision of
+ * 2026-08-26 reorders the drawn flow to say so. Putting the id in the URL is
+ * what makes that choice a thing you can bookmark, share and go back to, rather
+ * than React state a reload would forget.
+ *
+ * The two ways in both name it: `MyCharactersScreen`'s *New character*, which
+ * folds the memberships it already read, and `PlayerCampaignScreen`, which is
+ * already at one table.
+ *
+ * Remounted on the campaign, like every other screen under this route: a form
+ * half-typed for one table must not survive into another.
+ */
+const playCharacterCreateRoute = createRoute({
+  getParentRoute: () => playCampaignRoute,
+  path: "characters/new",
+  component: CharacterCreateScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/**
  * The characters this account plays, and one of them.
  *
  * **The only pair of routes in the product that names no campaign**, and that
@@ -525,6 +551,7 @@ export const routeTree = rootRoute.addChildren([
     playIndexRoute,
     playCampaignRoute.addChildren([
       playCampaignIndexRoute,
+      playCharacterCreateRoute,
       playChronicleRoute,
       playCampaignSplatRoute,
     ]),

@@ -1,6 +1,6 @@
 import type { CampaignId, Character, Note } from "@taverns/api";
-import { useParams } from "@tanstack/react-router";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import { Link, useParams } from "@tanstack/react-router";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -26,6 +26,14 @@ import { loadPlayerCampaignView } from "./load";
  * placeholder for any of them here would be the stubbed field the screens rule
  * forbids. What a player has today is who is at the table and what the DM chose
  * to share, so that is what this says, and it says so in as many words.
+ *
+ * **One control writes, and it is the second door into the create flow.** *New
+ * character* goes to `#/play/campaigns/:c/characters/new` — this screen is
+ * already at one table, so unlike the roster's it needs no picker and is a plain
+ * link. It is here rather than only on the roster because this is where somebody
+ * lands the moment they accept an invitation: `JoinScreen` sends a new player
+ * straight to their table, and the first thing they want is to be in the party
+ * they are looking at.
  */
 
 /**
@@ -148,7 +156,18 @@ export function PlayerCampaignScreen() {
                 ? view.campaign.partyName
                 : "You are at this table."
           }
-        />
+        >
+          <Button
+            size="sm"
+            nativeButton={false}
+            render={
+              <Link to="/play/campaigns/$campaignId/characters/new" params={{ campaignId }} />
+            }
+          >
+            <Icon name="user-plus" size={14} />
+            New character
+          </Button>
+        </TopBar>
       }
     >
       <div className="flex flex-col gap-8">

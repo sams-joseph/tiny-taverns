@@ -1,4 +1,10 @@
-import type { Character, CharacterOwnUpdate, CharacterSheet } from "@taverns/api";
+import type {
+  CampaignId,
+  Character,
+  CharacterOwnCreate,
+  CharacterOwnUpdate,
+  CharacterSheet,
+} from "@taverns/api";
 import type { TavernsClient } from "../api/client";
 import { reads, type Invalidation } from "../api/keys";
 
@@ -42,6 +48,28 @@ export const saveOwnCharacter = (
 ) => client.me.updateCharacter({ params: { characterId: character.id }, payload });
 
 /**
+ * Writing one down for the first time — `POST /me/campaigns/:c/characters`.
+ *
+ * **The campaign is the one thing a player's write ever names**, and only
+ * because an insert has nothing else to name it with: a PATCH asks the
+ * predicate about the row's own `campaign_id`, and there is no row yet. It is a
+ * claim, refused by `ensureCampaignReadable` if it is a false one, which is why
+ * this function takes it as an argument rather than reaching for a "current"
+ * table — inventing one would silently write a character into a table nobody
+ * chose.
+ *
+ * There is still nothing to guard here. Whose it is comes from the credential
+ * on the server, and `CharacterOwnCreate` has no field for an account, a live
+ * column or a visibility — see `create.ts`'s `payloadFrom`, which is where the
+ * form's values become one.
+ */
+export const createOwnCharacter = (
+  client: TavernsClient,
+  campaignId: CampaignId,
+  payload: CharacterOwnCreate,
+) => client.me.createCharacter({ params: { campaignId }, payload });
+
+/**
  * What a player's write to their own sheet changes — **two reads, and the
  * second one is the interesting half.**
  *
@@ -60,10 +88,21 @@ export const saveOwnCharacter = (
  * gear, a death save) all change the same two things, and four copies of a list
  * is four chances for one of them to fall behind.
  */
-export const ownCharacterWrites = (character: Character): Invalidation => [
+export const characterWritesAt = (campaignId: CampaignId): Invalidation => [
   reads.myCharacters,
-  reads.characters(character.campaignId),
+  reads.characters(campaignId),
 ];
+
+/**
+ * The same two reads, from a row that already exists.
+ *
+ * A create knows only where it is going and an edit knows which row it moved,
+ * so the two spell the campaign differently and name the same list — one
+ * function under both, because two copies of a key list is two chances for one
+ * of them to fall behind.
+ */
+export const ownCharacterWrites = (character: Character): Invalidation =>
+  characterWritesAt(character.campaignId);
 
 /**
  * The whole document, with one part replaced.

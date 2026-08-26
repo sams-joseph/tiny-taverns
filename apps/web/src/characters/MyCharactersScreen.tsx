@@ -1,11 +1,12 @@
 import type { Character } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
-import { apiAtom, useApiAtom } from "../api/atoms";
-import { reads } from "../api/keys";
+import { useApiAtom } from "../api/atoms";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { loadMyCharacters, type MyCharactersView } from "./load";
+import { tablesForNewCharacter } from "./create";
+import { myCharactersAtom, type MyCharactersView } from "./load";
+import { NewCharacterAction } from "./NewCharacterAction";
 import { hitPoints, rosterSummary } from "./sheet";
 import { Portrait, StatPill } from "./SheetParts";
 
@@ -38,10 +39,29 @@ import { Portrait, StatPill } from "./SheetParts";
  *   `#/join/<token>`, a screen that already exists and reads the invitation
  *   before anybody signs in. A second, weaker way in would be a second answer to
  *   what an invitation is.
- * - **Every control that writes.** *New character*, *Send to the DM*, the
- *   portrait upload. A player cannot write anything yet — `ownedRowWritable`
- *   deliberately does not exist — and characters are made by the DM, in
- *   `campaign/CharacterDialog.tsx`.
+ * - ***Send to the DM*** and **the portrait upload**. Neither has anything
+ *   behind it: there is no approval queue and no column for one — the delivery's
+ *   own open questions say so — and there is no asset store, so the card draws
+ *   initials.
+ *
+ * ### *New character* is here now, and this is what changed
+ *
+ * It used to be in the list above, on the reasoning that *a player cannot write
+ * anything*. **Half of that went when `ownRowWritable` shipped** and the rest
+ * went with `POST /me/campaigns/:c/characters`: a player at a shared table
+ * writes their own row now, and this is the screen they start from.
+ *
+ * What did not change is who owns what. A character created here is the
+ * creator's — `account_id` is `CurrentActor`'s, server-side, and there is
+ * nowhere on `CharacterOwnCreate` to name an account — and it is `dm` by column
+ * default, so their DM sees it and the rest of the table does not.
+ * `campaign/CharacterDialog.tsx` is unchanged and is still how a DM types up
+ * somebody else's, with `CharacterAssign` to hand it over.
+ *
+ * The button is `NewCharacterAction`, which is *step one of the flow* rather
+ * than a control on the form — the captain's reordering puts finding a table
+ * first, and it folds the memberships this screen already read rather than
+ * asking for them again.
  *
  * A *Playing* badge goes too, and for the list's own rule rather than the data's:
  * every character here is in a campaign, so a badge on all of them would say
@@ -118,32 +138,51 @@ function CharacterCard({
 }
 
 /**
- * Two silences, told apart — and neither of them papered over.
+ * Three silences, told apart — and none of them papered over.
  *
  * An empty roster is exactly what it says: this account owns no character row.
- * Which of the two reasons it is depends on whether the account sits at a table
- * at all, and that is `GET /me/campaigns`, which `load.ts` already read.
+ * *Why* is a question about the memberships `load.ts` already read, and it has
+ * three answers rather than the two it had before a player could write one:
+ *
+ * - **no table at all** — the way in is an invitation, and it is somebody
+ *   else's to send;
+ * - **tables, but none you play at** — a DM who pressed *Player*. A character of
+ *   your own goes at a table you sit at; the one you run is
+ *   `campaign/CharacterDialog.tsx`'s. This branch exists so the copy never
+ *   offers a control `NewCharacterAction` has decided not to draw, which is the
+ *   failure a plain `memberships.length` check makes;
+ * - **a table you play at** — write one, or wait for your DM.
+ *
+ * The last sentence is what changed. It used to read *"your DM writes the
+ * characters and says who plays which"*, which was true of every release until
+ * this one and is now half the answer.
  */
 function NothingYet({ view }: { readonly view: MyCharactersView }) {
-  return view.tableCount === 0 ? (
+  if (view.memberships.length === 0) {
+    return (
+      <EmptyState icon="user" title="No characters yet">
+        Nobody has invited you to a table. Follow the link your DM sends you, and whatever they hand
+        you appears here.
+      </EmptyState>
+    );
+  }
+
+  if (tablesForNewCharacter(view.memberships).length === 0) {
+    return (
+      <EmptyState icon="user" title="No characters yet">
+        You run the tables you are at, and a character of your own belongs at one you play at.
+        Follow the link another DM sends you and it appears here.
+      </EmptyState>
+    );
+  }
+
+  return (
     <EmptyState icon="user" title="No characters yet">
-      Nobody has invited you to a table. Follow the link your DM sends you, and whatever they hand
-      you appears here.
-    </EmptyState>
-  ) : (
-    <EmptyState icon="user" title="No characters yet">
-      Your DM writes the characters and says who plays which. Ask them to put your name on one, and
-      it shows up here.
+      Write one down for a table you sit at, or wait for your DM to hand you one of theirs. Either
+      way it appears here.
     </EmptyState>
   );
 }
-
-/**
- * Every character this account plays, as an atom. No key: the read names no
- * campaign — `GET /me/characters` is the one read on `character` that does not
- * — so there is one of it, shared by whatever asks.
- */
-const myCharactersAtom = apiAtom(loadMyCharacters, [reads.myCharacters]);
 
 export function MyCharactersScreen() {
   const [resource, reload] = useApiAtom(myCharactersAtom);
@@ -157,9 +196,11 @@ export function MyCharactersScreen() {
           subtitle={
             view === undefined
               ? undefined
-              : rosterSummary(view.characters, view.tableCount, view.accountName)
+              : rosterSummary(view.characters, view.memberships.length, view.accountName)
           }
-        />
+        >
+          {view !== undefined && <NewCharacterAction memberships={view.memberships} />}
+        </TopBar>
       }
     >
       {resource.state === "loading" && <Loading label="Reading your characters…" />}

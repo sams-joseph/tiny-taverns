@@ -1,6 +1,14 @@
-import type { CampaignId, Character, CharacterId, PlayerLiveTable } from "@taverns/api";
+import type {
+  CampaignId,
+  CampaignMembership,
+  Character,
+  CharacterId,
+  PlayerLiveTable,
+} from "@taverns/api";
 import { Effect } from "effect";
+import { apiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
+import { reads } from "../api/keys";
 
 /**
  * Everything both character screens render, in one shape.
@@ -29,10 +37,30 @@ export interface MyCharactersView {
    * the predicate has already settled, and the one that could disagree.
    */
   readonly characters: ReadonlyArray<Character>;
-  /** `campaignId` → the campaign's name, for the one line the row cannot carry. */
+  /**
+   * Every table this account sits at, and what it is at each — the answer
+   * `GET /me/campaigns` gives, carried whole.
+   *
+   * Three screens fold it three ways and none of them wants the same shape: the
+   * roster asks *how many tables at all* to tell its two silences apart, the
+   * sheet asks *what is this one called*, and the create form asks *which of
+   * these am I a player at*, because that is the set a character of your own can
+   * go into. Carrying the list is one read; three folds of it in the screens
+   * that want them is no reads at all.
+   *
+   * `role` is why it has to be the memberships rather than the campaigns: it is
+   * a fact about the pair and has nowhere on a `Campaign` to live.
+   */
+  readonly memberships: ReadonlyArray<CampaignMembership>;
+  /**
+   * `campaignId` → the campaign's name, for the one line the row cannot carry.
+   *
+   * An **index** over the field above rather than a second answer to it: both
+   * screens that use it are looking a name up by id inside a render, and
+   * rebuilding the map per row is the thing a shared shape exists to avoid.
+   * Anything that wants the list itself, or the role, reads `memberships`.
+   */
   readonly campaignNames: ReadonlyMap<CampaignId, string>;
-  /** How many tables this account sits at at all — which is not how many it plays at. */
-  readonly tableCount: number;
   /**
    * What the signed-in account is called — `GET /me`, the one read here that is
    * about the reader rather than about what they have.
@@ -53,13 +81,29 @@ export const loadMyCharacters = (client: TavernsClient) =>
 
     return {
       characters,
+      memberships,
       campaignNames: new Map(
         memberships.map((membership) => [membership.campaign.id, membership.campaign.name]),
       ),
-      tableCount: memberships.length,
       accountName: me.name,
     } satisfies MyCharactersView;
   });
+
+/**
+ * Every character this account plays, as an atom.
+ *
+ * **No key**, because the read names no campaign — `GET /me/characters` is the
+ * one read on `character` that does not — so there is one of it, shared by
+ * whatever asks. Three screens do: the roster, the sheet, and the create form,
+ * which wants the memberships this already carries and so costs nothing on
+ * arrival from either of the other two.
+ *
+ * It lives here rather than beside a screen for the reason `campaign/load.ts`'s
+ * atoms do: an atom is its own identity, so a second screen naming a second
+ * atom over the same read would make two requests where the registry can make
+ * one.
+ */
+export const myCharactersAtom = apiAtom(loadMyCharacters, [reads.myCharacters]);
 
 /**
  * The sheet's own view: the roster's, plus what is live at that character's
