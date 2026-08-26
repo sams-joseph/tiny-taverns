@@ -90,14 +90,30 @@ describe("the API declaration", () => {
     expect(identity?.path).toBe("/me");
     expect(identity?.params).toBeUndefined();
     expect(identity?.query).toBeUndefined();
-    // And it is not a lookup wearing another name: the one endpoint in the
-    // whole group that takes a path parameter is the character write, whose
-    // parameter is a row of the caller's own.
-    expect(
-      endpointsOf(me as GroupShape)
-        .filter((endpoint) => endpoint.params !== undefined)
-        .map((endpoint) => endpoint.identifier),
-    ).toEqual(["updateCharacter"]);
+    // And it is not a lookup wearing another name, which is a property of the
+    // *whole group* rather than of this one endpoint: **nothing here takes a
+    // path that names an account.**
+    //
+    // Asserted as the path shape rather than as "only one endpoint has params",
+    // because that weaker form has already been outgrown twice. Three endpoints
+    // take a parameter now — a character of the caller's own, twice, and the
+    // campaign a new one goes into, which an insert has no row to derive. None
+    // of the three is an account, and an `:accountId` appearing under `/me`
+    // would be the second answer to `members.list` that this test exists to
+    // prevent, whether or not it arrived alone.
+    const parameterised = endpointsOf(me as GroupShape).filter(
+      (endpoint) => endpoint.params !== undefined,
+    );
+    expect(parameterised.map((endpoint) => endpoint.identifier).sort()).toEqual([
+      "createCharacter",
+      "deleteCharacter",
+      "updateCharacter",
+    ]);
+    expect(parameterised.map((endpoint) => endpoint.path).sort()).toEqual([
+      "/me/campaigns/:campaignId/characters",
+      "/me/characters/:characterId",
+      "/me/characters/:characterId",
+    ]);
   });
 
   it("declares the groups the product has today, and no more", () => {

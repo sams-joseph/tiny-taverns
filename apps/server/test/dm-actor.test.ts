@@ -531,7 +531,23 @@ describe("the scope, counted", () => {
     // and it discloses strictly less than the rows do. Gating them would gate
     // the bestiary itself, which is a creature read a player of a shared
     // campaign is entitled to.
-    expect(ungated).toBe(73);
+    //
+    // The seventy-fourth and seventy-fifth are `Characters.createOwn` and
+    // `Characters.removeOwn` — `POST /me/campaigns/:c/characters` and
+    // `DELETE /me/characters/:id`, the other two thirds of what a player may do
+    // to a character. They are ungated for `updateOwn`'s reason, not for a new
+    // one: the gate proves *this account is the campaign's DM*, and the whole
+    // point of all three is that its caller is not, so a proof here would answer
+    // the wrong question rather than a redundant one.
+    //
+    // What bounds the delete is `ownRowWritable`, the same fragment the PATCH
+    // composes, so it can never reach a row `ownedRowReadable` refuses. What
+    // bounds the create is `ensureCampaignReadable` — the campaign half of
+    // `withinReadableCampaign`, which is what makes a row created through it
+    // readable and writable by its creator afterwards — plus
+    // `CharacterOwnCreate`, which has no field for a live column, for
+    // `visibility` or for an account. `player-create.test.ts` pins both halves.
+    expect(ungated).toBe(75);
   });
 });
 

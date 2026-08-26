@@ -513,6 +513,76 @@ export const CharacterOwnUpdate = Schema.Struct({
 export type CharacterOwnUpdate = typeof CharacterOwnUpdate.Type;
 
 /**
+ * What a **player** may say when they write down a character of their own —
+ * `POST /me/campaigns/:campaignId/characters`, and the first row a non-DM has
+ * ever been able to bring into being.
+ *
+ * Until this existed a player at a shared table could not create a character at
+ * all: `characters.create` composes `campaignWritable`, which requires `isDm`,
+ * so every character in the product was typed by its DM and handed over with
+ * `CharacterAssign`. That path is unchanged and is still the DM's; this is the
+ * other door, and it opens onto a row the caller owns from the moment it exists.
+ *
+ * ### It is `CharacterOwnUpdate`'s shape, not `CharacterCreate`'s
+ *
+ * The same rule, met once more: **distinct schemas on distinct paths, never a
+ * field filter over the wider type.** Four fields `CharacterCreate` carries are
+ * absent here and each is absent for the reason `CharacterOwnUpdate` gives:
+ *
+ * - **`hpCurrent`** — and this is the one that would otherwise ride in on a
+ *   good argument. `CharacterCreate` allows it because *a row that does not
+ *   exist yet is in no fight*, so there is no second copy to disagree with; that
+ *   is true of this insert too. But it answers a different question — how hurt
+ *   somebody already is, which is the DM's to say and moves by delta everywhere
+ *   else — and "safe on this one statement" is not the same as "a player's to
+ *   set". A character created here starts with `hp_current` null, which is what
+ *   the column default already means: *nobody has said yet*, neither zero nor
+ *   full.
+ * - **`tempHp`, `conditions`** — `0014`'s live trio, and neither is something
+ *   true of a character before their first session.
+ * - **`visibility`** — the row's own half of the disclosure seam. It falls to
+ *   the column default, `dm`, which is the answer a new row must fail to: the
+ *   player reads it because they own it (`ownRowReadable`), the DM reads it
+ *   because `isDm` is a disjunct of the same predicate, and nobody else at the
+ *   table does until the DM says so. **That is the property the whole slice is
+ *   verified against**, and it is a column default rather than a decision this
+ *   payload gets to make.
+ *
+ * **`accountId` is not here either, and there is nowhere it could go.** The
+ * owner is `CurrentActor`'s, taken server-side — the `Invites.redeem` shape
+ * verbatim, *"takes a token and nothing else … so a caller cannot invite
+ * somebody else in"*. So the guarantee `CharacterAssign` buys by being its own
+ * endpoint — a player cannot point a character at another account — is bought
+ * here by the payload having no such field, which is the same guarantee from
+ * the same direction.
+ *
+ * ### What bounds which *campaign* it lands in
+ *
+ * The campaign is a path segment and therefore a client claim, which is the one
+ * way this endpoint differs from `me.updateCharacter` — a PATCH derives the
+ * campaign from the row, and an insert has no row to derive it from. What
+ * refuses a false claim is `ensureCampaignReadable`, which is exactly the
+ * campaign half of `withinReadableCampaign`, the piece `ownRowReadable` and
+ * `ownRowWritable` already share. So a row created through this gate is
+ * guaranteed readable *and* writable by its creator afterwards, and a player at
+ * a table the DM has not shared is refused here with the same `NotFound` they
+ * get from everything else at that table. **No new predicate.**
+ */
+export const CharacterOwnCreate = Schema.Struct({
+  name: Schema.NonEmptyString,
+  playerName: Schema.optional(Schema.String),
+  level: Schema.optional(level),
+  species: Schema.optional(shortLabel),
+  className: Schema.optional(shortLabel),
+  ac: Schema.optional(ac),
+  hpMax: Schema.optional(hp),
+  sheetUrl: Schema.optional(sheetUrl),
+  /** Omit and the column default — an empty document — decides. */
+  sheet: Schema.optional(CharacterSheet),
+});
+export type CharacterOwnCreate = typeof CharacterOwnCreate.Type;
+
+/**
  * Apply damage or healing to a character, outside a fight or inside one.
  *
  * `CombatantDamage`'s shape exactly, and for its reasons — a delta rather than

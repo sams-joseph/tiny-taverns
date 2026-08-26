@@ -106,11 +106,14 @@ const CampaignsLive = HttpApiBuilder.group(
  * handler that filtered would be the leak pattern `repo/visibility.ts` exists
  * to prevent, and it has nothing to filter with.
  *
- * `updateCharacter` is as thin as the rest, which matters more here than
- * anywhere else in this file: it is the product's first player write, and a
- * "while we are here, refuse a live column" block would be the second place that
- * rule lives. There is nothing to refuse — `CharacterOwnUpdate` has no such
- * field, and `ownRowWritable` decides the row.
+ * The three writes are as thin as the reads, which matters more here than
+ * anywhere else in this file: they are the whole of what a non-DM may do to a
+ * `character`, and a "while we are here, refuse a live column" block would be
+ * the second place that rule lives. There is nothing to refuse.
+ * `CharacterOwnUpdate` and `CharacterOwnCreate` have no field for a live column,
+ * for `visibility` or for an account; `ownRowWritable` decides the row for the
+ * PATCH and the DELETE, and `ensureCampaignReadable` decides where the POST may
+ * put one.
  */
 const MeLive = HttpApiBuilder.group(
   TavernsApi,
@@ -134,6 +137,14 @@ const MeLive = HttpApiBuilder.group(
         .handle("updateCharacter", ({ params, payload }) =>
           characters.updateOwn(params.characterId, payload),
         )
+        // The one handler in this group whose path names a campaign, because an
+        // insert has no row to derive one from. There is still nothing to check
+        // here: `ensureCampaignReadable` refuses a campaign this credential does
+        // not reach, and the owner is `CurrentActor`'s rather than an argument.
+        .handle("createCharacter", ({ params, payload }) =>
+          characters.createOwn(params.campaignId, payload),
+        )
+        .handle("deleteCharacter", ({ params }) => characters.removeOwn(params.characterId))
     );
   }),
 );

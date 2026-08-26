@@ -7,6 +7,7 @@ import {
   type CharacterCreate,
   type CharacterDamage,
   type CharacterId,
+  type CharacterOwnCreate,
   type CharacterOwnUpdate,
   type CharacterSheet,
   type CharacterUpdate,
@@ -188,6 +189,41 @@ export class Characters extends Context.Service<
       campaignId: CampaignId,
       payload: CharacterCreate,
     ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    /**
+     * A player writing down a character of their own —
+     * `POST /me/campaigns/:campaignId/characters`, and **the first row a non-DM
+     * has ever been able to bring into being.**
+     *
+     * The mirror of `create` above, and every difference from it is deliberate:
+     *
+     * - **`ensureCampaignReadable`, not `ensureCampaignWritable`.** The writable
+     *   gate requires `isDm` and is what made this impossible before. The
+     *   readable one is the campaign half of `withinReadableCampaign` — the same
+     *   piece `ownRowReadable` and `ownRowWritable` compose and do not restate —
+     *   so a row created through it is guaranteed readable *and* writable by its
+     *   creator afterwards, by the same clauses rather than by two rules kept in
+     *   step.
+     * - **`account_id` is the actor's**, written here and taken from
+     *   `CurrentActor`. `CharacterOwnCreate` has no such field, so there is no
+     *   request shape that names anybody else — the property `assign` buys by
+     *   being a separate endpoint, bought here by the payload's shape.
+     * - **A narrower payload.** No `hpCurrent`, `tempHp`, `conditions` or
+     *   `visibility`: the live trio stays the DM's, and the row's own half of
+     *   the disclosure seam falls to the column default. A new character is
+     *   `dm`, which its owner and its DM both read and nobody else does.
+     *
+     * **It rings no doorbell, and that is `updateOwn`'s answer rather than an
+     * omission.** `currentSessionOf` composes `campaignWritableById`, which
+     * answers a player nothing, so a bell here would ring for a DM using this
+     * endpoint and stay silent for the audience it is for — a doorbell whose
+     * behaviour depends on who called it, which is worse than none. An open DM
+     * page stays stale until it refetches, exactly as it does for a level-up
+     * typed between games.
+     */
+    readonly createOwn: (
+      campaignId: CampaignId,
+      payload: CharacterOwnCreate,
+    ) => Effect.Effect<Character, NotFound, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
       id: CharacterId,
@@ -246,6 +282,32 @@ export class Characters extends Context.Service<
       campaignId: CampaignId,
       id: CharacterId,
     ) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
+     * A player throwing away a character of their own —
+     * `DELETE /me/characters/:characterId`.
+     *
+     * `remove`'s twin, and the differences are `updateOwn`'s: no campaign id
+     * (the row's own answers for it, through `rowCampaign`) and
+     * `ownRowWritable` rather than `rowWritable` — deletable because the row is
+     * theirs, not because they are the DM.
+     *
+     * It exists because `createOwn` above changed what an unwanted row is. Every
+     * `character` until this slice was typed by a DM who could already delete
+     * it; now a player two fields into a character they thought better of leaves
+     * a real row on their DM's party screen, and the remedy is a way to take it
+     * back.
+     *
+     * **One statement and no doorbell, like `updateOwn` and unlike `remove`.**
+     * `remove` is a transaction because it appends `character-updated` after
+     * the delete; this rings nothing for the reason `createOwn` gives above, so
+     * there is no second write to commit with the first. What the delete
+     * reaches beyond its own row, Postgres reaches in the same statement:
+     * `combatant.character_id` is `on delete set null`, so a fight already on
+     * the table keeps every field it snapshotted at seed time and loses only a
+     * pointer nothing reads back. Deleting a character mid-fight is therefore
+     * the same non-event it is for the DM.
+     */
+    readonly removeOwn: (id: CharacterId) => Effect.Effect<void, NotFound, CurrentActor>;
   }
 >()("Characters") {
   static readonly layer = Layer.effect(this)(
@@ -371,6 +433,57 @@ export class Characters extends Context.Service<
                 Effect.tap(ring),
                 Effect.map(({ character }) => character),
               ),
+          ),
+
+        /**
+         * **One statement, and the two things it does that `create` does not.**
+         *
+         * `ensureCampaignReadable` rather than `ensureCampaignWritable`: the
+         * writable gate is `isDm` and is exactly what made a player unable to
+         * write a character at all. The readable one is the campaign half of
+         * `withinReadableCampaign` — the same fragment `ownRowReadable` and
+         * `ownRowWritable` compose — so this insert cannot put a row anywhere
+         * its author will not afterwards be able to read and edit. That is one
+         * predicate doing both jobs rather than two that could drift.
+         *
+         * `account_id` is `actor.accountId` and is written *here*, from the
+         * credential, because there is nowhere on `CharacterOwnCreate` for a
+         * caller to put one. No comparison against anything a request supplied,
+         * so there is no shape of this call that creates somebody else's
+         * character — the same guarantee `assign` gives by being a different
+         * endpoint, arrived at from the other direction.
+         *
+         * Everything the payload cannot say falls to the column: `hp_current`
+         * null (*nobody has said yet*, which is what `0014` means by it),
+         * `temp_hp` zero, no conditions, and `visibility` at `dm` — which its
+         * owner reads through `ownRowReadable` and their DM through `isDm`, and
+         * nobody else at the table until the DM says otherwise.
+         */
+        createOwn: (campaignId, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const rows = yield* sql<CharacterRow>`
+                insert into character ${sql.insert(
+                  defined({
+                    campaign_id: campaignId,
+                    account_id: actor.accountId,
+                    name: payload.name,
+                    player_name: payload.playerName,
+                    level: payload.level,
+                    species: payload.species,
+                    class_name: payload.className,
+                    ac: payload.ac,
+                    hp_max: payload.hpMax,
+                    sheet_url: payload.sheetUrl,
+                    body: payload.sheet && encodeSheet(payload.sheet),
+                  }),
+                )}
+                returning *
+              `;
+              return toCharacter(rows[0]!);
+            }),
           ),
 
         /**
@@ -667,6 +780,32 @@ export class Characters extends Context.Service<
                 }),
               )
               .pipe(Effect.tap(ring), Effect.asVoid),
+          ),
+
+        /**
+         * The player's own delete — `updateOwn`'s shape with a `delete` in it.
+         *
+         * The predicate is the same one the PATCH composes, which is what makes
+         * *"a player can never remove a character they could not edit"* a fact
+         * about the fragment rather than about two `WHERE` clauses agreeing.
+         * `ownRowWritable` is strictly narrower than `ownedRowReadable`, so
+         * somebody else's `shared` character and an unassigned one are both
+         * refused — `account_id = ${actor.accountId}` never matches null — and
+         * both give the ordinary `NotFound` naming the character rather than
+         * saying which kind of refusal it was.
+         */
+        removeOwn: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<{ readonly id: CharacterId }>`
+                delete from character
+                where character.id = ${id}
+                  and ${ownRowWritable(sql, "character", rowCampaign(sql, "character"), actor)}
+                returning character.id
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
+            }),
           ),
       };
     }),

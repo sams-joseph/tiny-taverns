@@ -9,6 +9,7 @@ import {
   CharacterAssign,
   CharacterCreate,
   CharacterDamage,
+  CharacterOwnCreate,
   CharacterOwnUpdate,
   CharacterUpdate,
 } from "./Character.js";
@@ -156,10 +157,20 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * The tables this account is at, and what it is at them — and the characters it
  * plays across all of them.
  *
- * **The one group in the product that names no campaign**, because it is the
- * question you ask before you have one: a signed-in account with no membership
- * anywhere is now a legitimate steady state — somebody who signed up and has
- * not been invited yet — and this is the read whose empty answer says so.
+ * **The group whose reads name no campaign**, because they are the questions
+ * you ask before you have one: a signed-in account with no membership anywhere
+ * is a legitimate steady state — somebody who signed up and has not been
+ * invited yet — and this is the read whose empty answer says so.
+ *
+ * `createCharacter` is the one endpoint here that does name one, and the
+ * exception is worth reading rather than treating as drift: a PATCH asks the
+ * predicate about the row's own `campaign_id`, so there is nothing for a caller
+ * to claim; **an insert has no row to derive that from**, and where a new
+ * character goes is genuinely the caller's to say. It is a claim, refused by
+ * `ensureCampaignReadable` exactly as every other create in the product refuses
+ * one. What the endpoint still does not let a caller name is the *account* — so
+ * the group's real property is intact where it matters: nothing here answers
+ * about, or writes for, anybody but the credential.
  *
  * No endpoint here is a second answer to a campaign-scoped one. `campaigns`
  * composes the identical predicate `campaigns.list` does (see
@@ -177,11 +188,18 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * takes nothing at all, so the account it answers about is the credential's by
  * construction.
  *
- * `updateCharacter` is the group's first write and the product's first player
- * write. It follows the same rule from the other side: its predicate is
- * conjoined with ownership too, so it can only ever reach rows `characters`
- * above already answers — and it carries a payload of its own rather than the
- * DM's, so the columns it may move are a fact about which schema exists.
+ * The three writes are the whole of what a player may do to a `character`, and
+ * they follow one rule from three sides: **which rows** is a predicate
+ * conjoined with ownership, so no write here reaches a row `characters` above
+ * would not already answer, and **which columns** is a payload of the player's
+ * own rather than the DM's, so what may move is a fact about which schema
+ * exists.
+ *
+ * - `createCharacter` — `CharacterOwnCreate`, gated by `ensureCampaignReadable`,
+ *   with `account_id` from `CurrentActor` and nowhere on the wire to put one.
+ * - `updateCharacter` — the product's first player write, over `ownRowWritable`.
+ * - `deleteCharacter` — the same predicate as the PATCH, and it exists because
+ *   creating a character is now something a player can abandon halfway.
  */
 class MeGroup extends HttpApiGroup.make("me")
   .add(
@@ -292,6 +310,103 @@ class MeGroup extends HttpApiGroup.make("me")
       params: { characterId: CharacterId },
       payload: CharacterOwnUpdate,
       success: Character,
+      error: NotFound,
+    }),
+    /**
+     * **A player writes down a character of their own** — the first row a
+     * non-DM has ever been able to bring into being, and the endpoint that
+     * makes `#/play/campaigns/:c/characters/new` possible.
+     *
+     * Until this existed, `characters.create` was the only way a `character`
+     * row came about and it composes `campaignWritable`, which requires
+     * `isDm`. So a player at a shared table could not create a character at
+     * all — they waited for their DM to type one up and hand it over with
+     * `CharacterAssign`. That door is unchanged; this is a second one, and the
+     * two differ in exactly the way the group they each live in does.
+     *
+     * ### The one endpoint here that names a campaign, and why it has to
+     *
+     * Everywhere else in this group the property is *it names no campaign, so
+     * there is none for a caller to claim* — a PATCH asks the predicate about
+     * the row's own `campaign_id`, so the campaign a request reaches is by
+     * construction the campaign the row is in. **An insert has no row to derive
+     * that from.** Where the character goes is genuinely the caller's to say,
+     * so it is a path segment and therefore a claim, exactly as it is on every
+     * other create in the product.
+     *
+     * What refuses a false one is `ensureCampaignReadable` — a live membership,
+     * a credential that reaches this campaign, and `isDm OR campaign.visibility
+     * = 'shared'`. That is *the campaign half of `withinReadableCampaign`*, the
+     * piece `ownRowReadable` and `ownRowWritable` already share and do not
+     * restate, which is what makes the guarantee worth having: a row created
+     * through this gate is readable and writable by its creator afterwards by
+     * the same clauses, rather than by two lists kept in step. A player at a
+     * table the DM has not shared is refused here with the same `NotFound`
+     * everything else at that table gives them. **No new predicate.**
+     *
+     * ### Whose it is, and where that is decided
+     *
+     * `account_id` is `CurrentActor`'s, taken server-side. It is not on
+     * `CharacterOwnCreate` and there is nowhere on this endpoint to put one —
+     * the `Invites.redeem` shape verbatim, which *"takes a token and nothing
+     * else — no account id (it is `CurrentActor`'s, so a caller cannot invite
+     * somebody else in)"*. So the property `CharacterAssign` protects by being
+     * a separate DM-only endpoint is protected here by the payload having no
+     * such field, and a player cannot create a character for anybody else any
+     * more than they can re-point one.
+     *
+     * **The DM's assign is not on this path and does not need to run.**
+     * Requiring it would mean a player creating a character they then cannot
+     * read. It stays what it is for: the character a DM types up mid-campaign,
+     * and reassignment.
+     *
+     * ### It fails closed, and that is the column default rather than a choice
+     *
+     * `CharacterOwnCreate` has no `visibility`, so a new character is `dm`. Its
+     * creator reads it because they own it and the DM reads it because `isDm`
+     * is a disjunct of the same predicate; nobody else at the table does until
+     * the DM shares it. A DM passing this gate through `isDm` may use it too —
+     * harmless, and not a reason to narrow an endpoint whose audience is the
+     * people who could not write anything before.
+     */
+    HttpApiEndpoint.post("createCharacter", "/campaigns/:campaignId/characters", {
+      params: { campaignId: CampaignId },
+      payload: CharacterOwnCreate,
+      success: Character,
+      error: NotFound,
+    }),
+    /**
+     * Throwing away a character of your own.
+     *
+     * **It exists because creating one is now cheap**, which is a state the
+     * product has not been in before: every `character` row until this slice
+     * was typed by a DM who could already delete it, so a row nobody wanted was
+     * a row somebody had chosen to make. A player who starts a character, gets
+     * two fields in and changes their mind now leaves a real row in their DM's
+     * party list, and the honest remedy is a way to take it back rather than an
+     * apology in a comment.
+     *
+     * `ownRowWritable`, the same predicate `updateCharacter` composes and
+     * therefore the same set of rows: yours, in a campaign you hold a live
+     * membership of, through a credential that reaches it, while the DM has
+     * shared it. Somebody else's `shared` character is refused, an unassigned
+     * one is refused (`account_id = me` never matches null), and both give the
+     * ordinary `NotFound` rather than saying which.
+     *
+     * **It is not the DM's delete under another name.** `characters.remove`
+     * composes `rowWritable` and reaches every character at the table; this
+     * reaches one account's own. Neither is wider than the other where they
+     * overlap, and the DM's stays the answer to *"somebody left and their
+     * character goes with them"*.
+     *
+     * Like the PATCH beside it, one statement and no doorbell: nothing live
+     * moved, and the fight's copy of a character is a snapshot that reads
+     * nothing back. An open DM page stays stale until it refetches, exactly as
+     * it does for a level-up typed between games.
+     */
+    HttpApiEndpoint.delete("deleteCharacter", "/characters/:characterId", {
+      params: { characterId: CharacterId },
+      success: Schema.Void,
       error: NotFound,
     }),
   )
