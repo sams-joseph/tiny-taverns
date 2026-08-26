@@ -157,15 +157,32 @@ const problemsIn = (kind: OptionKind, draft: OptionDraft): DraftProblems => {
   return problems;
 };
 
-const bodyOf = (kind: OptionKind, draft: OptionDraft): ClassBody | SpeciesBody => {
+/**
+ * The draft as the half of a document its `kind` names, **paired with that
+ * kind** rather than returned bare.
+ *
+ * The pair is what makes the writes below cast-free: `OptionLibraryCreate` is a
+ * union discriminated on `kind`, so a bare `ClassBody | SpeciesBody` beside a
+ * `kind` the compiler cannot relate it to would need an assertion at every call
+ * site — which is exactly what a discriminated union exists to avoid.
+ */
+const documentOf = (
+  kind: OptionKind,
+  draft: OptionDraft,
+):
+  | { readonly kind: "class"; readonly body: ClassBody }
+  | { readonly kind: "species"; readonly body: SpeciesBody } => {
   const summary = draft.summary.trim();
   // Omitted rather than `""`, which is `CharacterOption.ts`'s own rule about an
   // optional key: an empty summary is *nobody wrote one*, and a blank string
   // stored in the document would render as an empty paragraph on the card.
-  const shared = summary === "" ? {} : { summary };
+  const said = summary === "" ? {} : { summary };
   return kind === "class"
-    ? { hitDie: parseWhole(draft.hitDie) ?? 8, unarmouredAc: draft.unarmouredAc, ...shared }
-    : { hpPerLevel: parseWhole(draft.hpPerLevel) ?? 0, ...shared };
+    ? {
+        kind: "class",
+        body: { hitDie: parseWhole(draft.hitDie) ?? 8, unarmouredAc: draft.unarmouredAc, ...said },
+      }
+    : { kind: "species", body: { hpPerLevel: parseWhole(draft.hpPerLevel) ?? 0, ...said } };
 };
 
 export function OptionDialog({
@@ -210,7 +227,7 @@ export function OptionDialog({
     if (Object.keys(problems).length > 0) return;
 
     const name = draft.name.trim();
-    const body = bodyOf(kind, draft);
+    const written = documentOf(kind, draft);
 
     const saved = await submit(
       (client) =>
@@ -218,7 +235,7 @@ export function OptionDialog({
           if (option !== undefined) {
             return yield* client.options.update({
               params: { campaignId, optionId: option.id },
-              payload: { name, body, visibility: draft.visibility },
+              payload: { name, body: written.body, visibility: draft.visibility },
             });
           }
 
@@ -233,19 +250,18 @@ export function OptionDialog({
           // *Copy from your library* is the control for exactly that state —
           // where rolling back with a third request would fail the same way one
           // call later.
-          // Two calls rather than one with a computed payload: the create is a
-          // union discriminated on `kind`, so branching at the call site is
-          // what lets the compiler see that a class create carries a class
-          // document. A single call with a widened payload would need a cast,
-          // and a cast is exactly what a discriminated union exists to avoid.
-          const original =
-            kind === "class"
-              ? yield* client.library.createOption({
-                  payload: { kind: "class", name, body: body as ClassBody },
-                })
-              : yield* client.library.createOption({
-                  payload: { kind: "species", name, body: body as SpeciesBody },
-                });
+          // Branched at the call site rather than handed a computed payload:
+          // the endpoint's payload is a union discriminated on `kind`, and TS
+          // will not resolve a union *value* against it. Narrowing `written`
+          // first is what makes that cast-free — `written.body` really is a
+          // class document inside the first arm.
+          const original = yield* written.kind === "class"
+            ? client.library.createOption({
+                payload: { kind: "class", name, body: written.body },
+              })
+            : client.library.createOption({
+                payload: { kind: "species", name, body: written.body },
+              });
           return yield* client.options.derive({
             params: { campaignId, optionId: original.id },
             // The visible screen-level choice, said out loud on the wire. It is

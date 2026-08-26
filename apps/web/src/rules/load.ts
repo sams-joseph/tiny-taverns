@@ -64,10 +64,12 @@ export interface RulesView {
  * The two lists as one value, for `CampaignChrome`'s `extra`.
  *
  * `combine` rather than a bare `AsyncResult.all` for the reason `api/atoms.ts`
- * states: `all` propagates the first non-success verbatim, so a part that has
- * never been read makes the whole `Initial` and blanks a screen that already
- * has rows on it. Here that happens the first time the copy dialog is opened on
- * a fresh session, which is exactly when the list underneath it should stay put.
+ * states: `all` propagates the first non-success verbatim, so a part that is
+ * `Initial` makes the whole `Initial` and blanks a screen that already has rows
+ * on it. `party/load.ts` takes `all` because both its parts are keyed on the
+ * campaign and its campaign never changes under it; here one part is keyed on
+ * nothing at all and is shared with every other campaign's Rules screen, so
+ * whether it is warm on arrival is not this screen's to know.
  *
  * The refresh callback is the second argument `Atom.readable` takes, and it is
  * required rather than optional here: re-running the read above hands back the
