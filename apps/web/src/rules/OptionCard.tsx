@@ -23,7 +23,11 @@ export function OptionCard({
 
   return (
     <Card tone="raised">
-      <CardContent className="flex flex-wrap items-start gap-x-3 gap-y-2.5">
+      {/* `py-3` rather than the card's own bottom padding: a vocabulary is
+          twenty-two rows long at a table that has copied nothing in, and a card
+          shaped for a stat block would make it a page nobody reads to the end
+          of. The grid this sits in is `RulesScreen`'s. */}
+      <CardContent className="flex flex-wrap items-start gap-x-3 gap-y-2.5 py-3">
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-2 text-body leading-snug font-semibold text-heading">
             {option.name}

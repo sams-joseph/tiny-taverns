@@ -112,6 +112,7 @@ pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server bestiary:import  # loads the bundled bestiary (optional, idempotent)
+pnpm -F server ruleset:import   # loads the bundled classes and species (idempotent)
 pnpm dev                        # API on :3000, web on :5173
 ```
 
@@ -227,6 +228,13 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
   -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"name":"Grask, Boss of the Reeds"}'
 ```
+
+**A campaign can have its own classes and species**, and they follow exactly the same
+model. `pnpm -F server ruleset:import` writes the bundled twelve and ten as global rows;
+a DM writes their own in the campaign's **Rules** screen, which authors the original into
+their library and copies it into the table in one press. The copy is what a player picks
+from, because a player can never read somebody else's library — see `AGENTS.md`, which is
+also where the one thing this importer does differently is written down.
 
 ### Hosted sign-in (optional)
 

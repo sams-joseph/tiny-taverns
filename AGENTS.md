@@ -1297,6 +1297,149 @@ need `corpusRowReadable`'s campaign quantified, which is the shape this change j
 - **Existing campaign-authored creatures were not migrated into anybody's Library**, by the captain's
   own instruction, and `0015` clears nothing. Whose Library would have been a guess.
 
+## Character options: a campaign's own classes and species
+
+`character_option` (`0017`) is the **second** table to carry the Library model, and the
+finding that made it cheap is the one to reuse rather than re-derive: **the four Library
+predicates in `repo/visibility.ts` have always taken a `table: string` and had only ever been
+called with `"creature"`.** A design probe built a table with `creature`'s ownership shape and
+called `libraryRowReadable`, `libraryRowWritable`, `corpusRowReadable` and
+`copyableIntoCampaign` **unmodified** against it — 8 of 8 assertions, including the
+leak-shaped ones. So this slice added **no predicate, no base case and no change to
+`repo/visibility.ts` at all**. If a third table of this shape ever seems to need one, that is a
+finding worth reporting rather than a routine step.
+
+Read "The Library: a monster belongs to an **account**" first; everything there about the three
+owners, `*_one_owner`, `*_system_is_unowned` and the snapshot applies here word for word.
+What follows is only what is **different about a rules entry**.
+
+### The asymmetry that decides the whole design
+
+A monster is used _in a campaign_; a class is used _by a character_, and a character may be a
+**player's**. `libraryRowReadable` compares `account_id` to the **reader's** account, so a
+player can never read their DM's Library — measured, over real HTTP, at their DM's own table.
+**Therefore a homebrew class must be copied into the campaign before a player can pick it.**
+The copy is not convenience; without it the feature does not work at all, and
+`options.list` is the one campaign-scoped list in the product a **player** reads to fill in a
+control.
+
+### The bundled importer writes `visibility = 'shared'`, and `bestiary:import` does not
+
+The one place the two importers differ, and it is the consequence of the same decision rather
+than a second one. `corpusRowReadable` ends in `isDm OR visibility = 'shared'` and the column
+default is `dm`. For a **creature** that is the whole point — a stat block is precisely what
+the product says a player must not have. For a **class** it is the difference between working
+and not: the bundle landing `dm` would give every player in the product an **empty class
+picker**, at every table, until each DM shared twelve rows by hand.
+
+The rule is the one the copy-in dialog follows: **the column default does not change, and a
+writer that means `shared` says so out loud.** So `ruleset/import.ts`'s `insert` names it and
+its `do update` clause deliberately does **not** — a DM who un-shared a bundled class does not
+have it re-shared by an upgrade, exactly as `bestiary/import.ts` never touches a visibility.
+`OptionDialog` and `CopyOptionIn` send `visibility: "shared"` on the wire for the same reason,
+and the switch is the one form control in the product that **starts on**.
+
+### `character` needed no migration, and could not have used the useful thing
+
+No `class_id`, no `species_id`, no column at all — `species` and `class_name` stay text.
+
+The first reason is a hard constraint rather than a preference: **`character.descriptor` is a
+generated column, and a generated column cannot reference another table** (`cannot use subquery
+in column generation expression`, measured). So the label can only ever be written from text on
+the character's own row.
+
+The second is that nothing would read the pointer. `seedFor` consumes the class **once**, at
+creation, and never again. A provenance pointer arrives at the slice where something reads it,
+and the first plausible reader is a _report_ ("4 characters were made from Bloodsworn before
+this edit") — which is the honest form of propagation and is not a write. The named cost of not
+having it: the product cannot answer that question, and cannot tell two same-named classes in
+two campaigns apart.
+
+### Propagation stops at every hop, and there must be no button that undoes that
+
+```
+Library original ──derive──▶ campaign copy ──seed at creation──▶ character row
+     edits stop here            edits stop here                   edits stop here
+```
+
+Hop 1 is the creature rule verbatim (a copy is a snapshot; nothing is read through
+`derived_from`). Hop 2 is the captain's shipped _seed at creation, never recompute_. A DM who
+wants an edit to reach the table edits the **campaign copy**, so every character made after
+that gets it. **There is no recompute-all-sheets and there must not be one** — it would
+overwrite `ac` and `hpMax` values players typed by hand, with no way to tell an intentional
+number from a stale seed. `RulesScreen.test.tsx` asserts the absence.
+
+### What `Ruleset.ts` is now, and where the twelve and the ten went
+
+`packages/api/src/Ruleset.ts` keeps the **arithmetic** — `AbilityKey`/`ABILITY_KEYS` (the
+ruleset's _frame_ rather than its content), `signed`, `modifierFor`, `modifierOf`,
+`STARTING_LEVEL`, `ClassEntry`/`SpeciesEntry` as the shapes a document decodes to, and
+`seedFor`. **`seedFor` takes entries rather than labels**: there is no global map to look one
+up in, so each caller resolves against its own vocabulary and hands over what it found.
+
+The data moved to `apps/server/src/ruleset/systemOptions.ts` — the bundle the seeder writes —
+and **there is deliberately no fallback map in the contract package.** A second copy in code
+would be a second answer to _what is a druid_, and it would be the one nobody edits.
+
+That file is also where `proposeCharacter`'s closed vocabulary lives now
+(`BundledClassName`/`BundledSpeciesName`, `bundledClass`/`bundledSpecies`): **Hob still drafts
+from the twelve and the ten**, because a per-campaign vocabulary cannot be a module-level
+literal and a closed enum is what holds a small model to a list. Binding both to the same list
+is what keeps that from being a second answer. Note its vocabularies are a **name tuple beside
+a `Record<Name, Entry>`** rather than one array of objects: `Schema.Literals` needs a tuple,
+`Array.prototype.map` widens one to an array, and the pairing is exhaustive by type — so there
+is no cast anywhere, which `dm-actor.test.ts` enforces (`as unknown as` is banned in `src`).
+
+### Six smaller things that are decisions
+
+- **`kind` is a query parameter, not a path segment.** The design sketched `/options/:kind`;
+  `/options/class` and `/options/:optionId` are the same shape, so one would have to win. It is
+  also what both readers want — the create form needs classes _and_ species in one request.
+- **The lists are not paged.** A vocabulary is bounded by what it hangs off, like a campaign's
+  members and a night's checklist. `OPTION_LIMIT` is a sanity bound, not a page.
+- **There is no `POST /campaigns/:c/options`.** Authoring happens in the Library, so a campaign
+  gets a row through `derive` and nothing else — the contradiction `AGENTS.md` already records
+  about `POST /campaigns/:c/creatures` is deliberately not inherited.
+- **`OptionUpdate` has no `kind`.** A class that became a species would carry a document its own
+  column contradicts. A body that does not match the row is a `Conflict` from `repo/Options.ts`,
+  which is the only place a body is told apart by its shape (`bodyKind`).
+- **No `tsvector` and no fifth arm in `repo/Search.ts`.** `0008_beats.ts`'s rule — an index
+  nothing reads is worse than none.
+- **The bundle's unique index is `(kind, lower(name))`**, unlike `creature_system_name_key`: a
+  class and a species may share a name, and an index over the name alone would refuse the second
+  with a violation naming an index nobody has heard of.
+
+### The screens
+
+`apps/web/src/rules/` is the DM's half — a **Rules** item on the campaign row over
+`CampaignChrome`, two labelled sections in a `@container` grid, `OptionDialog` (which authors
+into the Library **and** derives into the campaign in one `submit`, the `EncounterDialog`
+precedent), `CopyOptionIn` and `RemoveOptionDialog`. `option.ts` is the pure half: **ownership
+is `campaignId`/`accountId` and never `origin`** — an _imported_ copy is `imported` and still
+the campaign's, so a screen keying on `origin` would lock a row its owner needed.
+
+The player's half is the create form's two pickers, which read `campaignOptionsAtom` — **the
+same atom the Rules screen writes through**, so a class shared on one becomes pickable on the
+other. `newCharacterAtom` reads both atoms **unconditionally** (an atom's dependencies are the
+ones its read function actually touched, so a `get` behind a false branch is a subscription that
+never gets made — measured: the screen loaded for ever) and drops the vocabulary's answer only
+at a table this account does not _play_ at, where `options.list` is a 404 and the screen has a
+better sentence than a generic error card.
+
+**Measured end to end in Chromium** against a real server, a real Postgres and two accounts (a
+DM and a player joined through a real invitation): the DM wrote _Bloodsworn, d10, unarmoured AC
+DEX + CON_, which produced **two rows** — the Library original at the column default (`dm`) and
+the campaign copy at `shared`, sent out loud; the player's picker then offered thirteen classes
+including it and none of the DM's Library, and picking it with constitution 14 landed on the
+shipped sheet at _"Level 1 Human Bloodsworn"_, **12/12 hp and AC 12**. Editing the campaign copy
+to a d4 afterwards left both characters exactly where they were — including one carrying the
+free-text `"Circle of the Moon Druid"`, which is never rewritten and resolves to nothing because
+`optionNamed` refuses fuzzy matching. Un-sharing the copy took it out of the player's picker and
+left the DM's screen saying _"1 your players cannot pick yet"_. Copying the same original again
+made a second copy, which the dialog says it will. Dialogs at `z-dialog` 110 over `z-scrim` 100
+at 460px; the grid is two columns at 1440/1200/1024/900 and one at 760, with
+`document.scrollWidth` equal to the viewport at every width.
+
 ## The party: what earns a column on `character`, and what lives in the document
 
 `0012_character_sheet.ts` made `character` the same shape as `creature`, and the rule it
@@ -1606,12 +1749,22 @@ scroll at 1440, 1024, 900 or 760.
 
 #### The class and species vocabularies, and the three numbers they seed
 
-`packages/api/src/Ruleset.ts` is the whole of it — twelve classes, ten species, the six ability
-labels, and `seedFor`. **It lives in `@taverns/api` because both create paths call the same
-function**: the manual form (`apps/web/src/characters/create.ts`'s `seededDraft`) and Hob's
-`proposeCharacter` handler, which resolves the numbers onto the proposal so the card and the row
-cannot disagree — the rule `HobProposal.sheet` already followed. Two copies of this arithmetic
-would be two answers to _what does a level-1 druid start on_.
+**Superseded in part by `0017` — a campaign has its own vocabulary now.** What is still true is
+everything below about the _arithmetic_ and the two decisions it is shaped around; what moved is
+where the twelve and the ten live. See "Character options" above for the split, and read the two
+sections together rather than either alone.
+
+`packages/api/src/Ruleset.ts` holds `seedFor` and the six ability labels. **It lives in
+`@taverns/api` because both create paths call the same function**: the manual form
+(`apps/web/src/characters/create.ts`'s `seededDraft`) and Hob's `proposeCharacter` handler, which
+resolves the numbers onto the proposal so the card and the row cannot disagree — the rule
+`HobProposal.sheet` already followed. Two copies of this arithmetic would be two answers to _what
+does a level-1 druid start on_. **It takes entries rather than labels since `0017`**, because
+there is no global map left to look one up in: each caller resolves against its own vocabulary and
+hands over what it found.
+
+The twelve and the ten are `apps/server/src/ruleset/systemOptions.ts` — the bundle, written as
+rows by `pnpm -F server ruleset:import`.
 
 **The ruleset is the 2024 Player's Handbook, and one ruleset only.** Chosen on shape rather than
 arithmetic (the captain's brief says the two barely differ for these three values): 2024 species
@@ -1625,7 +1778,11 @@ The captain's three decisions of 2026-08-26 and where each is enforced:
   one has to survive. The create form's two pickers are the vocabulary and nothing else, and
   `proposeCharacter`'s `species`/`className` are closed `Schema.Literals` (the argument `AbilityKey`
   already makes: the published JSON schema becomes a fixed list a grammar can hold a model to). A
-  near miss is a tool call that fails to decode, which is what `Hob.ts`'s `recover` is for.
+  near miss is a tool call that fails to decode, which is what `Hob.ts`'s `recover` is for. **The
+  pickers read the campaign now and Hob's two literals are still the bundle's** — a per-campaign
+  vocabulary cannot be a module-level literal, so Hob keeps drafting from the twelve and the ten
+  until its toolkit is built per request. That degrades gracefully, because a drafted character
+  already carries a label the campaign may not have.
 - **Seed at creation, never recompute** — `seedFor` is wired to the two pickers and to the propose
   handler, and to nothing else. No effect watches the form, no trigger, no generated column;
   `descriptor` stays the product's only derived character value. Measured in a browser: setting the
@@ -1636,8 +1793,10 @@ The captain's three decisions of 2026-08-26 and where each is enforced:
 
 **There is no migration and no new column, and that is the answer to the existing free-text data
 rather than an omission.** A stored value _is_ the vocabulary's own label, so the link from a row
-back to an entry is `classFor`/`speciesFor` matching case-insensitively on the label — a stored key
-beside it would be a second answer to a question the label already answers. So
+back to an entry is a **case-insensitive, exact, no-fuzzy** match on the label — `optionNamed` in
+`packages/api/src/CharacterOption.ts` for a campaign's vocabulary, `bundledClass`/`bundledSpecies`
+in `apps/server/src/ruleset/systemOptions.ts` for Hob's. A stored key beside it would be a second
+answer to a question the label already answers, and `0017` did not add one either. So
 `"Circle of the Moon Druid"` resolves to nothing, is never rewritten, renders exactly as it did, and
 is one ordinary edit away from a label that does resolve. **Nothing anywhere refuses a value it used
 to accept**: `Character`, `CharacterUpdate`, `CharacterOwnUpdate` and `CharacterOwnCreate` all keep

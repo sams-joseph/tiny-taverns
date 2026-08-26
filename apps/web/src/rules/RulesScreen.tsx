@@ -235,9 +235,19 @@ function Section({
           {emptyBody}
         </EmptyState>
       ) : (
-        options.map((option) => (
-          <OptionCard key={option.id} option={option} onEdit={onEdit} onRemove={onRemove} />
-        ))
+        /* Two columns where the column is wide enough, because a bundled
+           vocabulary is twenty-two rows and a single file of them is a page
+           nobody reads to the end of. `@container` on the section and `@3xl`
+           on the grid, never a viewport breakpoint: the question is how wide
+           *this column* is, and the campaign frame's aside is not something a
+           window width can see. */
+        <div className="@container">
+          <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2">
+            {options.map((option) => (
+              <OptionCard key={option.id} option={option} onEdit={onEdit} onRemove={onRemove} />
+            ))}
+          </div>
+        </div>
       )}
     </section>
   );
