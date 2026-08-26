@@ -66,6 +66,16 @@ export function SkillsDialog({
 
   const proficient = drafts.filter((draft) => draft.proficient).length;
 
+  /**
+   * *Animal Handling* and *Sleight of Hand* have spaces in them, and an `id`
+   * may not — a `<label for>` still finds it and the accessible name still
+   * resolves, but `#skill-proficient-Animal Handling` is not a selector, so
+   * anything reaching for the control by id (a test, a driver, `:focus-visible`
+   * tooling) silently misses it. The name is the label's job; the id is only a
+   * handle.
+   */
+  const handle = (name: string) => `skill-proficient-${name.replace(/\s+/g, "-").toLowerCase()}`;
+
   const save = async () => {
     const saved = await submit(
       (client) =>
@@ -98,7 +108,7 @@ export function SkillsDialog({
               className="flex flex-wrap items-center gap-2.5 border-b border-hairline py-2 last:border-b-0"
             >
               <Switch
-                id={`skill-proficient-${draft.name}`}
+                id={handle(draft.name)}
                 checked={draft.proficient}
                 onCheckedChange={(next) => setDraft(draft.name, { proficient: next })}
               />
@@ -106,7 +116,7 @@ export function SkillsDialog({
                   screen reader hears the skill for the control that marks it —
                   the `Switch` + `Label` pair `VisibilityField` already uses. */}
               <label
-                htmlFor={`skill-proficient-${draft.name}`}
+                htmlFor={handle(draft.name)}
                 className="min-w-0 flex-1 cursor-pointer text-body-s leading-none text-foreground"
               >
                 {draft.name}

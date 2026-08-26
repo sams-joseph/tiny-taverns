@@ -4039,10 +4039,13 @@ silently.
 - **A tab is drawn when the document fills it _or_ when there is somewhere to write.**
   Thirteen optional keys, and a character written through `CharacterDialog` has none of them; five
   empty tabs would claim the data exists and is blank. `sheetTabs(sheet, writable)` is the whole
-  rule, and `writable` is the sheet screen's own: Gear and Story are drawn either way, because
-  each carries the affordance that creates its own contents and a tab that appeared only once its
-  contents existed would be a first line of backstory nobody could type. Stats, Actions and Log
-  stay content-driven — nothing here writes an ability cell, an attack or a level-up.
+  rule, and `writable` is the sheet screen's own: Stats, Gear and Story are drawn either way,
+  because each carries the affordance that creates its own contents and a tab that appeared only
+  once its contents existed would be a first line of backstory nobody could type. **Stats joined
+  the other two when the abilities and skills editors landed**, and the reason it was out before
+  was the right one at the time — nothing wrote an ability cell then. Actions and Log stay
+  content-driven for that same test, which is what keeps the flag meaning something rather than
+  being `writable` spelled twice: nothing here writes an attack, a spell slot or a level-up.
 - **The empty roster tells its two silences apart** — invited nowhere, or at a table with nothing
   handed to you — off `tableCount`, which is why the load reads memberships even when the campaign
   names are not needed. Neither is papered over with a friendlier sentence.
@@ -4059,7 +4062,8 @@ silently.
   a list of characters at N tables would be N requests for a card that is blank almost always.
 - **Every control the payload cannot carry**: rolling a check or an attack into the DM's dice
   tray, spending a slot, preparing a spell, uploading a portrait, adding a journal entry, _New
-  character_, _Join a game_, _Claim a seat_. Rolling has no endpoint at all and the rest are
+  character_, _Join a game_, _Claim a seat_. (**Abilities and skills are no longer on this list** —
+  they are written now; see "The abilities and skills editors" below.) Rolling has no endpoint at all and the rest are
   document keys no delivery has drawn a control for. Each is drawn as the value it is, the call
   `bestiary/StatBlock.tsx` already made about a rollable trait. **The live half of the row —
   current hit points, temp, conditions — is drawn and is not editable**, because it is `0014`'s
@@ -4214,12 +4218,13 @@ the viewport at every width, with the action hit-testable at 760.
 
 #### The sheet writes, and the one thing about it that is not obvious
 
-**`PATCH /me/characters/:characterId` — four surfaces, one endpoint, named once in
+**`PATCH /me/characters/:characterId` — six surfaces, one endpoint, named once in
 `apps/web/src/characters/write.ts`.** The top bar's _Edit_ is the durable columns
-(`IdentityDialog`); the Story tab's _Edit_ is the backstory (`BackstoryDialog`, `sheet.notes`);
-the Gear tab's _Add_ is the carried list (`GearDialog`, `sheet.inventory`, opening with a blank
-line and editing the whole array the way `CreatureForm`'s trait editor does); and a death-save pip
-is its own write, straight through. Both boundaries stay where they are and are not restated in
+(`IdentityDialog`); the Stats tab's two are the six cells and the skill list (`AbilitiesDialog`,
+`SkillsDialog` — see below); the Story tab's _Edit_ is the backstory (`BackstoryDialog`,
+`sheet.notes`); the Gear tab's _Add_ is the carried list (`GearDialog`, `sheet.inventory`, opening
+with a blank line and editing the whole array the way `CreatureForm`'s trait editor does); and a
+death-save pip is its own write, straight through. Both boundaries stay where they are and are not restated in
 `apps/web`: **which rows** is `ownRowWritable`, **which columns** is `CharacterOwnUpdate`, so a
 control for `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId` does not compile.
 
@@ -4247,13 +4252,84 @@ control for `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId` doe
   show these yet."_ instead. **The DM-side read is unbuilt and is its own piece of work**; when a
   delivery draws it, `Character.ts` already states the shape (two `smallint`s and a `vitals.ts`
   write-through).
-- **Two buttons named _Edit_ on one screen is a real ambiguity**, so the backstory's carries
-  `aria-label="Edit backstory"` with the visible word kept as the prefix — anything driving by the
-  label it can see still matches.
+- **Four buttons named _Edit_ on one screen is a real ambiguity**, so every one but the bar's
+  carries an `aria-label` naming what it edits — _Edit backstory_, _Edit abilities_, _Edit
+  skills_ — with the visible word kept as the prefix, so anything driving by the label it can see
+  still matches. **The same trap runs one level in**: six ability rows all label their score box
+  _Score_, so each `Input` carries `aria-label={`${label} score`}`. A visible label repeated down a
+  list is one control as far as anything that reads names is concerned.
 - A dialog is portalled to the body, so a test whose `afterEach` wipes the body must call RTL's
   `cleanup()` **first**; otherwise React unmounts into nothing and throws _"the node to be removed
   is not a child of this node"_, reported against whichever test happened to end with a dialog
   open. Half of `sheetWrites.test.tsx`'s do, deliberately — a refused save keeps it.
+
+#### The abilities and skills editors, and where the dice live
+
+`sheet.abilities` and `sheet.skills` were the last two halves of the drawn sheet nothing in the
+product could write, and the gap was not Hob's: `campaign/CharacterDialog.tsx` writes no ability
+cell either, so **every character this product has ever made had six cells with no first value
+typeable into them.** `AbilitiesDialog` and `SkillsDialog` close it off the Stats tab's own header
+slot, in the shipped dialog idiom, through the same `saveOwnCharacter` + `sheetWith` as the other
+four. `abilities.ts` and `skills.ts` are the pure halves and are separately tested, for the reason
+`chronicle/fight.ts` is: everything decided in them is wrong _silently_.
+
+- **The dice are the browser's, and this was not re-decided.** `run/RunScreen.tsx` already records
+  it — _"there is no roll endpoint and there should not be — a roll is not durable state, only the
+  number it produced is"_ — and six 4d6-drop-lowest rolls are that d20's shape. The report's §5
+  splits the question and puts only the _assignment arithmetic_ server-side, inside a
+  `proposeCharacter` handler that does not exist yet; a player typing their own scores has no such
+  handler to reach and no adversarial stake at their own DM's table. **Measured: the only non-GET
+  request any of this makes is the `PATCH`.**
+- **Standard array is the default and rolling is a second, explicit press**, which is the
+  drawing's own order (`CharacterCreate.jsx:157`) and matters because a sheet that generated
+  random numbers on open would be the one control here that changes the document unasked. Neither
+  generator saves; both write into the boxes.
+- **Do not copy the prototype's re-roll.** `CharacterCreate.jsx:73-77` is `8 + floor(random × 9)`,
+  a flat 8–16, under a toast that says _"4d6 drop lowest, six times"_. The toast is the intent.
+  The distributions are not close — a flat 8–16 has no 17 and no 18 at all.
+- **The modifier is written in the same object literal as the score it came from.** `Ability.score`
+  and `Ability.modifier` are **both stored `NonEmptyString`s** (`Creature.ts`: _the document keeps
+  what was written_), which is exactly why an editor must compute one from the other — the one
+  thing the document cannot survive is the two disagreeing. There is no code path that moves one
+  without the other, and `abilities.test.ts` pins that a stale modifier in the document is
+  recomputed rather than carried.
+- **A saving throw and a skill bonus are deliberately _not_ derived.** Each is the modifier plus a
+  proficiency this document does not model, so deriving either means inventing the proficiency
+  bonus and whether this row has it — a wrong number in a column somebody reads out at the table.
+  The score's arithmetic has a right answer here; theirs does not.
+- **Unknown rows are preserved one level in from `sheetWith`.** `abilityDrafts` and `skillDrafts`
+  draw the six and the eighteen _plus_ anything already in the document under another name, so a
+  seventh cell or a homebrew skill the DM typed survives a save from a form that never drew it.
+  `sheetWith` guards the document's keys; these guard the rows inside one of them. Verified in a
+  browser: a `HON` cell and a `Piloting` skill both came back after an unrelated save.
+- **A row with nothing to say is not written.** A blank score is dropped (`Ability.score` is
+  non-empty, and four of six filled in is a real thing to do); a skill is written when it is
+  proficient **or** carries a bonus, so eighteen rows of nothing do not become a list of what a
+  character is _not_ good at. A non-proficient row with a bonus survives — the shipped reader
+  already draws exactly that, in muted type.
+- **Two departures from the drawing, both reported rather than quietly made.** _"Drag a score onto
+  another ability"_ (`:157`) is a **select per row** — the report's own call, and the accessible
+  form of the same act; only the score moves, because the saving throw belongs to the ability
+  rather than to the number. And the skills picker's _"N of 4 picked"_ counter is **left to a
+  creation screen**: a background, a feat and expertise all grant more, so a sheet that held the
+  limit would tell a level-9 rogue their sheet is wrong.
+
+Measured in Chromium at 1440/1200/1024/900/760 against a real server, a real Postgres and a player
+joined through a real invitation: a score typed by hand redrew its modifier live and saved with
+`save`/`proficient` intact; _Standard array_ filled the six boxes `15/14/13/12/10/8` and saved as
+six cells with derived modifiers; _Roll_ produced six scores in range and saved them as ordinary
+written values with **no request but the `PATCH`**; the swap select opened at `z-popup` 200 above
+the dialog's 110 with `elementFromPoint` landing inside an option, traded two scores and left both
+saving throws where they were; the skills dialog sat at 110 over a `z-scrim` 100 at 460px; a
+reload read the whole Stats tab back; and across an abilities save and a skills save the backstory,
+inventory, spellcasting, death saves, traits and identity were all still there, with `hpCurrent`,
+`tempHp`, `conditions`, `visibility` and `accountId` untouched. No sideways scroll at any width,
+and the empty sheet drew both sections with a sentence rather than a grid of nothing.
+
+**One id trap, found in the browser and not by any test.** `Animal Handling` and `Sleight of Hand`
+have spaces in them, and an `id` may not: `<label for>` still associates and the accessible name
+still resolves, so jsdom is perfectly happy — but `#skill-proficient-Animal Handling` is not a
+selector, so anything reaching the control by id misses it silently. `SkillsDialog` slugifies.
 
 Measured in Chromium against a real server, a real Postgres, a DM and a player joined through a
 real invitation: the backstory, a gear line (with its `equipped` switch), the level, the AC and the
