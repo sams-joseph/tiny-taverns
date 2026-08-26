@@ -218,7 +218,7 @@ export function CharacterCreateScreen() {
     >
       {resource.state === "loading" && <Loading label="Reading your tables…" />}
       {resource.state === "failed" && (
-        <div className="max-w-3xl">
+        <div className="mx-auto w-full max-w-3xl">
           <FailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
@@ -248,8 +248,15 @@ export function CharacterCreateScreen() {
                wrote it, why, and the composer that asks for something else.
                `@3xl` on the container rather than a viewport breakpoint,
                because the question is how wide this column is and the Hob panel
-               can take 400px out of it without the window moving. */
-            <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
+               can take 400px out of it without the window moving.
+
+               Centred like the other two, but on its own maximum: this state is
+               a prose column *plus* an aside, so the width it is centred within
+               is composed from the tokens the two halves are actually drawn at
+               (`--measure` + `--gutter` + `--aside-w`) rather than restated as a
+               number. Below `@3xl` the row stacks and the maximum stops
+               mattering — the page padding is the edge. */
+            <div className="mx-auto flex w-full max-w-[calc(var(--measure)+var(--gutter)+var(--aside-w))] flex-col gap-gutter @3xl:flex-row @3xl:items-start">
               <div className="min-w-0 flex-1">
                 <DraftCard
                   draft={hob.draft}
@@ -300,7 +307,7 @@ export function CharacterCreateScreen() {
           ) : (
             /* **The drawn step 1**, minus its campaign question — the URL has
                already settled that, by the captain's decision of 2026-08-26. */
-            <div className="flex max-w-measure flex-col gap-7">
+            <div className="mx-auto flex w-full max-w-measure flex-col gap-7">
               <div className="flex gap-3">
                 <Icon name="sparkles" size={18} className="mt-0.5 shrink-0 text-accent-ink" />
                 <div className="min-w-0 flex-1">
@@ -391,7 +398,7 @@ export function CharacterCreateScreen() {
             </div>
           )
         ) : (
-          <div className="flex max-w-measure flex-col gap-7">
+          <div className="mx-auto flex w-full max-w-measure flex-col gap-7">
             {/* The way back to Hob, and it is a link rather than a second
                 heading: *Fill it in myself* is a fork rather than a step, so
                 the only thing to say is that the other fork is still there. It
