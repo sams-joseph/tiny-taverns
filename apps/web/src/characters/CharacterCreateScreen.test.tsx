@@ -255,6 +255,42 @@ describe("writing down a character of your own", () => {
     expect(bodyOf(server, "POST", createPath)).toMatchObject({ name: "Sorrel Ash" });
   });
 
+  it("says a redraft changed nothing, rather than leaving the old sheet unexplained", async () => {
+    // The same failure as the one above, one position along and much easier to
+    // miss: the card is still on screen, so a player who asked for a ranger and
+    // got prose would otherwise be looking at the druid with nothing saying why.
+    await renderCreate();
+    await userEvent.type(
+      await screen.findByLabelText(/Describe your character/i),
+      "A wood elf who grew up in a river town.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Have Hob draft the sheet/i }));
+    await screen.findByText("Sorrel Ash");
+
+    server.routes.set(`POST /campaigns/${campaignId}/hob/ask`, draftedNothing());
+    await userEvent.click(screen.getByRole("button", { name: "Darker backstory" }));
+
+    expect(await screen.findByText(/Nothing changed on the sheet above/)).toBeTruthy();
+    // The draft is still there and still keepable.
+    expect(screen.getByText("Sorrel Ash")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Keep them/i })).toBeTruthy();
+  });
+
+  it("says Hob could not be reached rather than that no model is configured", async () => {
+    // Two different sentences because they have two different fixes, and only
+    // one of them is the reader's to act on. A failed status read used to say
+    // the server had no model, which is a claim it has no evidence for.
+    server.routes.set(`GET /campaigns/${campaignId}/hob`, {
+      status: 503,
+      body: { _tag: "HobUnavailable", message: "nope" },
+    });
+
+    await renderCreate();
+
+    expect(await screen.findByText(/Hob could not be reached/)).toBeTruthy();
+    expect(screen.queryByText(/No model is configured/)).toBeNull();
+  });
+
   it("offers no composer when no model is configured, and says why", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/hob`, {
       status: 200,

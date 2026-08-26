@@ -262,6 +262,21 @@ export function CharacterCreateScreen() {
                     {kept}
                   </p>
                 )}
+                {/* **A redraft that produced no card is the same failure as a
+                    first question that did**, one position along and much
+                    easier to miss: the old sheet is still on screen and would
+                    otherwise sit there unchanged with nothing saying why. */}
+                {hob.said !== "" && hob.offeredNothing && (
+                  <div className="mt-6 flex flex-col gap-2 border-l-2 border-hairline pl-3.5">
+                    <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+                      {hob.said}
+                    </p>
+                    <p className="text-caption leading-body text-muted-foreground">
+                      Nothing changed on the sheet above. Ask again in different words, or keep them
+                      as they are and edit the sheet afterwards.
+                    </p>
+                  </div>
+                )}
                 {/* Both ways out of a draft, said plainly. *Fill it in myself*
                     is the same button as on the empty state and lands on the
                     same form — a draft the player does not want costs them one
@@ -277,6 +292,7 @@ export function CharacterCreateScreen() {
                 <DraftAside
                   rationale={hob.draft.rationale}
                   busy={hob.thinking || hob.keeping}
+                  activity={hob.activity}
                   onAsk={(text) => hob.ask(text)}
                 />
               </div>
@@ -354,7 +370,7 @@ export function CharacterCreateScreen() {
                   outcome and not an error: measured at one propose call in five
                   on a 4B. Whatever it said stands, and the way on is the form
                   it was always an accelerator over. */}
-              {hob.said !== "" && hob.draft === undefined && !hob.thinking && (
+              {hob.said !== "" && hob.offeredNothing && (
                 <div className="flex flex-col gap-2 border-l-2 border-hairline pl-3.5">
                   <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
                     {hob.said}

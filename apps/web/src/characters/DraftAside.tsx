@@ -42,10 +42,13 @@ export function DraftAside({
   rationale,
   onAsk,
   busy,
+  activity,
 }: {
   readonly rationale: ReadonlyArray<string>;
   readonly onAsk: (text: string) => void;
   readonly busy: boolean;
+  /** The tool step, in words, while a redraft is in flight. */
+  readonly activity?: string;
 }) {
   const [text, setText] = useState("");
 
@@ -117,6 +120,14 @@ export function DraftAside({
             </Button>
           ))}
         </div>
+        {/* The one moment Hob's whole claim — that a draft comes out of what the
+            DM has actually shared — is visible, and the only thing on screen
+            while a redraft is in flight and the card above has not moved. */}
+        {busy && (
+          <p className="mt-2.5 text-caption leading-body text-muted-foreground">
+            {activity ?? "Hob is redrafting…"}
+          </p>
+        )}
       </SheetSection>
     </div>
   );

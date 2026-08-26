@@ -97,6 +97,16 @@ export interface CharacterDraft {
   readonly available: boolean | undefined;
   /** Why Hob cannot draft, said where the composer would be. */
   readonly unavailable: string | undefined;
+  /**
+   * The last completed answer produced no draft.
+   *
+   * **The state this surface most has to get right**, and it is two different
+   * moments: the first question, where there is nothing on screen at all, and a
+   * redraft, where the *old* card is still there and would otherwise sit
+   * unchanged with no explanation. A player who asked for a ranger and got
+   * prose has to be told the druid in front of them is still the druid.
+   */
+  readonly offeredNothing: boolean;
   /** A draft is coming and there is nothing to read yet. */
   readonly thinking: boolean;
   /** *"Searching the record…"* — the tool step, in words. */
@@ -176,6 +186,10 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
   const [turnId, setTurnId] = useState<AssistantTurnId | undefined>(undefined);
   const [asked, setAsked] = useState(false);
   const [keeping, setKeeping] = useState(false);
+  const [offeredNothing, setOfferedNothing] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
+  /** Whether *this* answer has offered anything, read when it finishes. */
+  const offered = useRef(false);
 
   /**
    * The conversation being continued.
@@ -205,7 +219,10 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
       if (!live) return;
       // A failed status read is the honest *no*: the composer is not offered and
       // the form is one press away, which is where a player who cannot reach Hob
-      // was going anyway.
+      // was going anyway. It is told apart from a configured-but-off server
+      // because the two have different fixes and only one of them is the
+      // reader's to act on.
+      setUnreachable(Result.isFailure(result));
       setAvailable(Result.isSuccess(result) ? result.success.available : false);
     })();
     return () => {
@@ -230,6 +247,8 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
       setWriting(false);
       setActivity(undefined);
       setSaid("");
+      setOfferedNothing(false);
+      offered.current = false;
 
       const receive = (event: HobEvent) => {
         switch (event.event) {
@@ -255,6 +274,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
             // is an offer this screen ignores rather than a card it draws
             // wrongly.
             if (event.data.proposal.target === "character") {
+              offered.current = true;
               setDraft(event.data.proposal);
               setTurnId(event.data.turnId);
             }
@@ -294,6 +314,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
           setWriting(false);
           setActivity(undefined);
           answering.current = undefined;
+          setOfferedNothing(!offered.current);
           if (Result.isFailure(outcome)) {
             setSaid(draftFailureFor(classifyFailure(outcome.failure)));
           }
@@ -339,11 +360,15 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
 
   return {
     available,
+    offeredNothing,
     unavailable:
-      available === false
-        ? "No model is configured behind Hob on this server, so there is no draft to have. " +
-          "Fill the sheet in yourself — you can always add the rest later."
-        : undefined,
+      available !== false
+        ? undefined
+        : unreachable
+          ? "Hob could not be reached, so there is no draft to have. Fill the sheet in " +
+            "yourself — you can always add the rest later."
+          : "No model is configured behind Hob on this server, so there is no draft to have. " +
+            "Fill the sheet in yourself — you can always add the rest later.",
     thinking: asking && !writing,
     activity,
     said,
