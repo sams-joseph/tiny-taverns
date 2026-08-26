@@ -4866,6 +4866,19 @@ refused connection or a rate limit is re-raised, since another round cannot fix 
 stated: a persistently garbled provider now costs up to `MAX_ROUNDS` calls where it used to cost
 one and a dump.
 
+**And running out of rounds is a failure only when Hob got nowhere** (`gotNowhere`, the one place
+that judgement is made). A turn that offered the DM something and then spent its last round is not
+a turn that failed, and saying both is the pair that cannot be true: `tail` puts the proposal at
+the very end so it cannot land after a `done`, so a failure emitted from a round _necessarily_
+arrives before the card and reads as a contradiction of the thing arriving one event later. The
+measured 8B did exactly this. What is lost there is the sentence _about_ the offer, not the offer,
+so the report is the card and a `done`, and `save` writes a turn with a proposal and no words — the
+shape the panel already draws and `promptFor`'s `offered()` already reads back. With nothing
+offered the failure stands, and `hob.test.ts` pins both halves on both paths into exhaustion, since
+the fix would otherwise be indistinguishable from deleting the failure. `truncated` and a provider
+error are deliberately **not** softened the same way: those are the model or the endpoint breaking,
+which the DM has to be told about whatever else landed.
+
 **4. There was no way to ask what a campaign _has_.** See "`listCreatures` is the sixth read"
 above; and `searchCampaign`'s `query` now accepts `""` **at the schema** and refuses it **in the
 handler**, with a `Conflict` naming `listCreatures`. The rule is unchanged and the place it is

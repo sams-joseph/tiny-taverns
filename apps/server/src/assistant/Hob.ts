@@ -318,7 +318,7 @@ export class Hob extends Context.Service<
                 Stream.concat(
                   Stream.unwrap(
                     Effect.map(Chat.fromPrompt(promptFor(campaign, history, ask)), (chat) =>
-                      round(chat, toolkit, MAX_ROUNDS, finished),
+                      round(chat, toolkit, MAX_ROUNDS, finished, proposal),
                     ),
                   ).pipe(Stream.tap((event) => note(written, broke, event))),
                 ),
@@ -355,10 +355,16 @@ export class Hob extends Context.Service<
  * back and write a sentence — and this loop is what supplies them.
  *
  * Four allows a model to look twice and then answer, which is as much
- * indecision as is worth paying for on a local model. Running out is reported
- * to the DM rather than swallowed: an answer that stops with no prose is a
- * failure, and pretending otherwise is exactly the sort of quiet wrongness this
- * surface must not have.
+ * indecision as is worth paying for on a local model. **A recovered round is
+ * charged to it like any other** — see `recover` — because a free retry is a
+ * loop with no ceiling.
+ *
+ * Running out is reported to the DM rather than swallowed: an answer that stops
+ * with no prose is a failure, and pretending otherwise is exactly the sort of
+ * quiet wrongness this surface must not have. The one exception is a turn that
+ * offered something, which is not an answer that stopped with nothing — see
+ * `gotNowhere`, which is the whole of that judgement and the only place it is
+ * made.
  */
 const MAX_ROUNDS = 4;
 
@@ -386,6 +392,16 @@ const round = (
   budget: number,
   finished: Ref.Ref<string>,
   /**
+   * What Hob has offered so far, read and never written here.
+   *
+   * The only thing this loop asks of it is whether it is empty, and only when
+   * the budget has run out — see {@link exhausted}. It is a `Ref` rather than a
+   * boolean because it is filled by a tool handler *during* a round, so its
+   * value at the moment the budget is spent is the only one that answers the
+   * question.
+   */
+  proposal: ProposalSlot,
+  /**
    * What to say before this round — empty for an ordinary one.
    *
    * The `Chat` carries the conversation, so a round normally has nothing of its
@@ -408,14 +424,8 @@ const round = (
               yield* Ref.set(finished, part.reason);
               if (part.reason === "length") return Result.succeed(truncated);
               if (yield* Ref.get(calledTool)) {
-                return budget > 1
-                  ? Result.fail(part)
-                  : Result.succeed(
-                      failure(
-                        "Hob kept looking things up and never got to an answer. Ask again, " +
-                          "more narrowly.",
-                      ),
-                    );
+                if (budget > 1) return Result.fail(part);
+                return (yield* gotNowhere(proposal)) ? Result.succeed(ranOut) : Result.fail(part);
               }
               return Result.fail(part);
             }
@@ -432,7 +442,7 @@ const round = (
               // answer costs the DM four provider calls to reach the same place.
               ([used, reason]) =>
                 used && budget > 1 && reason !== "length"
-                  ? round(chat, toolkit, budget - 1, finished)
+                  ? round(chat, toolkit, budget - 1, finished, proposal)
                   : Stream.empty,
             ),
           ),
@@ -440,10 +450,53 @@ const round = (
         // Outside the recursion on purpose, so it also covers a later round: a
         // model that gets one call right and the next one wrong is the ordinary
         // case, and the budget is already decremented by the time we are here.
-        Stream.catch((error) => recover(chat, toolkit, budget, finished, error)),
+        Stream.catch((error) => recover(chat, toolkit, budget, finished, proposal, error)),
       ),
     ),
   );
+
+/**
+ * Whether the budget running out is worth reporting: only if Hob got nowhere.
+ *
+ * **A turn that offered the DM something is not a turn that failed**, and
+ * saying both is the one shape this surface must not have. Running out of
+ * rounds after a `propose*` call used to emit `ranOut`'s "never got to an
+ * answer" and then, one event later, the card that answered it: `tail` puts the
+ * proposal at the very end so it cannot land after a `done`, so the apology
+ * necessarily arrived first and read as a contradiction of the thing arriving
+ * next. The measured 8B did exactly this — told the DM it never got there while
+ * a good `proposeEncounter` was already on its way.
+ *
+ * What was lost in that case is the *sentence about* the offer, not the offer.
+ * The card names itself and draws its own roster, so the honest report is the
+ * card and a `done`: `tail` emits both, `broke` stays false, and `save` writes
+ * a turn with a proposal and no words — a shape the panel already draws and
+ * `promptFor`'s `offered()` already reads back.
+ *
+ * With nothing offered there is genuinely nothing to show, so the failure
+ * stands. It is the same question `tail` asks about an empty answer, one layer
+ * in: the difference between quiet and empty.
+ *
+ * It deliberately does *not* soften `truncated` or a provider error the same
+ * way. Those are the model or the endpoint breaking mid-answer, which the DM
+ * has to be told about whatever else landed — the DM can read the card and the
+ * apology as two true things. "It never got to an answer" beside an answer is
+ * the only pair that cannot both be true.
+ */
+const gotNowhere = (proposal: ProposalSlot): Effect.Effect<boolean> =>
+  Effect.map(Ref.get(proposal), (offered) => offered === undefined);
+
+/**
+ * The model spent every round looking things up and never wrote a sentence.
+ *
+ * Only said when it also offered nothing — see {@link gotNowhere}.
+ */
+const ranOut: HobEvent = {
+  event: "failed",
+  data: new HobFailure({
+    message: "Hob kept looking things up and never got to an answer. Ask again, more narrowly.",
+  }),
+};
 
 /**
  * One tool call the framework could not read — handed back to the model instead
@@ -480,11 +533,22 @@ const recover = (
   toolkit: Toolkit.WithHandler<HobTools>,
   budget: number,
   finished: Ref.Ref<string>,
+  proposal: ProposalSlot,
   error: AiError.AiError | Schema.SchemaError,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> => {
   const detail = unreadableCall(error);
   if (detail === undefined) return Stream.fail(error);
-  if (budget <= 1) return Stream.succeed(unreadable);
+  if (budget <= 1) {
+    // The same question `exhausted` asks, and it is asked more often here: a
+    // recovery is charged to the budget, so a model that offered something good
+    // and then garbled one more call is a way to reach this that did not exist
+    // before `recover` did.
+    return Stream.unwrap(
+      Effect.map(gotNowhere(proposal), (nowhere) =>
+        nowhere ? Stream.succeed(unreadable) : Stream.empty,
+      ),
+    );
+  }
   return Stream.unwrap(
     Effect.as(
       // The raw text is worth keeping and is not worth showing: it names every
@@ -492,7 +556,7 @@ const recover = (
       // where whoever is running the model can see which parameter the endpoint
       // could not express.
       Effect.logWarning(`Hob could not read a tool call, and asked again: ${detail}`),
-      round(chat, toolkit, budget - 1, finished, [
+      round(chat, toolkit, budget - 1, finished, proposal, [
         {
           role: "user" as const,
           content:

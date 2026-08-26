@@ -255,6 +255,21 @@ const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify
 const texts = (events: ReadonlyArray<HobEvent>): ReadonlyArray<string> =>
   events.flatMap((event) => (event.event === "delta" ? [event.data.text] : []));
 
+/**
+ * A scripted round with the fixture's real creature id in it.
+ *
+ * The id is minted by `beforeAll`, so a round declared at module scope cannot
+ * name it. Substituting into the serialised arguments keeps the scripts
+ * readable where they are written.
+ */
+const withGoblin = (chunks: ReadonlyArray<unknown>): ReadonlyArray<unknown> =>
+  JSON.parse(
+    JSON.stringify(chunks).replaceAll(
+      '\\"creatureId\\":\\"\\"',
+      `\\"creatureId\\":\\"${fixture.goblin.id}\\"`,
+    ),
+  ) as ReadonlyArray<unknown>;
+
 describe("answering", () => {
   it("streams the reply in pieces rather than in one finished paragraph", async () => {
     const { events } = await ask(fixture.dm, fixture.campaign.id);
@@ -676,6 +691,75 @@ describe("a tool call the framework cannot read", () => {
       expect(failures(events)[0]).toContain(shape.says);
       expectNoFrameworkWords(events);
     }
+  }, 60_000);
+});
+
+describe("running out of rounds", () => {
+  /** The one call that fills the proposal slot, for the tests below. */
+  const proposes = toolCallChunks(
+    "proposeEncounter",
+    { name: "Ambush in the reeds", creatures: [{ creatureId: "", count: 3 }] },
+    "call_offer",
+  );
+
+  it("does not call a turn that offered something a failure", async () => {
+    // **The pair that cannot both be true.** `tail` puts the proposal at the
+    // very end so it cannot land after a `done`, so a failure emitted from a
+    // round necessarily arrives *before* the card — and "Hob kept looking things
+    // up and never got to an answer" beside the answer reads as a contradiction
+    // of the thing arriving one event later. Measured against a real 8B, which
+    // told the DM exactly that while a good `proposeEncounter` was on its way.
+    const search = toolCallChunks("searchCampaign", { query: "goblin" }, "call_look");
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [withGoblin(proposes), search, search, search] as never,
+    });
+
+    // The budget really is gone — four provider rounds, every one of them a
+    // tool call — and the turn still ends cleanly.
+    expect(failures(events)).toEqual([]);
+    expect(events.map((event) => event.event).slice(-2)).toEqual(["proposal", "done"]);
+  }, 60_000);
+
+  it("still says so when the rounds went nowhere at all", async () => {
+    // The other half, and the reason this is a question about the slot rather
+    // than a softening: with nothing offered there is genuinely nothing to show,
+    // so the report stands. Without this the fix would be indistinguishable from
+    // deleting the failure.
+    const search = toolCallChunks("searchCampaign", { query: "goblin" }, "call_look");
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [search, search, search, search] as never,
+    });
+
+    expect(failures(events)).toHaveLength(1);
+    expect(failures(events)[0]).toContain("never got to an answer");
+    expect(events.at(-1)?.event).toBe("failed");
+  }, 60_000);
+
+  it("does not call an offer a failure when the rounds went on unreadable calls", async () => {
+    // The same question on the other path into exhaustion, and the one this
+    // change made likelier: a recovery is charged to the budget, so a model that
+    // offers something good and then garbles one more call is a way to run out
+    // that did not exist before `recover` did.
+    const bad = toolCallChunks("searchCampaign", { query: "goblin", limit: "lots" }, "call_bad");
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [withGoblin(proposes), bad, bad, bad] as never,
+    });
+
+    expect(requests).toHaveLength(4);
+    expect(failures(events)).toEqual([]);
+    expect(events.map((event) => event.event).slice(-2)).toEqual(["proposal", "done"]);
+  }, 60_000);
+
+  it("still says so when unreadable calls offered nothing", async () => {
+    // Pinned beside the last one for the reason above: the failure has to
+    // survive where it is the only thing left to say.
+    const bad = toolCallChunks("searchCampaign", { query: "goblin", limit: "lots" }, "call_bad");
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [bad, bad, bad, bad] as never,
+    });
+
+    expect(failures(events)).toHaveLength(1);
+    expectNoFrameworkWords(events);
   }, 60_000);
 });
 
