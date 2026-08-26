@@ -1,5 +1,17 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Button, Card, CardContent, Icon, Input } from "@taverns/ui";
+import { CLASS_KEYS, SPECIES_KEYS } from "@taverns/api";
+import {
+  Button,
+  Card,
+  CardContent,
+  Icon,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -15,7 +27,9 @@ import {
   payloadFrom,
   problemsIn,
   refused,
+  seededDraft,
   type CharacterDraft as FormDraft,
+  type SeededField,
 } from "./create";
 import { DraftAside } from "./DraftAside";
 import { DraftCard } from "./DraftCard";
@@ -115,9 +129,34 @@ export function CharacterCreateScreen() {
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
 
+  /**
+   * Which of the two seeded boxes the player has typed in.
+   *
+   * Held here rather than in `create.ts` because it is form state in the sense
+   * `api/mutation.ts` means — it belongs to one open form and must not outlive
+   * it. What it buys is that picking a class re-seeds while a typed number is
+   * never overwritten; see `seededDraft`, which is where the rule is written.
+   */
+  const [edited, setEdited] = useState<ReadonlySet<SeededField>>(() => new Set());
+
   const problems = problemsIn(draft);
   const set = <K extends keyof FormDraft>(key: K, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
+
+  /** Typing in a seeded box is what takes it out of the seed's reach, permanently. */
+  const setSeeded = (key: SeededField, value: string) => {
+    setEdited((current) => new Set(current).add(key));
+    set(key, value);
+  };
+
+  /**
+   * A pick re-seeds — **the only thing on this screen that ever writes those two
+   * boxes on the player's behalf**, and it happens once per pick rather than on
+   * a watcher, which is what makes *seed, never recompute* a property of the
+   * wiring rather than of a flag.
+   */
+  const pick = (key: "species" | "className", value: string) =>
+    setDraft((current) => seededDraft({ ...current, [key]: value }, edited));
 
   /**
    * The membership rather than the campaign, because `role` is the half that
@@ -458,14 +497,43 @@ export function CharacterCreateScreen() {
                       className="w-20"
                     />
                   </Field>
-                  <Field label="Species" htmlFor="new-character-species">
-                    <Input
-                      id="new-character-species"
-                      placeholder="Wood elf"
+                  {/* **Pickers, not boxes**, by the captain's decision of
+                      2026-08-26. The vocabulary is the 2024 Player's Handbook's
+                      ten and twelve (`packages/api/src/Ruleset.ts`), and it is
+                      what makes the two numbers under this row possible at all
+                      — a class is the only thing that carries a hit die, and
+                      "Circle of the Moon Druid" carries none.
+
+                      `Select.Value` is written out rather than left to Base UI:
+                      with neither `items` nor children it serialises the value,
+                      which for the unpicked state is `""` and draws nothing at
+                      all where a placeholder belongs. */}
+                  <Field
+                    label="Species"
+                    htmlFor="new-character-species"
+                    // The vocabulary is one ruleset's, so anything narrower than
+                    // a species is not in it — and both fields are ordinary free
+                    // text on the sheet afterwards, which is where a wood elf
+                    // becomes a wood elf.
+                    hint="Anything more specific goes on the sheet."
+                  >
+                    <Select
                       value={draft.species}
-                      onChange={(event) => set("species", event.target.value)}
-                      className="w-40"
-                    />
+                      onValueChange={(value) => pick("species", String(value))}
+                    >
+                      <SelectTrigger id="new-character-species" className="w-40">
+                        <SelectValue>
+                          {(value) => (value === "" ? "Pick a species" : String(value))}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SPECIES_KEYS.map((key) => (
+                          <SelectItem key={key} value={key}>
+                            {key}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </Field>
                   <Field
                     label="Class"
@@ -478,57 +546,92 @@ export function CharacterCreateScreen() {
                     // the moment the save lands.
                     hint="Three fields, not one line — the half-line under their name is written from them."
                   >
-                    <Input
-                      id="new-character-class"
-                      placeholder="Druid"
+                    <Select
                       value={draft.className}
-                      onChange={(event) => set("className", event.target.value)}
-                      className="w-40"
-                    />
+                      onValueChange={(value) => pick("className", String(value))}
+                    >
+                      <SelectTrigger id="new-character-class" className="w-40">
+                        <SelectValue>
+                          {(value) => (value === "" ? "Pick a class" : String(value))}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CLASS_KEYS.map((key) => (
+                          <SelectItem key={key} value={key}>
+                            {key}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </Field>
                 </div>
 
-                <div className="flex flex-wrap gap-5">
-                  <Field
-                    label="AC"
-                    htmlFor="new-character-ac"
-                    error={showProblems ? problems.ac : undefined}
-                  >
-                    <Input
-                      id="new-character-ac"
-                      mono
-                      type="number"
-                      min={0}
-                      max={MAX_AC}
-                      value={draft.ac}
-                      aria-invalid={showProblems && problems.ac !== undefined}
-                      onChange={(event) => set("ac", event.target.value)}
-                      className="w-24"
-                    />
-                  </Field>
-                  <Field
-                    label="Hit points"
-                    htmlFor="new-character-hp"
-                    // Deliberately the *maximum* and nothing else.
-                    // `CharacterOwnCreate` has no `hpCurrent`, so what they are
-                    // on tonight is the DM's to say — through the fight, or
-                    // through the delta endpoint — and there is no box here to
-                    // say it in.
-                    hint="Their maximum. What they are on tonight is your DM's to track."
-                    error={showProblems ? problems.hpMax : undefined}
-                  >
-                    <Input
-                      id="new-character-hp"
-                      mono
-                      type="number"
-                      min={0}
-                      max={MAX_HP}
-                      value={draft.hpMax}
-                      aria-invalid={showProblems && problems.hpMax !== undefined}
-                      onChange={(event) => set("hpMax", event.target.value)}
-                      className="w-28"
-                    />
-                  </Field>
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-wrap gap-5">
+                    <Field
+                      label="AC"
+                      htmlFor="new-character-ac"
+                      error={showProblems ? problems.ac : undefined}
+                    >
+                      <Input
+                        id="new-character-ac"
+                        mono
+                        type="number"
+                        min={0}
+                        max={MAX_AC}
+                        value={draft.ac}
+                        aria-invalid={showProblems && problems.ac !== undefined}
+                        onChange={(event) => setSeeded("ac", event.target.value)}
+                        className="w-24"
+                      />
+                    </Field>
+                    <Field
+                      label="Hit points"
+                      htmlFor="new-character-hp"
+                      // Deliberately the *maximum* and nothing else.
+                      // `CharacterOwnCreate` has no `hpCurrent`, so what they are
+                      // on tonight is the DM's to say — through the fight, or
+                      // through the delta endpoint — and there is no box here to
+                      // say it in.
+                      hint="Their maximum. What they are on tonight is your DM's to track."
+                      error={showProblems ? problems.hpMax : undefined}
+                    >
+                      <Input
+                        id="new-character-hp"
+                        mono
+                        type="number"
+                        min={0}
+                        max={MAX_HP}
+                        value={draft.hpMax}
+                        aria-invalid={showProblems && problems.hpMax !== undefined}
+                        onChange={(event) => setSeeded("hpMax", event.target.value)}
+                        className="w-28"
+                      />
+                    </Field>
+                  </div>
+                  {/* **What the two numbers above actually are**, said where
+                      they are rather than left to be assumed.
+
+                      They are filled in from the class and species the moment
+                      those are picked, and they are a *starting point*: the
+                      armour class is the unarmoured base and nothing worn, and
+                      neither number knows the ability scores, because this form
+                      does not ask for them — those live on the sheet, with the
+                      editor and the dice. Nothing recalculates either of them
+                      afterwards, by the captain's decision, so the honest thing
+                      is to say so before the player presses *Create* rather
+                      than to let them find out at the table. */}
+                  {(draft.className !== "" || draft.species !== "") && (
+                    <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
+                      <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
+                      <span>
+                        A starting point from the class and species — the hit die, and{" "}
+                        <span className="font-mono">10</span> before any armour. Type over either.
+                        Once you have set your ability scores on the sheet, come back and adjust
+                        them; nothing changes them for you.
+                      </span>
+                    </p>
+                  )}
                 </div>
 
                 <Field

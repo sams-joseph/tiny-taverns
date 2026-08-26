@@ -62,13 +62,19 @@ export function DraftCard({
             <div className="font-display text-display-s leading-tight font-semibold text-heading">
               {draft.name}
             </div>
-            {/* Level is deliberately absent rather than shown as 1: `level` is
-                not a parameter of the tool and the accepted row takes the
-                column default, so a "Level 1" here would be a number nothing
-                sent. It appears under the name on the sheet the moment the
-                player sets one. */}
+            {/* The half-line, as the sheet's own `descriptor` will read it.
+                `level` is on the proposal now — a drafted character starts at
+                1, and the accept writes that number rather than leaving the
+                column to say *nobody has said*. It is drawn here rather than
+                assumed because the card and the row it becomes are checked
+                against each other by eye. */}
             <div className="mt-1 text-body-s leading-body text-muted-foreground">
-              {[line, sheet.identity?.subclass]
+              {[
+                [draft.level === undefined ? undefined : `Level ${String(draft.level)}`, line]
+                  .filter((part) => part !== undefined && part !== "")
+                  .join(" "),
+                sheet.identity?.subclass,
+              ]
                 .filter((part) => part !== undefined && part !== "")
                 .join(" · ")}
             </div>
@@ -93,6 +99,28 @@ export function DraftCard({
           ))}
         </div>
       </SheetSection>
+
+      {/* **The two seeded numbers, and what they are** — drawn only when the
+          proposal carries them, which every proposal written since the seed
+          landed does and none written before it did.
+
+          Said in the same words the manual form uses, because it is the same
+          function that produced them (`Ruleset.seedFor`): the class hit die
+          plus constitution, and the unarmoured base. Nothing recalculates
+          either afterwards, so a player who reads this and disagrees is one
+          press from a sheet where both are ordinary boxes. */}
+      {(draft.ac !== undefined || draft.hpMax !== undefined) && (
+        <SheetSection title="Starting numbers" aside="A starting point — edit them on the sheet">
+          <div className="flex flex-wrap gap-2.5">
+            {draft.hpMax !== undefined && (
+              <StartingNumber label="Hit points" value={draft.hpMax} note="hit die + CON" />
+            )}
+            {draft.ac !== undefined && (
+              <StartingNumber label="AC" value={draft.ac} note="unarmoured" />
+            )}
+          </div>
+        </SheetSection>
+      )}
 
       {skills.length > 0 && (
         <SheetSection title="Skills">
@@ -149,6 +177,24 @@ export function DraftCard({
           Rewrite the description
         </Button>
       </div>
+    </div>
+  );
+}
+
+function StartingNumber({
+  label,
+  value,
+  note,
+}: {
+  readonly label: string;
+  readonly value: number;
+  readonly note: string;
+}) {
+  return (
+    <div className="flex min-w-24 flex-col gap-0.5 rounded-control border border-hairline bg-surface-sunken px-3 py-2">
+      <span className="text-micro leading-none tracking-caps uppercase text-faint">{label}</span>
+      <span className="font-mono text-display-s leading-tight text-heading">{value}</span>
+      <span className="text-micro leading-none text-faint">{note}</span>
     </div>
   );
 }

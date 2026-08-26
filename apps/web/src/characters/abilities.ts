@@ -1,4 +1,5 @@
 import type { Ability } from "@taverns/api";
+import { ABILITY_KEYS, modifierFor, signed } from "@taverns/api";
 
 /**
  * The six cells, the arithmetic under them, and the dice — **the pure half of
@@ -34,8 +35,16 @@ import type { Ability } from "@taverns/api";
  * one without the other.
  */
 
-/** The six, in the order every sheet in the product draws them. */
-export const ABILITY_LABELS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as const;
+/**
+ * The six, in the order every sheet in the product draws them.
+ *
+ * `packages/api/src/Ruleset.ts`'s list, re-exported under this file's own name
+ * rather than copied. It was written out here and again in
+ * `apps/server/src/assistant/toolkit.ts`, which is two chances for a
+ * reordering to reach one and not the other — and the seed reads two of the six
+ * by name, so a third copy would have been three.
+ */
+export const ABILITY_LABELS = ABILITY_KEYS;
 
 /**
  * The default, and it is the default because the drawing says so.
@@ -48,11 +57,15 @@ export const ABILITY_LABELS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as cons
  */
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8] as const;
 
-/** `+4`, `-1`, `+0` — pre-signed, the way every number on this sheet is stored. */
-export const signed = (value: number): string => (value < 0 ? String(value) : `+${String(value)}`);
-
-/** The one implementation of the ability modifier: `⌊(score − 10) / 2⌋`, signed. */
-export const modifierFor = (score: number): string => signed(Math.floor((score - 10) / 2));
+/**
+ * `+4`, `-1`, `+0`, and `⌊(score − 10) / 2⌋` signed — **`Ruleset`'s, re-exported
+ * rather than restated.**
+ *
+ * The one implementation, and it has to be one: the seed reads a modifier back
+ * out of the document this editor wrote, so an editor that signed differently
+ * from the reader would produce a hit point total nobody could account for.
+ */
+export { modifierFor, signed };
 
 /** A fair d6. Injectable so the roll can be measured rather than hoped at. */
 export type Die = () => number;

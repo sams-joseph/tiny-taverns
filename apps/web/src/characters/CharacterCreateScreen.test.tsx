@@ -78,6 +78,26 @@ const fillItIn = async () => {
   await userEvent.click(await screen.findByRole("button", { name: /Fill it in myself/i }));
 };
 
+/**
+ * Pick from one of the two vocabularies.
+ *
+ * Species and class are `Select`s rather than boxes since the captain's
+ * decision of 2026-08-26 — the 2024 Player's Handbook's ten and twelve, from
+ * `packages/api/src/Ruleset.ts` — so a test drives them the way every other
+ * select in this suite is driven, by the trigger's own accessible name.
+ */
+const pick = async (label: string, option: string) => {
+  await userEvent.click(await screen.findByRole("combobox", { name: label }));
+  await userEvent.click(await screen.findByRole("option", { name: option }));
+};
+
+/** Type over a box the pick has already filled in. */
+const retype = async (label: RegExp | string, value: string) => {
+  const box = await screen.findByLabelText(label);
+  await userEvent.clear(box);
+  await userEvent.type(box, value);
+};
+
 /** A campaign this account is at no table of. */
 const strangerCampaignId = "2b1f2a1e-0000-4000-8000-0000000000ff";
 
@@ -88,11 +108,12 @@ describe("writing down a character of your own", () => {
 
     await type(/^Name$/, "Sorrel Ash");
     await type(/^Player$/, "Ilse");
-    await type(/^Level$/, "1");
-    await type(/^Species$/, "Wood elf");
-    await type(/^Class$/, "Druid");
-    await type(/^AC$/, "14");
-    await type(/Hit points/, "9");
+    await pick("Species", "Elf");
+    await pick("Class", "Druid");
+    // Both are seeded by the picks above; typing over them is what the form is
+    // for, and is what takes them out of the seed's reach.
+    await retype(/^AC$/, "14");
+    await retype(/Hit points/, "9");
     await type(/Who they are/, "Raised by the road.");
     await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
 
@@ -106,8 +127,10 @@ describe("writing down a character of your own", () => {
     expect(body).toEqual({
       name: "Sorrel Ash",
       playerName: "Ilse",
+      // Level 1 without anybody typing it, and the two labels are the
+      // vocabulary's own words — which is what makes them readable back.
       level: 1,
-      species: "Wood elf",
+      species: "Elf",
       className: "Druid",
       ac: 14,
       hpMax: 9,
@@ -411,5 +434,64 @@ describe("writing down a character of your own", () => {
     await screen.findByText("That campaign is gone, or it belongs to someone else.");
     expect((screen.getByLabelText(/^Name$/) as HTMLInputElement).value).toBe("Sorrel Ash");
     expect(window.location.hash).toBe(`#/play/campaigns/${campaignId}/characters/new`);
+  });
+  it("seeds the two numbers from a pick, and says what they are", async () => {
+    await renderCreate();
+    await fillItIn();
+
+    // Nothing is filled in until a class is: there is no hit die to read, and a
+    // form that opened on a number nobody chose would be the stubbed field this
+    // product refuses everywhere else.
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("");
+    expect(screen.queryByText(/A starting point from the class and species/)).toBeNull();
+
+    await pick("Class", "Wizard");
+    // d6, and no ability scores on this form — so the die and a bare 10.
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("6");
+    expect((screen.getByLabelText(/^AC$/) as HTMLInputElement).value).toBe("10");
+    // Said where the numbers are, before the press rather than at the table.
+    await screen.findByText(/A starting point from the class and species/);
+
+    // Changing the pick re-seeds: a wizard's hit points must not survive into a
+    // barbarian, which renders as a perfectly ordinary form when it is wrong.
+    await pick("Class", "Barbarian");
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("12");
+    await pick("Species", "Dwarf");
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("13");
+  });
+
+  it("never writes over a number the player typed, however the pick changes", async () => {
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Sorrel Ash");
+    await pick("Class", "Druid");
+    await retype(/Hit points/, "34");
+    await pick("Class", "Sorcerer");
+
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("34");
+    // The AC is still the seed's, because that box was never touched.
+    expect((screen.getByLabelText(/^AC$/) as HTMLInputElement).value).toBe("10");
+
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+    expect(bodyOf(server, "POST", createPath)).toMatchObject({
+      className: "Sorcerer",
+      hpMax: 34,
+      ac: 10,
+      level: 1,
+    });
+  });
+
+  it("offers the vocabulary and nothing else, so no free-text class can be created", async () => {
+    await renderCreate();
+    await fillItIn();
+    // The captain's decision of 2026-08-26 read as a property of the screen:
+    // there is no box to type "Circle of the Moon Druid" into. What an existing
+    // character carrying one keeps is a separate question, answered by there
+    // being no migration at all — see `packages/api/src/Ruleset.ts`.
+    expect(screen.queryByRole("textbox", { name: "Class" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Species" })).toBeNull();
+
+    await userEvent.click(await screen.findByRole("combobox", { name: "Class" }));
+    expect(await screen.findAllByRole("option")).toHaveLength(12);
   });
 });

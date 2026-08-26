@@ -168,17 +168,28 @@ export class Proposals extends Context.Service<
           case "character":
             return Effect.map(
               // `createOwn`, so `account_id` is the accepting credential's and
-              // there is nowhere in a proposal to name anybody else. `level`,
-              // `visibility` and the live trio are all absent for the reason
+              // there is nowhere in a proposal to name anybody else.
+              // `visibility` and the live trio stay absent for the reason
               // `CharacterOwnCreate` has no field for them: a drafted character
-              // starts at level 1, `dm`, and unhurt, by column default rather
-              // than by a value this file chose.
+              // is `dm` and unhurt by column default rather than by a value
+              // this file chose.
+              //
+              // The three seeded numbers are **copied, not computed.**
+              // `Ruleset.seedFor` ran when the proposal was made, so the row
+              // carries exactly what the card the player pressed *Keep them* on
+              // said — the same rule the roster follows, and the reason the
+              // accept can be read without knowing any arithmetic. Each is an
+              // optional key on the proposal, because one written before the
+              // seed existed simply has none and falls to the column default.
               characters.createOwn(
                 campaignId,
                 {
                   name: proposal.name,
                   ...(proposal.species === null ? {} : { species: proposal.species }),
                   ...(proposal.className === null ? {} : { className: proposal.className }),
+                  ...(proposal.level === undefined ? {} : { level: proposal.level }),
+                  ...(proposal.ac === undefined ? {} : { ac: proposal.ac }),
+                  ...(proposal.hpMax === undefined ? {} : { hpMax: proposal.hpMax }),
                   sheet: proposal.sheet,
                 },
                 from,

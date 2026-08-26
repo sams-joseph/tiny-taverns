@@ -1603,6 +1603,71 @@ the campaign's **own DM** through `/me`, and `200` for the owner's. With two tab
 at `z-dialog` 110 over a scrim at `z-scrim` 100 with `elementFromPoint` inside it. No sideways
 scroll at 1440, 1024, 900 or 760.
 
+#### The class and species vocabularies, and the three numbers they seed
+
+`packages/api/src/Ruleset.ts` is the whole of it — twelve classes, ten species, the six ability
+labels, and `seedFor`. **It lives in `@taverns/api` because both create paths call the same
+function**: the manual form (`apps/web/src/characters/create.ts`'s `seededDraft`) and Hob's
+`proposeCharacter` handler, which resolves the numbers onto the proposal so the card and the row
+cannot disagree — the rule `HobProposal.sheet` already followed. Two copies of this arithmetic
+would be two answers to _what does a level-1 druid start on_.
+
+**The ruleset is the 2024 Player's Handbook, and one ruleset only.** Chosen on shape rather than
+arithmetic (the captain's brief says the two barely differ for these three values): 2024 species
+carry no ability score increases and no subraces, so a species is one word and the picker is flat.
+The visible cost is that `"Half-orc"` and `"Wood elf"` are 2014's and are not entries — a new
+character picks `Elf` and edits the label on the sheet, where both fields are ordinary free text.
+
+The captain's three decisions of 2026-08-26 and where each is enforced:
+
+- **Structured, not free text** — at every point a _new_ value is chosen and at none where an old
+  one has to survive. The create form's two pickers are the vocabulary and nothing else, and
+  `proposeCharacter`'s `species`/`className` are closed `Schema.Literals` (the argument `AbilityKey`
+  already makes: the published JSON schema becomes a fixed list a grammar can hold a model to). A
+  near miss is a tool call that fails to decode, which is what `Hob.ts`'s `recover` is for.
+- **Seed at creation, never recompute** — `seedFor` is wired to the two pickers and to the propose
+  handler, and to nothing else. No effect watches the form, no trigger, no generated column;
+  `descriptor` stays the product's only derived character value. Measured in a browser: setting the
+  standard array on the sheet afterwards left a manually created druid on the 27 hp and AC 10 it was
+  made with.
+- **Level defaults to 1** — `STARTING_LEVEL`, used by `emptyDraft.level` and by the proposal, so the
+  form's default and the accept's value are one number.
+
+**There is no migration and no new column, and that is the answer to the existing free-text data
+rather than an omission.** A stored value _is_ the vocabulary's own label, so the link from a row
+back to an entry is `classFor`/`speciesFor` matching case-insensitively on the label — a stored key
+beside it would be a second answer to a question the label already answers. So
+`"Circle of the Moon Druid"` resolves to nothing, is never rewritten, renders exactly as it did, and
+is one ordinary edit away from a label that does resolve. **Nothing anywhere refuses a value it used
+to accept**: `Character`, `CharacterUpdate`, `CharacterOwnUpdate` and `CharacterOwnCreate` all keep
+their open `className`/`species`, and `HobProposal`'s two stay `NullOr(String)` because a proposal is
+**persisted** (`assistant_turn.proposal`) and narrowing it would take a whole conversation down on
+read. Its three new numbers are `Schema.optional` for the same reason.
+
+Three things about the arithmetic that are decisions:
+
+- **Trap 2's answer is `Ability.modifier`, and the shape is not touched.** Both halves of a cell are
+  stored `NonEmptyString`s and every writer emits the pair in one object literal, so reading the
+  score and recomputing would be a second implementation. A missing or unparseable cell reads as `0`.
+- **`ClassEntry.unarmouredAc` is a list rather than a boolean** because **Barbarian** is
+  `10 + DEX + CON` and **Monk** is `10 + DEX + WIS`. Those two are the awkward classes and the only
+  ones whose armour class is not `10 + DEX`.
+- **Exactly one species touches any of the three** — Dwarf, through Dwarven Toughness (+1 hp per
+  level). The other nine are entries because the picker needs them, and inventing an axis for them
+  would be the stubbed field this product refuses.
+
+**The manual form asks for no ability scores**, so a hand-filled character seeds from the die and a
+bare 10 (a druid: 8 hp, AC 10; a wizard: 6 hp). That is the honest level-1 answer for a character
+whose scores nobody has typed, the abilities editor is on the sheet by an earlier decision, and the
+form says so in its own words under the two boxes. Hob's path _does_ have scores, because
+`abilitiesFrom` has already assigned the standard array — so a drafted CON-first druid comes back on
+10 hp rather than 8.
+
+**The DM's `CharacterDialog` is deliberately untouched** and still takes free text: it is for typing
+up characters that already exist, where a level-1 seed is wrong and a closed vocabulary would refuse
+a table's homebrew. Same for the sheet's `IdentityDialog`, which is the escape hatch that lets an
+unmatched label be corrected.
+
 ### Where a hit point lives, and what the doorbell covers
 
 `0014_character_live.ts` made `character` a **live** table — `hp_current`, `temp_hp`,

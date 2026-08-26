@@ -1,8 +1,11 @@
 import {
   type Ability,
+  ABILITY_KEYS,
+  AbilityKey,
   type Actor,
   type CampaignId,
   type CharacterSheet,
+  ClassKey,
   Conflict,
   Creature,
   CreatureId,
@@ -10,14 +13,17 @@ import {
   Difficulty,
   type HobProposal,
   type HobRosterLine,
+  modifierFor,
   NotFound,
   SearchHit,
   SearchSource,
+  seedFor,
   Session,
   SessionEvent,
   SessionId,
   SessionRecap,
   type Skill,
+  SpeciesKey,
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
@@ -415,18 +421,22 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
 });
 
 /**
- * The six abilities, in the order every sheet in the product draws them.
+ * The six abilities, the twelve classes and the ten species are all
+ * `packages/api/src/Ruleset.ts`'s — imported above, not restated here.
  *
- * A closed enum rather than free text, and it is the one place in
- * `proposeCharacter` where being strict pays: the published JSON schema becomes
- * a six-word vocabulary, which an endpoint that compiles it into a grammar can
- * hold the model to. A model that wrote `"Wisdom"` would otherwise produce an
- * ability nothing on a sheet can match up with a saving throw.
+ * Each is a closed enum rather than free text, and `proposeCharacter` is where
+ * being strict pays: the published JSON schema becomes a fixed vocabulary,
+ * which an endpoint that compiles it into a grammar can hold the model to. A
+ * model that wrote `"Wisdom"` would otherwise produce an ability nothing on a
+ * sheet can match up with a saving throw, and one that wrote `"Wood Elf"` a
+ * species nothing can look a hit point up against.
+ *
+ * **They live in `@taverns/api` because the create form picks from the same
+ * three lists**, and two copies of a vocabulary are two answers to what a
+ * druid is. A near miss — `"Wood Elf"` where the grammar is not compiled — is
+ * a tool call that fails to decode, which is exactly what `Hob.ts`'s `recover`
+ * exists for and is charged to `MAX_ROUNDS` like any other.
  */
-const AbilityKey = Schema.Literals(["STR", "DEX", "CON", "INT", "WIS", "CHA"]);
-type AbilityKey = typeof AbilityKey.Type;
-
-const ABILITY_KEYS: ReadonlyArray<AbilityKey> = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
 
 /**
  * The array `proposeCharacter` assigns, and the reason the tool takes no
@@ -443,9 +453,6 @@ const ABILITY_KEYS: ReadonlyArray<AbilityKey> = ["STR", "DEX", "CON", "INT", "WI
  * is not a roll.
  */
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8] as const;
-
-/** `+4`, `-1`, `+0` — pre-signed, the way every number on a sheet is stored. */
-const signed = (value: number): string => (value < 0 ? String(value) : `+${String(value)}`);
 
 /**
  * Six ability cells from a ranking — **the whole of the arithmetic, in one
@@ -474,7 +481,7 @@ const abilitiesFrom = (order: ReadonlyArray<AbilityKey>): ReadonlyArray<Ability>
   // the numbers, not where a cell sits on the sheet.
   return ABILITY_KEYS.map((label) => {
     const score = scores.get(label) ?? 10;
-    return { label, score: String(score), modifier: signed(Math.floor((score - 10) / 2)) };
+    return { label, score: String(score), modifier: modifierFor(score) };
   });
 };
 
@@ -523,15 +530,38 @@ const skillsFrom = (names: ReadonlyArray<string>): ReadonlyArray<Skill> => {
 export const ProposeCharacter = Tool.make("proposeCharacter", {
   description:
     "Offer the player a character sheet built from what they described. Give " +
-    "them a name, a species and a class, rank the six abilities most important " +
-    "first, name up to four skills, and write a short backstory in their own " +
-    "register. Do not give scores or modifiers — rank the abilities and the " +
-    "standard array is applied for you. Only a suggestion: nothing is saved " +
-    "unless the player accepts it. Say one short line about it and stop.",
+    "them a name, then pick one species from Aasimar, Dragonborn, Dwarf, Elf, " +
+    "Gnome, Goliath, Halfling, Human, Orc, Tiefling and one class from " +
+    "Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, " +
+    "Sorcerer, Warlock, Wizard — spelled exactly like that. Put anything more " +
+    "specific, like a wood elf or a circle of the moon, in subclass. Rank the " +
+    "six abilities most important first, name up to four skills, and write a " +
+    "short backstory in their own register. Do not give scores, modifiers, hit " +
+    "points, armour class or a level — the standard array is applied for you " +
+    "and the starting numbers are worked out from the class and species. Only " +
+    "a suggestion: nothing is saved unless the player accepts it. Say one " +
+    "short line about it and stop.",
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
-    species: Schema.String.check(Schema.isLengthBetween(0, 60)),
-    className: Schema.String.check(Schema.isLengthBetween(0, 60)),
+    /**
+     * The species and the class, as **closed vocabularies** —
+     * `packages/api/src/Ruleset.ts`'s ten and twelve.
+     *
+     * They were free text of up to sixty characters, and the captain's decision
+     * of 2026-08-26 is that they are not. The gain is not tidiness: a class is
+     * the only thing that carries a hit die, so *"which of the twelve"* is the
+     * question that lets the three numbers below this be seeded at all. A model
+     * writing `"Circle of the Moon Druid"` produces a label nothing can look a
+     * die up against, and it did — that is what the old bound allowed.
+     *
+     * Both required, unlike every other parameter here: a character has a class
+     * and a species, this is the one call whose whole job is to say which, and
+     * an empty arm would be an escape a small model reaches for under pressure.
+     * The description names both lists so the vocabulary is in the prompt as
+     * well as in the grammar.
+     */
+    species: SpeciesKey,
+    className: ClassKey,
     /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
     subclass: optionalText(80),
     background: optionalText(80),
@@ -934,13 +964,39 @@ export const playerHandlersFor = (
         ...(carried.length === 0 ? {} : { inventory: carried.map((item) => ({ name: item })) }),
       };
 
+      /**
+       * The three numbers a character starts on, worked out **here** rather
+       * than at the accept.
+       *
+       * `HobProposal.sheet` is resolved when the proposal is made, and these
+       * follow it for the same stated reason: the card the player reads and the
+       * row *Keep them* creates cannot disagree, and the accept does no
+       * arithmetic a reader could not see coming. It reads the class hit die,
+       * the species, and the constitution and dexterity modifiers out of the
+       * `sheet` this handler has just assembled — so a draft that ranked
+       * constitution first really does come back with more hit points, which is
+       * the whole point of ranking it.
+       *
+       * `seedFor` is `@taverns/api`'s and is the same function the manual create
+       * form calls, so a drafted druid and a hand-filled one start on the same
+       * number. It is called **once**, and nothing recomputes any of the three
+       * afterwards.
+       */
+      const seed = seedFor({ className, species, abilities: sheet.abilities });
+
       return offer(
         {
           target: "character",
           name,
-          species: blank(species) ?? null,
-          className: blank(className) ?? null,
+          species,
+          className,
           sheet,
+          level: seed.level,
+          ac: seed.ac,
+          // Always present in practice — the class is a closed vocabulary, so
+          // there is always a hit die — and optional on the wire because a
+          // proposal saved before this existed has no key at all.
+          ...(seed.hpMax === undefined ? {} : { hpMax: seed.hpMax }),
           rationale: (rationale ?? []).map((line) => line.trim()).filter((line) => line !== ""),
         },
         `Offered ${name} to the player. They can keep them or ask for changes; ` +

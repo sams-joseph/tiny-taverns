@@ -135,7 +135,11 @@ const DESCRIBED =
 const aDraft = (over: Record<string, unknown> = {}) =>
   toolCallChunks("proposeCharacter", {
     name: "Sorrel Ash",
-    species: "Wood elf",
+    // Both are closed vocabularies since the seed landed — the 2024 Player's
+    // Handbook's ten and twelve (`packages/api/src/Ruleset.ts`) — which is what
+    // lets the server look a hit die up. Anything more specific than a species
+    // goes in `subclass`, which is still prose.
+    species: "Elf",
     className: "Druid",
     subclass: "Circle of the Land (Marsh)",
     background: "Herbalist's apprentice",
@@ -297,6 +301,56 @@ describe("what the tool takes, and what the server works out", () => {
     expect(proposed.proposal.sheet.story?.flaw).toBeUndefined();
   }, 60_000);
 
+  it("offers the two vocabularies to the model, and no free text beside them", async () => {
+    // `AbilityKey`'s argument, applied to the two labels that carry a rule:
+    // the published JSON schema becomes a fixed list, which an endpoint that
+    // compiles it into a grammar can hold the model to. Before this they were
+    // strings of up to sixty characters, and a model that wrote "Circle of the
+    // Moon Druid" produced a class nothing could look a hit die up against.
+    const { requests } = await ask(fixture.player);
+    const tools = shownTo(requests.slice(0, 1));
+
+    expect(tools).toContain("Barbarian");
+    expect(tools).toContain("Aasimar");
+    // 2014's, and not in the vocabulary — the cost of picking one ruleset,
+    // stated where it would otherwise be found by a model.
+    expect(tools).not.toContain("Half-Orc");
+    // The description names both lists as well, so the vocabulary is in the
+    // prompt and not only in the grammar.
+    expect(tools).toContain("spelled exactly like that");
+  }, 60_000);
+
+  it("seeds hit points, armour class and level from the class and species", async () => {
+    // The captain's decision of 2026-08-26, on the drafted path. `Ruleset.seedFor`
+    // is the one implementation and the manual form calls the same one, so a
+    // drafted druid and a hand-filled one start on the same number.
+    const { events } = await ask(fixture.player);
+    const proposed = proposedIn(events);
+    if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
+
+    // d8, CON 14 at rank two so `+2`, DEX 13 at rank three so `+1`.
+    expect(proposed.proposal.hpMax).toBe(10);
+    expect(proposed.proposal.ac).toBe(11);
+    expect(proposed.proposal.level).toBe(1);
+  }, 60_000);
+
+  it("reads a different die and a different armour rule for a different class", async () => {
+    // **Barbarian is the awkward one and is the reason `unarmouredAc` is a list
+    // rather than a boolean**: Unarmoured Defense is `10 + DEX + CON`, so a
+    // barbarian with the same ranking seeds a genuinely different armour class
+    // from the druid above rather than the same 11. Dwarven Toughness is the
+    // one species trait that reaches any of the three, and it adds its hit
+    // point on top of the d12.
+    const { events } = await ask(fixture.player, {
+      rounds: [aDraft({ className: "Barbarian", species: "Dwarf" }), textChunks("A dwarf, then.")],
+    });
+    const proposed = proposedIn(events);
+    if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
+
+    expect(proposed.proposal.hpMax).toBe(15);
+    expect(proposed.proposal.ac).toBe(13);
+  }, 60_000);
+
   it("carries the rationale, which is the only place the reasons live", async () => {
     const { events } = await ask(fixture.player);
     const proposed = proposedIn(events);
@@ -355,7 +409,15 @@ describe("the accept makes a character, and it is the player's own", () => {
     // Every default the payload cannot say.
     expect(character.visibility).toBe("dm");
     expect(character.hpCurrent).toBeNull();
-    expect(character.level).toBeNull();
+    // **The three seeded numbers**, copied off the proposal rather than worked
+    // out here — a druid's d8, no constitution modifier from the standard array
+    // at rank two (`CON 14`, `+2`), the unarmoured base with `DEX 13` at rank
+    // three (`+1`), and the level the captain's decision fixes at 1. Nothing
+    // recomputes any of them afterwards; the sheet's own dialogs are how they
+    // move.
+    expect(character.level).toBe(1);
+    expect(character.hpMax).toBe(10);
+    expect(character.ac).toBe(11);
     // And the sheet is the one the card drew, not a second assembly.
     expect(character.sheet.abilities).toHaveLength(6);
     expect(character.sheet.skills?.map((skill) => skill.name)).toEqual([
@@ -373,7 +435,7 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.sheet.notes).toContain("Ashfen");
     // `descriptor` is a generated column over the three, so the drafted species
     // and class reach the line under the name with nothing computing it twice.
-    expect(character.descriptor).toBe("Wood elf Druid");
+    expect(character.descriptor).toBe("Level 1 Elf Druid");
   }, 60_000);
 
   it("is an ordinary character afterwards: the player reads it, the DM reads it, nobody else does", async () => {
@@ -486,7 +548,7 @@ describe("the redraft loop", () => {
     // The draft, read back as the ranking the tool takes rather than as six
     // cells the tool cannot accept.
     expect(opening).toContain("Sorrel Ash");
-    expect(opening).toContain("Wood elf Druid");
+    expect(opening).toContain("Elf Druid");
     expect(opening).toContain("WIS > CON > DEX");
     expect(opening).toContain("Nature, Perception, Medicine, Survival");
     expect(opening).toContain("Circle of the Land (Marsh)");

@@ -184,9 +184,47 @@ export const HobProposal = Schema.Union([
   Schema.Struct({
     target: Schema.Literal("character"),
     name: Schema.String,
+    /**
+     * The two halves of the descriptor, as **the vocabulary's own labels.**
+     *
+     * `proposeCharacter` takes them as closed enums (`SpeciesKey`, `ClassKey`),
+     * so what lands here is always a label `packages/api/src/Ruleset.ts` knows
+     * — which is what lets the three numbers below exist at all.
+     *
+     * They stay `NullOr(String)` rather than the enums themselves, and that is
+     * not laziness. **A proposal is persisted** — it is `assistant_turn.proposal`,
+     * a `jsonb` column read back on every thread read — so narrowing this type
+     * would make a draft written before the vocabulary existed fail to decode,
+     * and it would take the whole conversation down with it. The enum belongs
+     * where a *new* value is chosen; this is where an old one has to survive.
+     */
     species: Schema.NullOr(Schema.String),
     className: Schema.NullOr(Schema.String),
     sheet: CharacterSheet,
+    /**
+     * What the character starts on — **resolved when the proposal is made, for
+     * the reason `sheet` above is.**
+     *
+     * `Ruleset.seedFor` reads the class hit die, the species, and the
+     * constitution and dexterity modifiers the `sheet` beside this already
+     * carries, and it runs once: the card the player is looking at and the row
+     * they get by pressing *Keep them* cannot disagree, and the accept does no
+     * arithmetic a reader could not see coming.
+     *
+     * **Optional keys rather than nullable ones**, which is the same
+     * persisted-column argument the two labels above make: a proposal written
+     * before this existed simply has no key, decodes exactly as it did, and
+     * accepts to a row whose three columns fall to their defaults — which is
+     * what it would have done anyway.
+     *
+     * `level` is always 1 and is here rather than assumed at the accept for the
+     * same one-answer reason. `ac` is the unarmoured base and `hpMax` the die
+     * plus constitution; both are seeded starting points the player edits on the
+     * sheet, and neither is ever recomputed.
+     */
+    level: Schema.optional(Schema.Int),
+    ac: Schema.optional(Schema.Int),
+    hpMax: Schema.optional(Schema.Int),
     /** Short lines, in the order Hob wrote them. Empty is legal and draws nothing. */
     rationale: Schema.Array(Schema.String),
   }),

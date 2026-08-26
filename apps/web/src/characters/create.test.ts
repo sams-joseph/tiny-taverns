@@ -5,8 +5,10 @@ import {
   payloadFrom,
   problemsIn,
   refused,
+  seededDraft,
   tablesForNewCharacter,
   type CharacterDraft,
+  type SeededField,
 } from "./create";
 
 /**
@@ -98,7 +100,11 @@ describe("the payload", () => {
     // no `Schema.NullOr` on any of them, unlike the update — and `species` and
     // `className` are `NonEmptyString`, so `""` is refused by the contract
     // locally and the form fails on a field left deliberately blank.
-    expect(payloadFrom(draftWith({}))).toEqual({ name: "Sorrel" });
+    //
+    // `level` is the one thing an untouched draft still carries: the captain's
+    // third decision is that a character starts at 1, so an empty form is a
+    // level-1 character rather than one whose level nobody has said.
+    expect(payloadFrom(draftWith({}))).toEqual({ name: "Sorrel", level: 1 });
   });
 
   it("trims, and carries every field that was filled in", () => {
@@ -150,5 +156,72 @@ describe("the payload", () => {
     for (const key of ["hpCurrent", "tempHp", "conditions", "visibility", "accountId"]) {
       expect(payload).not.toHaveProperty(key);
     }
+  });
+});
+
+/**
+ * The seed, on the manual path.
+ *
+ * `packages/api/src/Ruleset.test.ts` pins the arithmetic. What is pinned here is
+ * the half that is this form's own and is wrong *silently*: which boxes a pick
+ * is allowed to write, and which it must leave alone for ever.
+ */
+describe("what a class and species pick fills in", () => {
+  const untouched: ReadonlySet<SeededField> = new Set();
+
+  it("starts every character at level 1, before anything is picked", () => {
+    // A constant rather than part of the seed: a level is chosen in 5e, not
+    // calculated, so it does not wait on a class.
+    expect(emptyDraft.level).toBe("1");
+    expect(emptyDraft.species).toBe("");
+    expect(emptyDraft.className).toBe("");
+  });
+
+  it("fills in the hit die and the unarmoured base once a class is picked", () => {
+    const picked = seededDraft(draftWith({ className: "Druid", species: "Elf" }), untouched);
+    // d8, and no ability scores on this form — so the die and a bare 10.
+    expect(picked.hpMax).toBe("8");
+    expect(picked.ac).toBe("10");
+  });
+
+  it("re-seeds when the pick changes, so a druid's hit points do not survive a barbarian", () => {
+    const druid = seededDraft(draftWith({ className: "Druid", species: "Elf" }), untouched);
+    const barbarian = seededDraft({ ...druid, className: "Barbarian" }, untouched);
+    expect(barbarian.hpMax).toBe("12");
+    // Dwarven Toughness, the one species trait that reaches any of the three.
+    expect(seededDraft({ ...barbarian, species: "Dwarf" }, untouched).hpMax).toBe("13");
+  });
+
+  it("never writes over a number the player typed", () => {
+    // The whole reason the screen remembers which boxes were touched. Without
+    // it, picking a class after typing a hit point total silently discards it —
+    // which renders as a perfectly ordinary form.
+    const typed = draftWith({ className: "Druid", species: "Elf", ac: "17", hpMax: "34" });
+    const seeded = seededDraft(typed, new Set<SeededField>(["ac", "hpMax"]));
+    expect(seeded.ac).toBe("17");
+    expect(seeded.hpMax).toBe("34");
+    // And one at a time: the AC is the player's and the hit points are still
+    // the class's.
+    expect(seededDraft(typed, new Set<SeededField>(["ac"]))).toMatchObject({
+      ac: "17",
+      hpMax: "8",
+    });
+  });
+
+  it("leaves the hit points alone until a class is picked", () => {
+    // There is no hit die to read, so there is no number to write. The armour
+    // class still seeds, because 10 is true of everybody.
+    const speciesOnly = seededDraft(draftWith({ species: "Dwarf" }), untouched);
+    expect(speciesOnly.hpMax).toBe("");
+    expect(speciesOnly.ac).toBe("10");
+  });
+
+  it("sends the vocabulary's own labels, which is what makes them readable back", () => {
+    // No key column and no migration: the link from a row to the vocabulary is
+    // the label, so what the picker writes has to be the label exactly.
+    const payload = payloadFrom(seededDraft(draftWith({ className: "Monk" }), untouched));
+    expect(payload.className).toBe("Monk");
+    expect(payload.hpMax).toBe(8);
+    expect(payload.level).toBe(1);
   });
 });

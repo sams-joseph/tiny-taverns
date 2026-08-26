@@ -1,5 +1,5 @@
 import type { CampaignMembership, CharacterOwnCreate, CharacterSheet } from "@taverns/api";
-import { emptyCharacterSheet } from "@taverns/api";
+import { emptyCharacterSheet, seedFor, STARTING_LEVEL } from "@taverns/api";
 
 /**
  * The two decisions the create form makes that are not rendering — **which
@@ -49,6 +49,15 @@ export interface CharacterDraft {
   readonly name: string;
   readonly playerName: string;
   readonly level: string;
+  /**
+   * A `SpeciesKey` / `ClassKey`, or `""` for *not picked yet*.
+   *
+   * Strings rather than the literal unions because a `Select` holds a string
+   * and the empty state has to be expressible; the **picker** is what makes
+   * them structured, and it offers `Ruleset`'s ten and twelve and nothing else.
+   * `payloadFrom` still sends them as the labels they are, so what lands in
+   * `character.species` and `character.class_name` is the vocabulary's own word.
+   */
   readonly species: string;
   readonly className: string;
   readonly ac: string;
@@ -60,7 +69,15 @@ export interface CharacterDraft {
 export const emptyDraft: CharacterDraft = {
   name: "",
   playerName: "",
-  level: "",
+  /**
+   * **Level 1, before anything is picked** — the captain's third decision, and
+   * a constant rather than something {@link seededDraft} fills in.
+   *
+   * A level is chosen in 5e, not calculated, so it does not depend on the class
+   * and there is no state in which a new character has no level. `STARTING_LEVEL`
+   * is the same constant the accept path uses for a drafted one.
+   */
+  level: String(STARTING_LEVEL),
   species: "",
   className: "",
   ac: "",
@@ -68,6 +85,18 @@ export const emptyDraft: CharacterDraft = {
   sheetUrl: "",
   notes: "",
 };
+
+/**
+ * Which of the two seeded boxes the player has typed in for themselves.
+ *
+ * The seed has to be *re-applied* when the class or species changes — a player
+ * who picks Druid, sees 8, then changes their mind to Barbarian must not be
+ * left holding a druid's hit points — and it must equally never overwrite a
+ * number they typed. Remembering which boxes they have touched is the only way
+ * to have both, and it is a set rather than two booleans so a third seeded
+ * field costs one word.
+ */
+export type SeededField = "ac" | "hpMax";
 
 /**
  * What the player is told before anything is sent.
@@ -121,6 +150,45 @@ export const problemsIn = (draft: CharacterDraft): DraftProblems => {
 };
 
 export const refused = (problems: DraftProblems): boolean => Object.keys(problems).length > 0;
+
+/**
+ * The draft with its two seeded numbers filled in — **called when a pick
+ * changes, and never again.**
+ *
+ * This is the client half of the captain's *seed at creation, never recompute*
+ * decision, and the shape is what enforces it: it is a pure function of a draft
+ * and it is wired to the two pickers alone. There is no effect watching the
+ * form, nothing on the sheet calls it, and the row it eventually writes carries
+ * plain integers with no rule attached — so a player who levels up, buys plate
+ * or has their constitution drained keeps the numbers they are actually
+ * playing, which is precisely what a locked derived value would take away.
+ *
+ * **`abilities: []`, and that is not a stub.** This form asks for no ability
+ * scores — six cells of three fields belong to the sheet, where the editor and
+ * the dice already are — so a hand-filled character has none at the moment it is
+ * created, and `seedFor` reads every modifier as zero. What comes out is the
+ * honest level-1 answer for a character whose scores nobody has typed yet: the
+ * class hit die, and a bare 10. Both are boxes the player edits before pressing
+ * *Create*, and the form says as much beside them.
+ */
+export const seededDraft = (
+  draft: CharacterDraft,
+  edited: ReadonlySet<SeededField>,
+): CharacterDraft => {
+  const seed = seedFor({
+    className: draft.className,
+    species: draft.species,
+    abilities: [],
+  });
+  return {
+    ...draft,
+    ...(edited.has("ac") ? {} : { ac: String(seed.ac) }),
+    // Absent only for a class the vocabulary does not know, which the picker
+    // cannot produce — so in this form it is absent only before one is picked,
+    // and then the box stays as it was rather than being blanked.
+    ...(edited.has("hpMax") || seed.hpMax === undefined ? {} : { hpMax: String(seed.hpMax) }),
+  };
+};
 
 /**
  * The draft as `CharacterOwnCreate` — **omission, never a null and never a
