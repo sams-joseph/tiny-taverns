@@ -1407,7 +1407,7 @@ of the above and fails four ways if the disjunct is removed; `Characters.assign`
 `DmActor` on purpose (`dm-actor.test.ts` counts it), because `rowWritable` already requires `isDm`
 and assignment has no player projection to diverge.
 
-#### What a player may write, and it is exactly three endpoints
+#### What a player may write, and it is exactly six endpoints
 
 **`PATCH /me/characters/:characterId` was the first write in the product's history that a non-DM
 may make**, by the captain's decision of 2026-08-12 (`player-edits-own-character`). Until it
@@ -1415,7 +1415,7 @@ landed, every write predicate in `repo/visibility.ts` bottomed out in `isDm`, so
 was a fact about the seam rather than a check anywhere. That simplification is spent. **This is the
 list of what a player may write, and every future entry will be read against it.**
 
-The list is three, all on `character`, all in the `me` group:
+Three are on `character`, in the `me` group:
 
 | endpoint                             | which rows               | which columns          |
 | ------------------------------------ | ------------------------ | ---------------------- |
@@ -1423,10 +1423,22 @@ The list is three, all on `character`, all in the `me` group:
 | `PATCH /me/characters/:characterId`  | `ownRowWritable`         | `CharacterOwnUpdate`   |
 | `DELETE /me/characters/:characterId` | `ownRowWritable`         | — (the row goes whole) |
 
-**No new predicate was needed for any of them, and that is the finding to reuse rather than
+**Three more arrived with the player's Hob**, on 2026-08-26, and they are in the `hob` group
+because a conversation is campaign-scoped — see "A player talks to Hob" below. They write two
+tables a player could not touch before and one they already could:
+
+| endpoint                         | which rows               | what it writes                                |
+| -------------------------------- | ------------------------ | --------------------------------------------- |
+| `POST …/hob/ask` (no `threadId`) | `ensureCampaignReadable` | one `assistant_thread`, `account_id` = theirs |
+| `POST …/hob/ask` (with one)      | `conversationReachable`  | two `assistant_turn` rows                     |
+| `POST …/hob/…/accept`            | `conversationReachable`  | one `character`, through `createOwn`          |
+
+**No new predicate was needed for any of the six, and that is the finding to reuse rather than
 re-derive.** `ownRowReadable`, `ownRowWritable` and `ensureCampaignReadable` are generic over a
-table and cover everything a player-owned row needs. The rest of this section is the PATCH; the
-create and the delete are under "A player writes one down" below it.
+table and cover everything a player-owned row needs; `conversationReachable` is the sixth
+predicate and it is `ownRowWritable` on one side and `rowWritable` plus a null owner on the other.
+The rest of this section is the PATCH; the create and the delete are under "A player writes one
+down" below it.
 
 **What a player may write, exactly — the durable half of their own character:**
 
@@ -1543,11 +1555,10 @@ Six things that are decisions rather than details:
   `currentSessionOf` composes `campaignWritableById` and answers a player nothing, so a bell would
   ring for a DM and stay silent for the audience the endpoints are for.
 - **The delete is `ownRowWritable`, the PATCH's predicate exactly**, so "a player can never remove a
-  character they could not edit" is a fact about the fragment. It has **no UI control yet and that
-  is deliberate**: the product has never had a character delete on screen — the DM's
-  `characters.remove` has had no caller either — and its named caller is slice 4, where an
-  abandoned Hob draft has to be removable. Adding the product's first one to the sheet screen was
-  outside this slice.
+  character they could not edit" is a fact about the fragment. It had no UI control when it shipped,
+  and its named caller arrived on 2026-08-26: `characters/DeleteCharacterDialog.tsx` on the sheet's
+  own bar — **the product's first character delete on screen**, and the remedy for a Hob draft
+  somebody keeps and then abandons. The DM's `characters.remove` still has no caller.
 
 **It lands on the shipped sheet, and that is the single biggest simplification campaign-first
 buys.** There is no second editor: `IdentityDialog`, `BackstoryDialog`, `GearDialog` and the death
@@ -1556,12 +1567,14 @@ unchanged. A client-side draft would have meant refactoring all three from `(cha
 to `(value, onSave)` or writing a fourth copy of each.
 
 **What the drawing asks for that this deliberately does not build** — reported, per the standing
-rule: the prose composer, the starter chips and _Have Hob draft the sheet_ (slice 4); the abilities
-and skills editors, which belong to the **sheet** so both surfaces get them and a shipped gap closes
-(slice 2); `DraftField` inline editing, a third editing idiom in a product with two; the portrait
-upload, which the kit itself wires to _"Not wired in this kit"_; and the _"Fen approves characters
-before they play"_ box, which the delivery's own open questions already call a switch with nothing
-behind it.
+rule. Two of them have since landed: the **abilities and skills editors** went onto the _sheet_ so
+both surfaces get them and a shipped gap closed, and the **prose composer, the starter chips and
+_Have Hob draft the sheet_** are the other fork of this same screen (see "A player talks to Hob"
+under the assistant). What is still absent and why: `DraftField` inline editing, a third editing
+idiom in a product with two — and, since the accept path landed, one the wire cannot express, because
+accept carries no content; the portrait upload, which the kit itself wires to _"Not wired in this
+kit"_; and the _"Fen approves characters before they play"_ box, which the delivery's own open
+questions already call a switch with nothing behind it.
 
 **Two web-side changes worth knowing before touching this area:**
 
@@ -2657,9 +2670,13 @@ Six things that are decisions rather than layout:
   sections means neither can light the other's item. **_Bestiary_ and _Party_ are kept out on top
   of that**: `members.list` is behind the `DmActor` gate and a player's projection of a roster is
   _nothing_, and a control that exists and then errors is worse than one that is absent.
-- **_Ask Hob_ is absent in player mode, in the shell.** Asking is a write (`HobThreads.start` needs
-  `campaignWritable`) and the captain settled that players do not talk to Hob, so the button would
-  open a panel that can only apologise.
+- **_Ask Hob_ is absent in player mode, in the shell — and that is no longer because a player may
+  not talk to Hob.** The captain reversed that on 2026-08-26 and a player has one Hob surface now:
+  the character-drafting composer on `#/play/campaigns/:c/characters/new` (see "A player talks to
+  Hob" below). What is still absent is the **docked panel**, because a player's toolkit is
+  `searchCampaign` + `proposeCharacter` and the panel's own verbs are _Save to session_ on a note,
+  a beat or an encounter — none of which a player may write. A general player panel is a surface
+  nobody has drawn, and the button would open one that can only apologise.
 - **The pill belongs to the shell and takes no prop, and that is the fix for the bug where nobody
   could find it.** It was `AppShell`'s `roleSwitch`, defaulting to `false`, offered by the two
   campaign lists and by nothing else, and on the DM's list only once a `player` membership already
@@ -4622,7 +4639,9 @@ that is one shipped repository method — `Search.search`, `Sessions.list`, `Rec
 an unscoped read does not compile. A pre-assembled context blob would be a second data path with
 its own filtering, and the day it disagrees with the predicate is the day the assistant leaks.
 
-**Nine tools: six reads and three `propose*`.** A propose tool still writes nothing —
+**Nine tools for the DM: six reads and three `propose*`** — and **two for a player**, which is a
+second toolkit rather than this one narrowed; see "A player talks to Hob" below. A propose tool
+still writes nothing —
 it stashes what Hob drafted in a `Ref` that becomes the turn's `proposal` column. There is no
 write repository anywhere under `src/assistant/`, which is what makes "nothing enters the
 campaign without an accept" a property of the wiring. `proposeEncounter` resolves each
@@ -4704,11 +4723,14 @@ together; the check was _unenforceable_ until there was a turn to point at, so a
 makes `assistant_turn_id` a real foreign key on all fourteen content tables.
 
 - **A thread is campaign-scoped and a turn hangs off a thread**, so `repo/HobThreads.ts` writes
-  **no predicate of its own** — `rowReadable`/`rowWritable` plus the existing `NestedTable`
-  machinery, exactly as `prep_item` sits under `session`.
-- **Asking is a write.** `HobThreads.start` needs `campaignWritable`, so a player gets the
-  ordinary `NotFound` — Hob is the DM's sidekick and a conversation nobody could read back is
-  not worth writing. `hob.test.ts` pins it, and pins the player's _tool reads_ separately.
+  **no predicate of its own** — `repo/visibility.ts`'s `conversationReachable` plus the existing
+  `NestedTable` machinery, exactly as `prep_item` sits under `session`.
+- **Asking is a write, and whose write it is decides which conversation it lands in.** A DM's
+  thread is the campaign's (`account_id is null`) and needs `campaignWritable`; a player's is
+  their own and needs `ensureCampaignReadable`, which is `Characters.createOwn`'s gate one table
+  across. The two reaches are disjoint, so neither can read or resume the other's — see "A player
+  talks to Hob" below, which is where the whole of it is written down. `hob.test.ts` pins both
+  directions, and pins the player's _tool reads_ separately.
 - **A hob turn is `origin = 'assistant'` with `assistant_turn_id = id`** — the turn that produced
   this text is itself. `who` says who spoke; `origin` says where the content came from, and a hob
   turn claiming `authored` would be a lie in the one table whose whole purpose is provenance.
@@ -4742,10 +4764,13 @@ have it recorded as the assistant's.
 - **One transaction, and the turn is locked first.** `for update` on the turn is the whole
   idempotency story — a double-tapped _Save to session_ is one row and one 409. A second accept
   is a `Conflict` ("it is already there"), a turn that proposed nothing is a `NotFound`.
-- **Three targets, chosen because they are three tables**: `note`, `beat`, `encounter` (with its
-  roster). A beat's session is resolved at accept time from `campaign.current_session_id` — the
-  DM may have finished the night since — and no session is a `Conflict`, not a 404. Accepted rows
-  take the column default for `visibility`, so a draft lands DM-only whatever it is about.
+- **Four targets, chosen because they are four tables**: `note`, `beat`, `encounter` (with its
+  roster) and — since the player's Hob — `character`. A beat's session is resolved at accept time
+  from `campaign.current_session_id` — the DM may have finished the night since — and no session is
+  a `Conflict`, not a 404. Accepted rows take the column default for `visibility`, so a draft lands
+  DM-only whatever it is about. **Which of the four an accept can reach is decided by the reach, not
+  by a check here**: a `character` proposal is only ever produced by the player toolkit into a
+  player's own thread, so a DM cannot reach one.
 - **Discard is not built and is not faked.** An unaccepted proposal is harmless transcript;
   hiding it would need a `dismissed_at` and an endpoint. The card disables the button, which is
   this surface's shipped way of saying "not given".
@@ -4755,6 +4780,171 @@ have it recorded as the assistant's.
 `assistant_turn` in one statement, and an immediate `no action` fires before the referencing rows
 are gone. Under autocommit a lone `delete from assistant_turn` is still refused on the spot — an
 accepted row pins the turn that produced it, and `schema.test.ts` proves it.
+
+### A player talks to Hob, and Hob drafts them a character
+
+**The captain reversed _players do not talk to Hob_ on 2026-08-26.** Everything below is what that
+bought and what it deliberately did not; the two places that recorded the old position — the shell
+note above and `hob.test.ts`'s _"cannot be built for a player at all"_ — were rewritten by the same
+change rather than left contradicting the code.
+
+**The grounding model is untouched, and that is not a coincidence.** The flow is campaign-first, so
+the surface is `/campaigns/:campaignId/hob/…` exactly as the DM's is: the campaign is still a path
+segment closed over by the handlers, still not a tool parameter and still not in a payload, so
+`Api.ts`'s objection to a top-level `/hob` never arises. Do not re-litigate it.
+
+#### One column, and its null is the DM's
+
+`0016_player_threads.ts` gives `assistant_thread` a nullable `account_id`. Null is the campaign's
+own conversation, a uuid is one account's, and **the two sets are disjoint by predicate rather than
+by convention** — `repo/visibility.ts`'s `conversationReachable`, whose `"dm"` arm adds
+`account_id is null` and whose `"own"` arm is `ownRowWritable`, which never matches a null. That
+disjointness is load-bearing three times and only the third is obvious:
+
+- the DM's panel resumes _the newest thread_, so without it a player asking Hob would silently
+  change which conversation their DM is shown;
+- **a DM can never reach a `character` proposal**, so `Proposals.materialise`'s fourth case cannot
+  create a character owned by somebody who is not its subject — a fact about which rows a reach
+  returns rather than a role check inside the accept;
+- a player cannot read the DM's prep conversation.
+
+Three more things about that predicate are decisions:
+
+- **One fragment for reading and for writing.** Everywhere else in `visibility.ts` the two differ,
+  because a player may read a `shared` note and must not edit it. A conversation has no such middle
+  state: `assistant_thread.visibility` exists only because `schema.test.ts` requires it on every
+  content table, and nothing writes it or reads it. It is spelled with the _writable_ halves so it
+  cannot widen by accident if a `shared` thread ever comes to mean something.
+- **The turn-level fragment does not apply the turn's own `visibility`**, where `nestedRowReadable`
+  would. That column defaults to `dm`, so applying it would hide every turn of a player's own
+  conversation from its author — a rule about players at a table, asked of a question with no table
+  in it. Same argument as `libraryRowReadable`.
+- **`HobThreads` takes a `reach` argument rather than growing twins.** `character` answers the same
+  shape with `create`/`createOwn` because its two paths differ in _payload_ as well as in whose row
+  they reach; here nothing differs but whose it is, so the choice between the two predicates is made
+  once in `visibility.ts` instead of five times in the repository. `Hob.ask` and the `hob` handlers
+  derive the reach from the `DmActor` proof they already ask for, and a failure means `"own"` —
+  safe, because the predicate underneath still refuses somebody who is neither.
+
+#### Two toolkits, because a toolkit is what the model is _shown_
+
+`HobToolkit` is the DM's nine; **`PlayerToolkit` is two** — `searchCampaign` and
+`proposeCharacter`. A player bound to the DM's handlers with a narrower predicate underneath would
+still be _offered_ `getCreature`, which is a stat block and precisely what the product says a player
+must not have. `dmHandlersFor` still takes the `DmActor` (`sessionRecap` and `sessionLog` need one);
+`playerHandlersFor` takes a plain `Actor` and the campaign, because there is no DM-ness to prove.
+
+`searchCampaign` is written **once** and bound to whichever actor is asking, so `rowReadable` is what
+makes a DM's answer wide and a player's narrow — the same `WHERE` clause, not a second "player-safe"
+search. At a table whose DM shares nothing it honestly returns nothing, which means the drawn
+showcase line (_"your DM's campaign is on the salt road"_) is best-case rather than typical.
+
+`round`, `recover` and `toHobEvent` in `Hob.ts` are generic over the tool set as a result. There is
+**one cast** in that file, on `chat.streamText`, and its doc says exactly what it asserts: over a
+resolved toolkit the extra error and requirement channels compute to `never`, and over an unresolved
+`Tools` those conditionals stay deferred.
+
+There is a **second system prompt**, `playerPrompt`. It says three things the DM's does not, each a
+measured hazard: _draft, do not interview_ (a model that asks clarifying questions first has spent
+the round budget and produced no card, which on screen is indistinguishable from failing to call the
+tool); _rank the abilities, do not write numbers_; and _the record is the DM's and mostly not
+shared_.
+
+#### `proposeCharacter` takes no numbers, and that is the measured design
+
+The prior report measured the captain's own configured 4B choosing `proposeEncounter` **one time in
+five** with all tools offered. A character draft is a strictly harder call, so every parameter is one
+a small model is good at: labels, a ranking of six ability keys, and prose. **The server applies the
+standard array to the ranking and derives every modifier** (`abilitiesFrom` in `toolkit.ts`), which
+is where the one-implementation-of-a-rule habit belongs — `Ability.score` and `Ability.modifier` are
+_both_ stored strings, so the one thing the document cannot survive is the two disagreeing. A short
+or duplicated ranking is repaired rather than refused: a tool call that is nearly right is the common
+case, and a `NotFound` for a repeated "DEX" costs a round to say something the server can resolve.
+The dice stay in the browser, on the sheet's own abilities editor, by the decision already written
+down.
+
+`level` is not a parameter — a new character is level 1 — and there is no `visibility`, `hpCurrent`
+or `accountId`, for the reason `CharacterOwnCreate` has none: the row falls to its column defaults.
+
+**`optionalText` is a second optional helper and the reason is worth keeping.** `ABSENT_WORDS` is
+safe only because no parameter reached through `optional` is prose; `proposeCharacter` is the first
+tool with prose optionals (a background, a bond, an ideal, a flaw), and there `"None"` is something
+somebody might mean. So those take a permissive arm — absent, `null`, or any string — and the
+_handler_ treats a blank one as not given, which is `searchCampaign.query`'s lesson applied a second
+time.
+
+#### Accept comes before the corrections, and that is a security property
+
+**Hob proposes → the player keeps it as it stands → the row exists with `origin = 'assistant'` →
+every correction is an ordinary `PATCH /me/characters/:id`.** `repo/Proposals.ts` is explicit that
+accept takes no content payload, _because if it did, any client could post its own prose and have it
+recorded as the assistant's_ — so a client must never be able to rewrite `proposal`, and
+**"edit the draft, then accept" is the obvious shape and breaks it.** Measured over real HTTP: an
+accept whose body named a different character, a different owner, `visibility: "shared"` and
+`origin: "authored"` answered 200 with the server's own draft, owned by the caller, `dm`, `assistant`.
+
+`Characters.createOwn` gained the `from?: AssistantOrigin` that `Notes.create` and `Beats.create`
+have had since the accept path shipped — on `createOwn` rather than `create`, because a drafted
+character is drafted _for the person who asked_ and `account_id` therefore comes from the credential.
+
+#### The redraft loop is one `switch` case, and it is the whole of §4.3's defect
+
+`promptFor`'s `offered()` gained a `character` arm. Without it, _"make her a ranger instead"_ reaches
+a model that cannot see the druid it just wrote, so it drafts a fresh person from the original
+paragraph and loses every choice the player was happy with. It reads the abilities back as the
+**ranking**, not as six cells: a model shown `STR 8 (-1)` and asked for scores it cannot send is a
+model one round from a schema error. Measured against a real provider request — the second question's
+opening prompt carried the name, `Wood elf Druid`, `WIS > CON > DEX > INT > CHA > STR`, the four
+skills, the subclass, the background and the backstory, and then the new question.
+
+**The loop lives entirely on the create screen, before the accept, and that is a departure from the
+drawing worth knowing.** The delivery docks the composer beside step 2, which is before a row exists,
+and it can only be there: after the accept a redraft would either make a _second_ character (a second
+accept is a second row) or silently overwrite corrections Hob cannot see. Once the character exists,
+corrections are the shipped sheet.
+
+#### The screen, and the path that has to work when the model will not draft
+
+`apps/web/src/characters/draft.ts` is the whole client seam — deliberately not `hob/conversation.ts`
+with a flag, because that file is about a transcript, a thread picker and an artifact card, and this
+is about one draft at a time. `DraftCard.tsx` and `DraftAside.tsx` are the drawn step 2.
+
+**A finished answer with no draft is an ordinary outcome, not an error**, and every state is designed
+around it being common: the screen says so, whatever Hob wrote stands, and _Fill it in myself_ lands
+on the same form slice 1 built with nothing lost. Both forks end on the shipped sheet.
+
+`artifactFrom` in `hob/transcript.ts` answers `undefined` for a `character` proposal — the DM's chat
+panel has no card for one and cannot reach one, and drawing a character sheet as a generic artifact
+would be a _Save to session_ button that means something else.
+
+**The delete got its first caller.** `DELETE /me/characters/:id` shipped with slice 1 with no UI;
+`DeleteCharacterDialog` is it, on the sheet's own bar. It is the remedy for a draft somebody keeps
+and then abandons — not a leak while it sits there, because a new character is `dm` by column
+default, but a real row in the DM's party list.
+
+**What the drawing asks for that this does not build**, reported per the standing rule: `DraftField`
+inline editing (a third editing idiom, and the accept-order argument above rules it out anyway); the
+portrait upload (the kit wires it to _"Not wired in this kit"_); _Roll again_ on the draft (the tool
+takes no numbers; the dice are on the sheet's abilities editor); the skills picker's _"N of 4
+picked"_ counter (a background, a feat and expertise all grant more — the call `SkillsDialog` already
+made); and the _"Nowhere yet, keep her in my roster"_ option, dropped rather than stubbed by the
+campaign-first decision.
+
+**Measured end to end in Chromium** against a real server, a real Postgres, a scripted
+OpenAI-compatible endpoint and three real accounts (a DM and two players minted through real
+invitations): a player described a character, got a druid, asked _"make her a ranger instead"_ in the
+same thread and got a ranger with the species, background, abilities and skills kept, pressed _Keep
+them_ and landed on the shipped sheet with the row `origin: assistant`, `visibility: dm`, `hpCurrent`
+null and `assistantTurnId` set; corrected the name and level through the shipped identity dialog and
+reloaded to find it kept; and deleted it from the sheet's own bar. **The DM's party screen showed
+that player as `Playing` with the character on it, and the other player at the same shared table saw
+nothing of it on either their table screen or their roster.** The DM's threads did not include the
+player's and the player's did not include the DM's; the DM and the other player each got
+`404 assistant_turn` accepting the draft, and a second accept by its owner got `409`. The DM's
+request carried nine tools and the player's exactly two, with `campaignid` in neither. No sideways
+scroll at 1440 / 1200 / 1024 / 900 / 760 on either the draft screen (the aside docks to 900 and
+stacks at 760) or the sheet, and the delete dialog sat at `z-dialog` 110 over `z-scrim` 100 at 460px
+with `elementFromPoint` inside it.
 
 ### Configuration: unset is a supported mode
 
