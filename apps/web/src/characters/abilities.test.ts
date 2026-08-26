@@ -3,7 +3,9 @@ import {
   ABILITY_LABELS,
   abilitiesFrom,
   abilityDrafts,
+  abilitySummary,
   assignScores,
+  badScores,
   modifierFor,
   roll4d6DropLowest,
   rollAbilityScores,
@@ -187,5 +189,39 @@ describe("what goes on the wire", () => {
     // input and the modifier is computed from it, in the same literal.
     const stale = abilityDrafts([{ label: "STR", score: "18", modifier: "-99" }]);
     expect(abilitiesFrom(stale)[0]?.modifier).toBe("+4");
+  });
+});
+
+/**
+ * The two helpers the create form needed, and the reason each is here rather
+ * than in a screen: both are read by **two** surfaces now.
+ */
+describe("what is said about a set of scores before it is accepted", () => {
+  const six = (...scores: ReadonlyArray<number>) => assignScores(abilityDrafts([]), scores);
+
+  it("names only the cells whose score is out of range, and never a blank one", () => {
+    // A blank cell is somebody who filled in four of the six, which is a real
+    // thing to do — and on the create form it is what lets ability scores stay
+    // optional.
+    expect(badScores(abilityDrafts([]))).toEqual([]);
+    expect(badScores(six(15, 14, 13, 12, 10, 8))).toEqual([]);
+    expect(badScores(six(0, 31, 15, 12, 10, 8)).map((cell) => cell.label)).toEqual(["STR", "DEX"]);
+    // Not a whole number, which the wire has no check for at all.
+    expect(badScores(six(12).map((c) => (c.label === "STR" ? { ...c, score: "ten" } : c)))).toEqual(
+      [expect.objectContaining({ label: "STR" })],
+    );
+  });
+
+  it("summarises the set as the cells that carry a score, in the order they are drawn", () => {
+    expect(abilitySummary(abilityDrafts([]))).toBeUndefined();
+    expect(abilitySummary(six(15, 14, 13, 12, 10, 8))).toBe(
+      "STR 15 · DEX 14 · CON 13 · INT 12 · WIS 10 · CHA 8",
+    );
+    // What is not named is not implied: a skipped cell has no value to state.
+    expect(
+      abilitySummary(
+        abilityDrafts([]).map((c) => (c.label === "CON" ? { ...c, score: " 16 " } : c)),
+      ),
+    ).toBe("CON 16");
   });
 });

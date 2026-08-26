@@ -1,5 +1,6 @@
 import type { CampaignMembership } from "@taverns/api";
 import { describe, expect, it } from "vitest";
+import { abilityDrafts, abilitySummary, assignScores } from "./abilities";
 import {
   emptyDraft,
   payloadFrom,
@@ -223,5 +224,146 @@ describe("what a class and species pick fills in", () => {
     expect(payload.className).toBe("Monk");
     expect(payload.hpMax).toBe(8);
     expect(payload.level).toBe(1);
+  });
+});
+
+/**
+ * The seed, once the manual form has ability scores to read.
+ *
+ * **This is the gap the slice closed, pinned as arithmetic.** Hob assigns the
+ * standard array to the ranking it chose and resolves `seedFor` against it; the
+ * manual form passed `abilities: []` and resolved the same function against six
+ * absent cells. Both were right and they disagreed by two hit points and three
+ * of armour class on a Dwarf Barbarian, which is exactly the kind of wrong that
+ * renders as an ordinary form.
+ *
+ * The arithmetic itself is `packages/api/src/Ruleset.test.ts`'s; what is here is
+ * that this caller hands the scores over, that a draft with none still gets the
+ * old honest answer, and that the seed is still only ever *applied* — never
+ * recomputed.
+ */
+describe("what the ability scores fill in", () => {
+  const untouched: ReadonlySet<SeededField> = new Set();
+
+  /** The six cells as the shared editor holds them, given scores in draw order. */
+  const scored = (...scores: ReadonlyArray<number>) => assignScores(abilityDrafts([]), scores);
+
+  it("seeds a Dwarf Barbarian the same as Hob's draft of one does", () => {
+    // The captain's own example. Hob ranks a barbarian CON-first, so the 15 is
+    // constitution and the 14 dexterity: 12 (d12) + 2 (CON 15) + 1 (Dwarven
+    // Toughness) = 15 hit points, and 10 + 2 (DEX 14) + 2 (CON 15) = 14 armour
+    // class — Unarmoured Defense, the reason `unarmouredAc` is a list.
+    const hand = seededDraft(
+      draftWith({
+        className: "Barbarian",
+        species: "Dwarf",
+        // STR 13, DEX 14, CON 15, INT 8, WIS 12, CHA 10.
+        abilities: scored(13, 14, 15, 8, 12, 10),
+      }),
+      untouched,
+    );
+    expect(hand.hpMax).toBe("15");
+    expect(hand.ac).toBe("14");
+
+    // And the same character with the standard array left in draw order is a
+    // *different* set of scores, which is why the array is a press rather than
+    // a default on this form: 15 in strength buys nothing here.
+    const drawOrder = seededDraft(
+      draftWith({
+        className: "Barbarian",
+        species: "Dwarf",
+        abilities: scored(15, 14, 13, 12, 10, 8),
+      }),
+      untouched,
+    );
+    expect(drawOrder.hpMax).toBe("14");
+  });
+
+  it("still seeds from a bare baseline when nobody has typed a score", () => {
+    // Not required, by the captain's boundary: a player who wants to get in now
+    // and fix it later gets the answer the form has always given them, and the
+    // copy beside the boxes says so.
+    const none = seededDraft(draftWith({ className: "Barbarian", species: "Dwarf" }), untouched);
+    expect(none.hpMax).toBe("13");
+    expect(none.ac).toBe("10");
+    expect(abilitySummary(emptyDraft.abilities)).toBeUndefined();
+  });
+
+  it("reads a partly filled set, because a cell with no score is not a cell", () => {
+    // `abilitiesFrom` drops a blank row on both sides of this — the seed and the
+    // payload — so four of six is a real thing to fill in and the two cannot
+    // disagree about what the fifth means.
+    const conOnly = abilityDrafts([]).map((cell) =>
+      cell.label === "CON" ? { ...cell, score: "16" } : cell,
+    );
+    const some = seededDraft(draftWith({ className: "Wizard", abilities: conOnly }), untouched);
+    // d6 plus a +3 constitution, and a dexterity nobody typed is still +0.
+    expect(some.hpMax).toBe("9");
+    expect(some.ac).toBe("10");
+    expect(abilitySummary(conOnly)).toBe("CON 16");
+  });
+
+  it("re-seeds when a score changes, and still never writes over a typed number", () => {
+    const druid = seededDraft(draftWith({ className: "Druid", species: "Elf" }), untouched);
+    expect(druid.hpMax).toBe("8");
+    // The scores arrive after the class, which is the ordinary order on the
+    // form: the boxes have to follow, or they hold the answer for a character
+    // whose abilities were all 10.
+    const withScores = seededDraft(
+      { ...druid, abilities: scored(8, 14, 15, 12, 15, 10) },
+      untouched,
+    );
+    expect(withScores.hpMax).toBe("10");
+    expect(withScores.ac).toBe("12");
+    // And a box the player typed in is still theirs, whatever the scores do.
+    expect(
+      seededDraft(
+        { ...druid, abilities: scored(8, 14, 15, 12, 15, 10) },
+        new Set<SeededField>(["ac"]),
+      ).ac,
+    ).toBe(druid.ac);
+  });
+
+  it("sends the six cells as part of one document, with the modifier beside each", () => {
+    const payload = payloadFrom(
+      seededDraft(
+        draftWith({
+          className: "Barbarian",
+          species: "Dwarf",
+          abilities: scored(13, 14, 15, 8, 12, 10),
+        }),
+        untouched,
+      ),
+    );
+    expect(payload.hpMax).toBe(15);
+    expect(payload.ac).toBe(14);
+    // Written in the same object literal as the score, so the one thing the
+    // document cannot survive — the two disagreeing — is not expressible.
+    expect(payload.sheet?.abilities).toEqual([
+      { label: "STR", score: "13", modifier: "+1" },
+      { label: "DEX", score: "14", modifier: "+2" },
+      { label: "CON", score: "15", modifier: "+2" },
+      { label: "INT", score: "8", modifier: "-1" },
+      { label: "WIS", score: "12", modifier: "+1" },
+      { label: "CHA", score: "10", modifier: "+0" },
+    ]);
+    // The scores are enough on their own to send a document; the backstory is
+    // no longer the only key this form writes.
+    expect(payload.sheet?.notes).toBe("");
+  });
+
+  it("sends no document at all when neither a backstory nor a score was typed", () => {
+    // Unchanged, and it is what keeps a brand new character's `body` the same
+    // shape as one the DM typed.
+    expect(payloadFrom(draftWith({})).sheet).toBeUndefined();
+  });
+
+  it("refuses a score the editor would not have handed back", () => {
+    // A backstop rather than the sentence a player normally reads —
+    // `AbilityScoresDialog` checks first. It is here because `Ability.score` is
+    // a `NonEmptyString` and the contract has no range check to fall back on.
+    const wild = draftWith({ abilities: scored(400, 10, 10, 10, 10, 10) });
+    expect(problemsIn(wild).abilities).toBe("An ability score is a whole number, 1 to 30.");
+    expect(refused(problemsIn(wild))).toBe(true);
   });
 });

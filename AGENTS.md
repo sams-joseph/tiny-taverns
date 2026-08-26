@@ -1567,11 +1567,12 @@ unchanged. A client-side draft would have meant refactoring all three from `(cha
 to `(value, onSave)` or writing a fourth copy of each.
 
 **What the drawing asks for that this deliberately does not build** — reported, per the standing
-rule. Two of them have since landed: the **abilities and skills editors** went onto the _sheet_ so
-both surfaces get them and a shipped gap closed, and the **prose composer, the starter chips and
-_Have Hob draft the sheet_** are the other fork of this same screen (see "A player talks to Hob"
-under the assistant). What is still absent and why: `DraftField` inline editing, a third editing
-idiom in a product with two — and, since the accept path landed, one the wire cannot express, because
+rule. Three of them have since landed: the **skills editor** went onto the _sheet_ so a shipped gap
+closed, the **prose composer, the starter chips and _Have Hob draft the sheet_** are the other fork
+of this same screen (see "A player talks to Hob" under the assistant), and the **abilities editor is
+on both** — it went to the sheet first and came back here when the two create paths were measured
+against each other, see "The manual form asks for ability scores too" below. What is still absent
+and why: `DraftField` inline editing, a third editing idiom in a product with two — and, since the accept path landed, one the wire cannot express, because
 accept carries no content; the portrait upload, which the kit itself wires to _"Not wired in this
 kit"_; and the _"Fen approves characters before they play"_ box, which the delivery's own open
 questions already call a switch with nothing behind it.
@@ -1656,12 +1657,52 @@ Three things about the arithmetic that are decisions:
   level). The other nine are entries because the picker needs them, and inventing an axis for them
   would be the stubbed field this product refuses.
 
-**The manual form asks for no ability scores**, so a hand-filled character seeds from the die and a
-bare 10 (a druid: 8 hp, AC 10; a wizard: 6 hp). That is the honest level-1 answer for a character
-whose scores nobody has typed, the abilities editor is on the sheet by an earlier decision, and the
-form says so in its own words under the two boxes. Hob's path _does_ have scores, because
-`abilitiesFrom` has already assigned the standard array — so a drafted CON-first druid comes back on
-10 hp rather than 8.
+#### The manual form asks for ability scores too, and that reversed a written decision
+
+**Superseded, by the captain's decision of 2026-08-26.** The manual form used to pass
+`abilities: []` to `seedFor` on the reasoning that the six cells belong to the sheet, so a
+hand-filled character seeded from the class hit die and a bare 10 while a drafted one seeded from
+the standard array Hob had already assigned. Both were arithmetically correct and they disagreed:
+measured, a **Dwarf Barbarian by hand came out on 13 hit points and armour class 10 where Hob's
+draft of the same character came out on 15 and 13.** The manual one looked thin, and the difference
+was entirely that only one of the two paths had scores to read.
+
+So the create form asks. Three things about how, and the third is the judgement call:
+
+- **It is the shipped editor, not a second one.** `apps/web/src/characters/AbilityFields.tsx` is the
+  body — the two generators, the six rows, the swap select, the derived modifier — and there are two
+  thin shells around it in `AbilitiesDialog.tsx`: the sheet's, which `PATCH`es and has a busy flag
+  and a `SaveFailure`, and `AbilityScoresDialog`, which hands the drafts back and **writes
+  nothing**. They are not one component with an optional mutation because the mutation is most of
+  what the sheet's shell is. A second editor over these six would disagree first about the
+  _modifier_, which is stored rather than derived and is therefore only ever as right as its writer.
+- **Scores re-seed through the same one call.** `seededDraft` reads `abilitiesFrom(draft.abilities)`
+  now, and the screen routes a score change through it exactly as it routes a pick — so `edited`
+  still protects a box the player typed over, and there is still no watcher. **Seed at creation,
+  never recompute is untouched**: nothing calls `seededDraft` once the row exists, and editing the
+  same six cells on the shipped sheet moves the modifier beside them and nothing else.
+  `sheetWrites.test.tsx` pins that the sheet's write names neither `ac` nor `hpMax` at all.
+- **The standard array is a press, not a default**, and the argument is worth keeping because the
+  drawing says otherwise. `CharacterCreate.jsx:157` opens on it — but there it opens on a set Hob has
+  _assigned to the description_, and this fork is the one the drawing itself calls _Fill it in
+  myself_, where there is no description to fit. Pre-filled, the array lands in draw order: STR 15,
+  DEX 14, CON 13 for everybody including the wizard. That writes six choices nobody made, and it
+  does not even close the gap — a draw-order Dwarf Barbarian seeds **14** hit points against Hob's
+  15 and looks _nearly_ right, which is the hardest kind of wrong to notice.
+
+**Ability scores are still not required**, by the captain's boundary: a draft with none seeds from
+the die and a bare 10 exactly as before, and the line under the two boxes says which of the two
+states it is in rather than letting _"13 hit points"_ read as a real total.
+
+**Measured in Chromium** against a real server, a real Postgres and a player joined through a real
+invitation, driving both paths for one Dwarf Barbarian: Hob drafted STR 14 / DEX 13 / CON 15 / INT 8
+/ WIS 12 / CHA 10 and the row came out **15 hit points, armour class 13**, `origin: assistant`; the
+same character filled in by hand — _Standard array_, then four swaps to put the numbers where a
+barbarian wants them — came out on **15 and 13**, `origin: authored`, from the identical six cells.
+With no scores set it was 13 and 10, unchanged. Raising constitution to 20 on the shipped sheet
+afterwards left both numbers where they were. The create form's dialog sat at `z-dialog` 110 over a
+`z-scrim` 100 with `elementFromPoint` inside it, and the swap select inside it opened at `z-popup`
+200 with the hit test landing on an option. No sideways scroll at 1440, 1024, 900 or 760.
 
 **The DM's `CharacterDialog` is deliberately untouched** and still takes free text: it is for typing
 up characters that already exist, where a level-1 seed is wrong and a closed vocabulary would refuse
@@ -4460,6 +4501,14 @@ slot, in the shipped dialog idiom, through the same `saveOwnCharacter` + `sheetW
 four. `abilities.ts` and `skills.ts` are the pure halves and are separately tested, for the reason
 `chronicle/fight.ts` is: everything decided in them is wrong _silently_.
 
+**The abilities editor's body is `AbilityFields.tsx` and has two shells since 2026-08-26** — this
+one, and `AbilityScoresDialog`, which the create form opens over a character that does not exist
+yet. Everything in this section is the body's and holds on both surfaces; what is only the sheet's
+is the `PATCH`. See "The manual form asks for ability scores too" under the party for why the create
+form asks at all, and for the one thing the two shells deliberately disagree about (the standard
+array is this one's default because the document it opens on is the answer; on the create form it is
+a press, because a draw-order array is six choices nobody made).
+
 - **The dice are the browser's, and this was not re-decided.** `run/RunScreen.tsx` already records
   it — _"there is no roll endpoint and there should not be — a roll is not durable state, only the
   number it produced is"_ — and six 4d6-drop-lowest rolls are that d20's shape. The report's §5
@@ -4497,9 +4546,10 @@ four. `abilities.ts` and `skills.ts` are the pure halves and are separately test
 - **Two departures from the drawing, both reported rather than quietly made.** _"Drag a score onto
   another ability"_ (`:157`) is a **select per row** — the report's own call, and the accessible
   form of the same act; only the score moves, because the saving throw belongs to the ability
-  rather than to the number. And the skills picker's _"N of 4 picked"_ counter is **left to a
-  creation screen**: a background, a feat and expertise all grant more, so a sheet that held the
-  limit would tell a level-9 rogue their sheet is wrong.
+  rather than to the number. And the skills picker's _"N of 4 picked"_ counter is **not built on
+  either surface**: a background, a feat and expertise all grant more, so a sheet that held the
+  limit would tell a level-9 rogue their sheet is wrong — and the create form, which is the one
+  place the level-1 limit _is_ true, draws the abilities editor and deliberately not the skills one.
 
 Measured in Chromium at 1440/1200/1024/900/760 against a real server, a real Postgres and a player
 joined through a real invitation: a score typed by hand redrew its modifier live and saved with

@@ -1,5 +1,6 @@
 import type { CampaignMembership, CharacterOwnCreate, CharacterSheet } from "@taverns/api";
 import { emptyCharacterSheet, seedFor, STARTING_LEVEL } from "@taverns/api";
+import { abilitiesFrom, abilityDrafts, badScores, type AbilityDraft } from "./abilities";
 
 /**
  * The two decisions the create form makes that are not rendering — **which
@@ -64,6 +65,20 @@ export interface CharacterDraft {
   readonly hpMax: string;
   readonly sheetUrl: string;
   readonly notes: string;
+  /**
+   * The six cells, as the shared editor holds them —
+   * `apps/web/src/characters/abilities.ts`'s own type, not a second one.
+   *
+   * They are on the *draft* rather than beside it because they are an input to
+   * {@link seededDraft}: constitution reaches the hit points and dexterity the
+   * armour class, so a set of scores that lived outside the draft would be a
+   * second piece of state the seed had to be handed separately, which is one
+   * caller away from being forgotten.
+   *
+   * **Blank on an empty form, and nothing fills them in.** See
+   * {@link emptyDraft}.
+   */
+  readonly abilities: ReadonlyArray<AbilityDraft>;
 }
 
 export const emptyDraft: CharacterDraft = {
@@ -84,6 +99,26 @@ export const emptyDraft: CharacterDraft = {
   hpMax: "",
   sheetUrl: "",
   notes: "",
+  /**
+   * **Six blank cells, and the standard array is a press rather than a
+   * default** — the one judgement call in this slice, so it is written down.
+   *
+   * The drawing opens on the standard array (`CharacterCreate.jsx:157`), and
+   * there it is opening on a set Hob has *assigned to the description*. This
+   * fork is the one the drawing itself calls *Fill it in myself*: there is no
+   * description to fit, so a pre-filled array would land in the order the cells
+   * are drawn — STR 15, DEX 14, CON 13 for everybody, including the wizard.
+   *
+   * That is worse than blank in both directions. It writes six choices nobody
+   * made into a document, which is the one thing no control in this product
+   * does; and it does not even close the gap it would be there to close, since
+   * Hob ranks a barbarian's constitution first and a draw-order array does not
+   * — a Dwarf Barbarian would seed 14 hit points against Hob's 15 and look
+   * *nearly* right, which is the hardest kind of wrong to notice. Pressing
+   * *Standard array* and putting the 15 where it belongs reproduces Hob's
+   * numbers exactly, and skipping the whole thing still creates a character.
+   */
+  abilities: abilityDrafts([]),
 };
 
 /**
@@ -115,6 +150,17 @@ export interface DraftProblems {
   readonly ac?: string;
   readonly hpMax?: string;
   readonly sheetUrl?: string;
+  /**
+   * A score outside 1–30, which the editor refuses to hand back — so this is a
+   * backstop rather than the sentence a player normally reads.
+   *
+   * It is here anyway because the scores are the one part of this draft that
+   * arrives through a control the form does not own: `AbilityScoresDialog`
+   * checks them, and a second entry point that did not would otherwise send a
+   * document the contract has no range check on (`Ability.score` is a
+   * `NonEmptyString`, and `"400"` is one).
+   */
+  readonly abilities?: string;
 }
 
 export const problemsIn = (draft: CharacterDraft): DraftProblems => {
@@ -124,6 +170,7 @@ export const problemsIn = (draft: CharacterDraft): DraftProblems => {
     ac?: string;
     hpMax?: string;
     sheetUrl?: string;
+    abilities?: string;
   } = {};
   const level = parseOptional(draft.level);
   const ac = parseOptional(draft.ac);
@@ -146,6 +193,9 @@ export const problemsIn = (draft: CharacterDraft): DraftProblems => {
     // exploit.
     problems.sheetUrl = "A link starting http:// or https://.";
   }
+  if (badScores(draft.abilities).length > 0) {
+    problems.abilities = "An ability score is a whole number, 1 to 30.";
+  }
   return problems;
 };
 
@@ -163,13 +213,25 @@ export const refused = (problems: DraftProblems): boolean => Object.keys(problem
  * or has their constitution drained keeps the numbers they are actually
  * playing, which is precisely what a locked derived value would take away.
  *
- * **`abilities: []`, and that is not a stub.** This form asks for no ability
- * scores — six cells of three fields belong to the sheet, where the editor and
- * the dice already are — so a hand-filled character has none at the moment it is
- * created, and `seedFor` reads every modifier as zero. What comes out is the
- * honest level-1 answer for a character whose scores nobody has typed yet: the
- * class hit die, and a bare 10. Both are boxes the player edits before pressing
- * *Create*, and the form says as much beside them.
+ * **It reads the draft's own ability scores**, which is what closed the gap
+ * between the two create paths. Hob assigns the standard array to the ranking it
+ * chose and resolves the seed against it, so a drafted Dwarf Barbarian came back
+ * on 15 hit points and armour class 13 while the same character filled in here
+ * came back on 13 and 10 — both arithmetically right, and disagreeing, because
+ * only one of them had scores to read. `seedFor` is unchanged; what changed is
+ * that this caller now has something to hand it.
+ *
+ * A draft with no scores set still seeds from a bare 10 and the class hit die,
+ * and that is deliberately still reachable: ability scores are not required, so
+ * a player who wants to get in now and fix it later gets the same honest
+ * level-1 answer the form has always given them, with the form saying so beside
+ * the two boxes.
+ *
+ * **The re-seed is still only ever a pick or a score**, never a watcher. It runs
+ * when the player changes one of the three things the seed reads and at no other
+ * time, which is what keeps *seed at creation, never recompute* a property of
+ * the wiring: once the row exists nothing calls this, and editing the same six
+ * cells on the shipped sheet moves the modifier beside them and nothing else.
  */
 export const seededDraft = (
   draft: CharacterDraft,
@@ -178,7 +240,10 @@ export const seededDraft = (
   const seed = seedFor({
     className: draft.className,
     species: draft.species,
-    abilities: [],
+    // The same function the payload sends, so the number in the box is worked
+    // out from exactly the cells that will be written — a cell with no score
+    // is dropped by both and cannot mean one thing here and another there.
+    abilities: abilitiesFrom(draft.abilities),
   });
   return {
     ...draft,
@@ -201,10 +266,13 @@ export const seededDraft = (
  * `species` and `className` are `NonEmptyString`, so the contract refuses them
  * locally and the form fails on a field the player deliberately left blank.
  *
- * `sheet` goes the same way. `notes` is the one key this form writes, and an
- * empty one means *send no document at all* so the column default decides —
- * which is what keeps a brand new character's `body` the same shape as one the
- * DM typed.
+ * `sheet` goes the same way, and it is now **two** keys rather than one: the
+ * backstory, and the six ability cells. A document is sent when either of them
+ * has something in it and not otherwise, so a character who is only a name still
+ * lands on the column default and has the same `body` shape as one the DM typed.
+ * `abilitiesFrom` drops a cell with no score, which is what lets four of six be
+ * set — and what makes *nobody typed any* the empty array rather than six cells
+ * reading nothing.
  *
  * **There is nothing here for the live trio, `visibility` or `accountId`**, and
  * that is not a filter this function applies: `CharacterOwnCreate` has no field
@@ -220,7 +288,8 @@ export const payloadFrom = (draft: CharacterDraft): CharacterOwnCreate => {
   const className = draft.className.trim();
   const sheetUrl = draft.sheetUrl.trim();
   const notes = draft.notes.trim();
-  const sheet: CharacterSheet = { ...emptyCharacterSheet, notes };
+  const abilities = abilitiesFrom(draft.abilities);
+  const sheet: CharacterSheet = { ...emptyCharacterSheet, notes, abilities };
 
   return {
     name: draft.name.trim(),
@@ -231,6 +300,6 @@ export const payloadFrom = (draft: CharacterDraft): CharacterOwnCreate => {
     ...(ac === null || ac === undefined ? {} : { ac }),
     ...(hpMax === null || hpMax === undefined ? {} : { hpMax }),
     ...(sheetUrl === "" ? {} : { sheetUrl }),
-    ...(notes === "" ? {} : { sheet }),
+    ...(notes === "" && abilities.length === 0 ? {} : { sheet }),
   };
 };

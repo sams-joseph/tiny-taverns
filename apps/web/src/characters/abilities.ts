@@ -229,3 +229,45 @@ export const abilitiesFrom = (drafts: ReadonlyArray<AbilityDraft>): ReadonlyArra
       },
     ];
   });
+
+/**
+ * The cells whose score is neither blank nor a whole number in range — **the
+ * one thing said before a set of scores is accepted anywhere.**
+ *
+ * Pure and here rather than in either dialog because there are two surfaces
+ * over these six cells now (the sheet's editor and the create form's), and a
+ * rule about what a score may be that each of them spelled for itself would be
+ * two rules the day one of them was corrected.
+ *
+ * **A blank score is not in it.** It is a cell nobody has filled in, which is
+ * what lets four of the six be set — and on the create form it is what lets a
+ * player get in and fix it later, which is the whole reason ability scores are
+ * not required there.
+ */
+export const badScores = (drafts: ReadonlyArray<AbilityDraft>): ReadonlyArray<AbilityDraft> =>
+  drafts.filter((draft) => {
+    if (draft.score.trim() === "") return false;
+    const score = parseScore(draft.score);
+    return score === undefined || score < MIN_SCORE || score > MAX_SCORE;
+  });
+
+/**
+ * The six as one line — `"STR 15 · DEX 14 · CON 13"` — or **nothing at all when
+ * nobody has typed one.**
+ *
+ * The create form draws its scores behind the same dialog the sheet does, so
+ * this is what it shows in the dialog's place. `undefined` rather than a
+ * placeholder because the two states are genuinely different sentences: *these
+ * are the scores* and *there are none yet, and the two numbers below are
+ * therefore a bare 10 and the die*.
+ *
+ * Only cells that carry a score are named, in the order they are drawn, so it
+ * says exactly what {@link abilitiesFrom} would send and never implies a value
+ * for a cell that was skipped.
+ */
+export const abilitySummary = (drafts: ReadonlyArray<AbilityDraft>): string | undefined => {
+  const set = drafts.filter((draft) => parseScore(draft.score) !== undefined);
+  return set.length === 0
+    ? undefined
+    : set.map((draft) => `${draft.label} ${draft.score.trim()}`).join(" · ");
+};

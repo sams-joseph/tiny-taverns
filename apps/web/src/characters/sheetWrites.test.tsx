@@ -291,6 +291,28 @@ describe("editing the abilities", () => {
     );
   });
 
+  it("does not move the seeded hit points or armour class", async () => {
+    // **Seed at creation, never recompute** — the captain's decision, and the
+    // half of it that lives on this side of the row. The create form seeds
+    // `ac`/`hpMax` from these same six cells, so the two rules are one mistake
+    // apart: a watcher here would silently overwrite the plate armour a player
+    // typed the moment they corrected a score.
+    await renderSheet();
+    await openAbilities();
+
+    const con = screen.getByRole("spinbutton", { name: "CON score" });
+    await userEvent.clear(con);
+    await userEvent.type(con, "20");
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const body = sent() as Record<string, unknown>;
+    // Not sent at all, which is stronger than sent unchanged: `CharacterOwnUpdate`
+    // carries them, and this write simply names neither.
+    expect(body).not.toHaveProperty("hpMax");
+    expect(body).not.toHaveProperty("ac");
+  });
+
   it("says a score out of range before anything is sent", async () => {
     await renderSheet();
     await openAbilities();

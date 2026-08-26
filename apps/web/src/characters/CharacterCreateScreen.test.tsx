@@ -443,14 +443,17 @@ describe("writing down a character of your own", () => {
     // form that opened on a number nobody chose would be the stubbed field this
     // product refuses everywhere else.
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("");
-    expect(screen.queryByText(/A starting point from the class and species/)).toBeNull();
+    expect(screen.queryByText(/A starting point from the class, the species/)).toBeNull();
 
     await pick("Class", "Wizard");
     // d6, and no ability scores on this form — so the die and a bare 10.
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("6");
     expect((screen.getByLabelText(/^AC$/) as HTMLInputElement).value).toBe("10");
-    // Said where the numbers are, before the press rather than at the table.
-    await screen.findByText(/A starting point from the class and species/);
+    // Said where the numbers are, before the press rather than at the table —
+    // including that no scores are set, which is what stops "6 hit points"
+    // reading as this wizard's real total.
+    await screen.findByText(/A starting point from the class, the species and your ability scores/);
+    await screen.findByText(/No scores are set, so every modifier counts as \+0/);
 
     // Changing the pick re-seeds: a wizard's hit points must not survive into a
     // barbarian, which renders as a perfectly ordinary form when it is wrong.
@@ -479,6 +482,85 @@ describe("writing down a character of your own", () => {
       ac: 10,
       level: 1,
     });
+  });
+
+  it("seeds from the ability scores, which is what makes the two paths agree", async () => {
+    // **The captain's own example, driven through the real editor.** A Dwarf
+    // Barbarian by hand used to come out on 13 hit points and armour class 10
+    // while Hob's draft of the same character came out on 15 and 13, because
+    // only one of the two had scores to seed from.
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Brannoc");
+    await pick("Class", "Barbarian");
+    await pick("Species", "Dwarf");
+
+    // The bare baseline is still what a character with no scores gets, and the
+    // form says so where the numbers are.
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("13");
+    expect((screen.getByLabelText(/^AC$/) as HTMLInputElement).value).toBe("10");
+    await screen.findByText(/No scores are set, so every modifier counts as \+0/);
+
+    // The shipped editor, opened over a character that does not exist yet.
+    await userEvent.click(screen.getByRole("button", { name: /Set ability scores/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Standard array/i }));
+    // Assigned in draw order, so the 15 lands on strength — and a barbarian
+    // wants it on constitution. The swap is the accessible half of the
+    // drawing's drag and is the same control the sheet offers.
+    await userEvent.click(screen.getByRole("combobox", { name: /Swap STR score with/i }));
+    await userEvent.click(await screen.findByRole("option", { name: /^CON/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Use these scores/i }));
+
+    // 12 (d12) + 2 (CON 15) + 1 (Dwarven Toughness), and 10 + 2 (DEX 14) + 2
+    // (CON 15) — Unarmoured Defense, which is why `unarmouredAc` is a list.
+    expect((await screen.findByLabelText(/Hit points/)) as HTMLInputElement).toHaveValue(15);
+    expect(screen.getByLabelText(/^AC$/)).toHaveValue(14);
+    // Said on the form itself, so the scores are readable without reopening.
+    await screen.findByText(/STR 13 · DEX 14 · CON 15/);
+
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+    const body = bodyOf(server, "POST", createPath) as {
+      hpMax: number;
+      ac: number;
+      sheet: { abilities: ReadonlyArray<{ label: string; score: string; modifier: string }> };
+    };
+    expect(body.hpMax).toBe(15);
+    expect(body.ac).toBe(14);
+    expect(body.sheet.abilities).toContainEqual({ label: "CON", score: "15", modifier: "+2" });
+  });
+
+  it("leaves a number the player typed alone when the scores change", async () => {
+    // The same `edited` set the pickers respect, and the same one rule: a box
+    // the player has typed in is theirs for ever, whichever of the three things
+    // the seed reads moves afterwards.
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Brannoc");
+    await pick("Class", "Barbarian");
+    await retype(/^AC$/, "18");
+
+    await userEvent.click(screen.getByRole("button", { name: /Set ability scores/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Standard array/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Use these scores/i }));
+
+    expect(screen.getByLabelText(/^AC$/)).toHaveValue(18);
+    // The hit points were never touched, so they still follow: 12 + 1 (CON 13).
+    expect(screen.getByLabelText(/Hit points/)).toHaveValue(13);
+  });
+
+  it("changes nothing when the editor is closed without being used", async () => {
+    // Cancelling is not a save, on either surface. The create form's shell
+    // writes nothing at all — the scores are form state until *Create*.
+    await renderCreate();
+    await fillItIn();
+    await pick("Class", "Wizard");
+    await userEvent.click(screen.getByRole("button", { name: /Set ability scores/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Roll 4d6/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+
+    expect(screen.getByLabelText(/Hit points/)).toHaveValue(6);
+    expect(screen.queryByText(/^STR /)).toBeNull();
+    await screen.findByRole("button", { name: /Set ability scores/i });
   });
 
   it("offers the vocabulary and nothing else, so no free-text class can be created", async () => {

@@ -19,6 +19,8 @@ import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { abilitySummary, type AbilityDraft } from "./abilities";
+import { AbilityScoresDialog } from "./AbilitiesDialog";
 import {
   emptyDraft,
   MAX_AC,
@@ -82,10 +84,9 @@ import { characterWritesAt, createOwnCharacter } from "./write";
  *   this is the spine the drawing itself calls *Fill it in myself*
  *   (`CharacterCreate.jsx:128`), and it lands on the same place the drafted
  *   path will.
- * - **The abilities and the skills.** Six cells of three fields and a four-of-N
- *   picker are their own controls, they belong to the sheet rather than to a
- *   creation screen — both surfaces get them that way, and a shipped gap closes
- *   as a side effect — and they are not this change's.
+ * - **The skills.** A four-of-N picker is its own control and belongs to the
+ *   sheet; the counter it would need is a level-1 rule that stops being true at
+ *   level 3, which is the call `SkillsDialog` already made.
  * - **Inline `DraftField` editing.** A third editing idiom in a product with
  *   two, and the least accessible of the three. The shipped dialogs on the sheet
  *   already satisfy *"every field is editable"*, which is what the drawing's own
@@ -94,6 +95,14 @@ import { characterWritesAt, createOwnCharacter } from "./write";
  *   this kit"*; there is no asset store, and the sheet screen draws initials.
  * - ***Fen approves characters before they play.*** A switch with nothing behind
  *   it, which the delivery's own open questions already say.
+ *
+ * The **abilities** were on that list and are not any more. They came back
+ * because the seed reads two of the six: a hand-filled Dwarf Barbarian was
+ * coming out on 13 hit points and armour class 10 where Hob's draft of the same
+ * character came out on 15 and 13, and the difference was entirely that only one
+ * of the two paths had scores to seed from. They are the shipped editor —
+ * `AbilityFields`, behind `AbilityScoresDialog` — rather than a second one, so
+ * there is still one answer to what the six cells are.
  *
  * ### The three things it cannot say, and does not
  *
@@ -139,7 +148,12 @@ export function CharacterCreateScreen() {
    */
   const [edited, setEdited] = useState<ReadonlySet<SeededField>>(() => new Set());
 
+  /** Whether the shipped abilities editor is open over the form. */
+  const [scoring, setScoring] = useState(false);
+
   const problems = problemsIn(draft);
+  /** `"STR 15 · DEX 14 · …"`, or nothing at all when nobody has typed one. */
+  const scores = abilitySummary(draft.abilities);
   const set = <K extends keyof FormDraft>(key: K, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
@@ -157,6 +171,23 @@ export function CharacterCreateScreen() {
    */
   const pick = (key: "species" | "className", value: string) =>
     setDraft((current) => seededDraft({ ...current, [key]: value }, edited));
+
+  /**
+   * The scores re-seed too, through **the same one call** — because the seed
+   * reads two of the six.
+   *
+   * Constitution reaches the hit points and dexterity the armour class (and, for
+   * a barbarian or a monk, a second modifier does too), so a set of scores that
+   * did not re-seed would leave the two boxes reading the answer for a character
+   * whose scores were all 10 — which is exactly the gap this slice exists to
+   * close, one screen further along. A box the player has typed over is still
+   * theirs, by the same `edited` set: `seededDraft` is where that rule lives and
+   * there is one of it.
+   */
+  const setAbilities = (abilities: ReadonlyArray<AbilityDraft>) => {
+    setDraft((current) => seededDraft({ ...current, abilities }, edited));
+    setScoring(false);
+  };
 
   /**
    * The membership rather than the campaign, because `role` is the half that
@@ -566,6 +597,41 @@ export function CharacterCreateScreen() {
                   </Field>
                 </div>
 
+                {/* **The six cells, and they sit here because this is where
+                    they matter**: the two boxes directly below are worked out
+                    from them, so the reading order is the causal one — pick the
+                    class, set the scores, watch the numbers follow.
+
+                    A summary and a button rather than six rows inline. The
+                    editor is `AbilityFields`, the same one the sheet's Stats tab
+                    opens, and the dialog around it here writes nothing: the
+                    scores are form state until *Create character* sends them as
+                    part of one payload. Six rows of four controls in the middle
+                    of this card would bury the two boxes they exist to seed, and
+                    the shipped idiom for these six is a dialog anyway. */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={() => setScoring(true)}>
+                      <Icon name="dices" size={13} />
+                      {scores === undefined ? "Set ability scores" : "Edit ability scores"}
+                    </Button>
+                    {scores === undefined ? (
+                      <span className="text-caption leading-body text-muted-foreground">
+                        Optional. Without them you get the class hit die and a bare 10.
+                      </span>
+                    ) : (
+                      <span className="font-mono text-body-s leading-body text-foreground">
+                        {scores}
+                      </span>
+                    )}
+                  </div>
+                  {showProblems && problems.abilities !== undefined && (
+                    <span role="alert" className="text-caption leading-body text-danger-ink">
+                      {problems.abilities}
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-wrap gap-5">
                     <Field
@@ -612,23 +678,28 @@ export function CharacterCreateScreen() {
                   {/* **What the two numbers above actually are**, said where
                       they are rather than left to be assumed.
 
-                      They are filled in from the class and species the moment
-                      those are picked, and they are a *starting point*: the
-                      armour class is the unarmoured base and nothing worn, and
-                      neither number knows the ability scores, because this form
-                      does not ask for them — those live on the sheet, with the
-                      editor and the dice. Nothing recalculates either of them
-                      afterwards, by the captain's decision, so the honest thing
-                      is to say so before the player presses *Create* rather
-                      than to let them find out at the table. */}
+                      They are filled in from the class, the species and the
+                      ability scores the moment any of those changes, and they
+                      are a *starting point*: the armour class is the unarmoured
+                      base and nothing worn. Nothing recalculates either of them
+                      after the character exists, by the captain's decision, so
+                      the honest thing is to say so before the player presses
+                      *Create* rather than to let them find out at the table.
+
+                      Two sentences rather than one, because the two states are
+                      different facts: with no scores set these are the answer
+                      for a character whose abilities nobody has typed, and
+                      saying so is what stops *"13 hit points"* reading as this
+                      barbarian's real total. */}
                   {(draft.className !== "" || draft.species !== "") && (
                     <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
                       <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
                       <span>
-                        A starting point from the class and species — the hit die, and{" "}
-                        <span className="font-mono">10</span> before any armour. Type over either.
-                        Once you have set your ability scores on the sheet, come back and adjust
-                        them; nothing changes them for you.
+                        A starting point from the class, the species and your ability scores — the
+                        hit die, and <span className="font-mono">10</span> before any armour.
+                        {scores === undefined
+                          ? " No scores are set, so every modifier counts as +0. Set them above and these follow."
+                          : " Type over either; nothing changes them for you once they are created."}
                       </span>
                     </p>
                   )}
@@ -692,6 +763,17 @@ export function CharacterCreateScreen() {
                 </div>
               )}
             </div>
+
+            {/* The sheet's own editor, over a character that does not exist
+                yet. It hands drafts back rather than saving, and closing it
+                without pressing *Use these scores* changes nothing. */}
+            {scoring && (
+              <AbilityScoresDialog
+                drafts={draft.abilities}
+                onClose={() => setScoring(false)}
+                onDone={setAbilities}
+              />
+            )}
           </div>
         ))}
     </AppShell>
