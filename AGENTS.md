@@ -4622,13 +4622,27 @@ that is one shipped repository method — `Search.search`, `Sessions.list`, `Rec
 an unscoped read does not compile. A pre-assembled context blob would be a second data path with
 its own filtering, and the day it disagrees with the predicate is the day the assistant leaks.
 
-**Eight tools now: those five reads and three `propose*`.** A propose tool still writes nothing —
+**Nine tools: six reads and three `propose*`.** A propose tool still writes nothing —
 it stashes what Hob drafted in a `Ref` that becomes the turn's `proposal` column. There is no
 write repository anywhere under `src/assistant/`, which is what makes "nothing enters the
 campaign without an accept" a property of the wiring. `proposeEncounter` resolves each
 `creatureId` through `Creatures.findById`, so a model that invented one gets a `NotFound` it can
 read rather than a card the DM cannot accept — and the name, rating and hit points on the card
 come out of the row rather than out of the model.
+
+**`listCreatures` is the sixth read and it is a defect fix, not a capability.** Until it existed
+there was no way to ask what a campaign _has_: the only reach into the bestiary was
+`searchCampaign`, which is lexical and needs a word. Asked to build an encounter with no hint,
+both a 4B and an 8B guessed nouns off the campaign's name, got `[]` every time, and concluded —
+correctly, per the tool descriptions they had — that they could not propose one. That is the
+measured reason "build me an encounter" came back as prose. `Creatures.list` was already shipped
+and already predicated; only the tool was missing. It mirrors `listSessions` — **no parameters at
+all**, which is most of why a small model can reach for it — and returns a projection
+(`CreatureLine`: `creatureId`, name, CR, AC, hp, `"Small humanoid"`, environments), capped at 50
+and ordered by name. The `statBlock` document is deliberately dropped: fifty stat blocks is a
+context window a local model drowns in, and drowning it is the failure this whole area exists to
+stop. The id is spelled `creatureId` because that is its name where it is going, so a roster costs
+no renaming and no second read.
 
 **The campaign is not a tool parameter.** No tool takes one; `handlersFor(repositories,
 campaignId, actor, proposal)` closes over the path segment the request was routed on and over the actor
@@ -4766,32 +4780,49 @@ this version: `@effect/ai-anthropic` ships **no** embedding module; `@effect/ai-
 `@effect/ai-openai-compat` have `OpenAiEmbeddingModel`. Retrieval here is lexical by decision —
 no embeddings.
 
-### "Hob never calls a tool": what it is not, and the two things it is
+### "Hob never calls a tool": what it is not, and the five things it is
 
-Reported twice, against a 1B and then against a tool-capable 8B, and the diagnosis was wrong
-both times before anyone looked at the wire. **Look at the wire first — the request body is one
+Reported three times — against a 1B, a tool-capable 8B and a 4B — and the diagnosis was wrong
+every time before anyone looked at the wire. **Look at the wire first — the request body is one
 `HttpClient.tapRequest` away** (`test/support/model.ts` already records it), and it settles in
-one step which of three links failed. Measured against a real Qwen3-8B through LM Studio:
+one step which of three links failed. Measured against a real Qwen3-8B and a real
+Nemotron-3-Nano-4B through LM Studio:
 
-- **The tools are in the request.** Eight `function` entries, `tool_choice: "auto"`, on every
+- **The tools are in the request.** Every `function` entry, `tool_choice: "auto"`, on every
   round including the second and third. The toolkit → provider → wire path has never been the
   bug, and `hob.test.ts` asserts it by name.
 - **The model calls them.** Replaying that exact captured body with `curl` came back
-  `finish_reason: "tool_calls"` and a well-formed `searchCampaign`.
-- So the failures are downstream, and there were two, **both of which report as "no tool call"
-  and neither of which said anything at all**:
+  `finish_reason: "tool_calls"` and a well-formed `searchCampaign`. Offered `proposeEncounter`
+  alone with `tool_choice: "required"`, the 4B produced 3/3 well-formed calls — **the schema is
+  not the barrier**, so do not go looking there again.
+- So the failures are downstream, and there were five, **every one of which reports as "no tool
+  call" or "no card" and none of which said anything at all**:
 
-**1. `Schema.optional` on a tool parameter is a bug, and it is invisible until a model obeys the
-schema.** The provider rewrites parameters through OpenAI strict mode (`toCodecOpenAI`): every
-property lands in `required` and an optional one gains a `null` member, because strict mode has
-no way to spell "may be absent". The **decode** side then validates against the _untransformed_
-schema, which refuses `null` — so the two halves of one round trip disagree, and an endpoint that
-compiles the published schema into a grammar (llama.cpp does) leaves the model no other way to say
-"no filter". One `"source": null` kills the whole answer with `Expected "note" | "beat" |
-"creature" | undefined, got null`, one round in, with no tool step ever drawn. Use
-`toolkit.ts`'s `optional` helper — `Schema.optionalKey(Schema.NullOr(…))`, which publishes the
-identical JSON schema and accepts what it asks for — and `absent()` at the handler.
-`Schema.optional` on a `Tool.make` parameter is the thing to grep for.
+**1. An unset optional arrives as `null`, or as the _word_ `"null"`, and both used to be fatal.**
+The provider rewrites parameters through OpenAI strict mode (`toCodecOpenAI`): every property
+lands in `required` and an optional one gains a `null` member, because strict mode has no way to
+spell "may be absent". The **decode** side then validates against the _untransformed_ schema,
+which refuses `null` — so the two halves of one round trip disagree, and an endpoint that compiles
+the published schema into a grammar (llama.cpp does) leaves the model no other way to say "no
+filter". One `"source": null` killed the whole answer, one round in, with no tool step ever drawn.
+
+That is only half of it, and the other half is worse because it is invisible in the schema. A chat
+template whose tool-call format is **XML** hands llama.cpp untyped parameter _text_, which it
+coerces through the published JSON schema: for an integer or array optional the text `null` parses
+as JSON null and arrives correctly, and for a **string-typed** one it stays the string `"null"` —
+`"source":"null"` **6 times out of 6**, `proposeEncounter`'s `difficulty` as `"null"` ×3 and
+`"None"` ×1. **The double-nested `anyOf` is not the cause and flattening it changes nothing**
+(6/6 either way, measured); it is the endpoint's conversion.
+
+So `toolkit.ts`'s `optional` helper is `Schema.optionalKey(Schema.Union([schema, Schema.Null,
+AbsentWord]))`, where `AbsentWord` is a `Schema.Literals` of `""`/`null`/`none` in their plausible
+casings decoded to `null`, and `absent()` turns that into "not given" at the handler. **A
+`Schema.Literals` rather than a `Schema.String` arm, deliberately**: the published JSON schema is
+generated from the _encoded_ side of a transformation, so a string arm would widen `source` from
+an enum to "the enum or any string", losing the grammar's guidance and silently swallowing a
+mistyped real value. It is safe only because **no optional parameter in this toolkit is free
+text**; check that before adding one. `Schema.optional` on a `Tool.make` parameter is still the
+thing to grep for.
 
 **2. `HOB_MAX_TOKENS` covers reasoning tokens, and 1024 was not enough for a thinking model.**
 That is the captain's report. A capable local 8B in 2026 is a reasoning model: it deliberates
@@ -4814,6 +4845,50 @@ than spending three more calls re-truncating. `hob.test.ts` pins all four cases,
 `test/support/model.ts`'s `reasoningChunks` is the wire shape a reasoning model actually produces
 (both spellings). **A `done` that follows nothing is the shape to distrust here** — the panel has
 no other way to tell "it answered briefly" from "it never started".
+
+**3. One malformed tool argument used to destroy the whole answer, and `failureMode: "return"`
+never applied to it.** This is the one that made everything else here look like a model problem.
+A tool call's arguments are decoded against the tool's parameter schema **by the framework, inside
+`streamText`, before any handler of ours is forked** — `Response.StreamPart(toolkit)` decodes the
+whole chunk first (`LanguageModel.ts`'s `streamContent`), so the convention every refusal in this
+toolkit uses to reach the model does not cover it. The stream died, `save` wrote nothing, no tool
+step was ever drawn, and the DM was shown a page of `Expected "note" | "beat" | … at
+[2]["params"]["source"]` naming every tool in the toolkit. Reproduced in a real browser, twice.
+`recover` in `Hob.ts` is the fix: the correction goes back to the model as a **`user` message**
+(not a tool result — the call that failed to decode never reached the history, so there is no tool
+call for a result to answer) and the loop carries on. **`complaint()` trims it to the lines whose
+path names `["params"]`**, because the raw message is a union complaint carrying one line per tool
+that did _not_ match: sent whole it is a page of context a small model spends instead of thinking,
+and it reads as an instruction to go and call `listSessions`. It is **charged to `MAX_ROUNDS`**, because a
+free retry is a loop with no ceiling; running out is the written `unreadable` sentence. Only the
+two decode reasons — `InvalidOutputError` and `ToolParameterValidationError` — are recovered; a
+refused connection or a rate limit is re-raised, since another round cannot fix it. The cost,
+stated: a persistently garbled provider now costs up to `MAX_ROUNDS` calls where it used to cost
+one and a dump.
+
+**4. There was no way to ask what a campaign _has_.** See "`listCreatures` is the sixth read"
+above; and `searchCampaign`'s `query` now accepts `""` **at the schema** and refuses it **in the
+handler**, with a `Conflict` naming `listCreatures`. The rule is unchanged and the place it is
+enforced moved, for exactly the reason in 3: a minimum length in the parameter schema is a refusal
+the model cannot hear, and `query: ""` — the natural escape from "build me an encounter" with no
+hint — was the commonest way both models triggered it. The HTTP contract's `SearchFilter.q` is
+untouched and still requires a word; there a caller reads a 400 and there is nothing to recover.
+
+**5. Hob forgot what it had offered.** The prompt was assembled from `HobTurn.text` alone, so a
+turn where Hob offered a card and said one short line — which is what the propose tools' own
+instruction asks for — reached the next question as a sentence about an encounter with nothing
+about what was in it, and a turn where it said _nothing_ was dropped from the prompt entirely.
+`promptFor`'s `offered()` renders the saved `turn.proposal` as one bracketed line beside the text,
+carrying the roster's `creatureId`s (the one thing a follow-up cannot re-derive without another
+round) and whether the DM accepted it.
+
+**Whatever went wrong, the panel gets a sentence somebody wrote.** `HobFailure.message` is
+rendered verbatim inside a conversation the DM is having, so `apology()` in `Hob.ts` is the only
+thing that may fill it: a written line per failure the DM can act on (unreachable endpoint,
+refused credential, rate limit, unreadable output) and one honest fall-through. `describe()` still
+exists and is now **for the log**, beside a `logWarning`, which is where the schema error is
+actually useful. `hob.test.ts` sweeps every reachable failure shape for the framework's own
+fingerprints — `LanguageModel.`, `Invalid output`, `Expected `, ` at [` — and fails on any of them.
 
 ### Running it locally, with and without a model
 
