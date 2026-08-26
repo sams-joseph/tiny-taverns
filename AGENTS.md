@@ -43,10 +43,22 @@ and `packages/ui/src/styles.css` bridges those tokens into Tailwind's theme laye
 `var()` reference only. `PORT-NOTES.md` in that package records exactly what was brought
 across, what was left out, and the one-line `rsync` that does the copy.
 
-**Nothing we author lives inside that package.** Every file in it is byte-identical to the
-delivery except `styles.css` (relative `@import` paths) and `SKILL.md` (a filename case fix
-and a pointer) — so `diff -r` against a new delivery names those two and nothing else, and
-anything more is a real designer change. The two measurements the delivery states only in
+**Nothing we author lives inside that package, with one named exception.** Every file in it
+is byte-identical to the delivery except `styles.css` (relative `@import` paths), `SKILL.md`
+(a filename case fix and a pointer), and **the three icon files under `assets/icon/` that
+are the captain's own artwork** — `mark-on-dark-256.png`, `favicon-32.png` and the added
+`apple-touch-icon-180.png`. So `diff -r` against a new delivery names those five and nothing
+else, and anything more is a real designer change.
+
+**The icon exception is deliberate and has a live hazard attached.** It exists because those
+are _art the captain supplied_, and unlike a token value there is no `local-tokens.css`
+equivalent for a PNG the product imports by package path. `assets/` sits inside PORT-NOTES'
+`rsync --delete` with no exclusion, so **a delivery silently restores the old flat mark and
+deletes the 180** — re-copy the three after every update and confirm `git status` names them.
+Unlike the `--fs-label-l` incident below, a diff reporting these as changed is _correct_: the
+designers did not revise the icon, we replaced it. Only two of the three are imported by
+anything (`main.tsx` takes the favicon; the shell, Hob and marketing take the mark);
+`packages/design-system/assets/README.md` is the file that says which is which. The two measurements the delivery states only in
 prose, `--fs-label-l` and `--scrim-blur`, therefore live in
 **`packages/ui/src/local-tokens.css`**, the same rule that keeps the layering scale in
 `packages/ui/src/styles.css` §3. `adherence.test.ts` fails if either name reappears in a
