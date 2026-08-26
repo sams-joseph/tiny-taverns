@@ -13,7 +13,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
-import { HobToolkit } from "../src/assistant/toolkit.js";
+import {
+  HobToolkit,
+  NO_VOCABULARY,
+  playerToolkitListing,
+  playerToolkitOver,
+} from "../src/assistant/toolkit.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -22,6 +27,7 @@ import { DmActors } from "../src/repo/DmActor.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Options } from "../src/repo/Options.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
@@ -65,6 +71,7 @@ const services = Layer.mergeAll(
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
+  Options.layer,
   Recap.layer,
   Search.layer,
   SessionEvents.layer,
@@ -1278,6 +1285,25 @@ describe("the assistant seam", () => {
       "searchCampaign",
       "sessionLog",
       "sessionRecap",
+    ]);
+  });
+
+  it("counts the player's two tools, and the one the cap adds", () => {
+    // The player's toolkit is built per request now, so it cannot be counted as
+    // a module constant — but the same property has to hold, and this is where
+    // it does: a third capability offered to a player is an edit to this list.
+    //
+    // `listOptions` is the *only* thing the cap adds, which is the design's own
+    // constraint on itself: the schema may vary with the vocabulary and the
+    // toolkit may not vary for anything else.
+    expect(Object.keys(playerToolkitOver(NO_VOCABULARY).tools).sort()).toEqual([
+      "proposeCharacter",
+      "searchCampaign",
+    ]);
+    expect(Object.keys(playerToolkitListing(NO_VOCABULARY).tools).sort()).toEqual([
+      "listOptions",
+      "proposeCharacter",
+      "searchCampaign",
     ]);
   });
 });

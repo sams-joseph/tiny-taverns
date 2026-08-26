@@ -31,16 +31,20 @@ import { Campaigns } from "../repo/Campaigns.js";
 import { Creatures } from "../repo/Creatures.js";
 import { DmActors } from "../repo/DmActor.js";
 import { HobThreads } from "../repo/HobThreads.js";
+import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
 import { Search } from "../repo/Search.js";
 import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
 import {
+  type CharacterVocabulary,
   dmHandlersFor,
   HobToolkit,
-  playerHandlersFor,
-  PlayerToolkit,
+  NO_VOCABULARY,
+  playerBindListing,
+  playerBindOver,
   type ProposalSlot,
+  vocabularyOf,
 } from "./toolkit.js";
 
 /**
@@ -162,6 +166,7 @@ export class Hob extends Context.Service<
     | DmActors
     | HobThreads
     | LanguageModel.LanguageModel
+    | Options
     | Recap
     | Search
     | SessionEvents
@@ -179,6 +184,10 @@ export class Hob extends Context.Service<
           recap: yield* Recap,
           creatures: yield* Creatures,
           events: yield* SessionEvents,
+          // The seventh, and the one no tool handler calls: a campaign's
+          // classes and species decide the *shape* of `proposeCharacter`, so
+          // they are read before the toolkit exists rather than from inside it.
+          options: yield* Options,
         };
 
         return {
@@ -252,6 +261,30 @@ export class Hob extends Context.Service<
               const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
               const finished = yield* Ref.make("stop");
 
+              /**
+               * This campaign's classes and species — **one extra read, and
+               * only for a player.**
+               *
+               * `proposeCharacter` is built from it, and only the player's
+               * toolkit has one, so a DM's question costs exactly what it did
+               * before. That is the design's second stated cost paid at its
+               * smallest: capped by `OPTION_LIMIT`, against `corpusRowReadable`
+               * — the same predicate and the same method the create form's own
+               * pickers read through, so a class Hob may offer is exactly a
+               * class the player could have picked by hand.
+               *
+               * Read **here** rather than inside the stream, for two reasons
+               * that both matter: `CurrentActor` is still ambient at this point
+               * (the stream is pulled after this effect returns, which is why
+               * every handler re-provides it), and a `NotFound` here is still a
+               * 404 before a byte of body — it cannot be, since
+               * `campaigns.findById` has already answered, but the shape is
+               * what keeps that true if it ever could.
+               */
+              const vocabulary: CharacterVocabulary = Result.isSuccess(dm)
+                ? NO_VOCABULARY
+                : vocabularyOf(yield* repositories.options.list(campaignId, {}));
+
               // Bound to *this* campaign and *this* actor, now — the stream
               // below is pulled after this effect has returned, so nothing may
               // be left to the ambient context. The proof is resolved above
@@ -262,35 +295,43 @@ export class Hob extends Context.Service<
               // what the provider is shown, so a player bound to the DM's would
               // be *offered* `getCreature` — a stat block — whatever the
               // handler behind it did. See `toolkit.ts`.
+              const asked = <Tools extends AnyTools>(
+                tools: Effect.Effect<Toolkit.WithHandler<Tools>>,
+                system: string,
+              ) => conversation(tools, system, history, ask, finished, proposal);
+
+              /**
+               * Which of the three surfaces answers, decided once.
+               *
+               * The DM's is module-level and unchanged. The player's is built
+               * per request, and which of *its* two shapes depends on whether
+               * this campaign's vocabulary fits in a grammar — see
+               * `OPTION_ENUM_CAP`. Three branches rather than a flag because
+               * the two player shapes carry different tools and `Toolkit` is
+               * invariant in its tool record; the branch is where the cost of
+               * the fallback is visible, which is where it belongs.
+               */
               const answering: Stream.Stream<
                 HobEvent,
                 AiError.AiError | Schema.SchemaError,
                 LanguageModel.LanguageModel
               > = Result.isSuccess(dm)
-                ? conversation(
+                ? asked(
                     Effect.flatMap(
                       HobToolkit.toHandlers(dmHandlersFor(repositories, dm.success, proposal)),
                       (bound) => Effect.provideContext(HobToolkit, bound),
                     ),
                     dmPrompt(campaign),
-                    history,
-                    ask,
-                    finished,
-                    proposal,
                   )
-                : conversation(
-                    Effect.flatMap(
-                      PlayerToolkit.toHandlers(
-                        playerHandlersFor(repositories, actor, campaignId, proposal),
-                      ),
-                      (bound) => Effect.provideContext(PlayerToolkit, bound),
-                    ),
-                    playerPrompt(campaign),
-                    history,
-                    ask,
-                    finished,
-                    proposal,
-                  );
+                : vocabulary.listed
+                  ? asked(
+                      playerBindListing(repositories, actor, campaignId, proposal, vocabulary),
+                      playerPrompt(campaign),
+                    )
+                  : asked(
+                      playerBindOver(repositories, actor, campaignId, proposal, vocabulary),
+                      playerPrompt(campaign),
+                    );
 
               /**
                * Saves what Hob actually produced, however the stream ended.

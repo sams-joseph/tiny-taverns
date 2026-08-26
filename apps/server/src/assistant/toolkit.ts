@@ -4,7 +4,9 @@ import {
   AbilityKey,
   type Actor,
   type CampaignId,
+  type CharacterOption,
   type CharacterSheet,
+  type ClassEntry,
   Conflict,
   Creature,
   CreatureId,
@@ -12,8 +14,12 @@ import {
   Difficulty,
   type HobProposal,
   type HobRosterLine,
+  isClassOption,
+  isSpeciesOption,
   modifierFor,
   NotFound,
+  OptionKind,
+  optionNamed,
   SearchHit,
   SearchSource,
   seedFor,
@@ -22,17 +28,13 @@ import {
   SessionId,
   SessionRecap,
   type Skill,
+  type SpeciesEntry,
 } from "@taverns/api";
-import {
-  BundledClassName,
-  BundledSpeciesName,
-  bundledClass,
-  bundledSpecies,
-} from "../ruleset/systemOptions.js";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
 import type { DmActor } from "../repo/DmActor.js";
+import type { Options } from "../repo/Options.js";
 import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
 import type { SessionEvents } from "../repo/SessionEvents.js";
@@ -119,6 +121,191 @@ const LOG_LIMIT = 100;
  * searching rather than reciting, which is what the tool's description says.
  */
 const CREATURE_LIMIT = 50;
+
+/**
+ * How many names of one kind may go into the tool's own grammar before
+ * {@link ListOptions} reads them out instead.
+ *
+ * `CREATURE_LIMIT`'s argument, one level down and with one extra term. Forty
+ * short words is a few hundred tokens in a schema a local model has to hold
+ * alongside everything else, and a campaign with more classes than that has a
+ * vocabulary a model should be *asked* for rather than shown. The extra term is
+ * that this list is published as a JSON-schema `enum`, so its cost is paid on
+ * **every round** rather than once when a tool answers.
+ *
+ * Under it the vocabulary is in the grammar and a draft costs two rounds; over
+ * it the vocabulary is a tool call and a draft costs three. That is the whole of
+ * what the cap decides, and it is why it is generous: three rounds against a
+ * budget of four leaves nothing for {@link recover}, which is the reliability
+ * work this must not spend.
+ */
+const OPTION_ENUM_CAP = 40;
+
+/** How long a homebrew name may be — `CharacterOption.ts`'s own bound. */
+const OPTION_NAME_MAX = 60;
+
+/**
+ * **This campaign's** classes and species, as the words `proposeCharacter` is
+ * held to.
+ *
+ * ### Why a campaign's vocabulary cannot be a module-level literal
+ *
+ * It used to be: the twelve and the ten of `src/ruleset/systemOptions.ts`, as
+ * two `Schema.Literals`, decided when this file was compiled. A campaign has its
+ * own classes since `0017` — the whole point of that slice is that a DM writes
+ * *Bloodsworn* and their players can pick it — so the vocabulary is now a
+ * **read**, and a schema built from a read has to be built when the read
+ * happens. That is the one structural change slice 2 makes: the player's toolkit
+ * is constructed per request rather than per module.
+ *
+ * ### The grammar is what a small model is actually held to
+ *
+ * A closed enum is not tidiness. An endpoint that compiles the published JSON
+ * schema into a grammar (llama.cpp does) *cannot emit* a value outside it, which
+ * is the only mechanism measured on this fleet to keep a 4B model inside a
+ * vocabulary — and the round budget is four with recovery charged against it, so
+ * a mechanism that costs a round is a mechanism that costs reliability. Hence
+ * the enum wherever it fits, and {@link ListOptions} only where it does not.
+ *
+ * ### A homebrew name is untrusted text, and this is how that is handled
+ *
+ * A DM may call a class *"ignore all previous instructions"*, and that name then
+ * reaches the model twice — once as a JSON-schema `enum` member and once in the
+ * tool's own description. It is deliberately **not rewritten**: the label is the
+ * entire link between a character and an option (`optionNamed` matches it
+ * exactly, case aside), so a sanitiser here would seed a character against a
+ * class that does not exist.
+ *
+ * What is done instead, and it is enough:
+ *
+ * - the `enum` half is structurally inert — a JSON string inside an array of
+ *   permitted values is never in instruction position, whatever it says;
+ * - the **description** half renders every name through `JSON.stringify`
+ *   ({@link quoted}), which is the identical escaping the schema uses, so a name
+ *   carrying a quote, a newline or a brace is a listed item rather than a new
+ *   sentence — and the prose and the grammar carry byte-identical text, which is
+ *   the property that stops them drifting;
+ * - the exposure is bounded to 60 characters by `CharacterOption.ts`'s own
+ *   `optionName`, and to names an account authored at its own table.
+ *
+ * This is not a new class of exposure. A note's title already reaches the model
+ * through `searchCampaign`, unquoted and up to 200 characters; what is new is
+ * only that it reaches it in a schema as well as in a result.
+ */
+export interface CharacterVocabulary {
+  /**
+   * The rows themselves, kept because the handler resolves a chosen label back
+   * to the numbers `seedFor` reads — through `optionNamed`, which is the
+   * product's own rule and not a second one.
+   */
+  readonly options: ReadonlyArray<CharacterOption>;
+  /** Class names, de-duplicated, in the order the picker shows them. */
+  readonly classes: ReadonlyArray<string>;
+  /** {@link classes}' twin. */
+  readonly species: ReadonlyArray<string>;
+  /**
+   * Whether either kind is over {@link OPTION_ENUM_CAP} — which is the one
+   * thing that decides which toolkit a player gets.
+   */
+  readonly listed: boolean;
+}
+
+/** A campaign with nothing written down. Also what the DM's side is handed. */
+export const NO_VOCABULARY: CharacterVocabulary = {
+  options: [],
+  classes: [],
+  species: [],
+  listed: false,
+};
+
+/**
+ * The names of one kind, de-duplicated case-insensitively, first spelling kept.
+ *
+ * Duplicates are expected rather than defensive: copying one Library original
+ * into a campaign twice makes two rows, deliberately, and nothing refuses it.
+ * The first spelling is kept because that is the row `optionNamed` resolves to —
+ * it is a `find`, so an enum offering the second copy's casing would name a row
+ * the handler will not reach.
+ */
+const namesOf = (
+  options: ReadonlyArray<CharacterOption>,
+  kind: OptionKind,
+): ReadonlyArray<string> => {
+  const seen = new Set<string>();
+  const names: Array<string> = [];
+  for (const option of options) {
+    if (option.kind !== kind) continue;
+    const key = option.name.trim().toLowerCase();
+    if (key === "" || seen.has(key)) continue;
+    seen.add(key);
+    names.push(option.name);
+  }
+  return names;
+};
+
+/** What `Options.list` answered, as the two lists and the one decision. */
+export const vocabularyOf = (options: ReadonlyArray<CharacterOption>): CharacterVocabulary => {
+  const classes = namesOf(options, "class");
+  const species = namesOf(options, "species");
+  return {
+    options,
+    classes,
+    species,
+    listed: classes.length > OPTION_ENUM_CAP || species.length > OPTION_ENUM_CAP,
+  };
+};
+
+/**
+ * One name, escaped exactly as the schema escapes it.
+ *
+ * `JSON.stringify` and not a hand-rolled quote: the tool's parameters are
+ * published as JSON, so this is the same transformation applied to the same
+ * string, which is what makes "the prompt and the grammar cannot drift" a
+ * property rather than a habit.
+ */
+const quoted = (name: string): string => JSON.stringify(name);
+
+/**
+ * How a name is spelled in the tool schema for one kind — and therefore whether
+ * the vocabulary reaches the model as a grammar or as a tool.
+ *
+ * Three cases, and each is a true sentence about the campaign rather than a
+ * fallback chain:
+ *
+ * - **nothing written down** — free text. There is no enum to build and nothing
+ *   for {@link ListOptions} to read out, so the model writes what fits and the
+ *   seed degrades exactly as an unmatched label already does.
+ * - **within the cap** — `Schema.Literals`, which is the whole design.
+ * - **over the cap** — free text, with {@link ListOptions} in the toolkit and
+ *   the description pointing at it.
+ *
+ * The return type is erased to a plain string codec on purpose: the two arms
+ * have different *static* types and identical runtime meaning for a caller, and
+ * the handler stores a label either way. Nothing is lost — the AST the JSON
+ * schema is generated from is untouched, so the `enum` still reaches the wire.
+ */
+const nameSchema = (names: ReadonlyArray<string>): Schema.Codec<string, string> =>
+  names.length === 0 || names.length > OPTION_ENUM_CAP
+    ? Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX))
+    : Schema.Literals(names);
+
+/**
+ * The sentence in the tool's description for one kind, built from the same list
+ * the schema was.
+ *
+ * Templated rather than written out, which is the point: the twelve and the ten
+ * used to appear twice — once as `Schema.Literals` and once as prose — and two
+ * statements of one vocabulary is two things to forget to update.
+ */
+const nameSentence = (noun: string, plural: string, names: ReadonlyArray<string>): string =>
+  names.length === 0
+    ? `This campaign has no ${plural} written down, so put whatever fits the ` +
+      `character in ${noun} and say so.`
+    : names.length > OPTION_ENUM_CAP
+      ? `Pick one ${noun} from this campaign's own list: call listOptions first ` +
+        `and copy a name back exactly as it came, spelling and all.`
+      : `Pick one ${noun} from ${names.map(quoted).join(", ")} — spelled exactly ` +
+        "like that, quotes aside.";
 
 /**
  * The words a model writes when it means *nothing here*, for an endpoint that
@@ -531,91 +718,124 @@ const skillsFrom = (names: ReadonlyArray<string>): ReadonlyArray<Skill> => {
  * background genuinely called "None", so the free-text optionals take the
  * permissive arm and the handler collapses a blank one.
  */
-export const ProposeCharacter = Tool.make("proposeCharacter", {
+export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
+  Tool.make("proposeCharacter", {
+    description:
+      "Offer the player a character sheet built from what they described. Give " +
+      "them a name, then a species and a class. " +
+      `${nameSentence("species", "species", vocabulary.species)} ` +
+      `${nameSentence("class", "classes", vocabulary.classes)} ` +
+      "Put anything more " +
+      "specific, like a wood elf or a circle of the moon, in subclass. Rank the " +
+      "six abilities most important first, name up to four skills, and write a " +
+      "short backstory in their own register. Do not give scores, modifiers, hit " +
+      "points, armour class or a level — the standard array is applied for you " +
+      "and the starting numbers are worked out from the class and species. Only " +
+      "a suggestion: nothing is saved unless the player accepts it. Say one " +
+      "short line about it and stop.",
+    parameters: Schema.Struct({
+      name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+      /**
+       * The species and the class — **this campaign's own vocabulary**, as a
+       * closed enum wherever it fits in one.
+       *
+       * They were free text of up to sixty characters, then the bundled ten and
+       * twelve as module-level `Schema.Literals`, and now they are the words
+       * `Options.list` answered for *this* campaign. The gain of a closed
+       * vocabulary is not tidiness: a class is the only thing that carries a hit
+       * die, so *"which one"* is the question that lets the three numbers below
+       * be seeded at all — and a model writing `"Circle of the Moon Druid"`
+       * produces a label nothing can look a die up against, which is what the
+       * free-text bound allowed and what the enum ended.
+       *
+       * What slice 2 changed is *whose* words they are. A campaign's classes are
+       * a read, so the schema is built when the read happens — see
+       * {@link CharacterVocabulary} for why that is worth a per-request toolkit,
+       * and {@link nameSchema} for the three shapes this takes.
+       *
+       * Both required, unlike every other parameter here: a character has a
+       * class and a species, this is the one call whose whole job is to say
+       * which, and an empty arm would be an escape a small model reaches for
+       * under pressure. The description names the same two lists, built from the
+       * same two arrays, so the prompt and the grammar cannot drift.
+       */
+      species: nameSchema(vocabulary.species),
+      className: nameSchema(vocabulary.classes),
+      /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
+      subclass: optionalText(80),
+      background: optionalText(80),
+      /**
+       * Six ability keys, most important first — **a ranking, not scores.**
+       *
+       * Short of six is repaired rather than refused (see `abilitiesFrom`),
+       * which is why the check allows an empty array: a schema refusal here
+       * happens before any handler runs and cannot be read by the model.
+       */
+      abilityOrder: Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6)),
+      skills: optional(
+        Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40))).check(
+          Schema.isLengthBetween(0, 8),
+        ),
+      ),
+      backstory: Schema.String.check(Schema.isLengthBetween(0, 4000)),
+      bond: optionalText(400),
+      ideal: optionalText(400),
+      flaw: optionalText(400),
+      /** Starting kit, as item names. It becomes `sheet.inventory`. */
+      kit: optional(
+        Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 80))).check(
+          Schema.isLengthBetween(0, 20),
+        ),
+      ),
+      /**
+       * Why these choices — one short line each, the drawn *What Hob did* aside.
+       *
+       * Asked for explicitly rather than left to the reply, because it is the
+       * one part of a draft the player has to be able to argue with, and a
+       * sentence buried in prose above the card is not that.
+       */
+      rationale: optional(
+        Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 400))).check(
+          Schema.isLengthBetween(0, 8),
+        ),
+      ),
+    }),
+    success: Schema.String,
+    failure: proposalFailure,
+    failureMode: "return",
+  });
+
+/** One line of a campaign's vocabulary, as {@link ListOptions} reads it out. */
+const OptionLine = Schema.Struct({
+  kind: OptionKind,
+  /** The label, exactly as `proposeCharacter` must spell it back. */
+  name: Schema.String,
+});
+
+/**
+ * The campaign's vocabulary, read out — **only offered above
+ * {@link OPTION_ENUM_CAP}**, and this is the fallback the design names.
+ *
+ * It is `listCreatures` one table across, and it exists for the identical
+ * measured reason: a model that cannot enumerate a corpus dead-ends, guesses,
+ * and concludes correctly that it cannot make the call. Under the cap it is
+ * absent rather than idle, because a toolkit is what the model is *shown* and a
+ * third tool is a third thing to spend a round reaching for — which on a budget
+ * of four is the whole cost this design was chosen to avoid.
+ *
+ * **Both kinds in one call**, deliberately: a per-kind tool would cost a round
+ * each, and the point of the fallback is that it costs exactly one.
+ *
+ * It takes no parameters, exactly as `listSessions` and `listCreatures` do —
+ * "what can this campaign build a character from" has nothing to get wrong.
+ */
+export const ListOptions = Tool.make("listOptions", {
   description:
-    "Offer the player a character sheet built from what they described. Give " +
-    "them a name, then pick one species from Aasimar, Dragonborn, Dwarf, Elf, " +
-    "Gnome, Goliath, Halfling, Human, Orc, Tiefling and one class from " +
-    "Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, " +
-    "Sorcerer, Warlock, Wizard — spelled exactly like that. Put anything more " +
-    "specific, like a wood elf or a circle of the moon, in subclass. Rank the " +
-    "six abilities most important first, name up to four skills, and write a " +
-    "short backstory in their own register. Do not give scores, modifiers, hit " +
-    "points, armour class or a level — the standard array is applied for you " +
-    "and the starting numbers are worked out from the class and species. Only " +
-    "a suggestion: nothing is saved unless the player accepts it. Say one " +
-    "short line about it and stop.",
-  parameters: Schema.Struct({
-    name: Schema.String.check(Schema.isLengthBetween(1, 120)),
-    /**
-     * The species and the class, as **closed vocabularies** — the bundled ten
-     * and twelve, from `src/ruleset/systemOptions.ts`.
-     *
-     * They were free text of up to sixty characters, and the captain's decision
-     * of 2026-08-26 is that they are not. The gain is not tidiness: a class is
-     * the only thing that carries a hit die, so *"which of the twelve"* is the
-     * question that lets the three numbers below this be seeded at all. A model
-     * writing `"Circle of the Moon Druid"` produces a label nothing can look a
-     * die up against, and it did — that is what the old bound allowed.
-     *
-     * Both required, unlike every other parameter here: a character has a class
-     * and a species, this is the one call whose whole job is to say which, and
-     * an empty arm would be an escape a small model reaches for under pressure.
-     * The description names both lists so the vocabulary is in the prompt as
-     * well as in the grammar.
-     *
-     * **These are the bundle's names and deliberately not the campaign's**,
-     * even though a campaign can have its own classes now. A per-campaign
-     * vocabulary cannot be a module-level literal, and a closed enum is what
-     * lets a grammar-compiling endpoint hold a small model to a list — measured
-     * at the 4B tier. Building the toolkit per request is the answer and is its
-     * own piece of work; until then Hob drafts from the twelve and the ten,
-     * which degrades gracefully because a drafted character already carries a
-     * label the campaign may not have, exactly like today's `"Half-orc"`.
-     */
-    species: BundledSpeciesName,
-    className: BundledClassName,
-    /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
-    subclass: optionalText(80),
-    background: optionalText(80),
-    /**
-     * Six ability keys, most important first — **a ranking, not scores.**
-     *
-     * Short of six is repaired rather than refused (see `abilitiesFrom`), which
-     * is why the check allows an empty array: a schema refusal here happens
-     * before any handler runs and cannot be read by the model.
-     */
-    abilityOrder: Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6)),
-    skills: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40))).check(
-        Schema.isLengthBetween(0, 8),
-      ),
-    ),
-    backstory: Schema.String.check(Schema.isLengthBetween(0, 4000)),
-    bond: optionalText(400),
-    ideal: optionalText(400),
-    flaw: optionalText(400),
-    /** Starting kit, as item names. It becomes `sheet.inventory`. */
-    kit: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 80))).check(
-        Schema.isLengthBetween(0, 20),
-      ),
-    ),
-    /**
-     * Why these choices — one short line each, the drawn *What Hob did* aside.
-     *
-     * Asked for explicitly rather than left to the reply, because it is the one
-     * part of a draft the player has to be able to argue with, and a sentence
-     * buried in prose above the card is not that.
-     */
-    rationale: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 400))).check(
-        Schema.isLengthBetween(0, 8),
-      ),
-    ),
-  }),
-  success: Schema.String,
-  failure: proposalFailure,
+    "Every class and species a character in this campaign can be built from — " +
+    "the ones its DM has written or copied in, and the shared bundle. Use it " +
+    "before proposeCharacter, and copy a `name` back exactly as it came.",
+  success: Schema.Array(OptionLine),
+  failure: NotFound,
   failureMode: "return",
 });
 
@@ -654,7 +874,8 @@ export const HobToolkit = Toolkit.make(
 );
 
 /**
- * What a **player** is offered: one read and one proposal.
+ * What a **player** is offered: one read and one proposal — built per request,
+ * because one of the two is shaped by the campaign it was asked in.
  *
  * **A second toolkit rather than the first one narrowed at the handler**, and
  * the difference is not style: a toolkit is what the provider is *shown*, so a
@@ -672,7 +893,10 @@ export const HobToolkit = Toolkit.make(
  *   what makes the drawn showcase line possible (*"your DM's campaign is on the
  *   salt road"*), and at a table whose DM shares nothing it honestly returns
  *   nothing.
- * - **`proposeCharacter`** is the point of the surface.
+ * - **`proposeCharacter`** is the point of the surface, and since slice 2 it is
+ *   built from {@link CharacterVocabulary} rather than from a module-level
+ *   literal — so a DM's homebrew class is in the grammar the model is held to
+ *   at *their* table and at no other.
  *
  * The other seven are out, each for its own reason rather than by omission.
  * `getCreature` is a stat block, which is precisely what the product says a
@@ -682,8 +906,26 @@ export const HobToolkit = Toolkit.make(
  * to shape — a player cannot write a note or an encounter through the API
  * either, so offering to draft one would be a card whose *Save* could only
  * fail.
+ *
+ * ### Why this is two functions rather than one with a flag
+ *
+ * The two shapes carry **different tools**, so they are different types, and
+ * `Toolkit` is invariant in its tool record — one function returning either
+ * would return a union nothing can bind. Two builders and one branch at the
+ * call site is the honest form of that, and it keeps the cost visible where the
+ * choice is made rather than buried behind a boolean.
+ *
+ * Everything else about them is identical, including the handlers: it is the
+ * *schema* that varies with the campaign and nothing else, which is the one
+ * constraint the design put on itself — a tool surface that varied for any
+ * other reason would fragment prompt caching for no gain.
  */
-export const PlayerToolkit = Toolkit.make(SearchCampaign, ProposeCharacter);
+export const playerToolkitOver = (vocabulary: CharacterVocabulary) =>
+  Toolkit.make(SearchCampaign, proposeCharacterOver(vocabulary));
+
+/** {@link playerToolkitOver} above the cap: the same two, plus the listing. */
+export const playerToolkitListing = (vocabulary: CharacterVocabulary) =>
+  Toolkit.make(SearchCampaign, ListOptions, proposeCharacterOver(vocabulary));
 
 /** The repositories a Hob tool call may reach. **Read-only, every one.** */
 export interface HobRepositories {
@@ -692,6 +934,21 @@ export interface HobRepositories {
   readonly recap: (typeof Recap)["Service"];
   readonly creatures: (typeof Creatures)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
+  /**
+   * The campaign's classes and species.
+   *
+   * **Read once per question rather than inside a tool**, unlike every other
+   * entry here: the vocabulary decides the *shape* of `proposeCharacter`, so it
+   * has to be known before the toolkit exists. `Hob.ask` makes that read where
+   * `CurrentActor` is still ambient and where a `NotFound` is still a 404, and
+   * hands the result down as a {@link CharacterVocabulary} — which is why this
+   * is the one repository no handler below calls.
+   *
+   * It is `Options.list`, the same method and the same `corpusRowReadable` the
+   * create form's own pickers read through, so a class Hob may offer is exactly
+   * a class the player could have picked by hand.
+   */
+  readonly options: (typeof Options)["Service"];
 }
 
 /**
@@ -908,7 +1165,60 @@ export const dmHandlersFor = (
 };
 
 /**
- * The same idea for a player: one campaign, one plain `Actor`, two tools.
+ * What a `proposeCharacter` call carries, **derived from the tool rather than
+ * restated.**
+ *
+ * The handler is written once and bound to two toolkits, so its parameter needs
+ * a name — and the one thing it must not be is a second copy of the fifteen
+ * fields above. `Tool.Parameters` reads it off the tool, and the tool is built
+ * from {@link CharacterVocabulary}, so this follows the schema automatically.
+ *
+ * The vocabulary does not reach it: both name parameters erase to `string`
+ * ({@link nameSchema}), which is exactly right — a label is a label whether it
+ * came from a grammar or from a listing, and `HobProposal` has stored one as a
+ * string since before either existed.
+ */
+type CharacterDraft = Tool.Parameters<ReturnType<typeof proposeCharacterOver>>;
+
+/**
+ * The numbers `seedFor` reads, out of a row `optionNamed` returned.
+ *
+ * The narrowing is the union's own (`isClassOption`), and a `ClassBody` is a
+ * `ClassEntry` structurally — `Ruleset.ts` says so on purpose, which is what
+ * keeps the arithmetic free of the wire schemas. `undefined` in, `undefined`
+ * out: an unresolved label is a seed with no hit die, which is the shipped
+ * degrade rather than a new one.
+ */
+const classEntryOf = (option: CharacterOption | undefined): ClassEntry | undefined =>
+  option !== undefined && isClassOption(option) ? option.body : undefined;
+
+/** {@link classEntryOf}'s twin. */
+const speciesEntryOf = (option: CharacterOption | undefined): SpeciesEntry | undefined =>
+  option !== undefined && isSpeciesOption(option) ? option.body : undefined;
+
+/**
+ * A label the campaign does not have, refused where the model can hear it.
+ *
+ * **Only reachable above {@link OPTION_ENUM_CAP}.** Under the cap the name came
+ * out of the grammar, so it is in the list by construction; a near miss there is
+ * a *decode* failure and is `Hob.ts`'s `recover`'s to handle. With nothing
+ * written down there is no list to be outside of, and the seed degrades exactly
+ * as an unmatched free-text label already does.
+ *
+ * So this is the listing mode's own recovery, shaped after `searchCampaign`'s
+ * empty-query refusal: a `Conflict` naming the tool that answers what the model
+ * was reaching for, charged to the round budget like any other.
+ */
+const notInVocabulary = (kind: OptionKind, label: string) =>
+  new Conflict({
+    message:
+      `"${label}" is not a ${kind} in this campaign. Call listOptions and copy a ` +
+      "name back exactly as it comes, spelling and all.",
+  });
+
+/**
+ * The same idea for a player: one campaign, one plain `Actor`, two tools — and
+ * the campaign's own vocabulary, which is what one of the two is built from.
  *
  * **There is no proof to take, and none is missing.** A `DmActor` answers *is
  * this account the DM of this campaign*, and the whole point of this surface is
@@ -922,17 +1232,28 @@ export const dmHandlersFor = (
  * segment the request was routed on, never a parameter — so the grounding
  * property holds identically on both sides. `Hob.ask` resolves *which* of the
  * two to build once per question, from the DM proof it already asks for.
+ *
+ * **The vocabulary arrives already read**, for the reason `HobRepositories.options`
+ * states: it decides the shape of a tool, so it cannot be read from inside one.
+ * It is also the same list `listOptions` reads out, so the tool and the grammar
+ * cannot disagree about what this campaign has.
  */
 export const playerHandlersFor = (
   repositories: HobRepositories,
   actor: Actor,
   campaignId: CampaignId,
   proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
 ) => {
   const { as, offer } = bind(actor, proposal);
 
-  return PlayerToolkit.of({
+  return {
     searchCampaign: searchWith(repositories, campaignId, as),
+
+    listOptions: () =>
+      Effect.succeed(
+        vocabulary.options.map((option) => ({ kind: option.kind, name: option.name })),
+      ),
 
     proposeCharacter: ({
       name,
@@ -948,7 +1269,27 @@ export const playerHandlersFor = (
       flaw,
       kit,
       rationale,
-    }) => {
+    }: CharacterDraft) => {
+      /**
+       * The two labels, read back as the rows they name — through
+       * `optionNamed`, which is the product's own rule for turning a stored
+       * label into an option and is deliberately not re-derived here.
+       *
+       * It is case-insensitive and exact, with no fuzzy matching, so
+       * `"Circle of the Moon Druid"` resolves to nothing exactly as it does on
+       * a hand-filled sheet. Under the enum it cannot miss; above the cap it
+       * can, and that is what {@link notInVocabulary} is for.
+       */
+      const classOption = optionNamed(vocabulary.options, "class", className);
+      const speciesOption = optionNamed(vocabulary.options, "species", species);
+
+      if (vocabulary.listed && classOption === undefined) {
+        return Effect.fail(notInVocabulary("class", className));
+      }
+      if (vocabulary.listed && speciesOption === undefined) {
+        return Effect.fail(notInVocabulary("species", species));
+      }
+
       const identity = {
         ...(blank(subclass) === undefined ? {} : { subclass: blank(subclass)! }),
         ...(blank(background) === undefined ? {} : { background: blank(background)! }),
@@ -995,16 +1336,22 @@ export const playerHandlersFor = (
        * number. It is called **once**, and nothing recomputes any of the three
        * afterwards.
        *
-       * It takes **entries** rather than labels now, because there is no global
+       * It takes **entries** rather than labels, because there is no global
        * class map to look a label up in — a campaign's vocabulary is a read.
-       * The lookup here is the bundle's, matching the closed vocabulary the two
-       * parameters above are held to, so it cannot miss; the manual create form
-       * resolves against the campaign's own options instead. Two resolvers, one
-       * seed, and the arithmetic is untouched.
+       * Since slice 2 the entries come from the *campaign's* own rows, which is
+       * the whole feature in one expression: a homebrew d10 class seeds a
+       * homebrew d10 character. It is the same resolution the manual create form
+       * makes against the same list, so a drafted Bloodsworn and a hand-filled
+       * one start on the same number. One resolver, one seed, and the
+       * arithmetic is untouched.
+       *
+       * An unresolved label leaves the entry `undefined`, which `seedFor`
+       * already handles — level and armour class, no hit points — and which is
+       * reachable only where there is genuinely no vocabulary to match against.
        */
       const seed = seedFor({
-        classEntry: bundledClass(className),
-        speciesEntry: bundledSpecies(species),
+        classEntry: classEntryOf(classOption),
+        speciesEntry: speciesEntryOf(speciesOption),
         abilities: sheet.abilities,
       });
 
@@ -1012,14 +1359,18 @@ export const playerHandlersFor = (
         {
           target: "character",
           name,
-          species,
-          className,
+          // The **campaign's own spelling** where it resolved, and the model's
+          // where it did not. The label is the entire link between a character
+          // and an option, so storing a lower-cased near-miss would put a word
+          // on the sheet that the picker would never have produced.
+          species: speciesOption?.name ?? species,
+          className: classOption?.name ?? className,
           sheet,
           level: seed.level,
           ac: seed.ac,
-          // Always present in practice — the class is a closed vocabulary, so
-          // there is always a hit die — and optional on the wire because a
-          // proposal saved before this existed has no key at all.
+          // Absent only where the campaign has no class by that name and so no
+          // hit die to read — and optional on the wire because a proposal saved
+          // before this existed has no key at all.
           ...(seed.hpMax === undefined ? {} : { hpMax: seed.hpMax }),
           rationale: (rationale ?? []).map((line) => line.trim()).filter((line) => line !== ""),
         },
@@ -1028,5 +1379,65 @@ export const playerHandlersFor = (
           "on their screen.",
       );
     },
-  });
+  };
+};
+
+/**
+ * The player's toolkit, made and bound to its own handlers — **one fresh value,
+ * used as both.**
+ *
+ * This is the whole mechanism of slice 2 in four lines, and the reason it works
+ * at all is that `Toolkit.make` is an ordinary call: the value it returns is
+ * used to build the handler context (`toHandlers`) *and* as the key that context
+ * is provided under (`provideContext`). Both sides reference the same fresh
+ * value, so a toolkit that exists for one request is as good a tag as a
+ * module-level one — which is what makes a per-campaign grammar possible with no
+ * change to `round`, `recover` or `toHobEvent`.
+ *
+ * The toolkit deliberately does **not** escape this function. Handing back the
+ * bound `Effect` rather than the toolkit is what makes "both sides reference the
+ * same value" structural instead of a rule a caller has to keep.
+ *
+ * @see {@link playerBindListing} for the shape above the cap.
+ */
+export const playerBindOver = (
+  repositories: HobRepositories,
+  actor: Actor,
+  campaignId: CampaignId,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+) => {
+  const toolkit = playerToolkitOver(vocabulary);
+  return Effect.flatMap(
+    toolkit.toHandlers(
+      toolkit.of(playerHandlersFor(repositories, actor, campaignId, proposal, vocabulary)),
+    ),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
+/**
+ * The same, above {@link OPTION_ENUM_CAP}: three tools, one of which reads the
+ * vocabulary out because it is too big to be in the grammar.
+ *
+ * A separate function rather than a flag because the tool records are different
+ * types and `Toolkit` is invariant in its — see {@link playerToolkitOver}. The
+ * handlers are the *same object*: `listOptions` is bound either way and simply
+ * has no tool to answer under the cap, which is the cheapest possible way for
+ * the two modes to be unable to disagree about what the vocabulary is.
+ */
+export const playerBindListing = (
+  repositories: HobRepositories,
+  actor: Actor,
+  campaignId: CampaignId,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+) => {
+  const toolkit = playerToolkitListing(vocabulary);
+  return Effect.flatMap(
+    toolkit.toHandlers(
+      toolkit.of(playerHandlersFor(repositories, actor, campaignId, proposal, vocabulary)),
+    ),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
 };

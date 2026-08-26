@@ -112,7 +112,15 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
 export const assistantFromConfig: Layer.Layer<
   Hob,
   Config.ConfigError,
-  Campaigns | Creatures | DmActors | HobThreads | Recap | Search | SessionEvents | Sessions
+  | Campaigns
+  | Creatures
+  | DmActors
+  | HobThreads
+  | Options
+  | Recap
+  | Search
+  | SessionEvents
+  | Sessions
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -172,7 +180,15 @@ export const servicesOver = <E>(
   assistant: Layer.Layer<
     Hob,
     E | Config.ConfigError,
-    Campaigns | Creatures | DmActors | HobThreads | Recap | Search | SessionEvents | Sessions
+    | Campaigns
+    | Creatures
+    | DmActors
+    | HobThreads
+    | Options
+    | Recap
+    | Search
+    | SessionEvents
+    | Sessions
   > = assistantFromConfig,
 ): Layer.Layer<
   | Accounts
@@ -296,6 +312,10 @@ export const servicesOver = <E>(
         Creatures.layer,
         DmActors.layer,
         HobThreads.layer,
+        // `Options` is the newest, and it is the one Hob reads *outside* a
+        // tool: a campaign's classes and species decide the shape of
+        // `proposeCharacter`, so the player's toolkit is built per request.
+        Options.layer,
         Recap.layer,
         Search.layer,
         SessionEvents.layer,

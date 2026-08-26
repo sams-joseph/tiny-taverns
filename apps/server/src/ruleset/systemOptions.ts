@@ -1,5 +1,4 @@
 import type { AbilityKey, ClassEntry, OptionKind, SpeciesEntry } from "@taverns/api";
-import { Schema } from "effect";
 
 /**
  * The bundled rules vocabulary: **the twelve classes and the ten species of the
@@ -31,19 +30,20 @@ import { Schema } from "effect";
  * is a decision for whoever answers the bundle's licensing rather than
  * something to slip in beside a hit die.
  *
- * ### It is also the vocabulary Hob still drafts from
+ * ### It is no longer the vocabulary Hob drafts from
  *
- * `proposeCharacter` takes the class and the species as **closed
- * `Schema.Literals`** because the reliability work established that a closed
- * enum is what lets a grammar-compiling endpoint hold a small model to a
- * vocabulary. A per-campaign vocabulary cannot be a module-level literal, so
- * until Hob learns to build its toolkit per request it keeps drafting from
- * these — which is honest and degrades gracefully, because a drafted character
- * already carries a label the campaign may not have, exactly like today's
- * `"Half-orc"`.
+ * It was, for one slice. `proposeCharacter` took the class and the species as
+ * two `Schema.Literals` built from the tuples below, because the reliability
+ * work established that a closed enum is what lets a grammar-compiling endpoint
+ * hold a small model to a vocabulary — and a per-campaign vocabulary cannot be
+ * a module-level literal.
  *
- * Binding both to the same list is what stops that being a second answer: the
- * words Hob is held to are the words the seeder writes.
+ * Slice 2 answered that by building the player's toolkit **per request**, over
+ * `Options.list`, so Hob is now held to *the campaign's* words rather than to
+ * these. See `src/assistant/toolkit.ts`'s `CharacterVocabulary`. What is left
+ * here is the seeder's own source and nothing else: these twenty-two are what a
+ * fresh campaign's vocabulary starts as, which is why Hob still offers every
+ * one of them at a table whose DM has written no homebrew.
  */
 
 /** One bundled option, as the seeder writes it. */
@@ -99,21 +99,16 @@ const SPECIES_NAMES = [
 ] as const;
 
 /**
- * The bundled class names as a closed literal union — **Hob's tool parameter,
- * and nothing else.**
+ * One of the twelve, as a type — what makes {@link CLASS_BODIES} exhaustive.
  *
- * The same twelve words the seeder writes as rows, so the vocabulary the model
- * is held to and the vocabulary a campaign starts with cannot drift.
- *
- * It leaves with the slice that builds `proposeCharacter` per request over the
- * campaign's own options.
+ * A plain union rather than a `Schema.Literals` since slice 2: it had a schema
+ * because it *was* Hob's tool parameter, and that vocabulary is a campaign's
+ * read now. Nothing outside this file names it.
  */
-export const BundledClassName = Schema.Literals(CLASS_NAMES);
-export type BundledClassName = typeof BundledClassName.Type;
+type BundledClassName = (typeof CLASS_NAMES)[number];
 
 /** {@link BundledClassName}'s twin. */
-export const BundledSpeciesName = Schema.Literals(SPECIES_NAMES);
-export type BundledSpeciesName = typeof BundledSpeciesName.Type;
+type BundledSpeciesName = (typeof SPECIES_NAMES)[number];
 
 const DEX_ONLY: ReadonlyArray<AbilityKey> = ["DEX"];
 
@@ -186,33 +181,16 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
 ];
 
 /**
- * A stored label, read back as a bundled entry — **case-insensitively, on the
- * label alone, and with no fuzzy matching.**
+ * **There is deliberately no label lookup here any more.**
  *
- * `Ruleset.ts`'s `classFor`, moved with the data it read. The refusal at the
- * bottom of it is unchanged and is the part that matters: a prefix or a
- * contains rule would read `"Circle of the Moon Druid"` as a druid and
- * `"Half-orc"` as an orc, *which is a guess written into a number somebody
- * reads out at the table*.
+ * `bundledClass` and `bundledSpecies` were this module's answer to *what is a
+ * druid* for Hob's one caller, and they left with the slice that made the
+ * vocabulary a campaign's. The rule they implemented — case-insensitive, on the
+ * label alone, no fuzzy matching, because a prefix rule reads
+ * `"Circle of the Moon Druid"` as a druid and writes a guess into a number
+ * somebody reads out at the table — is `optionNamed` in
+ * `packages/api/src/CharacterOption.ts`, and is now the product's only one.
  *
- * **This is the bundle only, and is deliberately not a campaign's vocabulary.**
- * The campaign-aware version of the same rule is `optionNamed` in
- * `packages/api/src/CharacterOption.ts`, which the create form uses. Hob is the
- * one caller here, and it is the one consumer still bound to the twelve and the
- * ten.
+ * A second lookup here would be the fallback map the report says not to build:
+ * two answers to what a druid is, and the one nobody edits.
  */
-export const bundledClass = (label: string | null | undefined): ClassEntry | undefined =>
-  matching(SYSTEM_CLASSES, label);
-
-/** {@link bundledClass}'s twin, and the same rules apply to it. */
-export const bundledSpecies = (label: string | null | undefined): SpeciesEntry | undefined =>
-  matching(SYSTEM_SPECIES, label);
-
-const matching = <A extends { readonly name: string }>(
-  entries: ReadonlyArray<A>,
-  label: string | null | undefined,
-): A | undefined => {
-  const wanted = (label ?? "").trim().toLowerCase();
-  if (wanted === "") return undefined;
-  return entries.find((entry) => entry.name.toLowerCase() === wanted);
-};

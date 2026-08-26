@@ -23,6 +23,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Options } from "../src/repo/Options.js";
 import { Proposals } from "../src/repo/Proposals.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
@@ -60,6 +61,7 @@ const services = Layer.mergeAll(
   Encounters.layer,
   HobThreads.layer,
   Notes.layer,
+  Options.layer,
   Proposals.layer.pipe(
     Layer.provide([
       Beats.layer.pipe(Layer.provide(LiveEvents.layer)),

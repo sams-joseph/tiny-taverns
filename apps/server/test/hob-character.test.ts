@@ -23,11 +23,13 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Options } from "../src/repo/Options.js";
 import { Proposals } from "../src/repo/Proposals.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { importSystemOptions } from "../src/ruleset/import.js";
 import { anAccount, aPlayerAt } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
@@ -69,6 +71,7 @@ const services = Layer.mergeAll(
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
+  Options.layer,
   Proposals.layer.pipe(
     Layer.provide([
       Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -99,6 +102,17 @@ const MAX_TOKENS = 512;
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const notes = yield* Notes;
+
+  /**
+   * The bundle, as rows — which is what a real campaign's vocabulary *is*.
+   *
+   * Since slice 2 `proposeCharacter` is built from `Options.list`, so a database
+   * where `pnpm -F server ruleset:import` has never run gives Hob a campaign
+   * with no classes in it — free text, and a seed with no hit die. That is the
+   * honest degrade and it is asserted in its own test below; it is not the state
+   * a deployed table is in, so the fixture is seeded exactly as a deployment is.
+   */
+  yield* importSystemOptions();
 
   const dm = yield* anAccount("Fen");
   const as = withActor(dm);

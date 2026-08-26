@@ -1381,14 +1381,16 @@ The data moved to `apps/server/src/ruleset/systemOptions.ts` — the bundle the 
 and **there is deliberately no fallback map in the contract package.** A second copy in code
 would be a second answer to _what is a druid_, and it would be the one nobody edits.
 
-That file is also where `proposeCharacter`'s closed vocabulary lives now
-(`BundledClassName`/`BundledSpeciesName`, `bundledClass`/`bundledSpecies`): **Hob still drafts
-from the twelve and the ten**, because a per-campaign vocabulary cannot be a module-level
-literal and a closed enum is what holds a small model to a list. Binding both to the same list
-is what keeps that from being a second answer. Note its vocabularies are a **name tuple beside
-a `Record<Name, Entry>`** rather than one array of objects: `Schema.Literals` needs a tuple,
-`Array.prototype.map` widens one to an array, and the pairing is exhaustive by type — so there
-is no cast anywhere, which `dm-actor.test.ts` enforces (`as unknown as` is banned in `src`).
+**Hob drafts from the campaign's vocabulary, not from that file** — see "Hob drafts from the
+campaign's own vocabulary" under the assistant. It briefly did draft from the twelve and the
+ten, as two `Schema.Literals` exported here; the schemas and the two label lookups beside them
+(`BundledClassName`/`BundledSpeciesName`, `bundledClass`/`bundledSpecies`) **left with that
+slice and there must not be a second label lookup here**, which would be the fallback map the
+report forbids. `optionNamed` is the product's only one. What is left is the seeder's own
+source, and its two vocabularies are a **name tuple beside a `Record<Name, Entry>`** rather
+than one array of objects: `Array.prototype.map` widens a tuple to an array, and the pairing is
+exhaustive by type — so there is no cast anywhere, which `dm-actor.test.ts` enforces
+(`as unknown as` is banned in `src`).
 
 ### Six smaller things that are decisions
 
@@ -1764,7 +1766,8 @@ there is no global map left to look one up in: each caller resolves against its 
 hands over what it found.
 
 The twelve and the ten are `apps/server/src/ruleset/systemOptions.ts` — the bundle, written as
-rows by `pnpm -F server ruleset:import`.
+rows by `pnpm -F server ruleset:import`, and read back through `Options.list` like any other
+option. Nothing in code looks a label up in them any more.
 
 **The ruleset is the 2024 Player's Handbook, and one ruleset only.** Chosen on shape rather than
 arithmetic (the captain's brief says the two barely differ for these three values): 2024 species
@@ -1778,11 +1781,10 @@ The captain's three decisions of 2026-08-26 and where each is enforced:
   one has to survive. The create form's two pickers are the vocabulary and nothing else, and
   `proposeCharacter`'s `species`/`className` are closed `Schema.Literals` (the argument `AbilityKey`
   already makes: the published JSON schema becomes a fixed list a grammar can hold a model to). A
-  near miss is a tool call that fails to decode, which is what `Hob.ts`'s `recover` is for. **The
-  pickers read the campaign now and Hob's two literals are still the bundle's** — a per-campaign
-  vocabulary cannot be a module-level literal, so Hob keeps drafting from the twelve and the ten
-  until its toolkit is built per request. That degrades gracefully, because a drafted character
-  already carries a label the campaign may not have.
+  near miss is a tool call that fails to decode, which is what `Hob.ts`'s `recover` is for. **Both
+  read the campaign now** — the pickers directly, and Hob by building its player toolkit per
+  request over the same `Options.list`, so the words a model is held to are the words a player
+  could have picked. See "Hob drafts from the campaign's own vocabulary" under the assistant.
 - **Seed at creation, never recompute** — `seedFor` is wired to the two pickers and to the propose
   handler, and to nothing else. No effect watches the form, no trigger, no generated column;
   `descriptor` stays the product's only derived character value. Measured in a browser: setting the
@@ -5102,11 +5104,14 @@ Three more things about that predicate are decisions:
 
 #### Two toolkits, because a toolkit is what the model is _shown_
 
-`HobToolkit` is the DM's nine; **`PlayerToolkit` is two** — `searchCampaign` and
-`proposeCharacter`. A player bound to the DM's handlers with a narrower predicate underneath would
-still be _offered_ `getCreature`, which is a stat block and precisely what the product says a player
-must not have. `dmHandlersFor` still takes the `DmActor` (`sessionRecap` and `sessionLog` need one);
-`playerHandlersFor` takes a plain `Actor` and the campaign, because there is no DM-ness to prove.
+`HobToolkit` is the DM's nine and is module-level; **the player's is two** — `searchCampaign` and
+`proposeCharacter` — and is built per request, because one of the two is shaped by the campaign it
+was asked in (`playerToolkitOver`; `playerToolkitListing` is the same plus `listOptions`, above the
+cap). A player bound to the DM's handlers with a narrower predicate underneath would still be
+_offered_ `getCreature`, which is a stat block and precisely what the product says a player must not
+have. `dmHandlersFor` still takes the `DmActor` (`sessionRecap` and `sessionLog` need one);
+`playerHandlersFor` takes a plain `Actor`, the campaign and the campaign's vocabulary, because there
+is no DM-ness to prove.
 
 `searchCampaign` is written **once** and bound to whichever actor is asking, so `rowReadable` is what
 makes a DM's answer wide and a player's narrow — the same `WHERE` clause, not a second "player-safe"
@@ -5146,6 +5151,109 @@ tool with prose optionals (a background, a bond, an ideal, a flaw), and there `"
 somebody might mean. So those take a permissive arm — absent, `null`, or any string — and the
 _handler_ treats a blank one as not given, which is `searchCampaign.query`'s lesson applied a second
 time.
+
+#### Hob drafts from the campaign's own vocabulary, and the toolkit is built per request
+
+**The one structural change slice 2 made, and the sentence to hold on to:** a campaign's classes
+are a _read_, so a schema built from them has to be built when the read happens. The player's
+toolkit is therefore constructed **per request** over `Options.list`, and `proposeCharacter`'s
+`species` and `className` are `Schema.Literals` over _that campaign's_ names. A DM writes
+_Bloodsworn_, shares it, and their player is offered it — in the grammar the model is held to, not
+merely in the prose it reads.
+
+**Why a per-request toolkit and not the two cheaper-looking alternatives**, so nobody drifts back:
+a closed enum is what lets a grammar-compiling endpoint (llama.cpp) hold a small model to a
+vocabulary, and `MAX_ROUNDS` is 4 with `recover` charged against it. An enumeration tool costs a
+round on a budget that is already tight; free-text labels lose the grammar entirely. The enum keeps
+a draft at **two** rounds, measured.
+
+**It works because `Toolkit.make` is an ordinary call.** Its value is used both to build the handler
+context (`toHandlers`) and as the key that context is provided under (`provideContext`), so a
+toolkit made for one request is as good a tag as a module-level one — and `round`, `recover` and
+`toHobEvent` were already generic over the tool set, so **none of them changed**. `playerBindOver`
+and `playerBindListing` in `toolkit.ts` are the whole of it, and neither lets the toolkit escape:
+handing back the bound `Effect` is what makes "both sides reference the same value" structural.
+
+**`nameSchema` has three shapes per kind, and each is a true sentence about the campaign** rather
+than a fallback chain — nothing written down (free text, and the seed degrades exactly as an
+unmatched label already does), within `OPTION_ENUM_CAP` (the enum, which is the design), and over it
+(free text plus `listOptions`). The cap is **40 per kind**; over it a draft costs three rounds, which
+is why it is generous.
+
+- **`listOptions` is only in the toolkit above the cap**, because a toolkit is what the model is
+  _shown_ and a third tool is a third thing to spend a round reaching for. It reads **both kinds in
+  one call**, so the fallback costs one round rather than several.
+- **The decision is per kind.** Forty-two classes and ten species means free text for one and an
+  enum for the other; taking the grammar off both would be a cost paid for nothing.
+- **A silently truncated enum is what this avoids.** Holding a model to the first forty classes
+  reads as "that is all there is", which is the failure this codebase forbids by name.
+- **The description is templated from the same arrays the schema was**, so the prompt and the
+  grammar cannot drift. The twelve and the ten used to appear twice.
+
+**The seam is what decides the vocabulary, and that is the whole of the security story.** It is
+`Options.list` — the same method and the same `corpusRowReadable` the create form's own pickers read
+through — so a class the DM has not shared is one Hob cannot offer, and a campaign's words are in no
+other campaign's tool schema. The campaign is still closed over from the path and is still not a
+tool parameter.
+
+**Four costs, all paid rather than discovered:**
+
+1. **Tool schemas vary per campaign**, which fragments prompt caching _between_ campaigns and not
+   within one, and costs nothing for the local models this targets. **Do not make it worse by
+   varying the schema for any reason other than the vocabulary** — that is the constraint the design
+   put on itself, and it is why the two player toolkits share one handler object.
+2. **One extra read per question, and only for a player.** A DM's toolkit has no `proposeCharacter`,
+   so `Hob.ask` does not make the read at all — `NO_VOCABULARY` is what their branch is handed.
+3. **`Toolkit.make` per request, measured rather than assumed**: **220–260 µs** per build on this
+   (loaded) box, against a provider round trip measured in seconds. `vocabularyOf` is 1–4 µs. The
+   listing form is _cheaper_ than the enum form, because free-text schemas cost less to build than a
+   thirteen-member `Schema.Literals`.
+4. **A homebrew name is untrusted text in a tool schema**, and it is deliberately **not rewritten**:
+   the label is the entire link between a character and an option, so a sanitiser would seed a
+   character against a class that does not exist. What is done instead — the `enum` half is
+   structurally inert (a permitted-value string is never in instruction position), and the
+   description half renders every name through `JSON.stringify`, which is the _identical_ escaping
+   the schema uses, so a name carrying a quote or a newline is a listed item rather than a new
+   sentence _and_ the two halves stay byte-identical. Bounded to 60 characters by `optionName`. Not
+   a new class of exposure: a note's title already reaches the model through `searchCampaign`,
+   unquoted and longer.
+
+**Nothing else moved, and that is the finding.** `HobProposal`'s character member already stored the
+labels as strings and the numbers as optional ints _so that a persisted proposal survives a
+vocabulary change_ — so **the proposal shape and the whole accept path needed no edit at all**. If a
+future change here starts to need one, that is the signal it has drifted.
+
+Three smaller things that are decisions:
+
+- **The label a proposal stores is the campaign's own spelling** where it resolved (`optionNamed`,
+  case-insensitive and exact), and the model's where it did not. Only reachable above the cap; under
+  the enum a wrong spelling never reaches the handler, because the _decode_ refuses it and `recover`
+  carries it.
+- **An unknown label above the cap is a `Conflict` naming `listOptions`**, shaped after
+  `searchCampaign`'s empty-query refusal and charged to the round budget like any other. It is
+  unreachable under the enum and with an empty vocabulary, which is why the refusal is gated rather
+  than defensive.
+- **`playerPrompt` was not templated.** The vocabulary is stated in exactly one place — the tool
+  description — which is the strongest form of "they cannot drift".
+
+**Measured end to end in Chromium** against a real server, a real Postgres, a scripted
+OpenAI-compatible endpoint and three real accounts (a DM and two players minted through real
+invitations): a DM authored _Bloodsworn_ (d10, unarmoured `DEX + CON`) into their Library and derived
+it into The Salt Road as `shared`; the player's picker offered 13 classes and the tool schema on the
+wire carried the same 13 as an `enum` with the same 13 quoted in the description; the player
+described a character in prose and Hob offered **"Level 1 Human Bloodsworn · Oathkept"** at **12 hp
+and AC 13** — the homebrew's own die _and_ its own armour rule — in **two** provider round-trips;
+_Keep them_ landed on the shipped sheet with `origin: assistant`, `visibility: dm`, `hpCurrent` null
+and `assistantTurnId` set, with **no edit to the accept path**. A second table's schema carried
+_Saltcaller_ and neither of the first's words, on the same DM's credential; an unshared _Hedgewise_
+reached neither the player's picker nor their grammar; the DM's own request still carried the nine
+tools and no vocabulary at all. A 42-class campaign swapped the class enum for `listOptions`, kept
+the species enum, answered 52 rows of both kinds in one call, cost three rounds, and recovered from
+an invented class name through the `Conflict`. The redraft loop carried `"Human Bloodsworn"` back
+into the next question's prompt. No sideways scroll at 1440 / 1200 / 1024 / 900 / 760.
+
+`apps/server/test/hob-vocabulary.test.ts` pins all of it against real Postgres, including the three
+`nameSchema` shapes, the cross-campaign boundary and the injection-shaped name.
 
 #### Accept comes before the corrections, and that is a security property
 
