@@ -105,6 +105,7 @@ export interface HobConversation {
 const ACTIVITY: Record<string, string> = {
   searchCampaign: "Searching the record",
   listSessions: "Looking through the sessions",
+  listCreatures: "Reading the bestiary",
   sessionRecap: "Reading back a night",
   getCreature: "Reading a stat block",
   sessionLog: "Reading the log",

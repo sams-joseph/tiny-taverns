@@ -17,19 +17,9 @@ import {
   HobUnavailable,
   type NotFound,
 } from "@taverns/api";
+import { Cause, Context, Effect, type Filter, Layer, Ref, Result, Schema, Stream } from "effect";
 import {
-  Cause,
-  Context,
-  Effect,
-  type Filter,
-  Layer,
-  Ref,
-  Result,
-  type Schema,
-  Stream,
-} from "effect";
-import {
-  type AiError,
+  AiError,
   Chat,
   LanguageModel,
   type Prompt,
@@ -339,7 +329,12 @@ export class Hob extends Context.Service<
                 // half-written reply, so the only useful thing to do is say so
                 // in the thread rather than tear the connection down.
                 Stream.catchCause((cause) =>
-                  Stream.succeed(failure(describe(Cause.squash(cause)))),
+                  Stream.unwrap(
+                    Effect.as(
+                      Effect.logWarning(`Hob's answer failed: ${describe(Cause.squash(cause))}`),
+                      Stream.succeed(failure(apology(Cause.squash(cause)))),
+                    ),
+                  ),
                 ),
                 Stream.ensuring(save),
               );
@@ -390,10 +385,18 @@ const round = (
   toolkit: Toolkit.WithHandler<HobTools>,
   budget: number,
   finished: Ref.Ref<string>,
+  /**
+   * What to say before this round — empty for an ordinary one.
+   *
+   * The `Chat` carries the conversation, so a round normally has nothing of its
+   * own to add. The exception is the correction below: a round that follows an
+   * unreadable tool call has to tell the model what was wrong with it.
+   */
+  say: Prompt.RawInput = [],
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
   Stream.unwrap(
     Effect.map(Ref.make(false), (calledTool) =>
-      chat.streamText({ prompt: [], toolkit }).pipe(
+      chat.streamText({ prompt: say, toolkit }).pipe(
         Stream.filterMapEffect((part: Response.StreamPart<HobTools>) =>
           Effect.gen(function* () {
             if (part.type === "tool-call") yield* Ref.set(calledTool, true);
@@ -434,9 +437,146 @@ const round = (
             ),
           ),
         ),
+        // Outside the recursion on purpose, so it also covers a later round: a
+        // model that gets one call right and the next one wrong is the ordinary
+        // case, and the budget is already decremented by the time we are here.
+        Stream.catch((error) => recover(chat, toolkit, budget, finished, error)),
       ),
     ),
   );
+
+/**
+ * One tool call the framework could not read — handed back to the model instead
+ * of ending the answer.
+ *
+ * **This is the defect that made every other failure in this area look like a
+ * model problem.** A tool call's arguments are decoded against the tool's own
+ * parameter schema *by the framework*, inside `streamText`, before any handler
+ * of ours runs — so `failureMode: "return"`, which is how every refusal in this
+ * toolkit reaches the model, does not apply to it. One bad argument therefore
+ * failed the whole stream: nothing was saved to the thread, no tool step was
+ * ever drawn, and the DM was shown a `SchemaError` naming every tool in the
+ * toolkit. Measured in a real browser, twice, on two different models.
+ *
+ * A malformed argument is exactly the kind of failure a model can fix, and the
+ * shipped convention for that is to tell it. So the correction goes back as a
+ * message and the loop carries on with what is left of the budget — the same
+ * budget, because a round spent getting the protocol wrong is a round the DM
+ * paid for, and a free retry is a loop with no ceiling. When the budget is
+ * gone it is a written sentence like every other failure here, never the
+ * framework's own words.
+ *
+ * The correction is a `user` message rather than a `tool` result, and it has to
+ * be: a tool result must answer a tool call the assistant made, and the call
+ * that failed to decode never reached the history — `Chat.streamText` writes
+ * back only the parts it decoded, so the malformed one is not there to answer.
+ *
+ * Everything that is *not* an unreadable call — a refused connection, a 500, a
+ * rate limit — is re-raised untouched and becomes `ask`'s one `failed` event.
+ * Retrying those here would spend the budget on a server that is not answering.
+ */
+const recover = (
+  chat: Chat.Service,
+  toolkit: Toolkit.WithHandler<HobTools>,
+  budget: number,
+  finished: Ref.Ref<string>,
+  error: AiError.AiError | Schema.SchemaError,
+): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> => {
+  const detail = unreadableCall(error);
+  if (detail === undefined) return Stream.fail(error);
+  if (budget <= 1) return Stream.succeed(unreadable);
+  return Stream.unwrap(
+    Effect.as(
+      // The raw text is worth keeping and is not worth showing: it names every
+      // tool in the toolkit and reads as a stack trace. It goes to the log,
+      // where whoever is running the model can see which parameter the endpoint
+      // could not express.
+      Effect.logWarning(`Hob could not read a tool call, and asked again: ${detail}`),
+      round(chat, toolkit, budget - 1, finished, [
+        {
+          role: "user" as const,
+          content:
+            "That tool call could not be read, so it did nothing. The problem was: " +
+            `${detail}. Look at the tool's parameters and call it again with values ` +
+            "that fit them, or answer without it. An optional parameter may be left " +
+            "out altogether.",
+        },
+      ]),
+    ),
+  );
+};
+
+/**
+ * Whether a failure is the model getting a tool call wrong, and what was wrong.
+ *
+ * Two shapes reach us, from two different points in `streamText`, and both mean
+ * the same thing. `ToolParameterValidationError` is the decode `Toolkit.handle`
+ * does before calling a handler. `InvalidOutputError` is the decode of the
+ * response parts themselves, which is the one that actually fires here — the
+ * whole chunk is decoded before any handler is forked, so a bad argument fails
+ * there first and the handler never runs.
+ *
+ * Nothing else is treated as recoverable. `InvalidOutputError` is *only* raised
+ * for output the codec refused, so widening this to "anything retryable" would
+ * pull in rate limits and provider outages, which another round cannot fix.
+ */
+const unreadableCall = (error: AiError.AiError | Schema.SchemaError): string | undefined => {
+  if (Schema.isSchemaError(error)) return complaint(error.message);
+  if (!AiError.isAiError(error)) return undefined;
+  const reason = error.reason;
+  if (reason._tag === "ToolParameterValidationError") {
+    return `${reason.toolName} — ${complaint(reason.description)}`;
+  }
+  return reason._tag === "InvalidOutputError" ? complaint(reason.description) : undefined;
+};
+
+/**
+ * The part of a codec's complaint that is about the model's arguments.
+ *
+ * **The raw message is mostly noise, and the noise is the harmful half.** A
+ * stream part is a union over every tool, so one bad argument produces one line
+ * per tool that did *not* match — `Expected "listSessions", got
+ * "proposeEncounter"`, and eight more like it — around the single line that
+ * says what was actually wrong. Sent back whole, that is a page of context a
+ * small model spends instead of thinking, and it reads as an instruction to
+ * call `listSessions`. So the pairs whose path names `["params"]` are the ones
+ * kept, with the response-part index dropped and the JSON pointer written the
+ * way a model writes an argument.
+ *
+ * The fall-through is the first line, capped: for a call naming a tool that
+ * does not exist there is no parameter path, and `Expected "searchCampaign",
+ * got "frobnicate"` is still the useful sentence.
+ */
+const complaint = (description: string): string => {
+  const lines = description.split("\n");
+  const kept: Array<string> = [];
+  for (let index = 1; index < lines.length; index++) {
+    const path = /^\s*at \[\d+\]\["params"\](?<rest>.*)$/u.exec(lines[index] ?? "")?.groups?.rest;
+    if (path === undefined) continue;
+    const where = path.replaceAll(/\["([^"]*)"\]/gu, ".$1");
+    kept.push(`${(lines[index - 1] ?? "").trim()} at ${where === "" ? "the arguments" : where}`);
+  }
+  const said = kept.length === 0 ? (lines[0] ?? description) : kept.join("; ");
+  return said.length > 300 ? `${said.slice(0, 300)}…` : said;
+};
+
+/**
+ * The model could not be got to speak the toolkit's own schema.
+ *
+ * The last thing said when a run of unreadable calls exhausts the budget. It
+ * names the shape of the problem rather than the schema error, because the
+ * schema error is a page long and is about our tools rather than about the
+ * DM's question.
+ */
+const unreadable: HobEvent = {
+  event: "failed",
+  data: new HobFailure({
+    message:
+      "Hob kept reaching for the record with arguments this model could not spell, " +
+      "and ran out of tries. Ask again in fewer words, or point it at a model that " +
+      "handles tool calls better.",
+  }),
+};
 
 /**
  * The model ran out of room, said in the one place the DM is looking.
@@ -551,25 +691,69 @@ const systemPrompt = (campaign: Campaign): string =>
  */
 const RECENT_TURNS = 40;
 
+/**
+ * What Hob offered on a turn, as one line of the conversation it was part of.
+ *
+ * **A proposal is half of what was said, and leaving it out made Hob forget its
+ * own work.** The card is on the DM's screen and in `assistant_turn.proposal`,
+ * but the prompt was assembled from `text` alone — so "make that harder" or
+ * "did you save that?" reached a model that could see a sentence about an
+ * encounter and nothing about which creatures were in it. Worse, a turn where
+ * Hob offered a card and said *nothing* was dropped entirely, which is exactly
+ * what `proposeEncounter`'s own instruction ("say one short line and stop")
+ * makes likely.
+ *
+ * It is bracketed and written in the second person so it reads as a note about
+ * what happened rather than as prose Hob said out loud — the transcript's one
+ * voice belongs to the deltas the DM actually saw.
+ *
+ * The roster carries its `creatureId`s because they are the one thing a
+ * follow-up cannot re-derive without spending another round searching for
+ * creatures the model has already been shown. `accepted` is here for the same
+ * reason it is on the wire: an offer the DM kept and an offer still sitting
+ * there are different facts, and only one of them is a row in the campaign.
+ */
+const offered = (turn: HobTurn): string | undefined => {
+  const proposal = turn.proposal;
+  if (proposal === null) return undefined;
+  const kept = turn.acceptedAt === null ? "not yet accepted" : "accepted by the DM";
+  switch (proposal.target) {
+    case "note":
+      return `[You offered the DM a ${
+        proposal.kind === "read_aloud" ? "read-aloud note" : "note"
+      } called "${proposal.title}" — ${kept}: ${proposal.body}]`;
+    case "beat":
+      return `[You offered the DM a beat — ${kept}: ${proposal.body}]`;
+    case "encounter": {
+      const band = proposal.difficulty === null ? "" : `, ${proposal.difficulty}`;
+      const tags = proposal.tags.length === 0 ? "" : `, tagged ${proposal.tags.join(", ")}`;
+      const roster = proposal.roster
+        .map((line) => `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId})`)
+        .join("; ");
+      return `[You offered the DM an encounter called "${proposal.name}"${band}${tags} — ${kept}: ${roster}]`;
+    }
+  }
+};
+
 const promptFor = (
   campaign: Campaign,
   history: ReadonlyArray<HobTurn>,
   ask: HobAsk,
 ): Prompt.RawInput => [
   { role: "system" as const, content: systemPrompt(campaign) },
-  ...history.slice(-RECENT_TURNS).flatMap((turn) =>
-    // A turn with no words — Hob offered a card and said nothing — carries
-    // nothing a prompt can use, and an empty message is a shape some providers
-    // reject outright.
-    turn.text === ""
+  ...history.slice(-RECENT_TURNS).flatMap((turn) => {
+    // A turn that carries neither words nor an offer has nothing a prompt can
+    // use, and an empty message is a shape some providers reject outright.
+    const content = [turn.text, offered(turn)].filter((part) => part !== undefined && part !== "");
+    return content.length === 0
       ? []
       : [
           {
             role: turn.who === "user" ? ("user" as const) : ("assistant" as const),
-            content: turn.text,
+            content: content.join("\n\n"),
           },
-        ],
-  ),
+        ];
+  }),
   { role: "user" as const, content: ask.text },
 ];
 
@@ -578,7 +762,56 @@ const failure = (message: string): HobEvent => ({
   data: new HobFailure({ message: message === "" ? "The model stopped answering." : message }),
 });
 
-/** Whatever a cause carried, as one line a DM can read. */
+/**
+ * Whatever went wrong, as a sentence written for the person reading the panel.
+ *
+ * **Nothing a framework, a provider or a codec wrote may reach this surface**,
+ * and that is a rule about the surface rather than about any one bug.
+ * `HobFailure.message` is rendered verbatim inside a conversation the DM is
+ * having; a stack frame, a URL or a schema error listing every tool in the
+ * toolkit is not a thing Hob says, and the DM cannot act on any of it. The
+ * shipped failures here — `truncated`, `silence`, `unreadable` — are all
+ * written sentences that name the knob when there is one, and this is the same
+ * standard applied to the errors nobody anticipated.
+ *
+ * The branches are the ones a DM can do something about, and the fall-through
+ * is deliberately vague rather than helpfully raw. The detail is not lost: it
+ * is logged beside this, which is where somebody running a model can read it.
+ */
+const apology = (error: unknown): string => {
+  if (AiError.isAiError(error)) {
+    switch (error.reason._tag) {
+      case "NetworkError":
+        return (
+          "Hob could not reach the model. Check that the endpoint in HOB_API_URL is " +
+          "running, then ask again."
+        );
+      case "InternalProviderError":
+        return "The model endpoint failed while answering. Try again in a moment.";
+      case "AuthenticationError":
+        return "The model endpoint refused Hob's credential. Check HOB_API_KEY.";
+      case "RateLimitError":
+      case "QuotaExhaustedError":
+        return "The model turned Hob away for asking too often. Try again in a moment.";
+      case "ContentPolicyError":
+        return "The model refused to answer that one.";
+      case "InvalidOutputError":
+      case "StructuredOutputError":
+      case "ToolParameterValidationError":
+      case "InvalidToolResultError":
+      case "ToolResultEncodingError":
+        return (
+          "Hob could not make sense of what the model sent back. Ask again, or point " +
+          "the server at a model that handles tool calls better."
+        );
+      default:
+        break;
+    }
+  }
+  return "Something went wrong while Hob was answering. Ask again.";
+};
+
+/** The same thing again for the log, where the whole of it is useful. */
 const describe = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -635,7 +868,9 @@ const toHobEvent: Filter.Filter<Response.StreamPart<HobTools>, HobEvent> = (part
         }),
       });
     case "error":
-      return Result.succeed(failure(describe(part.error)));
+      // The provider's own mid-stream error part. Same rule as `apology`: the
+      // DM reads a sentence, not whatever the endpoint put on the wire.
+      return Result.succeed(failure(apology(part.error)));
     default:
       return Result.fail(part);
   }

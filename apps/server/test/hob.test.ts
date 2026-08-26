@@ -31,6 +31,7 @@ import { migratedDatabase } from "./support/database.js";
 import {
   type ChatRequest,
   reasoningChunks,
+  refused,
   scriptedModel,
   textChunks,
   toolCallChunks,
@@ -88,6 +89,7 @@ const withActor =
  */
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
+  const creatures = yield* Creatures;
   const notes = yield* Notes;
   const beats = yield* Beats;
   const sessions = yield* Sessions;
@@ -142,6 +144,40 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
+  // Two creatures at this table and one at the other, so `listCreatures` has
+  // something to answer *and* something it must not: the bestiary is the one
+  // read where "everything in the campaign" is the whole request, which is the
+  // shape a cross-campaign leak hides in most easily.
+  const goblin = yield* as(
+    creatures.create(campaign.id, {
+      name: "Marsh Goblin",
+      size: "Small",
+      type: "Humanoid",
+      cr: "1/4",
+      ac: 13,
+      hp: 7,
+      environments: ["Marsh"],
+    }),
+  );
+  yield* as(
+    creatures.create(campaign.id, {
+      name: "Reed Stalker",
+      type: "Beast",
+      cr: "2",
+      ac: 14,
+      hp: 33,
+    }),
+  );
+  yield* as(
+    creatures.create(otherTable.id, {
+      name: "Sixpence Drake",
+      type: "Dragon",
+      cr: "3",
+      ac: 15,
+      hp: 45,
+    }),
+  );
+
   const stranger = yield* anAccount("Someone else");
   const strangerCampaign = yield* withActor(stranger)(
     campaigns.create({ name: "A different table", visibility: "shared" }),
@@ -157,6 +193,7 @@ const makeFixture = Effect.gen(function* () {
     strangerCampaign,
     night,
     crateNote,
+    goblin,
   };
 }).pipe(Effect.orDie);
 
@@ -286,6 +323,7 @@ describe("answering", () => {
       tools.map((tool) => (tool.function as { name: string } | undefined)?.name).sort(),
     ).toEqual([
       "getCreature",
+      "listCreatures",
       "listSessions",
       "proposeBeat",
       "proposeEncounter",
@@ -298,6 +336,14 @@ describe("answering", () => {
     // request path, so a model that hallucinated another campaign's id has
     // nowhere to put it. Not refused — unrepresentable.
     expect(JSON.stringify(tools).toLowerCase()).not.toContain("campaignid");
+
+    // `listCreatures` takes nothing, exactly as `listSessions` does: "what is in
+    // this campaign" has no parameter to get wrong, which is most of why it is
+    // the tool a small model can actually reach for.
+    const listCreatures = tools.find(
+      (tool) => (tool.function as { name?: string } | undefined)?.name === "listCreatures",
+    )?.function as { parameters?: { properties?: object } } | undefined;
+    expect(listCreatures?.parameters?.properties ?? {}).toEqual({});
   }, 60_000);
 
   it("reports a model that answers with nothing but tool calls", async () => {
@@ -333,9 +379,29 @@ describe("answering", () => {
 
     const search = (requests[0]?.tools ?? []).find(
       (tool) => (tool.function as { name?: string } | undefined)?.name === "searchCampaign",
-    )?.function as { parameters?: { required?: ReadonlyArray<string> } } | undefined;
+    )?.function as
+      | {
+          parameters?: {
+            required?: ReadonlyArray<string>;
+            properties?: Record<string, unknown>;
+          };
+        }
+      | undefined;
     expect(search?.parameters?.required).toContain("source");
     expect(JSON.stringify(search?.parameters)).toContain(`"null"`);
+
+    // And what the endpoint compiles into a grammar is what a handler will
+    // accept, in both directions. `source` offers the enum, a real null and the
+    // words a template writes when it cannot spell one — and nothing wider: a
+    // string arm would swallow a mistyped `"creatur"` as "no filter".
+    const source = JSON.stringify(search?.parameters?.properties?.source);
+    expect(source).toContain(`"note","beat","creature","character"`);
+    expect(source).toContain(`"","null","Null","NULL","none","None","NONE"`);
+    expect(source).not.toContain(`{"type":"string"}`);
+    // `query` no longer carries a minimum on the wire, which is the half of the
+    // empty-search fix the model can see. The rule moved into the handler; see
+    // the tool-call tests below.
+    expect(JSON.stringify(search?.parameters?.properties?.query)).not.toContain("minLength");
 
     expect(
       events.flatMap((event) =>
@@ -398,6 +464,325 @@ describe("answering", () => {
     expect(events.at(-1)?.event).toBe("done");
     expect(texts(events)).toEqual(["I could not find that night."]);
     expect(shownTo(requests.slice(1))).toContain("NotFound");
+  }, 60_000);
+});
+
+/**
+ * Every failure sentence in the panel is one somebody wrote.
+ *
+ * `HobFailure.message` is rendered verbatim inside a conversation the DM is
+ * having, so the standard is not "no stack traces" but "nothing the framework,
+ * the provider or the codec wrote". These are the fingerprints of the dump this
+ * surface actually shipped — a page of `Expected "note" | "beat" | …` naming
+ * every tool in the toolkit, over `LanguageModel.streamText: Invalid output:`.
+ */
+const FRAMEWORK_WORDS = [
+  "LanguageModel.",
+  "Toolkit.",
+  "Invalid output",
+  "Expected ",
+  " at [",
+  "SchemaError",
+  "AiError",
+  "streamText",
+];
+
+const failures = (events: ReadonlyArray<HobEvent>): ReadonlyArray<string> =>
+  events.flatMap((event) => (event.event === "failed" ? [event.data.message] : []));
+
+const expectNoFrameworkWords = (events: ReadonlyArray<HobEvent>): void => {
+  for (const message of failures(events)) {
+    for (const word of FRAMEWORK_WORDS) expect(message).not.toContain(word);
+  }
+};
+
+describe("a tool call the framework cannot read", () => {
+  it("takes the word 'null' for an unset optional, which is all this endpoint can write", async () => {
+    // **Defect 1, measured six times out of six.** A chat template whose
+    // tool-call format is XML hands llama.cpp untyped parameter *text*, which it
+    // coerces through the published JSON schema: an integer optional's `null`
+    // parses as JSON null and a *string* optional's stays the string `"null"`.
+    // Both mean "not given" and only one used to decode.
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("searchCampaign", { query: "ferryman", source: "null", limit: null }),
+        textChunks("The ferryman is called Cazril."),
+      ] as never,
+    });
+
+    expect(
+      events.flatMap((event) =>
+        event.event === "tool" ? [`${event.data.name}:${event.data.phase}`] : [],
+      ),
+    ).toEqual(["searchCampaign:called", "searchCampaign:answered"]);
+    // Absent, not "null" read as a filter: the beat is a `beat` and the note a
+    // `note`, and both are in the answer.
+    expect(shownTo(requests.slice(1))).toContain("Cazril");
+    expect(texts(events)).toEqual(["The ferryman is called Cazril."]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("takes every spelling of absent a model reaches for, on a whole propose call", async () => {
+    // The same conversion reaches the propose path directly: four attempts at
+    // `proposeEncounter` with the two optionals unset produced `"null"` three
+    // times and `"None"` once. Each of those used to kill the answer *and* the
+    // card. Restricted-shaped: the two optionals are unset and the required
+    // ones are real.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("proposeEncounter", {
+          name: "Ambush in the reeds",
+          difficulty: "None",
+          tags: "null",
+          creatures: [{ creatureId: fixture.goblin.id, count: 3 }],
+        }),
+        textChunks("Three goblins in the reeds."),
+      ] as never,
+    });
+
+    const proposed = events.flatMap((event) =>
+      event.event === "proposal" ? [event.data.proposal] : [],
+    );
+    expect(proposed).toHaveLength(1);
+    // Absent means absent, and the column defaults answer — not the word.
+    expect(proposed[0]).toMatchObject({
+      target: "encounter",
+      name: "Ambush in the reeds",
+      difficulty: null,
+      tags: [],
+    });
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("refuses an empty search where the model can hear it, and names what to call instead", async () => {
+    // **The escape both models reached for.** Asked to build an encounter with
+    // no hint, they searched for everything — `query: ""` — which the tool's own
+    // schema forbade, one layer above any handler, killing the answer. The rule
+    // is unchanged; only the place it is enforced moved, so the "no" is now
+    // something Hob reads and acts on.
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("searchCampaign", { query: "" }),
+        textChunks("Let me look at the bestiary instead."),
+      ] as never,
+    });
+
+    expect(
+      events.flatMap((event) =>
+        event.event === "tool" ? [`${event.data.name}:${event.data.phase}`] : [],
+      ),
+    ).toEqual(["searchCampaign:called", "searchCampaign:answered"]);
+    const told = shownTo(requests.slice(1));
+    expect(told).toContain("Conflict");
+    expect(told).toContain("listCreatures");
+    expect(texts(events)).toEqual(["Let me look at the bestiary instead."]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("hands a malformed argument back to the model instead of ending the answer", async () => {
+    // **Defect 2.** A tool call's arguments are decoded by the framework, inside
+    // `streamText`, before any handler runs — so `failureMode: "return"` never
+    // applied to them and one bad value failed the whole stream. What the DM saw
+    // was a schema error; what the thread kept was nothing.
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("proposeEncounter", {
+          name: "Ambush in the reeds",
+          creatures: [{ creatureId: "not-a-uuid", count: 3 }],
+        }),
+        toolCallChunks(
+          "proposeEncounter",
+          {
+            name: "Ambush in the reeds",
+            creatures: [{ creatureId: fixture.goblin.id, count: 3 }],
+          },
+          "call_2",
+        ),
+        textChunks("Three goblins in the reeds."),
+      ] as never,
+    });
+
+    // The model was told, in a message it can act on, and it did.
+    expect(requests).toHaveLength(3);
+    const correction = String(requests[1]?.messages?.at(-1)?.content ?? "");
+    expect(correction).toContain("could not be read");
+    // **What it says is one precise thing, not the codec's whole complaint.** A
+    // stream part is a union over every tool, so the raw message carries a line
+    // per tool that did not match — a page of context a small model spends
+    // instead of thinking, and one that reads as an instruction to go and call
+    // `listSessions`. Only the pairs whose path names the arguments survive.
+    expect(correction).toContain(`Expected a UUID, got "not-a-uuid"`);
+    expect(correction).toContain(".creatures[0].creatureId");
+    expect(correction).not.toContain("listSessions");
+    expect(correction).not.toContain("tool-result");
+    // And the answer survived it: the second attempt landed, the card was made,
+    // and the DM got prose rather than an apology.
+    expect(
+      events.flatMap((event) => (event.event === "proposal" ? [event.data] : [])),
+    ).toHaveLength(1);
+    expect(texts(events)).toEqual(["Three goblins in the reeds."]);
+    expect(events.at(-1)?.event).toBe("done");
+    expect(failures(events)).toEqual([]);
+  }, 60_000);
+
+  it("gives up in words when the model never learns to spell the call", async () => {
+    // The budget is not infinite and a free retry would be a loop with no
+    // ceiling, so a run of unreadable calls ends — as a sentence about the
+    // model, never as the schema error that names all nine of our tools.
+    const bad = toolCallChunks("searchCampaign", { query: "ferryman", limit: "lots" });
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [bad, bad, bad, bad, bad] as never,
+    });
+
+    // Charged to the same budget an ordinary round is, which is what bounds it:
+    // the fifth script entry is never reached, however willing the model is.
+    expect(requests).toHaveLength(4);
+    expect(events.at(-1)?.event).toBe("failed");
+    expect(failures(events)).toHaveLength(1);
+    expectNoFrameworkWords(events);
+  }, 60_000);
+
+  it("says nothing the framework wrote, whatever went wrong", async () => {
+    // The rule, over every failure this surface can reach: the endpoint refusing
+    // outright, the model emitting a shape the codec cannot read, and the model
+    // running out of room. `HobFailure.message` is rendered verbatim in a
+    // conversation the DM is having.
+    const shapes: ReadonlyArray<{
+      readonly rounds: ReadonlyArray<unknown>;
+      readonly says: string;
+    }> = [
+      { rounds: [refused(500)], says: "The model endpoint failed while answering." },
+      { rounds: [refused(401)], says: "refused Hob's credential" },
+      { rounds: [refused(429)], says: "asking too often" },
+      {
+        // A response part the codec cannot read at all — not a tool call, the
+        // provider's own shape.
+        rounds: [
+          [
+            { object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: 7 } }] },
+            "[DONE]",
+          ],
+        ],
+        says: "HOB_MAX_TOKENS",
+      },
+      { rounds: [reasoningChunks("Thinking about the ferryman.")], says: "HOB_MAX_TOKENS" },
+    ];
+
+    for (const shape of shapes) {
+      const { events } = await ask(fixture.dm, fixture.campaign.id, {
+        rounds: shape.rounds as never,
+      });
+      expect(failures(events)).toHaveLength(1);
+      expect(failures(events)[0]).toContain(shape.says);
+      expectNoFrameworkWords(events);
+    }
+  }, 60_000);
+});
+
+describe("listing the bestiary", () => {
+  it("answers what this campaign can put in a fight, ids first", async () => {
+    // **Defect 4, and the reason "build me an encounter" came back as prose.**
+    // The only reach into the bestiary was lexical and needed a word, so a model
+    // with no hint guessed nouns off the campaign's name, got nothing every
+    // time, and concluded it could not propose anything. `Creatures.list` was
+    // already shipped; only the tool was missing.
+    const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [
+        toolCallChunks("listCreatures", {}),
+        toolCallChunks(
+          "proposeEncounter",
+          { name: "Reeds at dusk", creatures: [{ creatureId: fixture.goblin.id, count: 4 }] },
+          "call_2",
+        ),
+        textChunks("Four goblins in the reeds."),
+      ] as never,
+    });
+
+    const listed = shownTo(requests.slice(1, 2));
+    expect(listed).toContain("Marsh Goblin");
+    expect(listed).toContain("Reed Stalker");
+    // The id the model needs is in the answer under the name it has where it is
+    // going, so a roster costs no second read.
+    expect(listed).toContain("creatureId");
+    expect(listed).toContain(fixture.goblin.id);
+    expect(listed).toContain("Small Humanoid");
+    // And the whole stat block is not: fifty documents is a context window a
+    // local model drowns in, which is the failure this area exists to stop.
+    expect(listed).not.toContain("statBlock");
+
+    expect(
+      events.flatMap((event) => (event.event === "proposal" ? [event.data] : [])),
+    ).toHaveLength(1);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("lists no other table's creatures, on a credential that reaches both", async () => {
+    // The same leak the ferryman guards on the search path, on the read where
+    // "everything in the campaign" is the whole request. The DM owns both
+    // tables; the campaign is closed over from the path and nothing else.
+    const { requests } = await ask(fixture.dm, fixture.campaign.id, {
+      rounds: [toolCallChunks("listCreatures", {}), textChunks("Two of them.")] as never,
+    });
+
+    const listed = shownTo(requests.slice(1));
+    expect(listed).toContain("Marsh Goblin");
+    expect(listed).not.toContain("Sixpence Drake");
+  }, 60_000);
+});
+
+describe("what Hob offered, remembered", () => {
+  it("carries a saved proposal back into the next question's prompt", async () => {
+    // **Defect 3.** The card is on the DM's screen and in `assistant_turn`, and
+    // the prompt was assembled from `text` alone — so "make that harder" reached
+    // a model that could see a sentence about an encounter and nothing about
+    // what was in it. A turn where Hob offered a card and said *nothing* was
+    // dropped from the prompt entirely, which is exactly what the propose tools'
+    // own instruction ("say one short line and stop") makes likely.
+    const model = scriptedModel({
+      model: "scripted-local",
+      maxTokens: MAX_TOKENS,
+      rounds: [
+        toolCallChunks("proposeEncounter", {
+          name: "Ambush in the reeds",
+          difficulty: "Easy",
+          tags: ["marsh"],
+          creatures: [{ creatureId: fixture.goblin.id, count: 3 }],
+        }),
+        textChunks("Three goblins."),
+        textChunks("Make it five."),
+      ],
+    });
+
+    const asked = await runtime.runPromise(
+      Effect.gen(function* () {
+        const hob = yield* Hob;
+        const first = yield* hob.ask(fixture.campaign.id, { text: "Build me an encounter" });
+        const events = Array.from(yield* Stream.runCollect(first));
+        const began = events.find((event) => event.event === "began");
+        const threadId = began?.event === "began" ? began.data.threadId : undefined;
+        const second = yield* hob.ask(fixture.campaign.id, {
+          text: "Make it harder",
+          threadId,
+        });
+        yield* Stream.runCollect(second);
+        return model.requests();
+      }).pipe(
+        withActor(fixture.dm),
+        Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
+      ),
+    );
+
+    // The third request is the second question's opening prompt: the history it
+    // carries is what Hob remembers of the evening.
+    const remembered = shownTo(asked.slice(2, 3));
+    expect(remembered).toContain("Ambush in the reeds");
+    expect(remembered).toContain("Marsh Goblin");
+    // The id, because it is the one thing a follow-up cannot re-derive without
+    // spending another round looking for a creature it has already been shown.
+    expect(remembered).toContain(fixture.goblin.id);
+    // And whether it is a row in the campaign yet, which is the whole safety
+    // property of a proposal.
+    expect(remembered).toContain("not yet accepted");
   }, 60_000);
 });
 
@@ -664,10 +1049,11 @@ describe("the assistant seam", () => {
   it("reaches the record only through repositories that require an actor", () => {
     // Every tool handler is one repository call, and every one of those returns
     // `Effect<…, …, CurrentActor>` — so an unscoped read does not compile.
-    // Listing them here means a sixth capability is a visible edit rather than
+    // Listing them here means a tenth capability is a visible edit rather than
     // a quiet one.
     expect(Object.keys(HobToolkit.tools).sort()).toEqual([
       "getCreature",
+      "listCreatures",
       "listSessions",
       "proposeBeat",
       "proposeEncounter",

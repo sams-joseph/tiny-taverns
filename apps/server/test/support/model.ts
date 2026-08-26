@@ -29,6 +29,30 @@ import {
 /** One chat-completions chunk, or the `[DONE]` sentinel. */
 export type Chunk = Record<string, unknown> | "[DONE]";
 
+/**
+ * A round the endpoint refuses outright, rather than one the model answers.
+ *
+ * The failures that are *not* the model's — the port is closed, the key is
+ * wrong, the provider is rate-limiting — arrive as an HTTP status and never as
+ * a chunk, so they are the one thing a script of chunks cannot express. They
+ * are worth expressing because the panel's rule is that no framework message
+ * ever reaches it, and a rule about failures needs a failure nobody wrote a
+ * sentence for in advance.
+ */
+export interface Refusal {
+  readonly status: number;
+  /** The provider's own error body. Anything; it must not reach the panel. */
+  readonly body?: string;
+}
+
+/** One provider round-trip, as a script. */
+export type Round = ReadonlyArray<Chunk> | Refusal;
+
+const isRefusal = (round: Round): round is Refusal => !Array.isArray(round);
+
+/** A round the endpoint answers with an error status. See {@link Refusal}. */
+export const refused = (status: number, body?: string): Refusal => ({ status, body });
+
 /** What the provider sent, parsed. Loose on purpose — it is a wire capture. */
 export interface ChatRequest {
   readonly model?: string;
@@ -145,7 +169,7 @@ const bodyOf = (request: HttpClientRequest.HttpClientRequest): ChatRequest => {
 export const scriptedModel = (options: {
   readonly model: string;
   readonly maxTokens: number;
-  readonly rounds: ReadonlyArray<ReadonlyArray<Chunk>>;
+  readonly rounds: ReadonlyArray<Round>;
 }): ScriptedModel => {
   const requests: Array<ChatRequest> = [];
 
@@ -154,10 +178,19 @@ export const scriptedModel = (options: {
       const request = yield* requestEffect;
       const index = requests.length;
       requests.push(bodyOf(request));
-      const chunks = options.rounds[index] ?? textChunks();
+      const round = options.rounds[index] ?? textChunks();
+      if (isRefusal(round)) {
+        return HttpClientResponse.fromWeb(
+          request,
+          new Response(round.body ?? `{"error":{"message":"scripted refusal"}}`, {
+            status: round.status,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
       return HttpClientResponse.fromWeb(
         request,
-        new Response(sseBody(chunks), {
+        new Response(sseBody(round), {
           status: 200,
           headers: { "content-type": "text/event-stream" },
         }),
