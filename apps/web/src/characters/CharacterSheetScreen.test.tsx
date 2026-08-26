@@ -135,9 +135,16 @@ describe("a character sheet", () => {
         .map((node) => node.textContent ?? "")
         .filter((text) => text !== "" && !text.includes("Characters"));
 
-    // Stats: six ability cells and a skill list, none of which rolls.
+    // Stats: six ability cells and a skill list. Neither rolls a check into a
+    // dice tray — there is still no endpoint for that — but both are writable
+    // now, so the two *Edit*s here are the payload carrying what it can rather
+    // than a control it cannot. The bar's is the third.
     await tab("Stats");
-    expect(pressable()).toEqual(["Edit"]);
+    expect(pressable()).toEqual(["Edit", "Edit", "Edit"]);
+    expect(screen.getByRole("button", { name: "Edit abilities" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
+    // The cell is still not a roll button, which is what the drawing makes it.
+    expect(screen.queryByRole("button", { name: /STR check/i })).toBeNull();
 
     // Actions: attacks and spell pips. Nothing rolls and nothing is spent.
     await tab("Actions");
@@ -182,15 +189,33 @@ describe("a character sheet", () => {
    *
    * That sentence is the wrong answer now: a player can write, so the empty
    * sheet has to be the place they start rather than a notice about somebody
-   * else. Gear and Story are drawn on an empty document for exactly that
-   * reason; Stats, Actions and Log are not, because nothing on this screen
-   * writes an ability cell, an attack or a level-up.
+   * else. Stats, Gear and Story are drawn on an empty document for exactly
+   * that reason — each carries the affordance that creates its own contents.
+   * Actions and Log are not, because nothing on this screen writes an attack,
+   * a spell slot or a level-up.
    */
   it("gives an unwritten sheet somewhere to start, and no tab it cannot fill", async () => {
     await renderSheet(sorrelId);
     await screen.findByRole("heading", { name: "Sorrel Ash" });
 
-    expect(screen.getAllByRole("tab").map((node) => node.textContent)).toEqual(["Gear", "Story"]);
+    expect(screen.getAllByRole("tab").map((node) => node.textContent)).toEqual([
+      "Stats",
+      "Gear",
+      "Story",
+    ]);
+    // Stats is the first drawn tab now, so it is the one the sheet opens on.
+    // The six cells are where a score is typed a first time, so the section is
+    // there with a sentence rather than a grid of nothing.
+    expect(screen.getByRole("button", { name: "Edit abilities" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
+    expect(screen.getByText(/Take the standard array, or roll for them/)).toBeTruthy();
+    expect(screen.getByText(/What you are proficient in/)).toBeTruthy();
+    // And nothing is drawn as a value that is not one: no cell with an empty
+    // modifier under it, no `undefined` where a bonus would be.
+    expect(screen.queryByText("undefined")).toBeNull();
+    expect(screen.queryByText("NaN")).toBeNull();
+
+    await tab("Gear");
     expect(screen.getByRole("button", { name: /Add/ })).toBeTruthy();
     // A character with no maximum has no bar and no invented pair.
     expect(screen.queryByText(/hp/)).toBeNull();

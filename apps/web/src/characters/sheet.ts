@@ -72,13 +72,18 @@ export const coins = (
  * an empty sheet would say the data exists and is blank when what is true is
  * that nobody has written it.
  *
- * `writable` is what the player's own sheet passes. Under it Gear and Story are
- * drawn whether or not they hold anything, because each carries an affordance
- * that *creates* the thing the tab is for — and a tab that appears only once
- * its contents exist is a first line of backstory nobody can type. The other
- * three stay content-driven: nothing on this screen writes an ability cell, an
- * attack or a level-up, so an empty Stats tab would still be a promise with
- * nothing behind it.
+ * `writable` is what the player's own sheet passes. Under it Stats, Gear and
+ * Story are drawn whether or not they hold anything, because each carries an
+ * affordance that *creates* the thing the tab is for — and a tab that appears
+ * only once its contents exist is a first line of backstory nobody can type.
+ *
+ * **Stats joined them when the abilities and skills editors landed**, and the
+ * reason it was not there before was the right one at the time: nothing on the
+ * screen wrote an ability cell, so an empty Stats tab was a promise with
+ * nothing behind it. There is a write behind it now. Actions and Log stay
+ * content-driven for exactly the same test — nothing here writes an attack, a
+ * spell slot or a level-up — which is what keeps this flag meaning something
+ * rather than being *writable* spelled twice.
  */
 export interface SheetTabs {
   readonly stats: boolean;
@@ -88,8 +93,8 @@ export interface SheetTabs {
   readonly log: boolean;
   /**
    * Nothing in the document at all — the state every row written before it is
-   * in, and one a writable sheet is never in: Gear and Story are always drawn
-   * there, so there is always somewhere to start.
+   * in, and one a writable sheet is never in: Stats, Gear and Story are always
+   * drawn there, so there is always somewhere to start.
    */
   readonly empty: boolean;
 }
@@ -105,6 +110,7 @@ export const sheetTabs = (sheet: CharacterSheet, writable = false): SheetTabs =>
 
   const tabs = {
     stats:
+      writable ||
       some(sheet.abilities) ||
       some(sheet.skills) ||
       some(sheet.proficiencies) ||

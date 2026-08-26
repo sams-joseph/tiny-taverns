@@ -92,6 +92,24 @@ describe("which tabs the document can fill", () => {
     expect(sheetTabs(only({ levelUps: [{ level: 5 }] })).log).toBe(true);
   });
 
+  /**
+   * **Which tabs carry an affordance rather than a value**, and the line
+   * between them is *is there a write behind it*. Stats crossed that line with
+   * the abilities and skills editors; Actions and Log have not, because nothing
+   * on the sheet writes an attack, a spell slot or a level-up — which is what
+   * keeps the flag meaning something rather than being `true` spelled twice.
+   */
+  it("draws the three a player can start from, on a sheet nobody has written", () => {
+    expect(sheetTabs(emptyCharacterSheet, true)).toEqual({
+      stats: true,
+      actions: false,
+      gear: true,
+      story: true,
+      log: false,
+      empty: false,
+    });
+  });
+
   it("counts an empty spellcasting block and blank prose as nothing", () => {
     expect(sheetTabs({ ...emptyCharacterSheet, spellcasting: {} }).actions).toBe(false);
     expect(sheetTabs({ ...emptyCharacterSheet, notes: "   " }).story).toBe(false);

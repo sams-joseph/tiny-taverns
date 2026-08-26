@@ -20,9 +20,11 @@ import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
+import { AbilitiesDialog } from "./AbilitiesDialog";
 import { BackstoryDialog } from "./BackstoryDialog";
 import { GearDialog } from "./GearDialog";
 import { IdentityDialog } from "./IdentityDialog";
+import { SkillsDialog } from "./SkillsDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { loadCharacterSheet } from "./load";
 import { coins, sheetTabs } from "./sheet";
@@ -177,15 +179,19 @@ function SheetBody({
   character,
   open,
   onOpen,
+  onEditAbilities,
   onEditBackstory,
   onEditGear,
+  onEditSkills,
 }: {
   readonly character: Character;
   /** Which tab is open, held above the screen's own resource — see `onOpen`. */
   readonly open: string | undefined;
   readonly onOpen: (tab: string) => void;
+  readonly onEditAbilities: () => void;
   readonly onEditBackstory: () => void;
   readonly onEditGear: () => void;
+  readonly onEditSkills: () => void;
 }) {
   const sheet = character.sheet;
   // Writable, so Gear and Story are drawn whether or not they hold anything —
@@ -257,19 +263,56 @@ function SheetBody({
 
       {tabs.stats && (
         <TabsContent value="stats" className="flex flex-col gap-gutter">
-          {sheet.abilities.length > 0 && (
-            <SheetSection title="Abilities">
+          {/* **Drawn on a writable sheet whether or not it holds anything**, and
+              that is the whole of what the editors changed here: the six cells
+              are where a score is typed a first time, so a section that
+              appeared only once it had one would be a value nobody could
+              write. The *Edit* says what it edits — the bar carries one too,
+              and two buttons with one name on one screen is the ambiguity the
+              backstory's already had to be labelled out of. */}
+          <SheetSection
+            title="Abilities"
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Edit abilities"
+                onClick={onEditAbilities}
+              >
+                <Icon name="pencil" size={13} />
+                Edit
+              </Button>
+            }
+          >
+            {sheet.abilities.length === 0 ? (
+              <p className="text-caption leading-body text-muted-foreground">
+                Six scores. Take the standard array, or roll for them.
+              </p>
+            ) : (
               <div className="grid grid-cols-3 gap-2 @2xl:grid-cols-6">
                 {sheet.abilities.map((ability) => (
                   <AbilityCell key={ability.label} ability={ability} />
                 ))}
               </div>
-            </SheetSection>
-          )}
+            )}
+          </SheetSection>
 
           <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            {sheet.skills !== undefined && sheet.skills.length > 0 && (
-              <SheetSection title="Skills" className="min-w-0 flex-1">
+            <SheetSection
+              title="Skills"
+              className="min-w-0 flex-1"
+              action={
+                <Button variant="outline" size="sm" aria-label="Edit skills" onClick={onEditSkills}>
+                  <Icon name="pencil" size={13} />
+                  Edit
+                </Button>
+              }
+            >
+              {sheet.skills === undefined || sheet.skills.length === 0 ? (
+                <p className="text-caption leading-body text-muted-foreground">
+                  What you are proficient in, and what you add.
+                </p>
+              ) : (
                 <div className="grid grid-cols-1 gap-x-gutter @xl:grid-cols-2">
                   {sheet.skills.map((skill) => (
                     <div key={skill.name} className="flex min-h-7 items-center gap-2">
@@ -300,8 +343,8 @@ function SheetBody({
                     </div>
                   ))}
                 </div>
-              </SheetSection>
-            )}
+              )}
+            </SheetSection>
 
             <div className="flex min-w-0 flex-1 flex-col gap-gutter">
               {sheet.proficiencies !== undefined && sheet.proficiencies.length > 0 && (
@@ -818,7 +861,9 @@ export function CharacterSheetScreen() {
    * the screen, and a dialog owned by a subtree that re-renders under it would
    * be closed by its own success.
    */
-  const [editing, setEditing] = useState<"identity" | "backstory" | "gear" | undefined>();
+  const [editing, setEditing] = useState<
+    "identity" | "abilities" | "skills" | "backstory" | "gear" | undefined
+  >();
   /** Which tab is open — above the resource, for the reason `SheetBody` gives. */
   const [openTab, setOpenTab] = useState<string | undefined>();
   const close = () => setEditing(undefined);
@@ -918,8 +963,10 @@ export function CharacterSheetScreen() {
                   character={character}
                   open={openTab}
                   onOpen={setOpenTab}
+                  onEditAbilities={() => setEditing("abilities")}
                   onEditBackstory={() => setEditing("backstory")}
                   onEditGear={() => setEditing("gear")}
+                  onEditSkills={() => setEditing("skills")}
                 />
               </div>
             </div>
@@ -928,6 +975,12 @@ export function CharacterSheetScreen() {
 
       {character !== undefined && editing === "identity" && (
         <IdentityDialog character={character} onClose={close} onSaved={close} />
+      )}
+      {character !== undefined && editing === "abilities" && (
+        <AbilitiesDialog character={character} onClose={close} onSaved={close} />
+      )}
+      {character !== undefined && editing === "skills" && (
+        <SkillsDialog character={character} onClose={close} onSaved={close} />
       )}
       {character !== undefined && editing === "backstory" && (
         <BackstoryDialog character={character} onClose={close} onSaved={close} />

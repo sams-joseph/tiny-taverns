@@ -163,6 +163,272 @@ describe("editing the durable columns", () => {
   });
 });
 
+describe("editing the abilities", () => {
+  const openAbilities = async () => {
+    await screen.findByRole("tab", { name: /Stats/ });
+    await tab("Stats");
+    await userEvent.click(screen.getByRole("button", { name: "Edit abilities" }));
+    await screen.findByRole("button", { name: "Save abilities" });
+  };
+
+  it("sends the six cells with the modifier the score implies", async () => {
+    await renderSheet();
+    await openAbilities();
+
+    // Six rows share the visible label *Score*, so the accessible name carries
+    // the ability — otherwise every one of them is the same control.
+    const str = screen.getByRole("spinbutton", { name: "STR score" });
+    await userEvent.clear(str);
+    await userEvent.type(str, "19");
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const sheet = (sent() as { sheet: Record<string, unknown> }).sheet;
+    expect(sheet["abilities"]).toEqual([
+      // The modifier is written from the score in the same literal, so the two
+      // cannot part company however the box was edited.
+      { label: "STR", score: "19", modifier: "+4", save: "+7", proficient: true },
+      { label: "DEX", score: "12", modifier: "+1", save: "+1" },
+      { label: "CON", score: "16", modifier: "+3" },
+      { label: "INT", score: "9", modifier: "-1" },
+      { label: "WIS", score: "13", modifier: "+1", save: "+4", proficient: true },
+      { label: "CHA", score: "16", modifier: "+3", save: "+6", proficient: true },
+    ]);
+    // The half the form never drew, carried through rather than erased.
+    expect(sheet["skills"]).toHaveLength(2);
+    expect(sheet["spellcasting"]).toBeDefined();
+    expect(sheet["notes"]).toBe(brannoc.sheet.notes);
+    expect(sent()).not.toHaveProperty("name");
+    carriesNothingRefused();
+  });
+
+  /**
+   * The default, and it is the drawing's own: `CharacterCreate.jsx:157` opens
+   * on the standard array and makes rolling an explicit second action.
+   */
+  it("lays the standard array into the six boxes and saves it", async () => {
+    server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
+    await renderSheet(sorrelId);
+    await openAbilities();
+
+    await userEvent.click(screen.getByRole("button", { name: "Standard array" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        sheet: {
+          notes: "",
+          traits: [],
+          abilities: [
+            { label: "STR", score: "15", modifier: "+2" },
+            { label: "DEX", score: "14", modifier: "+2" },
+            { label: "CON", score: "13", modifier: "+1" },
+            { label: "INT", score: "12", modifier: "+1" },
+            { label: "WIS", score: "10", modifier: "+0" },
+            { label: "CHA", score: "8", modifier: "-1" },
+          ],
+        },
+      }),
+    );
+  });
+
+  /**
+   * **4d6-drop-lowest, client-side** — the rule the drawing's toast names, and
+   * the dice the initiative precedent puts in the browser (`RunScreen.tsx`:
+   * *a roll is not durable state, only the number it produced is*). What is
+   * asserted is the shape rather than the numbers: the distribution is
+   * `abilities.test.ts`, and what matters here is that six scores land in
+   * range and reach the wire as ordinary written values.
+   */
+  it("rolls six scores in the browser and sends them as numbers", async () => {
+    server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
+    await renderSheet(sorrelId);
+    await openAbilities();
+
+    await userEvent.click(screen.getByRole("button", { name: /Roll 4d6/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toBeDefined(),
+    );
+    const abilities = (
+      bodyOf(server, "PATCH", `/me/characters/${sorrelId}`) as {
+        sheet: { abilities: ReadonlyArray<{ label: string; score: string; modifier: string }> };
+      }
+    ).sheet.abilities;
+    expect(abilities.map((cell) => cell.label)).toEqual(["STR", "DEX", "CON", "INT", "WIS", "CHA"]);
+    for (const cell of abilities) {
+      const score = Number(cell.score);
+      expect(score).toBeGreaterThanOrEqual(3);
+      expect(score).toBeLessThanOrEqual(18);
+      expect(cell.modifier).toBe(
+        Math.floor((score - 10) / 2) < 0
+          ? String(Math.floor((score - 10) / 2))
+          : `+${String(Math.floor((score - 10) / 2))}`,
+      );
+    }
+    // No roll ever leaves the browser: the only request is the save.
+    expect(server.calls.filter((call) => call.method === "POST")).toEqual([]);
+  });
+
+  /** A cell nobody filled in is not a cell — `Ability.score` is non-empty. */
+  it("drops the boxes left blank rather than refusing the save", async () => {
+    server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
+    await renderSheet(sorrelId);
+    await openAbilities();
+
+    await userEvent.type(screen.getByRole("spinbutton", { name: "STR score" }), "18");
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        sheet: {
+          notes: "",
+          traits: [],
+          abilities: [{ label: "STR", score: "18", modifier: "+4" }],
+        },
+      }),
+    );
+  });
+
+  it("says a score out of range before anything is sent", async () => {
+    await renderSheet();
+    await openAbilities();
+
+    const str = screen.getByRole("spinbutton", { name: "STR score" });
+    await userEvent.clear(str);
+    await userEvent.type(str, "99");
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    expect(screen.getByText("A whole number, 1 to 30.")).toBeTruthy();
+    expect(sent()).toBeUndefined();
+  });
+
+  /**
+   * **The accessible form of the drawing's drag.** `CharacterCreate.jsx:157`
+   * offers *"drag a score onto another ability"*; a select naming the other
+   * ability says the same thing to a pointer, a keyboard and a screen reader
+   * alike, and it is what makes a rolled set usable without retyping six
+   * numbers. Only the score moves — the saving throw and its mark belong to
+   * the ability rather than to the number.
+   */
+  it("swaps two scores and leaves the saving throws where they were", async () => {
+    await renderSheet();
+    await openAbilities();
+
+    await userEvent.click(screen.getByRole("combobox", { name: "Swap STR score with" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^INT/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const abilities = (sent() as { sheet: { abilities: ReadonlyArray<Record<string, unknown>> } })
+      .sheet.abilities;
+    expect(abilities[0]).toEqual({
+      label: "STR",
+      score: "9",
+      modifier: "-1",
+      save: "+7",
+      proficient: true,
+    });
+    expect(abilities[3]).toEqual({ label: "INT", score: "18", modifier: "+4" });
+  });
+
+  it("leaves the reader on Stats after the save", async () => {
+    await renderSheet();
+    await openAbilities();
+    await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /Stats/ }).getAttribute("aria-selected")).toBe("true"),
+    );
+  });
+});
+
+describe("editing the skills", () => {
+  const openSkills = async () => {
+    await screen.findByRole("tab", { name: /Stats/ });
+    await tab("Stats");
+    await userEvent.click(screen.getByRole("button", { name: "Edit skills" }));
+    await screen.findByRole("button", { name: "Save skills" });
+  };
+
+  it("marks a skill and sends it with the ability it keys off", async () => {
+    server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
+    await renderSheet(sorrelId);
+    await openSkills();
+
+    await userEvent.click(screen.getByRole("switch", { name: "Perception" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Perception bonus" }), "+5");
+    await userEvent.click(screen.getByRole("button", { name: "Save skills" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        sheet: {
+          notes: "",
+          abilities: [],
+          traits: [],
+          // Only the row there is something to say about. Seventeen rows of
+          // nothing would be a list of what this character is *not* good at.
+          skills: [{ name: "Perception", ability: "WIS", bonus: "+5", proficient: true }],
+        },
+      }),
+    );
+  });
+
+  it("keeps the rest of the document, and the skills already marked", async () => {
+    await renderSheet();
+    await openSkills();
+
+    await userEvent.click(screen.getByRole("switch", { name: "Stealth" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save skills" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const sheet = (sent() as { sheet: Record<string, unknown> }).sheet;
+    expect(sheet["skills"]).toEqual([
+      // The document's own two come back unchanged, including the one that is
+      // not proficient and carries a bonus anyway.
+      { name: "Arcana", ability: "INT", bonus: "-1" },
+      { name: "Athletics", ability: "STR", bonus: "+7", proficient: true },
+      { name: "Stealth", ability: "DEX", proficient: true },
+    ]);
+    expect(sheet["abilities"]).toHaveLength(6);
+    expect(sheet["inventory"]).toHaveLength(2);
+    carriesNothingRefused();
+  });
+
+  it("drops a mark that has been taken off again", async () => {
+    await renderSheet();
+    await openSkills();
+
+    await userEvent.click(screen.getByRole("switch", { name: "Athletics" }));
+    await userEvent.clear(screen.getByRole("textbox", { name: "Athletics bonus" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save skills" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    expect((sent() as { sheet: { skills: ReadonlyArray<{ name: string }> } }).sheet.skills).toEqual(
+      [{ name: "Arcana", ability: "INT", bonus: "-1" }],
+    );
+  });
+
+  it("says a refusal and keeps what was marked", async () => {
+    server.routes.set(`PATCH ${patchPath}`, {
+      status: 404,
+      body: { _tag: "NotFound", resource: "character", id: brannocId },
+    });
+
+    await renderSheet();
+    await openSkills();
+    await userEvent.click(screen.getByRole("switch", { name: "Medicine" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save skills" }));
+
+    await screen.findByText(/belongs to someone else/);
+    expect(screen.getByRole("switch", { name: "Medicine" }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+  });
+});
+
 describe("editing the backstory", () => {
   it("sends the whole document with the prose replaced", async () => {
     await renderSheet();
