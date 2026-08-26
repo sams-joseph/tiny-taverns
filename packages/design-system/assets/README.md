@@ -1,41 +1,71 @@
 # Assets
 
-## App icon — the one mark that exists
+## App icon — the captain's mark, and the delivered one it replaced
 
-`assets/icon/` holds the app icon, chosen from the "App icon — pint + die" exploration
-(option **P2**, tankard with handle) and refined for export. It is a **tankard in
-peach on a deep-slate tile, with a hexagonal die as negative space in the body,
-a bumped froth crown, and one fleck of foam breaking off the rim.**
+`assets/icon/` holds the app icon. **Two of its files are the captain's artwork and the
+rest are the designers' superseded delivery.** Read that split before touching anything
+here, because the folder no longer depicts one thing.
+
+**The mark the product shows** is a full-colour **illustrated wooden tankard** — staved
+barrel body with iron bands and rivets, a thick cream froth head spilling over the rim with
+loose bubbles beside it, a curled handle, and a **d20**, a **d4** and a small stack of
+**coins** at its foot — drawn with a heavy dark outline on a **transparent background**.
+It is illustration, not the flat geometry it replaced.
+
+**The delivered mark it replaced** was option **P2** of the "App icon — pint + die"
+exploration: a flat **tankard on a deep-slate tile, with a hexagonal die as negative space
+in the body**, a bumped froth crown and one fleck of foam off the rim. Every file below
+marked *(delivered)* still depicts that, and **nothing imports any of them.**
 
 | File | Use |
 | --- | --- |
-| `tiny-taverns-icon-master-1024.png` | Store / iOS master. Full-bleed square, **no corner rounding** — the OS masks it. |
-| `tiny-taverns-icon-rounded-1024.png` | Preview only, squircle applied. Do not ship this. |
-| `tiny-taverns-icon-warm-1024.png` | Amber variant. **Off-palette** — see the note below. |
-| `android-adaptive-foreground-432.png` | Android adaptive foreground, art inside the safe circle. |
-| `android-adaptive-background-432.png` | Android adaptive background, flat `--slate-950`. |
-| `preview-{180,120,76,48,29}.png` | Rendered-size checks. |
-| `mark-on-dark-256.png` | **In-layout mark**, transparent background, die knocked to `--slate-950`. For dark surfaces: the app rail, the marketing footer. |
-| `mark-on-light-256.png` | Light-surface variant. **Currently unused** — the product is dark only. Kept for print and third-party placements. |
-| `favicon-32.png` | Browser tab, 7px rounded tile. |
+| `mark-on-dark-256.png` | **The in-layout mark**, and one of only two files the product imports. Captain's illustration, transparent. Used at 18–44px in the app rail, Hob's chat parts and the marketing header and footer. **Despite the name it is 512×512**, and the art is not dark-specific — its own outline carries it on any surface. |
+| `favicon-32.png` | **The browser tab**, and the other imported file. Captain's illustration, downscaled to 32. See the legibility note below. |
+| `apple-touch-icon-180.png` | Captain's illustration at 180. **Wired to nothing** — no `apple-touch-icon` is declared anywhere. Kept so the source survives in the repo; see the open questions. |
+| `tiny-taverns-icon-master-1024.png` | *(delivered)* Store / iOS master. Full-bleed square, no corner rounding. |
+| `tiny-taverns-icon-rounded-1024.png` | *(delivered)* Preview only, squircle applied. Do not ship. |
+| `tiny-taverns-icon-warm-1024.png` | *(delivered)* Amber variant. Off-palette. |
+| `android-adaptive-foreground-432.png` | *(delivered)* Android adaptive foreground. |
+| `android-adaptive-background-432.png` | *(delivered)* Android adaptive background, flat `--slate-950`. |
+| `preview-{180,120,76,48,29}.png` | *(delivered)* Rendered-size checks of the old art. |
+| `mark-on-light-256.png` | *(delivered)* Light-surface variant of the old flat mark. Unused. |
 
-**Lockup rule.** The mark sits left of the wordmark with a 10px gap: 30px in the app
-rail, 34px on the marketing site. The tagline is indented to align with the wordmark,
-not the mark. Use `mark-on-dark-256.png` everywhere in product and marketing; the die is negative
-space, so on a dark surface it reads through to the page.
+**Lockup rule** (unchanged). The mark sits left of the wordmark with a 10px gap: 22px in the
+app rail, 34px on the marketing site. The tagline is indented to align with the wordmark,
+not the mark.
 
-Contact sheet: `brand/app-icon-final.html`. Earlier explorations are kept in
-`brand/app-icon-options.html`, `app-icon-d20-options.html`,
+**The illustration does not survive 16px, and barely survives 32.** At tab size the staves,
+the froth and the dice collapse into a brown-and-purple smudge; the old flat mark held its
+silhouette at 16 because it was drawn for that size. This is the ordinary cost of an
+illustration in a favicon slot and is the captain's call to accept or fix — the fix is a
+simplified 32px glyph, not a different downscale.
+
+**Three things about the family are unresolved**, and are deliberately left rather than
+guessed at:
+
+1. **No `apple-touch-icon` is declared.** 180 is the standard size and one is now in the
+   folder, but the art is transparent and iOS composites touch icons onto a background
+   rather than honouring alpha — shipped bare it would land on white or black. Flattening it
+   onto the brand's dark tile first is the safe form.
+2. **There is no new 1024 master, no Android adaptive pair and no light variant.** The
+   delivered ones are still here and depict the old artwork.
+3. **The old previews measure the old mark.** They are not checks of anything that ships.
+
+**The amber question is closed by the new art.** It asked whether the cool palette made the
+tankard read as teal fluid rather than ale; the illustration is warm wood and cream froth
+and does not pose it. `#E8A33A` is still not a token and the warm 1024 variant is still
+off-palette.
+
+**These two files are overwritten by a design-system delivery.** `assets/` is inside
+PORT-NOTES' `rsync --delete`, so the next update silently restores the flat mark. See
+PORT-NOTES' deviation list.
+
+Contact sheet for the delivered icon: `brand/app-icon-final.html`. Earlier explorations are
+in `brand/app-icon-options.html`, `app-icon-d20-options.html`,
 `app-icon-pint-options.html` and `app-icon-mug-options.html`.
 
-**The amber question is still open.** The system palette is entirely cool, so the
-peach tankard reads as teal fluid rather than ale. The warm variant uses
-`#E8A33A`, which exists nowhere else in the system. It is **not a token** — if the
-warm route is chosen, it should be declared a brand-only accent (icon and marketing
-moments), never a UI colour.
-
-**The icon is drawn geometry, not a typeset logo**, and there is still no wordmark
-lockup — see below.
+**The icon is artwork, not a typeset logo**, and there is still no wordmark lockup — see
+below.
 
 ## There is no logo
 

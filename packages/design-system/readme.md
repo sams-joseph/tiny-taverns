@@ -369,11 +369,19 @@ UI, read-aloud, serif weight axis, mono, pairing) · Spacing (scale, layout toke
 elevation, states, motion, surfaces, iconography, voice do/don't).
 
 ### `assets/`
-`icon/` holds the **app icon** (option P2 — tankard with a die, exported as an iOS
-master, Android adaptive layers and rendered-size previews) plus a warm off-palette
-variant. `README.md` documents every file and the open amber question. The mark is used in-layout as a **lockup**: `mark-on-dark-256.png` (transparent, die knocked through to the surface) beside the
-wordmark — the light-surface variant is retained in `assets/icon/` but unused, since
-no layout has a light background, in the app rail, the marketing header and footer, and as a favicon.
+`icon/` holds the **app icon**. Two files in it are the captain's own artwork and are
+**not the designers' delivery** — `mark-on-dark-256.png` and `favicon-32.png` are a
+full-colour illustrated wooden tankard with froth, a d20, a d4 and coins, on a
+transparent background. Everything else in the folder is the superseded delivered icon
+(option P2 — flat geometry, a tankard with a hexagonal die as negative space) exported as
+an iOS master, Android adaptive layers, a light variant and rendered-size previews;
+**nothing imports any of those**, and they now depict different artwork from the mark the
+product actually shows. `README.md` documents every file and the open questions.
+
+The mark is used in-layout as a **lockup**: `mark-on-dark-256.png` beside the wordmark, in
+the app rail, Hob's chat parts, and the marketing header and footer, and — at 32px — as the
+favicon. The illustration carries its own outline, so it reads on light and dark alike;
+`mark-on-light-256.png` is the old flat mark and remains unused.
 **There is still no standalone typeset wordmark** — "Tiny Taverns" is set live in
 Instrument Sans 600 at `--ls-display`, not drawn.
 

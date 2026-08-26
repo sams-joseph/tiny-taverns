@@ -20,7 +20,7 @@ else. `packages/ui/src/styles.css` bridges these tokens into Tailwind's theme la
 | `readme.md`, `SKILL.md` | Guidance material. |
 | `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to ESLint in `packages/eslint-config/design-system.js`. |
 
-**Every other file here is byte-identical to the delivery.** Exactly two are edited, both
+**Every other file here is byte-identical to the delivery.** Two are *edited*, both
 structural rather than visual, and both are re-applied by hand on each update:
 
 - `styles.css` — `@import url("tokens/…")` → `@import url("./tokens/…")`. Bare paths
@@ -29,6 +29,27 @@ structural rather than visual, and both are re-applied by hand on each update:
   that file does carry two `@font-face` rules, so the comment is corrected here too.)
 - `SKILL.md` — `README.md` → `readme.md` (the delivered file is lowercase, and this
   filesystem is case-sensitive), plus a pointer to the ported components.
+
+**Three icon files are the captain's artwork and override the delivery.** This is the one
+place the "nothing we author lives here" rule is deliberately broken, and it is broken
+because the files it concerns are *art the captain supplied*, not values we derived — there
+is no `local-tokens.css` equivalent for a PNG the product imports by package path.
+
+- `assets/icon/mark-on-dark-256.png` — replaced with the captain's illustrated tankard
+  (512×512, transparent). **The name is now wrong about its size** and arguably about
+  `on-dark`; renaming it is three import sites plus five `ui_kits` references and has not
+  been done.
+- `assets/icon/favicon-32.png` — replaced with the same illustration at 32.
+- `assets/icon/apple-touch-icon-180.png` — **added**, not in any delivery. Imported by
+  nothing; it is the captain's 180 kept so the source survives in the repo.
+
+**`assets/` is inside the `rsync --delete` below and is not excluded, so a delivery
+silently reverts the first two and deletes the third.** That is the whole reason this
+entry exists. After every update, re-copy the captain's three files and confirm
+`git status` names them — a `diff -r` against the next delivery will report these as
+changed, and unlike the `--fs-label-l` incident that report is *correct*: the designers
+did not revise the icon, we replaced it. `packages/design-system/assets/README.md` says
+which files in that folder are the captain's and which are the superseded delivery.
 
 **Nothing else we author may live in this package**, and that is a rule with a cost
 attached rather than a preference. The first port put two values the delivery states only
@@ -93,7 +114,8 @@ rsync -a --delete \
   "<delivery>/" packages/design-system/
 ```
 
-then re-apply the two edits above and run `pnpm -F @taverns/ui test`.
+then re-apply the two edits **and the three icon files** above, and run
+`pnpm -F @taverns/ui test`.
 
 ## The prototypes are a specification, not shippable code
 
