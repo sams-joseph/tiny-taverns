@@ -1,5 +1,4 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { CLASS_KEYS, SPECIES_KEYS } from "@taverns/api";
 import {
   Button,
   Card,
@@ -36,7 +35,7 @@ import {
 import { DraftAside } from "./DraftAside";
 import { DraftCard } from "./DraftCard";
 import { STARTERS, useCharacterDraft } from "./draft";
-import { myCharactersAtom } from "./load";
+import { newCharacterAtom } from "./load";
 import { characterWritesAt, createOwnCharacter } from "./write";
 
 /**
@@ -131,7 +130,7 @@ import { characterWritesAt, createOwnCharacter } from "./write";
 export function CharacterCreateScreen() {
   const { campaignId } = useParams({ from: "/play/campaigns/$campaignId/characters/new" });
   const navigate = useNavigate();
-  const [resource, reload] = useApiAtom(myCharactersAtom);
+  const [resource, reload] = useApiAtom(newCharacterAtom(campaignId));
   const view = resource.state === "ready" ? resource.value : undefined;
 
   const [draft, setDraft] = useState<FormDraft>(emptyDraft);
@@ -170,7 +169,7 @@ export function CharacterCreateScreen() {
    * wiring rather than of a flag.
    */
   const pick = (key: "species" | "className", value: string) =>
-    setDraft((current) => seededDraft({ ...current, [key]: value }, edited));
+    setDraft((current) => seededDraft({ ...current, [key]: value }, edited, options));
 
   /**
    * The scores re-seed too, through **the same one call** — because the seed
@@ -185,7 +184,7 @@ export function CharacterCreateScreen() {
    * there is one of it.
    */
   const setAbilities = (abilities: ReadonlyArray<AbilityDraft>) => {
-    setDraft((current) => seededDraft({ ...current, abilities }, edited));
+    setDraft((current) => seededDraft({ ...current, abilities }, edited, options));
     setScoring(false);
   };
 
@@ -207,6 +206,26 @@ export function CharacterCreateScreen() {
    */
   const membership = view?.memberships.find((row) => row.campaign.id === campaignId);
   const writable = membership !== undefined && membership.role === "player";
+
+  /**
+   * The classes and species **this table** offers — the two pickers, and the
+   * two entries the seed reads.
+   *
+   * It used to be `Ruleset`'s global twelve and ten. A campaign can have its
+   * own now, so the vocabulary is a read: the bundle every campaign shares,
+   * plus whatever this table's DM has copied in and **shared**. That last word
+   * is the server's, not this screen's — `corpusRowReadable` ends in
+   * `isDm OR visibility = 'shared'`, so an unshared class is simply not in this
+   * answer and there is no client-side filter that could disagree with it.
+   *
+   * `[]` while the read is in flight, which is the honest state rather than a
+   * fallback: an empty picker says *nothing to pick yet* for the fraction of a
+   * second before the list lands, and a hard-coded twelve would say something
+   * this table may not offer.
+   */
+  const options = view?.options ?? [];
+  const classes = options.filter((option) => option.kind === "class");
+  const species = options.filter((option) => option.kind === "species");
 
   /**
    * Which of the two paths this screen is on.
@@ -529,11 +548,17 @@ export function CharacterCreateScreen() {
                     />
                   </Field>
                   {/* **Pickers, not boxes**, by the captain's decision of
-                      2026-08-26. The vocabulary is the 2024 Player's Handbook's
-                      ten and twelve (`packages/api/src/Ruleset.ts`), and it is
-                      what makes the two numbers under this row possible at all
-                      — a class is the only thing that carries a hit die, and
+                      2026-08-26, and **this table's vocabulary** rather than a
+                      global one since a campaign could have its own. It is what
+                      makes the two numbers under this row possible at all — a
+                      class is the only thing that carries a hit die, and
                       "Circle of the Moon Druid" carries none.
+
+                      What is offered is what the server answered, narrowed by
+                      `corpusRowReadable`: the bundle, plus the classes this
+                      table's DM has copied in *and shared*. A DM who has
+                      written one and not shared it is not in this list, which
+                      is the row-level toggle doing its ordinary job.
 
                       `Select.Value` is written out rather than left to Base UI:
                       with neither `items` nor children it serialises the value,
@@ -558,9 +583,9 @@ export function CharacterCreateScreen() {
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {SPECIES_KEYS.map((key) => (
-                          <SelectItem key={key} value={key}>
-                            {key}
+                        {species.map((option) => (
+                          <SelectItem key={option.id} value={option.name}>
+                            {option.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -587,9 +612,9 @@ export function CharacterCreateScreen() {
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {CLASS_KEYS.map((key) => (
-                          <SelectItem key={key} value={key}>
-                            {key}
+                        {classes.map((option) => (
+                          <SelectItem key={option.id} value={option.name}>
+                            {option.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

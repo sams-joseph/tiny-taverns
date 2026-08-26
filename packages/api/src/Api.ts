@@ -13,6 +13,14 @@ import {
   CharacterOwnUpdate,
   CharacterUpdate,
 } from "./Character.js";
+import {
+  CharacterOption,
+  OptionDerive,
+  OptionFilter,
+  OptionLibraryCreate,
+  OptionLibraryUpdate,
+  OptionUpdate,
+} from "./CharacterOption.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import {
   Creature,
@@ -53,6 +61,7 @@ import {
   BeatId,
   CampaignId,
   CharacterId,
+  CharacterOptionId,
   CombatantId,
   CreatureId,
   EncounterCreatureId,
@@ -812,8 +821,15 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
   .middleware(Authorization) {}
 
 /**
- * The Library: **where a monster is authored**, and the only place a creature
+ * The Library: **where an original is authored**, and the only place a row
  * exists that is in no campaign and is somebody's.
+ *
+ * Two tables, one model, one group. A monster and a character option carry the
+ * same three-owner shape — the bundle, an account's original, a campaign's copy
+ * — because `repo/visibility.ts`'s four Library predicates are generic over a
+ * table name and were called unmodified against the second one. So the four
+ * statements below are read once and apply to both, and `derive` is the one
+ * seam in each case.
  *
  * Captain's model, in their own words: *"The library should be where you create
  * the entities; when you use them in a campaign they are copied in, so the
@@ -856,6 +872,118 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
  * The payloads are the same shape for the same reason, minus `visibility` — see
  * `CreatureLibraryCreate`, where its absence is the decision.
  */
+/**
+ * A campaign's **rules vocabulary**: the classes and species a character at this
+ * table can be built from.
+ *
+ * The bundle, plus whatever this campaign has copied in — which is
+ * `corpusRowReadable`, the same predicate and the same shape as the bestiary
+ * one path up. It is campaign-scoped in the path for the identical reason: the
+ * path is the *only* thing gating the bundled rows, and a top-level list would
+ * have nothing to read them through.
+ *
+ * ### The two readers, and why one of them is a player
+ *
+ * This is where character options stop resembling monsters. A creature list is
+ * the DM's; **this list is the create form's picker**, and the create form is a
+ * player's screen. `libraryRowReadable` compares `account_id` to the *reader's*
+ * account, so a player can never see their DM's Library — which is exactly why
+ * a homebrew class has to be copied into the campaign before it can be picked,
+ * and why this list rather than the Library one is what the picker reads.
+ *
+ * The consequence to hold on to: **`corpusRowReadable` ends in
+ * `isDm OR visibility = 'shared'`**, so a copy the DM has not shared is a class
+ * no player can choose. That is the seam working rather than a gap, and it is
+ * answered by the copy-in dialog sending `shared` out loud — see
+ * `OptionUpdate.visibility`.
+ *
+ * ### There is no `create` here, and that absence is the model
+ *
+ * The captain's second statement is that **authoring happens in the Library**;
+ * a campaign row created directly would be copied state with no original behind
+ * it. `POST /campaigns/:c/creatures` still exists and `AGENTS.md` already names
+ * it as the one endpoint that contradicts the model — so this group does not
+ * inherit the contradiction. A campaign gets an option by `derive` and by
+ * nothing else.
+ *
+ * ### Not paged, on purpose
+ *
+ * A vocabulary is bounded by what it hangs off, like a campaign's members and a
+ * night's checklist — see `Page.ts`, which lists exactly those as the reads
+ * that are deliberately not paged. A picker with a *Show more* under it is a
+ * picker that cannot be read at a glance. `OPTION_LIMIT` is the sanity bound.
+ */
+class CharacterOptionsGroup extends HttpApiGroup.make("options")
+  .add(
+    /**
+     * Every option this campaign offers — both kinds unless `kind` narrows it.
+     *
+     * One request rather than two is the common case and is why `kind` is a
+     * query parameter: the create form wants classes *and* species, and so does
+     * the Rules screen.
+     */
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: OptionFilter,
+      success: Schema.Array(CharacterOption),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:optionId", {
+      params: { campaignId: CampaignId, optionId: CharacterOptionId },
+      success: CharacterOption,
+      error: NotFound,
+    }),
+    /**
+     * Edit this campaign's copy — **including whether the players can see it**,
+     * which is the one field a copy has that an original does not.
+     *
+     * A bundled option lands here readable and not writable, and the refusal is
+     * the ordinary `NotFound`: `rowWritable` needs `campaign_id` to equal the
+     * campaign in the path, and a bundled row's is null.
+     */
+    HttpApiEndpoint.patch("update", "/:optionId", {
+      params: { campaignId: CampaignId, optionId: CharacterOptionId },
+      payload: OptionUpdate,
+      success: CharacterOption,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Take this campaign's copy back off the table.
+     *
+     * **No `Conflict`, and nothing refuses it**, which is the snapshot working
+     * rather than an oversight: a character stores its class as a *label*, so
+     * removing the option leaves every character made from it standing with the
+     * numbers they are playing. What they lose is a class the next character
+     * can be built from.
+     */
+    HttpApiEndpoint.delete("remove", "/:optionId", {
+      params: { campaignId: CampaignId, optionId: CharacterOptionId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * **Bring an option into this campaign** — the copy, and the only way a row
+     * gets here.
+     *
+     * The source is `copyableIntoCampaign`: this campaign's own options, the
+     * bundle, or the caller's own Library. Exactly the creature rule, and the
+     * Library half is what makes authoring-then-using a path at all.
+     *
+     * The copy is a **snapshot**. Nothing is read through `derivedFrom`, so
+     * editing the original afterwards does not reach it and deleting the
+     * original leaves it standing — which is the single most surprising thing
+     * about this feature and is why the dialog over it says so in words.
+     */
+    HttpApiEndpoint.post("derive", "/:optionId/derive", {
+      params: { campaignId: CampaignId, optionId: CharacterOptionId },
+      payload: OptionDerive,
+      success: CharacterOption,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/options")
+  .middleware(Authorization) {}
+
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
@@ -914,6 +1042,60 @@ class LibraryGroup extends HttpApiGroup.make("library")
      */
     HttpApiEndpoint.delete("remove", "/creatures/:creatureId", {
       params: { creatureId: CreatureId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * The account's own **character options** and the bundled ones — the
+     * classes and species it has authored, in no campaign.
+     *
+     * The same read as the creature list above with one word changed, because
+     * the predicate underneath is literally the same function with a different
+     * table name. What differs is downstream: an option here is invisible to
+     * every player in the product until its owner copies it into a campaign.
+     */
+    HttpApiEndpoint.get("options", "/options", {
+      query: OptionFilter,
+      success: Schema.Array(CharacterOption),
+    }),
+    /**
+     * **Write a class or a species.** The only place either is authored, and
+     * the second statement of the captain's model applied to a second table.
+     *
+     * No campaign, no `origin`, and no `visibility` — see
+     * `OptionLibraryCreate`, where each absence is the decision.
+     */
+    HttpApiEndpoint.post("createOption", "/options", {
+      payload: OptionLibraryCreate,
+      success: CharacterOption,
+    }),
+    HttpApiEndpoint.get("findOption", "/options/:optionId", {
+      params: { optionId: CharacterOptionId },
+      success: CharacterOption,
+      error: NotFound,
+    }),
+    /**
+     * Edit one you own.
+     *
+     * **This does not reach any campaign's copy of it**, which is the whole of
+     * what a snapshot means, and it is the thing a DM is most likely to be
+     * surprised by. A `Conflict` is how a body that does not match the row's own
+     * `kind` is refused — the payload cannot see the row it is patching, so the
+     * repository is where the two are compared.
+     */
+    HttpApiEndpoint.patch("updateOption", "/options/:optionId", {
+      params: { optionId: CharacterOptionId },
+      payload: OptionLibraryUpdate,
+      success: CharacterOption,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Delete one you own. **Copies already in campaigns stay where they are**,
+     * with `derivedFrom` going null — the same `on delete set null` a creature's
+     * provenance pointer has, and the same reason.
+     */
+    HttpApiEndpoint.delete("removeOption", "/options/:optionId", {
+      params: { optionId: CharacterOptionId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
@@ -1465,6 +1647,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(CreaturesGroup)
+  .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)
   .add(PrepGroup)

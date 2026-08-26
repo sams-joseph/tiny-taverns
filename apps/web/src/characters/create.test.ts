@@ -1,4 +1,4 @@
-import type { CampaignMembership } from "@taverns/api";
+import type { CampaignMembership, CharacterOption, OptionKind } from "@taverns/api";
 import { describe, expect, it } from "vitest";
 import { abilityDrafts, abilitySummary, assignScores } from "./abilities";
 import {
@@ -41,6 +41,38 @@ const draftWith = (part: Partial<CharacterDraft>): CharacterDraft => ({
   name: "Sorrel",
   ...part,
 });
+
+/**
+ * One row of a campaign's rules vocabulary.
+ *
+ * `as unknown as` rather than a real `CharacterOption`, for the reason `table`
+ * above is one: the decoded union carries the ownership pair, the provenance
+ * tail and two timestamps, and `seededDraft` reads the name, the kind and the
+ * document. Building the rest would be nine fields of noise around the three
+ * that decide the answer.
+ */
+const option = (kind: OptionKind, name: string, body: Record<string, unknown>): CharacterOption =>
+  ({ id: `option-${name}`, kind, name, body }) as unknown as CharacterOption;
+
+/**
+ * What a table offers, as the picker was built from it.
+ *
+ * The bundled entries these tests name, **plus a homebrew class and a homebrew
+ * species** — because the whole point of the vocabulary being a read is that
+ * the seed cannot tell one from the other, and a fixture holding only bundled
+ * rows would never show that.
+ */
+const VOCABULARY: ReadonlyArray<CharacterOption> = [
+  option("class", "Druid", { hitDie: 8, unarmouredAc: ["DEX"] }),
+  option("class", "Barbarian", { hitDie: 12, unarmouredAc: ["DEX", "CON"] }),
+  option("class", "Monk", { hitDie: 8, unarmouredAc: ["DEX", "WIS"] }),
+  option("class", "Wizard", { hitDie: 6, unarmouredAc: ["DEX"] }),
+  /** *Bloodsworn, d10, unarmoured AC DEX + CON* — this table's own. */
+  option("class", "Bloodsworn", { hitDie: 10, unarmouredAc: ["DEX", "CON"] }),
+  option("species", "Elf", { hpPerLevel: 0 }),
+  option("species", "Dwarf", { hpPerLevel: 1 }),
+  option("species", "Marshfolk", { hpPerLevel: 2 }),
+];
 
 describe("which tables a character of your own may go into", () => {
   it("is the ones you play at, and not the ones you run", () => {
@@ -179,18 +211,26 @@ describe("what a class and species pick fills in", () => {
   });
 
   it("fills in the hit die and the unarmoured base once a class is picked", () => {
-    const picked = seededDraft(draftWith({ className: "Druid", species: "Elf" }), untouched);
+    const picked = seededDraft(
+      draftWith({ className: "Druid", species: "Elf" }),
+      untouched,
+      VOCABULARY,
+    );
     // d8, and no ability scores on this form — so the die and a bare 10.
     expect(picked.hpMax).toBe("8");
     expect(picked.ac).toBe("10");
   });
 
   it("re-seeds when the pick changes, so a druid's hit points do not survive a barbarian", () => {
-    const druid = seededDraft(draftWith({ className: "Druid", species: "Elf" }), untouched);
-    const barbarian = seededDraft({ ...druid, className: "Barbarian" }, untouched);
+    const druid = seededDraft(
+      draftWith({ className: "Druid", species: "Elf" }),
+      untouched,
+      VOCABULARY,
+    );
+    const barbarian = seededDraft({ ...druid, className: "Barbarian" }, untouched, VOCABULARY);
     expect(barbarian.hpMax).toBe("12");
     // Dwarven Toughness, the one species trait that reaches any of the three.
-    expect(seededDraft({ ...barbarian, species: "Dwarf" }, untouched).hpMax).toBe("13");
+    expect(seededDraft({ ...barbarian, species: "Dwarf" }, untouched, VOCABULARY).hpMax).toBe("13");
   });
 
   it("never writes over a number the player typed", () => {
@@ -198,12 +238,12 @@ describe("what a class and species pick fills in", () => {
     // it, picking a class after typing a hit point total silently discards it —
     // which renders as a perfectly ordinary form.
     const typed = draftWith({ className: "Druid", species: "Elf", ac: "17", hpMax: "34" });
-    const seeded = seededDraft(typed, new Set<SeededField>(["ac", "hpMax"]));
+    const seeded = seededDraft(typed, new Set<SeededField>(["ac", "hpMax"]), VOCABULARY);
     expect(seeded.ac).toBe("17");
     expect(seeded.hpMax).toBe("34");
     // And one at a time: the AC is the player's and the hit points are still
     // the class's.
-    expect(seededDraft(typed, new Set<SeededField>(["ac"]))).toMatchObject({
+    expect(seededDraft(typed, new Set<SeededField>(["ac"]), VOCABULARY)).toMatchObject({
       ac: "17",
       hpMax: "8",
     });
@@ -212,15 +252,70 @@ describe("what a class and species pick fills in", () => {
   it("leaves the hit points alone until a class is picked", () => {
     // There is no hit die to read, so there is no number to write. The armour
     // class still seeds, because 10 is true of everybody.
-    const speciesOnly = seededDraft(draftWith({ species: "Dwarf" }), untouched);
+    const speciesOnly = seededDraft(draftWith({ species: "Dwarf" }), untouched, VOCABULARY);
     expect(speciesOnly.hpMax).toBe("");
     expect(speciesOnly.ac).toBe("10");
+  });
+
+  it("cannot tell this table's own class from a bundled one", () => {
+    // **The acceptance arithmetic of the homebrew slice.** A d10 class whose
+    // unarmoured defence adds constitution seeds exactly as a bundled one
+    // does, because nothing in `seedFor` asks where an entry came from — the
+    // *only* thing that changed on this screen is where the list comes from.
+    const picked = seededDraft(
+      draftWith({ className: "Bloodsworn", species: "Marshfolk" }),
+      untouched,
+      VOCABULARY,
+    );
+    // d10 + CON 0, plus Marshfolk's two per level at level 1.
+    expect(picked.hpMax).toBe("12");
+    expect(picked.ac).toBe("10");
+    // And the label the picker wrote is what the payload sends, which is the
+    // whole of the link between a character and the option it was made from.
+    expect(payloadFrom(picked).className).toBe("Bloodsworn");
+    expect(payloadFrom(picked).species).toBe("Marshfolk");
+  });
+
+  it("seeds nothing at all for a label this table has no option for", () => {
+    // Reachable from a URL, from a stale form, and from a class that was
+    // removed between the picker being drawn and the pick being made. There is
+    // no hit die to read and **no fuzzy matching to fall back on** — a prefix
+    // rule would read "Circle of the Moon Druid" as a druid, which is a guess
+    // written into a number somebody reads out at the table, and it is a worse
+    // guess under homebrew because a campaign may genuinely have a "Moon Druid"
+    // that is a different class.
+    const unknown = seededDraft(
+      draftWith({ className: "Circle of the Moon Druid", species: "Half-orc" }),
+      untouched,
+      VOCABULARY,
+    );
+    expect(unknown.hpMax).toBe("");
+    expect(unknown.ac).toBe("10");
+    // The label is kept verbatim and sent verbatim. Nothing rewrites it.
+    expect(payloadFrom(unknown).className).toBe("Circle of the Moon Druid");
+  });
+
+  it("matches a label case-insensitively and exactly, and no other way", () => {
+    expect(seededDraft(draftWith({ className: "druid" }), untouched, VOCABULARY).hpMax).toBe("8");
+    expect(seededDraft(draftWith({ className: "  DRUID " }), untouched, VOCABULARY).hpMax).toBe(
+      "8",
+    );
+    expect(seededDraft(draftWith({ className: "Blood" }), untouched, VOCABULARY).hpMax).toBe("");
+  });
+
+  it("seeds nothing when the table's vocabulary has not arrived yet", () => {
+    // The read is in flight, so the picker is empty and there is nothing to
+    // have picked. An empty list is the honest state rather than a fallback: a
+    // hard-coded twelve here would offer classes this table may not have.
+    expect(seededDraft(draftWith({ className: "Druid" }), untouched, []).hpMax).toBe("");
   });
 
   it("sends the vocabulary's own labels, which is what makes them readable back", () => {
     // No key column and no migration: the link from a row to the vocabulary is
     // the label, so what the picker writes has to be the label exactly.
-    const payload = payloadFrom(seededDraft(draftWith({ className: "Monk" }), untouched));
+    const payload = payloadFrom(
+      seededDraft(draftWith({ className: "Monk" }), untouched, VOCABULARY),
+    );
     expect(payload.className).toBe("Monk");
     expect(payload.hpMax).toBe(8);
     expect(payload.level).toBe(1);
@@ -261,6 +356,7 @@ describe("what the ability scores fill in", () => {
         abilities: scored(13, 14, 15, 8, 12, 10),
       }),
       untouched,
+      VOCABULARY,
     );
     expect(hand.hpMax).toBe("15");
     expect(hand.ac).toBe("14");
@@ -275,6 +371,7 @@ describe("what the ability scores fill in", () => {
         abilities: scored(15, 14, 13, 12, 10, 8),
       }),
       untouched,
+      VOCABULARY,
     );
     expect(drawOrder.hpMax).toBe("14");
   });
@@ -283,7 +380,11 @@ describe("what the ability scores fill in", () => {
     // Not required, by the captain's boundary: a player who wants to get in now
     // and fix it later gets the answer the form has always given them, and the
     // copy beside the boxes says so.
-    const none = seededDraft(draftWith({ className: "Barbarian", species: "Dwarf" }), untouched);
+    const none = seededDraft(
+      draftWith({ className: "Barbarian", species: "Dwarf" }),
+      untouched,
+      VOCABULARY,
+    );
     expect(none.hpMax).toBe("13");
     expect(none.ac).toBe("10");
     expect(abilitySummary(emptyDraft.abilities)).toBeUndefined();
@@ -296,7 +397,11 @@ describe("what the ability scores fill in", () => {
     const conOnly = abilityDrafts([]).map((cell) =>
       cell.label === "CON" ? { ...cell, score: "16" } : cell,
     );
-    const some = seededDraft(draftWith({ className: "Wizard", abilities: conOnly }), untouched);
+    const some = seededDraft(
+      draftWith({ className: "Wizard", abilities: conOnly }),
+      untouched,
+      VOCABULARY,
+    );
     // d6 plus a +3 constitution, and a dexterity nobody typed is still +0.
     expect(some.hpMax).toBe("9");
     expect(some.ac).toBe("10");
@@ -304,7 +409,11 @@ describe("what the ability scores fill in", () => {
   });
 
   it("re-seeds when a score changes, and still never writes over a typed number", () => {
-    const druid = seededDraft(draftWith({ className: "Druid", species: "Elf" }), untouched);
+    const druid = seededDraft(
+      draftWith({ className: "Druid", species: "Elf" }),
+      untouched,
+      VOCABULARY,
+    );
     expect(druid.hpMax).toBe("8");
     // The scores arrive after the class, which is the ordinary order on the
     // form: the boxes have to follow, or they hold the answer for a character
@@ -312,6 +421,7 @@ describe("what the ability scores fill in", () => {
     const withScores = seededDraft(
       { ...druid, abilities: scored(8, 14, 15, 12, 15, 10) },
       untouched,
+      VOCABULARY,
     );
     expect(withScores.hpMax).toBe("10");
     expect(withScores.ac).toBe("12");
@@ -320,6 +430,7 @@ describe("what the ability scores fill in", () => {
       seededDraft(
         { ...druid, abilities: scored(8, 14, 15, 12, 15, 10) },
         new Set<SeededField>(["ac"]),
+        VOCABULARY,
       ).ac,
     ).toBe(druid.ac);
   });
@@ -333,6 +444,7 @@ describe("what the ability scores fill in", () => {
           abilities: scored(13, 14, 15, 8, 12, 10),
         }),
         untouched,
+        VOCABULARY,
       ),
     );
     expect(payload.hpMax).toBe(15);

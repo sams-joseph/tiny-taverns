@@ -122,6 +122,19 @@ export const reads = {
   /** This campaign's bestiary: its own creatures, plus the bundle. */
   creatures: (campaignId: CampaignId): ReadKey => key`creatures:${campaignId}`,
 
+  /**
+   * This campaign's rules vocabulary: the classes and species copied into it,
+   * plus the bundle.
+   *
+   * **Two screens read it and neither of them is the one that writes it most.**
+   * The Rules screen is the DM's; the create form's two pickers are a player's,
+   * and a copy landing shared is what makes a class appear in one of them. So a
+   * write here is one of the few in the product whose effect is on a screen its
+   * author is not looking at — which is precisely what naming a resource
+   * reaches and calling a screen's `reload` does not.
+   */
+  options: (campaignId: CampaignId): ReadKey => key`options:${campaignId}`,
+
   // ----------------------------------------------------------------- a night
 
   /** *Before you sit down* — one night's checklist. */
@@ -155,6 +168,16 @@ export const reads = {
   /** The characters this account plays, across every table. */
   myCharacters: "me:characters" as ReadKey,
 
-  /** The account's Library: the originals it authored, plus the bundle. */
+  /** The account's Library: the creatures it authored, plus the bundle. */
   library: "library" as ReadKey,
+
+  /**
+   * The account's Library of **character options** — the classes and species it
+   * authored, plus the bundle.
+   *
+   * Its own key rather than `library`'s, because the two lists have no reader
+   * in common: nothing draws a monster and a class in one place, so refreshing
+   * one on a write to the other would be a request nobody is waiting for.
+   */
+  libraryOptions: "library:options" as ReadKey,
 } as const;

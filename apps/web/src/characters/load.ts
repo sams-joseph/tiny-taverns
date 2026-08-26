@@ -3,12 +3,15 @@ import type {
   CampaignMembership,
   Character,
   CharacterId,
+  CharacterOption,
   PlayerLiveTable,
 } from "@taverns/api";
 import { Effect } from "effect";
-import { apiAtom } from "../api/atoms";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { apiAtom, combine } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { reads } from "../api/keys";
+import { campaignOptionsAtom } from "../rules/load";
 
 /**
  * Everything both character screens render, in one shape.
@@ -146,3 +149,126 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
 
     return { ...view, live } satisfies CharacterSheetView;
   });
+
+/**
+ * What the create form reads: the roster's own value, plus **the vocabulary of
+ * the one table this character is being made at.**
+ *
+ * Two atoms rather than a third call inside `loadMyCharacters`, and the split
+ * is what each is keyed on: the roster names no campaign (`GET /me/characters`
+ * is the one read on `character` that does not), and the vocabulary names
+ * exactly one. Composed into `loadMyCharacters` they would share a key, and a
+ * DM sharing a class at one table would re-read every character the account
+ * plays, everywhere.
+ *
+ * **The picker is a player's window onto a DM's screen**, which is the thing to
+ * hold on to: `campaignOptionsAtom` is the same atom the Rules screen writes
+ * through, so a class shared on one becomes pickable on the other without
+ * either knowing the other exists. That is what naming a resource buys and what
+ * a screen's `reload` could not.
+ *
+ * ### The vocabulary is read **only at a table this account plays at**
+ *
+ * The screen already decides whether to draw the form at all from
+ * `memberships` — `role === "player"` and nothing else, which is
+ * `tablesForNewCharacter`'s rule — and this asks the same question one step
+ * earlier so the second read is not made when the answer is no.
+ *
+ * It is not an optimisation. `options.list` composes `ensureCampaignReadable`,
+ * so at a table this account is not a member of it is a **404** — and combined
+ * unconditionally that failure would become the screen's, replacing *"Not your
+ * table"* with a generic error card. Two refusals with two different sentences
+ * is the whole point of the screen reading the memberships first; asking for a
+ * vocabulary it has already decided not to draw would throw the better one
+ * away.
+ *
+ * A DM's own table is the case that makes it a *decision* rather than plumbing:
+ * `options.list` would succeed there — `isDm` is a disjunct of
+ * `campaignReadable` — and the read is still not made, because the form is not
+ * drawn either. The pill is a mode.
+ *
+ * `combine` rather than a bare `AsyncResult.all`, for `api/atoms.ts`'s reason:
+ * the vocabulary is keyed on a campaign this screen has only just arrived at,
+ * so on the first render it is an atom nobody has read — which `all` propagates
+ * as `Initial` and a screen renders as a blank body over a form somebody is
+ * typing into.
+ */
+export interface NewCharacterView extends MyCharactersView {
+  /**
+   * The classes and species this table offers, as a player sees them.
+   *
+   * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, so what
+   * arrives here is already narrowed by the server — there is no client-side
+   * "only the shared ones", and there must not be: a second answer to that
+   * question is the one that could disagree.
+   *
+   * `[]` at a table this account does not play at, where the screen draws a
+   * refusal rather than a form and nothing is asked for.
+   */
+  readonly options: ReadonlyArray<CharacterOption>;
+}
+
+export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable(
+    (get): AsyncResult.AsyncResult<NewCharacterView, unknown> => {
+      /**
+       * **Both are read on every evaluation, unconditionally**, and that is a
+       * requirement of the registry rather than a style: an atom's
+       * dependencies are the ones its read function actually touched, so a
+       * `get` behind a branch that was false on the first pass is a
+       * subscription that never gets made — and the value it eventually
+       * resolves to never wakes this atom. Measured: skipping the second `get`
+       * until the roster had arrived left the create screen loading for ever.
+       */
+      const roster = get(myCharactersAtom);
+      const vocabulary = get(campaignOptionsAtom(campaignId));
+
+      if (!AsyncResult.isSuccess(roster)) {
+        // `map` over a non-success carries the loading and failure states
+        // through unchanged — it is the widening the compiler needs, not a
+        // branch that can run.
+        return combine(
+          get,
+          AsyncResult.map(roster, (view) => ({ ...view, options: [] })),
+        );
+      }
+
+      /**
+       * At a table this account does not **play** at, the vocabulary's answer
+       * is dropped rather than shown.
+       *
+       * `options.list` composes `ensureCampaignReadable`, so at a table this
+       * account is not a member of it is a 404 — and propagated it would
+       * replace the screen's *"Not your table"* with a generic error card,
+       * throwing away the better of two sentences. The roster is what decides
+       * which refusal this is, and it has already answered.
+       *
+       * **It is dropped only here**, which is the line worth holding: at a
+       * table this account really does play at, a vocabulary that failed to
+       * load is something the player has to be told, because the alternative
+       * is a form whose class picker is silently empty. So the failure passes
+       * straight through in the one case where the form is drawn.
+       *
+       * A DM's own table takes this branch too, and `options.list` would have
+       * succeeded there — `isDm` is a disjunct of `campaignReadable`. The form
+       * is still not drawn, because the pill is a mode.
+       */
+      const membership = roster.value.memberships.find((row) => row.campaign.id === campaignId);
+      if (membership?.role !== "player") {
+        return AsyncResult.success({ ...roster.value, options: [] });
+      }
+
+      return combine(
+        get,
+        AsyncResult.map(vocabulary, (options) => ({ ...roster.value, options })),
+      );
+    },
+    // Named by atom rather than by key: both are this screen's own and it knows
+    // them by name. Without this the screen's *Try again* would re-run a
+    // derived read and hand back the same cached failure.
+    (refresh) => {
+      refresh(myCharactersAtom);
+      refresh(campaignOptionsAtom(campaignId));
+    },
+  ),
+);

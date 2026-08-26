@@ -1,0 +1,98 @@
+import { Effect } from "effect";
+import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
+
+/** What one run of the import did. */
+export interface ImportResult {
+  readonly inserted: number;
+  readonly updated: number;
+}
+
+/**
+ * Writes the bundled classes and species into `character_option` as global
+ * `system` rows.
+ *
+ * **The second writer of `origin = 'system'`, and it is deliberately not an
+ * HTTP endpoint** — `bestiary/import.ts` states the reasoning at length and it
+ * transfers unchanged: global content has no owning campaign, so there is no
+ * campaign in a path to scope it, no `CurrentActor` that could be checked
+ * against it, and nothing for the visibility predicates to contain it with. An
+ * endpoint that could mint one would be an endpoint that writes rows every
+ * campaign can read.
+ *
+ * So this and the bestiary importer are the only two places in `src/` that
+ * touch campaign content without `CurrentActor` in their requirements, and that
+ * exception is why each is confined to one file behind one bin script.
+ *
+ * Idempotent: upserts on `character_option_system_name_key`, the partial unique
+ * index over `(kind, lower(name))` where the row is owned by nobody.
+ * Re-running it after editing `systemOptions.ts` updates in place, so a DM's
+ * copies — which point at these rows through `derived_from` — survive.
+ *
+ * ### It writes `visibility = 'shared'` on insert, and the bestiary importer
+ * does not. That difference is the whole reason this comment is long.
+ *
+ * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, and the column
+ * default is `dm`. For a **creature** that is exactly right and is the point of
+ * the feature: a stat block is precisely the thing the product says a player
+ * must not have, so the bundled bestiary is DM-only until a DM shares a row.
+ *
+ * For a **class** it is the difference between working and not. This list is
+ * what the create form's pickers read, and the create form is a *player's*
+ * screen — so a bundle that landed `dm` would give every player in the product
+ * an empty class picker, at every table, until each DM went and shared twelve
+ * rows by hand. That is not a fail-closed default protecting anything; there is
+ * nothing secret about the existence of the word "Druid".
+ *
+ * The rule this follows is the one the copy-in dialog follows: **the column
+ * default does not change, and a writer that means `shared` says so out loud.**
+ * No predicate moves, `dm` is still what an unstated visibility means, and a DM
+ * who wants a class off their table's list un-shares it.
+ *
+ * Which is why the `do update` clause **does not touch `visibility`**, exactly
+ * as the bestiary importer's does not: a DM who un-shared a bundled class does
+ * not have it re-shared by an upgrade. `insert` says `shared`, `update` says
+ * nothing, and between them the DM's choice is the one that survives.
+ */
+export const importSystemOptions = (
+  corpus: ReadonlyArray<SystemOption> = SYSTEM_OPTIONS,
+): Effect.Effect<ImportResult, SqlError.SqlError, SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        let inserted = 0;
+        let updated = 0;
+
+        for (const option of corpus) {
+          // `xmax = 0` is true only for a tuple this statement inserted, which
+          // is how an upsert reports which of the two things it did.
+          const rows = yield* sql<{ readonly inserted: boolean }>`
+            insert into character_option (
+              campaign_id, account_id, origin, kind, name, body, visibility
+            )
+            values (
+              null,
+              null,
+              'system',
+              ${option.kind},
+              ${option.name},
+              ${JSON.stringify(option.body)},
+              'shared'
+            )
+            on conflict (kind, lower(name))
+              where campaign_id is null and account_id is null
+            do update set
+              body       = excluded.body,
+              updated_at = now()
+            returning (xmax = 0) as inserted
+          `;
+          if (rows[0]?.inserted === true) inserted += 1;
+          else updated += 1;
+        }
+
+        return { inserted, updated };
+      }),
+    );
+  });

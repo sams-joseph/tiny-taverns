@@ -547,7 +547,28 @@ describe("the scope, counted", () => {
     // readable and writable by its creator afterwards — plus
     // `CharacterOwnCreate`, which has no field for a live column, for
     // `visibility` or for an account. `player-create.test.ts` pins both halves.
-    expect(ungated).toBe(75);
+    //
+    // The last ten are the whole of `repo/Options.ts` — a campaign's rules
+    // vocabulary and the Library originals behind it. **Five of them are the
+    // Library's and are ungated for the Library's reason**, unchanged: a proof
+    // carries a campaign and those rows are in none, so there is no membership
+    // to prove and no player projection to diverge from.
+    //
+    // The other five are campaign-scoped and are the interesting half, because
+    // this is the one campaign-scoped list in the product a **player** reads.
+    // The gate is for a read whose player projection *diverges* from the DM's,
+    // and here the two projections are the same schema: a class is a name and a
+    // hit die, and a player who may pick it is a player who may read it. What
+    // narrows a player's answer is `corpusRowReadable`'s last clause — a copy
+    // the DM has not shared is not in it — which is the row-level toggle doing
+    // its ordinary job rather than a projection. Gating `list` would take the
+    // create form's picker away from the audience it exists for.
+    //
+    // The three writes among them (`update`, `remove`, `derive`) are ungated
+    // for `Characters.assign`'s reason: `rowWritable` and
+    // `ensureCampaignWritable` already require `isDm`, so a proof on top would
+    // be a second answer to a question the predicate underneath answers first.
+    expect(ungated).toBe(85);
   });
 });
 

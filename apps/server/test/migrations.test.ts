@@ -89,6 +89,7 @@ describe("migrations", () => {
       "campaign_invite",
       "campaign_member",
       "character",
+      "character_option",
       "combatant",
       "creature",
       "effect_sql_migrations",
@@ -122,6 +123,7 @@ describe("migrations", () => {
       { migration_id: 14, name: "character_live" },
       { migration_id: 15, name: "library_creatures" },
       { migration_id: 16, name: "player_threads" },
+      { migration_id: 17, name: "character_options" },
     ]);
   }, 60_000);
 
@@ -148,6 +150,7 @@ describe("migrations", () => {
       { migration_id: 14, name: "character_live" },
       { migration_id: 15, name: "library_creatures" },
       { migration_id: 16, name: "player_threads" },
+      { migration_id: 17, name: "character_options" },
     ]);
   }, 60_000);
 });

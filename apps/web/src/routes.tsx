@@ -22,6 +22,7 @@ import { JoinScreen } from "./join/JoinScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
+import { RulesScreen } from "./rules/RulesScreen";
 import { RunScreen } from "./run/RunScreen";
 
 /**
@@ -295,6 +296,25 @@ const partyRoute = createRoute({
 });
 
 /**
+ * The classes and species a character at this table is built from.
+ *
+ * It names a campaign because the read does — `options.list` hangs off
+ * `/campaigns/:campaignId`, and that path is the *only* thing gating the
+ * bundled rows it returns beside the campaign's own copies, exactly as it is
+ * for the bestiary. A campaign-less Rules screen would have nothing to read
+ * *through*.
+ *
+ * Remounted per campaign: which class is half-typed in the dialog belongs to
+ * the table it is being written for.
+ */
+const rulesRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "rules",
+  component: RulesScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/**
  * The fight, named by all three ids — see this file's own note on why.
  *
  * Remounted per run: the stream, the log and the optimistic hit points all
@@ -542,6 +562,7 @@ export const routeTree = rootRoute.addChildren([
     encountersRoute,
     notesRoute,
     bestiaryRoute,
+    rulesRoute,
     chronicleRoute,
     partyRoute,
     runRoute,
@@ -604,6 +625,7 @@ export const routes = {
   encounters: encountersRoute,
   notes: notesRoute,
   bestiary: bestiaryRoute,
+  rules: rulesRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
   run: runRoute,

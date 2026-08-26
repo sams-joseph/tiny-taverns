@@ -7,6 +7,7 @@ import { type HostedSession } from "../auth/hostedSession";
 import {
   campaign,
   campaignId,
+  campaignOptions,
   character,
   sessionId,
   type Answer,
@@ -27,7 +28,7 @@ import {
  * path, so the fixture has to cross a campaign boundary or it proves nothing.
  */
 
-export { campaign, campaignId } from "../campaign/campaign.fixtures";
+export { campaign, campaignId, campaignOptions } from "../campaign/campaign.fixtures";
 
 export const brannocId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
 export const sorrelId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000902");
@@ -259,6 +260,15 @@ export const twoTables = (): Map<string, Answer> =>
     ["GET /me", { status: 200, body: account }],
     ...hobRoutes(),
     ["GET /me/characters", { status: 200, body: [brannoc, sorrel] }],
+    // The two pickers' vocabulary — what *this table* offers, which since a
+    // campaign can have its own classes is a read rather than a constant. It is
+    // the campaign list rather than the Library one because a player cannot
+    // read their DM's Library at all, and it arrives already narrowed to the
+    // shared rows by `corpusRowReadable`. `campaignOptions` is the campaign
+    // fixtures' — one answer to what this table offers, shared by the DM's
+    // Rules screen and the player's create form.
+    [`GET /campaigns/${campaignId}/options`, { status: 200, body: campaignOptions }],
+    [`GET /campaigns/${otherCampaignId}/options`, { status: 200, body: campaignOptions }],
     // Neither table is playing: the quiet state, which is what most of these
     // tests are about and the one the banner draws nothing for.
     quiet(campaignId),

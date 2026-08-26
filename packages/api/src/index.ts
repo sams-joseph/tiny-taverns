@@ -4,6 +4,7 @@ export * from "./Api.js";
 export * from "./Beat.js";
 export * from "./Campaign.js";
 export * from "./Character.js";
+export * from "./CharacterOption.js";
 export * from "./Combatant.js";
 export * from "./Creature.js";
 export * from "./Encounter.js";

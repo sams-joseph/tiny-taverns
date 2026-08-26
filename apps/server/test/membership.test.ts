@@ -24,6 +24,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
@@ -155,6 +156,17 @@ describe("the reach seam, enforced rather than asserted", () => {
     // lives. It is not a reach path into a campaign either: the campaign half of
     // that predicate is the one every other predicate already composes, so a
     // conversation is reachable exactly while the table it is at is.
+    //
+    // `repo/Options.ts` and `ruleset/import.ts` are the seventh and eighth, and
+    // they are `repo/Creatures.ts`'s and `bestiary/import.ts`'s pair over the
+    // second table that carries the Library model —
+    // `character_option.account_id` (`0017`) is whose **Library** a class or a
+    // species is in. Not one new predicate between them: the four Library
+    // predicates in `repo/visibility.ts` have always taken a table name, so the
+    // repository composes them with a different string and the seeder names the
+    // column in the negative for the arbiter-index reason above. If a change
+    // here ever seems to need a predicate of its own, that is a finding rather
+    // than a step.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "bestiary/import.ts",
       "repo/Campaigns.ts",
@@ -162,7 +174,9 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Creatures.ts",
       "repo/HobThreads.ts",
       "repo/Memberships.ts",
+      "repo/Options.ts",
       "repo/visibility.ts",
+      "ruleset/import.ts",
     ]);
   });
 
@@ -220,6 +234,7 @@ const runtime = ManagedRuntime.make(
     Encounters.layer,
     HobThreads.layer,
     Notes.layer,
+    Options.layer,
     PrepItems.layer,
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -253,6 +268,7 @@ const makeFixture = Effect.gen(function* () {
   const encounters = yield* Encounters;
   const hob = yield* HobThreads;
   const notes = yield* Notes;
+  const options = yield* Options;
   const prep = yield* PrepItems;
   const roster = yield* EncounterCreatures;
   const runs = yield* EncounterRuns;
@@ -283,6 +299,19 @@ const makeFixture = Effect.gen(function* () {
   );
   const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: creature.id, count: 6 }));
+
+  // A homebrew class, authored into this account's Library and copied into the
+  // table. The copy is what the campaign read below has to have and the
+  // stranger has to be refused; the original is deliberately *not* what that
+  // read answers, which is the Library model in one line.
+  const homebrew = yield* as(
+    options.libraryCreate({
+      kind: "class",
+      name: "Bloodsworn",
+      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"] },
+    }),
+  );
+  yield* as(options.derive(campaign.id, homebrew.id, { visibility: "shared" }));
 
   const asDm = yield* as(dmOf(campaign.id));
   const run = yield* as(runs.start(asDm, session.id, { encounterId: encounter.id }));
@@ -339,6 +368,7 @@ const READS: Record<
     | Encounters
     | HobThreads
     | Notes
+    | Options
     | PrepItems
     | SessionEvents
     | Sessions
@@ -351,6 +381,14 @@ const READS: Record<
   beat: (f) => items(Effect.flatMap(Beats, (r) => r.list(f.campaign.id, f.session.id, {}))),
   prep_item: (f) => Effect.flatMap(PrepItems, (r) => r.list(f.campaign.id, f.session.id)),
   creature: (f) => items(Effect.flatMap(Creatures, (r) => r.list(f.campaign.id, {}))),
+  // The campaign's rules vocabulary. It is `creature`'s shape over a second
+  // table and needed no predicate of its own — `corpusRowReadable` takes a
+  // table name, so the reach question is the one already answered here. What
+  // makes it worth its own row in this list is that it is the **one list a
+  // player reads to fill in a control**, so a stranger reading it would be a
+  // leak somebody would have found by using the product rather than by testing
+  // it.
+  character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
   encounter: (f) => items(Effect.flatMap(Encounters, (r) => r.list(f.campaign.id, {}))),
   encounter_creature: (f) =>
     Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),

@@ -27,6 +27,20 @@ export const noteId = "2b1f2a1e-0000-4000-8000-000000000801";
 export const goblinId = "2b1f2a1e-0000-4000-8000-000000000a01";
 export const hagId = "2b1f2a1e-0000-4000-8000-000000000a02";
 export const rosterRowId = "2b1f2a1e-0000-4000-8000-000000000b01";
+/**
+ * The DM's own account.
+ *
+ * Declared up here with the rest of the ids rather than beside `dmMember`,
+ * because the Library fixtures below name it and a `const` is not hoisted.
+ * `dmAccountId` is exported from its old place and is this value.
+ */
+const theDmAccountId = "2b1f2a1e-0000-4000-8000-0000000000a1";
+export const druidOptionId = "2b1f2a1e-0000-4000-8000-000000000e01";
+export const elfOptionId = "2b1f2a1e-0000-4000-8000-000000000e02";
+export const bloodswornOptionId = "2b1f2a1e-0000-4000-8000-000000000e03";
+export const marshfolkOptionId = "2b1f2a1e-0000-4000-8000-000000000e04";
+export const bloodswornOriginalId = "2b1f2a1e-0000-4000-8000-000000000e05";
+export const marshfolkOriginalId = "2b1f2a1e-0000-4000-8000-000000000e06";
 export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
@@ -241,6 +255,149 @@ export const hag = {
 };
 
 /**
+ * The rules vocabulary — the classes and species a character at this table is
+ * built from.
+ *
+ * **Three positions, told apart by the two ownership columns and never by
+ * `origin`**, exactly as a creature is: the bundle is owned by nobody, a
+ * Library original has an `accountId`, and a campaign's copy has a
+ * `campaignId`. Only the last of the three is a row this table's DM may edit,
+ * and only the last of the three can be unshared.
+ */
+const bundledOption = {
+  campaignId: null,
+  accountId: null,
+  derivedFrom: null,
+  // Written `shared` by the seeder, deliberately and unlike the bundled
+  // bestiary: a class vocabulary no player can read is not a vocabulary, and
+  // the create form's pickers are a player's screen. See `ruleset/import.ts`.
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  ...stamps,
+};
+
+/**
+ * The bundled twelve and ten, as the seeder writes them.
+ *
+ * Generated from a compact table rather than written out as twenty-two object
+ * literals — the *values* are still exactly the JSON the server sends, which is
+ * what this file's rule is about, and twenty-two hand-copied blocks would be
+ * twenty-two chances to paste the wrong hit die under the right name.
+ *
+ * They are here because **every campaign has them**: the bundle is unowned, so
+ * `corpusRowReadable` returns it through whatever campaign is in the path. A
+ * fixture with only the copies would make a picker with two entries in it,
+ * which is not a state the product has.
+ */
+const bundled = (
+  kind: "class" | "species",
+  index: number,
+  name: string,
+  body: Record<string, unknown>,
+) => ({
+  ...bundledOption,
+  // Twelve hex digits in the last group, like every other id in this file: a
+  // short one decodes as *not a UUID* and the screen renders the schema's own
+  // complaint instead of a picker.
+  id: `2b1f2a1e-0000-4000-8000-${kind === "class" ? "f" : "e"}00000000${String(index).padStart(3, "0")}`,
+  kind,
+  name,
+  body,
+});
+
+const bundledClasses = (
+  [
+    ["Barbarian", 12, ["DEX", "CON"]],
+    ["Bard", 8, ["DEX"]],
+    ["Cleric", 8, ["DEX"]],
+    ["Druid", 8, ["DEX"]],
+    ["Fighter", 10, ["DEX"]],
+    ["Monk", 8, ["DEX", "WIS"]],
+    ["Paladin", 10, ["DEX"]],
+    ["Ranger", 10, ["DEX"]],
+    ["Rogue", 8, ["DEX"]],
+    ["Sorcerer", 6, ["DEX"]],
+    ["Warlock", 8, ["DEX"]],
+    ["Wizard", 6, ["DEX"]],
+  ] as ReadonlyArray<readonly [string, number, ReadonlyArray<string>]>
+).map(([name, hitDie, unarmouredAc], index) =>
+  bundled("class", index, name, { hitDie, unarmouredAc }),
+);
+
+const bundledSpecies = (
+  [
+    ["Aasimar", 0],
+    ["Dragonborn", 0],
+    ["Dwarf", 1],
+    ["Elf", 0],
+    ["Gnome", 0],
+    ["Goliath", 0],
+    ["Halfling", 0],
+    ["Human", 0],
+    ["Orc", 0],
+    ["Tiefling", 0],
+  ] as ReadonlyArray<readonly [string, number]>
+).map(([name, hpPerLevel], index) => bundled("species", index, name, { hpPerLevel }));
+
+/** Named for the tests that reach for one by hand. */
+export const druidOption = { ...bundledClasses[3]!, id: druidOptionId };
+export const elfOption = { ...bundledSpecies[3]!, id: elfOptionId };
+
+/** *Bloodsworn, d10, unarmoured AC DEX + CON* — this table's copy of its DM's own. */
+export const bloodswornOption = {
+  ...bundledOption,
+  id: bloodswornOptionId,
+  campaignId,
+  derivedFrom: bloodswornOriginalId,
+  origin: "authored",
+  kind: "class",
+  name: "Bloodsworn",
+  body: { hitDie: 10, unarmouredAc: ["DEX", "CON"], summary: "Sworn to the marsh." },
+};
+
+/** A copy the DM has **not** shared, so no player can pick it. */
+export const marshfolkOption = {
+  ...bloodswornOption,
+  id: marshfolkOptionId,
+  derivedFrom: marshfolkOriginalId,
+  visibility: "dm",
+  kind: "species",
+  name: "Marshfolk",
+  body: { hpPerLevel: 2 },
+};
+
+/**
+ * What this table offers: the bundle, plus what has been copied in.
+ *
+ * In the order the server sends — kind, then name — because both readers draw
+ * the two kinds separately and `readOrder` is what decides which is which.
+ */
+const named = <A extends { readonly name: string }>(rows: ReadonlyArray<A>): ReadonlyArray<A> =>
+  [...rows].sort((a, b) => a.name.localeCompare(b.name));
+
+export const campaignOptions = [
+  ...named([...bundledClasses, bloodswornOption]),
+  ...named([...bundledSpecies, marshfolkOption]),
+];
+
+/**
+ * The DM's Library — the bundle, plus the **originals** the two copies above
+ * were made from.
+ *
+ * Deliberately a superset with different ids: a copy is a separate row, so the
+ * original is still here after it has been brought in. That is the model rather
+ * than a fixture convenience, and it is what makes *Copy from your library*
+ * able to offer something already on the table.
+ */
+export const libraryOptions = [
+  { ...bloodswornOption, id: bloodswornOriginalId, campaignId: null, accountId: theDmAccountId },
+  ...bundledClasses,
+  { ...marshfolkOption, id: marshfolkOriginalId, campaignId: null, accountId: theDmAccountId },
+  ...bundledSpecies,
+];
+
+/**
  * A fight on the table: the run, and the two combatants it seeded.
  *
  * Shared with the runner's own tests for the reason this file exists — a field
@@ -348,7 +505,7 @@ export interface Call {
  * and the shared server has to be able to draw it. One definition, imported by
  * the party's own fixtures — the rule this file exists for.
  */
-export const dmAccountId = "2b1f2a1e-0000-4000-8000-0000000000a1";
+export const dmAccountId = theDmAccountId;
 
 export const dmMember = {
   accountId: dmAccountId,
@@ -386,6 +543,15 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
     [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
+    // The rules vocabulary this table builds characters from — the Rules
+    // screen's list, and the create form's two pickers. A bundled class, a
+    // bundled species, and one of each this table has copied in, so a test can
+    // see which rows are editable without re-aiming anything. The Library
+    // behind it is the copy control's source and is deliberately a superset:
+    // the same original the campaign copy came from is still there, which is
+    // the model — a copy is a separate row.
+    [`GET /campaigns/${campaignId}/options`, { status: 200, body: campaignOptions }],
+    ["GET /library/options", { status: 200, body: libraryOptions }],
     [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/creatures`,
       { status: 200, body: [rosterRow] },

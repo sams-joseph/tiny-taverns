@@ -19,6 +19,7 @@ import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
+import { Options } from "./repo/Options.js";
 import { type DmActor, DmActors } from "./repo/DmActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
@@ -312,7 +313,40 @@ const CreaturesLive = HttpApiBuilder.group(
 );
 
 /**
- * The Library — where a monster is authored, and the originals a campaign's
+ * A campaign's rules vocabulary — the classes and species a character at this
+ * table is built from.
+ *
+ * **The only list in the product a *player* reads to fill in a control**, which
+ * is what makes it different from the bestiary it is otherwise a copy of: the
+ * create form's two pickers are this read, and a player can never reach their
+ * DM's Library, so a homebrew class is unreachable until it is copied in. That
+ * is all in the repository and in `repo/visibility.ts`; there is nothing on
+ * this page but the campaign from the path and the payload.
+ *
+ * **There is no `create`.** Authoring happens in the Library — the captain's
+ * second statement — so a campaign gets an option through `derive` and through
+ * nothing else, and the group above it declares no such endpoint to handle.
+ */
+const CharacterOptionsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "options",
+  Effect.fnUntraced(function* (handlers) {
+    const options = yield* Options;
+    return handlers
+      .handle("list", ({ params, query }) => options.list(params.campaignId, query))
+      .handle("findById", ({ params }) => options.findById(params.campaignId, params.optionId))
+      .handle("update", ({ params, payload }) =>
+        options.update(params.campaignId, params.optionId, payload),
+      )
+      .handle("remove", ({ params }) => options.remove(params.campaignId, params.optionId))
+      .handle("derive", ({ params, payload }) =>
+        options.derive(params.campaignId, params.optionId, payload),
+      );
+  }),
+);
+
+/**
+ * The Library — where an original is authored, and the originals a campaign's
  * copies are made from.
  *
  * The same `Creatures` service as the group above, because it is the same table
@@ -329,6 +363,11 @@ const LibraryLive = HttpApiBuilder.group(
   "library",
   Effect.fnUntraced(function* (handlers) {
     const creatures = yield* Creatures;
+    // Two tables in one group, because the Library is one *place*: an account's
+    // originals, whatever kind they are. Two repositories rather than one for
+    // the reason there are two tables — one table gets one mapper — and the
+    // pair of predicates each composes is the same pair.
+    const options = yield* Options;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -337,7 +376,14 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("update", ({ params, payload }) =>
         creatures.libraryUpdate(params.creatureId, payload),
       )
-      .handle("remove", ({ params }) => creatures.libraryRemove(params.creatureId));
+      .handle("remove", ({ params }) => creatures.libraryRemove(params.creatureId))
+      .handle("options", ({ query }) => options.library(query))
+      .handle("createOption", ({ payload }) => options.libraryCreate(payload))
+      .handle("findOption", ({ params }) => options.libraryFindById(params.optionId))
+      .handle("updateOption", ({ params, payload }) =>
+        options.libraryUpdate(params.optionId, payload),
+      )
+      .handle("removeOption", ({ params }) => options.libraryRemove(params.optionId));
   }),
 );
 
@@ -756,6 +802,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     NotesLive,
     EncountersLive,
     CreaturesLive,
+    CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,
     PrepLive,

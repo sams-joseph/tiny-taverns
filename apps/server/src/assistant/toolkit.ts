@@ -5,7 +5,6 @@ import {
   type Actor,
   type CampaignId,
   type CharacterSheet,
-  ClassKey,
   Conflict,
   Creature,
   CreatureId,
@@ -23,8 +22,13 @@ import {
   SessionId,
   SessionRecap,
   type Skill,
-  SpeciesKey,
 } from "@taverns/api";
+import {
+  BundledClassName,
+  BundledSpeciesName,
+  bundledClass,
+  bundledSpecies,
+} from "../ruleset/systemOptions.js";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
@@ -544,8 +548,8 @@ export const ProposeCharacter = Tool.make("proposeCharacter", {
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
     /**
-     * The species and the class, as **closed vocabularies** —
-     * `packages/api/src/Ruleset.ts`'s ten and twelve.
+     * The species and the class, as **closed vocabularies** — the bundled ten
+     * and twelve, from `src/ruleset/systemOptions.ts`.
      *
      * They were free text of up to sixty characters, and the captain's decision
      * of 2026-08-26 is that they are not. The gain is not tidiness: a class is
@@ -559,9 +563,18 @@ export const ProposeCharacter = Tool.make("proposeCharacter", {
      * an empty arm would be an escape a small model reaches for under pressure.
      * The description names both lists so the vocabulary is in the prompt as
      * well as in the grammar.
+     *
+     * **These are the bundle's names and deliberately not the campaign's**,
+     * even though a campaign can have its own classes now. A per-campaign
+     * vocabulary cannot be a module-level literal, and a closed enum is what
+     * lets a grammar-compiling endpoint hold a small model to a list — measured
+     * at the 4B tier. Building the toolkit per request is the answer and is its
+     * own piece of work; until then Hob drafts from the twelve and the ten,
+     * which degrades gracefully because a drafted character already carries a
+     * label the campaign may not have, exactly like today's `"Half-orc"`.
      */
-    species: SpeciesKey,
-    className: ClassKey,
+    species: BundledSpeciesName,
+    className: BundledClassName,
     /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
     subclass: optionalText(80),
     background: optionalText(80),
@@ -981,8 +994,19 @@ export const playerHandlersFor = (
        * form calls, so a drafted druid and a hand-filled one start on the same
        * number. It is called **once**, and nothing recomputes any of the three
        * afterwards.
+       *
+       * It takes **entries** rather than labels now, because there is no global
+       * class map to look a label up in — a campaign's vocabulary is a read.
+       * The lookup here is the bundle's, matching the closed vocabulary the two
+       * parameters above are held to, so it cannot miss; the manual create form
+       * resolves against the campaign's own options instead. Two resolvers, one
+       * seed, and the arithmetic is untouched.
        */
-      const seed = seedFor({ className, species, abilities: sheet.abilities });
+      const seed = seedFor({
+        classEntry: bundledClass(className),
+        speciesEntry: bundledSpecies(species),
+        abilities: sheet.abilities,
+      });
 
       return offer(
         {

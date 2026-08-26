@@ -6,6 +6,7 @@ import {
   brannoc,
   brannocId,
   campaignId,
+  campaignOptions,
   drafted,
   draftedNothing,
   draftThreadId,
@@ -573,7 +574,35 @@ describe("writing down a character of your own", () => {
     expect(screen.queryByRole("textbox", { name: "Class" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Species" })).toBeNull();
 
+    // **What is offered is what the server answered**, which since a campaign
+    // can have its own classes is the bundled twelve *plus* whatever this table
+    // has copied in and shared. The count is the fixture's rather than a
+    // constant, because a constant would be a second answer to a question the
+    // read has already settled.
     await userEvent.click(await screen.findByRole("combobox", { name: "Class" }));
-    expect(await screen.findAllByRole("option")).toHaveLength(12);
+    const offered = await screen.findAllByRole("option");
+    expect(offered.map((option) => option.textContent)).toEqual(
+      campaignOptions.filter((row) => row.kind === "class").map((row) => row.name),
+    );
+    // Including this table's own — the whole point of the vocabulary being a
+    // read. A class the DM has **not** shared is absent, and that is the server
+    // narrowing rather than anything this screen does.
+    expect(offered.map((option) => option.textContent)).toContain("Bloodsworn");
+  });
+
+  it("offers a species this table shared and not one it kept to itself", async () => {
+    await renderCreate();
+    await fillItIn();
+    await userEvent.click(await screen.findByRole("combobox", { name: "Species" }));
+    const offered = (await screen.findAllByRole("option")).map((option) => option.textContent);
+    // `Marshfolk` is a campaign copy at `visibility: "dm"` in the fixture, so
+    // `corpusRowReadable` would not return it to a player — and the fixture's
+    // campaign list is what a player's read answers. The screen adds no filter
+    // of its own and must not: a client-side "only the shared ones" would be a
+    // second answer to a question the predicate has already settled.
+    expect(offered).toContain("Elf");
+    expect(offered).toEqual(
+      campaignOptions.filter((row) => row.kind === "species").map((row) => row.name),
+    );
   });
 });

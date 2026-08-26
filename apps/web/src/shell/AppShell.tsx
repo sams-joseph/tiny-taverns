@@ -227,6 +227,17 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
       section: "chronicle",
     },
+    {
+      // The classes and species this table builds characters from. A campaign
+      // item rather than a global one, and unlike *Bestiary* that is where it
+      // belongs rather than where it is waiting: the list is *this campaign's*
+      // vocabulary, and the account's own originals behind it are reached
+      // through this screen's copy control until a Library screen for them
+      // exists.
+      label: "Rules",
+      link: { to: "/campaigns/$campaignId/rules", params: { campaignId } },
+      section: "rules",
+    },
     // *Bestiary* was the sixth item here and is now *Library* on the global row
     // — see `globalNavFor`. The route it pointed at still exists and still
     // works; what it no longer is, is a destination this row offers, because

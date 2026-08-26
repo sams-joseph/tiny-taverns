@@ -35,6 +35,7 @@ import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { Options } from "./repo/Options.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -192,6 +193,10 @@ export const servicesOver = <E>(
   | LiveEvents
   | Memberships
   | Notes
+  // A campaign's rules vocabulary, and the Library originals behind it. An
+  // ordinary campaign-scoped repository composing the shipped predicates — no
+  // `LiveEvents`, because writing a class changes nothing at a table tonight.
+  | Options
   | PlayerTable
   | PrepItems
   | Proposals
@@ -240,6 +245,11 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     Memberships.layer,
     Notes.layer,
+    // The classes and species a character is built from — the campaign's
+    // vocabulary and the Library originals behind it. No `LiveEvents`: editing
+    // a class changes what the *next* character is made from, which is not
+    // something a screen watching tonight's fight is waiting for.
+    Options.layer,
     // What is live at one table, to a player — the character sheet's banner.
     // A view over three tables and a writer of none, so it needs no
     // `LiveEvents` for the reason `Recap` does not: reading a night's state
@@ -333,6 +343,7 @@ export const applicationOver = <E>(
     | LiveEvents
     | Memberships
     | Notes
+    | Options
     | PlayerTable
     | PrepItems
     | Proposals

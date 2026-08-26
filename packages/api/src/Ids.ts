@@ -34,6 +34,18 @@ export const CreatureId = id("CreatureId");
 export type CreatureId = typeof CreatureId.Type;
 
 /**
+ * One piece a character is **built from** — a class or a species, and later a
+ * background. Not the character: two characters made from one class are two
+ * rows that share nothing but a label, because the class is read once at
+ * creation and never again.
+ *
+ * The same three-owner shape a `CreatureId` names: the bundle, an account's
+ * Library original, or a campaign's copy of one.
+ */
+export const CharacterOptionId = id("CharacterOptionId");
+export type CharacterOptionId = typeof CharacterOptionId.Type;
+
+/**
  * A creature's place on one encounter's roster — the join row, not the creature.
  * It has an id of its own because the roster line is what a client edits: the
  * count changes, the creature does not.

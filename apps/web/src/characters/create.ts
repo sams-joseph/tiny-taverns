@@ -1,5 +1,10 @@
-import type { CampaignMembership, CharacterOwnCreate, CharacterSheet } from "@taverns/api";
-import { emptyCharacterSheet, seedFor, STARTING_LEVEL } from "@taverns/api";
+import type {
+  CampaignMembership,
+  CharacterOption,
+  CharacterOwnCreate,
+  CharacterSheet,
+} from "@taverns/api";
+import { emptyCharacterSheet, optionNamed, seedFor, STARTING_LEVEL } from "@taverns/api";
 import { abilitiesFrom, abilityDrafts, badScores, type AbilityDraft } from "./abilities";
 
 /**
@@ -51,13 +56,19 @@ export interface CharacterDraft {
   readonly playerName: string;
   readonly level: string;
   /**
-   * A `SpeciesKey` / `ClassKey`, or `""` for *not picked yet*.
+   * The **name** of a class or a species this campaign offers, or `""` for *not
+   * picked yet*.
    *
-   * Strings rather than the literal unions because a `Select` holds a string
-   * and the empty state has to be expressible; the **picker** is what makes
-   * them structured, and it offers `Ruleset`'s ten and twelve and nothing else.
-   * `payloadFrom` still sends them as the labels they are, so what lands in
-   * `character.species` and `character.class_name` is the vocabulary's own word.
+   * Strings rather than an id, and that is the design rather than a shortcut:
+   * `character.class_name` is what a character stores, and the label is the
+   * whole of the link between a row and the option it was made from. A stored
+   * id beside it would be a second answer to a question the label already
+   * answers, and `character.descriptor` — a generated column — could not read
+   * through one anyway.
+   *
+   * What makes them structured is the **picker**, which offers this campaign's
+   * vocabulary and nothing else. It used to offer `Ruleset`'s global ten and
+   * twelve; a campaign can have its own now, so the list is a read.
    */
   readonly species: string;
   readonly className: string;
@@ -213,6 +224,12 @@ export const refused = (problems: DraftProblems): boolean => Object.keys(problem
  * or has their constitution drained keeps the numbers they are actually
  * playing, which is precisely what a locked derived value would take away.
  *
+ * **The vocabulary is the campaign's**, which is the only thing about this that
+ * homebrew changed. `seedFor` takes entries rather than labels now, so the
+ * caller resolves the pick against the list its own picker was built from —
+ * and a campaign's own class seeds exactly as a bundled one does, because
+ * nothing in the arithmetic asks where an entry came from.
+ *
  * **It reads the draft's own ability scores**, which is what closed the gap
  * between the two create paths. Hob assigns the standard array to the ranking it
  * chose and resolves the seed against it, so a drafted Dwarf Barbarian came back
@@ -236,10 +253,26 @@ export const refused = (problems: DraftProblems): boolean => Object.keys(problem
 export const seededDraft = (
   draft: CharacterDraft,
   edited: ReadonlySet<SeededField>,
+  /**
+   * What this campaign offers — the list the two pickers were built from.
+   *
+   * Passed in rather than looked up in a module-level map, because there is no
+   * global vocabulary any more: a class is a row, and *which* rows depends on
+   * the table. `optionNamed` is the same case-insensitive, exact, no-fuzzy rule
+   * `Ruleset.classFor` was, moved beside the type it reads — so a label this
+   * campaign has no option for seeds nothing rather than seeding the nearest
+   * thing, which is the refusal that matters most under homebrew.
+   */
+  options: ReadonlyArray<CharacterOption>,
 ): CharacterDraft => {
+  const classOption = optionNamed(options, "class", draft.className);
+  const speciesOption = optionNamed(options, "species", draft.species);
   const seed = seedFor({
-    className: draft.className,
-    species: draft.species,
+    // The `kind` guard is what the union buys: a class row's document has a hit
+    // die and a species row's does not, so there is no shape in which the wrong
+    // one could be read as the right one.
+    classEntry: classOption?.kind === "class" ? classOption.body : undefined,
+    speciesEntry: speciesOption?.kind === "species" ? speciesOption.body : undefined,
     // The same function the payload sends, so the number in the box is worked
     // out from exactly the cells that will be written — a cell with no score
     // is dropped by both and cannot mean one thing here and another there.
@@ -248,9 +281,9 @@ export const seededDraft = (
   return {
     ...draft,
     ...(edited.has("ac") ? {} : { ac: String(seed.ac) }),
-    // Absent only for a class the vocabulary does not know, which the picker
-    // cannot produce — so in this form it is absent only before one is picked,
-    // and then the box stays as it was rather than being blanked.
+    // Absent only when no class resolved, which the picker cannot produce — so
+    // in this form it is absent only before one is picked, and then the box
+    // stays as it was rather than being blanked.
     ...(edited.has("hpMax") || seed.hpMax === undefined ? {} : { hpMax: String(seed.hpMax) }),
   };
 };
