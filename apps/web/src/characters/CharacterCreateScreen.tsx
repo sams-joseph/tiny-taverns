@@ -368,18 +368,12 @@ export function CharacterCreateScreen() {
               </span>
             </p>
 
+            {/* One press, and *Cancel* is the bar's — two controls with one name
+                on one screen is the ambiguity the backstory's *Edit* had to be
+                labelled out of, and the drawing puts it in the bar anyway. */}
             <div className="flex flex-wrap items-center gap-3">
               <Button size="sm" disabled={busy} onClick={() => void create()}>
                 {busy ? "Creating…" : "Create character"}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={busy}
-                nativeButton={false}
-                render={<Link to="/play/characters" />}
-              >
-                Cancel
               </Button>
               {failure !== undefined && (
                 <div className="min-w-0 flex-1">

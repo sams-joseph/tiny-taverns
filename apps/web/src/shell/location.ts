@@ -107,8 +107,11 @@ export function useSection(): Section {
   if (matchRoute({ to: "/library" })) return "library";
   if (mode === "player") {
     if (matchRoute({ to: "/play/campaigns/$campaignId/chronicle" })) return "playChronicle";
-    // Fuzzy, so the splat under a player's campaign lands on its Overview for
-    // the reason the DM's does: the campaign was legible, the section was not.
+    // Fuzzy, so anything else inside a player's campaign is its Overview —
+    // exactly what the DM's side does one block down, and for both of its
+    // reasons: a splat means the campaign was legible and the section was not,
+    // and a real route with no item of its own (the create form) would
+    // otherwise leave the campaign row dark.
     if (matchRoute({ to: "/play/campaigns/$campaignId", fuzzy: true })) return "playOverview";
     if (matchRoute({ to: "/play/characters", fuzzy: true })) return "playCharacters";
     return "play";

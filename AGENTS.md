@@ -1407,13 +1407,26 @@ of the above and fails four ways if the disjunct is removed; `Characters.assign`
 `DmActor` on purpose (`dm-actor.test.ts` counts it), because `rowWritable` already requires `isDm`
 and assignment has no player projection to diverge.
 
-#### A player writes, and this is the whole of it
+#### What a player may write, and it is exactly three endpoints
 
-**`PATCH /me/characters/:characterId` is the first write in the product's history that a non-DM may
-make**, by the captain's decision of 2026-08-12 (`player-edits-own-character`). Until it landed,
-every write predicate in `repo/visibility.ts` bottomed out in `isDm`, so a player's refusal was a
-fact about the seam rather than a check anywhere. That simplification is spent. **This is the first
-entry in the list of what a player may write, and every future one will be read against it.**
+**`PATCH /me/characters/:characterId` was the first write in the product's history that a non-DM
+may make**, by the captain's decision of 2026-08-12 (`player-edits-own-character`). Until it
+landed, every write predicate in `repo/visibility.ts` bottomed out in `isDm`, so a player's refusal
+was a fact about the seam rather than a check anywhere. That simplification is spent. **This is the
+list of what a player may write, and every future entry will be read against it.**
+
+The list is three, all on `character`, all in the `me` group:
+
+| endpoint                             | which rows               | which columns          |
+| ------------------------------------ | ------------------------ | ---------------------- |
+| `POST /me/campaigns/:c/characters`   | `ensureCampaignReadable` | `CharacterOwnCreate`   |
+| `PATCH /me/characters/:characterId`  | `ownRowWritable`         | `CharacterOwnUpdate`   |
+| `DELETE /me/characters/:characterId` | `ownRowWritable`         | — (the row goes whole) |
+
+**No new predicate was needed for any of them, and that is the finding to reuse rather than
+re-derive.** `ownRowReadable`, `ownRowWritable` and `ensureCampaignReadable` are generic over a
+table and cover everything a player-owned row needs. The rest of this section is the PATCH; the
+create and the delete are under "A player writes one down" below it.
 
 **What a player may write, exactly — the durable half of their own character:**
 
@@ -1486,6 +1499,96 @@ with the row unchanged; and unsharing the campaign took the write away and gave 
 with `GET /me/characters` honestly `[]` in between. `apps/server/test/player-write.test.ts` pins all
 of it plus the revoked membership, the mis-scoped credential, and — row by row across the campaign —
 that nothing writable is unreadable and that the write is genuinely the narrower of the two.
+
+#### A player writes one down: campaign-first, and the shipped sheet is step two
+
+`POST /me/campaigns/:campaignId/characters` and `DELETE /me/characters/:characterId`, with
+`#/play/campaigns/:campaignId/characters/new` over them
+(`apps/web/src/characters/CharacterCreateScreen.tsx`, `create.ts`, `NewCharacterAction.tsx`).
+Before this, **a player at a shared table could not create a character at all** — `characters.create`
+composes `campaignWritable`, which requires `isDm` — so every row was typed by its DM and handed
+over with `CharacterAssign`. That door is unchanged and is still the DM's.
+
+**The table is step one, by the captain's decision of 2026-08-26** (`character-create-step-order`).
+`ui_kits/dm-screen/CharacterCreate.jsx` draws _Find a table_ **third**, after describing the
+character and correcting a draft, and that order is not buildable: `character.campaign_id` is
+`not null` and so is `assistant_thread.campaign_id`, so neither the character nor the conversation
+that would draft one has anywhere to live before a table is picked. Every alternative is a migration
+plus a new reach rule in the one model that has none — `0015` is what that cost for `creature`. The
+drawing also contradicts itself, since its own showcase line has Hob citing the campaign's setting
+two steps before the campaign is known, so the reorder is what makes the design's intent true.
+**The drawn _"Nowhere yet, keep her in my roster"_ option is dropped rather than stubbed.**
+
+Six things that are decisions rather than details:
+
+- **`ensureCampaignReadable` is the gate, and it is the campaign half of `withinReadableCampaign`** —
+  the same fragment `ownRowReadable` and `ownRowWritable` compose and do not restate. So _a row
+  created through this gate is readable and writable by its creator afterwards_ is one predicate
+  doing both jobs rather than two that could drift. A player at a table the DM has not shared is
+  refused with the same `NotFound` everything else there gives them.
+- **The campaign is the one thing a player's write ever names**, and only because an insert has no
+  row to derive it from. It is a claim, exactly as on every other create. `Api.test.ts`'s "nothing
+  in `me` could name an account" therefore asserts the **path shape** now rather than "only one
+  endpoint has params" — the property it was always proxying for.
+- **`account_id` is `CurrentActor`'s and there is nowhere on the wire to put one.** The guarantee
+  `CharacterAssign` buys by being a separate DM-only endpoint is bought here by the payload's shape.
+  Measured: a `POST` naming another account plus `hpCurrent`, `visibility` and `conditions` answered
+  `200` with the row owned by **the caller**, `dm`, `hpCurrent` null and no conditions.
+- **`CharacterOwnCreate` is `CharacterOwnUpdate`'s shape with a required name.** `hpCurrent` is the
+  one that would otherwise ride in on a good argument — `CharacterCreate` allows it because _a row
+  that does not exist is in no fight_, which is true of this insert too — and it is out because how
+  hurt somebody already is is the DM's to say. Everything absent falls to a column default, and
+  **`visibility` falling to `dm` is the whole disclosure property of the feature.**
+- **Neither write rings the doorbell**, which is `updateOwn`'s answer rather than an omission:
+  `currentSessionOf` composes `campaignWritableById` and answers a player nothing, so a bell would
+  ring for a DM and stay silent for the audience the endpoints are for.
+- **The delete is `ownRowWritable`, the PATCH's predicate exactly**, so "a player can never remove a
+  character they could not edit" is a fact about the fragment. It has **no UI control yet and that
+  is deliberate**: the product has never had a character delete on screen — the DM's
+  `characters.remove` has had no caller either — and its named caller is slice 4, where an
+  abandoned Hob draft has to be removable. Adding the product's first one to the sheet screen was
+  outside this slice.
+
+**It lands on the shipped sheet, and that is the single biggest simplification campaign-first
+buys.** There is no second editor: `IdentityDialog`, `BackstoryDialog`, `GearDialog` and the death
+saves all take a `Character` and go through `saveOwnCharacter`, so they work on the new row
+unchanged. A client-side draft would have meant refactoring all three from `(character, endpoint)`
+to `(value, onSave)` or writing a fourth copy of each.
+
+**What the drawing asks for that this deliberately does not build** — reported, per the standing
+rule: the prose composer, the starter chips and _Have Hob draft the sheet_ (slice 4); the abilities
+and skills editors, which belong to the **sheet** so both surfaces get them and a shipped gap closes
+(slice 2); `DraftField` inline editing, a third editing idiom in a product with two; the portrait
+upload, which the kit itself wires to _"Not wired in this kit"_; and the _"Fen approves characters
+before they play"_ box, which the delivery's own open questions already call a switch with nothing
+behind it.
+
+**Two web-side changes worth knowing before touching this area:**
+
+- **`MyCharactersView` carries `memberships` whole and `tableCount` is gone** — it was exactly
+  `memberships.length`, and three screens want three folds of that list (how many tables at all, a
+  name by id, and which of them you _play_ at). `myCharactersAtom` moved into `characters/load.ts`
+  beside it, the way `campaign/load.ts` holds its own, so the create screen shares the read and the
+  picker **costs no request**.
+- **`tablesForNewCharacter` is `role === "player"` and nothing else**, and the create screen agrees
+  with it so a typed URL cannot reach a form the picker would never have offered.
+  `ensureCampaignReadable` _would_ let a DM through at their own table and that is harmless — but the
+  pill is a **mode**, so the two refusals are different sentences: _"Not your table"_ and _"You run
+  this table"_. The roster's empty state gained a third branch for the same reason; a plain
+  `memberships.length` check gets a DM-only account wrong.
+
+**Measured end to end in Chromium** against a real server, a real Postgres and three accounts (a DM
+and two players minted through real invitations): a player joined a shared table, pressed _New
+character_ — a link, not a picker, because they were at one table — filled the form and landed on
+the shipped sheet with `descriptor` back as `"Level 1 Wood elf Druid"` and the sheet's own tabs.
+**The DM's party screen then showed them as `Playing` with the character on it, and the other player
+at the same shared table saw nothing of it on either the table screen or their own roster** — the
+acceptance criterion, with no change to `party/roster.ts` for the `no-character` → `playing` flip.
+Over HTTP: `[]` for that other player's read of the party, the row `dm`/`authored`/`hpCurrent` null,
+`404` for a create at a campaign the caller is not at, `404` for a delete of somebody else's and for
+the campaign's **own DM** through `/me`, and `200` for the owner's. With two tables the picker drew
+at `z-dialog` 110 over a scrim at `z-scrim` 100 with `elementFromPoint` inside it. No sideways
+scroll at 1440, 1024, 900 or 760.
 
 ### Where a hit point lives, and what the doorbell covers
 
@@ -1652,6 +1755,7 @@ Four things about it that are decisions rather than details:
   _Join a game_ button. `character.campaign_id` is `not null` and a campaign-less character would
   need a reach rule beside membership — the one thing the whole model contains. Bringing a
   character to a second table is a **copy**, shaped like `creatures/:id/derive`; it is not built.
+  **This is also why the create flow is campaign-first** — see "A player writes one down" below.
 - **The campaign's _name_ on a character.** `GET /me/characters` answers `Character`, whose
   `campaignId` is the join key; the name comes from `GET /me/campaigns`, which the player shell
   reads anyway. A name here would be a second answer to what a campaign is called.
@@ -4062,8 +4166,9 @@ silently.
   a list of characters at N tables would be N requests for a card that is blank almost always.
 - **Every control the payload cannot carry**: rolling a check or an attack into the DM's dice
   tray, spending a slot, preparing a spell, uploading a portrait, adding a journal entry, _New
-  character_, _Join a game_, _Claim a seat_. (**Abilities and skills are no longer on this list** —
-  they are written now; see "The abilities and skills editors" below.) Rolling has no endpoint at all and the rest are
+  character_, _Join a game_, _Claim a seat_. (**Two of these have left the list since.** Abilities
+  and skills are written now — see "The abilities and skills editors" below. _New character_ is
+  built too — see "A player writes one down".) Rolling has no endpoint at all and the rest are
   document keys no delivery has drawn a control for. Each is drawn as the value it is, the call
   `bestiary/StatBlock.tsx` already made about a rollable trait. **The live half of the row —
   current hit points, temp, conditions — is drawn and is not editable**, because it is `0014`'s
@@ -4157,7 +4262,7 @@ Three more things that are decisions rather than details:
   whose _player projection diverges from the DM's_, and this read has no DM projection: a DM has
   the runner, `runs.list` and `sessions.list`, all of which say more. A DM calling it gets the
   identical narrow answer, which is how _"what will my players see"_ is one request.
-  `dm-actor.test.ts` counts it as the seventy-first ungated method.
+  `dm-actor.test.ts` counts it as the seventy-first ungated method (of seventy-five today).
 - **The campaign's _name_ is not on it.** `GET /me/campaigns` is the read that names campaigns —
   the rule `Character` already follows from the other side.
 
