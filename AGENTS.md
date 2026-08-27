@@ -2163,6 +2163,52 @@ wire format to drift.
 It is the one workspace package that builds to `dist/` rather than exporting source: `apps/server`
 is executed by plain `node`, which cannot load `.ts` from `node_modules`.
 
+### Its consumers build it themselves, because a per-package script never goes through turbo
+
+**`turbo.json` declares `dependsOn: ["^build"]` on `build`, `typecheck` and `test` — and that
+declaration does not apply to `pnpm -F server test`,** which runs the package's own script
+directly. So those commands ran against whatever `packages/api/dist` happened to be on disk, and
+on a fresh clone that is nothing at all.
+
+**Neither failure names the build, and both blame the code they land in.** An _absent_ `dist` is
+at least legible (`Failed to resolve entry for package "@taverns/api"`). A **stale** one resolves
+fine and hands the importer `undefined` for every export added since it was built:
+
+- the server suite fails to _collect_, every file, with
+  `TypeError: Cannot read properties of undefined (reading 'ast')` raised inside `SchemaAST` and
+  pointing at the `Schema.Struct` in `apps/server/src/assistant/toolkit.ts` that named the missing
+  export — which reads exactly like a bug in the assistant toolkit;
+- `typecheck` reports one `TS2307` and then dozens of consequent type errors spread across
+  untouched files. That is where "47 pre-existing typecheck errors in the runner" came from, and a
+  task was opened against innocent code before anyone rebuilt the package.
+
+Four people lost time to those two symptoms. So **each of those scripts opens by asking turbo for
+its own dependencies' build** — `turbo run build --filter=<package>^... && …` in
+`apps/server/package.json` and `apps/web/package.json`. Nested turbo is fine (measured: no
+recursion warning, and the outer run's already-built dependency is a cache hit), and a cache hit
+restores the correct `dist` **over** a stale one, which is what makes the stale case recover
+rather than merely the absent one.
+
+Four things about it that are decisions:
+
+- **`<package>^...`, not `@taverns/api`.** `^...` selects the package's own declared dependencies,
+  so the clause is the same statement `turbo.json` makes and cannot drift out of step with what a
+  package actually depends on.
+- **`lint` and `dev` are deliberately out.** `eslint` here reads no cross-package types and was
+  measured clean with `dist` deleted; `dev` is the one task `turbo.json` declares no `^build` for,
+  and a script disagreeing with the declaration would be a second answer to one question. So
+  `pnpm -F server dev` on a fresh clone still needs a build first — that is the known remaining
+  gap, and closing it is a change to the declaration rather than to a script.
+- **The cost is ~40ms per command** when everything is built (turbo's own startup; the `~160ms`
+  you will measure by hand is `npx`). Against a 12–20s suite that is inside the run-to-run noise
+  of this machine.
+- **`packages/api/src/dist.test.ts` is the pin**, and it lives in `api` because it is a fact about
+  _this_ package's exports map — it sweeps the workspace for anything depending on `@taverns/api`
+  and fails if one of those three scripts drops the clause, so a **new** consumer is caught too. It
+  also asserts the exports map still names `dist` and nothing else; if that ever points at `src`
+  the way `packages/ui`'s does, the whole coupling is gone and the guard should be reconsidered
+  rather than kept.
+
 Five things that cost time to find:
 
 - **`HttpApiSecurity.bearer` answers no 401 of its own.** A missing or malformed `Authorization`

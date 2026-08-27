@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "turbo run build --filter=web^... && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "turbo run build --filter=web^... && tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "turbo run build --filter=web^... && vitest run"
   },
   "dependencies": {
     "@clerk/react": "^6.12.11",

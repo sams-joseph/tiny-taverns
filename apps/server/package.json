@@ -6,10 +6,10 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env.local src/main.ts",
     "start": "node --env-file-if-exists=.env.local dist/main.js",
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "build": "turbo run build --filter=server^... && tsc -p tsconfig.build.json",
+    "typecheck": "turbo run build --filter=server^... && tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "turbo run build --filter=server^... && vitest run",
     "token:issue": "tsx --env-file-if-exists=.env.local src/bin/issue-token.ts",
     "migrate": "tsx --env-file-if-exists=.env.local src/bin/migrate.ts",
     "bestiary:import": "tsx --env-file-if-exists=.env.local src/bin/import-bestiary.ts",
