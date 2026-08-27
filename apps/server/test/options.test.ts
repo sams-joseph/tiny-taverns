@@ -96,6 +96,8 @@ const OPTIONS = {
   theirs: "Hexbound",
   /** Written by an account that is at no table at all. */
   theUninvited: "Wanderer",
+  /** A background that really grants something — every bundled one grants nothing. */
+  saltRunner: "Salt-runner",
 } as const;
 
 /** *Bloodsworn, d10, unarmoured AC DEX + CON* — the brief's own homebrew class. */
@@ -594,6 +596,125 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
       client.options.remove({
         params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
       }),
+    );
+  });
+
+  it("carries a background's ability increases through to the seed", async () => {
+    // **The acceptance shape of the background slice, over real HTTP.** A DM
+    // authors one, shares it, and a player at that table picks it — and the
+    // seed the create form runs comes back with numbers the ranking alone
+    // would not have given.
+    //
+    // A background is the only one of the three kinds that reaches the seed
+    // *through* the six ability cells, so this asserts the cells as well as
+    // the two numbers: `seedFor` hands back the raised ones precisely so no
+    // caller can write a different six.
+    const original = await as(fixture.jo.token, (client) =>
+      client.library.createOption({
+        payload: {
+          kind: "background",
+          name: OPTIONS.saltRunner,
+          body: {
+            abilityIncreases: [
+              { ability: "CON", amount: 2 },
+              { ability: "WIS", amount: 1 },
+            ],
+          },
+        },
+      }),
+    );
+    const copied = await as(fixture.jo.token, (client) =>
+      client.options.derive({
+        params: { campaignId: fixture.saltRoad.id, optionId: original.id },
+        payload: { visibility: "shared" },
+      }),
+    );
+
+    const asPlayer = await optionsAt(fixture.pim.token, fixture.saltRoad.id, "background");
+    // The bundle's sixteen are here too, and every one of them grants nothing.
+    expect(named(asPlayer)).toContain(OPTIONS.saltRunner);
+    expect(named(asPlayer)).toContain("Soldier");
+    const bundled = asPlayer.find((option) => option.name === "Soldier");
+    expect(bundled?.kind === "background" && bundled.body.abilityIncreases).toEqual([]);
+
+    const picked = asPlayer.find((option) => option.name === OPTIONS.saltRunner);
+    if (picked?.kind !== "background") throw new Error("expected a background");
+
+    // CON 15 raised to 17 (`+3`) and WIS 13 to 14 (`+2`): d8 plus 3 is 11, and
+    // the armour class is untouched because the grant names neither dexterity
+    // nor anything the class adds.
+    const seed = seedFor({
+      classEntry: { hitDie: 8, unarmouredAc: ["DEX"] },
+      speciesEntry: undefined,
+      backgroundEntry: picked.body,
+      abilities: CON_HEAVY,
+    });
+    expect(seed.hpMax).toBe(11);
+    expect(seed.ac).toBe(12);
+    expect(seed.abilities).toContainEqual({ label: "CON", score: "17", modifier: "+3" });
+    expect(seed.abilities).toContainEqual({ label: "WIS", score: "14", modifier: "+2" });
+    // Untouched cells come through exactly as they were written.
+    expect(seed.abilities).toContainEqual({ label: "DEX", score: "14", modifier: "+2" });
+
+    // And the same character with the *bundled* background is the answer the
+    // ranking alone gives, which is what makes the grant visible rather than
+    // assumed.
+    const plain = seedFor({
+      classEntry: { hitDie: 8, unarmouredAc: ["DEX"] },
+      speciesEntry: undefined,
+      backgroundEntry: bundled?.kind === "background" ? bundled.body : undefined,
+      abilities: CON_HEAVY,
+    });
+    expect(plain.hpMax).toBe(10);
+    expect(plain.abilities).toEqual(CON_HEAVY);
+
+    await as(fixture.jo.token, (client) =>
+      client.options.remove({
+        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
+      }),
+    );
+    await as(fixture.jo.token, (client) =>
+      client.library.removeOption({ params: { optionId: original.id } }),
+    );
+  });
+
+  it("refuses a body whose shape contradicts the row's own kind", async () => {
+    // The three documents are told apart by shape alone — `hitDie`,
+    // `hpPerLevel`, `abilityIncreases`, one required key each — because a PATCH
+    // carries a body and no kind. **This is why `BackgroundBody.abilityIncreases`
+    // is required rather than optional**: an all-optional body would match
+    // first inside `Schema.Union` and swallow the other two whole.
+    const original = await as(fixture.jo.token, (client) =>
+      client.library.createOption({
+        payload: { kind: "background", name: "Wrong shape", body: { abilityIncreases: [] } },
+      }),
+    );
+
+    const refusedBody = await refused(fixture.jo.token, (client) =>
+      client.library.updateOption({
+        params: { optionId: original.id },
+        payload: { body: { hitDie: 8, unarmouredAc: ["DEX"] } },
+      }),
+    );
+    expect(refusedBody._tag).toBe("Conflict");
+
+    // And the other direction, so neither is an accident of union order.
+    const ontoAClass = await refused(fixture.jo.token, (client) =>
+      client.library.updateOption({
+        params: { optionId: fixture.bloodsworn.id },
+        payload: { body: { abilityIncreases: [{ ability: "CON", amount: 1 }] } },
+      }),
+    );
+    expect(ontoAClass._tag).toBe("Conflict");
+
+    // The class is untouched by the refusal.
+    const stillAClass = await as(fixture.jo.token, (client) =>
+      client.library.findOption({ params: { optionId: fixture.bloodsworn.id } }),
+    );
+    expect(stillAClass.kind === "class" && stillAClass.body.hitDie).toBe(10);
+
+    await as(fixture.jo.token, (client) =>
+      client.library.removeOption({ params: { optionId: original.id } }),
     );
   });
 

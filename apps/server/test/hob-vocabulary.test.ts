@@ -113,11 +113,28 @@ const homebrewClass = (
     return yield* options.derive(campaignId, original.id, { visibility });
   }).pipe(Effect.orDie);
 
+/** A homebrew background, which is the kind that reaches the six ability cells. */
+const homebrewBackground = (
+  campaignId: CampaignId,
+  name: string,
+  abilityIncreases: ReadonlyArray<{ readonly ability: "CON" | "WIS"; readonly amount: number }>,
+): Effect.Effect<CharacterOption, never, Options | CurrentActor> =>
+  Effect.gen(function* () {
+    const options = yield* Options;
+    const original = yield* options.libraryCreate({
+      kind: "background",
+      name,
+      body: { abilityIncreases },
+    });
+    return yield* options.derive(campaignId, original.id, { visibility: "shared" });
+  }).pipe(Effect.orDie);
+
 /**
  * One DM with three tables, and a player at each.
  *
- * - **The Salt Road** carries *Bloodsworn* (d10, shared) and *Hedgewise* (d6,
- *   `dm` — the one the seam must keep out of the grammar).
+ * - **The Salt Road** carries *Bloodsworn* (d10, shared), *Hedgewise* (d6,
+ *   `dm` — the one the seam must keep out of the grammar) and *Salt-runner*, a
+ *   background that really grants something (every bundled one grants nothing).
  * - **Sixpence** carries *Saltcaller*, so "campaign A does not carry campaign
  *   B's homebrew" is a measurement rather than an absence.
  * - **The long list** carries enough classes to go over the cap.
@@ -136,6 +153,12 @@ const makeFixture = Effect.gen(function* () {
   const longList = yield* as(campaigns.create({ name: "The long list", visibility: "shared" }));
 
   yield* as(homebrewClass(campaign.id, "Bloodsworn", 10));
+  yield* as(
+    homebrewBackground(campaign.id, "Salt-runner", [
+      { ability: "CON", amount: 2 },
+      { ability: "WIS", amount: 1 },
+    ]),
+  );
   yield* as(homebrewClass(campaign.id, "Hedgewise", 6, "dm"));
   yield* as(homebrewClass(otherTable.id, "Saltcaller", 8));
 
@@ -174,6 +197,9 @@ const aDraft = (over: Record<string, unknown> = {}) =>
     // Required since the background became an entity — it is the third thing
     // the seed reads, so a model that may omit it is a seed that may silently
     // lose the ability score increases.
+    // Bundled, so it is in every campaign in this fixture that has the bundle
+    // — including the one over the cap, where an unknown label is a deliberate
+    // `Conflict`. A test about a *homebrew* background overrides it.
     background: "Soldier",
     abilityOrder: ["CON", "STR", "DEX", "WIS", "CHA", "INT"],
     backstory: "She kept the oath and lost the arm.",
@@ -279,19 +305,47 @@ describe("the grammar is this campaign's own vocabulary", () => {
     }
   }, 60_000);
 
-  it("seeds from the homebrew class's own hit die", async () => {
+  it("puts a homebrew background in its own enum too", async () => {
+    // The third kind, and the one that reaches the seed *through* the six
+    // ability cells. It matters more here than for the other two: every one of
+    // the sixteen bundled backgrounds grants nothing at all, so a campaign's
+    // own is the only kind that ever moves a number.
+    const { requests } = await ask(fixture.player, fixture.campaign.id);
+    const names = enumOf(requests[0], "proposeCharacter", "background");
+
+    expect(names).toContain("Salt-runner");
+    expect(names).toContain("Soldier");
+    const described = toolNamed(requests[0], "proposeCharacter")?.description ?? "";
+    expect(described).toContain(JSON.stringify("Salt-runner"));
+  }, 60_000);
+
+  it("seeds from the homebrew class's own hit die, and the background's own grant", async () => {
     // The feature end to end: a d10 class the product has never heard of gives
     // a level-1 character ten hit points plus their constitution modifier,
     // through the same `seedFor` the manual create form calls.
-    const { events } = await ask(fixture.player, fixture.campaign.id);
+    const { events } = await ask(fixture.player, fixture.campaign.id, {
+      rounds: [aDraft({ background: "Salt-runner" }), textChunks("Here she is.")],
+    });
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
-    // d10, CON ranked first so 15 and `+2`.
-    expect(proposed.proposal.hpMax).toBe(12);
+    // **The background is applied first**, which is why these numbers are not
+    // the ones the ranking alone would give. CON is ranked first, so the array
+    // puts 15 there and *Salt-runner* raises it to 17 — `+3`, not `+2`. d10
+    // plus that is 13.
+    expect(proposed.proposal.hpMax).toBe(13);
     expect(proposed.proposal.className).toBe("Bloodsworn");
-    // DEX ranked third, so 13 and `+1` over the unarmoured 10.
+    // DEX ranked third, so 13 and `+1` over the unarmoured 10 — untouched by a
+    // grant that names neither.
     expect(proposed.proposal.ac).toBe(11);
+    // And the cells that were written are the cells those numbers were read
+    // from, which is what `CharacterSeed.abilities` exists to guarantee.
+    expect(proposed.proposal.sheet.abilities).toContainEqual({
+      label: "CON",
+      score: "17",
+      modifier: "+3",
+    });
+    expect(proposed.proposal.sheet.identity?.background).toBe("Salt-runner");
   }, 60_000);
 
   it("hands a near miss back to the model rather than tearing the answer down", async () => {

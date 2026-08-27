@@ -185,11 +185,14 @@ describe("writing down a character of your own", () => {
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
     expect(screen.queryByText(/on top of the scores above/)).toBeNull();
 
-    // This table's own does, and says so where the player will read it.
+    // This table's own does, and says so where the player will read it — and
+    // with no scores typed it says the honest thing rather than the flattering
+    // one: `seedFor` raises a cell that exists and refuses to invent one, so
+    // nothing has moved yet.
     await pick("Background", "Salt-runner");
-    await screen.findByText(/Salt-runner adds \+2 CON, \+1 WIS, on top of the scores above/);
-    // No scores typed, so CON goes from nothing to 12 — `+1` — and the d8
-    // follows it.
+    await screen.findByText(
+      /Salt-runner adds \+2 CON, \+1 WIS\. Set the ability scores above and those go on top of them\./,
+    );
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
 
     await userEvent.click(screen.getByRole("button", { name: /Create character/i }));

@@ -299,6 +299,16 @@ export const backgroundIn = (
  *
  * `undefined` for the bundled sixteen, which grant nothing at all — see
  * `systemOptions.ts` — so the line appears only where something really moves.
+ *
+ * ### It has three states, because the grant only reaches a cell that exists
+ *
+ * `seedFor` raises a score that is there and **does not invent one that is
+ * not**: a player who has typed no constitution has not said what it is, and
+ * writing `12` would be inventing a base of 10 and presenting it as theirs.
+ * So a background picked before any scores are set moves nothing at all — which
+ * is correct, and is exactly the kind of thing a player would otherwise find
+ * out on the sheet. The sentence says which of the three situations they are in
+ * and points at the fix.
  */
 export const backgroundNote = (
   draft: CharacterDraft,
@@ -306,10 +316,24 @@ export const backgroundNote = (
 ): string | undefined => {
   const picked = backgroundIn(draft, options);
   if (picked?.kind !== "background") return undefined;
-  const line = increasesLine(picked.body.abilityIncreases);
-  return line === ""
-    ? undefined
-    : `${picked.name} adds ${line}, on top of the scores above — that is what their sheet will say.`;
+  const increases = picked.body.abilityIncreases;
+  const line = increasesLine(increases);
+  if (line === "") return undefined;
+
+  // Which of the named abilities the player has actually given a score to —
+  // the same test `seedFor` applies, asked of the draft rather than of the
+  // cells, so the two cannot come to say different things.
+  const typed = abilitiesFrom(draft.abilities);
+  const reached = increases.filter((increase) =>
+    typed.some((ability) => ability.label.trim().toUpperCase() === increase.ability),
+  );
+
+  if (reached.length === 0) {
+    return `${picked.name} adds ${line}. Set the ability scores above and those go on top of them.`;
+  }
+  return reached.length === increases.length
+    ? `${picked.name} adds ${line}, on top of the scores above — that is what their sheet will say.`
+    : `${picked.name} adds ${line}, on top of the scores above. An ability with no score set does not move.`;
 };
 
 /**

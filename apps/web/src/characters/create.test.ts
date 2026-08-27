@@ -610,9 +610,37 @@ describe("what a background pick does", () => {
 });
 
 describe("what the form says a background will do", () => {
+  const scored = (...scores: ReadonlyArray<number>) => assignScores(abilityDrafts([]), scores);
+
   it("names the grant and where it lands, because the player did not type it", () => {
-    expect(backgroundNote(draftWith({ background: "Salt-runner" }), VOCABULARY)).toBe(
+    expect(
+      backgroundNote(
+        draftWith({ background: "Salt-runner", abilities: scored(15, 14, 13, 12, 10, 8) }),
+        VOCABULARY,
+      ),
+    ).toBe(
       "Salt-runner adds +2 CON, +1 WIS, on top of the scores above — that is what their sheet will say.",
+    );
+  });
+
+  it("points at the scores when there are none, because then it moves nothing", () => {
+    // **The state a player is actually in most often**, and the one that would
+    // otherwise be a lie: `seedFor` raises a cell that exists and refuses to
+    // invent one that does not, so a background picked before any scores are
+    // set changes no number at all.
+    expect(backgroundNote(draftWith({ background: "Salt-runner" }), VOCABULARY)).toBe(
+      "Salt-runner adds +2 CON, +1 WIS. Set the ability scores above and those go on top of them.",
+    );
+  });
+
+  it("says so when only some of the abilities it names have a score", () => {
+    const conOnly = abilityDrafts([]).map((cell) =>
+      cell.label === "CON" ? { ...cell, score: "13" } : cell,
+    );
+    expect(
+      backgroundNote(draftWith({ background: "Salt-runner", abilities: conOnly }), VOCABULARY),
+    ).toBe(
+      "Salt-runner adds +2 CON, +1 WIS, on top of the scores above. An ability with no score set does not move.",
     );
   });
 
