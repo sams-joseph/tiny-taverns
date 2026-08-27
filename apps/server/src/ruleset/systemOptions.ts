@@ -27,8 +27,10 @@ import type { AbilityKey, ClassEntry, OptionKind, SpeciesEntry } from "@taverns/
  *
  * Feature text — Rage, Sneak Attack, a species' traits — is a genuinely
  * different question (it is somebody's expression rather than a number), and it
- * is a decision for whoever answers the bundle's licensing rather than
- * something to slip in beside a hit die.
+ * is **answered**: the bundle carries no third-party prose, so feature text
+ * arrives here only if this project writes its own, which is a new decision
+ * rather than something to slip in beside a hit die. See `AGENTS.md` § "The
+ * bundle carries no third-party prose".
  *
  * ### It is no longer the vocabulary Hob drafts from
  *

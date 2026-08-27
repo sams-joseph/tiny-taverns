@@ -1083,6 +1083,36 @@ reskins keep their ancestor. Two accounts may each keep a monster called Goblin 
 bundle is unique. It never writes `visibility`, so a shared system creature is not
 un-shared by an upgrade.
 
+### The bundle carries no third-party prose — this project writes what it ships
+
+**Captain's decision, 2026-08-26, and it is a rule rather than a historical note: nothing the
+product bundles is SRD, licensed or otherwise third-party content.** Everything shipped under
+`origin = 'system'` is written by this project — today six fixture creatures
+(`apps/server/src/bestiary/systemCreatures.ts`, transcribed from the designers' own `data.js`) and
+twenty-two class and species rows (`apps/server/src/ruleset/systemOptions.ts`).
+
+**The bundle ships mechanics and names only**: a name, a hit die, an unarmoured-armour rule, hit
+points per level. **No feature text, no background mechanical grants, no spell or item
+descriptions.** Those are somebody's expression rather than a number, and the reason is that this
+way the product takes on no attribution obligation and depends on no belief about what a licence
+permits — the 22 facts shipped in a TypeScript file every client downloaded long before `0017`
+moved them into rows, so nothing about them is newly published.
+
+Two consequences to state rather than leave to be inferred:
+
+- **A DM writing their own prose into their own homebrew is unaffected**, and the rule must never be
+  read as restricting them. `CharacterOption`'s `summary` and a creature's whole `statBlock`
+  document are theirs, in their campaign, and are not something this project ships.
+- **Slice 5 of `data/tav-character-entities-design/report.md` — feature text, proficiencies and
+  starting equipment on the bundle, with the sheet rendering the campaign's class document — is not
+  built as designed.** If it is ever wanted, the route is prose written fresh by this project, and
+  that is a new decision rather than a resumption of the old one.
+
+So an absent `summary` on a bundled row is **missing data, not a stub**: the field exists for the
+DM who fills it in, and inventing a sentence for a bundled class would be exactly the
+plausible-looking value `systemCreatures.ts` refuses. Do not add attribution notices or licence
+files either — the decision is that there is nothing to attribute.
+
 **`encounter_creature` hangs off `encounter` with no `campaign_id`,** like `prep_item` under
 `session` and for the same reason. Two things about it are specific:
 

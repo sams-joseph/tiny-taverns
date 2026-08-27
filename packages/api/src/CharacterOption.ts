@@ -93,9 +93,11 @@ export type OptionKind = typeof OptionKind.Type;
  *
  * The **only** prose either body carries, and it is here because a homebrew
  * class with no way to say what it is would be a name and two numbers. Feature
- * text — Rage, Sneak Attack, a species' traits — is deliberately absent: that
- * is a licensing question for a bundle to answer and a later slice's work, and
- * a field with no writer would be the stub this product refuses.
+ * text — Rage, Sneak Attack, a species' traits — is deliberately absent from
+ * *the bundle*, by the decision in `AGENTS.md` § "The bundle carries no
+ * third-party prose": this project writes what it ships, and nobody has written
+ * that prose. A DM writing feature text into their own homebrew is unaffected —
+ * that is their content in their campaign.
  */
 const summary = Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 500)));
 
