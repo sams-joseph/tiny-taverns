@@ -1,4 +1,4 @@
-import type { CampaignId, CharacterOption } from "@taverns/api";
+import type { CampaignId, CharacterOption, OptionKind } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -21,9 +21,9 @@ import { optionWritesAt } from "./load";
 import { numbersOf } from "./option";
 
 /**
- * Bringing a class or a species this account has already written into **this**
- * campaign — statement 3 of the captain's Library model, over the second table
- * that carries it.
+ * Bringing a class, a species or a background this account has already written
+ * into **this** campaign — statement 3 of the captain's Library model, over the
+ * second table that carries it.
  *
  * > when you use them in a campaign they are copied in […] the campaign is a
  * > copied state of the entity
@@ -48,6 +48,14 @@ import { numbersOf } from "./option";
  *   one that says so — and two of something in one campaign is occasionally
  *   what a DM wants while they work out which they are keeping.
  */
+
+/** What the badge on a row says. One map, so the three cannot drift apart. */
+const KIND_LABEL: Record<OptionKind, string> = {
+  class: "Class",
+  species: "Species",
+  background: "Background",
+};
+
 export function CopyOptionIn({
   campaignId,
   originals,
@@ -105,16 +113,16 @@ export function CopyOptionIn({
         <DialogHeader>
           <DialogTitle>Copy from your library</DialogTitle>
           <DialogDescription>
-            The classes and species you have written. Bringing one in gives this table its own copy
-            of it as it is now.
+            The classes, species and backgrounds you have written. Bringing one in gives this table
+            its own copy of it as it is now.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-gutter py-3">
           {mine.length === 0 ? (
             <EmptyState icon="book-open" title="Nothing in your library yet">
-              Write a class or a species with the buttons on this screen and it lands here as well
-              as on this table — so the next campaign you run can take a copy of it.
+              Write a class, a species or a background with the buttons on this screen and it lands
+              here as well as on this table — so the next campaign you run can take a copy of it.
             </EmptyState>
           ) : (
             mine.map((option) => (
@@ -123,9 +131,7 @@ export function CopyOptionIn({
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-body leading-snug font-semibold text-heading">
                       {option.name}
-                      <Badge variant="secondary">
-                        {option.kind === "class" ? "Class" : "Species"}
-                      </Badge>
+                      <Badge variant="secondary">{KIND_LABEL[option.kind]}</Badge>
                     </p>
                     <p className="text-caption leading-body text-muted-foreground">
                       {numbersOf(option)}
@@ -135,6 +141,12 @@ export function CopyOptionIn({
                   <Button
                     size="sm"
                     variant="secondary"
+                    // The visible word repeated down a list is one control as
+                    // far as anything reading names is concerned — the trap the
+                    // sheet's six ability cells already record. The visible
+                    // text is kept as the prefix, so anything driving by what
+                    // it can see still matches.
+                    aria-label={`Copy in ${option.name}`}
                     disabled={busy}
                     onClick={() => void copy(option)}
                   >

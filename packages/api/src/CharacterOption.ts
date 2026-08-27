@@ -1,19 +1,23 @@
 import { Schema } from "effect";
 import { AccountId, CampaignId, CharacterOptionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
-import { AbilityKey } from "./Ruleset.js";
+import { AbilityIncrease, AbilityKey } from "./Ruleset.js";
 
 /**
- * A piece a character is **built from** — a class or a species — as a row a
- * campaign can hold and an account can author.
+ * A piece a character is **built from** — a class, a species or a background —
+ * as a row a campaign can hold and an account can author.
  *
  * ### One table with a `kind`, not one table per piece
  *
  * The precedent is this project's own and is on the nose: *"one `note` table
  * with a `kind` and an optional attachment, not a `read_aloud` column on three
- * tables each with its own visibility rule to get wrong"*. Adding a background
- * — or, much later, a subclass — is then a new `kind` value rather than a
- * migration plus a repository plus an API group plus a screen.
+ * tables each with its own visibility rule to get wrong"*. **It has now been
+ * cashed once**: the background arrived as a new `kind` value, one widened
+ * check constraint (`0018`) and a third member of the unions below — no
+ * migration of any table's columns, no repository, no API group and no screen.
+ * A subclass, much later, is the same shape again — though it needs a parent
+ * pointer and a containment rule this table does not have, which is why it is
+ * held.
  *
  * ### The ownership model is the Library's, unchanged and unextended
  *
@@ -68,7 +72,9 @@ import { AbilityKey } from "./Ruleset.js";
  * predicate uses it, the seed copies it. Nothing filters classes by hit die;
  * `seedFor` reads it after fetching one row. So `kind` and `name` are columns
  * (the vocabulary is looked up by both) and everything that differs between a
- * class and a species is one `jsonb` document.
+ * class, a species and a background is one `jsonb` document. That rule is what
+ * made the third kind cost no column: a background's ability score increases
+ * are read once, by the seed, out of a row already in hand.
  */
 
 /**
@@ -80,18 +86,25 @@ import { AbilityKey } from "./Ruleset.js";
  * for a closed vocabulary, met — unlike a creature's `type`, which nothing
  * branches on and which is therefore open.
  *
- * `background` is deliberately not here yet. It is the entity that changes a
- * 2024 character's numbers most (the ability score increases moved onto it), so
- * it changes the *seed* — which is a bigger change than adding a row type and
- * should not ride along with the plumbing.
+ * `background` is the third and arrived on its own, for the reason it was held
+ * back from the first: it is the entity that changes a 2024 character's numbers
+ * most, because that ruleset moved the ability score increases off the species
+ * and onto it. So it changes the **seed** — `seedFor` applies it before it
+ * reads a modifier — where a class and a species only add to what the seed
+ * reads.
+ *
+ * `subclass` and `feat` are still not here. A subclass is a *child* of a class
+ * and needs a containment rule this table has none of; a feat is read by
+ * nothing in the product, which is the table-with-no-reader this codebase
+ * refuses everywhere.
  */
-export const OptionKind = Schema.Literals(["class", "species"]);
+export const OptionKind = Schema.Literals(["class", "species", "background"]);
 export type OptionKind = typeof OptionKind.Type;
 
 /**
- * A one-line summary, on either kind of document.
+ * A one-line summary, on any of the three documents.
  *
- * The **only** prose either body carries, and it is here because a homebrew
+ * The **only** prose any body carries, and it is here because a homebrew
  * class with no way to say what it is would be a name and two numbers. Feature
  * text — Rage, Sneak Attack, a species' traits — is deliberately absent from
  * *the bundle*, by the decision in `AGENTS.md` § "The bundle carries no
@@ -167,6 +180,48 @@ export const SpeciesBody = Schema.Struct({
 export type SpeciesBody = typeof SpeciesBody.Type;
 
 /**
+ * The background document.
+ *
+ * ### It is the only one of the three that moves an ability score
+ *
+ * The 2024 ruleset took the ability score increases off the species and put
+ * them here, which is what made this a slice of its own rather than a row type
+ * added beside the other two: a class contributes a hit die and a species hit
+ * points per level, and both are read straight into a number, where a
+ * background moves the six cells and lets the armour class and the hit points
+ * follow. `seedFor` applies it first and hands the moved cells back.
+ *
+ * ### `abilityIncreases` is required, and `[]` is the ordinary answer
+ *
+ * Required rather than optional, and that is structural rather than stylistic:
+ * `OptionUpdate.body` is a `Schema.Union` of the three documents and
+ * `Schema.Union` takes the **first member that matches**, so a body with no
+ * required key at all would swallow a class document whole (measured: reordered
+ * in front, `{hitDie: 8, unarmouredAc: ["DEX"]}` decodes to `{}`). With one
+ * required key each the three are mutually exclusive by shape, `repo/Options.ts`'s
+ * `bodyKind` can tell them apart, and the union's order stops mattering.
+ *
+ * The cost is that `[]` is a value rather than an absence, and it is the value
+ * every bundled background carries — see `systemOptions.ts`, which explains
+ * why. Both screens render it as *"no ability score increases written down"*,
+ * which is what it means: nobody has said, and a DM saying so is one edit away.
+ */
+export const BackgroundBody = Schema.Struct({
+  /**
+   * What this background adds to a new character's scores — `+2 CON, +1 WIS`.
+   *
+   * Empty for all sixteen bundled rows: this project ships names and numbers it
+   * has written, and a background's mechanical grants are named out by the
+   * bundle-licensing decision (`AGENTS.md` § "The bundle carries no third-party
+   * prose"). A table that plays them writes its own background, where the
+   * numbers are the DM's.
+   */
+  abilityIncreases: Schema.Array(AbilityIncrease).check(Schema.isLengthBetween(0, 6)),
+  summary,
+});
+export type BackgroundBody = typeof BackgroundBody.Type;
+
+/**
  * Everything an option carries whatever kind it is — the ownership pair, the
  * provenance tail, and the name the vocabulary is looked up by.
  */
@@ -228,17 +283,26 @@ export const SpeciesOption = Schema.Struct({
 });
 export type SpeciesOption = typeof SpeciesOption.Type;
 
+export const BackgroundOption = Schema.Struct({
+  ...optionFields,
+  kind: Schema.Literal("background"),
+  body: BackgroundBody,
+});
+export type BackgroundOption = typeof BackgroundOption.Type;
+
 /**
- * A class or a species — **a union discriminated on `kind`, not one record with
- * a nullable `hitDie` and a nullable `hpPerLevel`.**
+ * A class, a species or a background — **a union discriminated on `kind`, not
+ * one record with a nullable `hitDie`, a nullable `hpPerLevel` and a nullable
+ * list of increases.**
  *
  * The same call `SearchHit` and `PlayerCombatant` make, for the same reason:
  * `hitDie` exists only on a class and `hpPerLevel` only on a species, and a
- * record carrying both would let a species row claim a hit die that nothing
- * would ever read. Tying the document to the `kind` in the type is what makes
- * the seed's `switch` total.
+ * record carrying all three would let a species row claim a hit die that
+ * nothing would ever read. Tying the document to the `kind` in the type is what
+ * makes the seed's `switch` total — and what made adding the background a
+ * compile error everywhere it had to be handled rather than a silent absence.
  */
-export const CharacterOption = Schema.Union([ClassOption, SpeciesOption]);
+export const CharacterOption = Schema.Union([ClassOption, SpeciesOption, BackgroundOption]);
 export type CharacterOption = typeof CharacterOption.Type;
 
 /** A class row, narrowed — the shape `seedFor` reads a hit die out of. */
@@ -248,6 +312,10 @@ export const isClassOption = (option: CharacterOption): option is ClassOption =>
 /** A species row, narrowed. */
 export const isSpeciesOption = (option: CharacterOption): option is SpeciesOption =>
   option.kind === "species";
+
+/** A background row, narrowed — the shape the seed moves the six cells from. */
+export const isBackgroundOption = (option: CharacterOption): option is BackgroundOption =>
+  option.kind === "background";
 
 /**
  * A stored label, read back as the option it names — **case-insensitively, on
@@ -308,6 +376,7 @@ const optionName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 60));
 export const OptionLibraryCreate = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("class"), name: optionName, body: ClassBody }),
   Schema.Struct({ kind: Schema.Literal("species"), name: optionName, body: SpeciesBody }),
+  Schema.Struct({ kind: Schema.Literal("background"), name: optionName, body: BackgroundBody }),
 ]);
 export type OptionLibraryCreate = typeof OptionLibraryCreate.Type;
 
@@ -329,8 +398,14 @@ const optionUpdateFields = {
   /**
    * The whole document, and it must match the row's own `kind` — which the
    * repository checks, because a union here cannot see the row it is patching.
+   *
+   * The three members are mutually exclusive by shape: each has exactly one
+   * required key the other two lack (`hitDie`, `hpPerLevel`, `abilityIncreases`),
+   * which is why `BackgroundBody.abilityIncreases` is required and why the order
+   * of this list carries no meaning. `repo/Options.ts`'s `bodyKind` is the one
+   * reader of that property.
    */
-  body: Schema.optional(Schema.Union([ClassBody, SpeciesBody])),
+  body: Schema.optional(Schema.Union([ClassBody, SpeciesBody, BackgroundBody])),
 } as const;
 
 export const OptionLibraryUpdate = Schema.Struct(optionUpdateFields);
@@ -371,8 +446,9 @@ export type OptionDerive = typeof OptionDerive.Type;
  * design sketch's `/options/:kind` and is a routing fact rather than a
  * preference: `/options/class` and `/options/:optionId` are the same shape, so
  * one of them would have to win. Omitted means every kind, which is what both
- * readers actually want — the create form needs classes *and* species, and the
- * Rules screen draws both — so the common case is one request rather than two.
+ * readers actually want — the create form needs classes, species *and*
+ * backgrounds, and the Rules screen draws all three — so the common case is one
+ * request rather than three.
  */
 export const OptionFilter = {
   kind: Schema.optional(OptionKind),

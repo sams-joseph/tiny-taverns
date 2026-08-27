@@ -41,6 +41,8 @@ export const bloodswornOptionId = "2b1f2a1e-0000-4000-8000-000000000e03";
 export const marshfolkOptionId = "2b1f2a1e-0000-4000-8000-000000000e04";
 export const bloodswornOriginalId = "2b1f2a1e-0000-4000-8000-000000000e05";
 export const marshfolkOriginalId = "2b1f2a1e-0000-4000-8000-000000000e06";
+export const saltRunnerOptionId = "2b1f2a1e-0000-4000-8000-000000000e07";
+export const saltRunnerOriginalId = "2b1f2a1e-0000-4000-8000-000000000e08";
 export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
@@ -291,7 +293,7 @@ const bundledOption = {
  * which is not a state the product has.
  */
 const bundled = (
-  kind: "class" | "species",
+  kind: "class" | "species" | "background",
   index: number,
   name: string,
   body: Record<string, unknown>,
@@ -300,7 +302,7 @@ const bundled = (
   // Twelve hex digits in the last group, like every other id in this file: a
   // short one decodes as *not a UUID* and the screen renders the schema's own
   // complaint instead of a picker.
-  id: `2b1f2a1e-0000-4000-8000-${kind === "class" ? "f" : "e"}00000000${String(index).padStart(3, "0")}`,
+  id: `2b1f2a1e-0000-4000-8000-${kind === "class" ? "f" : kind === "species" ? "e" : "d"}00000000${String(index).padStart(3, "0")}`,
   kind,
   name,
   body,
@@ -340,6 +342,16 @@ const bundledSpecies = (
   ] as ReadonlyArray<readonly [string, number]>
 ).map(([name, hpPerLevel], index) => bundled("species", index, name, { hpPerLevel }));
 
+/**
+ * Four of the sixteen, and **every one of them grants nothing** — which is what
+ * the bundle really ships. The grants are the one thing the bundle-licensing
+ * decision names out by title, so a table that plays them writes its own, which
+ * is what `saltRunnerOption` below is.
+ */
+const bundledBackgrounds = ["Acolyte", "Sage", "Soldier", "Wayfarer"].map((name, index) =>
+  bundled("background", index, name, { abilityIncreases: [] }),
+);
+
 /** Named for the tests that reach for one by hand. */
 export const druidOption = { ...bundledClasses[3]!, id: druidOptionId };
 export const elfOption = { ...bundledSpecies[3]!, id: elfOptionId };
@@ -368,15 +380,42 @@ export const marshfolkOption = {
 };
 
 /**
+ * *Salt-runner, +2 CON and +1 WIS* — this table's own, and the only row in this
+ * fixture that moves a number a player typed.
+ *
+ * A background is the third kind and the one that reaches the seed *through*
+ * the six ability cells, so a fixture with only bundled backgrounds in it could
+ * not tell a working grant from a missing one.
+ */
+export const saltRunnerOption = {
+  ...bundledOption,
+  id: saltRunnerOptionId,
+  campaignId,
+  derivedFrom: saltRunnerOriginalId,
+  origin: "authored",
+  kind: "background",
+  name: "Salt-runner",
+  body: {
+    abilityIncreases: [
+      { ability: "CON", amount: 2 },
+      { ability: "WIS", amount: 1 },
+    ],
+    summary: "Raised on the barges, and still counting the tide.",
+  },
+};
+
+/**
  * What this table offers: the bundle, plus what has been copied in.
  *
  * In the order the server sends — kind, then name — because both readers draw
- * the two kinds separately and `readOrder` is what decides which is which.
+ * the three kinds separately and `readOrder` is what decides which is which.
+ * `background` sorts first, which is what `character_option.kind asc` does.
  */
 const named = <A extends { readonly name: string }>(rows: ReadonlyArray<A>): ReadonlyArray<A> =>
   [...rows].sort((a, b) => a.name.localeCompare(b.name));
 
 export const campaignOptions = [
+  ...named([...bundledBackgrounds, saltRunnerOption]),
   ...named([...bundledClasses, bloodswornOption]),
   ...named([...bundledSpecies, marshfolkOption]),
 ];
@@ -391,6 +430,8 @@ export const campaignOptions = [
  * able to offer something already on the table.
  */
 export const libraryOptions = [
+  { ...saltRunnerOption, id: saltRunnerOriginalId, campaignId: null, accountId: theDmAccountId },
+  ...bundledBackgrounds,
   { ...bloodswornOption, id: bloodswornOriginalId, campaignId: null, accountId: theDmAccountId },
   ...bundledClasses,
   { ...marshfolkOption, id: marshfolkOriginalId, campaignId: null, accountId: theDmAccountId },

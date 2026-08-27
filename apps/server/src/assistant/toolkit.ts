@@ -3,6 +3,7 @@ import {
   ABILITY_KEYS,
   AbilityKey,
   type Actor,
+  type BackgroundEntry,
   type CampaignId,
   type CharacterOption,
   type CharacterSheet,
@@ -14,6 +15,7 @@ import {
   Difficulty,
   type HobProposal,
   type HobRosterLine,
+  isBackgroundOption,
   isClassOption,
   isSpeciesOption,
   modifierFor,
@@ -145,8 +147,8 @@ const OPTION_ENUM_CAP = 40;
 const OPTION_NAME_MAX = 60;
 
 /**
- * **This campaign's** classes and species, as the words `proposeCharacter` is
- * held to.
+ * **This campaign's** classes, species and backgrounds, as the words
+ * `proposeCharacter` is held to.
  *
  * ### Why a campaign's vocabulary cannot be a module-level literal
  *
@@ -204,7 +206,12 @@ export interface CharacterVocabulary {
   /** {@link classes}' twin. */
   readonly species: ReadonlyArray<string>;
   /**
-   * Whether either kind is over {@link OPTION_ENUM_CAP} — which is the one
+   * {@link classes}' third — the origins, which in the 2024 ruleset are what
+   * carry the ability score increases.
+   */
+  readonly backgrounds: ReadonlyArray<string>;
+  /**
+   * Whether **any** kind is over {@link OPTION_ENUM_CAP} — which is the one
    * thing that decides which toolkit a player gets.
    */
   readonly listed: boolean;
@@ -215,6 +222,7 @@ export const NO_VOCABULARY: CharacterVocabulary = {
   options: [],
   classes: [],
   species: [],
+  backgrounds: [],
   listed: false,
 };
 
@@ -247,11 +255,17 @@ const namesOf = (
 export const vocabularyOf = (options: ReadonlyArray<CharacterOption>): CharacterVocabulary => {
   const classes = namesOf(options, "class");
   const species = namesOf(options, "species");
+  const backgrounds = namesOf(options, "background");
   return {
     options,
     classes,
     species,
-    listed: classes.length > OPTION_ENUM_CAP || species.length > OPTION_ENUM_CAP,
+    backgrounds,
+    // Any one kind over the cap puts `listOptions` in the toolkit, because the
+    // fallback reads every kind out in one call — a per-kind decision here
+    // would be a per-kind tool there, which is the round this design refuses to
+    // spend.
+    listed: [classes, species, backgrounds].some((names) => names.length > OPTION_ENUM_CAP),
   };
 };
 
@@ -722,15 +736,17 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
   Tool.make("proposeCharacter", {
     description:
       "Offer the player a character sheet built from what they described. Give " +
-      "them a name, then a species and a class. " +
+      "them a name, then a species, a class and a background. " +
       `${nameSentence("species", "species", vocabulary.species)} ` +
       `${nameSentence("class", "classes", vocabulary.classes)} ` +
+      `${nameSentence("background", "backgrounds", vocabulary.backgrounds)} ` +
       "Put anything more " +
       "specific, like a wood elf or a circle of the moon, in subclass. Rank the " +
       "six abilities most important first, name up to four skills, and write a " +
       "short backstory in their own register. Do not give scores, modifiers, hit " +
       "points, armour class or a level — the standard array is applied for you " +
-      "and the starting numbers are worked out from the class and species. Only " +
+      "and the starting numbers are worked out from the class, the species and " +
+      "the background. Only " +
       "a suggestion: nothing is saved unless the player accepts it. Say one " +
       "short line about it and stop.",
     parameters: Schema.Struct({
@@ -763,7 +779,23 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
       className: nameSchema(vocabulary.classes),
       /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
       subclass: optionalText(80),
-      background: optionalText(80),
+      /**
+       * The background — **the campaign's vocabulary too, and required like the
+       * other two rather than the prose optional it used to be.**
+       *
+       * It was `optionalText(80)`, back when a background was a line on the
+       * sheet and reached no number. The 2024 ruleset puts the ability score
+       * increases on it, so it is now the third thing the seed reads — and a
+       * parameter the model may silently omit is a seed that silently loses
+       * them. Required is also the cheaper call for a small model here, because
+       * the enum makes it a *pick* rather than something to invent: the
+       * measured hazard on this tier is inventing, not choosing.
+       *
+       * A campaign with no backgrounds written down gets free text, which is
+       * what {@link nameSchema} does with an empty list and is what this
+       * parameter has always been.
+       */
+      background: nameSchema(vocabulary.backgrounds),
       /**
        * Six ability keys, most important first — **a ranking, not scores.**
        *
@@ -1196,6 +1228,10 @@ const classEntryOf = (option: CharacterOption | undefined): ClassEntry | undefin
 const speciesEntryOf = (option: CharacterOption | undefined): SpeciesEntry | undefined =>
   option !== undefined && isSpeciesOption(option) ? option.body : undefined;
 
+/** {@link classEntryOf}'s third — the one that moves the six cells. */
+const backgroundEntryOf = (option: CharacterOption | undefined): BackgroundEntry | undefined =>
+  option !== undefined && isBackgroundOption(option) ? option.body : undefined;
+
 /**
  * A label the campaign does not have, refused where the model can hear it.
  *
@@ -1271,7 +1307,7 @@ export const playerHandlersFor = (
       rationale,
     }: CharacterDraft) => {
       /**
-       * The two labels, read back as the rows they name — through
+       * The three labels, read back as the rows they name — through
        * `optionNamed`, which is the product's own rule for turning a stored
        * label into an option and is deliberately not re-derived here.
        *
@@ -1282,6 +1318,7 @@ export const playerHandlersFor = (
        */
       const classOption = optionNamed(vocabulary.options, "class", className);
       const speciesOption = optionNamed(vocabulary.options, "species", species);
+      const backgroundOption = optionNamed(vocabulary.options, "background", background);
 
       if (vocabulary.listed && classOption === undefined) {
         return Effect.fail(notInVocabulary("class", className));
@@ -1289,10 +1326,43 @@ export const playerHandlersFor = (
       if (vocabulary.listed && speciesOption === undefined) {
         return Effect.fail(notInVocabulary("species", species));
       }
+      // Only when the campaign has some. A table with no backgrounds written
+      // down gets free text from `nameSchema` and there is no list to be
+      // outside of — the same three states the other two have.
+      if (
+        vocabulary.listed &&
+        vocabulary.backgrounds.length > 0 &&
+        backgroundOption === undefined
+      ) {
+        return Effect.fail(notInVocabulary("background", background));
+      }
+
+      /**
+       * The three numbers a character starts on — worked out **before** the
+       * document is assembled, because the background moves the six cells.
+       *
+       * `seedFor` applies the background's ability score increases to the
+       * ranking's standard array and hands the moved cells back on
+       * `seed.abilities`, which is what goes into `sheet` below. That ordering
+       * is the whole of what slice 3 changed here: a draft whose background
+       * raises constitution really does come back with more hit points *and* a
+       * sheet whose constitution cell says so, and there is no way to take one
+       * without the other.
+       */
+      const seed = seedFor({
+        classEntry: classEntryOf(classOption),
+        speciesEntry: speciesEntryOf(speciesOption),
+        backgroundEntry: backgroundEntryOf(backgroundOption),
+        abilities: abilitiesFrom(abilityOrder),
+      });
 
       const identity = {
         ...(blank(subclass) === undefined ? {} : { subclass: blank(subclass)! }),
-        ...(blank(background) === undefined ? {} : { background: blank(background)! }),
+        // The campaign's own spelling where it resolved, the model's where it
+        // did not — the same rule the species and the class labels follow.
+        ...(blank(backgroundOption?.name ?? background) === undefined
+          ? {}
+          : { background: blank(backgroundOption?.name ?? background)! }),
       };
       const story = {
         ...(blank(bond) === undefined ? {} : { bond: blank(bond)! }),
@@ -1310,50 +1380,16 @@ export const playerHandlersFor = (
        */
       const sheet: CharacterSheet = {
         notes: blank(backstory) ?? "",
-        abilities: abilitiesFrom(abilityOrder),
+        // The seed's, not the ranking's: these are the cells with the
+        // background applied, and they are the cells its armour class and hit
+        // points were read from.
+        abilities: seed.abilities,
         traits: [],
         ...(Object.keys(identity).length === 0 ? {} : { identity }),
         ...(Object.keys(story).length === 0 ? {} : { story }),
         ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
         ...(carried.length === 0 ? {} : { inventory: carried.map((item) => ({ name: item })) }),
       };
-
-      /**
-       * The three numbers a character starts on, worked out **here** rather
-       * than at the accept.
-       *
-       * `HobProposal.sheet` is resolved when the proposal is made, and these
-       * follow it for the same stated reason: the card the player reads and the
-       * row *Keep them* creates cannot disagree, and the accept does no
-       * arithmetic a reader could not see coming. It reads the class hit die,
-       * the species, and the constitution and dexterity modifiers out of the
-       * `sheet` this handler has just assembled — so a draft that ranked
-       * constitution first really does come back with more hit points, which is
-       * the whole point of ranking it.
-       *
-       * `seedFor` is `@taverns/api`'s and is the same function the manual create
-       * form calls, so a drafted druid and a hand-filled one start on the same
-       * number. It is called **once**, and nothing recomputes any of the three
-       * afterwards.
-       *
-       * It takes **entries** rather than labels, because there is no global
-       * class map to look a label up in — a campaign's vocabulary is a read.
-       * Since slice 2 the entries come from the *campaign's* own rows, which is
-       * the whole feature in one expression: a homebrew d10 class seeds a
-       * homebrew d10 character. It is the same resolution the manual create form
-       * makes against the same list, so a drafted Bloodsworn and a hand-filled
-       * one start on the same number. One resolver, one seed, and the
-       * arithmetic is untouched.
-       *
-       * An unresolved label leaves the entry `undefined`, which `seedFor`
-       * already handles — level and armour class, no hit points — and which is
-       * reachable only where there is genuinely no vocabulary to match against.
-       */
-      const seed = seedFor({
-        classEntry: classEntryOf(classOption),
-        speciesEntry: speciesEntryOf(speciesOption),
-        abilities: sheet.abilities,
-      });
 
       return offer(
         {

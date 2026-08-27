@@ -2,6 +2,7 @@ import type { CampaignMembership, CharacterOption, OptionKind } from "@taverns/a
 import { describe, expect, it } from "vitest";
 import { abilityDrafts, abilitySummary, assignScores } from "./abilities";
 import {
+  backgroundNote,
   emptyDraft,
   payloadFrom,
   problemsIn,
@@ -57,10 +58,13 @@ const option = (kind: OptionKind, name: string, body: Record<string, unknown>): 
 /**
  * What a table offers, as the picker was built from it.
  *
- * The bundled entries these tests name, **plus a homebrew class and a homebrew
- * species** — because the whole point of the vocabulary being a read is that
- * the seed cannot tell one from the other, and a fixture holding only bundled
- * rows would never show that.
+ * The bundled entries these tests name, **plus a homebrew class, a homebrew
+ * species and a homebrew background** — because the whole point of the
+ * vocabulary being a read is that the seed cannot tell one from the other, and
+ * a fixture holding only bundled rows would never show that. The background is
+ * the sharpest case of it: every bundled one grants nothing at all, so a
+ * fixture without a homebrew one could not tell a working grant from a missing
+ * one.
  */
 const VOCABULARY: ReadonlyArray<CharacterOption> = [
   option("class", "Druid", { hitDie: 8, unarmouredAc: ["DEX"] }),
@@ -72,6 +76,15 @@ const VOCABULARY: ReadonlyArray<CharacterOption> = [
   option("species", "Elf", { hpPerLevel: 0 }),
   option("species", "Dwarf", { hpPerLevel: 1 }),
   option("species", "Marshfolk", { hpPerLevel: 2 }),
+  /** All sixteen bundled backgrounds are this shape: a name and no grant. */
+  option("background", "Soldier", { abilityIncreases: [] }),
+  /** *+2 CON, +1 WIS* — this table's own, and where a grant actually comes from. */
+  option("background", "Salt-runner", {
+    abilityIncreases: [
+      { ability: "CON", amount: 2 },
+      { ability: "WIS", amount: 1 },
+    ],
+  }),
 ];
 
 describe("which tables a character of your own may go into", () => {
@@ -137,7 +150,7 @@ describe("the payload", () => {
     // `level` is the one thing an untouched draft still carries: the captain's
     // third decision is that a character starts at 1, so an empty form is a
     // level-1 character rather than one whose level nobody has said.
-    expect(payloadFrom(draftWith({}))).toEqual({ name: "Sorrel", level: 1 });
+    expect(payloadFrom(draftWith({}), VOCABULARY)).toEqual({ name: "Sorrel", level: 1 });
   });
 
   it("trims, and carries every field that was filled in", () => {
@@ -153,6 +166,7 @@ describe("the payload", () => {
           hpMax: "22",
           sheetUrl: " https://example.com/sorrel ",
         }),
+        VOCABULARY,
       ),
     ).toEqual({
       name: "Sorrel Ash",
@@ -170,8 +184,8 @@ describe("the payload", () => {
     // So a brand new character's `body` is the column default, which is the
     // same shape a DM-typed one has. A `{ notes: "" }` would be a document
     // written to say nothing.
-    expect(payloadFrom(draftWith({ notes: "   " })).sheet).toBeUndefined();
-    expect(payloadFrom(draftWith({ notes: "Raised by the road." })).sheet).toEqual({
+    expect(payloadFrom(draftWith({ notes: "   " }), VOCABULARY).sheet).toBeUndefined();
+    expect(payloadFrom(draftWith({ notes: "Raised by the road." }), VOCABULARY).sheet).toEqual({
       notes: "Raised by the road.",
       abilities: [],
       traits: [],
@@ -185,6 +199,7 @@ describe("the payload", () => {
     // disclosure property rests on the row coming out at its column defaults.
     const payload = payloadFrom(
       draftWith({ name: "Sorrel", level: "1", ac: "14", hpMax: "9" }),
+      VOCABULARY,
     ) as Record<string, unknown>;
     for (const key of ["hpCurrent", "tempHp", "conditions", "visibility", "accountId"]) {
       expect(payload).not.toHaveProperty(key);
@@ -272,8 +287,8 @@ describe("what a class and species pick fills in", () => {
     expect(picked.ac).toBe("10");
     // And the label the picker wrote is what the payload sends, which is the
     // whole of the link between a character and the option it was made from.
-    expect(payloadFrom(picked).className).toBe("Bloodsworn");
-    expect(payloadFrom(picked).species).toBe("Marshfolk");
+    expect(payloadFrom(picked, VOCABULARY).className).toBe("Bloodsworn");
+    expect(payloadFrom(picked, VOCABULARY).species).toBe("Marshfolk");
   });
 
   it("seeds nothing at all for a label this table has no option for", () => {
@@ -292,7 +307,7 @@ describe("what a class and species pick fills in", () => {
     expect(unknown.hpMax).toBe("");
     expect(unknown.ac).toBe("10");
     // The label is kept verbatim and sent verbatim. Nothing rewrites it.
-    expect(payloadFrom(unknown).className).toBe("Circle of the Moon Druid");
+    expect(payloadFrom(unknown, VOCABULARY).className).toBe("Circle of the Moon Druid");
   });
 
   it("matches a label case-insensitively and exactly, and no other way", () => {
@@ -315,6 +330,7 @@ describe("what a class and species pick fills in", () => {
     // the label, so what the picker writes has to be the label exactly.
     const payload = payloadFrom(
       seededDraft(draftWith({ className: "Monk" }), untouched, VOCABULARY),
+      VOCABULARY,
     );
     expect(payload.className).toBe("Monk");
     expect(payload.hpMax).toBe(8);
@@ -446,6 +462,7 @@ describe("what the ability scores fill in", () => {
         untouched,
         VOCABULARY,
       ),
+      VOCABULARY,
     );
     expect(payload.hpMax).toBe(15);
     expect(payload.ac).toBe(14);
@@ -467,7 +484,7 @@ describe("what the ability scores fill in", () => {
   it("sends no document at all when neither a backstory nor a score was typed", () => {
     // Unchanged, and it is what keeps a brand new character's `body` the same
     // shape as one the DM typed.
-    expect(payloadFrom(draftWith({})).sheet).toBeUndefined();
+    expect(payloadFrom(draftWith({}), VOCABULARY).sheet).toBeUndefined();
   });
 
   it("refuses a score the editor would not have handed back", () => {
@@ -477,5 +494,135 @@ describe("what the ability scores fill in", () => {
     const wild = draftWith({ abilities: scored(400, 10, 10, 10, 10, 10) });
     expect(problemsIn(wild).abilities).toBe("An ability score is a whole number, 1 to 30.");
     expect(refused(problemsIn(wild))).toBe(true);
+  });
+});
+
+/**
+ * The third picker, and the one that changes a number the player typed.
+ *
+ * **This is the whole of what the background slice added to this form.** A
+ * class and a species fill in the two boxes below the row; a background raises
+ * the *ability scores*, so the two boxes move and the document that gets sent
+ * is not the one the editor holds. The arithmetic is
+ * `packages/api/src/Ruleset.test.ts`'s; what is pinned here is this form's own
+ * half — that the raised cells are what the payload carries, that the boxes it
+ * holds are still what the player typed, and that changing the pick twice does
+ * not apply anything twice.
+ */
+describe("what a background pick does", () => {
+  const untouched: ReadonlySet<SeededField> = new Set();
+  const scored = (...scores: ReadonlyArray<number>) => assignScores(abilityDrafts([]), scores);
+
+  /** A druid with the standard array in draw order, so CON is the 13. */
+  const aDruid = (background: string) =>
+    draftWith({
+      className: "Druid",
+      species: "Elf",
+      background,
+      abilities: scored(15, 14, 13, 12, 10, 8),
+    });
+
+  it("re-seeds the two boxes, because the grant reaches them through the scores", () => {
+    // Salt-runner is `+2 CON, +1 WIS`, so CON 13 becomes 15 and the d8 seeds
+    // from `+2` rather than `+1`. Nothing else on the form moved.
+    const plain = seededDraft(aDruid("Soldier"), untouched, VOCABULARY);
+    const raised = seededDraft(aDruid("Salt-runner"), untouched, VOCABULARY);
+    expect(plain.hpMax).toBe("9");
+    expect(raised.hpMax).toBe("10");
+    // Dexterity is untouched by this one, so the armour class is not.
+    expect(raised.ac).toBe(plain.ac);
+  });
+
+  it("sends the raised cells, so the sheet and the two numbers agree", () => {
+    // **The property the whole shape exists for.** If the payload carried
+    // `abilitiesFrom(draft.abilities)` the sheet would say CON 13 while the hit
+    // points beside it had been worked out from 15 — arithmetically right on
+    // both sides and wrong together, which is the hardest kind to notice.
+    const payload = payloadFrom(
+      seededDraft(aDruid("Salt-runner"), untouched, VOCABULARY),
+      VOCABULARY,
+    );
+    expect(payload.hpMax).toBe(10);
+    expect(payload.sheet?.abilities).toContainEqual({
+      label: "CON",
+      score: "15",
+      modifier: "+2",
+    });
+    expect(payload.sheet?.abilities).toContainEqual({
+      label: "WIS",
+      score: "11",
+      modifier: "+0",
+    });
+    // And the label itself goes in the document rather than in a column: nothing
+    // filters or sorts on a background, and it is not one of the three
+    // `descriptor` is built from.
+    expect(payload.sheet?.identity).toEqual({ background: "Salt-runner" });
+  });
+
+  it("never applies a grant twice, because the boxes hold what the player typed", () => {
+    // The recompute trap this design refuses. Picking a background writes
+    // nothing back into `draft.abilities`, so changing the pick is a fresh
+    // answer rather than an un-apply followed by an apply — and picking the
+    // same one again is the same answer.
+    const once = seededDraft(aDruid("Salt-runner"), untouched, VOCABULARY);
+    const again = seededDraft({ ...once, background: "Salt-runner" }, untouched, VOCABULARY);
+    expect(again).toEqual(once);
+    // Back to a bundled one, and the numbers go back with it.
+    const back = seededDraft({ ...once, background: "Soldier" }, untouched, VOCABULARY);
+    expect(back.hpMax).toBe("9");
+    expect(back.abilities).toEqual(once.abilities);
+  });
+
+  it("changes nothing for a bundled background, which is all sixteen of them", () => {
+    // The ordinary path rather than the empty one: the bundle ships names and
+    // no grants, so on a table whose DM has written none this picker is a label
+    // and the two boxes below it do not move.
+    const none = seededDraft(aDruid(""), untouched, VOCABULARY);
+    const bundled = seededDraft(aDruid("Soldier"), untouched, VOCABULARY);
+    expect(bundled.hpMax).toBe(none.hpMax);
+    expect(bundled.ac).toBe(none.ac);
+    expect(payloadFrom(bundled, VOCABULARY).sheet?.abilities).toEqual(
+      payloadFrom(none, VOCABULARY).sheet?.abilities,
+    );
+  });
+
+  it("seeds nothing at all for a label this table has no background for", () => {
+    // The same refusal the other two pickers make, and reachable the same three
+    // ways. No fuzzy matching, so a free-text background typed on an older
+    // sheet resolves to nothing and moves nothing.
+    const unknown = seededDraft(aDruid("Herbalist's apprentice"), untouched, VOCABULARY);
+    expect(unknown.hpMax).toBe("9");
+    // The label is still kept verbatim and sent verbatim.
+    expect(payloadFrom(unknown, VOCABULARY).sheet?.identity?.background).toBe(
+      "Herbalist's apprentice",
+    );
+  });
+
+  it("sends a document for a background alone, and none when nothing was said", () => {
+    // A background is the third key this form writes into `sheet`, so it is
+    // enough on its own — and an untouched form still sends no document at all,
+    // which is what keeps a new character's `body` the column default.
+    expect(payloadFrom(draftWith({ background: "Soldier" }), VOCABULARY).sheet?.identity).toEqual({
+      background: "Soldier",
+    });
+    expect(payloadFrom(draftWith({}), VOCABULARY).sheet).toBeUndefined();
+  });
+});
+
+describe("what the form says a background will do", () => {
+  it("names the grant and where it lands, because the player did not type it", () => {
+    expect(backgroundNote(draftWith({ background: "Salt-runner" }), VOCABULARY)).toBe(
+      "Salt-runner adds +2 CON, +1 WIS, on top of the scores above — that is what their sheet will say.",
+    );
+  });
+
+  it("says nothing at all for a background that grants nothing", () => {
+    // Which is every bundled one, so this is the common case. A line reading
+    // *adds nothing* would be a placeholder saying that nothing happened.
+    expect(backgroundNote(draftWith({ background: "Soldier" }), VOCABULARY)).toBeUndefined();
+    expect(backgroundNote(draftWith({ background: "" }), VOCABULARY)).toBeUndefined();
+    expect(
+      backgroundNote(draftWith({ background: "Nobody wrote this" }), VOCABULARY),
+    ).toBeUndefined();
   });
 });

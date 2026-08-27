@@ -17,7 +17,7 @@ import type { Ability } from "./Creature.js";
  * | {@link AbilityKey}, {@link ABILITY_KEYS}         | the ruleset's *frame*, not its content     |
  * | {@link signed}, {@link modifierFor}, {@link modifierOf} | arithmetic with one right answer   |
  * | {@link STARTING_LEVEL}                           | a constant, not a vocabulary               |
- * | {@link ClassEntry}, {@link SpeciesEntry}         | the shape a document decodes to            |
+ * | {@link ClassEntry}, {@link SpeciesEntry}, {@link BackgroundEntry} | the shapes a document decodes to |
  * | {@link seedFor}                                  | one implementation, both create paths      |
  *
  * The six ability keys stay because they are the ruleset's frame rather than
@@ -25,8 +25,9 @@ import type { Ability } from "./Creature.js";
  * amount of homebrew makes a seventh. That is the line — some vocabularies are
  * the *frame*, and those live in code.
  *
- * **The twelve and the ten moved to `apps/server/src/ruleset/systemOptions.ts`,
- * which is the bundle the seeder writes** — so there is still exactly one
+ * **The twelve, the ten and the sixteen moved to
+ * `apps/server/src/ruleset/systemOptions.ts`, which is the bundle the seeder
+ * writes** — so there is still exactly one
  * answer to *what is a druid*, and it is now a row rather than a map. There is
  * deliberately **no fallback map here**: a second copy in code would be a second
  * answer, and it would be the one that never gets edited.
@@ -120,6 +121,113 @@ export interface SpeciesEntry {
   readonly hpPerLevel: number;
 }
 
+/**
+ * One ability score a background raises, and by how much.
+ *
+ * `{ ability: "CON", amount: 2 }`. A **list** of these rather than six numbers
+ * keyed by ability, for `ClassEntry.unarmouredAc`'s reason one level on: what
+ * a background says is *"+2 Constitution and +1 Wisdom"*, which is two things,
+ * and a record with four zeroes in it says four things nobody wrote.
+ *
+ * A schema here rather than an interface, unlike {@link ClassEntry} and its
+ * `ClassBody` — because it is the same shape on both sides and there is nothing
+ * for a document to add to it. `AbilityKey` is already a schema in this module
+ * for the same reason: it is the ruleset's frame, and a frame has one spelling.
+ *
+ * **An increase, as the name says, so the amount is at least 1.** A row saying
+ * `+0` is a row that says nothing, which the editor simply does not write. A
+ * background that *lowers* a score is not expressible and deliberately so:
+ * nothing in the 2024 ruleset does it, and a table that wants one has a player
+ * type the lower score — a number they can see rather than one applied behind
+ * them.
+ */
+export const AbilityIncrease = Schema.Struct({
+  ability: AbilityKey,
+  amount: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10 })),
+});
+export type AbilityIncrease = typeof AbilityIncrease.Type;
+
+/**
+ * A background, as **only the part that reaches one of the seeded values** —
+ * and it is the only one of the three entries that reaches them *through the
+ * ability scores* rather than past them.
+ *
+ * That is why the background was not slice 1. A class carries a hit die and a
+ * species carries hit points per level, and both are read straight into a
+ * number; the 2024 ruleset moved the ability score increases off the species
+ * and onto the background, so a background moves the six cells first and the
+ * armour class and the hit points follow from the cells. {@link seedFor}
+ * therefore applies it **before** it reads a modifier, and hands the moved
+ * cells back — see {@link CharacterSeed.abilities}.
+ *
+ * **Empty is the ordinary state, not a stub.** The bundled sixteen ship with
+ * no increases at all: this project ships what it writes, and a background's
+ * mechanical grants are named out by the bundle-licensing decision in
+ * `AGENTS.md` § "The bundle carries no third-party prose". A table that plays
+ * those grants writes its own background on the Rules screen, where the numbers
+ * are the DM's own — which is the same route a homebrew class already takes.
+ */
+export interface BackgroundEntry {
+  readonly abilityIncreases: ReadonlyArray<AbilityIncrease>;
+}
+
+/**
+ * What a background grants, in one line — `"+2 CON, +1 WIS"`, or `""` when it
+ * grants nothing.
+ *
+ * Here rather than on either screen because **two surfaces render it**: the
+ * Rules card, which is where a DM checks what they wrote, and the create form,
+ * which is where a player finds out that two numbers below the picker moved
+ * without them typing anything. Two spellings of it would disagree about the
+ * sign first, which is the half that matters.
+ */
+export const increasesLine = (increases: ReadonlyArray<AbilityIncrease>): string =>
+  increases.map((increase) => `${signed(increase.amount)} ${increase.ability}`).join(", ");
+
+/**
+ * The six cells with a background's increases applied — **the one place that
+ * arithmetic happens.**
+ *
+ * Three rules, and each of them is a refusal to invent:
+ *
+ * - **A cell that is not there is not created.** A player who filled in four of
+ *   the six and picked a background that raises constitution has not said what
+ *   their constitution is, and writing `12` would be inventing a base of 10 and
+ *   presenting it as something they typed. `modifierOf` already reads a missing
+ *   cell as `0`, so the seed's numbers are unchanged either way — what is
+ *   avoided is a *document* that claims six scores when four were given.
+ * - **A cell whose score is not a whole number is left exactly as written.**
+ *   `Ability.score` is a `NonEmptyString` because *"the document keeps what was
+ *   written"*, so `"12 (base 10)"` is expressible and is not arithmetic's to
+ *   touch.
+ * - **The modifier is rewritten in the same object literal as the score**, the
+ *   rule every writer of an `Ability` in the product follows: the one thing the
+ *   document cannot survive is the two disagreeing.
+ *
+ * Two increases naming one ability **add up**, which is what a list of
+ * increases means. No shipped editor can produce that — the form offers each
+ * ability once — so it is a reading rather than a feature.
+ */
+const withIncreases = (
+  abilities: ReadonlyArray<Ability>,
+  entry: BackgroundEntry | undefined,
+): ReadonlyArray<Ability> => {
+  const increases = entry?.abilityIncreases ?? [];
+  if (increases.length === 0) return abilities;
+  const by = new Map<string, number>();
+  for (const increase of increases) {
+    by.set(increase.ability, (by.get(increase.ability) ?? 0) + increase.amount);
+  }
+  return abilities.map((ability) => {
+    const amount = by.get(ability.label.trim().toUpperCase());
+    if (amount === undefined || amount === 0) return ability;
+    const score = Number(ability.score.trim());
+    if (!Number.isInteger(score)) return ability;
+    const raised = score + amount;
+    return { ...ability, score: String(raised), modifier: modifierFor(raised) };
+  });
+};
+
 /** What an unarmoured armour class falls back to when no class is picked. */
 const DEX_ONLY: ReadonlyArray<AbilityKey> = ["DEX"];
 
@@ -158,7 +266,7 @@ export const modifierOf = (abilities: ReadonlyArray<Ability>, key: AbilityKey): 
   return Number.isInteger(value) ? value : 0;
 };
 
-/** What a character is created with. Every one of the three is editable afterwards. */
+/** What a character is created with. Every one of these is editable afterwards. */
 export interface CharacterSeed {
   /** Always {@link STARTING_LEVEL}. */
   readonly level: number;
@@ -184,6 +292,23 @@ export interface CharacterSeed {
    * touched yet.
    */
   readonly hpMax?: number;
+  /**
+   * The six cells **as they should be written down** — the ones handed in, with
+   * the background's ability score increases applied.
+   *
+   * It is an output rather than a passthrough, and that is the whole of what
+   * the background cost this function. The 2024 ruleset puts the ability score
+   * increases on the background, so the cells a character is created with are
+   * not the cells the player typed — and both callers write a `sheet` as well
+   * as three numbers. Returning them here is what makes *"the cells the seed
+   * read are the cells that get written"* a property of the shape rather than a
+   * rule each caller has to remember: there is no way to take the armour class
+   * from this seed and the scores from somewhere else without noticing.
+   *
+   * Unchanged when no background was picked, or when it grants nothing — which
+   * is every bundled background and every character made before this existed.
+   */
+  readonly abilities: ReadonlyArray<Ability>;
 }
 
 /**
@@ -209,6 +334,20 @@ export interface CharacterSeed {
  * near miss (`optionNamed` refuses fuzzy matching for the reasons written
  * there).
  *
+ * ### Three entries now, and the third one is a different shape
+ *
+ * A class and a species are read *into* a number — the hit die, the hit points
+ * per level. The **background** is read into the ability scores, because the
+ * 2024 ruleset moved the ability score increases off the species and onto it.
+ * So it is applied first, everything else reads the raised cells, and the
+ * raised cells come back on {@link CharacterSeed.abilities} for the caller to
+ * write down. That is the only structural change the background made here.
+ *
+ * **It is still called once, at creation, and nothing recomputes.** A player
+ * who changes their background afterwards changes a line of prose in
+ * `sheet.identity`; their scores, armour class and hit points stay exactly
+ * where they were, the same answer editing a class label already gives.
+ *
  * Hit points are floored at 1: a d6 class with a −3 constitution is 3, and the
  * clamp only ever fires for a modifier a player typed by hand.
  */
@@ -216,19 +355,31 @@ export const seedFor = (input: {
   /** The class this character is being made from, or `undefined` for none. */
   readonly classEntry: ClassEntry | undefined;
   readonly speciesEntry: SpeciesEntry | undefined;
+  /**
+   * The background, or `undefined` for none — **the entry that moves the scores
+   * rather than reading them.**
+   *
+   * It is applied first, so everything below reads the raised cells: a
+   * background that raises constitution raises the hit points, and one that
+   * raises dexterity raises the armour class, exactly as it would if the player
+   * had typed the higher number themselves.
+   */
+  readonly backgroundEntry: BackgroundEntry | undefined;
+  /** The cells as they were typed or ranked — *before* any background. */
   readonly abilities: ReadonlyArray<Ability>;
 }): CharacterSeed => {
   const { classEntry, speciesEntry } = input;
   const level = STARTING_LEVEL;
+  // First, and once. Every read below is of these cells, and these are the
+  // cells that get written down — see `CharacterSeed.abilities`.
+  const abilities = withIncreases(input.abilities, input.backgroundEntry);
 
   const acFrom = classEntry?.unarmouredAc ?? DEX_ONLY;
-  const ac = acFrom.reduce((total, key) => total + modifierOf(input.abilities, key), 10);
+  const ac = acFrom.reduce((total, key) => total + modifierOf(abilities, key), 10);
 
-  if (classEntry === undefined) return { level, ac };
+  if (classEntry === undefined) return { level, ac, abilities };
 
   const hp =
-    classEntry.hitDie +
-    modifierOf(input.abilities, "CON") +
-    (speciesEntry?.hpPerLevel ?? 0) * level;
-  return { level, ac, hpMax: Math.max(1, hp) };
+    classEntry.hitDie + modifierOf(abilities, "CON") + (speciesEntry?.hpPerLevel ?? 0) * level;
+  return { level, ac, hpMax: Math.max(1, hp), abilities };
 };

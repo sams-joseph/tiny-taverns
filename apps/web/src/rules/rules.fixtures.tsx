@@ -7,6 +7,8 @@ import {
   campaignId,
   fullCampaign,
   marshfolkOption,
+  saltRunnerOption,
+  saltRunnerOriginalId,
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
@@ -36,6 +38,9 @@ export {
   libraryOptions,
   marshfolkOption,
   marshfolkOptionId,
+  saltRunnerOption,
+  saltRunnerOptionId,
+  saltRunnerOriginalId,
 } from "../campaign/campaign.fixtures";
 
 const base = `/campaigns/${campaignId}`;
@@ -57,6 +62,13 @@ export const fullRules = (): Map<string, Answer> => {
   routes.set(`PATCH ${base}/options/${bloodswornOption.id}`, {
     status: 200,
     body: bloodswornOption,
+  });
+  // The background's pair of the two above. Its own route because the derive
+  // path names the original's id, and because a test that wrote a background
+  // and read back a class would prove nothing about the third kind.
+  routes.set(`POST ${base}/options/${saltRunnerOriginalId}/derive`, {
+    status: 200,
+    body: saltRunnerOption,
   });
   routes.set(`PATCH ${base}/options/${marshfolkOption.id}`, {
     status: 200,

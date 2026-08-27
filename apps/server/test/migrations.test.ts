@@ -124,6 +124,7 @@ describe("migrations", () => {
       { migration_id: 15, name: "library_creatures" },
       { migration_id: 16, name: "player_threads" },
       { migration_id: 17, name: "character_options" },
+      { migration_id: 18, name: "background_option" },
     ]);
   }, 60_000);
 
@@ -151,6 +152,7 @@ describe("migrations", () => {
       { migration_id: 15, name: "library_creatures" },
       { migration_id: 16, name: "player_threads" },
       { migration_id: 17, name: "character_options" },
+      { migration_id: 18, name: "background_option" },
     ]);
   }, 60_000);
 });

@@ -149,14 +149,16 @@ const DESCRIBED =
 const aDraft = (over: Record<string, unknown> = {}) =>
   toolCallChunks("proposeCharacter", {
     name: "Sorrel Ash",
-    // Both are closed vocabularies since the seed landed — the 2024 Player's
-    // Handbook's ten and twelve (`packages/api/src/Ruleset.ts`) — which is what
-    // lets the server look a hit die up. Anything more specific than a species
-    // goes in `subclass`, which is still prose.
+    // All three are closed vocabularies — the campaign's own rows since slice 2
+    // — which is what lets the server look a hit die up. Anything more specific
+    // than a species goes in `subclass`, which is still prose.
     species: "Elf",
     className: "Druid",
     subclass: "Circle of the Land (Marsh)",
-    background: "Herbalist's apprentice",
+    // A third closed vocabulary since the background became an entity, and the
+    // one that reaches the seed *through the six cells* — a bundled background
+    // grants nothing, so the numbers below are the class and species alone.
+    background: "Sage",
     abilityOrder: ["WIS", "CON", "DEX", "INT", "CHA", "STR"],
     skills: ["Nature", "Perception", "Medicine", "Survival"],
     backstory: "She left Ashfen with the herbal under her coat.",
@@ -310,23 +312,29 @@ describe("what the tool takes, and what the server works out", () => {
     });
   }, 60_000);
 
-  it("takes the prose optionals as prose, so a background really called None survives", async () => {
+  it("takes the prose optionals as prose, so a subclass really called None survives", async () => {
     // The sentinel that rescues an unset *enum* would eat this. `optionalText`
     // is why `proposeCharacter`'s prose optionals do not go through `optional`.
+    //
+    // **This used to be about the background**, which was prose until it became
+    // an entity. It is not one any more — the parameter is required and is the
+    // campaign's own vocabulary, so it goes through neither `optional` nor
+    // `optionalText` and the sentinel cannot reach it at all. `subclass` is the
+    // nearest prose optional and carries the same hazard.
     const { events } = await ask(fixture.player, {
-      rounds: [aDraft({ background: "None", flaw: "" }), textChunks("As you like.")],
+      rounds: [aDraft({ subclass: "None", flaw: "" }), textChunks("As you like.")],
     });
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
-    expect(proposed.proposal.sheet.identity?.background).toBe("None");
+    expect(proposed.proposal.sheet.identity?.subclass).toBe("None");
     // And a genuinely blank one is not written at all, so the sheet draws the
     // section's invitation rather than an empty line.
     expect(proposed.proposal.sheet.story?.flaw).toBeUndefined();
   }, 60_000);
 
-  it("offers the two vocabularies to the model, and no free text beside them", async () => {
-    // `AbilityKey`'s argument, applied to the two labels that carry a rule:
+  it("offers the three vocabularies to the model, and no free text beside them", async () => {
+    // `AbilityKey`'s argument, applied to the three labels that carry a rule:
     // the published JSON schema becomes a fixed list, which an endpoint that
     // compiles it into a grammar can hold the model to. Before this they were
     // strings of up to sixty characters, and a model that wrote "Circle of the
@@ -336,11 +344,12 @@ describe("what the tool takes, and what the server works out", () => {
 
     expect(tools).toContain("Barbarian");
     expect(tools).toContain("Aasimar");
+    expect(tools).toContain("Wayfarer");
     // 2014's, and not in the vocabulary — the cost of picking one ruleset,
     // stated where it would otherwise be found by a model.
     expect(tools).not.toContain("Half-Orc");
-    // The description names both lists as well, so the vocabulary is in the
-    // prompt and not only in the grammar.
+    // The description names all three lists as well, so the vocabulary is in
+    // the prompt and not only in the grammar.
     expect(tools).toContain("spelled exactly like that");
   }, 60_000);
 

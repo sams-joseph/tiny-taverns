@@ -1,5 +1,6 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import {
+  type BackgroundBody,
   type CharacterOption,
   type CharacterOptionId,
   type ClassBody,
@@ -15,12 +16,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
-import { SYSTEM_CLASSES, SYSTEM_SPECIES, type SystemOption } from "../src/ruleset/systemOptions.js";
+import {
+  SYSTEM_BACKGROUNDS,
+  SYSTEM_CLASSES,
+  SYSTEM_SPECIES,
+  type SystemOption,
+} from "../src/ruleset/systemOptions.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * **A campaign can have its own classes and species, and characters are built
- * from them.**
+ * **A campaign can have its own classes, species and backgrounds, and
+ * characters are built from them.**
  *
  * This file is `library.test.ts`'s shape over the second table that carries the
  * Library model, and it is deliberately not a copy of it: what it pins is the
@@ -208,7 +214,7 @@ beforeAll(async () => {
 }, 60_000);
 
 /** This campaign's vocabulary, as this credential reads it. */
-const optionsAt = (token: string, campaignId: string, kind?: "class" | "species") =>
+const optionsAt = (token: string, campaignId: string, kind?: "class" | "species" | "background") =>
   as(token, (client) =>
     client.options.list({
       params: { campaignId: campaignId as never },
@@ -217,7 +223,7 @@ const optionsAt = (token: string, campaignId: string, kind?: "class" | "species"
   );
 
 describe("the bundle", () => {
-  it("is the twelve and the ten, owned by nobody", async () => {
+  it("is the twelve, the ten and the sixteen, owned by nobody", async () => {
     const rows = await sql(
       (client) => client<{ readonly kind: string; readonly count: string }>`
         select kind, count(*)::text as count from character_option
@@ -228,9 +234,37 @@ describe("the bundle", () => {
     expect(rows._tag).toBe("Success");
     if (rows._tag !== "Success") return;
     expect(rows.success).toEqual([
+      { kind: "background", count: String(SYSTEM_BACKGROUNDS.length) },
       { kind: "class", count: String(SYSTEM_CLASSES.length) },
       { kind: "species", count: String(SYSTEM_SPECIES.length) },
     ]);
+  });
+
+  it("ships every background as a name with no ability score increases", async () => {
+    // **The bundle-licensing decision, as a measurement.** A background is the
+    // entity that carries the 2024 ability score increases, and this project
+    // ships names and numbers *it has written* — a background's mechanical
+    // grants are named out by that decision in as many words. So all sixteen
+    // land as vocabulary: the word a player picks, and nothing that moves a
+    // number.
+    //
+    // A DM whose table plays the book's version writes their own background on
+    // the Rules screen, where the increases are theirs — which is the route the
+    // whole slice exists to open, and which the acceptance test below drives.
+    const rows = await sql(
+      (client) => client<{ readonly name: string; readonly body: BackgroundBody }>`
+        select name, body from character_option
+        where origin = 'system' and kind = 'background' order by lower(name)
+      `,
+    );
+
+    if (rows._tag !== "Success") throw new Error("expected the bundle");
+    expect(rows.success).toHaveLength(SYSTEM_BACKGROUNDS.length);
+    expect(rows.success.every((row) => row.body.abilityIncreases.length === 0)).toBe(true);
+    // `summary` too: the Player's Handbook's sentence about an acolyte is the
+    // Player's Handbook's, and an absent one is missing data rather than wrong
+    // data that reads as right.
+    expect(rows.success.every((row) => row.body.summary === undefined)).toBe(true);
   });
 
   it("lands shared, which is what makes a player's picker work at all", async () => {
@@ -472,7 +506,9 @@ describe("a campaign's vocabulary", () => {
 
     expect(named(ours)).toContain("Druid");
     expect(named(ours)).toContain("Dwarf");
-    expect(ours).toHaveLength(SYSTEM_CLASSES.length + SYSTEM_SPECIES.length);
+    expect(ours).toHaveLength(
+      SYSTEM_CLASSES.length + SYSTEM_SPECIES.length + SYSTEM_BACKGROUNDS.length,
+    );
     expect(named(ours)).not.toContain(OPTIONS.theirs);
     expect(ours.every((option) => option.campaignId === null)).toBe(true);
   });
@@ -549,9 +585,10 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
     const seed = seedFor({
       classEntry: picked?.kind === "class" ? picked.body : undefined,
       speciesEntry: undefined,
+      backgroundEntry: undefined,
       abilities: CON_HEAVY,
     });
-    expect(seed).toEqual({ level: 1, ac: 14, hpMax: 12 });
+    expect(seed).toEqual({ level: 1, ac: 14, hpMax: 12, abilities: CON_HEAVY });
 
     await as(fixture.jo.token, (client) =>
       client.options.remove({

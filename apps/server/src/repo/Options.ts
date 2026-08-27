@@ -1,5 +1,6 @@
 import {
   type AccountId,
+  type BackgroundBody,
   type CampaignId,
   type CharacterOption,
   type CharacterOptionId,
@@ -39,14 +40,14 @@ interface OptionRow extends ProvenanceColumns {
   readonly kind: OptionKind;
   readonly name: string;
   /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
-  readonly body: ClassBody | SpeciesBody;
+  readonly body: ClassBody | SpeciesBody | BackgroundBody;
 }
 
 /**
  * The row as the wire sees it.
  *
  * A `switch` rather than one object literal, because `CharacterOption` is a
- * union discriminated on `kind` and the two arms carry different documents.
+ * union discriminated on `kind` and the three arms carry different documents.
  * That the column and the document agree is a property of the **write** side —
  * every create and every update goes through a schema that pairs them, and
  * `update` refuses a body whose shape contradicts the row's own kind — exactly
@@ -62,26 +63,37 @@ const toOption = (row: OptionRow): CharacterOption => {
     name: row.name,
     ...provenanceOf(row),
   };
-  return row.kind === "class"
-    ? { ...shared, kind: "class", body: row.body as ClassBody }
-    : { ...shared, kind: "species", body: row.body as SpeciesBody };
+  switch (row.kind) {
+    case "class":
+      return { ...shared, kind: "class", body: row.body as ClassBody };
+    case "species":
+      return { ...shared, kind: "species", body: row.body as SpeciesBody };
+    case "background":
+      return { ...shared, kind: "background", body: row.body as BackgroundBody };
+  }
 };
 
 /** The document on its way into a `jsonb` column, as text — `Creatures.ts`'s rule. */
-const encodeBody = (body: ClassBody | SpeciesBody): string => JSON.stringify(body);
+const encodeBody = (body: ClassBody | SpeciesBody | BackgroundBody): string => JSON.stringify(body);
 
 /**
- * Whether a document is a class's rather than a species'.
+ * Which kind of document this is, from its shape alone.
  *
  * The **one** place a body is told apart by its shape rather than by a `kind`
  * beside it, and it exists for exactly one caller: a PATCH carries a body but
  * no kind — `kind` is what a row *is* and is chosen once, when it is authored —
  * so the only way to refuse a species document landing on a class row is to
- * look at what arrived. `hitDie` is the discriminator because it is the one
- * required key the two do not share.
+ * look at what arrived.
+ *
+ * **It works because each of the three documents has exactly one required key
+ * the other two lack** — `hitDie`, `hpPerLevel`, `abilityIncreases` — which is
+ * why `BackgroundBody.abilityIncreases` is required rather than optional and is
+ * argued at length there. A body with no required key would be indistinguishable
+ * from every other body *and* would swallow them inside `Schema.Union`, which
+ * takes the first member that matches.
  */
-const bodyKind = (body: ClassBody | SpeciesBody): OptionKind =>
-  "hitDie" in body ? "class" : "species";
+const bodyKind = (body: ClassBody | SpeciesBody | BackgroundBody): OptionKind =>
+  "hitDie" in body ? "class" : "hpPerLevel" in body ? "species" : "background";
 
 /**
  * A PATCH whose body does not match the row it is patching.
@@ -92,20 +104,15 @@ const bodyKind = (body: ClassBody | SpeciesBody): OptionKind =>
  * the kind it opened on — so this is the contract's backstop rather than a
  * sentence anybody reads.
  */
-const wrongKind = (kind: OptionKind): Conflict =>
-  new Conflict({
-    message:
-      kind === "class"
-        ? "that is a class, and the change describes a species"
-        : "that is a species, and the change describes a class",
-  });
+const wrongKind = (kind: OptionKind, sent: OptionKind): Conflict =>
+  new Conflict({ message: `that is a ${kind}, and the change describes a ${sent}` });
 
 /**
  * Which kinds a list answers, as a clause.
  *
- * Omitted means both, which is what the two shipped readers want: the create
- * form draws two pickers and the Rules screen draws two sections, and one
- * request beats two for a vocabulary of a few dozen rows.
+ * Omitted means every kind, which is what the two shipped readers want: the
+ * create form draws three pickers and the Rules screen draws three sections,
+ * and one request beats three for a vocabulary of a few dozen rows.
  */
 const ofKind = (
   sql: SqlClient.SqlClient,
@@ -116,7 +123,7 @@ const ofKind = (
 /**
  * The order a vocabulary is read in: **the kind, then the name.**
  *
- * Grouped by kind because both readers draw the two separately, and by name
+ * Grouped by kind because both readers draw the three separately, and by name
  * within it because that is the order a picker is read down. No id tiebreak and
  * no cursor: this is not a paged read (see `OPTION_LIMIT`), so there is no page
  * boundary for two rows sharing a name to fall across — and two options with
@@ -126,8 +133,9 @@ const readOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`character_option.kind asc, lower(character_option.name) asc`;
 
 /**
- * The classes and species a character is built from — **the campaign's
- * vocabulary and the Library's originals, one table and one mapper.**
+ * The classes, species and backgrounds a character is built from — **the
+ * campaign's vocabulary and the Library's originals, one table and one
+ * mapper.**
  *
  * This is `Creatures.ts` with a different document and one fewer create, and
  * that is the finding rather than a coincidence: the four Library predicates
@@ -316,7 +324,7 @@ export class Options extends Context.Service<
         visibility?: OptionUpdate["visibility"],
       ): Effect.Effect<Record<string, unknown>, Conflict> =>
         patch.body !== undefined && bodyKind(patch.body) !== row.kind
-          ? Effect.fail(wrongKind(row.kind))
+          ? Effect.fail(wrongKind(row.kind, bodyKind(patch.body)))
           : Effect.succeed(
               defined({
                 name: patch.name,

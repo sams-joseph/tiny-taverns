@@ -17,7 +17,9 @@ import { isCampaignCopy, numbersOf, unarmouredLine } from "./option";
 const aCampaign = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const anAccount = Schema.decodeSync(AccountId)("2b1f2a1e-0000-4000-8000-0000000000a1");
 
-const option = (part: Partial<CharacterOption> & { kind: "class" | "species" }): CharacterOption =>
+const option = (
+  part: Partial<CharacterOption> & { kind: "class" | "species" | "background" },
+): CharacterOption =>
   ({
     id: "option",
     campaignId: null,
@@ -68,6 +70,33 @@ describe("what a row's numbers say", () => {
     );
     expect(numbersOf(option({ kind: "species", body: { hpPerLevel: 2 } }))).toBe(
       "+2 hit points per level",
+    );
+  });
+
+  it("reads a background's grant, pre-signed and in one line", () => {
+    expect(
+      numbersOf(
+        option({
+          kind: "background",
+          body: {
+            abilityIncreases: [
+              { ability: "CON", amount: 2 },
+              { ability: "WIS", amount: 1 },
+            ],
+          },
+        }),
+      ),
+    ).toBe("+2 CON, +1 WIS");
+  });
+
+  it("says nobody has written one rather than that a background grants nothing", () => {
+    // **All sixteen bundled backgrounds land here**, so it is the commonest
+    // thing this screen says about one — the bundle ships names and no grants
+    // by the bundle-licensing decision. The wording is the invitation to write
+    // your own rather than a claim about the ruleset, which is the difference
+    // between an absence and a fact.
+    expect(numbersOf(option({ kind: "background", body: { abilityIncreases: [] } }))).toBe(
+      "No ability score increases written down",
     );
   });
 });

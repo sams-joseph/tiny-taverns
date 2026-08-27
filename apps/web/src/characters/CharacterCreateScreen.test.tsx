@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -164,6 +164,74 @@ describe("writing down a character of your own", () => {
     // `replace: true`, so *Back* from the sheet goes to wherever the player
     // started rather than to a form for a character they have already made.
     expect(window.location.hash).toBe(`#/play/characters/${brannocId}`);
+  });
+
+  it("seeds through the ability scores when the background grants any", async () => {
+    // **The third picker, and the only one that changes a number the player
+    // typed.** In the 2024 ruleset the ability score increases live on the
+    // background, so this is the one pick whose effect is on the six cells
+    // rather than on the two boxes — and the sheet that gets created therefore
+    // says something the editor did not.
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Sorrel Ash");
+    await pick("Class", "Druid");
+    // d8 with no scores set: the die and a bare 10.
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
+
+    // A bundled background grants nothing — which is all sixteen of them — so
+    // the numbers do not move and no line appears.
+    await pick("Background", "Soldier");
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
+    expect(screen.queryByText(/on top of the scores above/)).toBeNull();
+
+    // This table's own does, and says so where the player will read it.
+    await pick("Background", "Salt-runner");
+    await screen.findByText(/Salt-runner adds \+2 CON, \+1 WIS, on top of the scores above/);
+    // No scores typed, so CON goes from nothing to 12 — `+1` — and the d8
+    // follows it.
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
+
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+    const body = bodyOf(server, "POST", createPath) as Record<string, unknown>;
+    // The label goes in the document rather than in a column: nothing filters
+    // or sorts on a background and it is not one of the three `descriptor` is
+    // built from.
+    expect(body.sheet).toEqual({
+      notes: "",
+      abilities: [],
+      traits: [],
+      identity: { background: "Salt-runner" },
+    });
+  });
+
+  it("writes the raised cells, so the sheet and the two numbers cannot disagree", async () => {
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Sorrel Ash");
+    await pick("Class", "Druid");
+    await pick("Background", "Salt-runner");
+    // The shipped abilities editor, over the create form. Standard array in
+    // draw order puts 13 in constitution.
+    await userEvent.click(screen.getByRole("button", { name: /Set ability scores/i }));
+    const scores = await screen.findByRole("dialog");
+    await userEvent.click(within(scores).getByRole("button", { name: /Standard array/i }));
+    await userEvent.click(within(scores).getByRole("button", { name: /Use these scores/i }));
+
+    // CON 13 raised to 15, so the d8 seeds from `+2` rather than `+1`.
+    await waitFor(() => {
+      expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("10");
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+    const body = bodyOf(server, "POST", createPath) as Record<string, unknown>;
+    const sheet = body.sheet as { readonly abilities: ReadonlyArray<Record<string, string>> };
+    // **The property the whole shape exists for.** Written cells that did not
+    // carry the grant would leave the sheet saying CON 13 beside hit points
+    // worked out from 15 — right on both sides and wrong together.
+    expect(sheet.abilities).toContainEqual({ label: "CON", score: "15", modifier: "+2" });
+    expect(sheet.abilities).toContainEqual({ label: "WIS", score: "11", modifier: "+0" });
+    expect(body.hpMax).toBe(10);
   });
 
   it("says what is wrong before it sends anything", async () => {
@@ -458,7 +526,7 @@ describe("writing down a character of your own", () => {
     // Said where the numbers are, before the press rather than at the table —
     // including that no scores are set, which is what stops "6 hit points"
     // reading as this wizard's real total.
-    await screen.findByText(/A starting point from the class, the species and your ability scores/);
+    await screen.findByText(/A starting point from the class, the species, the background/);
     await screen.findByText(/No scores are set, so every modifier counts as \+0/);
 
     // Changing the pick re-seeds: a wizard's hit points must not survive into a

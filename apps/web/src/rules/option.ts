@@ -1,5 +1,5 @@
-import type { CharacterOption } from "@taverns/api";
-import type { AbilityKey } from "@taverns/api";
+import type { AbilityKey, CharacterOption } from "@taverns/api";
+import { increasesLine } from "@taverns/api";
 
 /**
  * The pure half of the Rules screen — **what a row says about itself.**
@@ -33,15 +33,31 @@ export const unarmouredLine = (abilities: ReadonlyArray<AbilityKey>): string =>
  * would be the copy that drifts.
  */
 export const numbersOf = (option: CharacterOption): string => {
-  if (option.kind === "class") {
-    return `d${String(option.body.hitDie)} · unarmoured ${unarmouredLine(option.body.unarmouredAc)}`;
+  switch (option.kind) {
+    case "class":
+      return `d${String(option.body.hitDie)} · unarmoured ${unarmouredLine(option.body.unarmouredAc)}`;
+    case "species": {
+      // Nine of the ten bundled species move nothing, and saying so is better
+      // than drawing `+0` — the same call `PartyList` makes about an absent
+      // stat.
+      const perLevel = option.body.hpPerLevel;
+      return perLevel === 0
+        ? "No extra hit points"
+        : `+${String(perLevel)} hit point${perLevel === 1 ? "" : "s"} per level`;
+    }
+    case "background": {
+      /**
+       * **All sixteen bundled backgrounds land here**, because the bundle
+       * ships names and no grants — the bundle-licensing decision, argued in
+       * `systemOptions.ts`. So this sentence is the commonest thing this
+       * screen says about a background, and it is written to invite the edit
+       * rather than to read as a fact about the ruleset: *nobody has said*,
+       * not *this background gives nothing*.
+       */
+      const line = increasesLine(option.body.abilityIncreases);
+      return line === "" ? "No ability score increases written down" : line;
+    }
   }
-  // Nine of the ten bundled species move nothing, and saying so is better than
-  // drawing `+0` — the same call `PartyList` makes about an absent stat.
-  const perLevel = option.body.hpPerLevel;
-  return perLevel === 0
-    ? "No extra hit points"
-    : `+${String(perLevel)} hit point${perLevel === 1 ? "" : "s"} per level`;
 };
 
 /**
@@ -57,5 +73,9 @@ export const numbersOf = (option: CharacterOption): string => {
  * There are only two positions in this list — the bundle and a campaign copy —
  * because a Library original is never in a campaign's answer. That is the
  * model, not a filter this screen applies.
+ *
+ * It is also what the background makes most visible: a bundled background
+ * grants nothing and cannot be edited here, so a table that wants one that
+ * moves a number writes its own and edits *that*.
  */
 export const isCampaignCopy = (option: CharacterOption): boolean => option.campaignId !== null;

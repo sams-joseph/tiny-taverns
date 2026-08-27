@@ -1,4 +1,6 @@
 import type {
+  AbilityIncrease,
+  BackgroundBody,
   CampaignId,
   CharacterOption,
   ClassBody,
@@ -6,7 +8,7 @@ import type {
   SpeciesBody,
   Visibility,
 } from "@taverns/api";
-import { ABILITY_KEYS, type AbilityKey } from "@taverns/api";
+import { ABILITY_KEYS, type AbilityKey, increasesLine } from "@taverns/api";
 import {
   Button,
   Checkbox,
@@ -27,7 +29,8 @@ import { optionWritesAt } from "./load";
 import { unarmouredLine } from "./option";
 
 /**
- * Writing a class or a species, and editing the one this table holds.
+ * Writing a class, a species or a background, and editing the one this table
+ * holds.
  *
  * ### It is one dialog and **two different writes**, and the difference is the
  * whole shape of the Library model
@@ -78,21 +81,51 @@ interface OptionDraft {
   readonly unarmouredAc: ReadonlyArray<AbilityKey>;
   /** Extra hit points per level. Species only. */
   readonly hpPerLevel: string;
+  /**
+   * What this background adds to each ability, as the six boxes hold it —
+   * `""` and `"0"` both meaning *nothing*. Background only.
+   *
+   * Six boxes keyed by ability rather than a list of rows, because that is what
+   * the control is: every ability is always offered and most of them are
+   * empty, exactly as the unarmoured-armour-class checkboxes are. It becomes a
+   * **list** on the way out ({@link documentOf}), which is what
+   * `BackgroundBody` stores — a record with four zeroes in it would say four
+   * things nobody wrote.
+   */
+  readonly increases: Readonly<Record<AbilityKey, string>>;
   readonly visibility: Visibility;
 }
 
 /** All three match `CharacterOption.ts`'s own checks, so the sentence beats the schema to it. */
 const MAX_HIT_DIE = 100;
 const MAX_HP_PER_LEVEL = 20;
+const MAX_INCREASE = 10;
+
+/** Six empty boxes — what a background that grants nothing looks like. */
+const NO_INCREASES: Record<AbilityKey, string> = {
+  STR: "",
+  DEX: "",
+  CON: "",
+  INT: "",
+  WIS: "",
+  CHA: "",
+};
+
+/** The stored list, back as the six boxes. Anything not named is blank. */
+const boxesFrom = (increases: ReadonlyArray<AbilityIncrease>): Record<AbilityKey, string> => {
+  const boxes = { ...NO_INCREASES };
+  for (const increase of increases) boxes[increase.ability] = String(increase.amount);
+  return boxes;
+};
 
 /**
  * The form's starting state.
  *
  * It takes no `kind` and does not need one: an empty draft carries a plausible
- * default for **both** halves and the form draws only the half its `kind` prop
- * names, and an existing row's `kind` is on the row. That is the union earning
- * its place — there is no state in which the wrong half could be read as the
- * right one, because the row says which it is.
+ * default for **all three** halves and the form draws only the one its `kind`
+ * prop names, and an existing row's `kind` is on the row. That is the union
+ * earning its place — there is no state in which the wrong part could be read
+ * as the right one, because the row says which it is.
  */
 const draftFrom = (option: CharacterOption | undefined): OptionDraft => {
   if (option === undefined) {
@@ -104,6 +137,10 @@ const draftFrom = (option: CharacterOption | undefined): OptionDraft => {
       // wants. The two exceptions are a press away.
       unarmouredAc: ["DEX"],
       hpPerLevel: "0",
+      // Blank rather than six zeroes, and the difference is the sentence the
+      // card ends up drawing: nothing typed is *nobody has said*, which is what
+      // an empty `abilityIncreases` means.
+      increases: NO_INCREASES,
       // **On, and this is the decision** — see the block above.
       visibility: "shared",
     };
@@ -114,8 +151,17 @@ const draftFrom = (option: CharacterOption | undefined): OptionDraft => {
     hitDie: option.kind === "class" ? String(option.body.hitDie) : "8",
     unarmouredAc: option.kind === "class" ? [...option.body.unarmouredAc] : ["DEX"],
     hpPerLevel: option.kind === "species" ? String(option.body.hpPerLevel) : "0",
+    increases:
+      option.kind === "background" ? boxesFrom(option.body.abilityIncreases) : NO_INCREASES,
     visibility: option.visibility,
   };
+};
+
+/** What each kind is called in a sentence — one map, so the three agree. */
+const NOUN: Record<OptionKind, string> = {
+  class: "class",
+  species: "species",
+  background: "background",
 };
 
 /** `""` ⇄ not a number. A blank die is a form that is not finished. */
@@ -126,6 +172,7 @@ interface DraftProblems {
   readonly name?: string;
   readonly hitDie?: string;
   readonly hpPerLevel?: string;
+  readonly increases?: string;
 }
 
 /**
@@ -138,7 +185,12 @@ interface DraftProblems {
  * these come first and `SaveFailure` is the backstop.
  */
 const problemsIn = (kind: OptionKind, draft: OptionDraft): DraftProblems => {
-  const problems: { name?: string; hitDie?: string; hpPerLevel?: string } = {};
+  const problems: {
+    name?: string;
+    hitDie?: string;
+    hpPerLevel?: string;
+    increases?: string;
+  } = {};
   if (draft.name.trim() === "") problems.name = "Give it a name.";
 
   if (kind === "class") {
@@ -147,11 +199,24 @@ const problemsIn = (kind: OptionKind, draft: OptionDraft): DraftProblems => {
     else if (die < 1 || die > MAX_HIT_DIE) {
       problems.hitDie = `Between 1 and ${String(MAX_HIT_DIE)}.`;
     }
-  } else {
+  } else if (kind === "species") {
     const hp = parseWhole(draft.hpPerLevel);
     if (hp === undefined) problems.hpPerLevel = "Hit points per level are a whole number.";
     else if (hp < 0 || hp > MAX_HP_PER_LEVEL) {
       problems.hpPerLevel = `Between 0 and ${String(MAX_HP_PER_LEVEL)}.`;
+    }
+  } else {
+    // **Blank is not a problem, and that is the whole rule of these six boxes**
+    // — an empty one is an ability this background does not touch, which is
+    // most of them. Only something typed that is not a usable number is.
+    const bad = ABILITY_KEYS.filter((ability) => {
+      const raw = draft.increases[ability].trim();
+      if (raw === "") return false;
+      const amount = parseWhole(raw);
+      return amount === undefined || amount < 0 || amount > MAX_INCREASE;
+    });
+    if (bad.length > 0) {
+      problems.increases = `An increase is a whole number, 0 to ${String(MAX_INCREASE)}.`;
     }
   }
   return problems;
@@ -171,19 +236,41 @@ const documentOf = (
   draft: OptionDraft,
 ):
   | { readonly kind: "class"; readonly body: ClassBody }
-  | { readonly kind: "species"; readonly body: SpeciesBody } => {
+  | { readonly kind: "species"; readonly body: SpeciesBody }
+  | { readonly kind: "background"; readonly body: BackgroundBody } => {
   const summary = draft.summary.trim();
   // Omitted rather than `""`, which is `CharacterOption.ts`'s own rule about an
   // optional key: an empty summary is *nobody wrote one*, and a blank string
   // stored in the document would render as an empty paragraph on the card.
   const said = summary === "" ? {} : { summary };
-  return kind === "class"
-    ? {
+  switch (kind) {
+    case "class":
+      return {
         kind: "class",
         body: { hitDie: parseWhole(draft.hitDie) ?? 8, unarmouredAc: draft.unarmouredAc, ...said },
-      }
-    : { kind: "species", body: { hpPerLevel: parseWhole(draft.hpPerLevel) ?? 0, ...said } };
+      };
+    case "species":
+      return { kind: "species", body: { hpPerLevel: parseWhole(draft.hpPerLevel) ?? 0, ...said } };
+    case "background":
+      return {
+        kind: "background",
+        // Six boxes become a list of what was actually said. A box left blank
+        // and a box holding `0` are the same thing — an ability this
+        // background does not touch — and neither becomes a row, because
+        // `AbilityIncrease.amount` starts at 1 and a `+0` row would say
+        // something nobody wrote. In `ABILITY_KEYS` order, so `+2 STR, +1 CON`
+        // reads the same however it was typed.
+        body: { abilityIncreases: increasesFrom(draft), ...said },
+      };
+  }
 };
+
+/** The six boxes as the list `BackgroundBody` stores. */
+const increasesFrom = (draft: OptionDraft): ReadonlyArray<AbilityIncrease> =>
+  ABILITY_KEYS.flatMap((ability) => {
+    const amount = parseWhole(draft.increases[ability]);
+    return amount === undefined || amount < 1 ? [] : [{ ability, amount }];
+  });
 
 export function OptionDialog({
   campaignId,
@@ -209,7 +296,7 @@ export function OptionDialog({
     setDraft((current) => ({ ...current, [key]: value }));
 
   const isNew = option === undefined;
-  const noun = kind === "class" ? "class" : "species";
+  const noun = NOUN[kind];
 
   const toggleAbility = (key: AbilityKey, on: boolean) =>
     set(
@@ -255,13 +342,18 @@ export function OptionDialog({
           // will not resolve a union *value* against it. Narrowing `written`
           // first is what makes that cast-free — `written.body` really is a
           // class document inside the first arm.
-          const original = yield* written.kind === "class"
-            ? client.library.createOption({
-                payload: { kind: "class", name, body: written.body },
-              })
-            : client.library.createOption({
-                payload: { kind: "species", name, body: written.body },
-              });
+          const original =
+            written.kind === "class"
+              ? yield* client.library.createOption({
+                  payload: { kind: "class", name, body: written.body },
+                })
+              : written.kind === "species"
+                ? yield* client.library.createOption({
+                    payload: { kind: "species", name, body: written.body },
+                  })
+                : yield* client.library.createOption({
+                    payload: { kind: "background", name, body: written.body },
+                  });
           return yield* client.options.derive({
             params: { campaignId, optionId: original.id },
             // The visible screen-level choice, said out loud on the wire. It is
@@ -287,7 +379,9 @@ export function OptionDialog({
           <DialogDescription>
             {kind === "class"
               ? "A class carries the hit die a new character's hit points are worked out from."
-              : "A species carries the extra hit points it gives at every level."}
+              : kind === "species"
+                ? "A species carries the extra hit points it gives at every level."
+                : "A background carries the ability score increases a new character starts with."}
           </DialogDescription>
         </DialogHeader>
 
@@ -300,7 +394,9 @@ export function OptionDialog({
           >
             <Input
               id="option-name"
-              placeholder={kind === "class" ? "Bloodsworn" : "Marshfolk"}
+              placeholder={
+                kind === "class" ? "Bloodsworn" : kind === "species" ? "Marshfolk" : "Salt-runner"
+              }
               value={draft.name}
               aria-invalid={showProblems && problems.name !== undefined}
               onChange={(event) => set("name", event.target.value)}
@@ -356,7 +452,7 @@ export function OptionDialog({
                 </div>
               </fieldset>
             </>
-          ) : (
+          ) : kind === "species" ? (
             <Field
               label="Hit points per level"
               htmlFor="option-hp-per-level"
@@ -375,6 +471,67 @@ export function OptionDialog({
                 className="w-24"
               />
             </Field>
+          ) : (
+            /* **Six boxes, and blank is the ordinary answer for four of them.**
+               In the 2024 ruleset this is what a background is *for* — the
+               ability score increases moved here off the species — so it is the
+               one editor in this dialog whose value reaches a number on
+               somebody's sheet rather than a number in a box on the create
+               form.
+
+               Six named boxes rather than an add-a-row list because the
+               vocabulary is fixed at six and always will be: `ABILITY_KEYS` is
+               the ruleset's *frame*, and a control that made you choose the
+               ability as well as the amount would be a picker over a list of
+               six that are all always offered. What is stored is still a list
+               of what was said — see `increasesFrom`. */
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-label leading-snug font-semibold text-heading">
+                Ability score increases
+              </legend>
+              <p className="text-caption leading-body text-muted-foreground">
+                Added to a new character's scores when they pick this.{" "}
+                <span className="text-heading">
+                  {increasesLine(increasesFrom(draft)) === ""
+                    ? "Nothing yet"
+                    : increasesLine(increasesFrom(draft))}
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2.5">
+                {ABILITY_KEYS.map((ability) => (
+                  <div key={ability} className="flex items-center gap-2">
+                    <Label htmlFor={`option-increase-${ability}`}>{ability}</Label>
+                    <Input
+                      id={`option-increase-${ability}`}
+                      // A visible label repeated down a list is one control as
+                      // far as anything reading names is concerned, which is
+                      // the trap the sheet's own six cells already record.
+                      aria-label={`${ability} increase`}
+                      mono
+                      type="number"
+                      min={0}
+                      max={MAX_INCREASE}
+                      placeholder="0"
+                      value={draft.increases[ability]}
+                      aria-invalid={showProblems && problems.increases !== undefined}
+                      onChange={(event) =>
+                        set("increases", { ...draft.increases, [ability]: event.target.value })
+                      }
+                      className="w-16"
+                    />
+                  </div>
+                ))}
+              </div>
+              {showProblems && problems.increases !== undefined && (
+                <p role="alert" className="text-caption leading-body text-danger-ink">
+                  {problems.increases}
+                </p>
+              )}
+              <p className="text-caption leading-body text-muted-foreground">
+                Leave one blank for an ability this background does not touch. The bundled
+                backgrounds carry none at all, so this is where a table's own numbers go.
+              </p>
+            </fieldset>
           )}
 
           <Field

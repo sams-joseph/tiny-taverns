@@ -12,11 +12,12 @@ import { OptionDialog } from "./OptionDialog";
 import { RemoveOptionDialog } from "./RemoveOptionDialog";
 
 /**
- * **Rules** — the classes and species a character at this table is built from.
+ * **Rules** — the classes, species and backgrounds a character at this table is
+ * built from.
  *
  * `#/campaigns/:campaignId/rules`, the sixth destination on the campaign row,
  * and the DM's half of the character-options feature. The other half is the
- * create form's two pickers, which read the same list this screen writes.
+ * create form's three pickers, which read the same list this screen writes.
  *
  * ### What this screen is for, in one sentence
  *
@@ -39,10 +40,12 @@ import { RemoveOptionDialog } from "./RemoveOptionDialog";
  *   are indistinguishable from it. That is the honest cost of having no
  *   `class_id`, and the pointer arrives at the slice where something reads it —
  *   the first plausible reader being exactly this count.
- * - **Anything about a background, a subclass or a feat.** A background changes
- *   the *seed* (2024's ability score increases moved onto it), which is a bigger
- *   change than adding a row type; the other two seed nothing at all and are
- *   free text on the sheet today.
+ * - **Anything about a subclass or a feat.** A subclass is a *child* of a class
+ *   and needs a containment rule this table has none of; a feat is read by
+ *   nothing in the product. Both are free text on the sheet today and work.
+ *   **The background is here now** — it was held back from the first slice
+ *   precisely because it changes the *seed* (2024's ability score increases
+ *   moved onto it), which is a bigger change than adding a row type.
  *
  * ### It wears the campaign's frame, like every other campaign destination
  *
@@ -60,14 +63,18 @@ import { RemoveOptionDialog } from "./RemoveOptionDialog";
 
 /** The subtitle: what this table offers, and how much of it the players can see. */
 const summaryOf = (view: RulesView): string => {
-  const classes = view.offered.filter((option) => option.kind === "class").length;
-  const species = view.offered.length - classes;
+  const count = (kind: OptionKind) => view.offered.filter((row) => row.kind === kind).length;
+  const classes = count("class");
+  const backgrounds = count("background");
   // Only a copy can be unshared — the bundle is written shared and is nobody's
   // to change here — so this counts what a DM can act on and nothing else.
   const hidden = view.offered.filter(
     (option) => isCampaignCopy(option) && option.visibility === "dm",
   ).length;
-  const counted = `${String(classes)} class${classes === 1 ? "" : "es"}, ${String(species)} species`;
+  const counted =
+    `${String(classes)} class${classes === 1 ? "" : "es"}, ` +
+    `${String(count("species"))} species, ` +
+    `${String(backgrounds)} background${backgrounds === 1 ? "" : "s"}`;
   return hidden === 0 ? counted : `${counted} · ${String(hidden)} your players cannot pick yet`;
 };
 
@@ -87,10 +94,23 @@ export function RulesScreen() {
       extra={rulesAtom(campaignId)}
       subtitle={({ extra }) => summaryOf(extra)}
       actions={() => (
-        <>
+        /* **Four controls, so they wrap** — the shell's own action slot is one
+           unwrapped row, which is right for the two or three every other screen
+           has. Written out here rather than in `AppShell` because it is this
+           screen that is unusually wide, and the `min-w-0` is what lets the
+           title beside it give way first. */
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5">
           <Button variant="secondary" size="sm" onClick={() => setCopying(true)}>
             <Icon name="copy" size={14} />
             Copy from your library
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setEditing({ kind: "background", option: undefined })}
+          >
+            <Icon name="plus" size={14} />
+            Write a background
           </Button>
           <Button
             variant="secondary"
@@ -104,7 +124,7 @@ export function RulesScreen() {
             <Icon name="plus" size={14} />
             Write a class
           </Button>
-        </>
+        </div>
       )}
     >
       {(slots) => (
@@ -143,15 +163,14 @@ function Rules({
   const { extra } = slots;
   const [removing, setRemoving] = useState<CharacterOption>();
 
-  const classes = extra.offered.filter((option) => option.kind === "class");
-  const species = extra.offered.filter((option) => option.kind === "species");
+  const of = (kind: OptionKind) => extra.offered.filter((option) => option.kind === kind);
 
   return (
     <>
       <div className="flex flex-col gap-8">
         <Section
           title="Classes"
-          options={classes}
+          options={of("class")}
           empty="No classes at all"
           emptyBody="This table has nothing to build a character from. Run the bundled ruleset importer, or write a class of your own with the button above."
           onEdit={(option) => onEdit({ kind: "class", option })}
@@ -159,10 +178,23 @@ function Rules({
         />
         <Section
           title="Species"
-          options={species}
+          options={of("species")}
           empty="No species at all"
           emptyBody="This table has nothing to build a character from. Run the bundled ruleset importer, or write a species of your own with the button above."
           onEdit={(option) => onEdit({ kind: "species", option })}
+          onRemove={setRemoving}
+        />
+        {/* **Third, and last on the page for the same reason it is third on the
+            create form**: it is the pick that adjusts what the two above
+            produced. The bundled sixteen all read *no ability score increases
+            written down*, which is true and is the invitation — a table that
+            plays the book's version writes its own here. */}
+        <Section
+          title="Backgrounds"
+          options={of("background")}
+          empty="No backgrounds at all"
+          emptyBody="Run the bundled ruleset importer for the sixteen names, or write a background of your own with the button above — a background is where a new character's ability score increases come from."
+          onEdit={(option) => onEdit({ kind: "background", option })}
           onRemove={setRemoving}
         />
       </div>
@@ -206,9 +238,9 @@ function Rules({
 /**
  * One of the two lists.
  *
- * Two labelled regions rather than tabs, the call `PartyScreen` makes about its
- * two: they are different questions about one table and both are short, so a
- * tab would hide half of the answer behind a press.
+ * Three labelled regions rather than tabs, the call `PartyScreen` makes about
+ * its two: they are different questions about one table and each is short, so a
+ * tab would hide two thirds of the answer behind a press.
  */
 function Section({
   title,

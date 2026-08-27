@@ -14,7 +14,7 @@ import { SaveFailure } from "../ui/form";
 import { optionWritesAt } from "./load";
 
 /**
- * Taking a class or a species off this table's list.
+ * Taking a class, a species or a background off this table's list.
  *
  * ### It removes the copy, and nothing else in the product notices
  *
@@ -53,7 +53,7 @@ export function RemoveOptionDialog({
   readonly onRemoved: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
-  const noun = option.kind === "class" ? "class" : "species";
+  const noun = option.kind;
 
   const remove = async () => {
     const done = await submit(

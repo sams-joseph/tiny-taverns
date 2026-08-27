@@ -2,9 +2,17 @@ import type {
   CampaignMembership,
   CharacterOption,
   CharacterOwnCreate,
+  CharacterSeed,
   CharacterSheet,
+  SheetIdentity,
 } from "@taverns/api";
-import { emptyCharacterSheet, optionNamed, seedFor, STARTING_LEVEL } from "@taverns/api";
+import {
+  emptyCharacterSheet,
+  increasesLine,
+  optionNamed,
+  seedFor,
+  STARTING_LEVEL,
+} from "@taverns/api";
 import { abilitiesFrom, abilityDrafts, badScores, type AbilityDraft } from "./abilities";
 
 /**
@@ -72,6 +80,19 @@ export interface CharacterDraft {
    */
   readonly species: string;
   readonly className: string;
+  /**
+   * The **name** of a background this campaign offers, or `""` for *not picked
+   * yet* — the third picker, and the only one of the three that moves an
+   * ability score.
+   *
+   * It is a string like the other two and for the same reason, but it lands
+   * somewhere else: a character's background is `sheet.identity.background`, a
+   * document key, where the class and the species are columns. Nothing in the
+   * product filters or sorts on it and it is not one of the three the generated
+   * `descriptor` column is built from, so it earned no column — the same call
+   * `Character.ts` makes about `subclass` in as many words.
+   */
+  readonly background: string;
   readonly ac: string;
   readonly hpMax: string;
   readonly sheetUrl: string;
@@ -106,6 +127,7 @@ export const emptyDraft: CharacterDraft = {
   level: String(STARTING_LEVEL),
   species: "",
   className: "",
+  background: "",
   ac: "",
   hpMax: "",
   sheetUrl: "",
@@ -245,16 +267,92 @@ export const refused = (problems: DraftProblems): boolean => Object.keys(problem
  * the two boxes.
  *
  * **The re-seed is still only ever a pick or a score**, never a watcher. It runs
- * when the player changes one of the three things the seed reads and at no other
+ * when the player changes one of the four things the seed reads and at no other
  * time, which is what keeps *seed at creation, never recompute* a property of
  * the wiring: once the row exists nothing calls this, and editing the same six
  * cells on the shipped sheet moves the modifier beside them and nothing else.
+ *
+ * **The background is the fourth, and it is the one that moves the scores.**
+ * The 2024 ruleset put the ability score increases on it, so `seedFor` raises
+ * the cells before it reads a modifier — which is why the two boxes move when a
+ * background is picked, and why {@link payloadFrom} sends the *seed's* cells
+ * rather than the draft's. What this function still does not do is write the
+ * raised scores back into `draft.abilities`: doing so would mean un-applying
+ * the previous background when the player changes their mind, which is exactly
+ * the recompute this whole design refuses. The boxes hold what the player
+ * typed; the seed holds what gets written down.
  */
+export const backgroundIn = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): CharacterOption | undefined => optionNamed(options, "background", draft.background);
+
+/**
+ * What a picked background adds, in words — or `undefined` when there is
+ * nothing to say.
+ *
+ * **This exists because the background is the one pick that changes a number
+ * the player typed.** A class and a species fill in two boxes the form draws;
+ * a background raises the ability scores themselves, so the sheet that is
+ * created says `CON 15` where the editor said `CON 13`. That has to be on
+ * screen before the save, not discovered on the sheet afterwards.
+ *
+ * `undefined` for the bundled sixteen, which grant nothing at all — see
+ * `systemOptions.ts` — so the line appears only where something really moves.
+ */
+export const backgroundNote = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): string | undefined => {
+  const picked = backgroundIn(draft, options);
+  if (picked?.kind !== "background") return undefined;
+  const line = increasesLine(picked.body.abilityIncreases);
+  return line === ""
+    ? undefined
+    : `${picked.name} adds ${line}, on top of the scores above — that is what their sheet will say.`;
+};
+
+/**
+ * The three picks resolved and the seed run — **one call, two readers.**
+ *
+ * {@link seededDraft} writes the two boxes from it and {@link payloadFrom}
+ * writes the six cells from it, and they must agree: the armour class in the
+ * box was computed from cells with the background applied, so a payload that
+ * sent the cells *without* it would ship a sheet whose own numbers do not
+ * account for the armour class printed beside them. One resolution, called at
+ * both ends, is what makes that impossible rather than careful.
+ *
+ * It is a pure function of a draft and a vocabulary, so calling it twice is not
+ * two answers — and neither call happens after the row exists, which is what
+ * *seed at creation, never recompute* means.
+ */
+export const seedOf = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): CharacterSeed => {
+  const classOption = optionNamed(options, "class", draft.className);
+  const speciesOption = optionNamed(options, "species", draft.species);
+  const backgroundOption = backgroundIn(draft, options);
+  return seedFor({
+    // The `kind` guard is what the union buys: a class row's document has a hit
+    // die and a species row's does not, so there is no shape in which the wrong
+    // one could be read as the right one.
+    classEntry: classOption?.kind === "class" ? classOption.body : undefined,
+    speciesEntry: speciesOption?.kind === "species" ? speciesOption.body : undefined,
+    backgroundEntry: backgroundOption?.kind === "background" ? backgroundOption.body : undefined,
+    // The cells as the player typed them, *before* the background — `seedFor`
+    // applies it and hands the raised cells back on `seed.abilities`, which is
+    // what the payload writes. A cell with no score is dropped here and cannot
+    // mean one thing in the box and another on the wire.
+    abilities: abilitiesFrom(draft.abilities),
+  });
+};
+
 export const seededDraft = (
   draft: CharacterDraft,
   edited: ReadonlySet<SeededField>,
   /**
-   * What this campaign offers — the list the two pickers were built from.
+   * What this campaign offers — the list the three pickers were built from.
    *
    * Passed in rather than looked up in a module-level map, because there is no
    * global vocabulary any more: a class is a row, and *which* rows depends on
@@ -265,19 +363,7 @@ export const seededDraft = (
    */
   options: ReadonlyArray<CharacterOption>,
 ): CharacterDraft => {
-  const classOption = optionNamed(options, "class", draft.className);
-  const speciesOption = optionNamed(options, "species", draft.species);
-  const seed = seedFor({
-    // The `kind` guard is what the union buys: a class row's document has a hit
-    // die and a species row's does not, so there is no shape in which the wrong
-    // one could be read as the right one.
-    classEntry: classOption?.kind === "class" ? classOption.body : undefined,
-    speciesEntry: speciesOption?.kind === "species" ? speciesOption.body : undefined,
-    // The same function the payload sends, so the number in the box is worked
-    // out from exactly the cells that will be written — a cell with no score
-    // is dropped by both and cannot mean one thing here and another there.
-    abilities: abilitiesFrom(draft.abilities),
-  });
+  const seed = seedOf(draft, options);
   return {
     ...draft,
     ...(edited.has("ac") ? {} : { ac: String(seed.ac) }),
@@ -299,9 +385,11 @@ export const seededDraft = (
  * `species` and `className` are `NonEmptyString`, so the contract refuses them
  * locally and the form fails on a field the player deliberately left blank.
  *
- * `sheet` goes the same way, and it is now **two** keys rather than one: the
- * backstory, and the six ability cells. A document is sent when either of them
- * has something in it and not otherwise, so a character who is only a name still
+ * `sheet` goes the same way, and it is now **three** keys rather than one: the
+ * backstory, the six ability cells, and the background — which lives in
+ * `sheet.identity` rather than in a column, because nothing in the product
+ * filters or sorts on it. A document is sent when any of them has something in
+ * it and not otherwise, so a character who is only a name still
  * lands on the column default and has the same `body` shape as one the DM typed.
  * `abilitiesFrom` drops a cell with no score, which is what lets four of six be
  * set — and what makes *nobody typed any* the empty array rather than six cells
@@ -312,17 +400,43 @@ export const seededDraft = (
  * for any of them, so a control for one would not compile. The row comes out
  * `dm` and unhurt because those are the columns' defaults.
  */
-export const payloadFrom = (draft: CharacterDraft): CharacterOwnCreate => {
+export const payloadFrom = (
+  draft: CharacterDraft,
+  /**
+   * The same vocabulary the pickers were built from, because **the six cells
+   * that get written are the seed's rather than the draft's**.
+   *
+   * A background raises the ability scores, so the document this sends is the
+   * one `seedOf` produced and not the one the editor holds. Without the
+   * vocabulary there is nothing to resolve the picked background against, and
+   * the sheet would carry the scores the player typed while the armour class
+   * beside them was worked out from higher ones.
+   */
+  options: ReadonlyArray<CharacterOption>,
+): CharacterOwnCreate => {
   const level = parseOptional(draft.level);
   const ac = parseOptional(draft.ac);
   const hpMax = parseOptional(draft.hpMax);
   const playerName = draft.playerName.trim();
   const species = draft.species.trim();
   const className = draft.className.trim();
+  const background = draft.background.trim();
   const sheetUrl = draft.sheetUrl.trim();
   const notes = draft.notes.trim();
-  const abilities = abilitiesFrom(draft.abilities);
-  const sheet: CharacterSheet = { ...emptyCharacterSheet, notes, abilities };
+  // The seed's cells, not `abilitiesFrom(draft.abilities)`: these are the ones
+  // the two numbers above were computed from, and they carry the background's
+  // increases. One resolution, two readers — see `seedOf`.
+  const abilities = seedOf(draft, options).abilities;
+  // Omitted rather than written empty, `emptyCharacterSheet`'s own rule: a
+  // sheet with an `identity` object holding nothing draws the section's header
+  // over a blank.
+  const identity: SheetIdentity = { background };
+  const sheet: CharacterSheet = {
+    ...emptyCharacterSheet,
+    notes,
+    abilities,
+    ...(background === "" ? {} : { identity }),
+  };
 
   return {
     name: draft.name.trim(),
@@ -333,6 +447,6 @@ export const payloadFrom = (draft: CharacterDraft): CharacterOwnCreate => {
     ...(ac === null || ac === undefined ? {} : { ac }),
     ...(hpMax === null || hpMax === undefined ? {} : { hpMax }),
     ...(sheetUrl === "" ? {} : { sheetUrl }),
-    ...(notes === "" && abilities.length === 0 ? {} : { sheet }),
+    ...(notes === "" && abilities.length === 0 && background === "" ? {} : { sheet }),
   };
 };

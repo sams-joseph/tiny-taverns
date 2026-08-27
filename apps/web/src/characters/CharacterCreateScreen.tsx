@@ -21,6 +21,7 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { abilitySummary, type AbilityDraft } from "./abilities";
 import { AbilityScoresDialog } from "./AbilitiesDialog";
 import {
+  backgroundNote,
   emptyDraft,
   MAX_AC,
   MAX_HP,
@@ -168,7 +169,7 @@ export function CharacterCreateScreen() {
    * a watcher, which is what makes *seed, never recompute* a property of the
    * wiring rather than of a flag.
    */
-  const pick = (key: "species" | "className", value: string) =>
+  const pick = (key: "species" | "className" | "background", value: string) =>
     setDraft((current) => seededDraft({ ...current, [key]: value }, edited, options));
 
   /**
@@ -208,8 +209,8 @@ export function CharacterCreateScreen() {
   const writable = membership !== undefined && membership.role === "player";
 
   /**
-   * The classes and species **this table** offers — the two pickers, and the
-   * two entries the seed reads.
+   * The classes, species and backgrounds **this table** offers — the three
+   * pickers, and the three entries the seed reads.
    *
    * It used to be `Ruleset`'s global twelve and ten. A campaign can have its
    * own now, so the vocabulary is a read: the bundle every campaign shares,
@@ -226,6 +227,18 @@ export function CharacterCreateScreen() {
   const options = view?.options ?? [];
   const classes = options.filter((option) => option.kind === "class");
   const species = options.filter((option) => option.kind === "species");
+  const backgrounds = options.filter((option) => option.kind === "background");
+  /**
+   * What the picked background adds, said before the save rather than found on
+   * the sheet afterwards.
+   *
+   * **The background is the one pick that changes a number the player typed.**
+   * A class and a species fill in the two boxes below; a background raises the
+   * ability scores themselves, so the sheet that gets created says `CON 15`
+   * where the editor said `CON 13`. `undefined` for every bundled background,
+   * which grants nothing at all.
+   */
+  const background = backgroundNote(draft, options);
 
   /**
    * Which of the two paths this screen is on.
@@ -270,7 +283,11 @@ export function CharacterCreateScreen() {
     if (refused(problems)) return;
 
     const made = await submit(
-      (client) => createOwnCharacter(client, campaignId, payloadFrom(draft)),
+      // The vocabulary goes with the draft, because the six cells this sends
+      // are the *seed's* — a background raises the ability scores, and the
+      // armour class in the box beside them was worked out from the raised
+      // ones. See `payloadFrom`.
+      (client) => createOwnCharacter(client, campaignId, payloadFrom(draft, options)),
       // What moved that this write never sent: the roster it will appear on, and
       // the campaign's party list — a DM's screen, which this write has never
       // seen and reaches by naming the resource rather than the screen.
@@ -620,7 +637,56 @@ export function CharacterCreateScreen() {
                       </SelectContent>
                     </Select>
                   </Field>
+                  {/* **The third picker, and the one that moves a number the
+                      player typed.** In the 2024 ruleset the ability score
+                      increases live on the background, so this is the only pick
+                      on this form whose effect is on the six cells rather than
+                      on the two boxes below — which is why the line under the
+                      row says what it adds, in words, before anything is saved.
+
+                      It lands in `sheet.identity.background` rather than in a
+                      column: nothing filters or sorts on it and it is not one
+                      of the three `descriptor` is built from, so it earned no
+                      column — `Character.ts` makes the same call about
+                      `subclass`. It is still ordinary free text on the sheet
+                      afterwards, so a table with a background nobody has
+                      written down loses nothing. */}
+                  <Field
+                    label="Background"
+                    htmlFor="new-character-background"
+                    hint="Where they come from. Your DM's own backgrounds are in this list."
+                  >
+                    <Select
+                      value={draft.background}
+                      onValueChange={(value) => pick("background", String(value))}
+                    >
+                      <SelectTrigger id="new-character-background" className="w-40">
+                        <SelectValue>
+                          {(value) => (value === "" ? "Pick a background" : String(value))}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {backgrounds.map((option) => (
+                          <SelectItem key={option.id} value={option.name}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
                 </div>
+
+                {/* Only where something really moves. The sixteen bundled
+                    backgrounds grant nothing at all — this project ships names
+                    and the grants are a DM's to write — so on most tables this
+                    line is simply absent, which is the honest state rather than
+                    a placeholder saying nothing happened. */}
+                {background !== undefined && (
+                  <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
+                    <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
+                    <span>{background}</span>
+                  </p>
+                )}
 
                 {/* **The six cells, and they sit here because this is where
                     they matter**: the two boxes directly below are worked out
@@ -703,7 +769,7 @@ export function CharacterCreateScreen() {
                   {/* **What the two numbers above actually are**, said where
                       they are rather than left to be assumed.
 
-                      They are filled in from the class, the species and the
+                      They are filled in from the class, the species, the background and the
                       ability scores the moment any of those changes, and they
                       are a *starting point*: the armour class is the unarmoured
                       base and nothing worn. Nothing recalculates either of them
@@ -716,12 +782,13 @@ export function CharacterCreateScreen() {
                       for a character whose abilities nobody has typed, and
                       saying so is what stops *"13 hit points"* reading as this
                       barbarian's real total. */}
-                  {(draft.className !== "" || draft.species !== "") && (
+                  {(draft.className !== "" || draft.species !== "" || draft.background !== "") && (
                     <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
                       <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
                       <span>
-                        A starting point from the class, the species and your ability scores — the
-                        hit die, and <span className="font-mono">10</span> before any armour.
+                        A starting point from the class, the species, the background and your
+                        ability scores — the hit die, and <span className="font-mono">10</span>{" "}
+                        before any armour.
                         {scores === undefined
                           ? " No scores are set, so every modifier counts as +0. Set them above and these follow."
                           : " Type over either; nothing changes them for you once they are created."}

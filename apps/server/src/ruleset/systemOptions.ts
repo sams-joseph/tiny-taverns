@@ -1,8 +1,14 @@
-import type { AbilityKey, ClassEntry, OptionKind, SpeciesEntry } from "@taverns/api";
+import type {
+  AbilityKey,
+  BackgroundEntry,
+  ClassEntry,
+  OptionKind,
+  SpeciesEntry,
+} from "@taverns/api";
 
 /**
- * The bundled rules vocabulary: **the twelve classes and the ten species of the
- * 2024 Player's Handbook, as names and numbers.**
+ * The bundled rules vocabulary: **the twelve classes, the ten species and the
+ * sixteen backgrounds of the 2024 Player's Handbook, as names and numbers.**
  *
  * ### This is `packages/api/src/Ruleset.ts`'s `CLASSES` and `SPECIES`, moved
  *
@@ -10,16 +16,38 @@ import type { AbilityKey, ClassEntry, OptionKind, SpeciesEntry } from "@taverns/
  * druid*, and it is here. A fallback map back in the contract package would be
  * a second one, and it would be the one nobody edits.
  *
- * What that move changed for a reader is **storage, not exposure**: these
+ * What that move changed for a reader is **storage, not exposure**: those
  * twenty-two facts shipped in a TypeScript file that every client downloads
  * before this, and they ship as database rows after it. Nothing about them is
  * newly published, so this raises no licensing question that was not already
  * answered by shipping them at all.
  *
+ * ### The sixteen backgrounds are names and nothing else, and that is a rule
+ *
+ * Every one of them carries `abilityIncreases: []`. In the 2024 ruleset a
+ * background is the entity that grants ability score increases — which is
+ * exactly what makes it worth being an entity — and **this bundle does not ship
+ * those grants**, by the captain's bundle-licensing decision: *"No feature
+ * text, no background mechanical grants, no spell or item descriptions"*
+ * (`AGENTS.md` § "The bundle carries no third-party prose"). The conservative
+ * reading of that sentence is the one taken here, because the whole point of
+ * choosing it was that nothing depends on a belief about what a licence permits.
+ *
+ * So a bundled background is **vocabulary**: the word a player picks and the
+ * word that lands in `sheet.identity.background`. A table that plays the book's
+ * grants writes its own background on the Rules screen, where the numbers are
+ * the DM's own — the same route a homebrew class already takes, and the route
+ * the whole slice exists to open.
+ *
+ * `[]` rather than an absent key is `BackgroundBody`'s decision and is argued
+ * there: the three documents are told apart by having one required key each, so
+ * an all-optional body would swallow the other two. Both screens render it as
+ * *"no ability score increases written down"*, which is what it means.
+ *
  * ### Names and numbers, and no prose
  *
  * `systemCreatures.ts`'s discipline verbatim: **nothing is invented to fill a
- * gap.** There is no `summary` on any of these twenty-two, because the
+ * gap.** There is no `summary` on any of these thirty-eight, because the
  * Player's Handbook's own sentence about a barbarian is the Player's Handbook's
  * and this project has not written its own. A `summary` is a field a *DM* fills
  * in on their own homebrew, and an empty one on a bundled row is missing data
@@ -43,8 +71,8 @@ import type { AbilityKey, ClassEntry, OptionKind, SpeciesEntry } from "@taverns/
  * Slice 2 answered that by building the player's toolkit **per request**, over
  * `Options.list`, so Hob is now held to *the campaign's* words rather than to
  * these. See `src/assistant/toolkit.ts`'s `CharacterVocabulary`. What is left
- * here is the seeder's own source and nothing else: these twenty-two are what a
- * fresh campaign's vocabulary starts as, which is why Hob still offers every
+ * here is the seeder's own source and nothing else: these thirty-eight are what
+ * a fresh campaign's vocabulary starts as, which is why Hob still offers every
  * one of them at a table whose DM has written no homebrew.
  */
 
@@ -52,7 +80,7 @@ import type { AbilityKey, ClassEntry, OptionKind, SpeciesEntry } from "@taverns/
 export interface SystemOption {
   readonly kind: OptionKind;
   readonly name: string;
-  readonly body: ClassEntry | SpeciesEntry;
+  readonly body: ClassEntry | SpeciesEntry | BackgroundEntry;
 }
 
 /**
@@ -101,6 +129,33 @@ const SPECIES_NAMES = [
 ] as const;
 
 /**
+ * The sixteen origins of the 2024 Player's Handbook, alphabetically.
+ *
+ * **Names, and only names.** See this module's own header: a background's
+ * mechanical grants are the one thing the bundle-licensing decision names out
+ * by title, so every one of these carries an empty grant and a DM who plays the
+ * book's version writes it themselves.
+ */
+const BACKGROUND_NAMES = [
+  "Acolyte",
+  "Artisan",
+  "Charlatan",
+  "Criminal",
+  "Entertainer",
+  "Farmer",
+  "Guard",
+  "Guide",
+  "Hermit",
+  "Merchant",
+  "Noble",
+  "Sage",
+  "Sailor",
+  "Scribe",
+  "Soldier",
+  "Wayfarer",
+] as const;
+
+/**
  * One of the twelve, as a type — what makes {@link CLASS_BODIES} exhaustive.
  *
  * A plain union rather than a `Schema.Literals` since slice 2: it had a schema
@@ -111,6 +166,9 @@ type BundledClassName = (typeof CLASS_NAMES)[number];
 
 /** {@link BundledClassName}'s twin. */
 type BundledSpeciesName = (typeof SPECIES_NAMES)[number];
+
+/** {@link BundledClassName}'s third. */
+type BundledBackgroundName = (typeof BACKGROUND_NAMES)[number];
 
 const DEX_ONLY: ReadonlyArray<AbilityKey> = ["DEX"];
 
@@ -168,6 +226,41 @@ const SPECIES_BODIES: Record<BundledSpeciesName, SpeciesEntry> = {
   Tiefling: { hpPerLevel: 0 },
 };
 
+/**
+ * What each of the sixteen grants: **nothing**, sixteen times.
+ *
+ * Written out rather than generated from the tuple, and that is deliberate.
+ * `Record<BundledBackgroundName, BackgroundEntry>` is exhaustive over the names
+ * exactly as the other two tables are, so a seventeenth name is a compile error
+ * until somebody says what it grants — which is the moment to notice that this
+ * bundle does not ship grants and to decide what the new row is for. A
+ * `BACKGROUND_NAMES.map(() => EMPTY)` would answer that question silently and
+ * for ever.
+ *
+ * `NO_INCREASES` is one shared frozen value because sixteen separate `[]`
+ * literals is sixteen places to accidentally type something into.
+ */
+const NO_INCREASES: BackgroundEntry = { abilityIncreases: [] };
+
+const BACKGROUND_BODIES: Record<BundledBackgroundName, BackgroundEntry> = {
+  Acolyte: NO_INCREASES,
+  Artisan: NO_INCREASES,
+  Charlatan: NO_INCREASES,
+  Criminal: NO_INCREASES,
+  Entertainer: NO_INCREASES,
+  Farmer: NO_INCREASES,
+  Guard: NO_INCREASES,
+  Guide: NO_INCREASES,
+  Hermit: NO_INCREASES,
+  Merchant: NO_INCREASES,
+  Noble: NO_INCREASES,
+  Sage: NO_INCREASES,
+  Sailor: NO_INCREASES,
+  Scribe: NO_INCREASES,
+  Soldier: NO_INCREASES,
+  Wayfarer: NO_INCREASES,
+};
+
 /** The twelve, in the order a picker draws them — alphabetical, as the book prints them. */
 export const SYSTEM_CLASSES: ReadonlyArray<{ readonly name: string } & ClassEntry> =
   CLASS_NAMES.map((name) => ({ name, ...CLASS_BODIES[name] }));
@@ -176,10 +269,19 @@ export const SYSTEM_CLASSES: ReadonlyArray<{ readonly name: string } & ClassEntr
 export const SYSTEM_SPECIES: ReadonlyArray<{ readonly name: string } & SpeciesEntry> =
   SPECIES_NAMES.map((name) => ({ name, ...SPECIES_BODIES[name] }));
 
-/** The twenty-two, as rows. */
+/** The sixteen, likewise — each with an empty grant. */
+export const SYSTEM_BACKGROUNDS: ReadonlyArray<{ readonly name: string } & BackgroundEntry> =
+  BACKGROUND_NAMES.map((name) => ({ name, ...BACKGROUND_BODIES[name] }));
+
+/** The thirty-eight, as rows. */
 export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
   ...CLASS_NAMES.map((name) => ({ kind: "class" as const, name, body: CLASS_BODIES[name] })),
   ...SPECIES_NAMES.map((name) => ({ kind: "species" as const, name, body: SPECIES_BODIES[name] })),
+  ...BACKGROUND_NAMES.map((name) => ({
+    kind: "background" as const,
+    name,
+    body: BACKGROUND_BODIES[name],
+  })),
 ];
 
 /**

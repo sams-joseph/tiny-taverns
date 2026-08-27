@@ -171,6 +171,10 @@ const aDraft = (over: Record<string, unknown> = {}) =>
     name: "Sorrel Ash",
     species: "Human",
     className: "Bloodsworn",
+    // Required since the background became an entity — it is the third thing
+    // the seed reads, so a model that may omit it is a seed that may silently
+    // lose the ability score increases.
+    background: "Soldier",
     abilityOrder: ["CON", "STR", "DEX", "WIS", "CHA", "INT"],
     backstory: "She kept the oath and lost the arm.",
     ...over,

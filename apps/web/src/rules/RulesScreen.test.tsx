@@ -8,6 +8,8 @@ import {
   installRulesServer,
   marshfolkOption,
   renderRules,
+  saltRunnerOption,
+  saltRunnerOriginalId,
 } from "./rules.fixtures";
 
 /**
@@ -41,7 +43,7 @@ const sent = (method: string, fragment: string) =>
   server.calls.find((call) => call.method === method && call.pathname.includes(fragment));
 
 describe("what this table offers", () => {
-  it("draws both kinds, with the numbers a character is seeded from", async () => {
+  it("draws all three kinds, with the numbers a character is seeded from", async () => {
     await renderRules();
 
     // The campaign's own copy, and a bundled row beside it in the same list.
@@ -53,6 +55,18 @@ describe("what this table offers", () => {
     // Nine of the ten bundled species move nothing, and the card says so rather
     // than drawing `+0`.
     expect(screen.getAllByText("No extra hit points").length).toBeGreaterThan(0);
+
+    // **The third kind, and the one the whole slice is about.** A background is
+    // where the 2024 ruleset puts the ability score increases, so its numbers
+    // line is the grant — and every bundled one says nobody has written one,
+    // which is what the bundle really ships.
+    expect(screen.getByRole("region", { name: "Backgrounds" })).toBeInTheDocument();
+    expect(screen.getByText("Salt-runner")).toBeInTheDocument();
+    expect(screen.getByText("+2 CON, +1 WIS")).toBeInTheDocument();
+    expect(screen.getByText("Soldier")).toBeInTheDocument();
+    expect(screen.getAllByText("No ability score increases written down").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("counts what a DM can act on, and says how much of it a player cannot pick", async () => {
@@ -60,7 +74,7 @@ describe("what this table offers", () => {
     // Thirteen classes and eleven species in the fixture, and exactly one copy
     // is unshared. The second clause is the whole friction of the feature said
     // where the DM will read it.
-    expect(await screen.findByText(/13 classes, 11 species/)).toBeInTheDocument();
+    expect(await screen.findByText(/13 classes, 11 species, 5 backgrounds/)).toBeInTheDocument();
     expect(screen.getByText(/1 your players cannot pick yet/)).toBeInTheDocument();
   });
 
@@ -74,10 +88,15 @@ describe("what this table offers", () => {
     // one field away from the wrong answer.
     expect(screen.getByRole("button", { name: "Edit Bloodsworn" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Marshfolk" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Salt-runner" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit Druid" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit Elf" })).toBeNull();
-    // Two copies, two remove buttons, and none on the bundle.
-    expect(screen.getAllByRole("button", { name: /Remove .* from this table/ })).toHaveLength(2);
+    // A bundled background is nobody's to edit either, and it is the one a DM
+    // is likeliest to want to: all sixteen grant nothing, so *Edit* on one
+    // would be exactly the 404 `isCampaignCopy` exists to prevent.
+    expect(screen.queryByRole("button", { name: "Edit Soldier" })).toBeNull();
+    // Three copies, three remove buttons, and none on the bundle.
+    expect(screen.getAllByRole("button", { name: /Remove .* from this table/ })).toHaveLength(3);
   });
 
   it("says which rows no player can pick, and only about rows that can be shared", async () => {
@@ -129,6 +148,69 @@ describe("writing one", () => {
     // is the visible screen-level choice, and it is the difference between a
     // class a player can pick and one nobody but the DM can see.
     expect(JSON.parse(copied?.body ?? "{}")).toEqual({ visibility: "shared" });
+  });
+
+  it("writes a background's ability score increases, which is what a background is for", async () => {
+    // **The third kind, and the only one whose grant reaches a number on
+    // somebody's sheet.** The bundle ships all sixteen with nothing at all, so
+    // this form is the *only* way a background in this product ever moves an
+    // ability score — which makes the six boxes and what they send the whole of
+    // the slice on this screen.
+    server.routes.set("POST /library/options", {
+      status: 200,
+      body: { ...saltRunnerOption, id: saltRunnerOriginalId, campaignId: null },
+    });
+
+    await renderRules();
+    await userEvent.click(await screen.findByRole("button", { name: /Write a background/i }));
+
+    const form = await screen.findByRole("dialog");
+    await userEvent.type(within(form).getByLabelText("Name"), "Salt-runner");
+    // Each box carries the ability's own accessible name: six boxes labelled
+    // *Score* would be one control as far as anything reading names goes.
+    await userEvent.type(within(form).getByLabelText("CON increase"), "2");
+    await userEvent.type(within(form).getByLabelText("WIS increase"), "1");
+    // Said back before the save, in the form, because nobody typed these into
+    // an ability cell and the player will not either.
+    expect(within(form).getByText("+2 CON, +1 WIS")).toBeVisible();
+
+    await userEvent.click(within(form).getByRole("button", { name: /Add background/i }));
+
+    await waitFor(() => {
+      expect(sent("POST", "/library/options")).toBeDefined();
+    });
+
+    // Only what was said: the four boxes left blank are abilities this
+    // background does not touch, and a `+0` row would say something nobody
+    // wrote. In `ABILITY_KEYS` order, so the line reads the same however it was
+    // typed.
+    expect(JSON.parse(sent("POST", "/library/options")?.body ?? "{}")).toEqual({
+      kind: "background",
+      name: "Salt-runner",
+      body: {
+        abilityIncreases: [
+          { ability: "CON", amount: 2 },
+          { ability: "WIS", amount: 1 },
+        ],
+      },
+    });
+    expect(
+      JSON.parse(sent("POST", `/options/${saltRunnerOriginalId}/derive`)?.body ?? "{}"),
+    ).toEqual({ visibility: "shared" });
+  });
+
+  it("draws one kind's fields and never another's", async () => {
+    // The union as three thirds of one dialog. A background form that also drew
+    // a hit die would let a DM type a number into a document that has nowhere
+    // to keep it — and `repo/Options.ts`'s `bodyKind` tells the three apart by
+    // exactly the key each has and the other two lack.
+    await renderRules();
+    await userEvent.click(await screen.findByRole("button", { name: /Write a background/i }));
+
+    const form = await screen.findByRole("dialog");
+    expect(within(form).getByLabelText("STR increase")).toBeInTheDocument();
+    expect(within(form).queryByLabelText("Hit die")).toBeNull();
+    expect(within(form).queryByLabelText(/Hit points per level/)).toBeNull();
   });
 
   it("opens with the players able to see it, which is the one form in the product that does", async () => {
@@ -248,12 +330,14 @@ describe("copying from the library", () => {
     // option is already on every campaign's list, so copying one would make a
     // second Druid that shadows the first.
     expect(within(dialog).queryByText("Druid")).toBeNull();
+    expect(within(dialog).queryByText("Soldier")).toBeNull();
     expect(within(dialog).getByText("Bloodsworn")).toBeVisible();
     expect(within(dialog).getByText("Marshfolk")).toBeVisible();
+    expect(within(dialog).getByText("Salt-runner")).toBeVisible();
     // The original is still offered though a copy of it is already on the
     // table, because a copy is a separate row — and the row says so rather than
     // being hidden.
-    expect(within(dialog).getAllByText(/already on this table/).length).toBe(2);
+    expect(within(dialog).getAllByText(/already on this table/).length).toBe(3);
     expect(
       within(dialog).getByText(/Copying the same one again makes a second copy/),
     ).toBeVisible();
@@ -264,8 +348,10 @@ describe("copying from the library", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Copy from your library/i }));
 
     const dialog = await screen.findByRole("dialog");
-    const rows = within(dialog).getAllByRole("button", { name: /Copy in/i });
-    await userEvent.click(rows[0]!);
+    // Named rather than taken by position: the Library is ordered by kind, so a
+    // third kind silently moved whichever row `[0]` used to be — which is why
+    // each button carries the row's own accessible name.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Copy in Bloodsworn" }));
 
     await waitFor(() => {
       expect(sent("POST", `/options/${bloodswornOriginalId}/derive`)).toBeDefined();
