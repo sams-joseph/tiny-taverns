@@ -1355,6 +1355,10 @@ control.
 
 ### The bundled importer writes `visibility = 'shared'`, and `bestiary:import` does not
 
+**Confirmed by the captain on 2026-08-27, as a rule rather than as a historical note** — all
+three parts of it below, including the seeder, which the original question did not name. It is
+the settled answer; do not "tidy" the asymmetry away in either direction.
+
 The one place the two importers differ, and it is the consequence of the same decision rather
 than a second one. `corpusRowReadable` ends in `isDm OR visibility = 'shared'` and the column
 default is `dm`. For a **creature** that is the whole point — a stat block is precisely what
@@ -1368,6 +1372,16 @@ its `do update` clause deliberately does **not** — a DM who un-shared a bundle
 have it re-shared by an upgrade, exactly as `bestiary/import.ts` never touches a visibility.
 `OptionDialog` and `CopyOptionIn` send `visibility: "shared"` on the wire for the same reason,
 and the switch is the one form control in the product that **starts on**.
+
+**The insert-names-it / update-does-not asymmetry is the part most at risk**, because it reads
+as an inconsistency to anybody meeting it cold and "fixing" it either way breaks a half:
+naming `visibility` in the `do update` too re-shares a row somebody un-shared, on every
+upgrade; dropping it from the `insert` gives the whole product an empty class picker. Both the
+reason and the confirmation are written at `apps/server/src/ruleset/import.ts`, and
+`apps/server/test/options.test.ts`'s _"says `shared` on insert and nothing on update"_ is the
+pin — it un-shares a bundled row behind the API (no shipped write path can reach one), re-runs
+the seeder with a changed body so the update demonstrably ran, and asserts the body moved and
+the visibility did not.
 
 ### `character` needed no migration, and could not have used the useful thing
 

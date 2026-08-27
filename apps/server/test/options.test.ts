@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
-import { SYSTEM_CLASSES, SYSTEM_SPECIES } from "../src/ruleset/systemOptions.js";
+import { SYSTEM_CLASSES, SYSTEM_SPECIES, type SystemOption } from "../src/ruleset/systemOptions.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -249,6 +249,72 @@ describe("the bundle", () => {
 
     if (rows._tag !== "Success") throw new Error("expected the bundle");
     expect(rows.success).toEqual([{ visibility: "shared" }]);
+  });
+
+  it("says `shared` on insert and nothing on update, so an upgrade never re-shares", async () => {
+    // **The insert-not-update asymmetry is the point, not an oversight.** An
+    // `insert` that names a column beside a `do update` that does not looks
+    // like a bug to anybody meeting it cold, and "tidying" it either way breaks
+    // one of the two halves of the decision:
+    //
+    //   - naming `visibility` in the `do update` too would re-share a row that
+    //     had been un-shared, on every upgrade — the DM's choice silently
+    //     undone by an operator running a bin script;
+    //   - dropping it from the `insert` would leave the bundle at the column
+    //     default `dm`, which is an empty class picker for every player in the
+    //     product until each DM shares twelve rows by hand.
+    //
+    // So: `insert` says `shared` out loud, `update` says nothing, and between
+    // them the DM's choice is the one that survives. The column default has not
+    // moved and no predicate changed — this is a writer stating what it means,
+    // exactly as the copy-in dialog does.
+    // A class rather than any bundled row, so the body's shape is known and the
+    // edit below needs no cast.
+    const [entry] = SYSTEM_CLASSES;
+    if (entry === undefined) throw new Error("expected a bundled class");
+    const { name, ...body } = entry;
+    const option: SystemOption = { kind: "class", name, body };
+
+    // Un-shared behind the API, because no shipped write path can reach a
+    // bundled row at all — `libraryRowWritable` and `rowWritable` each compare
+    // an ownership column to a uuid and a bundled row's are both null. That is
+    // the guarantee working; it is also why this half needs raw SQL to pin.
+    await sql(
+      (client) => client`
+        update character_option set visibility = 'dm'
+        where origin = 'system' and kind = 'class' and lower(name) = lower(${name})
+      `,
+    );
+
+    // Re-run the seeder with a changed body, so the `do update` clause
+    // demonstrably ran. Without this the assertion below would also pass if the
+    // upsert had quietly done nothing at all.
+    const edited: SystemOption = { ...option, body: { ...body, hitDie: 99 } };
+    const result = await runtime.runPromise(importSystemOptions([edited]).pipe(Effect.orDie));
+    expect(result).toEqual({ inserted: 0, updated: 1 });
+
+    const rows = await sql(
+      (client) => client<{ readonly visibility: string; readonly body: ClassBody }>`
+        select visibility, body from character_option
+        where origin = 'system' and kind = 'class' and lower(name) = lower(${name})
+      `,
+    );
+
+    if (rows._tag !== "Success") throw new Error("expected the row back");
+    // The body moved — the update ran — and the visibility did not.
+    expect(rows.success[0]?.body.hitDie).toBe(99);
+    expect(rows.success[0]?.visibility).toBe("dm");
+
+    // Leave the bundle as `ruleset:import` leaves it, for every test after this
+    // one. The body is restored by the seeder itself; the visibility is not,
+    // which is this test's own subject said a second way.
+    await runtime.runPromise(importSystemOptions([option]).pipe(Effect.orDie));
+    await sql(
+      (client) => client`
+        update character_option set visibility = 'shared'
+        where origin = 'system' and kind = 'class' and lower(name) = lower(${name})
+      `,
+    );
   });
 
   it("cannot be written by anybody, through either path", async () => {

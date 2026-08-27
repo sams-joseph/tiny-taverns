@@ -32,6 +32,13 @@ export interface ImportResult {
  * ### It writes `visibility = 'shared'` on insert, and the bestiary importer
  * does not. That difference is the whole reason this comment is long.
  *
+ * **Confirmed by the captain on 2026-08-27 as a rule, not as a historical
+ * note.** The `insert`-names-it / `do update`-does-not asymmetry below is
+ * deliberate and is the settled answer; it is not an oversight to tidy. Pinned
+ * by `apps/server/test/options.test.ts`'s *"says `shared` on insert and nothing
+ * on update, so an upgrade never re-shares"*, which fails if the `do update`
+ * clause gains a `visibility` line.
+ *
  * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, and the column
  * default is `dm`. For a **creature** that is exactly right and is the point of
  * the feature: a stat block is precisely the thing the product says a player
@@ -68,6 +75,9 @@ export const importSystemOptions = (
         for (const option of corpus) {
           // `xmax = 0` is true only for a tuple this statement inserted, which
           // is how an upsert reports which of the two things it did.
+          // `visibility` is named in the `values` list and deliberately
+          // absent from the `do update set` list below — the confirmed rule,
+          // stated at length in this function's doc block.
           const rows = yield* sql<{ readonly inserted: boolean }>`
             insert into character_option (
               campaign_id, account_id, origin, kind, name, body, visibility
@@ -84,6 +94,10 @@ export const importSystemOptions = (
             on conflict (kind, lower(name))
               where campaign_id is null and account_id is null
             do update set
+              -- visibility is deliberately NOT set here, and IS named on the
+              -- insert above. See this function's doc block: a DM who
+              -- un-shared a bundled class must not have it re-shared by an
+              -- upgrade. Not an omission; do not make the two consistent.
               body       = excluded.body,
               updated_at = now()
             returning (xmax = 0) as inserted
