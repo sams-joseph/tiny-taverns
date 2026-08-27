@@ -114,9 +114,40 @@ afterAll(async () => {
  * The `tsc` invocation stays *inside* the test on purpose. Compiling here is
  * what makes it impossible for this to pass against a stale or absent `dist/`;
  * hand the compile to the build pipeline and the test's guarantee becomes a
- * guarantee about whatever happened to be on disk. It is also not the slow part
- * — measured at 1.5–1.8s under full `turbo --force` load, the same as it takes
- * alone.
+ * guarantee about whatever happened to be on disk.
+ *
+ * It *is* the slow part, though, and the line that used to sit here saying
+ * otherwise — "1.5–1.8s under full `turbo --force` load, the same as it takes
+ * alone" — was measured on a quiet machine and does not survive a busy one.
+ * Re-measured on the same 24-core box with the cores oversubscribed two to one,
+ * the same `tsc` takes **15.5s** against 2.2s alone; and CI's own pipeline
+ * (`turbo run lint typecheck test build`) has `server:build` and
+ * `server:typecheck` compiling this very project alongside it.
+ *
+ * **Hence the 180_000 on both tests below, where the rest of the suite gets
+ * `vitest.config.ts`'s 60s.** Each of these is compile + spawn + poll, and the
+ * poll is already bounded at 20s by its own `deadline` — which is the bound
+ * that produces a *useful* failure, naming the port, the last attempt and the
+ * server's own output. The outer budget should only ever fire on something
+ * wedged past that, and at 60s it did not: under the load above it timed out at
+ * ~60_070ms in three runs out of six, losing that diagnostic to a bare
+ * `Test timed out in 60000ms`.
+ *
+ * The cost is not merely large, it is tail-heavy, which is why the headroom is
+ * wide. Across sixteen loaded runs of CI's own pipeline this test measured
+ * 15.6, 16.6, 62.2, 63.0, 64.5, 70.8, 80.2, 89.8, 94.3 and **101.1** seconds —
+ * a factor of six between the quiet runs and the busy ones, with the busy ones
+ * clustered at the top. 180s is a shade under twice the worst of those, and the
+ * worst was not the harshest load tried. Nothing is bought by tightening it: the failure this file guards against is "never answers", so
+ * every real one is reported by the inner deadline long before the outer one,
+ * and the only thing a tight outer bound buys is the loss of that message.
+ *
+ * If this is ever worth making *faster* rather than merely survivable, the
+ * lever is not here. CI runs `lint typecheck test build` together on a cold
+ * cache, so `server:build` and `server:typecheck` each compile this project at
+ * the same moment this test does — three `tsc` runs over one `tsconfig`. The
+ * compile cannot move out of the test without giving up the guarantee above, so
+ * that would be a change to the pipeline, deliberately not made here.
  */
 describe("production start (built output under plain node)", () => {
   it("boots dist/main.js and answers GET /health", async () => {
@@ -160,7 +191,7 @@ describe("production start (built output under plain node)", () => {
     const body: unknown = await response.json();
     expect(body).toMatchObject({ status: "ok" });
     expect((body as { uptime: number }).uptime).toBeGreaterThanOrEqual(0);
-  }, 60_000);
+  }, 180_000);
 
   /**
    * The boot-order guarantee: the socket must not accept until the application
@@ -254,5 +285,5 @@ describe("production start (built output under plain node)", () => {
     // observed run has done — but it is not the property under test, so it is
     // the unexpected *codes* that are asserted on, not the count.
     expect([...refusals.keys()].filter((code) => code !== "ECONNREFUSED")).toEqual([]);
-  }, 60_000);
+  }, 180_000);
 });

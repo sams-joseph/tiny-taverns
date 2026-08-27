@@ -721,14 +721,37 @@ connection failure into a message saying `pnpm db:up`. Do not make them skip ins
 repo has twice shipped a defect that a green build hid, and a silently-skipped database test
 is that same pattern.
 
-**A pool per file against `max_connections = 100` is the ceiling, and on a big machine
-`pnpm -F server test` alone can hit it.** Vitest sizes its worker pool from the core count, each
-worker holds a `PgClient` pool, and past roughly twenty concurrent files Postgres starts refusing
-— which surfaces as the `pnpm db:up` message on files that have nothing wrong with them, several
-at once and different ones each run. It is not a defect in whatever you just changed: check it
-against a clean tree before believing it. `pnpm test` from the root does not show it (turbo runs
-web and server together and each takes fewer workers), and `--maxWorkers=6` is the one-flag
-answer when it does.
+**A pool per file against `max_connections = 100` is the ceiling, and enough concurrent suites
+will hit it.** Vitest sizes its worker pool from the core count, each worker holds a `PgClient`
+pool, and past enough concurrent files Postgres starts refusing — which surfaces as the
+`pnpm db:up` message on files that have nothing wrong with them, several at once and different
+ones each run. It is not a defect in whatever you just changed: check it against a clean tree
+before believing it. `--maxWorkers=6` is the one-flag answer when it does.
+
+**What one suite costs was measured, and it is a third of the ceiling**: sampled every 250ms
+through a fully loaded 37-file run on a 24-core box, `pnpm -F server test` peaked at **30 client
+backends out of 100** and never saw a refusal. Pools are lazy (`min` is 0) and a file's runtime
+issues one query at a time, so a file holds about one connection rather than the ten its pool
+allows. What actually reaches 100 is several suites sharing one Postgres — the shared `pnpm db:up`
+container with three or four agents pointed at it — so the fix is a database per agent, not fewer
+workers.
+
+**A server-suite _timeout_ is therefore a different failure from that one, and reads differently.**
+Pool exhaustion fails loudly with the `pnpm db:up` text; a timeout is a wall-clock budget running
+out on work that was progressing. The budget lives in **`apps/server/vitest.config.ts`** —
+`testTimeout` and `hookTimeout`, both `60_000` — which exists because there was no config at all
+and 322 of the suite's 629 tests were on Vitest's bare 5000ms while the other 307 carried an inline
+`60_000` somebody had stapled on. `whoami.test.ts` is the file that lost it: almost every
+database-backed file builds its layer in an annotated `beforeAll`, so `migratedDatabase`'s
+`drop database` / `create database` / migration run is charged to a hook; that file has no
+`beforeAll`, so the same cost lands in its first test body against the default. Measured, that test
+is **2.4s idle and 3.7–7.0s under a loaded pipeline**, and it went red at 5050ms in 2 runs of 6.
+
+**`start.smoke.test.ts` keeps a budget of its own (180s) and is the reason 60s is not generous.**
+It runs `tsc` inside the test — 2.2s alone, **15.5s** with the box oversubscribed — while CI's
+`turbo run lint typecheck test build` has `server:build` and `server:typecheck` compiling the same
+project beside it. Across sixteen loaded runs it measured 15.6s to **101.1s**, and blew its old
+60s in 3 of 6. Read its own doc block before touching either number.
 
 **The web suite has its own load-sensitive flake, and it is the same trap wearing a different
 face.** `campaign/authoring.test.tsx`'s _"names it, rates it, tags it, and attaches a creature — in
