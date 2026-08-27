@@ -270,6 +270,11 @@ describe("writing down a character of your own", () => {
 
     expect(await screen.findByText(/Tell me more about where she is from/)).toBeTruthy();
     expect(screen.getByText(/No sheet came back this time/)).toBeTruthy();
+    // **One explanation, not two.** The server says so too — it has to, because
+    // the DM's panel has no equivalent sentence of its own — and this screen's
+    // own line is the one that names *this* way on. `draft.ts` keeps Hob's
+    // prose over a failure sentence, which is what makes that true.
+    expect(screen.queryByText(/did not make a usable drafting call/)).toBeNull();
     // Nothing to keep, and nothing pretending there is.
     expect(screen.queryByRole("button", { name: /Keep them/i })).toBeNull();
 

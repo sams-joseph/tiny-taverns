@@ -12,7 +12,7 @@ import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
-import { Hob } from "../src/assistant/Hob.js";
+import { aQuestionAboutIt, askedForABuild, Hob, printedTheCall } from "../src/assistant/Hob.js";
 import {
   HobToolkit,
   NO_VOCABULARY,
@@ -242,6 +242,8 @@ const ask = (
   options?: {
     readonly rounds?: ReadonlyArray<ReadonlyArray<Parameters<typeof textChunks>[0] | object>>;
     readonly query?: string;
+    /** What the DM typed. `ASKED` is a question about the record, deliberately. */
+    readonly text?: string;
   },
 ): Promise<Asked> => {
   const model = scriptedModel({
@@ -256,7 +258,7 @@ const ask = (
   return runtime.runPromise(
     Effect.gen(function* () {
       const hob = yield* Hob;
-      const stream = yield* hob.ask(campaignId, { text: ASKED });
+      const stream = yield* hob.ask(campaignId, { text: options?.text ?? ASKED });
       const events = yield* Stream.runCollect(stream);
       return { events: Array.from(events), requests: model.requests() };
     }).pipe(
@@ -271,6 +273,10 @@ const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify
 
 const texts = (events: ReadonlyArray<HobEvent>): ReadonlyArray<string> =>
   events.flatMap((event) => (event.event === "delta" ? [event.data.text] : []));
+
+/** Every sentence a `failed` event carried, which must never be more than one. */
+const apologies = (events: ReadonlyArray<HobEvent>): ReadonlyArray<string> =>
+  events.flatMap((event) => (event.event === "failed" ? [event.data.message] : []));
 
 /** The thread and the turn an answer was written into, said before a word of it. */
 const begunIn = (events: ReadonlyArray<HobEvent>) => {
@@ -1228,6 +1234,288 @@ describe("with no model configured", () => {
       model: "qwen2.5-3b-instruct",
     });
   }, 60_000);
+});
+
+/**
+ * **The captain's report, and the two halves of answering it.**
+ *
+ * A DM asks Hob to build something, the model answers in prose, and they get a
+ * plausible sentence and no card — with nothing saying Hob tried and failed. It
+ * is the common case rather than the rare one: with every tool offered, the
+ * captain's own configured 4B chose a `propose*` tool once in five attempts.
+ *
+ * The first three tests are the report. **The four after them are the more
+ * important half**: a false positive here — telling somebody the model refused
+ * when they never asked it to build anything, or when it built the thing — is
+ * worse than saying nothing, and the last one is the ordering pair
+ * `gotNowhere` already refuses and this must not reintroduce.
+ */
+describe("a model that would not use its build tools", () => {
+  it("says so when the DM asked for one and got prose", async () => {
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Build me an encounter for the reeds.",
+      rounds: [textChunks("Reed stalkers ", "would suit the marsh.")] as never,
+    });
+
+    // The prose still stands — it is what the model said, and dropping it would
+    // be a worse lie than the silence this replaces.
+    expect(texts(events)).toEqual(["Reed stalkers ", "would suit the marsh."]);
+    expect(events.map((event) => event.event)).toEqual(["began", "delta", "delta", "failed"]);
+    expect(apologies(events)).toHaveLength(1);
+    expect(apologies(events)[0]).toContain("built nothing you can save");
+    expect(apologies(events)[0]).toContain("write it yourself");
+  }, 60_000);
+
+  it("says so when the model printed the arguments in a fence, as the 4B did", async () => {
+    // The captured shape, close to verbatim: the tool's name is in the sentence
+    // and the arguments are in the block. The ask here is deliberately *not*
+    // one the wording test would catch — this signature has to stand alone.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "The reeds need something tonight.",
+      rounds: [
+        textChunks(
+          "I'm offering an encounter called **Goblin Ambush**.\n\n" +
+            '```json\n{ "name": "Goblin Ambush", "difficulty": null, "tags": [],\n' +
+            '  "creatures": [ { "creatureId": "d0ca", "count": 3 } ] }\n```\n',
+        ),
+      ] as never,
+    });
+
+    expect(events.at(-1)?.event).toBe("failed");
+    expect(apologies(events)[0]).toContain("built nothing you can save");
+  }, 60_000);
+
+  it("says so when the model named the call in its reply, as the 1B did", async () => {
+    // `proposeEncounter "The Marsh Encounter: Swamp Stompers": A Bullywug mob…`
+    // — drawn in the panel as ordinary reply text, with `proposal IS NULL` on
+    // the turn behind it. Again an ask the wording test does not catch.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Anything for the marsh tonight?",
+      rounds: [
+        textChunks(
+          'proposeEncounter "The Marsh Encounter: Swamp Stompers": ' +
+            "A Bullywug mob on the prowl.",
+        ),
+      ] as never,
+    });
+
+    expect(events.at(-1)?.event).toBe("failed");
+    expect(apologies(events)[0]).toContain("built nothing you can save");
+  }, 60_000);
+
+  it("names the way on that fits who asked, and says nothing about the other one", async () => {
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Write me a note about the lantern-keeper.",
+      rounds: [textChunks("He keeps the lamps and little else.")] as never,
+    });
+
+    const said = apologies(events)[0] ?? "";
+    expect(said).toContain("write it yourself");
+    expect(said).not.toContain("fill the sheet in");
+    // Never the framework's own words, whatever else it says.
+    expect(said).not.toContain("Expected ");
+    expect(said).not.toContain("LanguageModel.");
+  }, 60_000);
+
+  it("stays quiet on an ordinary question, which is most of what is asked", async () => {
+    // `ASKED` is "Who is the ferryman?" — the shape of nearly every question
+    // this panel gets, and the shape a false positive would spoil.
+    const { events } = await ask(fixture.dm, fixture.campaign.id);
+
+    expect(apologies(events)).toEqual([]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("stays quiet when a question about the record only looks like a request", async () => {
+    // A make-verb and a build noun, in a sentence asking what is already
+    // written down. This is the false positive the wording test is shaped
+    // around, and it is worth a round trip rather than only a unit assertion.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "What did I write in that note about the ambush?",
+      rounds: [textChunks("Nothing about an ambush.")] as never,
+    });
+
+    expect(apologies(events)).toEqual([]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("stays quiet when something was built — the pair it must never make", async () => {
+    // **The ordering bug the reliability work fixed, arriving by a new door.**
+    // A card and "it built nothing" are the one pair that cannot both be true,
+    // and the gate is structural: `tail` reads the proposal slot at the very
+    // end, after every round, so there is no order in which both are emitted.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Build me an encounter for the reeds.",
+      rounds: withGoblin([
+        toolCallChunks("proposeEncounter", {
+          name: "Reed ambush",
+          creatures: [{ creatureId: "", count: 3 }],
+        }),
+        textChunks("Three of them, in the reeds."),
+      ]) as never,
+    });
+
+    expect(events.some((event) => event.event === "proposal")).toBe(true);
+    expect(apologies(events)).toEqual([]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("stays quiet when the model did make the call and the tool refused it", async () => {
+    // It reached for a build tool and got an answer it could read — an invented
+    // creature id comes back as a `NotFound` through `failureMode: "return"`,
+    // which the model normally explains. Saying "no usable build tool call"
+    // there would be a true-sounding sentence about the wrong thing.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Build me an encounter for the reeds.",
+      rounds: [
+        toolCallChunks("proposeEncounter", {
+          name: "Reed ambush",
+          creatures: [{ creatureId: fixture.strangerCampaign.id, count: 3 }],
+        }),
+        textChunks("I could not find that creature here."),
+      ] as never,
+    });
+
+    expect(events.some((event) => event.event === "proposal")).toBe(false);
+    expect(apologies(events)).toEqual([]);
+    expect(events.at(-1)?.event).toBe("done");
+  }, 60_000);
+
+  it("says one thing, never two, when the answer already failed for its own reason", async () => {
+    // A build ask that also ran out of room. `truncated` names the knob and is
+    // the useful sentence; a second apology under it would be noise, and
+    // `broke` is what keeps this to one.
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Build me an encounter for the reeds.",
+      rounds: [reasoningChunks("Hmm, what lives in a marsh.")] as never,
+    });
+
+    expect(apologies(events)).toHaveLength(1);
+    expect(apologies(events)[0]).toContain("HOB_MAX_TOKENS");
+  }, 60_000);
+});
+
+/**
+ * **The judgement, written out as a table.**
+ *
+ * The two surfaces answer "was a build asked for" differently and the asymmetry
+ * is a fact about them rather than a hedge: the DM's panel is general chat, so
+ * silence is the default and the wording has to opt in; a player's is the
+ * character-drafting composer and nothing else, whose input is normally a
+ * paragraph with no verb in it, so a draft is the default and a question about
+ * the one on screen is the way out.
+ *
+ * This is where the whole of it is visible, and the misses are listed beside
+ * the hits on purpose: the rule is deliberately timid, and a test that only
+ * showed what it catches would hide the half that was chosen.
+ */
+describe("what counts as asking for a build", () => {
+  const DM_ASKS: ReadonlyArray<readonly [string, boolean]> = [
+    // Asked for, plainly.
+    ["Build me an encounter for the reeds.", true],
+    ["Can you write me an encounter?", true],
+    ["make a note that the ferryman wants a name", true],
+    ["I need a beat for what just happened", true],
+    ["come up with a fight for the crossing", true],
+    ["give me an encounter with goblins", true],
+    ["Build the ambush.", true],
+    ["Build me something for the reeds.", true],
+    ["write something about the lantern-keeper", true],
+    ["draft some read-aloud for the marsh", true],
+    // Not asked for. Every one of these is a question this panel really gets.
+    ["Who is the ferryman?", false],
+    ["Who wrote this note?", false],
+    ["What did I write in that note about the ambush?", false],
+    ["Did I make a note about the crate?", false],
+    ["How do I make an encounter?", false],
+    ["Tell me about the ambush at the crossing", false],
+    ["What happened in the last fight?", false],
+    ["Summarise the last encounter", false],
+    ["give me a summary of last session", false],
+    ["give me something to read about the ferryman", false],
+    // Misses, kept visible: each is a build ask the rule lets past, because
+    // erring towards silence is the instruction.
+    ["Give me a name for the ferryman", false],
+    ["Note what just happened.", false],
+    ["Something for the reeds, again.", false],
+  ];
+
+  it.each(DM_ASKS)("%s", (asked, expected) => {
+    expect(askedForABuild(asked)).toBe(expected);
+  });
+
+  const PLAYER_ASKS: ReadonlyArray<readonly [string, boolean]> = [
+    // The composer's ordinary input: a description, with no verb anywhere.
+    ["A wood elf who grew up in a river town. Quiet, terrible liar.", true],
+    ["Make her a ranger instead.", true],
+    ["Can you make her taller?", true],
+    ["Someone who bleeds for their oaths.", true],
+    // A question about the draft already on screen.
+    ["What did you give her for skills?", false],
+    ["Why is her wisdom so high?", false],
+    ["Is she any good in a fight?", false],
+    // Not a question, so still a draft ask — the timid direction here is the
+    // other one, because this surface has no other purpose.
+    ["what about a ranger", true],
+  ];
+
+  it.each(PLAYER_ASKS)("player: %s", (asked, expected) => {
+    expect(!aQuestionAboutIt(asked)).toBe(expected);
+  });
+
+  it("reads a printed call out of prose and out of a fence, and nothing else", () => {
+    // The name in call position — the 1B's shape, and a JavaScript-looking one.
+    expect(printedTheCall('proposeEncounter "Swamp Stompers": a Bullywug mob.')).toBe(true);
+    expect(printedTheCall("```\nproposeCharacter({ name: 'Sorrel' })\n```")).toBe(true);
+    expect(printedTheCall('{ "name": "proposeEncounter", "arguments": {} }')).toBe(true);
+    // The arguments in a fence, with the name only in the sentence above it —
+    // the 4B's shape, which the first half cannot see.
+    expect(
+      printedTheCall(
+        'Offering an ambush.\n```json\n{ "creatures": [{ "creatureId": "d0" }] }\n```',
+      ),
+    ).toBe(true);
+    // A model saying which tool it used, having used it, is not this; nor is a
+    // fenced list of the tools it has; nor is read-aloud text in a block.
+    expect(printedTheCall("I offered it with proposeEncounter.")).toBe(false);
+    expect(printedTheCall("I will use proposeEncounter to build it.")).toBe(false);
+    expect(printedTheCall("```\nproposeEncounter\nproposeNote\n```")).toBe(false);
+    expect(printedTheCall("Here is the read-aloud:\n```\nThe reeds part.\n```")).toBe(false);
+  });
+
+  it("fingerprints argument names that are really in the published schemas", async () => {
+    // `BUILD_ARGUMENTS` is a hand-written fingerprint of this toolkit's own
+    // parameter names. A rename upstream would leave it matching nothing, and
+    // nothing else would notice — so it is checked against what actually goes
+    // on the wire, DM side and player side.
+    const { requests } = await ask(fixture.dm, fixture.campaign.id);
+    const dmTools = JSON.stringify(requests[0]?.tools ?? []);
+    expect(dmTools).toContain("creatureId");
+    expect(dmTools).toContain("readAloud");
+    const drafting: { readonly parametersSchema: { readonly fields: object } } =
+      playerToolkitOver(NO_VOCABULARY).tools.proposeCharacter;
+    expect(Object.keys(drafting.parametersSchema.fields)).toContain("abilityOrder");
+  }, 60_000);
+
+  it("keeps the naming convention the detector reads", () => {
+    // `isBuildTool` is `/^propose[A-Z]/` rather than a list, so it cannot fall
+    // out of step with the toolkits — as long as this holds. A build tool named
+    // anything else would go unreported, silently, which is the failure this
+    // whole area exists to remove.
+    const dm = Object.keys(HobToolkit.tools);
+    const player = Object.keys(playerToolkitListing(NO_VOCABULARY).tools);
+    expect(dm.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
+      "proposeBeat",
+      "proposeEncounter",
+      "proposeNote",
+    ]);
+    expect(player.filter((name) => /^propose[A-Z]/.test(name))).toEqual(["proposeCharacter"]);
+    // And nothing that builds is spelled another way: every remaining tool is a
+    // read, by the list `the assistant seam` above pins.
+    expect(
+      [...dm, ...player].filter((name) => /^(draft|offer|suggest|create)[A-Z]/.test(name)),
+    ).toEqual([]);
+  });
 });
 
 describe("the assistant seam", () => {

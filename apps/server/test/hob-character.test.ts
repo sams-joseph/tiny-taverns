@@ -218,6 +218,16 @@ const proposedIn = (events: ReadonlyArray<HobEvent>) => {
   return proposed?.event === "proposal" ? proposed.data : undefined;
 };
 
+/** What Hob wrote, in the pieces the panel drew. */
+const texts = (events: ReadonlyArray<HobEvent>): ReadonlyArray<string> =>
+  events.flatMap((event) => (event.event === "delta" ? [event.data.text] : []));
+
+/** The one sentence a `failed` event carries, for the tests that read it. */
+const said = (events: ReadonlyArray<HobEvent>): string => {
+  const failed = events.find((event) => event.event === "failed");
+  return failed?.event === "failed" ? failed.data.message : "";
+};
+
 const accept = (actor: Actor, threadId: AssistantThreadId, turnId: AssistantTurnId) =>
   runtime.runPromise(
     Effect.flatMap(Proposals, (proposals) =>
@@ -588,16 +598,24 @@ describe("the redraft loop", () => {
 });
 
 describe("when the model will not draft", () => {
-  it("answers in prose and offers nothing, without failing", async () => {
+  it("keeps what it said, offers nothing, and says that nothing was drafted", async () => {
     // **Measured, not hypothetical**: with all tools offered, the captain's own
     // configured 4B chose the propose tool one time in five. The flow must not
     // dead-end on it, so the honest server behaviour is a finished answer with
     // no card — and the screen is one press from the form.
+    //
+    // It used to end in a bare `done`, which is the captain's own report: a
+    // plausible sentence, no sheet, and nothing saying Hob tried to draft one.
+    // The prose still stands and is still what the player reads; the report is
+    // one sentence after it naming the way on.
     const { events } = await ask(fixture.player, {
       rounds: [textChunks("Tell me more about where she is from.")],
     });
 
-    expect(events.map((event) => event.event)).toEqual(["began", "delta", "done"]);
+    expect(events.map((event) => event.event)).toEqual(["began", "delta", "failed"]);
+    expect(texts(events)).toEqual(["Tell me more about where she is from."]);
+    expect(said(events)).toContain("drafted no sheet");
+    expect(said(events)).toContain("fill the sheet in yourself");
     expect(proposedIn(events)).toBeUndefined();
     // Nothing to accept is a `NotFound` about the proposal, not about the turn.
     const { threadId, turnId } = begunIn(events);

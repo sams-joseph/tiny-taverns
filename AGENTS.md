@@ -5398,6 +5398,9 @@ no embeddings.
 
 ### "Hob never calls a tool": what it is not, and the five things it is
 
+**And when it is genuinely the model's judgement, Hob says so** — see "A sixth thing" below,
+which is the report for the case none of the five below can fix.
+
 Reported three times — against a 1B, a tool-capable 8B and a 4B — and the diagnosis was wrong
 every time before anyone looked at the wire. **Look at the wire first — the request body is one
 `HttpClient.tapRequest` away** (`test/support/model.ts` already records it), and it settles in
@@ -5518,6 +5521,75 @@ refused credential, rate limit, unreadable output) and one honest fall-through. 
 exists and is now **for the log**, beside a `logWarning`, which is where the schema error is
 actually useful. `hob.test.ts` sweeps every reachable failure shape for the framework's own
 fingerprints — `LanguageModel.`, `Invalid output`, `Expected `, ` at [` — and fails on any of them.
+
+#### A sixth thing: the model would not use its build tools, and now says so
+
+**The failure that says nothing, and it is the common one.** A DM asks for an encounter, the
+model answers in prose, and the panel shows a plausible sentence and no card — with nothing
+saying Hob tried to build something and did not. `round` drops a finish that called no tool and
+stopped cleanly, which is _right_ for an ordinary prose answer and is exactly why this is
+invisible. Measured: with every tool offered, the captain's configured 4B chose a `propose*` tool
+**once in five attempts**, and character drafting ships on that path.
+
+It is now a `failed` event, emitted from `tail`. **`failed` rather than a new `HobEvent` member**
+because both clients already render one: a new kind would be ignored by `default: return` on both,
+which is the silence being fixed.
+
+**Two signatures, both measured, and neither subsumes the other** (`printedTheCall` in `Hob.ts`):
+
+- **the name in call position** — `proposeEncounter "Swamp Stompers": …` as reply text (the 1B),
+  or `proposeCharacter({…})`. It is the character _after_ the name that discriminates: a model
+  saying _"I offered it with proposeEncounter."_ about a call it really made stays quiet;
+- **the arguments in a fence** — ` ```json { "name": "Goblin Ambush", … "creatureId": … } ` (the
+  4B), where the tool's name is in the sentence before the block and not in it. Recognised by
+  `BUILD_ARGUMENTS`, a fingerprint of three camelCase parameter names this toolkit owns
+  (`creatureId`, `abilityOrder`, `readAloud`); `hob.test.ts` pins that each is really in a
+  published schema, so a rename cannot leave it matching nothing.
+
+**Three of the four gates are structural, and the fourth is the judgement.** Because it is
+computed in `tail`, after the last round:
+
+- **nothing was offered** — so it cannot land beside a card. That is `gotNowhere`'s pair, met a
+  second time by a new door: _"it built nothing"_ next to the thing it built is the one shape this
+  surface must never have, and there is no ordering in which both are emitted;
+- **nothing else already failed** (`broke`) — one apology per answer, so a truncation or an
+  unreadable call keeps its own, more useful sentence;
+- **no build tool call arrived** (`reachedForOne`, filled by `note` off the tool step). A
+  `propose*` call the _handler_ refused — an invented creature id, a second offer in one turn —
+  made a usable call and got an answer the model can read, so this stays quiet there. A call the
+  framework could not _decode_ is the other way round: nothing reached a handler, `recover` handed
+  the complaint back, and prose after that is exactly this state. Which is why the sentence says
+  **_a usable build tool call_** rather than naming what the model did or did not reach for.
+
+**The fourth is _was a build asked for_, and the two surfaces answer it differently on purpose.**
+A false positive is worse than a miss — somebody chatting about their campaign must not be told
+the model refused — so:
+
+- **the DM's panel is general chat**, so silence is the default and `askedForABuild` opts in: a
+  present-tense make-verb (`wrote`/`made` are deliberately absent), not preceded within three
+  words by `did`/`what`/`who`/…, with one of the things this toolkit builds inside six words after
+  it. _"Who wrote this note?"_ and _"What did I write about the ambush?"_ stay quiet; so do real
+  build asks like _"give me a name for the ferryman"_, and the misses are listed in the test table
+  beside the hits because erring toward silence is the decision;
+- **a player's is the character-drafting composer and nothing else** — its own prompt is _draft,
+  do not interview_ and its input is normally a paragraph with no verb in it — so a draft is the
+  default there and `aQuestionAboutIt` is the only way out: an interrogative opener **and** a `?`,
+  which is _"what did you give her for skills?"_ and not _"can you make her taller?"_.
+
+**The player screen was already covered client-side and is not double-told.** `draft.ts`'s
+`failed` handler keeps Hob's prose over a failure sentence, so `offeredNothing`'s own _"No sheet
+came back this time… or fill it in yourself"_ is what a player reads; the server event exists for
+the transcript-shaped reasons and for a future player surface, and
+`CharacterCreateScreen.test.tsx` asserts the server's sentence is **not** also on screen.
+
+**The sentence is not accumulated into the turn**, like every other failure here — `note` sets
+`broke` and does not append — so a reload shows the prose and not the notice. That is the shipped
+convention (_"the product apologising, not something Hob said"_) rather than an oversight.
+
+What the DM reads, verbatim: _"Hob answered in words and built nothing you can save — this model
+did not make a usable build tool call, which smaller models often do not. Ask again, or write it
+yourself; a model that handles tool calls better offers a card more often."_ The player's names
+_"fill the sheet in yourself"_ instead.
 
 ### Running it locally, with and without a model
 

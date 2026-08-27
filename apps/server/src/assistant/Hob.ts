@@ -258,6 +258,19 @@ export class Hob extends Context.Service<
 
               const written = yield* Ref.make("");
               const broke = yield* Ref.make(false);
+              /**
+               * Whether a build tool was *reached for* — as opposed to reached.
+               *
+               * Read in one place, by {@link wouldNotBuild}'s gate, and it is
+               * what keeps that report true rather than merely plausible: a
+               * model that called `proposeEncounter` and had it refused (an
+               * invented creature id, a second offer in one turn) did reach for
+               * its build tools, so "it did not" would be a sentence about the
+               * wrong thing. Set from the event stream rather than threaded
+               * through `round`, because the tool step is already an event by
+               * the time it passes `note`.
+               */
+              const reachedForOne = yield* Ref.make(false);
               const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
               const finished = yield* Ref.make("stop");
 
@@ -388,8 +401,9 @@ export class Hob extends Context.Service<
                     Ref.get(finished),
                     Ref.get(broke),
                     Ref.get(written),
+                    Ref.get(reachedForOne),
                   ]),
-                  ([offered, reason, failed, text]) =>
+                  ([offered, reason, failed, text, reached]) =>
                     Stream.fromIterable<HobEvent>([
                       ...(offered === undefined
                         ? []
@@ -403,7 +417,11 @@ export class Hob extends Context.Service<
                         ? []
                         : text === "" && offered === undefined
                           ? [silence]
-                          : [{ event: "done" as const, data: new HobDone({ reason }) }]),
+                          : offered === undefined &&
+                              !reached &&
+                              wouldNotBuild(reach, ask.text, text)
+                            ? [unbuilt(reach)]
+                            : [{ event: "done" as const, data: new HobDone({ reason }) }]),
                     ]),
                 ),
               );
@@ -414,7 +432,9 @@ export class Hob extends Context.Service<
                   data: new HobBegun({ threadId: thread.id, turnId: answerId }),
                 },
               ]).pipe(
-                Stream.concat(answering.pipe(Stream.tap((event) => note(written, broke, event)))),
+                Stream.concat(
+                  answering.pipe(Stream.tap((event) => note(written, broke, reachedForOne, event))),
+                ),
                 Stream.concat(tail),
                 Stream.provideService(LanguageModel.LanguageModel, languageModel),
                 // A provider that dies mid-answer, a model that returns
@@ -841,6 +861,326 @@ const silence: HobEvent = {
   }),
 };
 
+/**
+ * ## The model would not use its build tools, said out loud
+ *
+ * **The failure this whole block exists for is the one that says nothing.** A
+ * DM asks for an encounter, the model answers in prose, and the panel shows a
+ * plausible sentence and no card — with nothing anywhere saying Hob tried to
+ * build something and did not. `round` drops a finish that called no tool and
+ * stopped cleanly, which is exactly right for an ordinary prose answer and is
+ * exactly why this is invisible. It is also common rather than rare: with every
+ * tool offered, the captain's own configured 4B chose a `propose*` tool **once
+ * in five attempts**, and character drafting ships on that path.
+ *
+ * Two signatures, both measured (`data/tav-hob-no-proposal-card/report.md`) and
+ * both implemented below:
+ *
+ * 1. **the model printed the call** — a fenced block naming a `propose*` tool
+ *    inside the reply, rather than calling it. Seen at 4B and at 1B;
+ * 2. **a build was asked for and none was made.**
+ *
+ * ### Three gates, and every one of them is structural
+ *
+ * The report is emitted from `tail`, which reads what the whole answer
+ * produced, so all three are properties of where the check sits rather than
+ * rules somebody has to keep:
+ *
+ * - **nothing was offered.** The proposal slot is read at the very end, after
+ *   the last round, so this report cannot land beside a card. That is the same
+ *   pair `gotNowhere` refuses and it must not be reintroduced here: *"it did
+ *   not build anything"* beside the thing it built is the one shape this
+ *   surface must never have.
+ * - **nothing else already failed.** `broke` is set by `note` on any `failed`
+ *   event, so a truncation, an unreadable call, an exhausted budget or a
+ *   provider error is said once and this stays quiet. One apology per answer.
+ * - **no build tool call arrived.** A model that called `proposeEncounter` and
+ *   had it *refused* — an invented creature id, a second offer in one turn —
+ *   made a usable call and got an answer it could read, so this stays quiet
+ *   there: the refusal went back to the model, which usually explains itself. A
+ *   call the framework could not *decode* is the other way round — nothing
+ *   reached a handler, `recover` handed the complaint back, and if the model
+ *   then answers in prose the person is in exactly the state this reports. Which
+ *   is why the sentence says *a usable build tool call* rather than naming what
+ *   the model did or did not reach for.
+ *
+ * ### And the fourth gate is a judgement, so it is deliberately timid
+ *
+ * **A false positive here is worse than a miss.** Somebody talking to Hob about
+ * their campaign who never asked it to build anything must not be told the
+ * model refused, so the two surfaces answer *"was a build asked for"*
+ * differently — and the asymmetry is a fact about the surfaces rather than a
+ * hedge:
+ *
+ * - **the DM's panel is general chat**, so silence is the default and
+ *   {@link askedForABuild} has to opt in: a present-tense make-verb, then one
+ *   of the things this toolkit can build within a few words of it. It misses
+ *   plenty (*"give me a name for the ferryman"* is a build ask and does not
+ *   match), which is the direction to miss in;
+ * - **a player's is the character-drafting composer and nothing else** — its
+ *   own prompt is *draft, do not interview*, and its input is normally a
+ *   paragraph describing somebody, with no verb in it at all. So the default
+ *   there is that a draft was wanted, and the exclusion is
+ *   {@link aQuestionAboutIt}: a follow-up like *"what did you give her for
+ *   skills?"* is a question about the draft, not a request for another.
+ */
+
+/**
+ * Whether a tool builds something, by the one convention this toolkit keeps.
+ *
+ * Every tool that fills the proposal slot is named `propose*` — the DM's three
+ * and the player's one — so this needs no list to fall out of step with, and
+ * `hob.test.ts` pins the convention over both toolkits.
+ */
+const isBuildTool = (name: string): boolean => /^propose[A-Z]/.test(name);
+
+/** A fenced block, as a model writes one. */
+const FENCED = /```[\s\S]*?```/g;
+
+/**
+ * Parameter names a `propose*` tool takes and nothing a person writes does.
+ *
+ * A fingerprint of this toolkit's own schemas, and the second half of signature
+ * 1 — because the measured 4B fence names the *arguments* and leaves the tool's
+ * name in the prose above it, which the first half cannot see. Three camelCase
+ * identifiers that a model only ever emits when it is writing out a call it did
+ * not make; `hob.test.ts` pins that each is really in a published schema, so
+ * the fingerprint cannot quietly stop matching anything.
+ */
+const BUILD_ARGUMENTS: ReadonlyArray<string> = ["creatureId", "abilityOrder", "readAloud"];
+
+/**
+ * Signature 1: the model wrote the tool call out instead of making it.
+ *
+ * Two measured shapes, and neither subsumes the other:
+ *
+ * - **the name in call position** — `proposeEncounter "The Marsh Encounter":
+ *   …`, which is what a 1B put in the panel as ordinary reply text, and
+ *   `proposeCharacter({…})`. The character after the name is the whole of the
+ *   discrimination: a model saying *"I offered it with proposeEncounter."*
+ *   about a call it really made must stay quiet, and it does;
+ * - **the arguments in a fence** — *"```json { "name": "Goblin Ambush",
+ *   "creatures": [ { "creatureId": …"*, measured at 4B, where the tool's name
+ *   is in the sentence before the block rather than in it.
+ *
+ * Exported for the tests, which drive it over both.
+ */
+export const printedTheCall = (said: string): boolean =>
+  /\bpropose[A-Z][A-Za-z]*\s*["'({:]/.test(said) ||
+  (said.match(FENCED) ?? []).some(
+    (block) => block.includes("{") && BUILD_ARGUMENTS.some((name) => block.includes(name)),
+  );
+
+/**
+ * Verbs that ask for something to be made, in the strong sense.
+ *
+ * Present tense and imperative only. *"wrote"*, *"made"* and *"built"* are what
+ * a question about the record uses, and leaving them out is most of what keeps
+ * *"who wrote this note?"* quiet.
+ */
+const MAKE_VERBS: ReadonlyArray<string> = [
+  "make",
+  "build",
+  "write",
+  "write up",
+  "draft",
+  "create",
+  "generate",
+  "invent",
+  "design",
+  "sketch",
+  "compose",
+  "prep",
+  "prepare",
+  "come up with",
+  "put together",
+  "throw together",
+  "whip up",
+  "cook up",
+  "roll up",
+];
+
+/**
+ * Verbs that ask for one weakly, and therefore need a concrete noun.
+ *
+ * *"give me an encounter"* is a build ask; *"give me something to read about
+ * the ferryman"* is not, and the difference is only the noun — which is why
+ * {@link VAGUE_NOUNS} is offered to {@link MAKE_VERBS} and not to these.
+ */
+const WANT_VERBS: ReadonlyArray<string> = [
+  "give me",
+  "give us",
+  "need",
+  "want",
+  "propose",
+  "suggest",
+  "add",
+];
+
+/** The things the DM's toolkit can build, in the words a DM uses for them. */
+const DM_NOUNS: ReadonlyArray<string> = [
+  "encounter",
+  "encounters",
+  "fight",
+  "fights",
+  "combat",
+  "battle",
+  "battles",
+  "ambush",
+  "skirmish",
+  "monster",
+  "monsters",
+  "note",
+  "notes",
+  "read-aloud",
+  "read aloud",
+  "boxed text",
+  "beat",
+  "beats",
+];
+
+/** *"build me something"* names no table and is still a build ask. */
+const VAGUE_NOUNS: ReadonlyArray<string> = ["something", "anything", "one", "it"];
+
+/**
+ * Words that turn a make-verb just after them into a question about the record.
+ *
+ * *"did I write a note about the ferryman"* and *"what did you make her"* both
+ * carry a verb from the list above and neither is asking for anything new.
+ */
+const RECORD_MARKERS: ReadonlyArray<string> = [
+  "did",
+  "didn't",
+  "what",
+  "who",
+  "who's",
+  "when",
+  "where",
+  "which",
+  "why",
+  "how",
+  "have",
+  "has",
+  "had",
+  "already",
+];
+
+/** How far after a verb its object may sit before the pair stops meaning much. */
+const OBJECT_WINDOW = 6;
+
+/** Openers that make a sentence a question rather than a request. */
+const QUESTION_OPENERS: ReadonlyArray<string> = [
+  "what",
+  "who",
+  "when",
+  "where",
+  "which",
+  "why",
+  "how",
+  "did",
+  "does",
+  "do",
+  "is",
+  "are",
+  "was",
+  "were",
+  "have",
+  "has",
+];
+
+/** Lower-cased words, keeping the hyphen in *read-aloud* and the apostrophe. */
+const words = (text: string): ReadonlyArray<string> =>
+  text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}'-]+/gu, " ")
+    .split(" ")
+    .filter((word) => word !== "");
+
+/** Whether `phrase` — one word or several — begins at `at`. */
+const phraseAt = (tokens: ReadonlyArray<string>, at: number, phrase: string): boolean =>
+  phrase.split(" ").every((part, step) => tokens[at + step] === part);
+
+/** The longest of `phrases` beginning at `at`, so *"write up"* beats *"write"*. */
+const longestAt = (
+  phrases: ReadonlyArray<string>,
+  tokens: ReadonlyArray<string>,
+  at: number,
+): string | undefined =>
+  phrases
+    .filter((phrase) => phraseAt(tokens, at, phrase))
+    .sort((left, right) => right.length - left.length)[0];
+
+/**
+ * Signature 2, on the DM's side: they asked for one of the things Hob builds.
+ *
+ * A make-verb or a want-verb, not preceded by a {@link RECORD_MARKERS} word,
+ * with one of {@link DM_NOUNS} inside {@link OBJECT_WINDOW} words after it.
+ * Exported for the tests, which is where the whole of the judgement is visible:
+ * the table there is the specification.
+ */
+export const askedForABuild = (asked: string): boolean => {
+  const tokens = words(asked);
+  const wanted = DM_NOUNS.map((noun) => words(noun).join(" ")).filter((noun) => noun !== "");
+  for (let at = 0; at < tokens.length; at += 1) {
+    const strong = longestAt(MAKE_VERBS, tokens, at);
+    const verb = strong ?? longestAt(WANT_VERBS, tokens, at);
+    if (verb === undefined) continue;
+    if (tokens.slice(Math.max(0, at - 3), at).some((word) => RECORD_MARKERS.includes(word))) {
+      continue;
+    }
+    const from = at + verb.split(" ").length;
+    const looking = strong === undefined ? wanted : [...wanted, ...VAGUE_NOUNS];
+    const until = Math.min(tokens.length, from + OBJECT_WINDOW);
+    for (let object = from; object < until; object += 1) {
+      if (looking.some((noun) => phraseAt(tokens, object, noun))) return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Signature 2, on the player's side, inverted: this is a question about the
+ * draft rather than a request for one.
+ *
+ * The composer's input is normally a description with no verb in it, so the
+ * default there is *yes, they wanted a draft* and this is the only way out of
+ * it. Both halves are needed: *"why did you make her a druid?"* is a question,
+ * and *"can you make her taller?"* opens with a word that is not on the list
+ * and is a redraft.
+ */
+export const aQuestionAboutIt = (asked: string): boolean => {
+  const opener = words(asked)[0];
+  return opener !== undefined && QUESTION_OPENERS.includes(opener) && asked.trimEnd().endsWith("?");
+};
+
+/** The judgement, once. See the block comment above for all four gates. */
+const wouldNotBuild = (reach: "dm" | "own", asked: string, said: string): boolean =>
+  printedTheCall(said) || (reach === "dm" ? askedForABuild(asked) : !aQuestionAboutIt(asked));
+
+/**
+ * What the person is told, in their own terms.
+ *
+ * Two sentences and two ways on, because the next move genuinely differs: a DM
+ * writes the encounter on the campaign screen, and a player fills the sheet in
+ * on the form this composer has always been an accelerator over. Neither blames
+ * the question — the report measured this as a decision the model makes, not a
+ * phrasing the person got wrong — and both name the model, which is the same
+ * voice `unreadable` already uses.
+ */
+const unbuilt = (reach: "dm" | "own"): HobEvent => ({
+  event: "failed",
+  data: new HobFailure({
+    message:
+      reach === "dm"
+        ? "Hob answered in words and built nothing you can save — this model did not make " +
+          "a usable build tool call, which smaller models often do not. Ask again, or " +
+          "write it yourself; a model that handles tool calls better offers a card more often."
+        : "Hob answered in words and drafted no sheet — this model did not make a usable " +
+          "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
+          "in yourself; you can change any of it afterwards.",
+  }),
+});
+
 /** A turn id, minted before the row that carries it. See `HobThreads`. */
 const freshTurnId: Effect.Effect<AssistantTurnId> = Effect.sync(
   () => crypto.randomUUID() as AssistantTurnId,
@@ -858,10 +1198,15 @@ const freshTurnId: Effect.Effect<AssistantTurnId> = Effect.sync(
 const note = (
   written: Ref.Ref<string>,
   broke: Ref.Ref<boolean>,
+  /** See the `reachedForOne` ref in `ask`, which is the only thing this fills. */
+  reachedForOne: Ref.Ref<boolean>,
   event: HobEvent,
 ): Effect.Effect<void> => {
   if (event.event === "delta") return Ref.update(written, (text) => text + event.data.text);
   if (event.event === "failed") return Ref.set(broke, true);
+  if (event.event === "tool" && event.data.phase === "called" && isBuildTool(event.data.name)) {
+    return Ref.set(reachedForOne, true);
+  }
   return Effect.void;
 };
 

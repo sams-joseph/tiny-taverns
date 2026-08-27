@@ -395,12 +395,31 @@ export const drafted = (proposal: unknown = characterProposal): Answer => ({
  * one: with all tools offered, the captain's own configured 4B chose the propose
  * tool one time in five.
  */
+/**
+ * The model answered and drafted nothing — **the common case**, at one propose
+ * call in five on a 4B.
+ *
+ * It ends in `failed` rather than `done` and that is the server's own shape
+ * rather than a convenience here: `Hob.ts` reports a draft ask that produced no
+ * draft, because a plausible sentence and no sheet with nothing saying so is
+ * the captain's own report. What the *screen* says about it is still its own
+ * sentence — `draft.ts` keeps Hob's prose and lets `offeredNothing` speak — so
+ * the pair is one explanation and not two, which is asserted where it is drawn.
+ */
 export const draftedNothing = (): Answer => ({
   status: 200,
   sse: sseFrames([
     { event: "began", data: { threadId: draftThreadId, turnId: draftTurnId } },
     { event: "delta", data: { text: "Tell me more about where she is from." } },
-    { event: "done", data: { reason: "stop" } },
+    {
+      event: "failed",
+      data: {
+        message:
+          "Hob answered in words and drafted no sheet — this model did not make a usable " +
+          "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
+          "in yourself; you can change any of it afterwards.",
+      },
+    },
   ]),
 });
 

@@ -296,15 +296,24 @@ describe("the grammar is this campaign's own vocabulary", () => {
     // carry — the reliability work that landed before this slice, unweakened by
     // it and exercised here over the new schema.
     //
-    // So the answer survives as prose: no proposal, and no `failed`, because
-    // running out of things to offer is not the same as breaking.
+    // So the answer survives as prose rather than as a framework dump, and the
+    // recovery is unchanged by the report that follows it: two rounds, the
+    // model's own sentence, and **nothing from `recover`'s own exhaustion
+    // message** — the budget never ran out. What the player is told at the end
+    // is that no sheet came back, which is true and used to be unsaid.
     const { events } = await ask(fixture.player, fixture.campaign.id, {
       rounds: [aDraft({ className: "bloodsworn" }), textChunks("Let me try that again.")],
     });
 
     expect(proposedIn(events)).toBeUndefined();
-    expect(failedIn(events)).toBeUndefined();
-    expect(events.at(-1)?.event).toBe("done");
+    expect(events.flatMap((event) => (event.event === "delta" ? [event.data.text] : []))).toEqual([
+      "Let me try that again.",
+    ]);
+    const failed = failedIn(events);
+    expect(failed?.message).toContain("drafted no sheet");
+    // Not `unreadable`'s sentence, and nothing the framework wrote.
+    expect(failed?.message).not.toContain("could not spell");
+    expect(failed?.message).not.toContain("Expected");
   }, 60_000);
 
   it("costs two rounds, which is the whole reason this mechanism was chosen", async () => {
