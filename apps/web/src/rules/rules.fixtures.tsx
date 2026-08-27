@@ -7,6 +7,7 @@ import {
   campaignId,
   fullCampaign,
   marshfolkOption,
+  marshfolkOriginalId,
   saltRunnerOption,
   saltRunnerOriginalId,
   type Answer,
@@ -38,6 +39,7 @@ export {
   libraryOptions,
   marshfolkOption,
   marshfolkOptionId,
+  marshfolkOriginalId,
   saltRunnerOption,
   saltRunnerOptionId,
   saltRunnerOriginalId,
@@ -75,6 +77,16 @@ export const fullRules = (): Map<string, Answer> => {
     body: { ...marshfolkOption, visibility: "shared" },
   });
   routes.set(`DELETE ${base}/options/${bloodswornOption.id}`, { status: 204, body: null });
+
+  // The Library's own writes, which name no campaign at all. Both screens over
+  // this table share one wire because they share one read — a class written on
+  // either is on the other — so a test of one can assert that the other's paths
+  // were *not* touched.
+  routes.set(`PATCH /library/options/${bloodswornOriginalId}`, {
+    status: 200,
+    body: { ...bloodswornOption, id: bloodswornOriginalId, campaignId: null },
+  });
+  routes.set(`DELETE /library/options/${marshfolkOriginalId}`, { status: 204, body: null });
   return routes;
 };
 
@@ -143,6 +155,21 @@ export const noSession: HostedSession = {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderRules = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/rules`, (screen) => (
+    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+  ));
+};
+
+/**
+ * The other screen over the same table: **the account's own library**, in no
+ * campaign.
+ *
+ * The same wire, deliberately — the two screens read one atom and one endpoint
+ * between them, so a fixture that gave each its own server would let the two
+ * come to disagree about what a class is in exactly the place the model says
+ * they cannot.
+ */
+export const renderOptionLibrary = async (): Promise<void> => {
+  await renderAt("/library/rules", (screen) => (
     <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
   ));
 };

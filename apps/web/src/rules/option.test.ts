@@ -2,10 +2,10 @@ import type { CharacterOption } from "@taverns/api";
 import { AccountId, CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { isCampaignCopy, numbersOf, unarmouredLine } from "./option";
+import { isCampaignCopy, isLibraryOriginal, numbersOf, ownerOf, unarmouredLine } from "./option";
 
 /**
- * The pure half of the Rules screen.
+ * The pure half of the two screens over `character_option`.
  *
  * Its own file for the reason `chronicle/fight.ts`'s is: **every branch here
  * renders plausible output when it is wrong.** A hit die read off a species
@@ -135,5 +135,59 @@ describe("which rows this table may edit", () => {
       body: { hpPerLevel: 1 },
     });
     expect(isCampaignCopy(original)).toBe(false);
+  });
+});
+
+describe("which rows the library may edit", () => {
+  it("is the same ownership question, asked from the other side", () => {
+    // The Library's list is the bundle plus this account's own, so the one
+    // thing it has to tell apart is *mine* from *nobody's*. Read as
+    // `origin === "authored"` it would lock an imported original, which is
+    // exactly the mistake the campaign half already guards against.
+    const bundled = option({ kind: "class", body: { hitDie: 8, unarmouredAc: [] } });
+    const mine = option({
+      kind: "class",
+      accountId: anAccount,
+      origin: "imported",
+      body: { hitDie: 8, unarmouredAc: [] },
+    });
+
+    expect(isLibraryOriginal(bundled)).toBe(false);
+    expect(isLibraryOriginal(mine)).toBe(true);
+  });
+
+  it("never says yes to a campaign's copy, which is never in this list either", () => {
+    const copy = option({
+      kind: "species",
+      campaignId: aCampaign,
+      origin: "authored",
+      body: { hpPerLevel: 1 },
+    });
+    expect(isLibraryOriginal(copy)).toBe(false);
+  });
+
+  /**
+   * **The two questions are exclusive, and that is the schema rather than a
+   * convention** — `character_option_one_owner` makes a row a campaign's, or an
+   * account's, or nobody's, never two at once. It is what lets each screen name
+   * one column and be complete.
+   */
+  it("puts every row in exactly one of the three positions", () => {
+    const bundled = option({ kind: "class", body: { hitDie: 8, unarmouredAc: [] } });
+    const mine = option({
+      kind: "class",
+      accountId: anAccount,
+      body: { hitDie: 8, unarmouredAc: [] },
+    });
+    const copy = option({
+      kind: "class",
+      campaignId: aCampaign,
+      body: { hitDie: 8, unarmouredAc: [] },
+    });
+
+    expect([bundled, mine, copy].map(ownerOf)).toEqual(["bundle", "library", "campaign"]);
+    for (const row of [bundled, mine, copy]) {
+      expect(isCampaignCopy(row) && isLibraryOriginal(row)).toBe(false);
+    }
   });
 });

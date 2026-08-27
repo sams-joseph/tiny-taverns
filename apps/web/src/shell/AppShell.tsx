@@ -113,7 +113,24 @@ interface NavItem {
  * campaign's **copies** — and neither can answer the other's. See `routes.tsx`,
  * where the decision about it is written down.
  *
- * **DM only, as the delivery draws it** (`GLOBAL_PLAYER` has no Library), and
+ * ### Rules, the second shelf, and why it is a second item
+ *
+ * `#/library/rules` is the same act one table across: the classes and species
+ * an account has written, in no campaign. It is **beside** *Library* rather
+ * than inside it because the two lists are disjoint by predicate — a campaign's
+ * copy is in neither, and a monster is in only one — so a switch between them
+ * would be a control over two things that never overlap. The screens are shaped
+ * differently for a reason that is not cosmetic either: a bestiary is a corpus
+ * somebody browses, so it has a search, chips and pages; a vocabulary is
+ * bounded by what it hangs off (`CharacterOption.ts`), so it is the bundle's
+ * thirty-eight rows in three labelled two-column sections and a filter over it
+ * would be furniture.
+ *
+ * It wears the campaign row's own word — *Rules* — because it is the same
+ * vocabulary one level up, and one word for one thing across the two rows
+ * survives the reader moving between them.
+ *
+ * **Both are DM only, as the delivery draws it** (`GLOBAL_PLAYER` has no Library), and
  * the reason is the mode rather than the endpoint. Player mode is the tables you
  * sit at; authoring monsters is not something you do at somebody else's table.
  * Worth being exact, because it is **not** the reason `Bestiary` was kept out of
@@ -143,6 +160,15 @@ const globalNavFor = (mode: Mode): ReadonlyArray<NavItem> => {
     // `footprints`, as the delivery names it — the same glyph the bestiary's own
     // empty state wears, which is what makes the two read as one corpus.
     { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
+    // The second shelf: the classes and species this account has written. Two
+    // items rather than one screen with a switch, because the two lists are
+    // **disjoint by predicate** — a monster and a class are two tables and
+    // neither list can ever hold a row of the other's — and because one of them
+    // has a search, chips and pages while the other is a bounded vocabulary
+    // drawn in two columns. *Rules*, the word the campaign row already uses for
+    // the same vocabulary one level down; `book-open`, the glyph its own empty
+    // states already wear.
+    { label: "Rules", icon: "book-open", link: { to: "/library/rules" }, section: "libraryRules" },
     { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
   ];
 };

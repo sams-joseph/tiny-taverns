@@ -22,6 +22,7 @@ import { JoinScreen } from "./join/JoinScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
+import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
 import { RulesScreen } from "./rules/RulesScreen";
 import { RunScreen } from "./run/RunScreen";
 
@@ -261,6 +262,31 @@ const libraryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/library",
   component: LibraryScreen,
+});
+
+/**
+ * The other half of the same shelf: **the classes and species this account has
+ * written**, in no campaign either.
+ *
+ * A sibling rather than a child of `/library`, because it is a second
+ * destination and not a view of the first: the two read different tables
+ * through the same predicate, and neither list can ever contain a row of the
+ * other's. The bar draws them as two items for that reason, and this URL is the
+ * second one.
+ *
+ * `/library/rules` and not `/library/options`, though the endpoint is
+ * `GET /library/options`: the web routes have called this vocabulary *rules*
+ * since the campaign screen shipped at `/campaigns/$campaignId/rules`, and one
+ * word for one thing across the two levels is worth more than matching the
+ * wire.
+ *
+ * No `remountDeps`, for `libraryRoute`'s reason: there is no id for a different
+ * one of to exist.
+ */
+const libraryRulesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library/rules",
+  component: OptionLibraryScreen,
 });
 
 /**
@@ -557,6 +583,7 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   campaignsRoute,
   libraryRoute,
+  libraryRulesRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
@@ -621,6 +648,7 @@ declare module "@tanstack/react-router" {
 export const routes = {
   campaigns: campaignsRoute,
   library: libraryRoute,
+  libraryRules: libraryRulesRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,

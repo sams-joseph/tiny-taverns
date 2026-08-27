@@ -60,6 +60,13 @@ export function useMode(): Mode {
  * and the party stay their own sections for the reason they always were: they
  * are screens you go *to* from a campaign rather than views of one.
  *
+ * **There are two Library items and they are two sections**, not one section
+ * and a view of it: `/library` is the monsters an account has written and
+ * `/library/rules` is the classes and species, and the lists are disjoint by
+ * predicate — neither can ever contain a row of the other's. So each lights its
+ * own item, which is what stops *Library* staying lit while a reader is on the
+ * rules shelf.
+ *
  * **The bestiary stopped being one when the Library took its item.** Its item is
  * on the global row now and points at `/library`, which names no campaign; the
  * campaign-scoped bestiary is still a route (see `routes.tsx`) but is no longer
@@ -84,6 +91,7 @@ export type Section =
   /* The global row: everything above a campaign. */
   | "campaigns"
   | "library"
+  | "libraryRules"
   | "play"
   | "playCharacters"
   | "gallery"
@@ -103,8 +111,12 @@ export function useSection(): Section {
   const mode = useMode();
 
   if (matchRoute({ to: "/gallery" })) return "gallery";
-  // Above any campaign, so it is asked before the mode: the Library is the DM's
-  // and there is no player route under it to confuse it with.
+  // Above any campaign, so both are asked before the mode: the two Library
+  // screens are the DM's and there is no player route under either to confuse
+  // them with. The more specific one first, and both exact — they are two
+  // destinations rather than a screen and a view of it, so neither contains
+  // the other and a fuzzy match on `/library` would light the wrong item.
+  if (matchRoute({ to: "/library/rules" })) return "libraryRules";
   if (matchRoute({ to: "/library" })) return "library";
   if (mode === "player") {
     if (matchRoute({ to: "/play/campaigns/$campaignId/chronicle" })) return "playChronicle";

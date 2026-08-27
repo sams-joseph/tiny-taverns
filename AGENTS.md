@@ -1545,14 +1545,61 @@ exhaustive by type — so there is no cast anywhere, which `dm-actor.test.ts` en
   as many words. So an existing free-text background resolves to nothing, is never rewritten,
   and renders exactly as it did.
 
-### The screens
+### The screens: two lists over one table, and they can never overlap
 
-`apps/web/src/rules/` is the DM's half — a **Rules** item on the campaign row over
-`CampaignChrome`, three labelled sections in a `@container` grid, `OptionDialog` (which authors
-into the Library **and** derives into the campaign in one `submit`, the `EncounterDialog`
-precedent), `CopyOptionIn` and `RemoveOptionDialog`. `option.ts` is the pure half: **ownership
-is `campaignId`/`accountId` and never `origin`** — an _imported_ copy is `imported` and still
-the campaign's, so a screen keying on `origin` would lock a row its owner needed.
+`apps/web/src/rules/` holds **both**, and the pair is the point rather than a coincidence:
+
+| screen                | route                  | what it lists                             |
+| --------------------- | ---------------------- | ----------------------------------------- |
+| `RulesScreen`         | `#/campaigns/:c/rules` | this campaign's copies, plus the bundle   |
+| `OptionLibraryScreen` | `#/library/rules`      | this account's originals, plus the bundle |
+
+**Disjoint by predicate, so neither can ever show the other's rows** — `corpusRowReadable`
+requires the campaign in the path, `libraryRowReadable` requires `campaign_id is null`. Measured
+against real Postgres: the DM's library answered 23 rows with **no row carrying a `campaignId`**
+and the campaign's vocabulary answered 23 with **no row carrying an `accountId`**, over one
+derived class. So _originals only_ is a fact about which read was made, and neither screen
+applies a filter of its own; one that did would be a second answer to a settled question.
+
+**The Library screen is a second global item, not a view of the monster Library.** _Rules_ on
+the global row beside _Library_, `book-open`, DM-only for the mode reason the monster Library
+records. It is `#/library/rules` rather than `/library/options`, because the web routes have
+called this vocabulary _rules_ since the campaign screen shipped and one word across the two
+levels beats matching the wire. The two are two `Section`s (`shell/location.ts`), so neither
+stays lit on the other's URL — verified in a browser.
+
+**Four files are shared and each is shared for a reason that would otherwise be a silent
+disagreement**, the rule `characters/AbilityFields.tsx` already states:
+
+- `optionDraft.ts` — what a draft is and what it becomes. Two implementations of _is an
+  untouched summary an absent key_ would differ first at the thing nobody looks at.
+- `OptionFields.tsx` — the boxes. The **editor**, under two shells.
+- `OptionSection.tsx` — one labelled region and the `@container` grid it draws. Both screens
+  draw three of them (classes, species, backgrounds), which is what made the background's
+  arrival one call site each rather than a second component.
+- `OptionCard.tsx` — a row. The verbs come in as `(option) => (() => void) | undefined`, the
+  `CreatureGrid` shape, so each list renders the shipped write predicate at the one place that
+  knows which list it is: `isCampaignCopy` on the campaign's, `isLibraryOriginal` on the
+  Library's.
+
+What differs between the two shells is real and is not a flag: the campaign's authors **and**
+derives in one `submit` and carries the visibility switch; the Library's writes the original and
+has the delete beside it. **`visibility` is deliberately not on the shared draft** —
+`OptionLibraryCreate` and `OptionLibraryUpdate` have no field for it, because a row's visibility
+says which of a _campaign's_ players may read it and an original is in no campaign. The card
+draws the _Not shared_ line **exactly when the row is a campaign's**, which is that same rule
+rather than a screen flag: drawn on the Library it would mark every row a DM ever wrote as
+hidden from players who could never have seen it.
+
+`option.ts` is the pure half: **ownership is `campaignId`/`accountId` and never `origin`** —
+`ownerOf` returns `bundle | library | campaign`, mirroring `bestiary/provenance.ts`, and an
+_imported_ copy is `imported` and still the campaign's, so a screen keying on `origin` would
+lock a row its owner needed.
+
+**Deleting an original lives inside `OptionForm`** with no second confirmation
+(`CombatantDialog`'s rule), and the line beside it is the captain's decision of 2026-08-14 one
+table across: _copies already in your campaigns stay where they are_. Measured — deleting the
+original left the campaign's copy standing with `derivedFrom` null.
 
 **The Rules screen wraps its own action row**, which is the one layout thing the third kind
 cost: four controls do not fit the shell's single unwrapped action slot, and the wrap is written
@@ -3039,11 +3086,18 @@ Six things about it that are decisions, not details:
   question is always whether _this row_ fits — which the window does not answer.
 - **The rows are the screens that exist, on the route and the mode**, both read off the router.
   _Run_ has never earned an item (a fight is reached from the campaign that owns it); _At the
-  table_ has not either. **_Bestiary_ is on the campaign row though the delivery draws it as
-  _Library_ on the global one** — deliberately, until a Library screen exists. The server half is
-  built now, but a nav item is earned by a screen; and the two are **different lists** since the
-  Library became originals-only, so _Library_ arriving is an item added rather than one moved. See
-  the sixth delivery's section and "The Library".
+  table_ has not either. The DM's global row is four now — **Campaigns, Library, Rules,
+  Components** — where _Library_ is the monsters an account has written and _Rules_ is the
+  classes, species and backgrounds (`#/library/rules`). They are **two items rather than one
+  screen with a switch**, because the two lists are disjoint by predicate and the screens are
+  shaped differently for a reason that is not cosmetic: a bestiary is a corpus somebody browses,
+  so it has a search, chips and pages; a vocabulary is bounded by what it hangs off, so it is the
+  bundle's thirty-eight rows in three labelled two-column sections and a filter over it would be
+  furniture. Both are DM-only, for the mode reason `globalNavFor` records rather than a
+  gate. _Bestiary_ came off the campaign row when _Library_ arrived — nothing appears on both
+  rows — and the campaign row's own _Rules_ stays, because a campaign's vocabulary and an
+  account's are different lists. See the sixth delivery's section, "The Library", and "The
+  screens: two lists over one table".
 - **The name is the first thing to give way, and it gives way whole.** The campaign row needs
   986px with six items, a badge and _Start session_, so below about 1024 something must go.
   Left as a plain shrinking flex item the name squeezed the **chevron** to zero width at 760 and

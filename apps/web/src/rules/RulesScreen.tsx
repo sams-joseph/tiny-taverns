@@ -3,12 +3,11 @@ import { useParams } from "@tanstack/react-router";
 import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
-import { EmptyState } from "../ui/states";
 import { CopyOptionIn } from "./CopyOptionIn";
 import { rulesAtom, type RulesView } from "./load";
 import { isCampaignCopy } from "./option";
-import { OptionCard } from "./OptionCard";
 import { OptionDialog } from "./OptionDialog";
+import { OptionSection } from "./OptionSection";
 import { RemoveOptionDialog } from "./RemoveOptionDialog";
 
 /**
@@ -29,12 +28,13 @@ import { RemoveOptionDialog } from "./RemoveOptionDialog";
  *
  * ### The three lists that are not on it
  *
- * - **The Library itself.** Its own screen is not built, deliberately: nothing
- *   in the product draws an account's originals of *this* table yet, and a nav
- *   item is earned by a screen. What a DM can reach of it is exactly what they
- *   need here — *Copy from your library*, which lists the originals and copies
- *   one in. When a Library screen for options lands, this control is the read it
- *   is built from rather than a second one.
+ * - **The Library itself.** It has its own screen now —
+ *   `OptionLibraryScreen` at `#/library/rules`, on the global row where
+ *   authoring belongs — and the two lists are **disjoint by predicate**, so
+ *   neither can ever show the other's rows. What a DM reaches of the Library
+ *   from here is the one thing this screen needs of it: *Copy from your
+ *   library*, which reads the same `libraryOptionsAtom` that screen does, so a
+ *   class written on either is on the other with no second request.
  * - **A "who is playing this" count.** Nothing can produce it: a character
  *   stores its class as a *label*, and two same-named classes in two campaigns
  *   are indistinguishable from it. That is the honest cost of having no
@@ -168,34 +168,44 @@ function Rules({
   return (
     <>
       <div className="flex flex-col gap-8">
-        <Section
+        {/* **The two verbs are the shipped write predicate rendered**: a DM may
+            edit and remove this table's own copies and nothing else. A bundled
+            row is readable here and not writable, so it gets neither — read off
+            `origin` instead, an *imported* copy would be wrongly locked. */}
+        <OptionSection
           title="Classes"
           options={of("class")}
           empty="No classes at all"
           emptyBody="This table has nothing to build a character from. Run the bundled ruleset importer, or write a class of your own with the button above."
-          onEdit={(option) => onEdit({ kind: "class", option })}
-          onRemove={setRemoving}
+          onEdit={(option) =>
+            isCampaignCopy(option) ? () => onEdit({ kind: "class", option }) : undefined
+          }
+          onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
         />
-        <Section
+        <OptionSection
           title="Species"
           options={of("species")}
           empty="No species at all"
           emptyBody="This table has nothing to build a character from. Run the bundled ruleset importer, or write a species of your own with the button above."
-          onEdit={(option) => onEdit({ kind: "species", option })}
-          onRemove={setRemoving}
+          onEdit={(option) =>
+            isCampaignCopy(option) ? () => onEdit({ kind: "species", option }) : undefined
+          }
+          onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
         />
         {/* **Third, and last on the page for the same reason it is third on the
             create form**: it is the pick that adjusts what the two above
             produced. The bundled sixteen all read *no ability score increases
             written down*, which is true and is the invitation — a table that
             plays the book's version writes its own here. */}
-        <Section
+        <OptionSection
           title="Backgrounds"
           options={of("background")}
           empty="No backgrounds at all"
           emptyBody="Run the bundled ruleset importer for the sixteen names, or write a background of your own with the button above — a background is where a new character's ability score increases come from."
-          onEdit={(option) => onEdit({ kind: "background", option })}
-          onRemove={setRemoving}
+          onEdit={(option) =>
+            isCampaignCopy(option) ? () => onEdit({ kind: "background", option }) : undefined
+          }
+          onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
         />
       </div>
 
@@ -232,55 +242,5 @@ function Rules({
         />
       )}
     </>
-  );
-}
-
-/**
- * One of the two lists.
- *
- * Three labelled regions rather than tabs, the call `PartyScreen` makes about
- * its two: they are different questions about one table and each is short, so a
- * tab would hide two thirds of the answer behind a press.
- */
-function Section({
-  title,
-  options,
-  empty,
-  emptyBody,
-  onEdit,
-  onRemove,
-}: {
-  readonly title: string;
-  readonly options: ReadonlyArray<CharacterOption>;
-  readonly empty: string;
-  readonly emptyBody: string;
-  readonly onEdit: (option: CharacterOption) => void;
-  readonly onRemove: (option: CharacterOption) => void;
-}) {
-  return (
-    <section aria-label={title} className="flex flex-col gap-3">
-      <h2 className="font-display text-subtitle leading-snug font-semibold text-heading">
-        {title}
-      </h2>
-      {options.length === 0 ? (
-        <EmptyState icon="book-open" title={empty}>
-          {emptyBody}
-        </EmptyState>
-      ) : (
-        /* Two columns where the column is wide enough, because a bundled
-           vocabulary is twenty-two rows and a single file of them is a page
-           nobody reads to the end of. `@container` on the section and `@3xl`
-           on the grid, never a viewport breakpoint: the question is how wide
-           *this column* is, and the campaign frame's aside is not something a
-           window width can see. */
-        <div className="@container">
-          <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2">
-            {options.map((option) => (
-              <OptionCard key={option.id} option={option} onEdit={onEdit} onRemove={onRemove} />
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
   );
 }

@@ -1,36 +1,24 @@
-import type {
-  AbilityIncrease,
-  BackgroundBody,
-  CampaignId,
-  CharacterOption,
-  ClassBody,
-  OptionKind,
-  SpeciesBody,
-  Visibility,
-} from "@taverns/api";
-import { ABILITY_KEYS, type AbilityKey, increasesLine } from "@taverns/api";
+import type { CampaignId, CharacterOption, OptionKind, Visibility } from "@taverns/api";
 import {
   Button,
-  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
-import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
+import { SaveFailure, VisibilityField } from "../ui/form";
 import { optionWritesAt } from "./load";
-import { unarmouredLine } from "./option";
+import { OptionFields } from "./OptionFields";
+import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } from "./optionDraft";
 
 /**
- * Writing a class, a species or a background, and editing the one this table
- * holds.
+ * Writing a class, a species or a background **for a campaign**, and editing
+ * the one that table holds.
  *
  * ### It is one dialog and **two different writes**, and the difference is the
  * whole shape of the Library model
@@ -46,6 +34,13 @@ import { unarmouredLine } from "./option";
  *   stays exactly as it was, which is what the sentence at the bottom of the
  *   form says out loud — see below.
  *
+ * **The boxes are `OptionFields`, shared with `OptionForm`** — the Library's
+ * own authoring surface, which writes an original with no campaign anywhere
+ * near it. What differs between the two shells is the write, the visibility
+ * switch and the delete; what must not differ is what a hit die is and whether
+ * a background box holding `0` becomes a row, which is why it is one editor
+ * rather than two.
+ *
  * ### The copy is a snapshot, and this dialog is where that is explained
  *
  * `CopyIntoCampaign` makes the same point about a monster, and it is more
@@ -57,7 +52,7 @@ import { unarmouredLine } from "./option";
  * ### `visibility` is a **visible choice**, sent out loud, and defaults on
  *
  * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, so a class the
- * players cannot see is a class no player can pick — and the create form's two
+ * players cannot see is a class no player can pick — and the create form's
  * pickers are a player's screen. For a monster that gate is the whole point of
  * the feature; for a rules entry it is friction, and a table's classes are not
  * secrets the way a stat block is.
@@ -69,208 +64,19 @@ import { unarmouredLine } from "./option";
  * `repo/visibility.ts` moved, `dm` is still what an unstated visibility means
  * everywhere, and a DM with a class they are not ready to show turns the switch
  * off and it behaves like everything else.
- */
-
-/** What the form holds, before any of it is a payload. */
-interface OptionDraft {
-  readonly name: string;
-  readonly summary: string;
-  /** A number of faces: `"10"` for a d10. Class only. */
-  readonly hitDie: string;
-  /** Which ability modifiers are added to 10 unarmoured. Class only. */
-  readonly unarmouredAc: ReadonlyArray<AbilityKey>;
-  /** Extra hit points per level. Species only. */
-  readonly hpPerLevel: string;
-  /**
-   * What this background adds to each ability, as the six boxes hold it —
-   * `""` and `"0"` both meaning *nothing*. Background only.
-   *
-   * Six boxes keyed by ability rather than a list of rows, because that is what
-   * the control is: every ability is always offered and most of them are
-   * empty, exactly as the unarmoured-armour-class checkboxes are. It becomes a
-   * **list** on the way out ({@link documentOf}), which is what
-   * `BackgroundBody` stores — a record with four zeroes in it would say four
-   * things nobody wrote.
-   */
-  readonly increases: Readonly<Record<AbilityKey, string>>;
-  readonly visibility: Visibility;
-}
-
-/** All three match `CharacterOption.ts`'s own checks, so the sentence beats the schema to it. */
-const MAX_HIT_DIE = 100;
-const MAX_HP_PER_LEVEL = 20;
-const MAX_INCREASE = 10;
-
-/** Six empty boxes — what a background that grants nothing looks like. */
-const NO_INCREASES: Record<AbilityKey, string> = {
-  STR: "",
-  DEX: "",
-  CON: "",
-  INT: "",
-  WIS: "",
-  CHA: "",
-};
-
-/** The stored list, back as the six boxes. Anything not named is blank. */
-const boxesFrom = (increases: ReadonlyArray<AbilityIncrease>): Record<AbilityKey, string> => {
-  const boxes = { ...NO_INCREASES };
-  for (const increase of increases) boxes[increase.ability] = String(increase.amount);
-  return boxes;
-};
-
-/**
- * The form's starting state.
  *
- * It takes no `kind` and does not need one: an empty draft carries a plausible
- * default for **all three** halves and the form draws only the one its `kind`
- * prop names, and an existing row's `kind` is on the row. That is the union
- * earning its place — there is no state in which the wrong part could be read
- * as the right one, because the row says which it is.
+ * It is held **beside** the draft rather than inside it, because the Library
+ * shell has no such field at all: `OptionLibraryCreate` and
+ * `OptionLibraryUpdate` carry no `visibility`, since an original is in no
+ * campaign and there is nobody for it to be hidden from.
  */
-const draftFrom = (option: CharacterOption | undefined): OptionDraft => {
-  if (option === undefined) {
-    return {
-      name: "",
-      summary: "",
-      hitDie: "8",
-      // The ten-of-twelve answer, and the one a homebrew class most often
-      // wants. The two exceptions are a press away.
-      unarmouredAc: ["DEX"],
-      hpPerLevel: "0",
-      // Blank rather than six zeroes, and the difference is the sentence the
-      // card ends up drawing: nothing typed is *nobody has said*, which is what
-      // an empty `abilityIncreases` means.
-      increases: NO_INCREASES,
-      // **On, and this is the decision** — see the block above.
-      visibility: "shared",
-    };
-  }
-  return {
-    name: option.name,
-    summary: option.body.summary ?? "",
-    hitDie: option.kind === "class" ? String(option.body.hitDie) : "8",
-    unarmouredAc: option.kind === "class" ? [...option.body.unarmouredAc] : ["DEX"],
-    hpPerLevel: option.kind === "species" ? String(option.body.hpPerLevel) : "0",
-    increases:
-      option.kind === "background" ? boxesFrom(option.body.abilityIncreases) : NO_INCREASES,
-    visibility: option.visibility,
-  };
+
+/** What the description under the title says. One map, so the three agree. */
+const BLURB: Record<OptionKind, string> = {
+  class: "A class carries the hit die a new character's hit points are worked out from.",
+  species: "A species carries the extra hit points it gives at every level.",
+  background: "A background carries the ability score increases a new character starts with.",
 };
-
-/** What each kind is called in a sentence — one map, so the three agree. */
-const NOUN: Record<OptionKind, string> = {
-  class: "class",
-  species: "species",
-  background: "background",
-};
-
-/** `""` ⇄ not a number. A blank die is a form that is not finished. */
-const parseWhole = (raw: string): number | undefined =>
-  raw.trim() !== "" && Number.isInteger(Number(raw)) ? Number(raw) : undefined;
-
-interface DraftProblems {
-  readonly name?: string;
-  readonly hitDie?: string;
-  readonly hpPerLevel?: string;
-  readonly increases?: string;
-}
-
-/**
- * What the DM is told before anything is sent.
- *
- * The contract catches all of it on its own — the derived client encodes
- * through the same schema the handler decodes with, so a bad payload fails
- * locally and never reaches the network. But `Expected a value between 1 and
- * 100 at ["body"]["hitDie"]` is a sentence for whoever wrote the schema, so
- * these come first and `SaveFailure` is the backstop.
- */
-const problemsIn = (kind: OptionKind, draft: OptionDraft): DraftProblems => {
-  const problems: {
-    name?: string;
-    hitDie?: string;
-    hpPerLevel?: string;
-    increases?: string;
-  } = {};
-  if (draft.name.trim() === "") problems.name = "Give it a name.";
-
-  if (kind === "class") {
-    const die = parseWhole(draft.hitDie);
-    if (die === undefined) problems.hitDie = "A hit die is a whole number of faces.";
-    else if (die < 1 || die > MAX_HIT_DIE) {
-      problems.hitDie = `Between 1 and ${String(MAX_HIT_DIE)}.`;
-    }
-  } else if (kind === "species") {
-    const hp = parseWhole(draft.hpPerLevel);
-    if (hp === undefined) problems.hpPerLevel = "Hit points per level are a whole number.";
-    else if (hp < 0 || hp > MAX_HP_PER_LEVEL) {
-      problems.hpPerLevel = `Between 0 and ${String(MAX_HP_PER_LEVEL)}.`;
-    }
-  } else {
-    // **Blank is not a problem, and that is the whole rule of these six boxes**
-    // — an empty one is an ability this background does not touch, which is
-    // most of them. Only something typed that is not a usable number is.
-    const bad = ABILITY_KEYS.filter((ability) => {
-      const raw = draft.increases[ability].trim();
-      if (raw === "") return false;
-      const amount = parseWhole(raw);
-      return amount === undefined || amount < 0 || amount > MAX_INCREASE;
-    });
-    if (bad.length > 0) {
-      problems.increases = `An increase is a whole number, 0 to ${String(MAX_INCREASE)}.`;
-    }
-  }
-  return problems;
-};
-
-/**
- * The draft as the half of a document its `kind` names, **paired with that
- * kind** rather than returned bare.
- *
- * The pair is what makes the writes below cast-free: `OptionLibraryCreate` is a
- * union discriminated on `kind`, so a bare `ClassBody | SpeciesBody` beside a
- * `kind` the compiler cannot relate it to would need an assertion at every call
- * site — which is exactly what a discriminated union exists to avoid.
- */
-const documentOf = (
-  kind: OptionKind,
-  draft: OptionDraft,
-):
-  | { readonly kind: "class"; readonly body: ClassBody }
-  | { readonly kind: "species"; readonly body: SpeciesBody }
-  | { readonly kind: "background"; readonly body: BackgroundBody } => {
-  const summary = draft.summary.trim();
-  // Omitted rather than `""`, which is `CharacterOption.ts`'s own rule about an
-  // optional key: an empty summary is *nobody wrote one*, and a blank string
-  // stored in the document would render as an empty paragraph on the card.
-  const said = summary === "" ? {} : { summary };
-  switch (kind) {
-    case "class":
-      return {
-        kind: "class",
-        body: { hitDie: parseWhole(draft.hitDie) ?? 8, unarmouredAc: draft.unarmouredAc, ...said },
-      };
-    case "species":
-      return { kind: "species", body: { hpPerLevel: parseWhole(draft.hpPerLevel) ?? 0, ...said } };
-    case "background":
-      return {
-        kind: "background",
-        // Six boxes become a list of what was actually said. A box left blank
-        // and a box holding `0` are the same thing — an ability this
-        // background does not touch — and neither becomes a row, because
-        // `AbilityIncrease.amount` starts at 1 and a `+0` row would say
-        // something nobody wrote. In `ABILITY_KEYS` order, so `+2 STR, +1 CON`
-        // reads the same however it was typed.
-        body: { abilityIncreases: increasesFrom(draft), ...said },
-      };
-  }
-};
-
-/** The six boxes as the list `BackgroundBody` stores. */
-const increasesFrom = (draft: OptionDraft): ReadonlyArray<AbilityIncrease> =>
-  ABILITY_KEYS.flatMap((ability) => {
-    const amount = parseWhole(draft.increases[ability]);
-    return amount === undefined || amount < 1 ? [] : [{ ability, amount }];
-  });
 
 export function OptionDialog({
   campaignId,
@@ -288,30 +94,19 @@ export function OptionDialog({
   readonly onSaved: () => void;
 }) {
   const [draft, setDraft] = useState<OptionDraft>(() => draftFrom(option));
+  // **On for a new one, and this is the decision** — see the block above.
+  const [visibility, setVisibility] = useState<Visibility>(option?.visibility ?? "shared");
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
 
   const problems = problemsIn(kind, draft);
-  const set = <K extends keyof OptionDraft>(key: K, value: OptionDraft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
 
   const isNew = option === undefined;
   const noun = NOUN[kind];
 
-  const toggleAbility = (key: AbilityKey, on: boolean) =>
-    set(
-      "unarmouredAc",
-      on
-        ? // In `ABILITY_KEYS` order rather than press order, so `10 + DEX + CON`
-          // reads the same however it was clicked. The sum does not care; the
-          // person reading the card does.
-          ABILITY_KEYS.filter((ability) => ability === key || draft.unarmouredAc.includes(ability))
-        : draft.unarmouredAc.filter((ability) => ability !== key),
-    );
-
   const save = async () => {
     setShowProblems(true);
-    if (Object.keys(problems).length > 0) return;
+    if (refuses(problems)) return;
 
     const name = draft.name.trim();
     const written = documentOf(kind, draft);
@@ -322,7 +117,7 @@ export function OptionDialog({
           if (option !== undefined) {
             return yield* client.options.update({
               params: { campaignId, optionId: option.id },
-              payload: { name, body: written.body, visibility: draft.visibility },
+              payload: { name, body: written.body, visibility },
             });
           }
 
@@ -359,7 +154,7 @@ export function OptionDialog({
             // The visible screen-level choice, said out loud on the wire. It is
             // the *only* place a copy's visibility is ever named, which is what
             // keeps `dm` the meaning of an unstated one everywhere else.
-            payload: { visibility: draft.visibility },
+            payload: { visibility },
           });
         }),
       // Both lists, always. Authoring touches the Library as well as the
@@ -376,181 +171,22 @@ export function OptionDialog({
       <DialogContent aria-label={isNew ? `Write a ${noun}` : `Edit ${option.name}`}>
         <DialogHeader>
           <DialogTitle>{isNew ? `Write a ${noun}` : `Edit ${option.name}`}</DialogTitle>
-          <DialogDescription>
-            {kind === "class"
-              ? "A class carries the hit die a new character's hit points are worked out from."
-              : kind === "species"
-                ? "A species carries the extra hit points it gives at every level."
-                : "A background carries the ability score increases a new character starts with."}
-          </DialogDescription>
+          <DialogDescription>{BLURB[kind]}</DialogDescription>
         </DialogHeader>
 
         <div className="flex max-h-[60vh] flex-col gap-5 overflow-y-auto px-gutter py-3">
-          <Field
-            label="Name"
-            htmlFor="option-name"
-            error={showProblems ? problems.name : undefined}
-            hint="What a player picks it by, and what lands on their sheet."
-          >
-            <Input
-              id="option-name"
-              placeholder={
-                kind === "class" ? "Bloodsworn" : kind === "species" ? "Marshfolk" : "Salt-runner"
-              }
-              value={draft.name}
-              aria-invalid={showProblems && problems.name !== undefined}
-              onChange={(event) => set("name", event.target.value)}
-            />
-          </Field>
-
-          {kind === "class" ? (
-            <>
-              <Field
-                label="Hit die"
-                htmlFor="option-hit-die"
-                hint="The number of faces. A level-1 character gets this at its maximum, plus their constitution."
-                error={showProblems ? problems.hitDie : undefined}
-              >
-                <Input
-                  id="option-hit-die"
-                  mono
-                  type="number"
-                  min={1}
-                  max={MAX_HIT_DIE}
-                  value={draft.hitDie}
-                  aria-invalid={showProblems && problems.hitDie !== undefined}
-                  onChange={(event) => set("hitDie", event.target.value)}
-                  className="w-24"
-                />
-              </Field>
-
-              {/* Six toggles rather than a *has unarmoured defence* switch,
-                  because the real ruleset needs two different answers:
-                  Barbarian is `10 + DEX + CON` and Monk is `10 + DEX + WIS`.
-                  A boolean would be quietly wrong for exactly the two classes
-                  most likely to notice, and a homebrew class is more likely to
-                  be unusual here rather than less. */}
-              <fieldset className="flex flex-col gap-2">
-                <legend className="text-label leading-snug font-semibold text-heading">
-                  Unarmoured armour class
-                </legend>
-                <p className="text-caption leading-body text-muted-foreground">
-                  Ten plus these, when nothing is worn.{" "}
-                  <span className="text-heading">{unarmouredLine(draft.unarmouredAc)}</span>
-                </p>
-                <div className="flex flex-wrap gap-x-5 gap-y-2.5">
-                  {ABILITY_KEYS.map((ability) => (
-                    <div key={ability} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`option-ac-${ability}`}
-                        checked={draft.unarmouredAc.includes(ability)}
-                        onCheckedChange={(next) => toggleAbility(ability, next === true)}
-                      />
-                      <Label htmlFor={`option-ac-${ability}`}>{ability}</Label>
-                    </div>
-                  ))}
-                </div>
-              </fieldset>
-            </>
-          ) : kind === "species" ? (
-            <Field
-              label="Hit points per level"
-              htmlFor="option-hp-per-level"
-              hint="Nine of the ten in the book give none. A dwarf gives one."
-              error={showProblems ? problems.hpPerLevel : undefined}
-            >
-              <Input
-                id="option-hp-per-level"
-                mono
-                type="number"
-                min={0}
-                max={MAX_HP_PER_LEVEL}
-                value={draft.hpPerLevel}
-                aria-invalid={showProblems && problems.hpPerLevel !== undefined}
-                onChange={(event) => set("hpPerLevel", event.target.value)}
-                className="w-24"
-              />
-            </Field>
-          ) : (
-            /* **Six boxes, and blank is the ordinary answer for four of them.**
-               In the 2024 ruleset this is what a background is *for* — the
-               ability score increases moved here off the species — so it is the
-               one editor in this dialog whose value reaches a number on
-               somebody's sheet rather than a number in a box on the create
-               form.
-
-               Six named boxes rather than an add-a-row list because the
-               vocabulary is fixed at six and always will be: `ABILITY_KEYS` is
-               the ruleset's *frame*, and a control that made you choose the
-               ability as well as the amount would be a picker over a list of
-               six that are all always offered. What is stored is still a list
-               of what was said — see `increasesFrom`. */
-            <fieldset className="flex flex-col gap-2">
-              <legend className="text-label leading-snug font-semibold text-heading">
-                Ability score increases
-              </legend>
-              <p className="text-caption leading-body text-muted-foreground">
-                Added to a new character's scores when they pick this.{" "}
-                <span className="text-heading">
-                  {increasesLine(increasesFrom(draft)) === ""
-                    ? "Nothing yet"
-                    : increasesLine(increasesFrom(draft))}
-                </span>
-              </p>
-              <div className="flex flex-wrap gap-x-4 gap-y-2.5">
-                {ABILITY_KEYS.map((ability) => (
-                  <div key={ability} className="flex items-center gap-2">
-                    <Label htmlFor={`option-increase-${ability}`}>{ability}</Label>
-                    <Input
-                      id={`option-increase-${ability}`}
-                      // A visible label repeated down a list is one control as
-                      // far as anything reading names is concerned, which is
-                      // the trap the sheet's own six cells already record.
-                      aria-label={`${ability} increase`}
-                      mono
-                      type="number"
-                      min={0}
-                      max={MAX_INCREASE}
-                      placeholder="0"
-                      value={draft.increases[ability]}
-                      aria-invalid={showProblems && problems.increases !== undefined}
-                      onChange={(event) =>
-                        set("increases", { ...draft.increases, [ability]: event.target.value })
-                      }
-                      className="w-16"
-                    />
-                  </div>
-                ))}
-              </div>
-              {showProblems && problems.increases !== undefined && (
-                <p role="alert" className="text-caption leading-body text-danger-ink">
-                  {problems.increases}
-                </p>
-              )}
-              <p className="text-caption leading-body text-muted-foreground">
-                Leave one blank for an ability this background does not touch. The bundled
-                backgrounds carry none at all, so this is where a table's own numbers go.
-              </p>
-            </fieldset>
-          )}
-
-          <Field
-            label="What it is"
-            htmlFor="option-summary"
-            hint="One line, for whoever is picking. Blank is fine."
-          >
-            <Textarea
-              id="option-summary"
-              placeholder="Sworn to the marsh, and it takes its due in blood."
-              value={draft.summary}
-              onChange={(event) => set("summary", event.target.value)}
-            />
-          </Field>
+          <OptionFields
+            kind={kind}
+            draft={draft}
+            problems={problems}
+            showProblems={showProblems}
+            onChange={setDraft}
+          />
 
           <VisibilityField
             id="option-visibility"
-            value={draft.visibility}
-            onChange={(next) => set("visibility", next)}
+            value={visibility}
+            onChange={setVisibility}
             shared={`Your players can pick this ${noun} when they make a character.`}
             hidden={`Only you can see it. No player can pick this ${noun} until you share it.`}
           />
