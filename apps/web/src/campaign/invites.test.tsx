@@ -136,6 +136,21 @@ describe("inviting a player", () => {
       expect(url.pathname).not.toContain(TOKEN);
       expect(url.search).not.toContain(TOKEN);
     });
+
+    /**
+     * The page's own query string is not part of the invitation. `createHref`
+     * carries `location.search` along with the path, so a link minted while
+     * the DM was on a URL with one used to hand that query string to whoever
+     * they sent it to. Cosmetic — the token stays in the fragment — but this
+     * is a URL a person reads before they trust it.
+     */
+    it("drops the page's query string", async () => {
+      window.history.replaceState({}, "", "/taverns/?foo=1&bar=2");
+      const url = new URL(await mintLink());
+
+      expect(url.search).toBe("");
+      expect(url.toString()).toBe(`${window.location.origin}/taverns/#/join/${TOKEN}`);
+    });
   });
 
   it("names who took one, and offers to take the seat back", async () => {

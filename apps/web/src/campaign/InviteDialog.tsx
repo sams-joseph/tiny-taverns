@@ -123,7 +123,14 @@ const linkFor = (router: RegisteredRouter, token: string): string => {
   // own path and the route behind a `#`. It is the same call `Link` makes, so
   // this link and every rendered one cannot disagree.
   const href = router.history.createHref(publicHref);
-  return new URL(href, globalThis.location.href).toString();
+  const url = new URL(href, globalThis.location.href);
+  // `createHref` carries the page's own `search` as well as its path, so an
+  // invitation minted while the DM happened to be on `…?foo=1` would post that
+  // query string to whoever the link is sent to. Harmless — the token is in
+  // the fragment either way — but it is noise in a URL a person reads, and the
+  // route this link names takes no query parameters at all.
+  url.search = "";
+  return url.toString();
 };
 
 function InviteRow({ invite }: { readonly invite: CampaignInvite }) {
