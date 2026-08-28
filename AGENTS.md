@@ -56,9 +56,13 @@ equivalent for a PNG the product imports by package path. `assets/` sits inside 
 `rsync --delete` with no exclusion, so **a delivery silently restores the old flat mark and
 deletes the 180** — re-copy the three after every update and confirm `git status` names them.
 Unlike the `--fs-label-l` incident below, a diff reporting these as changed is _correct_: the
-designers did not revise the icon, we replaced it. Only two of the three are imported by
-anything (`main.tsx` takes the favicon; the shell, Hob and marketing take the mark);
-`packages/design-system/assets/README.md` is the file that says which is which. The two measurements the delivery states only in
+designers did not revise the icon, we replaced it. **All three are imported now** — `main.tsx`
+takes the favicon and the touch icon, the shell, Hob and marketing take the mark — so a delivery
+that deletes the 180 breaks the build rather than merely losing artwork. That is the loudest
+form this trap has and is still not a guard. `packages/design-system/assets/README.md` is the
+file that says which file is whose, and is where the touch icon's flatten (the captain's
+illustration composited onto `--slate-950`, because iOS ignores alpha on a home-screen icon)
+and its measured full-bleed framing are written down. The two measurements the delivery states only in
 prose, `--fs-label-l` and `--scrim-blur`, therefore live in
 **`packages/ui/src/local-tokens.css`**, the same rule that keeps the layering scale in
 `packages/ui/src/styles.css` §3. `adherence.test.ts` fails if either name reappears in a

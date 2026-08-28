@@ -40,13 +40,17 @@ is no `local-tokens.css` equivalent for a PNG the product imports by package pat
   `on-dark`; renaming it is three import sites plus five `ui_kits` references and has not
   been done.
 - `assets/icon/favicon-32.png` — replaced with the same illustration at 32.
-- `assets/icon/apple-touch-icon-180.png` — **added**, not in any delivery. Imported by
-  nothing; it is the captain's 180 kept so the source survives in the repo.
+- `assets/icon/apple-touch-icon-180.png` — **added**, not in any delivery. The captain's 180
+  **flattened onto `--slate-950`**, because iOS does not honour alpha on a home-screen icon.
+  Imported by `apps/web/src/main.tsx` beside the favicon; the transparent art it was
+  composited from is `mark-on-dark-256.png`. See `assets/README.md` for the flatten command.
 
 **`assets/` is inside the `rsync --delete` below and is not excluded, so a delivery
 silently reverts the first two and deletes the third.** That is the whole reason this
-entry exists. After every update, re-copy the captain's three files and confirm
-`git status` names them — a `diff -r` against the next delivery will report these as
+entry exists, and all three are now imported by `apps/web`, so a delivery that deletes the
+third **breaks the build** rather than merely losing artwork — which is the loudest form
+this trap has, and still not a guard. After every update, re-copy the captain's three files
+and confirm `git status` names them — a `diff -r` against the next delivery will report these as
 changed, and unlike the `--fs-label-l` incident that report is *correct*: the designers
 did not revise the icon, we replaced it. `packages/design-system/assets/README.md` says
 which files in that folder are the captain's and which are the superseded delivery.
