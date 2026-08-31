@@ -139,10 +139,10 @@ describe("the API declaration", () => {
       "me",
       "members",
       "notes",
-      // A campaign's rules vocabulary: the classes and species a character at
-      // that table is built from. Campaign-scoped for `creatures`' reason — the
-      // path is the only thing gating the bundled rows — and the one list in
-      // the product a *player* reads to fill in a picker.
+      // A campaign's rules vocabulary: the classes, races and backgrounds a
+      // character at that table is built from. Campaign-scoped for `creatures`'
+      // reason — the path is the only thing gating the bundled rows — and the
+      // one list in the product a *player* reads to fill in a picker.
       "options",
       "prep",
       "recap",

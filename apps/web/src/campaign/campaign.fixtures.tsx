@@ -1,6 +1,6 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
-import { CampaignId } from "@taverns/api";
+import { ABILITY_KEYS, CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
@@ -156,7 +156,8 @@ export const character = {
   name: "Brannoc",
   playerName: "Ilse",
   level: 3,
-  species: "Half-orc",
+  race: "Half-orc",
+  subrace: null,
   className: "Paladin",
   // Derived by a generated column from the three above, never sent by a client
   // — so it is here as the server would send it and in neither payload.
@@ -257,7 +258,7 @@ export const hag = {
 };
 
 /**
- * The rules vocabulary — the classes and species a character at this table is
+ * The rules vocabulary — the classes and race a character at this table is
  * built from.
  *
  * **Three positions, told apart by the two ownership columns and never by
@@ -280,12 +281,12 @@ const bundledOption = {
 };
 
 /**
- * The bundled twelve and ten, as the seeder writes them.
+ * The bundled starter options, as the seeder writes them.
  *
- * Generated from a compact table rather than written out as twenty-two object
+ * Generated from a compact table rather than written out as repeated object
  * literals — the *values* are still exactly the JSON the server sends, which is
- * what this file's rule is about, and twenty-two hand-copied blocks would be
- * twenty-two chances to paste the wrong hit die under the right name.
+ * what this file's rule is about, and hand-copied blocks would be many chances
+ * to paste the wrong hit die under the right name.
  *
  * They are here because **every campaign has them**: the bundle is unowned, so
  * `corpusRowReadable` returns it through whatever campaign is in the path. A
@@ -293,7 +294,7 @@ const bundledOption = {
  * which is not a state the product has.
  */
 const bundled = (
-  kind: "class" | "species" | "background",
+  kind: "class" | "race" | "background",
   index: number,
   name: string,
   body: Record<string, unknown>,
@@ -302,7 +303,7 @@ const bundled = (
   // Twelve hex digits in the last group, like every other id in this file: a
   // short one decodes as *not a UUID* and the screen renders the schema's own
   // complaint instead of a picker.
-  id: `2b1f2a1e-0000-4000-8000-${kind === "class" ? "f" : kind === "species" ? "e" : "d"}00000000${String(index).padStart(3, "0")}`,
+  id: `2b1f2a1e-0000-4000-8000-${kind === "class" ? "f" : kind === "race" ? "e" : "d"}00000000${String(index).padStart(3, "0")}`,
   kind,
   name,
   body,
@@ -327,34 +328,125 @@ const bundledClasses = (
   bundled("class", index, name, { hitDie, unarmouredAc }),
 );
 
-const bundledSpecies = (
-  [
-    ["Aasimar", 0],
-    ["Dragonborn", 0],
-    ["Dwarf", 1],
-    ["Elf", 0],
-    ["Gnome", 0],
-    ["Goliath", 0],
-    ["Halfling", 0],
-    ["Human", 0],
-    ["Orc", 0],
-    ["Tiefling", 0],
-  ] as ReadonlyArray<readonly [string, number]>
-).map(([name, hpPerLevel], index) => bundled("species", index, name, { hpPerLevel }));
+const raceBody = (
+  abilityBonuses: ReadonlyArray<{ readonly ability: string; readonly amount: number }>,
+  extra: Record<string, unknown> = {},
+) => ({
+  speed: 30,
+  size: "Medium",
+  abilityBonuses,
+  hpPerLevel: 0,
+  traits: [],
+  subraces: [],
+  ...extra,
+});
 
-/**
- * Four of the sixteen, and **every one of them grants nothing** — which is what
- * the bundle really ships. The grants are the one thing the bundle-licensing
- * decision names out by title, so a table that plays them writes its own, which
- * is what `saltRunnerOption` below is.
- */
+const bundledRace = (
+  [
+    [
+      "Dragonborn",
+      raceBody([
+        { ability: "STR", amount: 2 },
+        { ability: "CHA", amount: 1 },
+      ]),
+    ],
+    [
+      "Dwarf",
+      raceBody([{ ability: "CON", amount: 2 }], {
+        speed: 25,
+        subraces: [
+          {
+            name: "Hill Dwarf",
+            abilityBonuses: [{ ability: "WIS", amount: 1 }],
+            hpPerLevel: 1,
+            traits: ["Dwarven Toughness"],
+          },
+        ],
+      }),
+    ],
+    [
+      "Elf",
+      raceBody([{ ability: "DEX", amount: 2 }], {
+        subraces: [
+          {
+            name: "High Elf",
+            abilityBonuses: [{ ability: "INT", amount: 1 }],
+            traits: ["High Elf Cantrip"],
+          },
+        ],
+      }),
+    ],
+    [
+      "Gnome",
+      raceBody([{ ability: "INT", amount: 2 }], {
+        speed: 25,
+        subraces: [
+          {
+            name: "Rock Gnome",
+            abilityBonuses: [{ ability: "CON", amount: 1 }],
+            traits: ["Artificer's Lore"],
+          },
+        ],
+      }),
+    ],
+    [
+      "Half-Elf",
+      raceBody([{ ability: "CHA", amount: 2 }], {
+        abilityBonusChoice: {
+          choose: 2,
+          bonuses: [
+            { ability: "STR", amount: 1 },
+            { ability: "DEX", amount: 1 },
+            { ability: "CON", amount: 1 },
+            { ability: "INT", amount: 1 },
+            { ability: "WIS", amount: 1 },
+          ],
+        },
+      }),
+    ],
+    [
+      "Half-Orc",
+      raceBody([
+        { ability: "STR", amount: 2 },
+        { ability: "CON", amount: 1 },
+      ]),
+    ],
+    [
+      "Halfling",
+      raceBody([{ ability: "DEX", amount: 2 }], {
+        speed: 25,
+        subraces: [
+          {
+            name: "Lightfoot Halfling",
+            abilityBonuses: [{ ability: "CHA", amount: 1 }],
+            traits: ["Naturally Stealthy"],
+          },
+        ],
+      }),
+    ],
+    ["Human", raceBody(ABILITY_KEYS.map((ability) => ({ ability, amount: 1 })))],
+    [
+      "Tiefling",
+      raceBody([
+        { ability: "INT", amount: 1 },
+        { ability: "CHA", amount: 2 },
+      ]),
+    ],
+  ] as ReadonlyArray<readonly [string, Record<string, unknown>]>
+).map(([name, body], index) => bundled("race", index, name, body));
+
 const bundledBackgrounds = ["Acolyte", "Sage", "Soldier", "Wayfarer"].map((name, index) =>
-  bundled("background", index, name, { abilityIncreases: [] }),
+  bundled("background", index, name, {
+    proficiencies: [],
+    languages: [],
+    equipment: [],
+    choices: [],
+  }),
 );
 
 /** Named for the tests that reach for one by hand. */
 export const druidOption = { ...bundledClasses[3]!, id: druidOptionId };
-export const elfOption = { ...bundledSpecies[3]!, id: elfOptionId };
+export const elfOption = { ...bundledRace[2]!, id: elfOptionId };
 
 /** *Bloodsworn, d10, unarmoured AC DEX + CON* — this table's copy of its DM's own. */
 export const bloodswornOption = {
@@ -374,19 +466,14 @@ export const marshfolkOption = {
   id: marshfolkOptionId,
   derivedFrom: marshfolkOriginalId,
   visibility: "dm",
-  kind: "species",
+  kind: "race",
   name: "Marshfolk",
-  body: { hpPerLevel: 2 },
+  body: raceBody([{ ability: "CON", amount: 2 }], {
+    hpPerLevel: 2,
+    summary: "Born in the reeds.",
+  }),
 };
 
-/**
- * *Salt-runner, +2 CON and +1 WIS* — this table's own, and the only row in this
- * fixture that moves a number a player typed.
- *
- * A background is the third kind and the one that reaches the seed *through*
- * the six ability cells, so a fixture with only bundled backgrounds in it could
- * not tell a working grant from a missing one.
- */
 export const saltRunnerOption = {
   ...bundledOption,
   id: saltRunnerOptionId,
@@ -396,10 +483,12 @@ export const saltRunnerOption = {
   kind: "background",
   name: "Salt-runner",
   body: {
-    abilityIncreases: [
-      { ability: "CON", amount: 2 },
-      { ability: "WIS", amount: 1 },
-    ],
+    proficiencies: ["Athletics"],
+    languages: ["River cant"],
+    equipment: ["Travel-stained clothes", "ferryman's token"],
+    gold: "15 gp",
+    feature: { name: "Riverwise", text: "You know who watches the crossings." },
+    choices: [],
     summary: "Raised on the barges, and still counting the tide.",
   },
 };
@@ -417,7 +506,7 @@ const named = <A extends { readonly name: string }>(rows: ReadonlyArray<A>): Rea
 export const campaignOptions = [
   ...named([...bundledBackgrounds, saltRunnerOption]),
   ...named([...bundledClasses, bloodswornOption]),
-  ...named([...bundledSpecies, marshfolkOption]),
+  ...named([...bundledRace, marshfolkOption]),
 ];
 
 /**
@@ -435,7 +524,7 @@ export const libraryOptions = [
   { ...bloodswornOption, id: bloodswornOriginalId, campaignId: null, accountId: theDmAccountId },
   ...bundledClasses,
   { ...marshfolkOption, id: marshfolkOriginalId, campaignId: null, accountId: theDmAccountId },
-  ...bundledSpecies,
+  ...bundledRace,
 ];
 
 /**
@@ -586,7 +675,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
     // The rules vocabulary this table builds characters from — the Rules
     // screen's list, and the create form's two pickers. A bundled class, a
-    // bundled species, and one of each this table has copied in, so a test can
+    // bundled race, and one of each this table has copied in, so a test can
     // see which rows are editable without re-aiming anything. The Library
     // behind it is the copy control's source and is deliberately a superset:
     // the same original the campaign copy came from is still there, which is

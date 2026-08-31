@@ -12,7 +12,7 @@ import { OptionForm } from "./OptionForm";
 import { OptionSection } from "./OptionSection";
 
 /**
- * **Your library of classes, species and backgrounds** — where one is written,
+ * **Your library of classes, races and backgrounds** — where one is written,
  * in no campaign at all.
  *
  * `#/library/rules`, inside the global *Library* destination, which is where a
@@ -71,7 +71,7 @@ import { OptionSection } from "./OptionSection";
  *
  * Counted the same way `RulesScreen`'s is and by kind rather than by
  * subtraction, so a fourth kind arriving is a fourth clause rather than a
- * silently wrong species count.
+ * silently wrong race count.
  */
 const summaryOf = (options: ReadonlyArray<CharacterOption>): string => {
   const count = (kind: OptionKind) => options.filter((row) => row.kind === kind).length;
@@ -80,7 +80,7 @@ const summaryOf = (options: ReadonlyArray<CharacterOption>): string => {
   const mine = options.filter(isLibraryOriginal).length;
   const counted =
     `${String(classes)} class${classes === 1 ? "" : "es"}, ` +
-    `${String(count("species"))} species, ` +
+    `${String(count("race"))} race, ` +
     `${String(backgrounds)} background${backgrounds === 1 ? "" : "s"}`;
   // Absence is what says "the bundle and nothing else" — a "0 written by you"
   // would be a number nobody needs on the one screen whose whole job is to fill
@@ -128,10 +128,10 @@ export function OptionLibraryScreen() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setEditing({ kind: "species", option: undefined })}
+              onClick={() => setEditing({ kind: "race", option: undefined })}
             >
               <Icon name="plus" size={14} />
-              Write a species
+              Write a race
             </Button>
             <Button size="sm" onClick={() => setEditing({ kind: "class", option: undefined })}>
               <Icon name="plus" size={14} />
@@ -166,19 +166,18 @@ export function OptionLibraryScreen() {
             }
           />
           <OptionSection
-            title="Species"
-            options={of("species")}
-            empty="No species at all"
-            emptyBody={emptyBody("species")}
+            title="Race"
+            options={of("race")}
+            empty="No race at all"
+            emptyBody={emptyBody("race")}
             onEdit={(option) =>
-              isLibraryOriginal(option) ? () => setEditing({ kind: "species", option }) : undefined
+              isLibraryOriginal(option) ? () => setEditing({ kind: "race", option }) : undefined
             }
           />
           {/* **Third, and last, for the reason it is third on `RulesScreen` and
-              on the create form**: it is the pick that adjusts what the two
-              above produced. The bundled sixteen all read *no ability score
-              increases written down*, which is true and is the invitation — a
-              table that plays the book's version writes its own, here. */}
+              on the create form**: 2014 backgrounds carry proficiencies,
+              languages, equipment and feature text. Ability-score arithmetic
+              belongs to races and contained subraces. */}
           <OptionSection
             title="Backgrounds"
             options={of("background")}
@@ -219,8 +218,8 @@ export function OptionLibraryScreen() {
  */
 const emptyBody = (kind: OptionKind) => (
   <>
-    Write {kind === "class" ? "a class" : kind === "species" ? "a species" : "a background"} and it
-    lives here, in no campaign until you copy it into one. The bundled ruleset arrives with{" "}
+    Write {kind === "class" ? "a class" : kind === "race" ? "a race" : "a background"} and it lives
+    here, in no campaign until you copy it into one. The bundled ruleset arrives with{" "}
     <code className="font-mono text-mono whitespace-nowrap text-slate-300">
       pnpm -F server ruleset:import
     </code>

@@ -20,7 +20,7 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * numbers the sheet's identity card draws around it.
  *
  * `descriptor` on the row already answers *"Level 5 Half-orc Paladin"* from
- * three columns. What the kit draws beside it — *"Oath of the Open Road"*, a
+ * the durable identity columns. What the kit draws beside it — *"Oath of the Open Road"*, a
  * background, an alignment, a speed, an initiative, a proficiency bonus, hit
  * dice and an experience bar — is filtered by nothing, sorted by nothing,
  * seeded by nothing and predicated on nothing, so by the rule at the top of
@@ -237,7 +237,7 @@ export const CharacterSheet = Schema.Struct({
    * Free prose about them — background, appearance, what they are afraid of,
    * and the Story tab's backstory.
    *
-   * This is also where a descriptor written before `species` and `class_name`
+   * This is also where a descriptor written before `race` and `class_name`
    * were columns landed: `0012_character_sheet.ts` moved it here verbatim
    * rather than guessing at its parts.
    */
@@ -306,18 +306,20 @@ export class Character extends Schema.Class<Character>("Character")({
   playerName: Schema.NullOr(Schema.String),
   /** `3`. Absent until somebody says. */
   level: Schema.NullOr(Schema.Int),
-  /** `"Half-orc"` — an open vocabulary, like a creature's `size`. */
-  species: Schema.NullOr(Schema.String),
+  /** `"Elf"` — an open 2014 race label, like a creature's `size`. */
+  race: Schema.NullOr(Schema.String),
+  /** `"High Elf"` — optional and rendered only when the player chose one. */
+  subrace: Schema.NullOr(Schema.String),
   /** `"Paladin"` — likewise open, and rendered as the DM capitalised it. */
   className: Schema.NullOr(Schema.String),
   /**
    * The `"Level 3 Half-orc Paladin"` half-line under the name — **derived, and
    * not writable.**
    *
-   * It used to be a column the DM typed. Once `level`, `species` and
+   * It used to be a column the DM typed. Once `level`, `race`, `subrace` and
    * `className` became columns it had to become one or the other: a label
-   * stored beside the three fields it summarises is a second answer, and the
-   * two disagree the first time anyone edits one of them. So it is a Postgres
+   * stored beside the fields it summarises is a second answer, and the two
+   * disagree the first time anyone edits one of them. So it is a Postgres
    * generated column (`0012_character_sheet.ts`), which is why it appears here
    * and in neither payload below — sending one is refused by this schema before
    * it reaches the network, which is the honest signal.
@@ -400,7 +402,8 @@ export const CharacterCreate = Schema.Struct({
   name: Schema.NonEmptyString,
   playerName: Schema.optional(Schema.String),
   level: Schema.optional(level),
-  species: Schema.optional(shortLabel),
+  race: Schema.optional(shortLabel),
+  subrace: Schema.optional(shortLabel),
   className: Schema.optional(shortLabel),
   ac: Schema.optional(ac),
   hpMax: Schema.optional(hp),
@@ -428,7 +431,8 @@ export const CharacterUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
   level: Schema.optional(Schema.NullOr(level)),
-  species: Schema.optional(Schema.NullOr(shortLabel)),
+  race: Schema.optional(Schema.NullOr(shortLabel)),
+  subrace: Schema.optional(Schema.NullOr(shortLabel)),
   className: Schema.optional(Schema.NullOr(shortLabel)),
   ac: Schema.optional(Schema.NullOr(ac)),
   hpMax: Schema.optional(Schema.NullOr(hp)),
@@ -460,7 +464,7 @@ export type CharacterUpdate = typeof CharacterUpdate.Type;
  * write in the product's history, and deliberately the smaller schema.
  *
  * The captain's decision (`player-edits-own-character`) grants the **durable
- * half only**: their name, the three fields the descriptor derives from, the
+ * half only**: their name, the fields the descriptor derives from, the
  * numbers that move when they level up, where their real sheet lives, and the
  * document. *Never hit points, never anything inside a live fight.*
  *
@@ -502,7 +506,8 @@ export const CharacterOwnUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
   level: Schema.optional(Schema.NullOr(level)),
-  species: Schema.optional(Schema.NullOr(shortLabel)),
+  race: Schema.optional(Schema.NullOr(shortLabel)),
+  subrace: Schema.optional(Schema.NullOr(shortLabel)),
   className: Schema.optional(Schema.NullOr(shortLabel)),
   ac: Schema.optional(Schema.NullOr(ac)),
   hpMax: Schema.optional(Schema.NullOr(hp)),
@@ -572,7 +577,8 @@ export const CharacterOwnCreate = Schema.Struct({
   name: Schema.NonEmptyString,
   playerName: Schema.optional(Schema.String),
   level: Schema.optional(level),
-  species: Schema.optional(shortLabel),
+  race: Schema.optional(shortLabel),
+  subrace: Schema.optional(shortLabel),
   className: Schema.optional(shortLabel),
   ac: Schema.optional(ac),
   hpMax: Schema.optional(hp),

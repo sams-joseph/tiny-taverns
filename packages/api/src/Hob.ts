@@ -185,11 +185,13 @@ export const HobProposal = Schema.Union([
     target: Schema.Literal("character"),
     name: Schema.String,
     /**
-     * The two halves of the descriptor, as **the vocabulary's own labels.**
+     * The descriptor labels, as **the vocabulary's own labels** where Hob could
+     * resolve them.
      *
-     * `proposeCharacter` takes them as closed enums (`SpeciesKey`, `ClassKey`),
-     * so what lands here is always a label `packages/api/src/Ruleset.ts` knows
-     * — which is what lets the three numbers below exist at all.
+     * `proposeCharacter` takes `race` and `className` as closed enums where the
+     * campaign vocabulary fits in one, so what lands here is a label
+     * `packages/api/src/Ruleset.ts` can seed from — which is what lets the
+     * three numbers below exist at all.
      *
      * They stay `NullOr(String)` rather than the enums themselves, and that is
      * not laziness. **A proposal is persisted** — it is `assistant_turn.proposal`,
@@ -198,14 +200,15 @@ export const HobProposal = Schema.Union([
      * and it would take the whole conversation down with it. The enum belongs
      * where a *new* value is chosen; this is where an old one has to survive.
      */
-    species: Schema.NullOr(Schema.String),
+    race: Schema.NullOr(Schema.String),
+    subrace: Schema.optional(Schema.NullOr(Schema.String)),
     className: Schema.NullOr(Schema.String),
     sheet: CharacterSheet,
     /**
      * What the character starts on — **resolved when the proposal is made, for
      * the reason `sheet` above is.**
      *
-     * `Ruleset.seedFor` reads the class hit die, the species, and the
+     * `Ruleset.seedFor` reads the class hit die, the race, and the
      * constitution and dexterity modifiers the `sheet` beside this already
      * carries, and it runs once: the card the player is looking at and the row
      * they get by pressing *Keep them* cannot disagree, and the accept does no

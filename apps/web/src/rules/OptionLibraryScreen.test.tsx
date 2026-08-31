@@ -10,7 +10,7 @@ import {
 } from "./rules.fixtures";
 
 /**
- * The library of classes and species, against a stub server.
+ * The library of classes, races and backgrounds, against a stub server.
  *
  * What is asserted is the four things about this screen that would be wrong
  * *silently* — each renders as a perfectly ordinary page when it is not right:
@@ -52,19 +52,17 @@ describe("what your library holds", () => {
     expect(screen.getByText("Druid")).toBeInTheDocument();
     expect(screen.getByText("Marshfolk")).toBeInTheDocument();
     expect(screen.getByText(/\+2 hit points per level/)).toBeInTheDocument();
-    // The third kind, and the sentence every bundled one of them draws: the
-    // bundle ships names and no grants, so this is the commonest thing this
-    // screen says about a background.
     expect(screen.getByText("Salt-runner")).toBeInTheDocument();
-    expect(screen.getAllByText("No ability score increases written down").length).toBe(4);
+    expect(screen.getByText(/Athletics/)).toBeInTheDocument();
+    expect(screen.getAllByText("no fixed proficiencies").length).toBe(4);
   });
 
   it("counts what is in here and shows it as the Rules shelf of Library", async () => {
     await renderOptionLibrary();
     // Counted by kind rather than by subtraction, so the background's arrival
-    // was a clause rather than a silently wrong species count.
+    // was a clause rather than a silently wrong race count.
     expect(
-      await screen.findByText(/13 classes, 11 species, 5 backgrounds · 3 yours/),
+      await screen.findByText(/13 classes, 10 race, 5 backgrounds · 3 yours/),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(
@@ -156,7 +154,7 @@ describe("writing one", () => {
     expect(JSON.parse(sent("POST", "/library/options")?.body ?? "{}")).toEqual({
       kind: "class",
       name: "Hexbound",
-      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"] },
+      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"], proficiencies: [], savingThrows: [] },
     });
 
     // **One write, not two.** The Rules screen's own *Write a class* authors
@@ -169,17 +167,14 @@ describe("writing one", () => {
     );
   });
 
-  it("writes a background's increases as a list of what was actually said", async () => {
+  it("writes a background's 2014 proficiencies and equipment", async () => {
     await renderOptionLibrary();
     await userEvent.click(await screen.findByRole("button", { name: /Write a background/i }));
 
     const form = await screen.findByRole("dialog");
     await userEvent.type(within(form).getByLabelText("Name"), "Salt-runner");
-    await userEvent.type(within(form).getByLabelText("STR increase"), "2");
-    await userEvent.type(within(form).getByLabelText("CON increase"), "1");
-    // Typed and then thought better of: `0` and blank are the same thing — an
-    // ability this background does not touch — and neither becomes a row.
-    await userEvent.type(within(form).getByLabelText("WIS increase"), "0");
+    await userEvent.type(within(form).getByLabelText("Proficiencies"), "Athletics");
+    await userEvent.type(within(form).getByLabelText("Equipment"), "ferryman's token");
 
     await userEvent.click(within(form).getByRole("button", { name: /Add to your library/i }));
 
@@ -189,12 +184,11 @@ describe("writing one", () => {
     expect(JSON.parse(sent("POST", "/library/options")?.body ?? "{}")).toEqual({
       kind: "background",
       name: "Salt-runner",
-      // In `ABILITY_KEYS` order rather than typing order, and with no `+0` row.
       body: {
-        abilityIncreases: [
-          { ability: "STR", amount: 2 },
-          { ability: "CON", amount: 1 },
-        ],
+        proficiencies: ["Athletics"],
+        languages: [],
+        equipment: ["ferryman's token"],
+        choices: [],
       },
     });
     expect(server.calls.some((call) => call.pathname.includes("/campaigns/"))).toBe(false);
@@ -202,13 +196,13 @@ describe("writing one", () => {
 
   it("carries no visibility switch, because an original is in no campaign", async () => {
     await renderOptionLibrary();
-    await userEvent.click(await screen.findByRole("button", { name: /Write a species/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Write a race/i }));
 
     await screen.findByRole("dialog");
     // `OptionLibraryCreate` has no field for it. A control here would reach
     // nothing, and would imply the row is hidden from somebody.
     expect(screen.queryByRole("switch", { name: /Players can see this/i })).toBeNull();
-    // A species form draws no hit die, and a class form draws no per-level hit
+    // A race form draws no hit die, and a class form draws no per-level hit
     // points — the union, as two halves of one editor.
     expect(screen.getByLabelText(/Hit points per level/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Hit die")).toBeNull();
@@ -258,7 +252,13 @@ describe("editing one", () => {
       JSON.parse(sent("PATCH", `/library/options/${bloodswornOriginalId}`)?.body ?? "{}"),
     ).toEqual({
       name: "Bloodsworn",
-      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"], summary: "Sworn to the marsh." },
+      body: {
+        hitDie: 10,
+        unarmouredAc: ["DEX", "CON"],
+        proficiencies: [],
+        savingThrows: [],
+        summary: "Sworn to the marsh.",
+      },
     });
     // **The snapshot, as a fact about the wire**: nothing was written to any
     // campaign, so no campaign's copy could have moved.
@@ -267,9 +267,9 @@ describe("editing one", () => {
 
   it("edits the half its own kind names, whichever button opened it", async () => {
     await renderOptionLibrary();
-    // Opened from the Species section, so the row's own `kind` decides — the
+    // Opened from the Race section, so the row's own `kind` decides — the
     // union earning its place. A form that trusted the button would draw a hit
-    // die over a species document.
+    // die over a race document.
     await userEvent.click(await screen.findByRole("button", { name: "Edit Marshfolk" }));
 
     const form = await screen.findByRole("dialog");
@@ -330,7 +330,7 @@ describe("when the read fails", () => {
     // every account reads the bundle — so the sentence names the fix rather
     // than implying the reader has done something wrong.
     expect(await screen.findByText("No classes at all")).toBeInTheDocument();
-    expect(screen.getByText("No species at all")).toBeInTheDocument();
+    expect(screen.getByText("No race at all")).toBeInTheDocument();
     expect(screen.getByText("No backgrounds at all")).toBeInTheDocument();
     expect(screen.getAllByText("pnpm -F server ruleset:import").length).toBe(3);
   });

@@ -4,7 +4,7 @@ import { EmptyState } from "../ui/states";
 import { OptionCard } from "./OptionCard";
 
 /**
- * One of the labelled lists a vocabulary is drawn as — classes, then species,
+ * One of the labelled lists a vocabulary is drawn as — classes, then races,
  * then backgrounds.
  *
  * **Labelled regions rather than tabs**, the call `PartyScreen` makes about its

@@ -3,6 +3,7 @@ import {
   type Campaign,
   type Character,
   type CharacterId,
+  Conflict,
   CharacterOwnUpdate,
   CharacterUpdate,
   CurrentActor,
@@ -103,7 +104,7 @@ const makeFixture = Effect.gen(function* () {
       name: "Brannoc",
       playerName: "Pim",
       level: 3,
-      species: "Half-orc",
+      race: "Half-orc",
       className: "Paladin",
       ac: 16,
       hpMax: 32,
@@ -214,7 +215,7 @@ describe("the grant: a player edits their own character's durable half", () => {
       name: "Brannoc Duskharrow",
       playerName: "Pim",
       level: 5,
-      species: "Half-orc",
+      race: "Half-orc",
       className: "Paladin",
       ac: 18,
       hpMax: 52,
@@ -264,6 +265,40 @@ describe("the grant: a player edits their own character's durable half", () => {
 });
 
 describe("the columns: the live half is not expressible", () => {
+  it("refuses a subrace that is not contained by the selected race", async () => {
+    // Subraces are not a fourth option kind. Once a character names one, the
+    // pair has to resolve through this campaign's race vocabulary; a free-text
+    // race may still stand alone, but it cannot carry an unrelated child.
+    await runtime.runPromise(
+      sql`
+        insert into character_option (campaign_id, kind, name, body, visibility)
+        values (
+          ${fixture.table.id},
+          'race',
+          'Elf',
+          ${JSON.stringify({
+            speed: 30,
+            size: "Medium",
+            abilityBonuses: [{ ability: "DEX", amount: 2 }],
+            hpPerLevel: 0,
+            traits: [],
+            subraces: [{ name: "High Elf", abilityBonuses: [{ ability: "INT", amount: 1 }] }],
+          })}::jsonb,
+          'shared'
+        )
+      `.pipe(Effect.orDie),
+    );
+
+    const result = await editOwn(fixture.pim, fixture.brannoc.id, {
+      race: "Elf",
+      subrace: "Hill Dwarf",
+    });
+
+    expect(result._tag).toBe("Failure");
+    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(Conflict);
+    expect((await asWritten(fixture.brannoc.id)).race).toBe("Half-orc");
+  });
+
   it("has no field for a live value, for the owner, or for the disclosure toggle", () => {
     // The structural half of the boundary. `PlayerSessionRecap`'s rule, met on
     // the write side: a payload that *can* carry `hpCurrent` is one that
@@ -275,9 +310,10 @@ describe("the columns: the live half is not expressible", () => {
       "level",
       "name",
       "playerName",
+      "race",
       "sheet",
       "sheetUrl",
-      "species",
+      "subrace",
     ]);
 
     // And the DM's is the wider one, so the difference is the thing that

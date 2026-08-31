@@ -59,7 +59,7 @@ export const spareCharacter = {
   name: "Sorrel Ash",
   playerName: null,
   level: 1,
-  species: "Elf",
+  race: "Elf",
   className: "Ranger",
   descriptor: "Level 1 Elf Ranger",
   hpCurrent: null,
@@ -77,7 +77,7 @@ export const secondSpare = {
   id: "2b1f2a1e-0000-4000-8000-000000000903",
   name: "Pell",
   level: 3,
-  species: "Human",
+  race: "Human",
   className: "Cleric",
   descriptor: "Level 3 Human Cleric",
 };

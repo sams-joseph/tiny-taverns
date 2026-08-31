@@ -43,10 +43,18 @@ export interface SourceRevision {
   readonly contentHash: string;
 }
 
+export interface SourceLinkInput {
+  readonly relation: string;
+  readonly targetFamily: string;
+  readonly targetIndex: string;
+  readonly ordinal?: number;
+  readonly payload?: unknown;
+}
+
 /**
- * The current starter rows are project-authored. They are source-keyed now, but
- * they are not 5e-bits data and not SRD content; a future 2014 importer will
- * insert a different source document with a real 2014 edition and attribution.
+ * The bestiary starter rows remain project-authored. They are source-keyed, but
+ * they are not 5e-bits data and not SRD content; the character rules importer
+ * below uses its own 2014 source document and attribution.
  */
 export const TAVERNS_STARTER_SOURCE: RulesSourceDefinition = {
   document: {
@@ -63,23 +71,25 @@ export const TAVERNS_STARTER_SOURCE: RulesSourceDefinition = {
 };
 
 /**
- * Metadata for the planned 2014 source. Current starter importers do not use it;
- * tests assert they keep their project-authored identity until a real 2014
- * importer lands beside the required source files and notices.
+ * Metadata for the pinned 2014 character-rules source used by
+ * `ruleset:import`. The importer is generated from the local 5e-bits snapshot;
+ * it does not fetch at runtime.
  */
 export const FIVE_E_BITS_2014_SOURCE: RulesSourceDefinition = {
   document: {
     system: "dnd-5e-srd",
     edition: "2014",
     documentName: "5e-bits 2014 SRD data",
-    documentVersion: "5e-database 5.10.0",
+    documentVersion: "5e-database 5.10.0+5a7ee5a0489b26655d343e4a41e8f7942a887af2",
     license: "5e-bits MIT project data; underlying SRD 5.1 content under OGL-1.0a",
-    sourceUrl: "https://github.com/5e-bits/5e-database",
+    sourceUrl:
+      "https://github.com/5e-bits/5e-database/tree/5a7ee5a0489b26655d343e4a41e8f7942a887af2/src/2014/en",
     attribution:
-      "Data transformed from 5e-bits/5e-database under its MIT license, with underlying SRD 5.1 rules content under the Open Gaming License 1.0a. Include the full required notices before copied SRD content ships.",
+      "Rules data transformed from 5e-bits/5e-database commit 5a7ee5a0489b26655d343e4a41e8f7942a887af2 (MIT). Underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open Game License version 1.0a.",
   },
   provider: "5e-bits-transform",
   providerVersion: "5e-database 5.10.0",
+  providerCommit: "5a7ee5a0489b26655d343e4a41e8f7942a887af2",
 };
 
 const SOURCE_INDEX = /^[a-z0-9][a-z0-9._/-]*$/;
@@ -215,4 +225,45 @@ export const sourceRevisionFor = (
       returning id
     `;
     return { sourceEntityId, sourceRevisionId: revisions[0]!.id, contentHash };
+  });
+
+/** Records one relationship observed in the imported source. */
+export const sourceLinkFor = (
+  sql: SqlClient.SqlClient,
+  context: RulesImportContext,
+  from: SourceRevision,
+  input: SourceLinkInput,
+): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    validateEntity({
+      family: input.targetFamily,
+      sourceIndex: input.targetIndex,
+      name: input.targetIndex,
+      raw: {},
+    });
+    const targets = yield* sql<{ readonly id: RulesSourceEntityId }>`
+      select id from rules_source_entity
+      where document_id = ${context.documentId}
+        and family = ${input.targetFamily}
+        and source_index = ${input.targetIndex}
+      limit 1
+    `;
+    yield* sql`
+      insert into rules_source_link (
+        from_revision_id, relation, to_entity_id, target_family, target_index, ordinal, payload
+      )
+      values (
+        ${from.sourceRevisionId},
+        ${input.relation},
+        ${targets[0]?.id ?? null},
+        ${input.targetFamily},
+        ${input.targetIndex},
+        ${input.ordinal ?? 0},
+        ${JSON.stringify(input.payload ?? {})}
+      )
+      on conflict (from_revision_id, relation, ordinal, target_family, target_index)
+      do update set
+        to_entity_id = excluded.to_entity_id,
+        payload      = excluded.payload
+    `;
   });

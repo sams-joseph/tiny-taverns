@@ -195,7 +195,7 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
  */
 export interface NewCharacterView extends MyCharactersView {
   /**
-   * The classes and species this table offers, as a player sees them.
+   * The classes, races and backgrounds this table offers, as a player sees them.
    *
    * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, so what
    * arrives here is already narrowed by the server — there is no client-side

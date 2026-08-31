@@ -40,7 +40,7 @@ export const campaignOptionsAtom = Atom.family((campaignId: CampaignId) =>
 );
 
 /**
- * The classes and species this account has authored, plus the bundle.
+ * The classes, races and backgrounds this account has authored, plus the bundle.
  *
  * **No key on the campaign**, because the read names none: a Library original
  * is in no campaign, and `libraryRowReadable` compares its owner to the

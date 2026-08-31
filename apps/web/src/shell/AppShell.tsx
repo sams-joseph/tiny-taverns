@@ -113,7 +113,7 @@ interface NavItem {
  * campaign's **copies** — and neither can answer the other's. See `routes.tsx`,
  * where the decision about it is written down.
  *
- * `#/library/rules` is the same act one table across: the classes, species and
+ * `#/library/rules` is the same act one table across: the classes, races and
  * backgrounds an account has written, in no campaign. It lives **inside**
  * Library now, as the second shelf of the same account-owned originals model:
  * monsters are a corpus somebody browses, while rules are a bounded vocabulary
@@ -235,12 +235,12 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       section: "chronicle",
     },
     {
-      // The classes and species this table builds characters from. A campaign
-      // item rather than a global one, and unlike *Bestiary* that is where it
-      // belongs rather than where it is waiting: the list is *this campaign's*
-      // vocabulary, and the account's own originals behind it are reached
-      // through this screen's copy control until a Library screen for them
-      // exists.
+      // The classes, races and backgrounds this table builds characters from.
+      // A campaign item rather than a global one, and unlike *Bestiary* that is
+      // where it belongs rather than where it is waiting: the list is *this
+      // campaign's* vocabulary, and the account's own originals behind it are
+      // reached through this screen's copy control until a Library screen for
+      // them exists.
       label: "Rules",
       link: { to: "/campaigns/$campaignId/rules", params: { campaignId } },
       section: "rules",

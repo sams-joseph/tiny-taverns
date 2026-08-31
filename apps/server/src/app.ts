@@ -261,7 +261,7 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     Memberships.layer,
     Notes.layer,
-    // The classes and species a character is built from — the campaign's
+    // The classes, races and backgrounds a character is built from — the campaign's
     // vocabulary and the Library originals behind it. No `LiveEvents`: editing
     // a class changes what the *next* character is made from, which is not
     // something a screen watching tonight's fight is waiting for.
@@ -313,7 +313,7 @@ export const servicesOver = <E>(
         DmActors.layer,
         HobThreads.layer,
         // `Options` is the newest, and it is the one Hob reads *outside* a
-        // tool: a campaign's classes and species decide the shape of
+        // tool: a campaign's classes, races and backgrounds decide the shape of
         // `proposeCharacter`, so the player's toolkit is built per request.
         Options.layer,
         Recap.layer,

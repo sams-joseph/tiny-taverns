@@ -49,10 +49,10 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * ### Where each thing on it comes from
  *
  * Nine columns and one `jsonb` document, and the split is the one `Character.ts`
- * argues: name, player, level, species, class, AC, hit points, temp, conditions
- * and `sheetUrl` are columns; the thirty-odd fields the drawing adds are
- * optional keys on `sheet`, which is why the whole of this screen cost no
- * migration. `descriptor` is generated from three of the columns and is drawn
+ * argues: name, player, level, race, subrace, class, AC, hit points, temp,
+ * conditions and `sheetUrl` are columns; the thirty-odd fields the drawing adds
+ * are optional keys on `sheet`, which is why the whole of this screen cost no
+ * migration. `descriptor` is generated from the identity columns and is drawn
  * once, under the name — never recomputed here, because a second implementation
  * of it is exactly what the generated column exists to prevent.
  *

@@ -80,12 +80,12 @@ const fillItIn = async () => {
 };
 
 /**
- * Pick from one of the two vocabularies.
+ * Pick from one of the three vocabularies.
  *
- * Species and class are `Select`s rather than boxes since the captain's
- * decision of 2026-08-26 — the 2024 Player's Handbook's ten and twelve, from
- * `packages/api/src/Ruleset.ts` — so a test drives them the way every other
- * select in this suite is driven, by the trigger's own accessible name.
+ * Race, class and background are `Select`s rather than boxes since the captain's
+ * decision to use the campaign's 2014 rules rows, so a test drives them the way
+ * every other select in this suite is driven, by the trigger's own accessible
+ * name.
  */
 const pick = async (label: string, option: string) => {
   await userEvent.click(await screen.findByRole("combobox", { name: label }));
@@ -109,7 +109,7 @@ describe("writing down a character of your own", () => {
 
     await type(/^Name$/, "Sorrel Ash");
     await type(/^Player$/, "Ilse");
-    await pick("Species", "Elf");
+    await pick("Race", "Elf");
     await pick("Class", "Druid");
     // Both are seeded by the picks above; typing over them is what the form is
     // for, and is what takes them out of the seed's reach.
@@ -131,7 +131,7 @@ describe("writing down a character of your own", () => {
       // Level 1 without anybody typing it, and the two labels are the
       // vocabulary's own words — which is what makes them readable back.
       level: 1,
-      species: "Elf",
+      race: "Elf",
       className: "Druid",
       ac: 14,
       hpMax: 9,
@@ -166,12 +166,11 @@ describe("writing down a character of your own", () => {
     expect(window.location.hash).toBe(`#/play/characters/${brannocId}`);
   });
 
-  it("seeds through the ability scores when the background grants any", async () => {
-    // **The third picker, and the only one that changes a number the player
-    // typed.** In the 2024 ruleset the ability score increases live on the
-    // background, so this is the one pick whose effect is on the six cells
-    // rather than on the two boxes — and the sheet that gets created therefore
-    // says something the editor did not.
+  it("writes the background label without changing creation arithmetic", async () => {
+    // In the 2014 ruleset backgrounds carry proficiencies and story hooks; the
+    // ability-score arithmetic belongs to race and subrace. Picking a
+    // background therefore writes the sheet facts and leaves the two numbers
+    // alone.
     await renderCreate();
     await fillItIn();
     await type(/^Name$/, "Sorrel Ash");
@@ -179,36 +178,32 @@ describe("writing down a character of your own", () => {
     // d8 with no scores set: the die and a bare 10.
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
 
-    // A bundled background grants nothing — which is all sixteen of them — so
-    // the numbers do not move and no line appears.
     await pick("Background", "Soldier");
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
     expect(screen.queryByText(/on top of the scores above/)).toBeNull();
 
-    // This table's own does, and says so where the player will read it — and
-    // with no scores typed it says the honest thing rather than the flattering
-    // one: `seedFor` raises a cell that exists and refuses to invent one, so
-    // nothing has moved yet.
     await pick("Background", "Salt-runner");
-    await screen.findByText(
-      /Salt-runner adds \+2 CON, \+1 WIS\. Set the ability scores above and those go on top of them\./,
-    );
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("8");
+    expect(screen.queryByText(/on top of the scores above/)).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
     const body = bodyOf(server, "POST", createPath) as Record<string, unknown>;
     // The label goes in the document rather than in a column: nothing filters
-    // or sorts on a background and it is not one of the three `descriptor` is
-    // built from.
+    // or sorts on a background and it is not one of the fields `descriptor` is
+    // built from. The 2014 background's proficiencies, equipment, gold and
+    // feature are sheet data beside it.
     expect(body.sheet).toEqual({
       notes: "",
       abilities: [],
-      traits: [],
+      traits: [{ name: "Riverwise", text: "You know who watches the crossings." }],
       identity: { background: "Salt-runner" },
+      proficiencies: ["Athletics", "River cant"],
+      inventory: [{ name: "Travel-stained clothes" }, { name: "ferryman's token" }],
+      currency: { gp: 15 },
     });
   });
 
-  it("writes the raised cells, so the sheet and the two numbers cannot disagree", async () => {
+  it("writes the race-raised cells, so the sheet and the two numbers cannot disagree", async () => {
     await renderCreate();
     await fillItIn();
     await type(/^Name$/, "Sorrel Ash");
@@ -221,9 +216,10 @@ describe("writing down a character of your own", () => {
     await userEvent.click(within(scores).getByRole("button", { name: /Standard array/i }));
     await userEvent.click(within(scores).getByRole("button", { name: /Use these scores/i }));
 
-    // CON 13 raised to 15, so the d8 seeds from `+2` rather than `+1`.
+    // CON 13 is the score the seed reads; backgrounds no longer raise it, so
+    // the d8 seeds from `+1`.
     await waitFor(() => {
-      expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("10");
+      expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("9");
     });
 
     await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
@@ -232,9 +228,9 @@ describe("writing down a character of your own", () => {
     // **The property the whole shape exists for.** Written cells that did not
     // carry the grant would leave the sheet saying CON 13 beside hit points
     // worked out from 15 — right on both sides and wrong together.
-    expect(sheet.abilities).toContainEqual({ label: "CON", score: "15", modifier: "+2" });
-    expect(sheet.abilities).toContainEqual({ label: "WIS", score: "11", modifier: "+0" });
-    expect(body.hpMax).toBe(10);
+    expect(sheet.abilities).toContainEqual({ label: "CON", score: "13", modifier: "+1" });
+    expect(sheet.abilities).toContainEqual({ label: "WIS", score: "10", modifier: "+0" });
+    expect(body.hpMax).toBe(9);
   });
 
   it("says what is wrong before it sends anything", async () => {
@@ -520,7 +516,7 @@ describe("writing down a character of your own", () => {
     // form that opened on a number nobody chose would be the stubbed field this
     // product refuses everywhere else.
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("");
-    expect(screen.queryByText(/A starting point from the class, the species/)).toBeNull();
+    expect(screen.queryByText(/A starting point from the class, the race/)).toBeNull();
 
     await pick("Class", "Wizard");
     // d6, and no ability scores on this form — so the die and a bare 10.
@@ -529,14 +525,16 @@ describe("writing down a character of your own", () => {
     // Said where the numbers are, before the press rather than at the table —
     // including that no scores are set, which is what stops "6 hit points"
     // reading as this wizard's real total.
-    await screen.findByText(/A starting point from the class, the species, the background/);
+    await screen.findByText(/A starting point from the class, the race or subrace/);
     await screen.findByText(/No scores are set, so every modifier counts as \+0/);
 
     // Changing the pick re-seeds: a wizard's hit points must not survive into a
     // barbarian, which renders as a perfectly ordinary form when it is wrong.
     await pick("Class", "Barbarian");
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("12");
-    await pick("Species", "Dwarf");
+    await pick("Race", "Dwarf");
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("12");
+    await pick("Subrace", "Hill Dwarf");
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("13");
   });
 
@@ -570,7 +568,8 @@ describe("writing down a character of your own", () => {
     await fillItIn();
     await type(/^Name$/, "Brannoc");
     await pick("Class", "Barbarian");
-    await pick("Species", "Dwarf");
+    await pick("Race", "Dwarf");
+    await pick("Subrace", "Hill Dwarf");
 
     // The bare baseline is still what a character with no scores gets, and the
     // form says so where the numbers are.
@@ -588,10 +587,11 @@ describe("writing down a character of your own", () => {
     await userEvent.click(await screen.findByRole("option", { name: /^CON/ }));
     await userEvent.click(screen.getByRole("button", { name: /Use these scores/i }));
 
-    // 12 (d12) + 2 (CON 15) + 1 (Dwarven Toughness), and 10 + 2 (DEX 14) + 2
-    // (CON 15) — Unarmoured Defense, which is why `unarmouredAc` is a list.
-    expect((await screen.findByLabelText(/Hit points/)) as HTMLInputElement).toHaveValue(15);
-    expect(screen.getByLabelText(/^AC$/)).toHaveValue(14);
+    // 12 (d12) + 3 (CON 17 after the race bonus) + 1 (Dwarven Toughness), and
+    // 10 + 2 (DEX 14) + 3 (CON 17) — Unarmoured Defense, which is why
+    // `unarmouredAc` is a list.
+    expect((await screen.findByLabelText(/Hit points/)) as HTMLInputElement).toHaveValue(16);
+    expect(screen.getByLabelText(/^AC$/)).toHaveValue(15);
     // Said on the form itself, so the scores are readable without reopening.
     await screen.findByText(/STR 13 · DEX 14 · CON 15/);
 
@@ -601,9 +601,9 @@ describe("writing down a character of your own", () => {
       ac: number;
       sheet: { abilities: ReadonlyArray<{ label: string; score: string; modifier: string }> };
     };
-    expect(body.hpMax).toBe(15);
-    expect(body.ac).toBe(14);
-    expect(body.sheet.abilities).toContainEqual({ label: "CON", score: "15", modifier: "+2" });
+    expect(body.hpMax).toBe(16);
+    expect(body.ac).toBe(15);
+    expect(body.sheet.abilities).toContainEqual({ label: "CON", score: "17", modifier: "+3" });
   });
 
   it("leaves a number the player typed alone when the scores change", async () => {
@@ -648,7 +648,7 @@ describe("writing down a character of your own", () => {
     // character carrying one keeps is a separate question, answered by there
     // being no migration at all — see `packages/api/src/Ruleset.ts`.
     expect(screen.queryByRole("textbox", { name: "Class" })).toBeNull();
-    expect(screen.queryByRole("textbox", { name: "Species" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Race" })).toBeNull();
 
     // **What is offered is what the server answered**, which since a campaign
     // can have its own classes is the bundled twelve *plus* whatever this table
@@ -666,10 +666,10 @@ describe("writing down a character of your own", () => {
     expect(offered.map((option) => option.textContent)).toContain("Bloodsworn");
   });
 
-  it("offers a species this table shared and not one it kept to itself", async () => {
+  it("offers a race this table shared and not one it kept to itself", async () => {
     await renderCreate();
     await fillItIn();
-    await userEvent.click(await screen.findByRole("combobox", { name: "Species" }));
+    await userEvent.click(await screen.findByRole("combobox", { name: "Race" }));
     const offered = (await screen.findAllByRole("option")).map((option) => option.textContent);
     // `Marshfolk` is a campaign copy at `visibility: "dm"` in the fixture, so
     // `corpusRowReadable` would not return it to a player — and the fixture's
@@ -678,7 +678,7 @@ describe("writing down a character of your own", () => {
     // second answer to a question the predicate has already settled.
     expect(offered).toContain("Elf");
     expect(offered).toEqual(
-      campaignOptions.filter((row) => row.kind === "species").map((row) => row.name),
+      campaignOptions.filter((row) => row.kind === "race").map((row) => row.name),
     );
   });
 });

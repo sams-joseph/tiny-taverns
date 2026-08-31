@@ -185,8 +185,9 @@ export class Hob extends Context.Service<
           creatures: yield* Creatures,
           events: yield* SessionEvents,
           // The seventh, and the one no tool handler calls: a campaign's
-          // classes and species decide the *shape* of `proposeCharacter`, so
-          // they are read before the toolkit exists rather than from inside it.
+          // classes, races and backgrounds decide the *shape* of
+          // `proposeCharacter`, so they are read before the toolkit exists
+          // rather than from inside it.
           options: yield* Options,
         };
 
@@ -275,16 +276,16 @@ export class Hob extends Context.Service<
               const finished = yield* Ref.make("stop");
 
               /**
-               * This campaign's classes and species — **one extra read, and
-               * only for a player.**
+               * This campaign's classes, races and backgrounds — **one extra
+               * read, and only for a player.**
                *
                * `proposeCharacter` is built from it, and only the player's
                * toolkit has one, so a DM's question costs exactly what it did
                * before. That is the design's second stated cost paid at its
                * smallest: capped by `OPTION_LIMIT`, against `corpusRowReadable`
                * — the same predicate and the same method the create form's own
-               * pickers read through, so a class Hob may offer is exactly a
-               * class the player could have picked by hand.
+               * pickers read through, so an option Hob may offer is exactly an
+               * option the player could have picked by hand.
                *
                * Read **here** rather than inside the stream, for two reasons
                * that both matter: `CurrentActor` is still ambient at this point
@@ -1279,7 +1280,7 @@ const playerPrompt = (campaign: Campaign): string =>
     `make a character for "${campaign.name}", a tabletop roleplaying game somebody else runs.`,
     "",
     "They will describe a person in their own words. Read it, and offer them a whole",
-    "character with proposeCharacter — a name, a species, a class, the six abilities",
+    "character with proposeCharacter — a name, a race, a class, a background, the six abilities",
     "ranked most important first, up to four skills, a starting kit and a short",
     "backstory in their register rather than yours. Do not ask clarifying questions",
     "first: draft something, and let them correct it. Nothing you offer is saved until",
@@ -1366,7 +1367,7 @@ const offered = (turn: HobTurn): string | undefined => {
      * send is a model one round from a schema error.
      */
     case "character": {
-      const line = [proposal.species, proposal.className].filter((part) => part !== null).join(" ");
+      const line = [proposal.race, proposal.className].filter((part) => part !== null).join(" ");
       const ranked = [...proposal.sheet.abilities]
         .sort((a, b) => Number(b.score) - Number(a.score))
         .map((ability) => ability.label)

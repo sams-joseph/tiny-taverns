@@ -84,7 +84,8 @@ describe("editing the durable columns", () => {
         name: "Brannoc Duskharrow",
         playerName: "Ilse",
         level: 6,
-        species: "Half-orc",
+        race: "Half-orc",
+        subrace: null,
         className: "Paladin",
         ac: 18,
         hpMax: 52,
@@ -153,13 +154,13 @@ describe("editing the durable columns", () => {
     await renderSheet();
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
 
-    const species = await screen.findByRole("textbox", { name: "Species" });
-    await userEvent.clear(species);
-    await userEvent.type(species, "Goliath");
+    const race = await screen.findByRole("textbox", { name: "Race" });
+    await userEvent.clear(race);
+    await userEvent.type(race, "Goliath");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await screen.findByText(/belongs to someone else/);
-    expect(screen.getByRole("textbox", { name: "Species" }).getAttribute("value")).toBe("Goliath");
+    expect(screen.getByRole("textbox", { name: "Race" }).getAttribute("value")).toBe("Goliath");
   });
 });
 
@@ -659,7 +660,7 @@ describe("what a player still cannot reach", () => {
   /**
    * **The one thing a sheet write changes that this screen cannot see.**
    *
-   * A level, a species or a class moves the generated `descriptor`, and the
+   * A level, a race or a class moves the generated `descriptor`, and the
    * DM's party strip and party screen both draw it — a different account, in a
    * different browser, on a screen this dialog has never heard of. Naming the
    * *resource* is what reaches it, so what is asserted is that the resource is

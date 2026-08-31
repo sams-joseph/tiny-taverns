@@ -121,7 +121,7 @@ beforeAll(async () => {
       payload: {
         name: "Brannoc",
         playerName: "Ilse",
-        species: "Half-orc",
+        race: "Half-orc",
         className: "Paladin",
         hpMax: 52,
       },

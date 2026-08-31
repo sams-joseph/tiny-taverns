@@ -18,7 +18,7 @@ import { OptionFields } from "./OptionFields";
 import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } from "./optionDraft";
 
 /**
- * Writing a class, a species or a background **into your library** — in no
+ * Writing a class, a race or a background **into your library** — in no
  * campaign at all.
  *
  * The captain's model puts authoring here and nowhere else: writing a class is
@@ -42,7 +42,7 @@ import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } fr
  *   be hidden from. The copy `derive` makes takes the visibility the copy-in
  *   control names, not one inherited from here.
  * - **`kind`.** Not on `OptionLibraryUpdate` and it cannot be: a class that
- *   became a species would carry a document its own column contradicts. The
+ *   became a race would carry a document its own column contradicts. The
  *   kind is chosen once, when the row is written, and is what the row *is*.
  * - **`origin`.** No payload in the product carries it. Provenance is the
  *   server's to state.
@@ -105,9 +105,9 @@ export function OptionForm({
           return client.library.createOption({
             payload: { kind: "class", name, body: written.body },
           });
-        case "species":
+        case "race":
           return client.library.createOption({
-            payload: { kind: "species", name, body: written.body },
+            payload: { kind: "race", name, body: written.body },
           });
         case "background":
           return client.library.createOption({

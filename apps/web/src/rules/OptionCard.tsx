@@ -3,7 +3,7 @@ import { Badge, Button, Card, CardContent, Icon } from "@taverns/ui";
 import { numbersOf, ownerOf } from "./option";
 
 /**
- * One class or species, as a row on either list over this table.
+ * One class or race, as a row on either list over this table.
  *
  * **The Rules screen and the Library screen share it**, the way `CreatureCard`
  * is shared by the campaign bestiary and the monster Library, and for the same

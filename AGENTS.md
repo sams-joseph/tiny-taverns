@@ -1108,50 +1108,24 @@ inserting a second, and two future source entities may share a display name. The
 records is Taverns' project-authored starter bundle, not 5e-bits or SRD content. It never writes
 `visibility`, so a shared system creature is not un-shared by an upgrade.
 
-### The bundle carries no third-party prose — this project writes what it ships
+### The bundled rules source: bestiary is Taverns-authored, character rules are 2014 SRD
 
-**Captain's decision, 2026-08-26, and it is a rule rather than a historical note: the current
-starter bundle is not SRD, licensed or otherwise third-party content.** Everything it ships under
-`origin = 'system'` is written by this project — today six fixture creatures
-(`apps/server/src/bestiary/systemCreatures.ts`, transcribed from the designers' own `data.js`) and
-thirty-eight class, species and background rows (`apps/server/src/ruleset/systemOptions.ts`).
+Since `0019`, `origin = 'system'` is not the whole citation. It means _bundled and owned by
+nobody_; the `rules_source_*` tables say which source document/entity/revision a bundled row
+reflects. There are now two active source documents and they must not be collapsed:
 
-**Since `0019`, `origin = 'system'` is explicitly not the whole citation.** It still means
-_unowned bundled row_, and the structural immutability argument is unchanged; the new
-`rules_source_*` tables say which source document/entity/revision a bundled row reflects. The two
-current importers record **Taverns' project-authored starter bundle** there and must not label those
-rows as 5e-bits, SRD, OGL or Wizards content. The foundation is edition-aware because the next source
-is the captain's 2026-08-31 choice: 5e-bits' **2014** corpus and 2014 gameplay semantics. Broad SRD
-content only arrives through its own importer and source-document attribution.
+- **Bestiary starter creatures** remain Taverns project-authored data, transcribed from the
+  designers' fixture. `bestiary:import` records the `TAVERNS_STARTER_SOURCE` and never writes
+  third-party attribution for those six rows.
+- **Character rules options** (`class`, `race`, `background`) are transformed from the pinned
+  2014 5e-bits `5e-database` snapshot (`5.10.0`, commit
+  `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). `ruleset:import` records the 5e-bits MIT
+  attribution and that the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used
+  under the Open Game License 1.0a. The web footer and README name that attribution.
 
-**The current starter bundle ships mechanics and names only**: a name, a hit die, an unarmoured-armour rule, hit
-points per level. **No feature text, no background mechanical grants, no spell or item
-descriptions.** Those are somebody's expression rather than a number, and the reason is that this
-way the product takes on no attribution obligation and depends on no belief about what a licence
-permits — the 22 facts shipped in a TypeScript file every client downloaded long before `0017`
-moved them into rows, so nothing about them is newly published.
-
-Three consequences to state rather than leave to be inferred:
-
-- **A DM writing their own prose into their own homebrew is unaffected**, and the rule must never be
-  read as restricting them. `CharacterOption`'s `summary` and a creature's whole `statBlock`
-  document are theirs, in their campaign, and are not something this project ships.
-- **Slice 5 of `data/tav-character-entities-design/report.md` — feature text, proficiencies and
-  starting equipment on the bundle, with the sheet rendering the campaign's class document — is not
-  built as designed.** If it is ever wanted, the route is prose written fresh by this project, and
-  that is a new decision rather than a resumption of the old one.
-- **The sixteen bundled backgrounds therefore carry no ability score increases** —
-  `abilityIncreases: []` on every one of them — because in the 2024 ruleset that _is_ the
-  background's mechanical grant, which the sentence above names out by title. This is the
-  conservative reading, taken deliberately; the other one (an increase is a number, and numbers
-  are what the bundle ships) is defensible enough that **it is the captain's call, not a
-  worker's**. Changing it is one array in `systemOptions.ts` and nothing else moves. See "The
-  bundled backgrounds are sixteen names and no grants at all" under character options.
-
-So an absent `summary` on a bundled row is **missing data, not a stub**: the field exists for the
-DM who fills it in, and inventing a sentence for a bundled class would be exactly the
-plausible-looking value `systemCreatures.ts` refuses. Do not add attribution notices or licence
-files either — the decision is that there is nothing to attribute.
+That split is deliberate: do not relabel the bestiary as SRD, and do not treat the 2014 rules
+rows as project-authored. A DM's own homebrew prose is still theirs, in their campaign or Library;
+the attribution rule is about what this product bundles and imports as `system`.
 
 **`encounter_creature` hangs off `encounter` with no `campaign_id`,** like `prep_item` under
 `session` and for the same reason. Two things about it are specific:
@@ -1367,191 +1341,78 @@ need `corpusRowReadable`'s campaign quantified, which is the shape this change j
 - **Existing campaign-authored creatures were not migrated into anybody's Library**, by the captain's
   own instruction, and `0015` clears nothing. Whose Library would have been a guess.
 
-## Character options: a campaign's own classes, species and backgrounds
+## Character options: a campaign's own 2014 classes, races and backgrounds
 
-`character_option` (`0017`) is the **second** table to carry the Library model, and the
-finding that made it cheap is the one to reuse rather than re-derive: **the four Library
-predicates in `repo/visibility.ts` have always taken a `table: string` and had only ever been
-called with `"creature"`.** A design probe built a table with `creature`'s ownership shape and
-called `libraryRowReadable`, `libraryRowWritable`, `corpusRowReadable` and
-`copyableIntoCampaign` **unmodified** against it — 8 of 8 assertions, including the
-leak-shaped ones. So this slice added **no predicate, no base case and no change to
-`repo/visibility.ts` at all**. If a third table of this shape ever seems to need one, that is a
-finding worth reporting rather than a routine step.
+`character_option` carries the same three-owner Library model as `creature`: bundled rows have
+neither owner, Library originals have `account_id`, campaign copies have `campaign_id`, and the
+four generic predicates in `repo/visibility.ts` still need no special case. A campaign's Rules
+screen reads the bundle plus that campaign's copies; the global Rules Library reads the bundle
+plus this account's originals. They are disjoint by predicate and must stay that way.
 
-Read "The Library: a monster belongs to an **account**" first; everything there about the three
-owners, `*_one_owner`, `*_system_is_unowned` and the snapshot applies here word for word.
-What follows is only what is **different about a rules entry**.
+### The 2014 switch, and what supersedes the old 2024 notes
 
-**The third kind cost one widened check constraint and nothing else** (`0018`), and that is
-worth recording because it is the bet `0017` made paying out: _"one `note` table with a `kind`…
-adding a background is then a new `kind` value rather than a migration plus a repository plus an
-API group plus a screen"_. No column on `character_option`, none on `character`, no index, no
-backfill, no predicate — a third member of three unions, a third arm in three `switch`es, and a
-third section on a screen. The next time somebody argues for a fourth table, this is the
-evidence.
+`0020_2014_character_rules.ts` is the active migration: the old ancestry column became `race`,
+`subrace` was added, the old ancestry option rows were reset out of the active vocabulary, and
+`descriptor` now prefers the subrace label when one is present. The earlier 2024 background-ASI
+sections below this file are historical context only if they appear in an old migration; active code
+must say **race**.
 
-### The asymmetry that decides the whole design
+The bundled rules vocabulary is pinned 2014 5e-bits data (`5e-database` 5.10.0, commit
+`5a7ee5a0489b26655d343e4a41e8f7942a887af2`) and is imported by
+`apps/server/src/ruleset/import.ts` from the generated local snapshot in `systemOptions.ts` — no
+runtime fetch. The source-document row records the 5e-bits MIT attribution and the SRD 5.1 / OGL
+1.0a notice; the bestiary starter bundle remains the Taverns-authored one. Do not collapse those
+two source documents. Existing development databases from the pre-2014 vocabulary should use the
+clean reset/reseed path in `README.md`, not a compatibility backfill.
 
-A monster is used _in a campaign_; a class is used _by a character_, and a character may be a
-**player's**. `libraryRowReadable` compares `account_id` to the **reader's** account, so a
-player can never read their DM's Library — measured, over real HTTP, at their DM's own table.
-**Therefore a homebrew class must be copied into the campaign before a player can pick it.**
-The copy is not convenience; without it the feature does not work at all, and
-`options.list` is the one campaign-scoped list in the product a **player** reads to fill in a
-control.
+### Races contain subraces; there is no fourth option kind
 
-**It bites hardest for the background**, which is the one kind whose bundled rows carry no
-mechanics at all: the sixteen are names, so a background that actually moves a number is
-_always_ a DM's own, and is always reached through the copy.
+A subrace is a child in `RaceBody.subraces`, not `character_option.kind = "subrace"`. That shape is
+what keeps the race/subrace pair contained by one source entity and one campaign copy. The UI and
+Hob both resolve subraces through `subraceNamed(race, label)`, and the repository validates manual
+character writes that name a subrace: a free-text race may stand alone, but `subrace` must be a
+child of a readable race option in that campaign.
 
-### The bundled importer writes `visibility = 'shared'`, and `bestiary:import` does not
+`Character.subrace` is nullable on the row and on every payload that can name the durable identity.
+When a patch omits one side, `repo/Characters.ts` validates against the existing row's other side;
+when a caller changes a race and leaves an old incompatible subrace in place, the write is a
+`Conflict` rather than a descriptor that lies.
 
-**Confirmed by the captain on 2026-08-27, as a rule rather than as a historical note** — all
-three parts of it below, including the seeder, which the original question did not name. It is
-the settled answer; do not "tidy" the asymmetry away in either direction.
+### What `Ruleset.ts` is now
 
-The one place the two importers differ, and it is the consequence of the same decision rather
-than a second one. `corpusRowReadable` ends in `isDm OR visibility = 'shared'` and the column
-default is `dm`. For a **creature** that is the whole point — a stat block is precisely what
-the product says a player must not have. For a **class** it is the difference between working
-and not: the bundle landing `dm` would give every player in the product an **empty class
-picker**, at every table, until each DM shared twelve rows by hand.
+`packages/api/src/Ruleset.ts` keeps arithmetic only: `AbilityKey`, `AbilityBonus`,
+`AbilityBonusChoice`, `ClassEntry`, `RaceEntry`, `SubraceEntry`, the modifier helpers, and
+`seedFor`. It holds **no fallback maps** of classes/races/backgrounds; every caller resolves labels
+against the campaign vocabulary and hands entries in. Backgrounds seed no ability scores in 2014.
 
-The rule is the one the copy-in dialog follows: **the column default does not change, and a
-writer that means `shared` says so out loud.** So `ruleset/import.ts`'s `insert` names it and
-its `do update` clause deliberately does **not** — a DM who un-shared a bundled class does not
-have it re-shared by an upgrade, exactly as `bestiary/import.ts` never touches a visibility.
-`OptionDialog` and `CopyOptionIn` send `visibility: "shared"` on the wire for the same reason,
-and the switch is the one form control in the product that **starts on**.
+`seedFor` applies fixed race bonuses, fixed subrace bonuses and explicit race bonus choices
+(Human's six +1s, Half-Elf's two choices, etc.) to the cells it is handed, then derives AC and HP
+from those same cells. `CharacterSeed.abilities` is therefore still load-bearing: the sheet stores
+the exact cells the seed read. The function is still seed-only — creation and Hob proposal only,
+never a recompute after a row exists.
 
-**The insert-names-it / update-does-not asymmetry is the part most at risk**, because it reads
-as an inconsistency to anybody meeting it cold and "fixing" it either way breaks a half:
-naming `visibility` in the `do update` too re-shares a row somebody un-shared, on every
-upgrade; dropping it from the `insert` gives the whole product an empty class picker. Both the
-reason and the confirmation are written at `apps/server/src/ruleset/import.ts`, and
-`apps/server/test/options.test.ts`'s _"says `shared` on insert and nothing on update"_ is the
-pin — it un-shares a bundled row behind the API (no shipped write path can reach one), re-runs
-the seeder with a changed body so the update demonstrably ran, and asserts the body moved and
-the visibility did not.
+### Backgrounds are 2014 source grants, not ability-score math
 
-### `character` needed no migration, and could not have used the useful thing
+`BackgroundBody` now records the 2014 background's display/source grants — proficiencies, languages,
+equipment/gold, feature text and choice text — and **no** ability-score-increase field. Choosing a background
+may write `sheet.identity.background`, `sheet.proficiencies` and starting `sheet.inventory`; it must
+not move the six ability cells or the derived HP/AC.
 
-No `class_id`, no `species_id`, no column at all — `species` and `class_name` stay text.
+The bundled importer still writes `visibility = 'shared'` on insert and deliberately leaves it alone
+on update, for the old reason: players need the shared bundle to fill pickers, while a DM who has
+unshared a bundled option must not have an upgrade re-share it.
 
-The first reason is a hard constraint rather than a preference: **`character.descriptor` is a
-generated column, and a generated column cannot reference another table** (`cannot use subquery
-in column generation expression`, measured). So the label can only ever be written from text on
-the character's own row.
-
-The second is that nothing would read the pointer. `seedFor` consumes the class **once**, at
-creation, and never again. A provenance pointer arrives at the slice where something reads it,
-and the first plausible reader is a _report_ ("4 characters were made from Bloodsworn before
-this edit") — which is the honest form of propagation and is not a write. The named cost of not
-having it: the product cannot answer that question, and cannot tell two same-named classes in
-two campaigns apart.
-
-### Propagation stops at every hop, and there must be no button that undoes that
+### Propagation stops at every hop
 
 ```
 Library original ──derive──▶ campaign copy ──seed at creation──▶ character row
      edits stop here            edits stop here                   edits stop here
 ```
 
-Hop 1 is the creature rule verbatim (a copy is a snapshot; nothing is read through
-`derived_from`). Hop 2 is the captain's shipped _seed at creation, never recompute_. A DM who
-wants an edit to reach the table edits the **campaign copy**, so every character made after
-that gets it. **There is no recompute-all-sheets and there must not be one** — it would
-overwrite `ac` and `hpMax` values players typed by hand, with no way to tell an intentional
-number from a stale seed. `RulesScreen.test.tsx` asserts the absence.
-
-### What `Ruleset.ts` is now, and where the twelve and the ten went
-
-`packages/api/src/Ruleset.ts` keeps the **arithmetic** — `AbilityKey`/`ABILITY_KEYS` (the
-ruleset's _frame_ rather than its content), `AbilityIncrease`, `signed`, `modifierFor`,
-`modifierOf`, `increasesLine`, `STARTING_LEVEL`, `ClassEntry`/`SpeciesEntry`/`BackgroundEntry`
-as the shapes a document decodes to, and `seedFor`. **`seedFor` takes entries rather than
-labels**: there is no global map to look one up in, so each caller resolves against its own
-vocabulary and hands over what it found.
-
-### The background is the entry that moves the six cells, and that is the whole of what it cost
-
-**The one thing to know before touching the seed.** A class carries a hit die and a species hit
-points per level; both are read straight into a number. The 2024 ruleset moved the ability score
-increases off the species and onto the **background**, so that entry raises the six ability
-cells and lets the armour class and the hit points follow from the raised ones. Hence:
-
-- `seedFor` applies the background **first**, before it reads any modifier;
-- and **hands the raised cells back** on `CharacterSeed.abilities`.
-
-That return value is not a convenience. Both create paths write a `sheet` as well as three
-numbers, and if the cells came from anywhere but the seed the sheet would say `CON 13` beside
-hit points worked out from 15 — arithmetically right on both sides and wrong together, which is
-the hardest kind of wrong to notice. Returning them is what makes _"the cells the seed read are
-the cells that get written"_ a property of the shape rather than a rule each caller remembers.
-
-**Seeding is still seed-only.** It is called once, at creation, from `apps/web/src/characters/create.ts`
-and `assistant/toolkit.ts` and nowhere else. Nothing writes the raised scores back into the
-create form's own boxes — the boxes hold what the player typed, `seedOf` holds what gets written
-— because un-applying a previous background when somebody changes their mind is exactly the
-recompute this design refuses. Changing the pick is a fresh answer, not an undo followed by a
-redo, and picking the same one twice is the same answer.
-
-**Two refusals inside `withIncreases`, both of them refusals to invent:**
-
-- **a cell that is not there is not created.** A player who filled in four of six has not said
-  what their constitution is, and writing `12` would be inventing a base of 10 and presenting it
-  as theirs. The seed's numbers are unchanged either way (`modifierOf` already reads a missing
-  cell as `+0`), so what is avoided is a _document_ claiming six scores when four were given —
-  and the create form says which of the three situations the player is in rather than promising
-  a change that will not happen;
-- **a score that is not a whole number is left exactly as written**, because `Ability.score` is
-  a `NonEmptyString` and the document keeps what was written.
-
-The modifier is rewritten in the same object literal as the score, the rule every writer of an
-`Ability` follows: the one thing the document cannot survive is the two disagreeing.
-
-The data moved to `apps/server/src/ruleset/systemOptions.ts` — the bundle the seeder writes —
-and **there is deliberately no fallback map in the contract package.** A second copy in code
-would be a second answer to _what is a druid_, and it would be the one nobody edits.
-
-### The bundled backgrounds are sixteen names and **no grants at all**
-
-**A rule, not an omission**, and the one thing about slice 3 most likely to be "fixed" by
-somebody meeting it cold. `AGENTS.md` § "The bundle carries no third-party prose" enumerates
-what the bundle ships — _a name, a hit die, an unarmoured-armour rule, hit points per level_ —
-and names **background mechanical grants** as out, by title. In the 2024 ruleset a background's
-mechanical grant is precisely the ability score increases, so every one of the sixteen ships
-with `abilityIncreases: []`.
-
-The conservative reading was taken deliberately: the whole point of that decision was that
-nothing depends on a belief about what a licence permits, and the alternative reading (an
-increase is a number, and numbers are what the bundle ships) is defensible enough that it is
-**the captain's to make, not a worker's**. Changing it is one array in one file; nothing in the
-schema, the seed or either screen would move.
-
-So a bundled background is **vocabulary**: the word a player picks and the word that lands in
-`sheet.identity.background`. A table that plays the book's grants writes its own on the Rules
-screen, and both screens render an empty grant as _"no ability score increases written down"_ —
-_nobody has said_, which is what it means, rather than a claim about the ruleset.
-
-`[]` rather than an absent key is `BackgroundBody`'s own decision and is structural:
-`OptionUpdate.body` is a `Schema.Union` of the three documents and **`Schema.Union` takes the
-first member that matches** (measured: put an all-optional struct in front and
-`{hitDie: 8, unarmouredAc: ["DEX"]}` decodes to `{}`). One required key each — `hitDie`,
-`hpPerLevel`, `abilityIncreases` — makes the three mutually exclusive by shape, which is what
-`repo/Options.ts`'s `bodyKind` reads and what makes the union's order carry no meaning.
-
-**Hob drafts from the campaign's vocabulary, not from that file** — see "Hob drafts from the
-campaign's own vocabulary" under the assistant. It briefly did draft from the twelve and the
-ten, as two `Schema.Literals` exported here; the schemas and the two label lookups beside them
-(`BundledClassName`/`BundledSpeciesName`, `bundledClass`/`bundledSpecies`) **left with that
-slice and there must not be a second label lookup here**, which would be the fallback map the
-report forbids. `optionNamed` is the product's only one. What is left is the seeder's own
-source, and its two vocabularies are a **name tuple beside a `Record<Name, Entry>`** rather
-than one array of objects: `Array.prototype.map` widens a tuple to an array, and the pairing is
-exhaustive by type — so there is no cast anywhere, which `dm-actor.test.ts` enforces
-(`as unknown as` is banned in `src`).
+A race/class/background copied into a campaign is a snapshot. A character seeded from it is another
+snapshot: no pointer is stored on `character`, and there must be no recompute-all-sheets button. The
+one explicit cost is accepted: the product cannot later answer which exact source entity a character
+was originally seeded from.
 
 ### Seven smaller things that are decisions
 
@@ -1563,20 +1424,20 @@ exhaustive by type — so there is no cast anywhere, which `dm-actor.test.ts` en
 - **There is no `POST /campaigns/:c/options`.** Authoring happens in the Library, so a campaign
   gets a row through `derive` and nothing else — the contradiction `AGENTS.md` already records
   about `POST /campaigns/:c/creatures` is deliberately not inherited.
-- **`OptionUpdate` has no `kind`.** A class that became a species would carry a document its own
-  column contradicts. A body that does not match the row is a `Conflict` from `repo/Options.ts`,
-  which is the only place a body is told apart by its shape (`bodyKind`).
+- **`OptionUpdate` has no `kind`.** A class that became a race or a background would carry a
+  document its own column contradicts. A body that does not match the row is a `Conflict` from
+  `repo/Options.ts`, which is the only place a body is told apart by its shape (`bodyKind`).
 - **No `tsvector` and no fifth arm in `repo/Search.ts`.** `0008_beats.ts`'s rule — an index
   nothing reads is worse than none.
 - **The bundle's unique index is its source entity**, not `(kind, lower(name))` any more. `kind`
-  still belongs in the source identity — class `Warden` and species `Warden` are different
-  entities — but display names are no longer an upsert key.
+  still belongs in the source identity — class `Warden` and race `Warden` are different entities —
+  but display names are no longer an upsert key.
 - **A character's background is `sheet.identity.background` and earns no column**, where the
-  class and the species are columns. Nothing filters or sorts on it and it is not one of the
-  three the generated `descriptor` is built from — adding a fourth would be a migration for a
-  string only the sheet's header draws, which `Character.ts` already refuses for `subclass` in
-  as many words. So an existing free-text background resolves to nothing, is never rewritten,
-  and renders exactly as it did.
+  class, race and subrace are columns. Nothing filters or sorts on it and it is not one of the
+  identity columns the generated `descriptor` is built from — adding it would be a migration for a
+  string only the sheet's header draws, which `Character.ts` already refuses for `subclass` in as
+  many words. So an existing free-text background resolves to nothing, is never rewritten, and
+  renders exactly as it did.
 
 ### The screens: two lists over one table, and they can never overlap
 
@@ -1608,8 +1469,8 @@ disagreement**, the rule `characters/AbilityFields.tsx` already states:
   untouched summary an absent key_ would differ first at the thing nobody looks at.
 - `OptionFields.tsx` — the boxes. The **editor**, under two shells.
 - `OptionSection.tsx` — one labelled region and the `@container` grid it draws. Both screens
-  draw three of them (classes, species, backgrounds), which is what made the background's
-  arrival one call site each rather than a second component.
+  draw three of them (classes, races, backgrounds), which is what made the background's arrival one
+  call site each rather than a second component.
 - `OptionCard.tsx` — a row. The verbs come in as `(option) => (() => void) | undefined`, the
   `CreatureGrid` shape, so each list renders the shipped write predicate at the one place that
   knows which list it is: `isCampaignCopy` on the campaign's, `isLibraryOriginal` on the
@@ -1640,52 +1501,22 @@ in the screen rather than in `AppShell` because it is this screen that is unusua
 Measured, the bar grows 89 → 110 → 197px at 1440 / 900 / 760 with no horizontal overflow at any
 width and every button hit-testable.
 
-The player's half is the create form's three pickers, which read `campaignOptionsAtom` — **the
-same atom the Rules screen writes through**, so a class shared on one becomes pickable on the
-other. The background picker is the third, and it is the only one whose effect is on the six
-ability cells rather than on the two boxes below the row — so a line under it names what the
-grant adds, in one of three states, because nobody typed those numbers and the sheet will carry
-them. `newCharacterAtom` reads both atoms **unconditionally** (an atom's dependencies are the
-ones its read function actually touched, so a `get` behind a false branch is a subscription that
-never gets made — measured: the screen loaded for ever) and drops the vocabulary's answer only
-at a table this account does not _play_ at, where `options.list` is a 404 and the screen has a
-better sentence than a generic error card.
+The player's half is the create form's class/race/subrace/background pickers, which read
+`campaignOptionsAtom` — **the same atom the Rules screen writes through**, so a class shared on
+one becomes pickable on the other. Race and contained subrace choices are the ones that can move
+the six ability cells before HP/AC are seeded; a background writes source grants onto the sheet
+(proficiencies, languages, feature, equipment/gold) and does not change creation arithmetic.
+`newCharacterAtom` reads both atoms **unconditionally** (an atom's dependencies are the ones its
+read function actually touched, so a `get` behind a false branch is a subscription that never
+gets made — measured: the screen loaded for ever) and drops the vocabulary's answer only at a
+table this account does not _play_ at, where `options.list` is a 404 and the screen has a better
+sentence than a generic error card.
 
-**Measured end to end in Chromium** against a real server, a real Postgres and two accounts (a
-DM and a player joined through a real invitation): the DM wrote _Bloodsworn, d10, unarmoured AC
-DEX + CON_, which produced **two rows** — the Library original at the column default (`dm`) and
-the campaign copy at `shared`, sent out loud; the player's picker then offered thirteen classes
-including it and none of the DM's Library, and picking it with constitution 14 landed on the
-shipped sheet at _"Level 1 Human Bloodsworn"_, **12/12 hp and AC 12**. Editing the campaign copy
-to a d4 afterwards left both characters exactly where they were — including one carrying the
-free-text `"Circle of the Moon Druid"`, which is never rewritten and resolves to nothing because
-`optionNamed` refuses fuzzy matching. Un-sharing the copy took it out of the player's picker and
-left the DM's screen saying _"1 your players cannot pick yet"_. Copying the same original again
-made a second copy, which the dialog says it will. Dialogs at `z-dialog` 110 over `z-scrim` 100
-at 460px; the grid is two columns at 1440/1200/1024/900 and one at 760, with
-`document.scrollWidth` equal to the viewport at every width.
-
-**Re-measured for the background on 2026-08-27**, same shape and same conclusion: the DM wrote
-_Salt-runner, +2 CON +1 WIS_, which produced the Library original at `dm` and the campaign copy
-at `shared`; the card read `+2 CON, +1 WIS` and the editor's six boxes round-tripped it. The
-player's picker offered seventeen backgrounds — the bundled sixteen plus that one — and the
-select popup opened at `z-popup` 200 with `elementFromPoint` landing on an option. Picking it
-with no scores set moved **nothing** and the line said so; pressing _Standard array_ then moved
-the two boxes to **10 hit points and armour class 12**, and the row that was created carried
-`CON 15 (+2)` and `WIS 11 (+0)` — the raised cells, not the typed ones — with
-`identity.background` set, `visibility` `dm` and `hpCurrent` null. Editing the campaign's copy
-afterwards left the character exactly where it was; raising constitution to 20 on the shipped
-sheet afterwards left `ac` and `hpMax` untouched; and a character carrying the free-text
-`"Herbalist's apprentice"` was byte-identical throughout. Un-sharing took it out of the player's
-list **and out of Hob's grammar** while the DM still read it. No sideways scroll at 1440 / 1200
-/ 1024 / 900 / 760 on either screen.
-
-**And the two creation paths agree exactly**, which is the thing that has diverged before on
-this seeding. For one Elf Druid with the ranking `STR DEX CON INT WIS CHA` and _Salt-runner_:
-the manual form produced `ac 12, hpMax 10` and six cells `STR 15 / DEX 14 / CON 15 (+2) /
-INT 12 / WIS 11 (+0) / CHA 8`; Hob's `proposeCharacter`, driven against a scripted
-OpenAI-compatible endpoint, produced the **same three numbers and the same six cells**, with the
-same `identity.background`. One `seedFor`, called once on each path.
+**The two creation paths agree exactly**, which is the thing that has diverged before on this
+seeding. The manual form and Hob both resolve labels from the same campaign vocabulary, hand
+entries to the same `seedFor`, and write the same background sheet facts when the background
+resolves. A free-text or later-deleted background label still lands only in
+`sheet.identity.background`; no proficiencies, feature, equipment or gold are invented.
 
 ## The party: what earns a column on `character`, and what lives in the document
 
@@ -1699,8 +1530,8 @@ applied is the one the bestiary already follows and the one every later step sho
 Taverns holding a character does not make it a character builder — that is a different product
 and the first thing it owes anyone is errata. So:
 
-- **Columns**: `name`, `player_name`, `level`, `species`, `class_name`, `ac`, `hp_max`,
-  `sheet_url`, `account_id`, plus the usual visibility/provenance tail.
+- **Columns**: `name`, `player_name`, `level`, `race`, `subrace`, `class_name`, `ac`,
+  `hp_max`, `sheet_url`, `account_id`, plus the usual visibility/provenance tail.
 - **Document**: `body` (on the wire `sheet`) — `notes`, `abilities`, `traits`, plus the thirteen
   optional keys the drawn sheet added without a migration (see "What the character sheet reads,
   and where each part of it lives"). `Ability` and `Trait` are imported from `Creature.ts` rather
@@ -1708,14 +1539,14 @@ and the first thing it owes anyone is errata. So:
   monster or a person, and `bestiary/StatBlock.tsx` already draws them — which is why the sheet
   extended those two rather than minting a `CharacterAbility` and an `Attack`.
 
-**`level`, `species` and `class_name` are columns by the captain's decision, against the
-report's own recommendation**, and the reason is that players edit their own characters and
-levelling is what they will do — an increment as a number, four people editing prose and hoping
-they agree as part of a string. It also makes the party sortable and gives Hob something to
-reason about.
+**`level`, `race`, `subrace` and `class_name` are columns by decision, against the original
+report's pointer-shaped recommendation**, and the reason is that players edit their own characters
+and levelling is what they will do — an increment as a number, four people editing prose and hoping
+they agree as part of a string. It also makes the party sortable and gives Hob something to reason
+about.
 
 **Therefore `descriptor` is derived, and it is a Postgres generated column** —
-`"Level 3 Half-orc Paladin"`, `nullif`/`btrim`/`coalesce` over the three. Four things follow,
+`"Level 3 Hill Dwarf Paladin"`, `nullif`/`btrim`/`coalesce` over level, subrace-or-race and class. Four things follow,
 and the first is the one to know before touching it:
 
 - **Nothing stores a second copy and nothing can**: Postgres refuses an `INSERT` or `UPDATE`
@@ -1725,18 +1556,18 @@ and the first is the one to know before touching it:
   the decision exists to prevent.
 - `concat_ws` reads better and cannot be used: it is `stable`, not `immutable`, so a generation
   expression refuses it. And **a generated column may not reference another**, which is why
-  `search` composes the three columns again rather than reusing `descriptor`.
+  `search` composes the identity columns again rather than reusing `descriptor`.
 - **Every reader kept working unchanged**, which is half of why it is done in SQL:
   `repo/EncounterRuns.ts` still seeds `combatant.subtitle` from `character.descriptor`, and
   `PartyList` still renders one column.
 - The upgrade **does not parse the descriptors already there**. Splitting `"Half-orc paladin"`
-  into a species and a class is guessing, and a guess written into a column the DM trusts is
-  worse than an absence — so the old text is kept verbatim as the sheet's `notes` and the
-  derived line is null until somebody fills the two boxes. `migrations.test.ts` pins that,
-  column by column.
+  into a race, optional subrace and class is guessing, and a guess written into a column the DM
+  trusts is worse than an absence — so the old text is kept verbatim as the sheet's `notes` and
+  the derived line is null until somebody fills the boxes. `migrations.test.ts` pins that, column
+  by column.
 
 **`character` is the search index's fourth arm** (`repo/Search.ts`), `rowReadable` like `note`,
-with the `creature` weighting exactly — name A, `player_name`/`species`/`class_name` B,
+with the `creature` weighting exactly — name A, `player_name`/`race`/`subrace`/`class_name` B,
 `jsonb_to_tsvector(body)` C — so `ts_rank` stays comparable across one union. `player_name` is
 also an `ILIKE` matcher, because "who is Dara running" is asked mid-type. The snippet is
 `ts_headline` over `body ->> 'notes'` falling back to the derived descriptor, the same
@@ -1832,12 +1663,12 @@ down" below it.
 
 **What a player may write, exactly — the durable half of their own character:**
 
-| may write                                                  | how it is bounded                                                         |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `name`, `player_name`                                      | on `CharacterOwnUpdate`                                                   |
-| `level`, `species`, `class_name` — so `descriptor` follows | on `CharacterOwnUpdate`; `descriptor` is generated and writable by nobody |
-| `ac`, `hp_max`                                             | `0012`'s prep columns — durable, and neither is a hit point               |
-| `sheet_url`, `body` (the whole sheet document)             | on `CharacterOwnUpdate`                                                   |
+| may write                                                          | how it is bounded                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `name`, `player_name`                                              | on `CharacterOwnUpdate`                                                   |
+| `level`, `race`, `subrace`, `class_name` — so `descriptor` follows | on `CharacterOwnUpdate`; `descriptor` is generated and writable by nobody |
+| `ac`, `hp_max`                                                     | `0012`'s prep columns — durable, and neither is a hit point               |
+| `sheet_url`, `body` (the whole sheet document)                     | on `CharacterOwnUpdate`                                                   |
 
 **What a player may not write, and why each is out:**
 
@@ -1994,74 +1825,35 @@ the campaign's **own DM** through `/me`, and `200` for the owner's. With two tab
 at `z-dialog` 110 over a scrim at `z-scrim` 100 with `elementFromPoint` inside it. No sideways
 scroll at 1440, 1024, 900 or 760.
 
-#### The class and species vocabularies, and the three numbers they seed
+#### The class and race vocabularies, and the three numbers they seed
 
-**Superseded in part by `0017` — a campaign has its own vocabulary now.** What is still true is
-everything below about the _arithmetic_ and the two decisions it is shaped around; what moved is
-where the twelve and the ten live. See "Character options" above for the split, and read the two
-sections together rather than either alone.
+**This section supersedes the old 2024 ancestry/background-ASI note.** The active ruleset is 2014
+5e-bits/SRD semantics: a character chooses a class, a race, optionally a contained subrace, and a
+background that supplies source/display grants but no ability-score math.
 
-`packages/api/src/Ruleset.ts` holds `seedFor` and the six ability labels. **It lives in
-`@taverns/api` because both create paths call the same function**: the manual form
+`packages/api/src/Ruleset.ts` holds `seedFor` and the six ability labels. It lives in
+`@taverns/api` because both create paths call the same function: the manual form
 (`apps/web/src/characters/create.ts`'s `seededDraft`) and Hob's `proposeCharacter` handler, which
-resolves the numbers onto the proposal so the card and the row cannot disagree — the rule
-`HobProposal.sheet` already followed. Two copies of this arithmetic would be two answers to _what
-does a level-1 druid start on_. **It takes entries rather than labels since `0017`**, because
-there is no global map left to look one up in: each caller resolves against its own vocabulary and
-hands over what it found.
+resolves the numbers onto the proposal so the card and the row cannot disagree. It takes entries
+rather than labels because there is no global map: each caller resolves against its campaign
+vocabulary and hands over what it found.
 
-The twelve and the ten are `apps/server/src/ruleset/systemOptions.ts` — the bundle, written as
-rows by `pnpm -F server ruleset:import`, and read back through `Options.list` like any other
-option. Nothing in code looks a label up in them any more.
+The bundled classes, races and the SRD background are `apps/server/src/ruleset/systemOptions.ts`,
+generated from the pinned 2014 5e-bits source and written as rows by
+`pnpm -F server ruleset:import`. Nothing in code looks a label up in that file at runtime.
 
-**The ruleset is the 2024 Player's Handbook, and one ruleset only.** Chosen on shape rather than
-arithmetic (the captain's brief says the two barely differ for these three values): 2024 species
-carry no ability score increases and no subraces, so a species is one word and the picker is flat.
-The visible cost is that `"Half-orc"` and `"Wood elf"` are 2014's and are not entries — a new
-character picks `Elf` and edits the label on the sheet, where both fields are ordinary free text.
-
-The captain's three decisions of 2026-08-26 and where each is enforced:
-
-- **Structured, not free text** — at every point a _new_ value is chosen and at none where an old
-  one has to survive. The create form's two pickers are the vocabulary and nothing else, and
-  `proposeCharacter`'s `species`/`className` are closed `Schema.Literals` (the argument `AbilityKey`
-  already makes: the published JSON schema becomes a fixed list a grammar can hold a model to). A
-  near miss is a tool call that fails to decode, which is what `Hob.ts`'s `recover` is for. **Both
-  read the campaign now** — the pickers directly, and Hob by building its player toolkit per
-  request over the same `Options.list`, so the words a model is held to are the words a player
-  could have picked. See "Hob drafts from the campaign's own vocabulary" under the assistant.
-- **Seed at creation, never recompute** — `seedFor` is wired to the two pickers and to the propose
-  handler, and to nothing else. No effect watches the form, no trigger, no generated column;
-  `descriptor` stays the product's only derived character value. Measured in a browser: setting the
-  standard array on the sheet afterwards left a manually created druid on the 27 hp and AC 10 it was
-  made with.
-- **Level defaults to 1** — `STARTING_LEVEL`, used by `emptyDraft.level` and by the proposal, so the
-  form's default and the accept's value are one number.
-
-**There is no migration and no new column, and that is the answer to the existing free-text data
-rather than an omission.** A stored value _is_ the vocabulary's own label, so the link from a row
-back to an entry is a **case-insensitive, exact, no-fuzzy** match on the label — `optionNamed` in
-`packages/api/src/CharacterOption.ts` for a campaign's vocabulary, `bundledClass`/`bundledSpecies`
-in `apps/server/src/ruleset/systemOptions.ts` for Hob's. A stored key beside it would be a second
-answer to a question the label already answers, and `0017` did not add one either. So
-`"Circle of the Moon Druid"` resolves to nothing, is never rewritten, renders exactly as it did, and
-is one ordinary edit away from a label that does resolve. **Nothing anywhere refuses a value it used
-to accept**: `Character`, `CharacterUpdate`, `CharacterOwnUpdate` and `CharacterOwnCreate` all keep
-their open `className`/`species`, and `HobProposal`'s two stay `NullOr(String)` because a proposal is
-**persisted** (`assistant_turn.proposal`) and narrowing it would take a whole conversation down on
-read. Its three new numbers are `Schema.optional` for the same reason.
-
-Three things about the arithmetic that are decisions:
+Three things about the arithmetic are decisions:
 
 - **Trap 2's answer is `Ability.modifier`, and the shape is not touched.** Both halves of a cell are
   stored `NonEmptyString`s and every writer emits the pair in one object literal, so reading the
-  score and recomputing would be a second implementation. A missing or unparseable cell reads as `0`.
+  score and recomputing would be a second implementation. A missing or unparseable cell reads as
+  `0`.
 - **`ClassEntry.unarmouredAc` is a list rather than a boolean** because **Barbarian** is
   `10 + DEX + CON` and **Monk** is `10 + DEX + WIS`. Those two are the awkward classes and the only
   ones whose armour class is not `10 + DEX`.
-- **Exactly one species touches any of the three** — Dwarf, through Dwarven Toughness (+1 hp per
-  level). The other nine are entries because the picker needs them, and inventing an axis for them
-  would be the stubbed field this product refuses.
+- **Race/subrace bonuses are source data.** Dwarf's toughness is `hpPerLevel`; fixed ability bonuses
+  move the cells before AC/HP are read; source-defined choices are explicit `raceBonusChoices`.
+  Backgrounds do not move scores in 2014.
 
 #### The manual form asks for ability scores too, and that reversed a written decision
 
@@ -3121,7 +2913,7 @@ Six things about it that are decisions, not details:
   _Run_ has never earned an item (a fight is reached from the campaign that owns it); _At the
   table_ has not either. The DM's global row is four now — **Campaigns, Library, Rules,
   Components** — where _Library_ is the monsters an account has written and _Rules_ is the
-  classes, species and backgrounds (`#/library/rules`). They are **two items rather than one
+  classes, races and backgrounds (`#/library/rules`). They are **two items rather than one
   screen with a switch**, because the two lists are disjoint by predicate and the screens are
   shaped differently for a reason that is not cosmetic: a bestiary is a corpus somebody browses,
   so it has a search, chips and pages; a vocabulary is bounded by what it hangs off, so it is the
@@ -3634,7 +3426,7 @@ deleted the only way to write a character; `party/PartyScreen.tsx` now answers _
 table"_ in both senses, over two labelled regions, at the cost of no extra read (the characters
 are `CampaignView.party`, which the frame reads anyway). `campaign/CharacterDialog.tsx` is deliberately the `character` row
 **as it stands today** (name, player, descriptor, AC, max HP, visibility): the table is due to gain
-`level`, `species` and `class_name` as real columns, at which point `descriptor` stops being a free
+`level`, `race`, `subrace` and `class_name` as real columns, at which point `descriptor` stops being a free
 line, and building for that shape early would mean either a column that does not exist or a display
 string parsed back into fields — which is the thing that decision exists to prevent.
 
@@ -4099,12 +3891,12 @@ re-derived slightly wrong.
 
 **What is indexed, and by what:**
 
-| arm         | index                                                   | read predicate                                         |
-| ----------- | ------------------------------------------------------- | ------------------------------------------------------ |
-| `note`      | `0009` — `title` at weight A, `body` at B               | `rowReadable`                                          |
-| `beat`      | `0009` — `body` at weight **B**, not the default D      | the `beat → session` chain via `containedRowReadable`  |
-| `creature`  | `0004` — name A, size/type B, `jsonb` body C            | `corpusRowReadable` — this campaign's, plus the bundle |
-| `character` | `0012` — name A, player/species/class B, `jsonb` body C | `rowReadable`                                          |
+| arm         | index                                                               | read predicate                                         |
+| ----------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
+| `note`      | `0009` — `title` at weight A, `body` at B                           | `rowReadable`                                          |
+| `beat`      | `0009` — `body` at weight **B**, not the default D                  | the `beat → session` chain via `containedRowReadable`  |
+| `creature`  | `0004` — name A, size/type B, `jsonb` body C                        | `corpusRowReadable` — this campaign's, plus the bundle |
+| `character` | `0012`/`0020` — name A, player/race/subrace/class B, `jsonb` body C | `rowReadable`                                          |
 
 **A Library entity is deliberately not findable here**, and it falls out of the predicate rather
 than being arranged: a search is scoped to a campaign by its path, and an original is in no
@@ -5029,7 +4821,7 @@ selector, so anything reaching the control by id misses it silently. `SkillsDial
 
 Measured in Chromium against a real server, a real Postgres, a DM and a player joined through a
 real invitation: the backstory, a gear line (with its `equipped` switch), the level, the AC and the
-species all round-tripped and survived a reload, with `descriptor` following to _"Level 6 Goliath
+race, subrace and class all round-tripped and survived a reload, with `descriptor` following to _"Level 6 Goliath
 Paladin"_; a death save persisted with `hpCurrent` unmoved; `hpCurrent`, `tempHp`, `conditions`,
 `visibility` and `accountId` were **untouched by every write**, and a payload naming all five sent
 by hand answered `200` with the row unchanged; another player's `shared` character answered
@@ -5443,14 +5235,14 @@ down.
 `level` is not a parameter — a new character is level 1 — and there is no `visibility`, `hpCurrent`
 or `accountId`, for the reason `CharacterOwnCreate` has none: the row falls to its column defaults.
 
-**`background` stopped being a prose optional when it became an entity**, and is now required
-and enumerated exactly like `species` and `className`. It was `optionalText(80)` back when a
-background was a line on the sheet reaching no number; it is the third thing the seed reads now,
-so a parameter a model may silently omit is a seed that silently loses the ability score
-increases — and the enum makes it a _pick_, which is the kind of call a small model is good at.
-One consequence worth knowing: `ABSENT_WORDS` can no longer reach it at all, so a campaign with
-a background genuinely called _"None"_ is safe by construction rather than by the `optionalText`
-argument. `subclass`, `bond`, `ideal` and `flaw` are still prose optionals and still need it.
+**`background` stopped being a prose optional when it became an entity**, and is now required and
+enumerated exactly like `race` and `className`. It was `optionalText(80)` back when a background was
+only a line on the sheet; in 2014 it carries the source grants the sheet writes (proficiencies,
+starting gear and feature text), even though it does not move ability scores. The enum makes it a
+_pick_, which is the kind of call a small model is good at. One consequence worth knowing:
+`ABSENT_WORDS` can no longer reach it at all, so a campaign with a background genuinely called
+_"None"_ is safe by construction rather than by the `optionalText` argument. `subclass`, `bond`,
+`ideal` and `flaw` are still prose optionals and still need it.
 
 **`optionalText` is a second optional helper and the reason is worth keeping.** `ABSENT_WORDS` is
 safe only because no parameter reached through `optional` is prose; `proposeCharacter` is the first
@@ -5461,12 +5253,13 @@ time.
 
 #### Hob drafts from the campaign's own vocabulary, and the toolkit is built per request
 
-**The one structural change slice 2 made, and the sentence to hold on to:** a campaign's classes
-are a _read_, so a schema built from them has to be built when the read happens. The player's
-toolkit is therefore constructed **per request** over `Options.list`, and `proposeCharacter`'s
-`species`, `className` and `background` are `Schema.Literals` over _that campaign's_ names. A DM writes
-_Bloodsworn_, shares it, and their player is offered it — in the grammar the model is held to, not
-merely in the prose it reads.
+**The one structural change slice 2 made, and the sentence to hold on to:** a campaign's rules
+vocabulary is a _read_, so a schema built from it has to be built when the read happens. The
+player's toolkit is therefore constructed **per request** over `Options.list`, and
+`proposeCharacter`'s `race`, `subrace`, `className` and `background` are `Schema.Literals` over
+_that campaign's_ names — with `subrace` constrained to the selected race and nullable when absent.
+A DM writes _Bloodsworn_, shares it, and their player is offered it — in the grammar the model is
+held to, not merely in the prose it reads.
 
 **Why a per-request toolkit and not the two cheaper-looking alternatives**, so nobody drifts back:
 a closed enum is what lets a grammar-compiling endpoint (llama.cpp) hold a small model to a
@@ -5488,12 +5281,12 @@ unmatched label already does), within `OPTION_ENUM_CAP` (the enum, which is the 
 is why it is generous.
 
 - **`listOptions` is only in the toolkit above the cap**, because a toolkit is what the model is
-  _shown_ and a third tool is a third thing to spend a round reaching for. It reads **both kinds in
-  one call**, so the fallback costs one round rather than several.
-- **The decision is per kind.** Forty-two classes and ten species means free text for one and an
-  enum for the other; taking the grammar off both would be a cost paid for nothing. `listed` —
-  which decides whether `listOptions` is in the toolkit at all — is _any_ kind over the cap,
-  because the fallback reads every kind out in one call.
+  _shown_ and a third tool is a third thing to spend a round reaching for. It reads the rules
+  vocabulary in one call, so the fallback costs one round rather than several.
+- **The decision is per kind.** Forty-two classes and ten races means free text for one and an enum
+  for the other; taking the grammar off both would be a cost paid for nothing. `listed` — which
+  decides whether `listOptions` is in the toolkit at all — is _any_ kind over the cap, because the
+  fallback reads every kind out in one call.
 - **A silently truncated enum is what this avoids.** Holding a model to the first forty classes
   reads as "that is all there is", which is the failure this codebase forbids by name.
 - **The description is templated from the same arrays the schema was**, so the prompt and the
@@ -5557,8 +5350,8 @@ and `assistantTurnId` set, with **no edit to the accept path**. A second table's
 _Saltcaller_ and neither of the first's words, on the same DM's credential; an unshared _Hedgewise_
 reached neither the player's picker nor their grammar; the DM's own request still carried the nine
 tools and no vocabulary at all. A 42-class campaign swapped the class enum for `listOptions`, kept
-the species enum, answered 52 rows of both kinds in one call, cost three rounds, and recovered from
-an invented class name through the `Conflict`. The redraft loop carried `"Human Bloodsworn"` back
+the race enum, answered the vocabulary in one call, cost three rounds, and recovered from an
+invented class name through the `Conflict`. The redraft loop carried `"Human Bloodsworn"` back
 into the next question's prompt. No sideways scroll at 1440 / 1200 / 1024 / 900 / 760.
 
 `apps/server/test/hob-vocabulary.test.ts` pins all of it against real Postgres, including the three
@@ -5624,7 +5417,7 @@ campaign-first decision.
 **Measured end to end in Chromium** against a real server, a real Postgres, a scripted
 OpenAI-compatible endpoint and three real accounts (a DM and two players minted through real
 invitations): a player described a character, got a druid, asked _"make her a ranger instead"_ in the
-same thread and got a ranger with the species, background, abilities and skills kept, pressed _Keep
+same thread and got a ranger with the race, subrace, background, abilities and skills kept, pressed _Keep
 them_ and landed on the shipped sheet with the row `origin: assistant`, `visibility: dm`, `hpCurrent`
 null and `assistantTurnId` set; corrected the name and level through the shipped identity dialog and
 reloaded to find it kept; and deleted it from the sheet's own bar. **The DM's party screen showed

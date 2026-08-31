@@ -161,7 +161,7 @@ describe("the reach seam, enforced rather than asserted", () => {
     // they are `repo/Creatures.ts`'s and `bestiary/import.ts`'s pair over the
     // second table that carries the Library model —
     // `character_option.account_id` (`0017`) is whose **Library** a class or a
-    // species is in. Not one new predicate between them: the four Library
+    // race is in. Not one new predicate between them: the four Library
     // predicates in `repo/visibility.ts` have always taken a table name, so the
     // repository composes them with a different string and the seeder names the
     // column in the negative for the arbiter-index reason above. If a change

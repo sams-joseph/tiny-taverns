@@ -82,7 +82,7 @@ function NpcBody({ artifact }: { readonly artifact: HobArtifact & { kind: "npc" 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-3.5 font-mono text-mono leading-snug font-medium text-foreground">
-        <span>{artifact.species}</span>
+        <span>{artifact.race}</span>
         <span className="text-muted-foreground">{artifact.alignment}</span>
       </div>
       <div className="text-body-s leading-body text-foreground">{artifact.summary}</div>

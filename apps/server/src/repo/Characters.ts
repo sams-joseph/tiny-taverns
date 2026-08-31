@@ -3,6 +3,7 @@ import {
   type Actor,
   type CampaignId,
   Character,
+  Conflict,
   type CharacterAssign,
   type CharacterCreate,
   type CharacterDamage,
@@ -13,6 +14,7 @@ import {
   type CharacterUpdate,
   CurrentActor,
   NotFound,
+  type RaceBody,
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
@@ -38,6 +40,7 @@ import {
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
+  corpusRowReadable,
   memberOfCampaign,
   ownedRowReadable,
   ownRowReadable,
@@ -54,7 +57,8 @@ interface CharacterRow extends ProvenanceColumns {
   readonly name: string;
   readonly player_name: string | null;
   readonly level: number | null;
-  readonly species: string | null;
+  readonly race: string | null;
+  readonly subrace: string | null;
   readonly class_name: string | null;
   /**
    * `generated always as … stored`, so it arrives like any other column and is
@@ -82,7 +86,8 @@ const toCharacter = (row: CharacterRow): Character =>
     name: row.name,
     playerName: row.player_name,
     level: row.level,
-    species: row.species,
+    race: row.race,
+    subrace: row.subrace,
     className: row.class_name,
     descriptor: row.descriptor,
     ac: row.ac,
@@ -103,6 +108,61 @@ const toCharacter = (row: CharacterRow): Character =>
  */
 const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
 
+const present = (value: string | null | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed === undefined || trimmed === "" ? undefined : trimmed;
+};
+
+const subraceMismatch = (race: string, subrace: string): Conflict =>
+  new Conflict({
+    message: `"${subrace}" is not a subrace of "${race}" in this campaign. Pick one contained by that race or leave subrace blank.`,
+  });
+
+const missingRaceForSubrace = (subrace: string): Conflict =>
+  new Conflict({
+    message: `"${subrace}" needs a race before it can be checked. Pick the race it belongs to or leave subrace blank.`,
+  });
+
+const unknownRaceForSubrace = (race: string, subrace: string): Conflict =>
+  new Conflict({
+    message: `"${subrace}" needs a race in this campaign, and "${race}" is not in this campaign's race vocabulary. Pick the race it belongs to or leave subrace blank.`,
+  });
+
+/**
+ * A subrace is not its own option kind; it is contained by a race document.
+ * Labels stay open so existing free-text characters survive, but once a caller
+ * names a subrace the pair has to resolve through the same campaign vocabulary
+ * the create form and Hob use.
+ */
+const validateSubrace = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+  race: string | null | undefined,
+  subrace: string | null | undefined,
+): Effect.Effect<void, Conflict> =>
+  Effect.gen(function* () {
+    const namedSubrace = present(subrace);
+    if (namedSubrace === undefined) return;
+    const namedRace = present(race);
+    if (namedRace === undefined) return yield* missingRaceForSubrace(namedSubrace);
+
+    const rows = yield* sql<{ readonly name: string; readonly body: RaceBody }>`
+      select name, body from character_option
+      where kind = 'race'
+        and lower(name) = lower(${namedRace})
+        and ${corpusRowReadable(sql, "character_option", campaignId, actor)}
+    `.pipe(Effect.orDie);
+    if (rows.length === 0) return yield* unknownRaceForSubrace(namedRace, namedSubrace);
+
+    const contained = rows.some((row) =>
+      row.body.subraces.some(
+        (candidate) => candidate.name.toLowerCase() === namedSubrace.toLowerCase(),
+      ),
+    );
+    if (!contained) return yield* subraceMismatch(rows[0]!.name, namedSubrace);
+  });
+
 /**
  * The party — and since `0014`, a live table.
  *
@@ -113,10 +173,11 @@ const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
  * the only place either copy moves; this file composes it. Two consequences
  * are worth reading before changing anything here:
  *
- * - **Every write in this file is now a transaction**, including the PATCH,
- *   because a character write may reach a live combatant and the two have to
- *   commit together or not at all.
- * - **A write during a session appends `character-updated` and rings the
+ * - **DM-side writes that may reach live rows are transactions**, because a
+ *   character write may reach a live combatant and the two have to commit
+ *   together or not at all. Player-owned create/PATCH remain one-statement
+ *   writes because their payloads cannot name the live fields.
+ * - **A DM write during a session appends `character-updated` and rings the
  *   doorbell; a write with no session open rings nothing.** That second half is
  *   the settled decision, not an omission — a level-up typed on a Tuesday
  *   updates nobody live and an open page stays stale until it refetches. See
@@ -126,9 +187,10 @@ const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
  *
  * **There is no `descriptor` in either payload, and that is the whole shape of
  * this file since `0012`.** The `"Level 3 Half-orc Paladin"` line is derived
- * from `level`, `species` and `class_name` by a generated column, so the only
- * way to change it is to change one of those — a label stored beside the three
- * fields it summarises is a second answer waiting to disagree with the first.
+ * from `level`, `race`, `subrace` and `class_name` by a generated column, so
+ * the only way to change it is to change one of those — a label stored beside
+ * the fields it summarises is a second answer waiting to disagree with the
+ * first.
  *
  * ### What has changed: `account_id` means something
  *
@@ -148,20 +210,21 @@ const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
  * the other two rather than a way round them; see `repo/visibility.ts`'s
  * `ownRowReadable` and `rowCampaign`.
  *
- * ### And a player writes now, in exactly one place
+ * ### And a player writes now, through the narrow branch
  *
- * `updateOwn` — `PATCH /me/characters/:characterId` — is **the first write in
- * the product a non-DM may make.** Every other method in this file is
- * `rowWritable` and therefore DM-only, unchanged; this one is `ownRowWritable`,
- * which is ownership conjoined with the same campaign gate the reads use.
+ * `createOwn`, `updateOwn` and `removeOwn` are the character writes a non-DM may
+ * make. Every other method in this file is `rowWritable` and therefore DM-only,
+ * unchanged; the player-owned branch is `ensureCampaignReadable` for the insert
+ * and `ownRowWritable` for existing rows, ownership conjoined with the same
+ * campaign gate the reads use.
  *
  * Two boundaries hold it, and they are different kinds of thing on purpose.
  * **Which rows** is the predicate: yours, and nothing else. **Which columns** is
- * the payload: `CharacterOwnUpdate` has no field for `hpCurrent`, `tempHp`,
- * `conditions`, `visibility` or `accountId`, so the live half of a character
- * cannot be named by a player at all. A predicate cannot bound a column list and
- * a schema cannot bound a row set — reaching for one to do the other is how this
- * gets wide.
+ * the payload: `CharacterOwnCreate`/`CharacterOwnUpdate` have no field for
+ * `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId`, so the live
+ * half of a character cannot be named by a player at all. A predicate cannot
+ * bound a column list and a schema cannot bound a row set — reaching for one to
+ * do the other is how this gets wide.
  */
 export class Characters extends Context.Service<
   Characters,
@@ -196,7 +259,7 @@ export class Characters extends Context.Service<
     readonly create: (
       campaignId: CampaignId,
       payload: CharacterCreate,
-    ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     /**
      * A player writing down a character of their own —
      * `POST /me/campaigns/:campaignId/characters`, and **the first row a non-DM
@@ -244,12 +307,12 @@ export class Characters extends Context.Service<
        * passes it, and the only place an `AssistantOrigin` can be constructed.
        */
       from?: AssistantOrigin,
-    ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
       id: CharacterId,
       patch: CharacterUpdate,
-    ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     /**
      * A player editing their own sheet — `PATCH /me/characters/:characterId`,
      * and **the first write in the product a non-DM may make.**
@@ -273,7 +336,7 @@ export class Characters extends Context.Service<
     readonly updateOwn: (
       id: CharacterId,
       patch: CharacterOwnUpdate,
-    ) => Effect.Effect<Character, NotFound, CurrentActor>;
+    ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     /**
      * Whose character this is — the DM naming somebody at their own table.
      *
@@ -417,6 +480,7 @@ export class Characters extends Context.Service<
                 Effect.gen(function* () {
                   const actor = yield* CurrentActor;
                   yield* ensureCampaignWritable(sql, campaignId, actor);
+                  yield* validateSubrace(sql, campaignId, actor, payload.race, payload.subrace);
                   const rows = yield* sql<CharacterRow>`
                   insert into character ${sql.insert(
                     defined({
@@ -424,7 +488,8 @@ export class Characters extends Context.Service<
                       name: payload.name,
                       player_name: payload.playerName,
                       level: payload.level,
-                      species: payload.species,
+                      race: payload.race,
+                      subrace: payload.subrace,
                       class_name: payload.className,
                       ac: payload.ac,
                       hp_max: payload.hpMax,
@@ -485,6 +550,7 @@ export class Characters extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
+              yield* validateSubrace(sql, campaignId, actor, payload.race, payload.subrace);
               const rows = yield* sql<CharacterRow>`
                 insert into character ${sql.insert(
                   defined({
@@ -493,7 +559,8 @@ export class Characters extends Context.Service<
                     name: payload.name,
                     player_name: payload.playerName,
                     level: payload.level,
-                    species: payload.species,
+                    race: payload.race,
+                    subrace: payload.subrace,
                     class_name: payload.className,
                     ac: payload.ac,
                     hp_max: payload.hpMax,
@@ -528,11 +595,27 @@ export class Characters extends Context.Service<
               .withTransaction(
                 Effect.gen(function* () {
                   const actor = yield* CurrentActor;
+                  const before = yield* sql<{
+                    readonly race: string | null;
+                    readonly subrace: string | null;
+                  }>`
+                    select race, subrace from character
+                    where character.id = ${id} and ${rowWritable(sql, "character", campaignId, actor)}
+                  `;
+                  if (before.length === 0)
+                    return yield* new NotFound({ resource: "character", id });
+                  const nextRace = patch.race === undefined ? before[0]!.race : patch.race;
+                  const nextSubrace =
+                    patch.subrace === undefined ? before[0]!.subrace : patch.subrace;
+                  if (nextRace !== before[0]!.race || nextSubrace !== before[0]!.subrace) {
+                    yield* validateSubrace(sql, campaignId, actor, nextRace, nextSubrace);
+                  }
                   const columns = defined({
                     name: patch.name,
                     player_name: patch.playerName,
                     level: patch.level,
-                    species: patch.species,
+                    race: patch.race,
+                    subrace: patch.subrace,
                     class_name: patch.className,
                     ac: patch.ac,
                     hp_max: patch.hpMax,
@@ -579,11 +662,10 @@ export class Characters extends Context.Service<
           ),
 
         /**
-         * The player's own PATCH — **one statement, and the only write in this
-         * file that is not a transaction.**
+         * The player's own PATCH — **one statement, and no transaction.**
          *
          * That is not an oversight, it is the reason the whole thing is safe:
-         * every other write here may reach a second row, so it has to commit
+         * the DM-side writes here may reach a second row, so they have to commit
          * with the first or not at all. This one cannot. `conditions` is the
          * only field `update` writes through to a fight and `CharacterOwnUpdate`
          * has no such field; a live combatant snapshots `display_name`,
@@ -606,11 +688,27 @@ export class Characters extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
+              const before = yield* sql<{
+                readonly campaign_id: CampaignId;
+                readonly race: string | null;
+                readonly subrace: string | null;
+              }>`
+                select campaign_id, race, subrace from character
+                where character.id = ${id}
+                  and ${ownRowWritable(sql, "character", rowCampaign(sql, "character"), actor)}
+              `;
+              if (before.length === 0) return yield* new NotFound({ resource: "character", id });
+              const nextRace = patch.race === undefined ? before[0]!.race : patch.race;
+              const nextSubrace = patch.subrace === undefined ? before[0]!.subrace : patch.subrace;
+              if (nextRace !== before[0]!.race || nextSubrace !== before[0]!.subrace) {
+                yield* validateSubrace(sql, before[0]!.campaign_id, actor, nextRace, nextSubrace);
+              }
               const columns = defined({
                 name: patch.name,
                 player_name: patch.playerName,
                 level: patch.level,
-                species: patch.species,
+                race: patch.race,
+                subrace: patch.subrace,
                 class_name: patch.className,
                 ac: patch.ac,
                 hp_max: patch.hpMax,

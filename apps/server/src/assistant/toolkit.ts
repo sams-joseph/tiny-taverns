@@ -1,9 +1,10 @@
 import {
   type Ability,
+  type AbilityBonus,
   ABILITY_KEYS,
   AbilityKey,
   type Actor,
-  type BackgroundEntry,
+  type BackgroundBody,
   type CampaignId,
   type CharacterOption,
   type CharacterSheet,
@@ -17,7 +18,7 @@ import {
   type HobRosterLine,
   isBackgroundOption,
   isClassOption,
-  isSpeciesOption,
+  isRaceOption,
   modifierFor,
   NotFound,
   OptionKind,
@@ -30,7 +31,10 @@ import {
   SessionId,
   SessionRecap,
   type Skill,
-  type SpeciesEntry,
+  type RaceEntry,
+  type SubraceEntry,
+  type Trait,
+  subraceNamed,
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
@@ -147,7 +151,7 @@ const OPTION_ENUM_CAP = 40;
 const OPTION_NAME_MAX = 60;
 
 /**
- * **This campaign's** classes, species and backgrounds, as the words
+ * **This campaign's** classes, races and backgrounds, as the words
  * `proposeCharacter` is held to.
  *
  * ### Why a campaign's vocabulary cannot be a module-level literal
@@ -204,11 +208,8 @@ export interface CharacterVocabulary {
   /** Class names, de-duplicated, in the order the picker shows them. */
   readonly classes: ReadonlyArray<string>;
   /** {@link classes}' twin. */
-  readonly species: ReadonlyArray<string>;
-  /**
-   * {@link classes}' third — the origins, which in the 2024 ruleset are what
-   * carry the ability score increases.
-   */
+  readonly race: ReadonlyArray<string>;
+  /** {@link classes}' third — the origins, proficiencies and starting kit. */
   readonly backgrounds: ReadonlyArray<string>;
   /**
    * Whether **any** kind is over {@link OPTION_ENUM_CAP} — which is the one
@@ -221,7 +222,7 @@ export interface CharacterVocabulary {
 export const NO_VOCABULARY: CharacterVocabulary = {
   options: [],
   classes: [],
-  species: [],
+  race: [],
   backgrounds: [],
   listed: false,
 };
@@ -254,18 +255,18 @@ const namesOf = (
 /** What `Options.list` answered, as the two lists and the one decision. */
 export const vocabularyOf = (options: ReadonlyArray<CharacterOption>): CharacterVocabulary => {
   const classes = namesOf(options, "class");
-  const species = namesOf(options, "species");
+  const race = namesOf(options, "race");
   const backgrounds = namesOf(options, "background");
   return {
     options,
     classes,
-    species,
+    race,
     backgrounds,
     // Any one kind over the cap puts `listOptions` in the toolkit, because the
     // fallback reads every kind out in one call — a per-kind decision here
     // would be a per-kind tool there, which is the round this design refuses to
     // spend.
-    listed: [classes, species, backgrounds].some((names) => names.length > OPTION_ENUM_CAP),
+    listed: [classes, race, backgrounds].some((names) => names.length > OPTION_ENUM_CAP),
   };
 };
 
@@ -626,15 +627,15 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
 });
 
 /**
- * The six abilities, the twelve classes and the ten species are all
- * `packages/api/src/Ruleset.ts`'s — imported above, not restated here.
+ * The six abilities and the campaign's classes, races and backgrounds are all
+ * `packages/api/src/Ruleset.ts`'s shapes — imported above, not restated here.
  *
- * Each is a closed enum rather than free text, and `proposeCharacter` is where
- * being strict pays: the published JSON schema becomes a fixed vocabulary,
- * which an endpoint that compiles it into a grammar can hold the model to. A
- * model that wrote `"Wisdom"` would otherwise produce an ability nothing on a
- * sheet can match up with a saving throw, and one that wrote `"Wood Elf"` a
- * species nothing can look a hit point up against.
+ * Each option label is a closed enum rather than free text when the vocabulary
+ * fits, and `proposeCharacter` is where being strict pays: the published JSON
+ * schema becomes a fixed vocabulary, which an endpoint that compiles it into a
+ * grammar can hold the model to. A model that wrote `"Wisdom"` would otherwise
+ * produce an ability nothing on a sheet can match up with a saving throw, and
+ * one that wrote `"Wood Elf"` a race nothing can seed from.
  *
  * **They live in `@taverns/api` because the create form picks from the same
  * three lists**, and two copies of a vocabulary are two answers to what a
@@ -736,23 +737,22 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
   Tool.make("proposeCharacter", {
     description:
       "Offer the player a character sheet built from what they described. Give " +
-      "them a name, then a species, a class and a background. " +
-      `${nameSentence("species", "species", vocabulary.species)} ` +
+      "them a name, then a race, a class and a background. " +
+      `${nameSentence("race", "race", vocabulary.race)} ` +
       `${nameSentence("class", "classes", vocabulary.classes)} ` +
       `${nameSentence("background", "backgrounds", vocabulary.backgrounds)} ` +
-      "Put anything more " +
-      "specific, like a wood elf or a circle of the moon, in subclass. Rank the " +
+      "If the race has a subrace, put that subrace in subrace; put a class specialty " +
+      "like circle of the moon in subclass. Rank the " +
       "six abilities most important first, name up to four skills, and write a " +
       "short backstory in their own register. Do not give scores, modifiers, hit " +
       "points, armour class or a level — the standard array is applied for you " +
-      "and the starting numbers are worked out from the class, the species and " +
-      "the background. Only " +
+      "and the starting numbers are worked out from the class, race and subrace. Only " +
       "a suggestion: nothing is saved unless the player accepts it. Say one " +
       "short line about it and stop.",
     parameters: Schema.Struct({
       name: Schema.String.check(Schema.isLengthBetween(1, 120)),
       /**
-       * The species and the class — **this campaign's own vocabulary**, as a
+       * The race and the class — **this campaign's own vocabulary**, as a
        * closed enum wherever it fits in one.
        *
        * They were free text of up to sixty characters, then the bundled ten and
@@ -770,12 +770,14 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
        * and {@link nameSchema} for the three shapes this takes.
        *
        * Both required, unlike every other parameter here: a character has a
-       * class and a species, this is the one call whose whole job is to say
+       * class and a race, this is the one call whose whole job is to say
        * which, and an empty arm would be an escape a small model reaches for
        * under pressure. The description names the same two lists, built from the
        * same two arrays, so the prompt and the grammar cannot drift.
        */
-      species: nameSchema(vocabulary.species),
+      race: nameSchema(vocabulary.race),
+      /** Optional, and must be one of the subraces contained by the race. */
+      subrace: optionalText(OPTION_NAME_MAX),
       className: nameSchema(vocabulary.classes),
       /** `"Circle of the Land (Marsh)"` — the drawn tagline's unowned half. */
       subclass: optionalText(80),
@@ -783,13 +785,12 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
        * The background — **the campaign's vocabulary too, and required like the
        * other two rather than the prose optional it used to be.**
        *
-       * It was `optionalText(80)`, back when a background was a line on the
-       * sheet and reached no number. The 2024 ruleset puts the ability score
-       * increases on it, so it is now the third thing the seed reads — and a
-       * parameter the model may silently omit is a seed that silently loses
-       * them. Required is also the cheaper call for a small model here, because
-       * the enum makes it a *pick* rather than something to invent: the
-       * measured hazard on this tier is inventing, not choosing.
+       * It was `optionalText(80)`, back when a background was only a line on the
+       * sheet. In the 2014 ruleset it is a rules entry: proficiencies,
+       * languages, equipment, gold and feature text. Required is also the
+       * cheaper call for a small model here, because the enum makes it a *pick*
+       * rather than something to invent: the measured hazard on this tier is
+       * inventing, not choosing.
        *
        * A campaign with no backgrounds written down gets free text, which is
        * what {@link nameSchema} does with an empty list and is what this
@@ -842,6 +843,8 @@ const OptionLine = Schema.Struct({
   kind: OptionKind,
   /** The label, exactly as `proposeCharacter` must spell it back. */
   name: Schema.String,
+  /** Present only on race rows; subraces are contained by this parent race. */
+  subraces: Schema.optional(Schema.Array(Schema.String)),
 });
 
 /**
@@ -855,15 +858,15 @@ const OptionLine = Schema.Struct({
  * third tool is a third thing to spend a round reaching for — which on a budget
  * of four is the whole cost this design was chosen to avoid.
  *
- * **Both kinds in one call**, deliberately: a per-kind tool would cost a round
- * each, and the point of the fallback is that it costs exactly one.
+ * **All three kinds in one call**, deliberately: a per-kind tool would cost a
+ * round each, and the point of the fallback is that it costs exactly one.
  *
  * It takes no parameters, exactly as `listSessions` and `listCreatures` do —
  * "what can this campaign build a character from" has nothing to get wrong.
  */
 export const ListOptions = Tool.make("listOptions", {
   description:
-    "Every class and species a character in this campaign can be built from — " +
+    "Every class, race and background a character in this campaign can be built from — " +
     "the ones its DM has written or copied in, and the shared bundle. Use it " +
     "before proposeCharacter, and copy a `name` back exactly as it came.",
   success: Schema.Array(OptionLine),
@@ -967,7 +970,7 @@ export interface HobRepositories {
   readonly creatures: (typeof Creatures)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
   /**
-   * The campaign's classes and species.
+   * The campaign's classes, races and backgrounds.
    *
    * **Read once per question rather than inside a tool**, unlike every other
    * entry here: the vocabulary decides the *shape* of `proposeCharacter`, so it
@@ -977,8 +980,8 @@ export interface HobRepositories {
    * is the one repository no handler below calls.
    *
    * It is `Options.list`, the same method and the same `corpusRowReadable` the
-   * create form's own pickers read through, so a class Hob may offer is exactly
-   * a class the player could have picked by hand.
+   * create form's own pickers read through, so an option Hob may offer is
+   * exactly one the player could have picked by hand.
    */
   readonly options: (typeof Options)["Service"];
 }
@@ -1225,12 +1228,55 @@ const classEntryOf = (option: CharacterOption | undefined): ClassEntry | undefin
   option !== undefined && isClassOption(option) ? option.body : undefined;
 
 /** {@link classEntryOf}'s twin. */
-const speciesEntryOf = (option: CharacterOption | undefined): SpeciesEntry | undefined =>
-  option !== undefined && isSpeciesOption(option) ? option.body : undefined;
+const raceEntryOf = (option: CharacterOption | undefined): RaceEntry | undefined =>
+  option !== undefined && isRaceOption(option) ? option.body : undefined;
 
-/** {@link classEntryOf}'s third — the one that moves the six cells. */
-const backgroundEntryOf = (option: CharacterOption | undefined): BackgroundEntry | undefined =>
+const subraceEntryOf = (
+  option: CharacterOption | undefined,
+  label: string | undefined,
+): SubraceEntry | undefined =>
+  option !== undefined && isRaceOption(option) && label !== undefined
+    ? subraceNamed(option.body, label)
+    : undefined;
+
+const raceChoiceBonuses = (
+  race: RaceEntry | undefined,
+  abilityOrder: ReadonlyArray<AbilityKey>,
+): ReadonlyArray<AbilityBonus> => {
+  if (race === undefined) return [];
+  const choice = race.abilityBonusChoice;
+  if (choice === undefined) return [];
+  const allowed = new Map(choice.bonuses.map((bonus) => [bonus.ability, bonus]));
+  const fixed = new Set(race.abilityBonuses.map((bonus) => bonus.ability));
+  const picked: Array<AbilityBonus> = [];
+  for (const ability of abilityOrder) {
+    const bonus = allowed.get(ability);
+    if (bonus === undefined || fixed.has(ability)) continue;
+    if (picked.some((item) => item.ability === ability)) continue;
+    picked.push(bonus);
+    if (picked.length >= choice.choose) break;
+  }
+  return picked;
+};
+
+const backgroundBodyOf = (option: CharacterOption | undefined): BackgroundBody | undefined =>
   option !== undefined && isBackgroundOption(option) ? option.body : undefined;
+
+const backgroundProficiencies = (body: BackgroundBody | undefined): ReadonlyArray<string> =>
+  body === undefined ? [] : [...body.proficiencies, ...body.languages];
+
+const backgroundTraits = (body: BackgroundBody | undefined): ReadonlyArray<Trait> =>
+  body?.feature === undefined ? [] : [{ name: body.feature.name, text: body.feature.text }];
+
+const backgroundInventory = (body: BackgroundBody | undefined): ReadonlyArray<{ name: string }> =>
+  body === undefined ? [] : body.equipment.map((name) => ({ name }));
+
+const goldPieces = (body: BackgroundBody | undefined): number | undefined => {
+  const match = body?.gold?.trim().match(/^(\d+)\s*gp$/i);
+  if (match?.[1] === undefined) return undefined;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) ? value : undefined;
+};
 
 /**
  * A label the campaign does not have, refused where the model can hear it.
@@ -1250,6 +1296,11 @@ const notInVocabulary = (kind: OptionKind, label: string) =>
     message:
       `"${label}" is not a ${kind} in this campaign. Call listOptions and copy a ` +
       "name back exactly as it comes, spelling and all.",
+  });
+
+const notASubrace = (race: string, subrace: string) =>
+  new Conflict({
+    message: `"${subrace}" is not a subrace of "${race}" in this campaign. Pick one contained by that race or leave subrace blank.`,
   });
 
 /**
@@ -1288,12 +1339,19 @@ export const playerHandlersFor = (
 
     listOptions: () =>
       Effect.succeed(
-        vocabulary.options.map((option) => ({ kind: option.kind, name: option.name })),
+        vocabulary.options.map((option) => ({
+          kind: option.kind,
+          name: option.name,
+          ...(option.kind === "race"
+            ? { subraces: option.body.subraces.map((subrace) => subrace.name) }
+            : {}),
+        })),
       ),
 
     proposeCharacter: ({
       name,
-      species,
+      race,
+      subrace,
       className,
       subclass,
       background,
@@ -1317,14 +1375,16 @@ export const playerHandlersFor = (
        * can, and that is what {@link notInVocabulary} is for.
        */
       const classOption = optionNamed(vocabulary.options, "class", className);
-      const speciesOption = optionNamed(vocabulary.options, "species", species);
+      const raceOption = optionNamed(vocabulary.options, "race", race);
       const backgroundOption = optionNamed(vocabulary.options, "background", background);
+      const namedSubrace = blank(subrace);
+      const subraceOption = subraceEntryOf(raceOption, namedSubrace);
 
       if (vocabulary.listed && classOption === undefined) {
         return Effect.fail(notInVocabulary("class", className));
       }
-      if (vocabulary.listed && speciesOption === undefined) {
-        return Effect.fail(notInVocabulary("species", species));
+      if (vocabulary.listed && raceOption === undefined) {
+        return Effect.fail(notInVocabulary("race", race));
       }
       // Only when the campaign has some. A table with no backgrounds written
       // down gets free text from `nameSchema` and there is no list to be
@@ -1336,30 +1396,39 @@ export const playerHandlersFor = (
       ) {
         return Effect.fail(notInVocabulary("background", background));
       }
+      if (namedSubrace !== undefined && raceOption !== undefined && subraceOption === undefined) {
+        return Effect.fail(notASubrace(raceOption.name, namedSubrace));
+      }
 
       /**
        * The three numbers a character starts on — worked out **before** the
-       * document is assembled, because the background moves the six cells.
+       * document is assembled, because race and subrace bonuses move the six
+       * cells first.
        *
-       * `seedFor` applies the background's ability score increases to the
-       * ranking's standard array and hands the moved cells back on
-       * `seed.abilities`, which is what goes into `sheet` below. That ordering
-       * is the whole of what slice 3 changed here: a draft whose background
-       * raises constitution really does come back with more hit points *and* a
-       * sheet whose constitution cell says so, and there is no way to take one
-       * without the other.
+       * `seedFor` applies those bonuses to the ranking's standard array and
+       * hands the moved cells back on `seed.abilities`, which is what goes into
+       * `sheet` below. A draft whose race raises constitution really does come
+       * back with more hit points *and* a sheet whose constitution cell says so,
+       * and there is no way to take one without the other.
        */
+      const raceEntry = raceEntryOf(raceOption);
+      const backgroundBody = backgroundBodyOf(backgroundOption);
+      const proficiencies = backgroundProficiencies(backgroundBody);
+      const backgroundKit = backgroundInventory(backgroundBody);
+      const traits = backgroundTraits(backgroundBody);
+      const gp = goldPieces(backgroundBody);
       const seed = seedFor({
         classEntry: classEntryOf(classOption),
-        speciesEntry: speciesEntryOf(speciesOption),
-        backgroundEntry: backgroundEntryOf(backgroundOption),
+        raceEntry,
+        subraceEntry: subraceOption,
+        raceBonusChoices: raceChoiceBonuses(raceEntry, abilityOrder),
         abilities: abilitiesFrom(abilityOrder),
       });
 
       const identity = {
         ...(blank(subclass) === undefined ? {} : { subclass: blank(subclass)! }),
         // The campaign's own spelling where it resolved, the model's where it
-        // did not — the same rule the species and the class labels follow.
+        // did not — the same rule the race and the class labels follow.
         ...(blank(backgroundOption?.name ?? background) === undefined
           ? {}
           : { background: blank(backgroundOption?.name ?? background)! }),
@@ -1369,7 +1438,10 @@ export const playerHandlersFor = (
         ...(blank(ideal) === undefined ? {} : { ideal: blank(ideal)! }),
         ...(blank(flaw) === undefined ? {} : { flaw: blank(flaw)! }),
       };
-      const carried = (kit ?? []).map((item) => item.trim()).filter((item) => item !== "");
+      const carried = [
+        ...backgroundKit.map((item) => item.name),
+        ...(kit ?? []).map((item) => item.trim()).filter((item) => item !== ""),
+      ];
       /**
        * The document, assembled here so the card and the row cannot disagree.
        *
@@ -1380,15 +1452,17 @@ export const playerHandlersFor = (
        */
       const sheet: CharacterSheet = {
         notes: blank(backstory) ?? "",
-        // The seed's, not the ranking's: these are the cells with the
-        // background applied, and they are the cells its armour class and hit
-        // points were read from.
+        // The seed's, not the ranking's: these are the cells with the race and
+        // subrace bonuses applied, and they are the cells its armour class and
+        // hit points were read from.
         abilities: seed.abilities,
-        traits: [],
+        traits,
         ...(Object.keys(identity).length === 0 ? {} : { identity }),
         ...(Object.keys(story).length === 0 ? {} : { story }),
         ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
-        ...(carried.length === 0 ? {} : { inventory: carried.map((item) => ({ name: item })) }),
+        ...(proficiencies.length === 0 ? {} : { proficiencies }),
+        ...(carried.length === 0 ? {} : { inventory: carried.map((name) => ({ name })) }),
+        ...(gp === undefined ? {} : { currency: { gp } }),
       };
 
       return offer(
@@ -1399,7 +1473,8 @@ export const playerHandlersFor = (
           // where it did not. The label is the entire link between a character
           // and an option, so storing a lower-cased near-miss would put a word
           // on the sheet that the picker would never have produced.
-          species: speciesOption?.name ?? species,
+          race: raceOption?.name ?? race,
+          ...(namedSubrace === undefined ? {} : { subrace: subraceOption?.name ?? namedSubrace }),
           className: classOption?.name ?? className,
           sheet,
           level: seed.level,

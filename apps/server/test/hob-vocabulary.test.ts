@@ -1,5 +1,6 @@
 import {
   Actor,
+  type BackgroundBody,
   type CampaignId,
   type CharacterOption,
   CurrentActor,
@@ -30,7 +31,7 @@ import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./s
  * TypeScript file.**
  *
  * Slice 2. `proposeCharacter`'s two name parameters used to be module-level
- * `Schema.Literals` over the bundled twelve and ten; they are now built from
+ * `Schema.Literals` over the bundled twelve classes and the starter races; they are now built from
  * `Options.list` for the campaign the question was asked in, which means the
  * player's toolkit is constructed **per request**. Five claims, and the second
  * is the one this file exists for:
@@ -113,18 +114,25 @@ const homebrewClass = (
     return yield* options.derive(campaignId, original.id, { visibility });
   }).pipe(Effect.orDie);
 
-/** A homebrew background, which is the kind that reaches the six ability cells. */
+/** A homebrew 2014 background. Its grants are display data, not ability-score seed data. */
 const homebrewBackground = (
   campaignId: CampaignId,
   name: string,
-  abilityIncreases: ReadonlyArray<{ readonly ability: "CON" | "WIS"; readonly amount: number }>,
+  body: BackgroundBody = {
+    proficiencies: ["Athletics"],
+    languages: ["River cant"],
+    equipment: ["ferryman's token"],
+    gold: "15 gp",
+    feature: { name: "Riverwise", text: "You know who watches the crossings." },
+    choices: [],
+  },
 ): Effect.Effect<CharacterOption, never, Options | CurrentActor> =>
   Effect.gen(function* () {
     const options = yield* Options;
     const original = yield* options.libraryCreate({
       kind: "background",
       name,
-      body: { abilityIncreases },
+      body,
     });
     return yield* options.derive(campaignId, original.id, { visibility: "shared" });
   }).pipe(Effect.orDie);
@@ -134,7 +142,7 @@ const homebrewBackground = (
  *
  * - **The Salt Road** carries *Bloodsworn* (d10, shared), *Hedgewise* (d6,
  *   `dm` — the one the seam must keep out of the grammar) and *Salt-runner*, a
- *   background that really grants something (every bundled one grants nothing).
+ *   2014 background whose grants are display data rather than seed arithmetic.
  * - **Sixpence** carries *Saltcaller*, so "campaign A does not carry campaign
  *   B's homebrew" is a measurement rather than an absence.
  * - **The long list** carries enough classes to go over the cap.
@@ -153,17 +161,12 @@ const makeFixture = Effect.gen(function* () {
   const longList = yield* as(campaigns.create({ name: "The long list", visibility: "shared" }));
 
   yield* as(homebrewClass(campaign.id, "Bloodsworn", 10));
-  yield* as(
-    homebrewBackground(campaign.id, "Salt-runner", [
-      { ability: "CON", amount: 2 },
-      { ability: "WIS", amount: 1 },
-    ]),
-  );
+  yield* as(homebrewBackground(campaign.id, "Salt-runner"));
   yield* as(homebrewClass(campaign.id, "Hedgewise", 6, "dm"));
   yield* as(homebrewClass(otherTable.id, "Saltcaller", 8));
 
   // Enough to push one kind over the cap: twelve bundled plus thirty is
-  // forty-two, so `classes` is over and `species` — ten bundled — is not.
+  // forty-two, so `classes` is over and `race` — nine bundled — is not.
   // Deliberately asymmetric, because "either kind over the cap" is the rule.
   for (let index = 0; index < ENUM_CAP - BUNDLED_CLASSES + 1; index += 1) {
     yield* as(homebrewClass(longList.id, `Guild Adept ${String(index)}`, 8));
@@ -192,15 +195,17 @@ const DESCRIBED = "Someone who bleeds for their oaths and does not talk about it
 const aDraft = (over: Record<string, unknown> = {}) =>
   toolCallChunks("proposeCharacter", {
     name: "Sorrel Ash",
-    species: "Human",
+    race: "Human",
     className: "Bloodsworn",
-    // Required since the background became an entity — it is the third thing
-    // the seed reads, so a model that may omit it is a seed that may silently
-    // lose the ability score increases.
-    // Bundled, so it is in every campaign in this fixture that has the bundle
-    // — including the one over the cap, where an unknown label is a deliberate
-    // `Conflict`. A test about a *homebrew* background overrides it.
-    background: "Soldier",
+    // Optional in the product, but OpenAI-compatible strict mode publishes it
+    // as required with a null arm, so the scripted provider must say absence
+    // out loud.
+    subrace: null,
+    // Required since the background became an entity. Bundled, so it is in
+    // every campaign in this fixture that has the bundle — including the one
+    // over the cap, where an unknown label is a deliberate `Conflict`. A test
+    // about a *homebrew* background overrides it.
+    background: "Acolyte",
     abilityOrder: ["CON", "STR", "DEX", "WIS", "CHA", "INT"],
     backstory: "She kept the oath and lost the arm.",
     ...over,
@@ -284,13 +289,13 @@ describe("the grammar is this campaign's own vocabulary", () => {
     // in *plus* the shared rows, which is `corpusRowReadable` and not a
     // replacement for it.
     expect(names).toContain("Druid");
-    expect(enumOf(requests[0], "proposeCharacter", "species")).toContain("Human");
+    expect(enumOf(requests[0], "proposeCharacter", "race")).toContain("Human");
   }, 60_000);
 
   it("says the same words in the description that it published in the enum", async () => {
     // The anti-drift property, and the reason the description is templated from
-    // the same array rather than written out: the twelve and the ten used to
-    // appear twice, and two statements of one vocabulary is two things to
+    // the same array rather than written out: the bundled lists used to appear
+    // twice, and two statements of one vocabulary is two things to
     // forget.
     const { requests } = await ask(fixture.player, fixture.campaign.id);
     const described = toolNamed(requests[0], "proposeCharacter")?.description ?? "";
@@ -306,20 +311,18 @@ describe("the grammar is this campaign's own vocabulary", () => {
   }, 60_000);
 
   it("puts a homebrew background in its own enum too", async () => {
-    // The third kind, and the one that reaches the seed *through* the six
-    // ability cells. It matters more here than for the other two: every one of
-    // the sixteen bundled backgrounds grants nothing at all, so a campaign's
-    // own is the only kind that ever moves a number.
+    // The third kind. It no longer reaches seed arithmetic in 2014, but it is
+    // still a campaign vocabulary the model must choose from rather than invent.
     const { requests } = await ask(fixture.player, fixture.campaign.id);
     const names = enumOf(requests[0], "proposeCharacter", "background");
 
     expect(names).toContain("Salt-runner");
-    expect(names).toContain("Soldier");
+    expect(names).toContain("Acolyte");
     const described = toolNamed(requests[0], "proposeCharacter")?.description ?? "";
     expect(described).toContain(JSON.stringify("Salt-runner"));
   }, 60_000);
 
-  it("seeds from the homebrew class's own hit die, and the background's own grant", async () => {
+  it("seeds from the homebrew class's own hit die and the race's own bonuses", async () => {
     // The feature end to end: a d10 class the product has never heard of gives
     // a level-1 character ten hit points plus their constitution modifier,
     // through the same `seedFor` the manual create form calls.
@@ -329,23 +332,29 @@ describe("the grammar is this campaign's own vocabulary", () => {
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
-    // **The background is applied first**, which is why these numbers are not
-    // the ones the ranking alone would give. CON is ranked first, so the array
-    // puts 15 there and *Salt-runner* raises it to 17 — `+3`, not `+2`. d10
+    // The human's six +1 bonuses apply to the ranking. CON is ranked first, so
+    // the array puts 15 there and Human raises it to 16 — `+3`, not `+2`. d10
     // plus that is 13.
     expect(proposed.proposal.hpMax).toBe(13);
     expect(proposed.proposal.className).toBe("Bloodsworn");
-    // DEX ranked third, so 13 and `+1` over the unarmoured 10 — untouched by a
-    // grant that names neither.
-    expect(proposed.proposal.ac).toBe(11);
+    // DEX ranked third, so 13 raised to 14 and `+2` over the unarmoured 10.
+    expect(proposed.proposal.ac).toBe(12);
     // And the cells that were written are the cells those numbers were read
     // from, which is what `CharacterSeed.abilities` exists to guarantee.
     expect(proposed.proposal.sheet.abilities).toContainEqual({
       label: "CON",
-      score: "17",
+      score: "16",
       modifier: "+3",
     });
     expect(proposed.proposal.sheet.identity?.background).toBe("Salt-runner");
+    expect(proposed.proposal.sheet.proficiencies).toEqual(["Athletics", "River cant"]);
+    expect(proposed.proposal.sheet.inventory?.map((item) => item.name)).toEqual([
+      "ferryman's token",
+    ]);
+    expect(proposed.proposal.sheet.currency).toEqual({ gp: 15 });
+    expect(proposed.proposal.sheet.traits).toEqual([
+      { name: "Riverwise", text: "You know who watches the crossings." },
+    ]);
   }, 60_000);
 
   it("hands a near miss back to the model rather than tearing the answer down", async () => {
@@ -465,8 +474,8 @@ describe("above the cap, the vocabulary is a tool call", () => {
     expect(toolNamed(requests[0], "proposeCharacter")?.description).toContain("listOptions");
   }, 60_000);
 
-  it("still holds the species to an enum, because that kind fits", async () => {
-    // Per kind, because the question is per kind. Ten bundled species is well
+  it("still holds the race to an enum, because that kind fits", async () => {
+    // Per kind, because the question is per kind. Nine bundled race is well
     // under the cap even at a table with forty-two classes, and taking the
     // grammar off both would be a cost paid for nothing.
     const { requests } = await ask(fixture.longListPlayer, fixture.longList.id, {
@@ -477,7 +486,7 @@ describe("above the cap, the vocabulary is a tool call", () => {
       ],
     });
 
-    expect(enumOf(requests[0], "proposeCharacter", "species")).toContain("Human");
+    expect(enumOf(requests[0], "proposeCharacter", "race")).toContain("Human");
   }, 60_000);
 
   it("reads every kind out in one call, so the fallback costs one round", async () => {
@@ -496,7 +505,7 @@ describe("above the cap, the vocabulary is a tool call", () => {
     expect(shown).toContain("Wizard");
     // Both kinds, from one call.
     expect(shown).toContain("Tiefling");
-    expect(shown).toContain('"species"');
+    expect(shown).toContain('"race"');
     // Three rounds, which is what the fallback costs and is why it is a
     // fallback rather than the mechanism.
     expect(requests).toHaveLength(3);
@@ -522,8 +531,9 @@ describe("above the cap, the vocabulary is a tool call", () => {
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
     expect(proposed.proposal.className).toBe("Guild Adept 3");
-    // And it found the die, which is the point of matching at all.
-    expect(proposed.proposal.hpMax).toBe(10);
+    // And it found the die, which is the point of matching at all; Human raises
+    // the first-ranked CON to +3.
+    expect(proposed.proposal.hpMax).toBe(11);
   }, 60_000);
 
   it("seeds from a listed class exactly as it would from an enumerated one", async () => {
@@ -537,8 +547,8 @@ describe("above the cap, the vocabulary is a tool call", () => {
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
-    // d8, CON first so `+2`.
-    expect(proposed.proposal.hpMax).toBe(10);
+    // d8, CON first and Human raises it to `+3`.
+    expect(proposed.proposal.hpMax).toBe(11);
     expect(proposed.proposal.className).toBe("Guild Adept 3");
   }, 60_000);
 

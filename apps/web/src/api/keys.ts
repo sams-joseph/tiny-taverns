@@ -123,8 +123,8 @@ export const reads = {
   creatures: (campaignId: CampaignId): ReadKey => key`creatures:${campaignId}`,
 
   /**
-   * This campaign's rules vocabulary: the classes and species copied into it,
-   * plus the bundle.
+   * This campaign's rules vocabulary: the classes, races and backgrounds copied
+   * into it, plus the bundle.
    *
    * **Two screens read it and neither of them is the one that writes it most.**
    * The Rules screen is the DM's; the create form's two pickers are a player's,
@@ -172,8 +172,8 @@ export const reads = {
   library: "library" as ReadKey,
 
   /**
-   * The account's Library of **character options** — the classes and species it
-   * authored, plus the bundle.
+   * The account's Library of **character options** — the classes, races and
+   * backgrounds it authored, plus the bundle.
    *
    * Its own key rather than `library`'s, because the two lists have no reader
    * in common: nothing draws a monster and a class in one place, so refreshing

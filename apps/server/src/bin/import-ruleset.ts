@@ -4,8 +4,8 @@ import * as Database from "../Database.js";
 import { importSystemOptions } from "../ruleset/import.js";
 
 /**
- * Loads the bundled classes and species into the shared `system` vocabulary and
- * exits.
+ * Loads the bundled classes, races and backgrounds into the shared `system`
+ * vocabulary and exits.
  *
  *   pnpm -F server ruleset:import
  *

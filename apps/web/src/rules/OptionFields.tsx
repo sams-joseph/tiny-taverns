@@ -1,34 +1,18 @@
 import type { OptionKind } from "@taverns/api";
-import { ABILITY_KEYS, type AbilityKey, increasesLine } from "@taverns/api";
+import { ABILITY_KEYS, bonusesLine, type AbilityKey } from "@taverns/api";
 import { Checkbox, Input, Label } from "@taverns/ui";
 import { Field, Textarea } from "../ui/form";
 import {
-  increasesFrom,
+  bonusesFrom,
+  MAX_BONUS,
   MAX_HIT_DIE,
   MAX_HP_PER_LEVEL,
-  MAX_INCREASE,
+  MAX_SPEED,
   type DraftProblems,
   type OptionDraft,
 } from "./optionDraft";
 import { unarmouredLine } from "./option";
 
-/**
- * The boxes a class, a species or a background is written in — **the editor,
- * not a dialog.**
- *
- * There are two shells over it and they are genuinely different acts:
- * `OptionDialog` authors into the Library *and* copies into a campaign in one
- * press, and carries the visibility switch a copy has; `OptionForm` writes the
- * Library original and has a delete beside it. What must not differ is what a
- * hit die is, what an unarmoured formula is, whether an untouched summary is an
- * absent key, and whether a background box holding `0` becomes a row — so that
- * is one file, exactly as `characters/AbilityFields.tsx` is one body under a
- * saving shell and a non-saving one.
- *
- * It holds no state and makes no request. The draft, the busy flag and the
- * write belong to whichever shell is over it — the rule `api/mutation.ts`
- * states about the three things that belong to one open form.
- */
 export function OptionFields({
   kind,
   draft,
@@ -36,11 +20,9 @@ export function OptionFields({
   showProblems,
   onChange,
 }: {
-  /** Which kind is being written. Not editable — see `OptionUpdate`. */
   readonly kind: OptionKind;
   readonly draft: OptionDraft;
   readonly problems: DraftProblems;
-  /** Problems are held back until the first press, then shown for good. */
   readonly showProblems: boolean;
   readonly onChange: (draft: OptionDraft) => void;
 }) {
@@ -51,10 +33,7 @@ export function OptionFields({
     set(
       "unarmouredAc",
       on
-        ? // In `ABILITY_KEYS` order rather than press order, so `10 + DEX + CON`
-          // reads the same however it was clicked. The sum does not care; the
-          // person reading the card does.
-          ABILITY_KEYS.filter((ability) => ability === key || draft.unarmouredAc.includes(ability))
+        ? ABILITY_KEYS.filter((ability) => ability === key || draft.unarmouredAc.includes(ability))
         : draft.unarmouredAc.filter((ability) => ability !== key),
     );
 
@@ -69,7 +48,7 @@ export function OptionFields({
         <Input
           id="option-name"
           placeholder={
-            kind === "class" ? "Bloodsworn" : kind === "species" ? "Marshfolk" : "Salt-runner"
+            kind === "class" ? "Bloodsworn" : kind === "race" ? "Marshfolk" : "Salt-runner"
           }
           value={draft.name}
           aria-invalid={showProblems && problems.name !== undefined}
@@ -82,7 +61,7 @@ export function OptionFields({
           <Field
             label="Hit die"
             htmlFor="option-hit-die"
-            hint="The number of faces. A level-1 character gets this at its maximum, plus their constitution."
+            hint="The number of faces. A level-1 character gets this at its maximum, plus constitution."
             error={showProblems ? problems.hitDie : undefined}
           >
             <Input
@@ -97,13 +76,6 @@ export function OptionFields({
               className="w-24"
             />
           </Field>
-
-          {/* Six toggles rather than a *has unarmoured defence* switch,
-              because the real ruleset needs two different answers:
-              Barbarian is `10 + DEX + CON` and Monk is `10 + DEX + WIS`.
-              A boolean would be quietly wrong for exactly the two classes
-              most likely to notice, and a homebrew class is more likely to
-              be unusual here rather than less. */}
           <fieldset className="flex flex-col gap-2">
             <legend className="text-label leading-snug font-semibold text-heading">
               Unarmoured armour class
@@ -125,87 +97,203 @@ export function OptionFields({
               ))}
             </div>
           </fieldset>
+          <Field label="Proficiencies" htmlFor="option-class-proficiencies" hint="One per line.">
+            <Textarea
+              id="option-class-proficiencies"
+              value={draft.classProficiencies}
+              onChange={(event) => set("classProficiencies", event.target.value)}
+            />
+          </Field>
+          <Field label="Saving throws" htmlFor="option-saving-throws" hint="One per line.">
+            <Textarea
+              id="option-saving-throws"
+              value={draft.savingThrows}
+              onChange={(event) => set("savingThrows", event.target.value)}
+            />
+          </Field>
         </>
-      ) : kind === "species" ? (
-        <Field
-          label="Hit points per level"
-          htmlFor="option-hp-per-level"
-          hint="Nine of the ten in the book give none. A dwarf gives one."
-          error={showProblems ? problems.hpPerLevel : undefined}
-        >
-          <Input
-            id="option-hp-per-level"
-            mono
-            type="number"
-            min={0}
-            max={MAX_HP_PER_LEVEL}
-            value={draft.hpPerLevel}
-            aria-invalid={showProblems && problems.hpPerLevel !== undefined}
-            onChange={(event) => set("hpPerLevel", event.target.value)}
-            className="w-24"
-          />
-        </Field>
-      ) : (
-        /* **Six boxes, and blank is the ordinary answer for four of them.**
-           In the 2024 ruleset this is what a background is *for* — the
-           ability score increases moved here off the species — so it is the
-           one editor in this form whose value reaches a number on
-           somebody's sheet rather than a number in a box on the create
-           form.
-
-           Six named boxes rather than an add-a-row list because the
-           vocabulary is fixed at six and always will be: `ABILITY_KEYS` is
-           the ruleset's *frame*, and a control that made you choose the
-           ability as well as the amount would be a picker over a list of
-           six that are all always offered. What is stored is still a list
-           of what was said — see `increasesFrom`. */
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-label leading-snug font-semibold text-heading">
-            Ability score increases
-          </legend>
-          <p className="text-caption leading-body text-muted-foreground">
-            Added to a new character's scores when they pick this.{" "}
-            <span className="text-heading">
-              {increasesLine(increasesFrom(draft)) === ""
-                ? "Nothing yet"
-                : increasesLine(increasesFrom(draft))}
-            </span>
-          </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-2.5">
-            {ABILITY_KEYS.map((ability) => (
-              <div key={ability} className="flex items-center gap-2">
-                <Label htmlFor={`option-increase-${ability}`}>{ability}</Label>
-                <Input
-                  id={`option-increase-${ability}`}
-                  // A visible label repeated down a list is one control as
-                  // far as anything reading names is concerned, which is
-                  // the trap the sheet's own six cells already record.
-                  aria-label={`${ability} increase`}
-                  mono
-                  type="number"
-                  min={0}
-                  max={MAX_INCREASE}
-                  placeholder="0"
-                  value={draft.increases[ability]}
-                  aria-invalid={showProblems && problems.increases !== undefined}
-                  onChange={(event) =>
-                    set("increases", { ...draft.increases, [ability]: event.target.value })
-                  }
-                  className="w-16"
-                />
-              </div>
-            ))}
+      ) : kind === "race" ? (
+        <>
+          <div className="flex flex-wrap gap-5">
+            <Field
+              label="Speed"
+              htmlFor="option-speed"
+              hint="Feet."
+              error={showProblems ? problems.speed : undefined}
+            >
+              <Input
+                id="option-speed"
+                mono
+                type="number"
+                min={0}
+                max={MAX_SPEED}
+                value={draft.speed}
+                aria-invalid={showProblems && problems.speed !== undefined}
+                onChange={(event) => set("speed", event.target.value)}
+                className="w-24"
+              />
+            </Field>
+            <Field label="Size" htmlFor="option-size">
+              <Input
+                id="option-size"
+                value={draft.size}
+                onChange={(event) => set("size", event.target.value)}
+                className="w-32"
+              />
+            </Field>
+            <Field
+              label="Hit points per level"
+              htmlFor="option-hp-per-level"
+              error={showProblems ? problems.hpPerLevel : undefined}
+            >
+              <Input
+                id="option-hp-per-level"
+                mono
+                type="number"
+                min={0}
+                max={MAX_HP_PER_LEVEL}
+                value={draft.hpPerLevel}
+                aria-invalid={showProblems && problems.hpPerLevel !== undefined}
+                onChange={(event) => set("hpPerLevel", event.target.value)}
+                className="w-24"
+              />
+            </Field>
           </div>
-          {showProblems && problems.increases !== undefined && (
-            <p role="alert" className="text-caption leading-body text-danger-ink">
-              {problems.increases}
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-label leading-snug font-semibold text-heading">
+              Ability bonuses
+            </legend>
+            <p className="text-caption leading-body text-muted-foreground">
+              Fixed 2014 race bonuses.{" "}
+              <span className="text-heading">
+                {bonusesLine(bonusesFrom(draft)) || "No fixed bonuses"}
+              </span>
             </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2.5">
+              {ABILITY_KEYS.map((ability) => (
+                <div key={ability} className="flex items-center gap-2">
+                  <Label htmlFor={`option-bonus-${ability}`}>{ability}</Label>
+                  <Input
+                    id={`option-bonus-${ability}`}
+                    aria-label={`${ability} bonus`}
+                    mono
+                    type="number"
+                    min={0}
+                    max={MAX_BONUS}
+                    placeholder="0"
+                    value={draft.abilityBonuses[ability]}
+                    aria-invalid={showProblems && problems.abilityBonuses !== undefined}
+                    onChange={(event) =>
+                      set("abilityBonuses", {
+                        ...draft.abilityBonuses,
+                        [ability]: event.target.value,
+                      })
+                    }
+                    className="w-16"
+                  />
+                </div>
+              ))}
+            </div>
+            {showProblems && problems.abilityBonuses !== undefined && (
+              <p role="alert" className="text-caption leading-body text-danger-ink">
+                {problems.abilityBonuses}
+              </p>
+            )}
+            {draft.abilityBonusChoice !== undefined && (
+              <p className="text-caption leading-body text-muted-foreground">
+                Also offers a choice: pick {draft.abilityBonusChoice.choose} from{" "}
+                {draft.abilityBonusChoice.bonuses.map((bonus) => bonus.ability).join(", ")}.
+                Character creation asks for that choice; this editor preserves the source choice.
+              </p>
+            )}
+          </fieldset>
+          <Field label="Traits" htmlFor="option-traits" hint="One per line; descriptive only here.">
+            <Textarea
+              id="option-traits"
+              value={draft.traits}
+              onChange={(event) => set("traits", event.target.value)}
+            />
+          </Field>
+          {draft.subraces.length > 0 && (
+            <div className="rounded-control border border-hairline bg-surface-sunken px-3 py-2.5">
+              <p className="text-label leading-snug font-semibold text-heading">Subraces</p>
+              <p className="mt-1 text-caption leading-body text-muted-foreground">
+                {draft.subraces.map((subrace) => subrace.name).join(", ")}. Subraces are contained
+                in their parent race; add or remove them by reimporting or editing the document
+                JSON.
+              </p>
+            </div>
           )}
-          <p className="text-caption leading-body text-muted-foreground">
-            Leave one blank for an ability this background does not touch. The bundled backgrounds
-            carry none at all, so this is where a table's own numbers go.
-          </p>
-        </fieldset>
+        </>
+      ) : (
+        <>
+          <Field
+            label="Proficiencies"
+            htmlFor="option-background-proficiencies"
+            hint="One per line."
+          >
+            <Textarea
+              id="option-background-proficiencies"
+              value={draft.proficiencies}
+              onChange={(event) => set("proficiencies", event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Languages"
+            htmlFor="option-background-languages"
+            hint="Fixed grants or choice text."
+          >
+            <Textarea
+              id="option-background-languages"
+              value={draft.languages}
+              onChange={(event) => set("languages", event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Equipment"
+            htmlFor="option-background-equipment"
+            hint="One line per grant or choice."
+          >
+            <Textarea
+              id="option-background-equipment"
+              value={draft.equipment}
+              onChange={(event) => set("equipment", event.target.value)}
+            />
+          </Field>
+          <Field label="Gold" htmlFor="option-background-gold">
+            <Input
+              id="option-background-gold"
+              value={draft.gold}
+              onChange={(event) => set("gold", event.target.value)}
+              className="w-32"
+            />
+          </Field>
+          <Field label="Feature name" htmlFor="option-feature-name">
+            <Input
+              id="option-feature-name"
+              value={draft.featureName}
+              onChange={(event) => set("featureName", event.target.value)}
+            />
+          </Field>
+          <Field label="Feature text" htmlFor="option-feature-text">
+            <Textarea
+              id="option-feature-text"
+              value={draft.featureText}
+              onChange={(event) => set("featureText", event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Personality choices"
+            htmlFor="option-background-choices"
+            hint="One choice block per line."
+          >
+            <Textarea
+              id="option-background-choices"
+              value={draft.choices}
+              onChange={(event) => set("choices", event.target.value)}
+            />
+          </Field>
+        </>
       )}
 
       <Field

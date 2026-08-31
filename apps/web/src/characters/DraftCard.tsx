@@ -48,7 +48,8 @@ export function DraftCard({
   readonly keeping: boolean;
 }) {
   const sheet = draft.sheet;
-  const line = [draft.species, draft.className].filter((part) => part !== null).join(" ");
+  const lineage = draft.subrace ?? draft.race;
+  const line = [lineage, draft.className].filter((part) => part !== null).join(" ");
   const kit = sheet.inventory ?? [];
   const skills = sheet.skills ?? [];
   const story = sheet.story;

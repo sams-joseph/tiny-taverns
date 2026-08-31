@@ -61,7 +61,7 @@ export function useMode(): Mode {
  * are screens you go *to* from a campaign rather than views of one.
  *
  * **There is one Library section.** `/library` is the monsters an account has
- * written and `/library/rules` is the classes, species and backgrounds; they
+ * written and `/library/rules` is the classes, races and backgrounds; they
  * are shelves under the same global destination, so both light *Library* on the
  * global row and let the screen's own tabs say which shelf is open.
  *

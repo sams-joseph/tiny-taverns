@@ -21,7 +21,7 @@ import { optionWritesAt } from "./load";
 import { numbersOf } from "./option";
 
 /**
- * Bringing a class, a species or a background this account has already written
+ * Bringing a class, a race or a background this account has already written
  * into **this** campaign — statement 3 of the captain's Library model, over the
  * second table that carries it.
  *
@@ -52,7 +52,7 @@ import { numbersOf } from "./option";
 /** What the badge on a row says. One map, so the three cannot drift apart. */
 const KIND_LABEL: Record<OptionKind, string> = {
   class: "Class",
-  species: "Species",
+  race: "Race",
   background: "Background",
 };
 
@@ -113,7 +113,7 @@ export function CopyOptionIn({
         <DialogHeader>
           <DialogTitle>Copy from your library</DialogTitle>
           <DialogDescription>
-            The classes, species and backgrounds you have written. Bringing one in gives this table
+            The classes, races and backgrounds you have written. Bringing one in gives this table
             its own copy of it as it is now.
           </DialogDescription>
         </DialogHeader>
@@ -121,7 +121,7 @@ export function CopyOptionIn({
         <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-gutter py-3">
           {mine.length === 0 ? (
             <EmptyState icon="book-open" title="Nothing in your library yet">
-              Write a class, a species or a background with the buttons on this screen and it lands
+              Write a class, a race or a background with the buttons on this screen and it lands
               here as well as on this table — so the next campaign you run can take a copy of it.
             </EmptyState>
           ) : (

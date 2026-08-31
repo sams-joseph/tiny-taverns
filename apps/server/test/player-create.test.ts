@@ -126,7 +126,7 @@ describe("a player creating their own character", () => {
         name: "Brannoc",
         playerName: "Pim",
         level: 1,
-        species: "Half-orc",
+        race: "Half-orc",
         className: "Paladin",
         ac: 16,
         hpMax: 12,

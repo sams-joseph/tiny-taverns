@@ -148,7 +148,7 @@ export const sorrel = {
   name: "Sorrel Ash",
   playerName: "Ilse",
   level: 1,
-  species: "Wood elf",
+  race: "Wood elf",
   className: "Druid",
   descriptor: "Level 1 Wood elf Druid",
   ac: null,
@@ -352,7 +352,7 @@ export const draftTurnId = "2b1f2a1e-0000-4000-8000-00000000a002";
 export const characterProposal = {
   target: "character",
   name: "Sorrel Ash",
-  species: "Wood elf",
+  race: "Wood elf",
   className: "Druid",
   sheet: {
     notes: "She left Ashfen with the herbal under her coat.",

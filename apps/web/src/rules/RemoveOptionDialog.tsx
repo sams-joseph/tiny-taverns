@@ -14,7 +14,7 @@ import { SaveFailure } from "../ui/form";
 import { optionWritesAt } from "./load";
 
 /**
- * Taking a class, a species or a background off this table's list.
+ * Taking a class, a race or a background off this table's list.
  *
  * ### It removes the copy, and nothing else in the product notices
  *

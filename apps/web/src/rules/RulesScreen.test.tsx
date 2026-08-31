@@ -52,29 +52,22 @@ describe("what this table offers", () => {
     expect(screen.getByText("Druid")).toBeInTheDocument();
     expect(screen.getByText("Marshfolk")).toBeInTheDocument();
     expect(screen.getByText(/\+2 hit points per level/)).toBeInTheDocument();
-    // Nine of the ten bundled species move nothing, and the card says so rather
-    // than drawing `+0`.
-    expect(screen.getAllByText("No extra hit points").length).toBeGreaterThan(0);
+    // Races now show their 2014 fixed bonuses and any hit-point rider.
+    expect(screen.getAllByText(/\+2 CON.*\+2 hit points per level/).length).toBeGreaterThan(0);
 
-    // **The third kind, and the one the whole slice is about.** A background is
-    // where the 2024 ruleset puts the ability score increases, so its numbers
-    // line is the grant — and every bundled one says nobody has written one,
-    // which is what the bundle really ships.
     expect(screen.getByRole("region", { name: "Backgrounds" })).toBeInTheDocument();
     expect(screen.getByText("Salt-runner")).toBeInTheDocument();
-    expect(screen.getByText("+2 CON, +1 WIS")).toBeInTheDocument();
+    expect(screen.getByText(/Athletics/)).toBeInTheDocument();
     expect(screen.getByText("Soldier")).toBeInTheDocument();
-    expect(screen.getAllByText("No ability score increases written down").length).toBeGreaterThan(
-      0,
-    );
+    expect(screen.getAllByText("no fixed proficiencies").length).toBeGreaterThan(0);
   });
 
   it("counts what a DM can act on, and says how much of it a player cannot pick", async () => {
     await renderRules();
-    // Thirteen classes and eleven species in the fixture, and exactly one copy
-    // is unshared. The second clause is the whole friction of the feature said
-    // where the DM will read it.
-    expect(await screen.findByText(/13 classes, 11 species, 5 backgrounds/)).toBeInTheDocument();
+    // Thirteen classes, ten races and five backgrounds in the fixture, and
+    // exactly one copy is unshared. The second clause is the whole friction of
+    // the feature said where the DM will read it.
+    expect(await screen.findByText(/13 classes, 10 races, 5 backgrounds/)).toBeInTheDocument();
     expect(screen.getByText(/1 your players cannot pick yet/)).toBeInTheDocument();
   });
 
@@ -139,7 +132,7 @@ describe("writing one", () => {
     expect(JSON.parse(authored?.body ?? "{}")).toEqual({
       kind: "class",
       name: "Bloodsworn",
-      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"] },
+      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"], proficiencies: [], savingThrows: [] },
     });
 
     const copied = sent("POST", `/options/${bloodswornOriginalId}/derive`);
@@ -150,12 +143,10 @@ describe("writing one", () => {
     expect(JSON.parse(copied?.body ?? "{}")).toEqual({ visibility: "shared" });
   });
 
-  it("writes a background's ability score increases, which is what a background is for", async () => {
-    // **The third kind, and the only one whose grant reaches a number on
-    // somebody's sheet.** The bundle ships all sixteen with nothing at all, so
-    // this form is the *only* way a background in this product ever moves an
-    // ability score — which makes the six boxes and what they send the whole of
-    // the slice on this screen.
+  it("writes a background's 2014 proficiencies and equipment", async () => {
+    // **The third kind.** 2014 ability score arithmetic belongs to race and
+    // subrace; backgrounds carry the proficiencies, languages, equipment and
+    // feature text that land on a new sheet.
     server.routes.set("POST /library/options", {
       status: 200,
       body: { ...saltRunnerOption, id: saltRunnerOriginalId, campaignId: null },
@@ -166,13 +157,8 @@ describe("writing one", () => {
 
     const form = await screen.findByRole("dialog");
     await userEvent.type(within(form).getByLabelText("Name"), "Salt-runner");
-    // Each box carries the ability's own accessible name: six boxes labelled
-    // *Score* would be one control as far as anything reading names goes.
-    await userEvent.type(within(form).getByLabelText("CON increase"), "2");
-    await userEvent.type(within(form).getByLabelText("WIS increase"), "1");
-    // Said back before the save, in the form, because nobody typed these into
-    // an ability cell and the player will not either.
-    expect(within(form).getByText("+2 CON, +1 WIS")).toBeVisible();
+    await userEvent.type(within(form).getByLabelText("Proficiencies"), "Athletics");
+    await userEvent.type(within(form).getByLabelText("Equipment"), "ferryman's token");
 
     await userEvent.click(within(form).getByRole("button", { name: /Add background/i }));
 
@@ -180,18 +166,14 @@ describe("writing one", () => {
       expect(sent("POST", "/library/options")).toBeDefined();
     });
 
-    // Only what was said: the four boxes left blank are abilities this
-    // background does not touch, and a `+0` row would say something nobody
-    // wrote. In `ABILITY_KEYS` order, so the line reads the same however it was
-    // typed.
     expect(JSON.parse(sent("POST", "/library/options")?.body ?? "{}")).toEqual({
       kind: "background",
       name: "Salt-runner",
       body: {
-        abilityIncreases: [
-          { ability: "CON", amount: 2 },
-          { ability: "WIS", amount: 1 },
-        ],
+        proficiencies: ["Athletics"],
+        languages: [],
+        equipment: ["ferryman's token"],
+        choices: [],
       },
     });
     expect(
@@ -208,7 +190,8 @@ describe("writing one", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Write a background/i }));
 
     const form = await screen.findByRole("dialog");
-    expect(within(form).getByLabelText("STR increase")).toBeInTheDocument();
+    expect(within(form).getByLabelText("Proficiencies")).toBeInTheDocument();
+    expect(within(form).getByLabelText("Equipment")).toBeInTheDocument();
     expect(within(form).queryByLabelText("Hit die")).toBeNull();
     expect(within(form).queryByLabelText(/Hit points per level/)).toBeNull();
   });
@@ -231,14 +214,14 @@ describe("writing one", () => {
 
   it("says the copy is a snapshot, because nothing else will", async () => {
     await renderRules();
-    await userEvent.click(await screen.findByRole("button", { name: /Write a species/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Write a race/i }));
 
     expect(
       await screen.findByText(
         /copies it into this campaign.*snapshot.*will not change your library's original/s,
       ),
     ).toBeVisible();
-    // A species form draws no hit die, and a class form draws no per-level hit
+    // A race form draws no hit die, and a class form draws no per-level hit
     // points — the union, as two halves of one dialog.
     expect(screen.getByLabelText(/Hit points per level/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Hit die")).toBeNull();
@@ -274,7 +257,13 @@ describe("editing one", () => {
     // for the reason `CreatureUpdate.statBlock` is.
     expect(JSON.parse(sent("PATCH", `/options/${bloodswornOption.id}`)?.body ?? "{}")).toEqual({
       name: "Bloodsworn",
-      body: { hitDie: 10, unarmouredAc: ["DEX", "CON"], summary: "Sworn to the marsh." },
+      body: {
+        hitDie: 10,
+        unarmouredAc: ["DEX", "CON"],
+        proficiencies: [],
+        savingThrows: [],
+        summary: "Sworn to the marsh.",
+      },
       visibility: "shared",
     });
     // And nothing was written to the Library: an edit here is the copy's.

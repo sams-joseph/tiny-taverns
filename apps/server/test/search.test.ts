@@ -159,7 +159,7 @@ const makeFixture = Effect.gen(function* () {
       name: "Brannoc",
       playerName: "Ilse",
       level: 3,
-      species: "Half-orc",
+      race: "Half-orc",
       className: "Paladin",
       ac: 18,
       hpMax: 52,
@@ -175,7 +175,7 @@ const makeFixture = Effect.gen(function* () {
     characters.create(campaign.id, {
       name: "Sister Pell",
       playerName: "Dara",
-      species: "Human",
+      race: "Human",
       className: "Cleric",
       sheet: { notes: "Knows what is in the crate and will not say.", abilities: [], traits: [] },
     }),
@@ -186,7 +186,7 @@ const makeFixture = Effect.gen(function* () {
     characters.create(campaign.id, {
       name: "Wren",
       playerName: "Kofi",
-      species: "Tiefling",
+      race: "Tiefling",
       className: "Bard",
       visibility: "shared",
     }),
@@ -196,7 +196,7 @@ const makeFixture = Effect.gen(function* () {
   yield* as(
     characters.create(otherTable.id, {
       name: "Sixpence Brannoc",
-      species: "Half-orc",
+      race: "Half-orc",
       className: "Paladin",
       sheet: { notes: "A different ferryman entirely.", abilities: [], traits: [] },
       visibility: "shared",
@@ -335,7 +335,7 @@ describe("two matchers, because one is not enough", () => {
 
   it("finds a character by the player running them", async () => {
     // "Who is Dara running" is a question a DM asks out loud, so `player_name`
-    // is a matcher and is indexed at weight B beside the species and the class.
+    // is a matcher and is indexed at weight B beside the race and the class.
     const hits = await found(fixture.dm, fixture.campaign.id, "Dara");
     expect(keys(hits)).toEqual([`character:${fixture.pell.id}`]);
   });

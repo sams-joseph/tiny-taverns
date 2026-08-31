@@ -76,7 +76,7 @@ export const SAMPLE_NPC: HobArtifact = {
   title: "Ubbo, the reed envoy",
   meta: "Bullywug · Neutral · Wants a courier",
   chips: ["Less friendly", "Give him a rival"],
-  species: "Bullywug envoy",
+  race: "Bullywug envoy",
   alignment: "Neutral",
   summary: "Wants the party to carry a complaint upriver. Will not say who to.",
   voice: "Voice: slow, wet consonants, ends every sentence like a question",

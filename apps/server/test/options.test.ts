@@ -5,7 +5,7 @@ import {
   type CharacterOptionId,
   type ClassBody,
   seedFor,
-  type SpeciesBody,
+  type RaceBody,
   TavernsApi,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -16,16 +16,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
-import {
-  SYSTEM_BACKGROUNDS,
-  SYSTEM_CLASSES,
-  SYSTEM_SPECIES,
-  type SystemOption,
-} from "../src/ruleset/systemOptions.js";
+import { SYSTEM_OPTIONS, type SystemOption } from "../src/ruleset/systemOptions.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * **A campaign can have its own classes, species and backgrounds, and
+ * **A campaign can have its own classes, race and backgrounds, and
  * characters are built from them.**
  *
  * This file is `library.test.ts`'s shape over the second table that carries the
@@ -96,12 +91,29 @@ const OPTIONS = {
   theirs: "Hexbound",
   /** Written by an account that is at no table at all. */
   theUninvited: "Wanderer",
-  /** A background that really grants something — every bundled one grants nothing. */
+  /** A 2014 background whose grants are display data, not ability score seed data. */
   saltRunner: "Salt-runner",
 } as const;
 
 /** *Bloodsworn, d10, unarmoured AC DEX + CON* — the brief's own homebrew class. */
 const BLOODSWORN: ClassBody = { hitDie: 10, unarmouredAc: ["DEX", "CON"] };
+const SALTBORN: RaceBody = {
+  speed: 30,
+  size: "Medium",
+  abilityBonuses: [{ ability: "CON", amount: 2 }],
+  hpPerLevel: 2,
+  traits: [],
+  subraces: [],
+};
+const SALT_RUNNER: BackgroundBody = {
+  proficiencies: ["Athletics"],
+  languages: [],
+  equipment: ["ferryman's token"],
+  choices: [],
+};
+const systemClasses = SYSTEM_OPTIONS.filter((option) => option.kind === "class");
+const systemRaces = SYSTEM_OPTIONS.filter((option) => option.kind === "race");
+const systemBackgrounds = SYSTEM_OPTIONS.filter((option) => option.kind === "background");
 
 /** The standard array a player might have typed, constitution at +2. */
 const CON_HEAVY = [
@@ -148,7 +160,7 @@ const makeFixture = Effect.gen(function* () {
     payload: { kind: "class", name: OPTIONS.bloodsworn, body: BLOODSWORN },
   });
   const saltborn = yield* asJo.library.createOption({
-    payload: { kind: "species", name: OPTIONS.saltborn, body: { hpPerLevel: 2 } },
+    payload: { kind: "race", name: OPTIONS.saltborn, body: SALTBORN },
   });
   const theirs = yield* asBo.library.createOption({
     payload: { kind: "class", name: OPTIONS.theirs, body: { hitDie: 8, unarmouredAc: ["DEX"] } },
@@ -177,7 +189,7 @@ const makeFixture = Effect.gen(function* () {
     payload: {
       name: "Sorrel",
       level: 3,
-      species: "Half-orc",
+      race: "Half-orc",
       className: "Circle of the Moon Druid",
       ac: 16,
       hpMax: 27,
@@ -216,7 +228,7 @@ beforeAll(async () => {
 }, 60_000);
 
 /** This campaign's vocabulary, as this credential reads it. */
-const optionsAt = (token: string, campaignId: string, kind?: "class" | "species" | "background") =>
+const optionsAt = (token: string, campaignId: string, kind?: "class" | "race" | "background") =>
   as(token, (client) =>
     client.options.list({
       params: { campaignId: campaignId as never },
@@ -225,7 +237,7 @@ const optionsAt = (token: string, campaignId: string, kind?: "class" | "species"
   );
 
 describe("the bundle", () => {
-  it("is the twelve, the ten and the sixteen, owned by nobody", async () => {
+  it("is the 2014 SRD starter bundle, owned by nobody", async () => {
     const rows = await sql(
       (client) => client<{ readonly kind: string; readonly count: string }>`
         select kind, count(*)::text as count from character_option
@@ -236,23 +248,18 @@ describe("the bundle", () => {
     expect(rows._tag).toBe("Success");
     if (rows._tag !== "Success") return;
     expect(rows.success).toEqual([
-      { kind: "background", count: String(SYSTEM_BACKGROUNDS.length) },
-      { kind: "class", count: String(SYSTEM_CLASSES.length) },
-      { kind: "species", count: String(SYSTEM_SPECIES.length) },
+      { kind: "background", count: String(systemBackgrounds.length) },
+      { kind: "class", count: String(systemClasses.length) },
+      { kind: "race", count: String(systemRaces.length) },
     ]);
   });
 
   it("ships every background as a name with no ability score increases", async () => {
-    // **The bundle-licensing decision, as a measurement.** A background is the
-    // entity that carries the 2024 ability score increases, and this project
-    // ships names and numbers *it has written* — a background's mechanical
-    // grants are named out by that decision in as many words. So all sixteen
-    // land as vocabulary: the word a player picks, and nothing that moves a
-    // number.
-    //
-    // A DM whose table plays the book's version writes their own background on
-    // the Rules screen, where the increases are theirs — which is the route the
-    // whole slice exists to open, and which the acceptance test below drives.
+    // **The bundle-licensing decision, as a measurement.** In 2014 a background
+    // carries proficiencies, languages, equipment and feature text; ability
+    // bonuses live on race/subrace. The starter bundle therefore lands as the
+    // word a player picks plus display/source data, and nothing that moves an
+    // ability score.
     const rows = await sql(
       (client) => client<{ readonly name: string; readonly body: BackgroundBody }>`
         select name, body from character_option
@@ -261,8 +268,12 @@ describe("the bundle", () => {
     );
 
     if (rows._tag !== "Success") throw new Error("expected the bundle");
-    expect(rows.success).toHaveLength(SYSTEM_BACKGROUNDS.length);
-    expect(rows.success.every((row) => row.body.abilityIncreases.length === 0)).toBe(true);
+    expect(rows.success).toHaveLength(systemBackgrounds.length);
+    expect(
+      rows.success.every(
+        (row) => row.body.proficiencies.length >= 0 && row.body.equipment.length >= 0,
+      ),
+    ).toBe(true);
     // `summary` too: the Player's Handbook's sentence about an acolyte is the
     // Player's Handbook's, and an absent one is missing data rather than wrong
     // data that reads as right.
@@ -306,10 +317,9 @@ describe("the bundle", () => {
     // exactly as the copy-in dialog does.
     // A class rather than any bundled row, so the body's shape is known and the
     // edit below needs no cast.
-    const [entry] = SYSTEM_CLASSES;
+    const [entry] = systemClasses;
     if (entry === undefined) throw new Error("expected a bundled class");
-    const { name, ...body } = entry;
-    const option: SystemOption = { kind: "class", sourceIndex: name.toLowerCase(), name, body };
+    const option: SystemOption = entry;
 
     // Un-shared behind the API, because no shipped write path can reach a
     // bundled row at all — `libraryRowWritable` and `rowWritable` each compare
@@ -318,21 +328,21 @@ describe("the bundle", () => {
     await sql(
       (client) => client`
         update character_option set visibility = 'dm'
-        where origin = 'system' and kind = 'class' and lower(name) = lower(${name})
+        where origin = 'system' and kind = 'class' and lower(name) = lower(${option.name})
       `,
     );
 
     // Re-run the seeder with a changed body, so the `do update` clause
     // demonstrably ran. Without this the assertion below would also pass if the
     // upsert had quietly done nothing at all.
-    const edited: SystemOption = { ...option, body: { ...body, hitDie: 99 } };
+    const edited: SystemOption = { ...option, body: { ...option.body, hitDie: 99 } };
     const result = await runtime.runPromise(importSystemOptions([edited]).pipe(Effect.orDie));
     expect(result).toEqual({ inserted: 0, updated: 1 });
 
     const rows = await sql(
       (client) => client<{ readonly visibility: string; readonly body: ClassBody }>`
         select visibility, body from character_option
-        where origin = 'system' and kind = 'class' and lower(name) = lower(${name})
+        where origin = 'system' and kind = 'class' and lower(name) = lower(${option.name})
       `,
     );
 
@@ -348,7 +358,7 @@ describe("the bundle", () => {
     await sql(
       (client) => client`
         update character_option set visibility = 'shared'
-        where origin = 'system' and kind = 'class' and lower(name) = lower(${name})
+        where origin = 'system' and kind = 'class' and lower(name) = lower(${option.name})
       `,
     );
   });
@@ -470,14 +480,14 @@ describe("the Library shows originals only", () => {
 
   it("refuses a body that contradicts the row's own kind", async () => {
     // `kind` is what a row *is* and is chosen once, so a PATCH has no field for
-    // it — which means the only way to refuse a species document landing on a
+    // it — which means the only way to refuse a race document landing on a
     // class row is to compare what arrived against the row. A `Conflict` rather
     // than a `NotFound`: the row exists and the caller may write it, and what
     // is wrong is the payload.
     const wrong = await refused(fixture.jo.token, (client) =>
       client.library.updateOption({
         params: { optionId: fixture.bloodsworn.id },
-        payload: { body: { hpPerLevel: 3 } },
+        payload: { body: { ...SALTBORN, hpPerLevel: 3 } },
       }),
     );
 
@@ -508,9 +518,7 @@ describe("a campaign's vocabulary", () => {
 
     expect(named(ours)).toContain("Druid");
     expect(named(ours)).toContain("Dwarf");
-    expect(ours).toHaveLength(
-      SYSTEM_CLASSES.length + SYSTEM_SPECIES.length + SYSTEM_BACKGROUNDS.length,
-    );
+    expect(ours).toHaveLength(systemClasses.length + systemRaces.length + systemBackgrounds.length);
     expect(named(ours)).not.toContain(OPTIONS.theirs);
     expect(ours.every((option) => option.campaignId === null)).toBe(true);
   });
@@ -586,11 +594,12 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
     // armour class 14.
     const seed = seedFor({
       classEntry: picked?.kind === "class" ? picked.body : undefined,
-      speciesEntry: undefined,
+      raceEntry: undefined,
+      subraceEntry: undefined,
       backgroundEntry: undefined,
       abilities: CON_HEAVY,
     });
-    expect(seed).toEqual({ level: 1, ac: 14, hpMax: 12, abilities: CON_HEAVY });
+    expect(seed).toEqual({ level: 1, ac: 14, hpMax: 12, abilities: CON_HEAVY, appliedBonuses: [] });
 
     await as(fixture.jo.token, (client) =>
       client.options.remove({
@@ -599,27 +608,17 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
     );
   });
 
-  it("carries a background's ability increases through to the seed", async () => {
+  it("carries a background's 2014 grants without changing the seed", async () => {
     // **The acceptance shape of the background slice, over real HTTP.** A DM
-    // authors one, shares it, and a player at that table picks it — and the
-    // seed the create form runs comes back with numbers the ranking alone
-    // would not have given.
-    //
-    // A background is the only one of the three kinds that reaches the seed
-    // *through* the six ability cells, so this asserts the cells as well as
-    // the two numbers: `seedFor` hands back the raised ones precisely so no
-    // caller can write a different six.
+    // authors one, shares it, and a player at that table picks it. In 2014 the
+    // background reaches the sheet as proficiencies/equipment; race and subrace
+    // entries carry the ability-score arithmetic, so the seed stays unchanged.
     const original = await as(fixture.jo.token, (client) =>
       client.library.createOption({
         payload: {
           kind: "background",
           name: OPTIONS.saltRunner,
-          body: {
-            abilityIncreases: [
-              { ability: "CON", amount: 2 },
-              { ability: "WIS", amount: 1 },
-            ],
-          },
+          body: SALT_RUNNER,
         },
       }),
     );
@@ -631,37 +630,35 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
     );
 
     const asPlayer = await optionsAt(fixture.pim.token, fixture.saltRoad.id, "background");
-    // The bundle's sixteen are here too, and every one of them grants nothing.
+    // The bundled SRD background is here too.
     expect(named(asPlayer)).toContain(OPTIONS.saltRunner);
-    expect(named(asPlayer)).toContain("Soldier");
-    const bundled = asPlayer.find((option) => option.name === "Soldier");
-    expect(bundled?.kind === "background" && bundled.body.abilityIncreases).toEqual([]);
+    expect(named(asPlayer)).toContain("Acolyte");
+    const bundled = asPlayer.find((option) => option.name === "Acolyte");
+    expect(bundled?.kind === "background" && bundled.body.proficiencies).toBeDefined();
 
     const picked = asPlayer.find((option) => option.name === OPTIONS.saltRunner);
     if (picked?.kind !== "background") throw new Error("expected a background");
 
-    // CON 15 raised to 17 (`+3`) and WIS 13 to 14 (`+2`): d8 plus 3 is 11, and
-    // the armour class is untouched because the grant names neither dexterity
-    // nor anything the class adds.
+    // 2014 backgrounds do not seed ability scores. They reach the sheet as
+    // displayed proficiencies and equipment, while race/subrace entries carry
+    // the creation arithmetic.
     const seed = seedFor({
       classEntry: { hitDie: 8, unarmouredAc: ["DEX"] },
-      speciesEntry: undefined,
+      raceEntry: undefined,
+      subraceEntry: undefined,
       backgroundEntry: picked.body,
       abilities: CON_HEAVY,
     });
-    expect(seed.hpMax).toBe(11);
+    expect(seed.hpMax).toBe(10);
     expect(seed.ac).toBe(12);
-    expect(seed.abilities).toContainEqual({ label: "CON", score: "17", modifier: "+3" });
-    expect(seed.abilities).toContainEqual({ label: "WIS", score: "14", modifier: "+2" });
-    // Untouched cells come through exactly as they were written.
-    expect(seed.abilities).toContainEqual({ label: "DEX", score: "14", modifier: "+2" });
+    expect(seed.abilities).toEqual(CON_HEAVY);
 
-    // And the same character with the *bundled* background is the answer the
-    // ranking alone gives, which is what makes the grant visible rather than
-    // assumed.
+    // And the same character with the *bundled* background is the same answer,
+    // because 2014 backgrounds do not seed ability scores.
     const plain = seedFor({
       classEntry: { hitDie: 8, unarmouredAc: ["DEX"] },
-      speciesEntry: undefined,
+      raceEntry: undefined,
+      subraceEntry: undefined,
       backgroundEntry: bundled?.kind === "background" ? bundled.body : undefined,
       abilities: CON_HEAVY,
     });
@@ -680,13 +677,13 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
 
   it("refuses a body whose shape contradicts the row's own kind", async () => {
     // The three documents are told apart by shape alone — `hitDie`,
-    // `hpPerLevel`, `abilityIncreases`, one required key each — because a PATCH
-    // carries a body and no kind. **This is why `BackgroundBody.abilityIncreases`
+    // `hpPerLevel`, `proficiencies`, one required key each — because a PATCH
+    // carries a body and no kind. **This is why `BackgroundBody.proficiencies`
     // is required rather than optional**: an all-optional body would match
     // first inside `Schema.Union` and swallow the other two whole.
     const original = await as(fixture.jo.token, (client) =>
       client.library.createOption({
-        payload: { kind: "background", name: "Wrong shape", body: { abilityIncreases: [] } },
+        payload: { kind: "background", name: "Wrong shape", body: SALT_RUNNER },
       }),
     );
 
@@ -702,7 +699,7 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
     const ontoAClass = await refused(fixture.jo.token, (client) =>
       client.library.updateOption({
         params: { optionId: fixture.bloodsworn.id },
-        payload: { body: { abilityIncreases: [{ ability: "CON", amount: 1 }] } },
+        payload: { body: SALT_RUNNER },
       }),
     );
     expect(ontoAClass._tag).toBe("Conflict");
@@ -793,7 +790,7 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
   it("leaves a campaign's copy standing when the original is deleted", async () => {
     const original = await as(fixture.jo.token, (client) =>
       client.library.createOption({
-        payload: { kind: "species", name: "Marshfolk", body: { hpPerLevel: 1 } },
+        payload: { kind: "race", name: "Marshfolk", body: { ...SALTBORN, hpPerLevel: 1 } },
       }),
     );
     const copied = await as(fixture.jo.token, (client) =>
@@ -826,7 +823,18 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
 
   it("does not copy a kind the payload could contradict", async () => {
     // A copy is what the original was. There is no `kind` on `OptionDerive`, so
-    // this is a fact about the payload's shape rather than a check.
+    // a body whose shape says something else is refused before the insert.
+    const mismatch = await refused(fixture.jo.token, (client) =>
+      client.options.derive({
+        params: { campaignId: fixture.saltRoad.id, optionId: fixture.saltborn.id },
+        payload: {
+          body: { hitDie: 8, unarmouredAc: ["DEX"] } satisfies ClassBody,
+        },
+      }),
+    );
+    expect(mismatch._tag).toBe("Conflict");
+    expect(mismatch.message).toBe("that is a race, and the change describes a class");
+
     const copied = await as(fixture.jo.token, (client) =>
       client.options.derive({
         params: { campaignId: fixture.saltRoad.id, optionId: fixture.saltborn.id },
@@ -834,8 +842,8 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
       }),
     );
 
-    expect(copied.kind).toBe("species");
-    expect(copied.kind === "species" && (copied.body as SpeciesBody).hpPerLevel).toBe(2);
+    expect(copied.kind).toBe("race");
+    expect(copied.kind === "race" && (copied.body as RaceBody).hpPerLevel).toBe(2);
 
     await as(fixture.jo.token, (client) =>
       client.options.remove({
@@ -857,7 +865,7 @@ describe("existing characters", () => {
     );
 
     expect(still.className).toBe("Circle of the Moon Druid");
-    expect(still.species).toBe("Half-orc");
+    expect(still.race).toBe("Half-orc");
     expect(still.descriptor).toBe("Level 3 Half-orc Circle of the Moon Druid");
     expect(still.ac).toBe(16);
     expect(still.hpMax).toBe(27);

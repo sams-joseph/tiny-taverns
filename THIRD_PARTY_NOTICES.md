@@ -1,0 +1,36 @@
+# Third-party notices
+
+Tiny Taverns bundles a small 2014 D&D 5e rules vocabulary for character creation. The rows are imported by `pnpm -F server ruleset:import` and each imported row records source-document, entity and revision metadata in the `rules_source_*` tables.
+
+## 5e-bits / 5e-database
+
+- Source: <https://github.com/5e-bits/5e-database>
+- Snapshot used here: `5e-database` 5.10.0, commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`, `src/2014/en`
+- License for the 5e-bits project data: MIT License
+- Underlying material: Dungeons & Dragons 5th Edition SRD 5.1 material under the Open Game License version 1.0a
+
+MIT notice from `5e-bits/5e-database`:
+
+> MIT License
+>
+> Copyright (c) [2018-2020] [Adrian Padua, Christopher Ward]
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+
+The upstream README states: "The underlying material is released using the Open Gaming License Version 1.0a" and links to Wizards' OGL FAQ. Tiny Taverns stores that OGL notice with the imported source document and displays the attribution in the web footer.

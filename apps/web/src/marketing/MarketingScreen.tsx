@@ -434,9 +434,24 @@ function SiteFooter(): ReactNode {
           </div>
         </div>
       </div>
-      <div className="mx-auto mt-8 flex max-w-275 flex-wrap gap-2.5 border-t border-strong pt-4 text-caption leading-snug text-on-dark-muted">
-        <span>&copy; 2026 Tiny Taverns</span>
-        <span className="@3xl:ml-auto">Made by people who were late to their own session.</span>
+      <div className="mx-auto mt-8 max-w-275 border-t border-strong pt-4 text-caption leading-snug text-on-dark-muted">
+        <p>
+          Character rules data is transformed from{" "}
+          <a
+            href="https://github.com/5e-bits/5e-database/tree/5a7ee5a0489b26655d343e4a41e8f7942a887af2/src/2014/en"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-300 underline decoration-hairline underline-offset-2 hover:text-heading"
+          >
+            5e-bits/5e-database 2014 SRD data
+          </a>{" "}
+          under the MIT License; underlying Dungeons &amp; Dragons 5th Edition SRD 5.1 material is
+          used under the Open Game License version 1.0a.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2.5">
+          <span>&copy; 2026 Tiny Taverns</span>
+          <span className="@3xl:ml-auto">Made by people who were late to their own session.</span>
+        </div>
       </div>
     </footer>
   );

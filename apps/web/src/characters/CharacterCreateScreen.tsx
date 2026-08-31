@@ -3,8 +3,10 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Icon,
   Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -21,20 +23,24 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { abilitySummary, type AbilityDraft } from "./abilities";
 import { AbilityScoresDialog } from "./AbilitiesDialog";
 import {
-  backgroundNote,
   emptyDraft,
   MAX_AC,
   MAX_HP,
   MAX_LEVEL,
   payloadFrom,
   problemsIn,
+  raceChoiceNote,
+  raceIn,
   refused,
   seededDraft,
+  selectedRaceBonuses,
+  subraceOptionsOf,
   type CharacterDraft as FormDraft,
   type SeededField,
 } from "./create";
 import { DraftAside } from "./DraftAside";
 import { DraftCard } from "./DraftCard";
+import { ABILITY_KEYS, type AbilityKey } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
 import { characterWritesAt, createOwnCharacter } from "./write";
@@ -154,7 +160,7 @@ export function CharacterCreateScreen() {
   const problems = problemsIn(draft);
   /** `"STR 15 · DEX 14 · …"`, or nothing at all when nobody has typed one. */
   const scores = abilitySummary(draft.abilities);
-  const set = <K extends keyof FormDraft>(key: K, value: string) =>
+  const set = <K extends keyof FormDraft>(key: K, value: FormDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   /** Typing in a seeded box is what takes it out of the seed's reach, permanently. */
@@ -169,8 +175,22 @@ export function CharacterCreateScreen() {
    * a watcher, which is what makes *seed, never recompute* a property of the
    * wiring rather than of a flag.
    */
-  const pick = (key: "species" | "className" | "background", value: string) =>
-    setDraft((current) => seededDraft({ ...current, [key]: value }, edited, options));
+  const pick = (key: "race" | "subrace" | "className" | "background", value: string) =>
+    setDraft((current) => {
+      const next =
+        key === "race"
+          ? { ...current, race: value, subrace: "", raceBonusChoices: [] }
+          : { ...current, [key]: value };
+      return seededDraft(next, edited, options);
+    });
+
+  const toggleRaceBonus = (ability: AbilityKey, on: boolean) =>
+    setDraft((current) => {
+      const selected = on
+        ? [...current.raceBonusChoices, ability]
+        : current.raceBonusChoices.filter((item) => item !== ability);
+      return seededDraft({ ...current, raceBonusChoices: selected }, edited, options);
+    });
 
   /**
    * The scores re-seed too, through **the same one call** — because the seed
@@ -209,11 +229,11 @@ export function CharacterCreateScreen() {
   const writable = membership !== undefined && membership.role === "player";
 
   /**
-   * The classes, species and backgrounds **this table** offers — the three
+   * The classes, races and backgrounds **this table** offers — the three
    * pickers, and the three entries the seed reads.
    *
-   * It used to be `Ruleset`'s global twelve and ten. A campaign can have its
-   * own now, so the vocabulary is a read: the bundle every campaign shares,
+   * It used to be `Ruleset`'s global starter list. A campaign can have its own
+   * now, so the vocabulary is a read: the bundle every campaign shares,
    * plus whatever this table's DM has copied in and **shared**. That last word
    * is the server's, not this screen's — `corpusRowReadable` ends in
    * `isDm OR visibility = 'shared'`, so an unshared class is simply not in this
@@ -226,19 +246,13 @@ export function CharacterCreateScreen() {
    */
   const options = view?.options ?? [];
   const classes = options.filter((option) => option.kind === "class");
-  const species = options.filter((option) => option.kind === "species");
+  const races = options.filter((option) => option.kind === "race");
   const backgrounds = options.filter((option) => option.kind === "background");
-  /**
-   * What the picked background adds, said before the save rather than found on
-   * the sheet afterwards.
-   *
-   * **The background is the one pick that changes a number the player typed.**
-   * A class and a species fill in the two boxes below; a background raises the
-   * ability scores themselves, so the sheet that gets created says `CON 15`
-   * where the editor said `CON 13`. `undefined` for every bundled background,
-   * which grants nothing at all.
-   */
-  const background = backgroundNote(draft, options);
+  const selectedRace = raceIn(draft, options);
+  const subraces = subraceOptionsOf(selectedRace);
+  const raceBonuses = selectedRaceBonuses(draft, options);
+  const raceChoice = raceChoiceNote(draft, options);
+  const choice = selectedRace?.kind === "race" ? selectedRace.body.abilityBonusChoice : undefined;
 
   /**
    * Which of the two paths this screen is on.
@@ -284,9 +298,8 @@ export function CharacterCreateScreen() {
 
     const made = await submit(
       // The vocabulary goes with the draft, because the six cells this sends
-      // are the *seed's* — a background raises the ability scores, and the
-      // armour class in the box beside them was worked out from the raised
-      // ones. See `payloadFrom`.
+      // are the *seed's*: race and subrace bonuses are applied before the
+      // armour class in the box beside them is worked out. See `payloadFrom`.
       (client) => createOwnCharacter(client, campaignId, payloadFrom(draft, options)),
       // What moved that this write never sent: the roster it will appear on, and
       // the campaign's party list — a DM's screen, which this write has never
@@ -582,25 +595,25 @@ export function CharacterCreateScreen() {
                       which for the unpicked state is `""` and draws nothing at
                       all where a placeholder belongs. */}
                   <Field
-                    label="Species"
-                    htmlFor="new-character-species"
-                    // The vocabulary is one ruleset's, so anything narrower than
-                    // a species is not in it — and both fields are ordinary free
-                    // text on the sheet afterwards, which is where a wood elf
-                    // becomes a wood elf.
-                    hint="Anything more specific goes on the sheet."
+                    label="Race"
+                    htmlFor="new-character-race"
+                    // The vocabulary is this campaign's, including contained
+                    // subraces where the race source supplies them. Both fields
+                    // are ordinary free text on the sheet afterwards, so a
+                    // table with its own label loses nothing.
+                    hint="Pick the race first; subraces appear when the source has them."
                   >
                     <Select
-                      value={draft.species}
-                      onValueChange={(value) => pick("species", String(value))}
+                      value={draft.race}
+                      onValueChange={(value) => pick("race", String(value))}
                     >
-                      <SelectTrigger id="new-character-species" className="w-40">
+                      <SelectTrigger id="new-character-race" className="w-40">
                         <SelectValue>
-                          {(value) => (value === "" ? "Pick a species" : String(value))}
+                          {(value) => (value === "" ? "Pick a race" : String(value))}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {species.map((option) => (
+                        {races.map((option) => (
                           <SelectItem key={option.id} value={option.name}>
                             {option.name}
                           </SelectItem>
@@ -608,6 +621,31 @@ export function CharacterCreateScreen() {
                       </SelectContent>
                     </Select>
                   </Field>
+                  {subraces.length > 0 && (
+                    <Field
+                      label="Subrace"
+                      htmlFor="new-character-subrace"
+                      hint="Contained by the race you picked."
+                    >
+                      <Select
+                        value={draft.subrace}
+                        onValueChange={(value) => pick("subrace", String(value))}
+                      >
+                        <SelectTrigger id="new-character-subrace" className="w-44">
+                          <SelectValue>
+                            {(value) => (value === "" ? "Pick a subrace" : String(value))}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subraces.map((subrace) => (
+                            <SelectItem key={subrace.name} value={subrace.name}>
+                              {subrace.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
                   <Field
                     label="Class"
                     htmlFor="new-character-class"
@@ -637,17 +675,16 @@ export function CharacterCreateScreen() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  {/* **The third picker, and the one that moves a number the
-                      player typed.** In the 2024 ruleset the ability score
-                      increases live on the background, so this is the only pick
-                      on this form whose effect is on the six cells rather than
-                      on the two boxes below — which is why the line under the
-                      row says what it adds, in words, before anything is saved.
+                  {/* **The third picker, and the one that writes sheet data
+                      without moving the two seeded numbers.** In the 2014
+                      ruleset the ability score arithmetic belongs to race and
+                      subrace; a background carries proficiencies, languages,
+                      equipment, gold and feature text.
 
-                      It lands in `sheet.identity.background` rather than in a
-                      column: nothing filters or sorts on it and it is not one
-                      of the three `descriptor` is built from, so it earned no
-                      column — `Character.ts` makes the same call about
+                      The label lands in `sheet.identity.background` rather than
+                      in a column: nothing filters or sorts on it and it is not
+                      one of the fields `descriptor` is built from, so it earned
+                      no column — `Character.ts` makes the same call about
                       `subclass`. It is still ordinary free text on the sheet
                       afterwards, so a table with a background nobody has
                       written down loses nothing. */}
@@ -676,15 +713,37 @@ export function CharacterCreateScreen() {
                   </Field>
                 </div>
 
-                {/* Only where something really moves. The sixteen bundled
-                    backgrounds grant nothing at all — this project ships names
-                    and the grants are a DM's to write — so on most tables this
-                    line is simply absent, which is the honest state rather than
-                    a placeholder saying nothing happened. */}
-                {background !== undefined && (
+                {choice !== undefined && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="text-label leading-snug font-semibold text-heading">
+                      Race bonus choices
+                    </legend>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2.5">
+                      {ABILITY_KEYS.map((ability) =>
+                        choice.bonuses.some((bonus) => bonus.ability === ability) ? (
+                          <div key={ability} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`new-character-race-bonus-${ability}`}
+                              checked={draft.raceBonusChoices.includes(ability)}
+                              onCheckedChange={(next) => toggleRaceBonus(ability, next === true)}
+                            />
+                            <Label htmlFor={`new-character-race-bonus-${ability}`}>{ability}</Label>
+                          </div>
+                        ) : null,
+                      )}
+                    </div>
+                  </fieldset>
+                )}
+
+                {(raceBonuses !== "" || raceChoice !== undefined) && (
                   <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
                     <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
-                    <span>{background}</span>
+                    <span>
+                      {raceBonuses === ""
+                        ? "No race bonuses selected yet."
+                        : `Race bonuses: ${raceBonuses}.`}
+                      {raceChoice === undefined ? "" : ` ${raceChoice}`}
+                    </span>
                   </p>
                 )}
 
@@ -769,9 +828,9 @@ export function CharacterCreateScreen() {
                   {/* **What the two numbers above actually are**, said where
                       they are rather than left to be assumed.
 
-                      They are filled in from the class, the species, the background and the
-                      ability scores the moment any of those changes, and they
-                      are a *starting point*: the armour class is the unarmoured
+                      They are filled in from the class, the race or subrace and
+                      the ability scores the moment any of those changes, and
+                      they are a *starting point*: the armour class is the unarmoured
                       base and nothing worn. Nothing recalculates either of them
                       after the character exists, by the captain's decision, so
                       the honest thing is to say so before the player presses
@@ -782,13 +841,12 @@ export function CharacterCreateScreen() {
                       for a character whose abilities nobody has typed, and
                       saying so is what stops *"13 hit points"* reading as this
                       barbarian's real total. */}
-                  {(draft.className !== "" || draft.species !== "" || draft.background !== "") && (
+                  {(draft.className !== "" || draft.race !== "" || draft.subrace !== "") && (
                     <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
                       <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
                       <span>
-                        A starting point from the class, the species, the background and your
-                        ability scores — the hit die, and <span className="font-mono">10</span>{" "}
-                        before any armour.
+                        A starting point from the class, the race or subrace and your ability scores
+                        — the hit die, and <span className="font-mono">10</span> before any armour.
                         {scores === undefined
                           ? " No scores are set, so every modifier counts as +0. Set them above and these follow."
                           : " Type over either; nothing changes them for you once they are created."}

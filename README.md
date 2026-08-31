@@ -112,9 +112,12 @@ pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server bestiary:import  # loads the bundled bestiary (optional, idempotent)
-pnpm -F server ruleset:import   # loads the bundled classes and species (idempotent)
+pnpm -F server ruleset:import   # loads the bundled 2014 classes, races and background (idempotent)
 pnpm dev                        # API on :3000, web on :5173
 ```
+
+If an existing development database still carries the pre-2014 character-rules rows, use the
+clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server bestiary:import && pnpm -F server ruleset:import`.
 
 That is the whole setup, and it needs no Clerk account. Paste the token into the Server
 panel's **Machine token** box to reach the authenticated endpoints.
@@ -220,10 +223,10 @@ that same declaration — paste a token there to see it list your campaigns.
 **The bestiary is two corpora in one list.** A campaign's own creatures live under it;
 `system` creatures are global, immutable and shared by every campaign, and the only thing
 that writes them is `pnpm -F server bestiary:import` — a shell command rather than an
-endpoint, because global content has no campaign to scope it to. The importer keys those
-starter rows through `rules_source_*` provenance tables rather than by display name; today's
-starter bundle is recorded as Taverns-authored data, not as 5e-bits or SRD content. A DM who
-wants to change a system creature derives a copy instead:
+endpoint, because global content has no campaign to scope it to. The importer keys those starter rows through `rules_source_*` provenance tables rather
+than by display name; today's bestiary starter bundle is recorded as Taverns-authored data,
+not as 5e-bits or SRD content. A DM who wants to change a system creature derives a copy
+instead:
 
 ```bash
 curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/derive" \
@@ -231,14 +234,22 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
   -d '{"name":"Grask, Boss of the Reeds"}'
 ```
 
-**A campaign can have its own classes, species and backgrounds**, and they follow exactly
-the same model. `pnpm -F server ruleset:import` writes the bundled starter vocabulary as
-global rows, keyed by stable `rules_source_*` identities; the current bundle remains
-project-authored until a real 2014 5e-bits/SRD importer ships with the required notices. A
-DM writes their own in the campaign's **Rules** screen, which authors the original into their
-library and copies it into the table in one press. The copy is what a player picks from,
-because a player can never read somebody else's library — see `AGENTS.md`, which is also
-where the one thing this importer does differently is written down.
+**A campaign can have its own classes, races and backgrounds**, and they follow exactly
+the same model. `pnpm -F server ruleset:import` writes the bundled 2014 SRD vocabulary as
+global rows, keyed by stable `rules_source_*` identities from the pinned 5e-bits
+`5e-database` snapshot (`5.10.0`, commit
+`5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races contain their 2014 subraces in the race
+body; there is no separate unparented subrace option kind. A DM writes their own in the
+campaign's **Rules** screen, which authors the original into their library and copies it into
+the table in one press. The copy is what a player picks from, because a player can never read
+somebody else's library — see `AGENTS.md`, which is also where the one thing this importer
+does differently is written down.
+
+The bundled 2014 character rules data is transformed from `5e-bits/5e-database` under the
+MIT License; the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the
+Open Game License version 1.0a. The source and license metadata are stored in
+`rules_source_document` by the importer and shown in the web footer for attribution; see
+`THIRD_PARTY_NOTICES.md` for the bundled notice text.
 
 ### Hosted sign-in (optional)
 

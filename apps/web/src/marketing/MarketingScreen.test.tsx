@@ -179,10 +179,20 @@ describe("the marketing homepage", () => {
       expect(screen.queryByRole("link", { name: gone })).toBeNull();
     }
 
-    // And nothing at all is an `<a>` without somewhere to be.
+    // App links are hash-history routes; the one external link is the legal
+    // source attribution and has a real URL.
     for (const link of screen.getAllByRole("link")) {
-      expect(link.getAttribute("href")).toMatch(/^\/#\//);
+      expect(link.getAttribute("href")).toMatch(/^(?:\/#\/|https:\/\/github\.com\/5e-bits\/)/);
     }
+  });
+
+  it("attributes the bundled 2014 rules source and license", async () => {
+    await renderHome();
+
+    expect(
+      screen.getByRole("link", { name: /5e-bits\/5e-database 2014 SRD data/ }),
+    ).toHaveAttribute("href", expect.stringContaining("5a7ee5a0489b26655d343e4a41e8f7942a887af2"));
+    expect(screen.getByText(/Open Game License version 1\.0a/)).toBeInTheDocument();
   });
 
   /**

@@ -11,7 +11,7 @@ import { OptionSection } from "./OptionSection";
 import { RemoveOptionDialog } from "./RemoveOptionDialog";
 
 /**
- * **Rules** — the classes, species and backgrounds a character at this table is
+ * **Rules** — the classes, races and backgrounds a character at this table is
  * built from.
  *
  * `#/campaigns/:campaignId/rules`, the sixth destination on the campaign row,
@@ -43,9 +43,9 @@ import { RemoveOptionDialog } from "./RemoveOptionDialog";
  * - **Anything about a subclass or a feat.** A subclass is a *child* of a class
  *   and needs a containment rule this table has none of; a feat is read by
  *   nothing in the product. Both are free text on the sheet today and work.
- *   **The background is here now** — it was held back from the first slice
- *   precisely because it changes the *seed* (2024's ability score increases
- *   moved onto it), which is a bigger change than adding a row type.
+ *   **The background is here now** as the 2014 source describes it: proficiencies,
+ *   languages, equipment and feature text. Ability-score arithmetic belongs to
+ *   races and contained subraces.
  *
  * ### It wears the campaign's frame, like every other campaign destination
  *
@@ -73,7 +73,7 @@ const summaryOf = (view: RulesView): string => {
   ).length;
   const counted =
     `${String(classes)} class${classes === 1 ? "" : "es"}, ` +
-    `${String(count("species"))} species, ` +
+    `${String(count("race"))} race${count("race") === 1 ? "" : "s"}, ` +
     `${String(backgrounds)} background${backgrounds === 1 ? "" : "s"}`;
   return hidden === 0 ? counted : `${counted} · ${String(hidden)} your players cannot pick yet`;
 };
@@ -115,10 +115,10 @@ export function RulesScreen() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setEditing({ kind: "species", option: undefined })}
+            onClick={() => setEditing({ kind: "race", option: undefined })}
           >
             <Icon name="plus" size={14} />
-            Write a species
+            Write a race
           </Button>
           <Button size="sm" onClick={() => setEditing({ kind: "class", option: undefined })}>
             <Icon name="plus" size={14} />
@@ -183,25 +183,23 @@ function Rules({
           onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
         />
         <OptionSection
-          title="Species"
-          options={of("species")}
-          empty="No species at all"
-          emptyBody="This table has nothing to build a character from. Run the bundled ruleset importer, or write a species of your own with the button above."
+          title="Race"
+          options={of("race")}
+          empty="No races at all"
+          emptyBody="This table has nothing to build a character from. Run the bundled ruleset importer, or write a race of your own with the button above."
           onEdit={(option) =>
-            isCampaignCopy(option) ? () => onEdit({ kind: "species", option }) : undefined
+            isCampaignCopy(option) ? () => onEdit({ kind: "race", option }) : undefined
           }
           onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
         />
         {/* **Third, and last on the page for the same reason it is third on the
-            create form**: it is the pick that adjusts what the two above
-            produced. The bundled sixteen all read *no ability score increases
-            written down*, which is true and is the invitation — a table that
-            plays the book's version writes its own here. */}
+            create form**: it is the pick that writes proficiencies, languages,
+            equipment and feature text onto the sheet. */}
         <OptionSection
           title="Backgrounds"
           options={of("background")}
           empty="No backgrounds at all"
-          emptyBody="Run the bundled ruleset importer for the sixteen names, or write a background of your own with the button above — a background is where a new character's ability score increases come from."
+          emptyBody="Run the bundled ruleset importer for the 2014 names, or write a background of your own with the button above — a background carries proficiencies, equipment and feature text."
           onEdit={(option) =>
             isCampaignCopy(option) ? () => onEdit({ kind: "background", option }) : undefined
           }

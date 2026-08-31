@@ -19,7 +19,7 @@ import { ownCharacterWrites, saveOwnCharacter } from "./write";
  * A player editing the durable half of their own character.
  *
  * **The columns, and exactly the columns `CharacterOwnUpdate` names** — their
- * name, the player behind them, the three the descriptor derives from, the two
+ * name, the player behind them, the labels the descriptor derives from, the two
  * numbers that move when they level or find better armour, and where the real
  * sheet lives. It is the same form `campaign/CharacterDialog.tsx` gives the DM
  * minus the two fields that are the DM's to say, and that subtraction is the
@@ -38,8 +38,8 @@ import { ownCharacterWrites, saveOwnCharacter } from "./write";
  *
  * ### There is no descriptor field, and no preview of one either
  *
- * `"Level 5 Half-orc Paladin"` is a generated column over the three boxes in
- * the middle row. Computing it locally to show what it will say would be the
+ * `"Level 5 Half-orc Paladin"` is a generated column over the identity boxes
+ * in the middle row. Computing it locally to show what it will say would be the
  * second implementation the generated column exists to prevent — the same call
  * `CharacterDialog` records. It appears under the name the moment the save
  * lands, which is why every write on this screen re-reads rather than patching
@@ -72,7 +72,8 @@ export function IdentityDialog({
   const [levelText, setLevelText] = useState(
     character.level === null ? "" : String(character.level),
   );
-  const [species, setSpecies] = useState(character.species ?? "");
+  const [race, setRace] = useState(character.race ?? "");
+  const [subrace, setSubrace] = useState(character.subrace ?? "");
   const [className, setClassName] = useState(character.className ?? "");
   const [acText, setAcText] = useState(character.ac === null ? "" : String(character.ac));
   const [hpText, setHpText] = useState(character.hpMax === null ? "" : String(character.hpMax));
@@ -119,7 +120,8 @@ export function IdentityDialog({
     if (refused) return;
 
     const trimmedPlayer = playerName.trim();
-    const trimmedSpecies = species.trim();
+    const trimmedRace = race.trim();
+    const trimmedSubrace = subrace.trim();
     const trimmedClass = className.trim();
     const trimmedUrl = sheetUrl.trim();
 
@@ -135,13 +137,14 @@ export function IdentityDialog({
           name: name.trim(),
           playerName: trimmedPlayer === "" ? null : trimmedPlayer,
           level,
-          species: trimmedSpecies === "" ? null : trimmedSpecies,
+          race: trimmedRace === "" ? null : trimmedRace,
+          subrace: trimmedSubrace === "" ? null : trimmedSubrace,
           className: trimmedClass === "" ? null : trimmedClass,
           ac,
           hpMax,
           sheetUrl: trimmedUrl === "" ? null : trimmedUrl,
         }),
-      // A level, a species or a class moves the generated `descriptor` — which
+      // A level, a race, a subrace or a class moves the generated `descriptor` — which
       // the DM's party strip draws. See `ownCharacterWrites`.
       ownCharacterWrites(character),
     );
@@ -201,12 +204,21 @@ export function IdentityDialog({
                 className="w-20"
               />
             </Field>
-            <Field label="Species" htmlFor="own-species">
+            <Field label="Race" htmlFor="own-race">
               <Input
-                id="own-species"
+                id="own-race"
                 placeholder="Half-orc"
-                value={species}
-                onChange={(event) => setSpecies(event.target.value)}
+                value={race}
+                onChange={(event) => setRace(event.target.value)}
+                className="w-40"
+              />
+            </Field>
+            <Field label="Subrace" htmlFor="own-subrace">
+              <Input
+                id="own-subrace"
+                placeholder="High Elf"
+                value={subrace}
+                onChange={(event) => setSubrace(event.target.value)}
                 className="w-40"
               />
             </Field>

@@ -116,7 +116,7 @@ describe("campaign, session, character and note CRUD", () => {
             name: "Ilse",
             playerName: "Sam",
             level: 3,
-            species: "Half-orc",
+            race: "Half-orc",
             className: "Paladin",
             ac: 17,
             hpMax: 21,

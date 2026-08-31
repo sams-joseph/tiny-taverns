@@ -43,9 +43,12 @@ const creature = (sourceIndex: string, name: string, hp = 7): SystemCreature => 
 
 const option = (sourceIndex: string, name: string, hitDie = 8): SystemOption => ({
   kind: "class",
+  sourceFamily: "classes",
   sourceIndex,
+  sourceUrl: `/api/2014/classes/${sourceIndex}`,
   name,
   body: { hitDie, unarmouredAc: ["DEX"] },
+  raw: { index: sourceIndex, name, hit_die: hitDie },
 });
 
 describe("rules source provenance", () => {
@@ -76,6 +79,52 @@ describe("rules source provenance", () => {
       },
     ]);
     expect(JSON.stringify(rows)).not.toMatch(/5e-bits|SRD|Wizards|OGL/i);
+  });
+
+  it("records character rules as pinned 2014 5e-bits/SRD data", async () => {
+    await run(importSystemOptions([option("source-test-rules-attribution", "Attribution Class")]));
+
+    const rows = await sql(
+      (client) => client<{
+        readonly system: string;
+        readonly edition: string;
+        readonly document_name: string;
+        readonly document_version: string;
+        readonly license: string;
+        readonly attribution: string;
+        readonly provider: string;
+        readonly provider_commit: string | null;
+      }>`
+      select rules_source_document.system,
+             rules_source_document.edition,
+             rules_source_document.document_name,
+             rules_source_document.document_version,
+             rules_source_document.license,
+             rules_source_document.attribution,
+             rules_import_run.provider,
+             rules_import_run.provider_commit
+      from rules_source_document
+      join rules_import_run on rules_import_run.document_id = rules_source_document.id
+      where rules_source_document.system = 'dnd-5e-srd'
+        and rules_source_document.edition = '2014'
+      order by rules_import_run.imported_at desc
+      limit 1
+    `,
+    );
+
+    expect(rows).toEqual([
+      {
+        system: "dnd-5e-srd",
+        edition: "2014",
+        document_name: "5e-bits 2014 SRD data",
+        document_version: "5e-database 5.10.0+5a7ee5a0489b26655d343e4a41e8f7942a887af2",
+        license: "5e-bits MIT project data; underlying SRD 5.1 content under OGL-1.0a",
+        attribution:
+          "Rules data transformed from 5e-bits/5e-database commit 5a7ee5a0489b26655d343e4a41e8f7942a887af2 (MIT). Underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open Game License version 1.0a.",
+        provider: "5e-bits-transform",
+        provider_commit: "5a7ee5a0489b26655d343e4a41e8f7942a887af2",
+      },
+    ]);
   });
 
   it("uses source identity rather than display names for creature upserts", async () => {

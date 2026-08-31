@@ -98,7 +98,7 @@ export type HobArtifact =
   | (ArtifactBase & { readonly kind: "beat"; readonly text: string })
   | (ArtifactBase & {
       readonly kind: "npc";
-      readonly species: string;
+      readonly race: string;
       readonly alignment: string;
       readonly summary: string;
       /** How to do the voice — the one thing a DM cannot look up. */

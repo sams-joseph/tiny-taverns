@@ -15,7 +15,7 @@ import {
   type OptionLibraryCreate,
   type OptionLibraryUpdate,
   type OptionUpdate,
-  type SpeciesBody,
+  type RaceBody,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
@@ -44,7 +44,7 @@ interface OptionRow extends ProvenanceColumns {
   /** The exact source revision this row snapshots. */
   readonly source_revision_id: string | null;
   /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
-  readonly body: ClassBody | SpeciesBody | BackgroundBody;
+  readonly body: ClassBody | RaceBody | BackgroundBody;
 }
 
 /**
@@ -70,15 +70,15 @@ const toOption = (row: OptionRow): CharacterOption => {
   switch (row.kind) {
     case "class":
       return { ...shared, kind: "class", body: row.body as ClassBody };
-    case "species":
-      return { ...shared, kind: "species", body: row.body as SpeciesBody };
+    case "race":
+      return { ...shared, kind: "race", body: row.body as RaceBody };
     case "background":
       return { ...shared, kind: "background", body: row.body as BackgroundBody };
   }
 };
 
 /** The document on its way into a `jsonb` column, as text — `Creatures.ts`'s rule. */
-const encodeBody = (body: ClassBody | SpeciesBody | BackgroundBody): string => JSON.stringify(body);
+const encodeBody = (body: ClassBody | RaceBody | BackgroundBody): string => JSON.stringify(body);
 
 /**
  * Which kind of document this is, from its shape alone.
@@ -86,18 +86,17 @@ const encodeBody = (body: ClassBody | SpeciesBody | BackgroundBody): string => J
  * The **one** place a body is told apart by its shape rather than by a `kind`
  * beside it, and it exists for exactly one caller: a PATCH carries a body but
  * no kind — `kind` is what a row *is* and is chosen once, when it is authored —
- * so the only way to refuse a species document landing on a class row is to
+ * so the only way to refuse a race document landing on a class row is to
  * look at what arrived.
  *
- * **It works because each of the three documents has exactly one required key
- * the other two lack** — `hitDie`, `hpPerLevel`, `abilityIncreases` — which is
- * why `BackgroundBody.abilityIncreases` is required rather than optional and is
- * argued at length there. A body with no required key would be indistinguishable
- * from every other body *and* would swallow them inside `Schema.Union`, which
- * takes the first member that matches.
+ * **It works because each of the three documents has required keys the other
+ * two lack** — `hitDie`, `hpPerLevel`, and the background's 2014
+ * proficiency/language/equipment lists. A body with no required key would be
+ * indistinguishable from every other body *and* would swallow them inside
+ * `Schema.Union`, which takes the first member that matches.
  */
-const bodyKind = (body: ClassBody | SpeciesBody | BackgroundBody): OptionKind =>
-  "hitDie" in body ? "class" : "hpPerLevel" in body ? "species" : "background";
+const bodyKind = (body: ClassBody | RaceBody | BackgroundBody): OptionKind =>
+  "hitDie" in body ? "class" : "hpPerLevel" in body ? "race" : "background";
 
 /**
  * A PATCH whose body does not match the row it is patching.
@@ -137,7 +136,7 @@ const readOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`character_option.kind asc, lower(character_option.name) asc`;
 
 /**
- * The classes, species and backgrounds a character is built from — **the
+ * The classes, races and backgrounds a character is built from — **the
  * campaign's vocabulary and the Library's originals, one table and one
  * mapper.**
  *
@@ -224,7 +223,7 @@ export class Options extends Context.Service<
       campaignId: CampaignId,
       id: CharacterOptionId,
       patch: OptionDerive,
-    ) => Effect.Effect<CharacterOption, NotFound, CurrentActor>;
+    ) => Effect.Effect<CharacterOption, NotFound | Conflict, CurrentActor>;
     /**
      * The Library — **originals only**: the bundle and what this account has
      * authored, with no campaign in the path and no campaign row in the answer.
@@ -241,7 +240,7 @@ export class Options extends Context.Service<
       id: CharacterOptionId,
     ) => Effect.Effect<CharacterOption, NotFound, CurrentActor>;
     /**
-     * Write a class or a species into this account's Library.
+     * Write a class, race or background into this account's Library.
      *
      * `account_id` comes from the actor and from nothing a caller supplied, and
      * `campaign_id` is not named at all — it takes the column default, which is
@@ -406,6 +405,9 @@ export class Options extends Context.Service<
                 const actor = yield* CurrentActor;
                 yield* ensureCampaignWritable(sql, campaignId, actor);
                 const source = yield* copyable(campaignId, id);
+                if (patch.body !== undefined && bodyKind(patch.body) !== source.kind) {
+                  return yield* wrongKind(source.kind, bodyKind(patch.body));
+                }
                 const rows = yield* sql<OptionRow>`
                   insert into character_option ${sql.insert(
                     defined({
@@ -414,7 +416,7 @@ export class Options extends Context.Service<
                       source_entity_id: source.source_entity_id,
                       source_revision_id: source.source_revision_id,
                       // Not from the patch, and there is no field for it: a
-                      // class that arrived as a species would carry a document
+                      // class that arrived as a race would carry a document
                       // its own column contradicts. What a copy is, is what the
                       // original was.
                       kind: source.kind,

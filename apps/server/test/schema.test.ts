@@ -79,7 +79,7 @@ describe("every content-bearing table", () => {
       "beat",
       "campaign",
       "character",
-      // A class or a species — the pieces a character is built from, in the
+      // A class or a race — the pieces a character is built from, in the
       // same three-owner shape a `creature` has. Content, and it carries the
       // whole tail: an option can be the assistant's the day something proposes
       // one, and until then the column is inert exactly as every other table's

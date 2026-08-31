@@ -151,14 +151,18 @@ const aDraft = (over: Record<string, unknown> = {}) =>
     name: "Sorrel Ash",
     // All three are closed vocabularies — the campaign's own rows since slice 2
     // — which is what lets the server look a hit die up. Anything more specific
-    // than a species goes in `subclass`, which is still prose.
-    species: "Elf",
+    // than a race goes in `subclass`, which is still prose.
+    race: "Elf",
+    // `subrace` is optional in the product, but OpenAI-compatible strict mode
+    // publishes it as required with a null arm, so the scripted provider must
+    // say absence out loud.
+    subrace: null,
     className: "Druid",
     subclass: "Circle of the Land (Marsh)",
-    // A third closed vocabulary since the background became an entity, and the
-    // one that reaches the seed *through the six cells* — a bundled background
-    // grants nothing, so the numbers below are the class and species alone.
-    background: "Sage",
+    // A third closed vocabulary since the background became an entity. The SRD
+    // starter bundle carries one background, and 2014 backgrounds do not seed
+    // ability scores, so the numbers below are the class and race alone.
+    background: "Acolyte",
     abilityOrder: ["WIS", "CON", "DEX", "INT", "CHA", "STR"],
     skills: ["Nature", "Perception", "Medicine", "Survival"],
     backstory: "She left Ashfen with the herbal under her coat.",
@@ -269,11 +273,12 @@ describe("what the tool takes, and what the server works out", () => {
     const sheet = proposed.proposal.sheet;
 
     // The standard array, down the ranking the model gave: WIS 15, CON 14,
-    // DEX 13, INT 12, CHA 10, STR 8. Drawn in the canonical order, because the
-    // ranking decides the numbers and not where a cell sits on the sheet.
+    // DEX 13, INT 12, CHA 10, STR 8, then the elf's +2 DEX. Drawn in the
+    // canonical order, because the ranking decides the numbers and not where a
+    // cell sits on the sheet.
     expect(sheet.abilities.map((ability) => `${ability.label} ${ability.score}`)).toEqual([
       "STR 8",
-      "DEX 13",
+      "DEX 15",
       "CON 14",
       "INT 12",
       "WIS 15",
@@ -300,11 +305,11 @@ describe("what the tool takes, and what the server works out", () => {
     const scores = Object.fromEntries(
       proposed.proposal.sheet.abilities.map((ability) => [ability.label, ability.score]),
     );
-    // CHA takes 15 once, DEX 14, and the four unnamed take what is left in the
-    // canonical order: STR 13, CON 12, INT 10, WIS 8.
+    // CHA takes 15 once, DEX takes 14 plus the elf's +2, and the four unnamed
+    // take what is left in the canonical order: STR 13, CON 12, INT 10, WIS 8.
     expect(scores).toEqual({
       CHA: "15",
-      DEX: "14",
+      DEX: "16",
       STR: "13",
       CON: "12",
       INT: "10",
@@ -343,17 +348,17 @@ describe("what the tool takes, and what the server works out", () => {
     const tools = shownTo(requests.slice(0, 1));
 
     expect(tools).toContain("Barbarian");
-    expect(tools).toContain("Aasimar");
-    expect(tools).toContain("Wayfarer");
-    // 2014's, and not in the vocabulary — the cost of picking one ruleset,
+    expect(tools).toContain("Dragonborn");
+    expect(tools).toContain("Acolyte");
+    // Not in the SRD 2014 starter bundle — the cost of picking one source,
     // stated where it would otherwise be found by a model.
-    expect(tools).not.toContain("Half-Orc");
+    expect(tools).not.toContain("Aasimar");
     // The description names all three lists as well, so the vocabulary is in
     // the prompt and not only in the grammar.
     expect(tools).toContain("spelled exactly like that");
   }, 60_000);
 
-  it("seeds hit points, armour class and level from the class and species", async () => {
+  it("seeds hit points, armour class and level from the class and race", async () => {
     // The captain's decision of 2026-08-26, on the drafted path. `Ruleset.seedFor`
     // is the one implementation and the manual form calls the same one, so a
     // drafted druid and a hand-filled one start on the same number.
@@ -361,9 +366,10 @@ describe("what the tool takes, and what the server works out", () => {
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
-    // d8, CON 14 at rank two so `+2`, DEX 13 at rank three so `+1`.
+    // d8, CON 14 at rank two so `+2`, and the elf's DEX bonus raises the
+    // third-ranked 13 to 15 (`+2`).
     expect(proposed.proposal.hpMax).toBe(10);
-    expect(proposed.proposal.ac).toBe(11);
+    expect(proposed.proposal.ac).toBe(12);
     expect(proposed.proposal.level).toBe(1);
   }, 60_000);
 
@@ -371,17 +377,16 @@ describe("what the tool takes, and what the server works out", () => {
     // **Barbarian is the awkward one and is the reason `unarmouredAc` is a list
     // rather than a boolean**: Unarmoured Defense is `10 + DEX + CON`, so a
     // barbarian with the same ranking seeds a genuinely different armour class
-    // from the druid above rather than the same 11. Dwarven Toughness is the
-    // one species trait that reaches any of the three, and it adds its hit
-    // point on top of the d12.
+    // from the druid above rather than the same 12. Dwarf's constitution bonus
+    // raises the second-ranked 14 to 16, and no subrace is selected here.
     const { events } = await ask(fixture.player, {
-      rounds: [aDraft({ className: "Barbarian", species: "Dwarf" }), textChunks("A dwarf, then.")],
+      rounds: [aDraft({ className: "Barbarian", race: "Dwarf" }), textChunks("A dwarf, then.")],
     });
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
 
     expect(proposed.proposal.hpMax).toBe(15);
-    expect(proposed.proposal.ac).toBe(13);
+    expect(proposed.proposal.ac).toBe(14);
   }, 60_000);
 
   it("carries the rationale, which is the only place the reasons live", async () => {
@@ -443,14 +448,13 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.visibility).toBe("dm");
     expect(character.hpCurrent).toBeNull();
     // **The three seeded numbers**, copied off the proposal rather than worked
-    // out here — a druid's d8, no constitution modifier from the standard array
-    // at rank two (`CON 14`, `+2`), the unarmoured base with `DEX 13` at rank
-    // three (`+1`), and the level the captain's decision fixes at 1. Nothing
-    // recomputes any of them afterwards; the sheet's own dialogs are how they
-    // move.
+    // out here — a druid's d8, constitution at rank two (`CON 14`, `+2`), the
+    // unarmoured base with the elf-raised DEX (`DEX 15`, `+2`), and the level
+    // the captain's decision fixes at 1. Nothing recomputes any of them
+    // afterwards; the sheet's own dialogs are how they move.
     expect(character.level).toBe(1);
     expect(character.hpMax).toBe(10);
-    expect(character.ac).toBe(11);
+    expect(character.ac).toBe(12);
     // And the sheet is the one the card drew, not a second assembly.
     expect(character.sheet.abilities).toHaveLength(6);
     expect(character.sheet.skills?.map((skill) => skill.name)).toEqual([
@@ -459,14 +463,20 @@ describe("the accept makes a character, and it is the player's own", () => {
       "Medicine",
       "Survival",
     ]);
+    expect(character.sheet.proficiencies).toEqual(["Insight", "Religion", "Choose 2 languages"]);
     expect(character.sheet.inventory?.map((item) => item.name)).toEqual([
+      "1 × Clothes, common",
+      "1 × Pouch",
+      "Choose 1 equipment",
       "Leather armour",
       "Scimitar",
       "Herbalism kit",
     ]);
+    expect(character.sheet.currency).toEqual({ gp: 15 });
+    expect(character.sheet.traits[0]?.name).toBe("Shelter of the Faithful");
     expect(character.sheet.identity?.subclass).toBe("Circle of the Land (Marsh)");
     expect(character.sheet.notes).toContain("Ashfen");
-    // `descriptor` is a generated column over the three, so the drafted species
+    // `descriptor` is a generated column over the three, so the drafted race
     // and class reach the line under the name with nothing computing it twice.
     expect(character.descriptor).toBe("Level 1 Elf Druid");
   }, 60_000);
@@ -582,7 +592,7 @@ describe("the redraft loop", () => {
     // cells the tool cannot accept.
     expect(opening).toContain("Sorrel Ash");
     expect(opening).toContain("Elf Druid");
-    expect(opening).toContain("WIS > CON > DEX");
+    expect(opening).toContain("DEX > WIS > CON");
     expect(opening).toContain("Nature, Perception, Medicine, Survival");
     expect(opening).toContain("Circle of the Land (Marsh)");
     expect(opening).toContain("not yet accepted");

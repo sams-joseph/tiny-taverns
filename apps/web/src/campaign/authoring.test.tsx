@@ -419,7 +419,7 @@ describe("authoring a character", () => {
     await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
     await userEvent.type(screen.getByRole("textbox", { name: "Player" }), "Ilse");
     await userEvent.type(screen.getByRole("spinbutton", { name: "Level" }), "3");
-    await userEvent.type(screen.getByRole("textbox", { name: "Species" }), "Half-orc");
+    await userEvent.type(screen.getByRole("textbox", { name: "Race" }), "Half-orc");
     await userEvent.type(screen.getByRole("textbox", { name: "Class" }), "Paladin");
     await userEvent.type(screen.getByRole("spinbutton", { name: "AC" }), "18");
 
@@ -429,11 +429,11 @@ describe("authoring a character", () => {
       expect(bodyOf(server, "POST", "/characters")).toEqual({
         name: "Brannoc",
         playerName: "Ilse",
-        // The three that replaced the typed descriptor. **No `descriptor` is
+        // The fields that replaced the typed descriptor. **No `descriptor` is
         // sent and none could be** — it is derived by a generated column, and
         // `CharacterCreate` has no such field.
         level: 3,
-        species: "Half-orc",
+        race: "Half-orc",
         className: "Paladin",
         ac: 18,
         // `hpMax`, `sheetUrl` and `sheet` are absent rather than null:
@@ -473,10 +473,10 @@ describe("authoring a character", () => {
     expect(screen.getByRole("textbox", { name: "Player" })).toHaveValue("Ilse");
     expect(screen.getByRole("spinbutton", { name: "Hit points" })).toHaveValue(52);
     expect(screen.getByRole("spinbutton", { name: "Level" })).toHaveValue(3);
-    expect(screen.getByRole("textbox", { name: "Species" })).toHaveValue("Half-orc");
+    expect(screen.getByRole("textbox", { name: "Race" })).toHaveValue("Half-orc");
     expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("Owes the ferryman a name.");
     // And there is no descriptor field, at all: the half-line is derived from
-    // the three boxes above, and a form that offered to type it would be the
+    // the identity boxes above, and a form that offered to type it would be the
     // second answer this shape exists to prevent.
     expect(screen.queryByRole("textbox", { name: "Descriptor" })).toBeNull();
 
@@ -492,7 +492,8 @@ describe("authoring a character", () => {
         name: "Brannoc",
         playerName: "Ilse",
         level: null,
-        species: "Half-orc",
+        race: "Half-orc",
+        subrace: null,
         className: "Paladin",
         ac: 18,
         hpMax: 52,

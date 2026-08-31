@@ -22,14 +22,15 @@ import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
  * The form is the `character` row, and since `0012_character_sheet.ts` that row
  * is shaped like a creature: **a field earns a control when it is a column, and
  * everything else goes into the sheet.** So there is a box for the level, the
- * species and the class — the three the captain settled on, because players
- * edit their own characters and levelling is the main thing they will do — and
- * one free area for whatever the table actually keeps about them.
+ * race, the optional subrace and the class — the identity fields the captain
+ * settled on, because players edit their own characters and levelling is the
+ * main thing they will do — and one free area for whatever the table actually
+ * keeps about them.
  *
  * ### There is no descriptor field, and there is no preview of one either
  *
  * The `"Level 3 Half-orc Paladin"` half-line `PartyList` renders is **derived**
- * — a generated column over those three, so that a label and the fields it
+ * — a generated column over those fields, so that a label and the fields it
  * summarises cannot come to disagree. Neither payload has the field, and this
  * form deliberately does not compute it locally to show the DM what it will
  * say: a second implementation of the derivation is exactly the thing the
@@ -80,7 +81,8 @@ export function CharacterDialog({
   const [levelText, setLevelText] = useState(
     character?.level === null ? "" : String(character?.level ?? ""),
   );
-  const [species, setSpecies] = useState(character?.species ?? "");
+  const [race, setRace] = useState(character?.race ?? "");
+  const [subrace, setSubrace] = useState(character?.subrace ?? "");
   const [className, setClassName] = useState(character?.className ?? "");
   const [acText, setAcText] = useState(character?.ac === null ? "" : String(character?.ac ?? ""));
   const [hpText, setHpText] = useState(
@@ -140,7 +142,8 @@ export function CharacterDialog({
     if (refused) return;
 
     const trimmedPlayer = playerName.trim();
-    const trimmedSpecies = species.trim();
+    const trimmedRace = race.trim();
+    const trimmedSubrace = subrace.trim();
     const trimmedClass = className.trim();
     const trimmedUrl = sheetUrl.trim();
     // The whole document, with the one field this form writes replaced. The
@@ -161,7 +164,8 @@ export function CharacterDialog({
                 name: name.trim(),
                 ...(trimmedPlayer === "" ? {} : { playerName: trimmedPlayer }),
                 ...(level === null ? {} : { level }),
-                ...(trimmedSpecies === "" ? {} : { species: trimmedSpecies }),
+                ...(trimmedRace === "" ? {} : { race: trimmedRace }),
+                ...(trimmedSubrace === "" ? {} : { subrace: trimmedSubrace }),
                 ...(trimmedClass === "" ? {} : { className: trimmedClass }),
                 ...(ac === null ? {} : { ac }),
                 ...(hpMax === null ? {} : { hpMax }),
@@ -179,7 +183,8 @@ export function CharacterDialog({
                 name: name.trim(),
                 playerName: trimmedPlayer === "" ? null : trimmedPlayer,
                 level,
-                species: trimmedSpecies === "" ? null : trimmedSpecies,
+                race: trimmedRace === "" ? null : trimmedRace,
+                subrace: trimmedSubrace === "" ? null : trimmedSubrace,
                 className: trimmedClass === "" ? null : trimmedClass,
                 ac,
                 hpMax,
@@ -257,12 +262,21 @@ export function CharacterDialog({
                 className="w-20"
               />
             </Field>
-            <Field label="Species" htmlFor="character-species">
+            <Field label="Race" htmlFor="character-race">
               <Input
-                id="character-species"
+                id="character-race"
                 placeholder="Half-orc"
-                value={species}
-                onChange={(event) => setSpecies(event.target.value)}
+                value={race}
+                onChange={(event) => setRace(event.target.value)}
+                className="w-40"
+              />
+            </Field>
+            <Field label="Subrace" htmlFor="character-subrace">
+              <Input
+                id="character-subrace"
+                placeholder="High Elf"
+                value={subrace}
+                onChange={(event) => setSubrace(event.target.value)}
                 className="w-40"
               />
             </Field>

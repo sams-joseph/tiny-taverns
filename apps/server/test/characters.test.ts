@@ -58,7 +58,7 @@ const makeFixture = Effect.gen(function* () {
       name: "Brannoc",
       playerName: "Ilse",
       level: 3,
-      species: "Half-orc",
+      race: "Half-orc",
       className: "Paladin",
       ac: 18,
       hpMax: 52,
@@ -109,7 +109,7 @@ describe("the descriptor is derived, and stored nowhere", () => {
   it("assembles the line the party list renders out of the three columns", () => {
     expect(fixture.brannoc.descriptor).toBe("Level 3 Half-orc Paladin");
     expect(fixture.brannoc.level).toBe(3);
-    expect(fixture.brannoc.species).toBe("Half-orc");
+    expect(fixture.brannoc.race).toBe("Half-orc");
     expect(fixture.brannoc.className).toBe("Paladin");
   });
 

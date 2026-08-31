@@ -265,8 +265,8 @@ const libraryRoute = createRoute({
 });
 
 /**
- * The other half of the same shelf: **the classes and species this account has
- * written**, in no campaign either.
+ * The other half of the same shelf: **the classes, races and backgrounds this
+ * account has written**, in no campaign either.
  *
  * A second shelf under the global Library destination: the two read different
  * tables through the same predicate, and neither list can ever contain a row of
@@ -321,7 +321,7 @@ const partyRoute = createRoute({
 });
 
 /**
- * The classes and species a character at this table is built from.
+ * The classes, races and backgrounds a character at this table is built from.
  *
  * It names a campaign because the read does — `options.list` hangs off
  * `/campaigns/:campaignId`, and that path is the *only* thing gating the

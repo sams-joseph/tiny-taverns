@@ -319,7 +319,7 @@ class MeGroup extends HttpApiGroup.make("me")
       params: { characterId: CharacterId },
       payload: CharacterOwnUpdate,
       success: Character,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     /**
      * **A player writes down a character of their own** — the first row a
@@ -382,7 +382,7 @@ class MeGroup extends HttpApiGroup.make("me")
       params: { campaignId: CampaignId },
       payload: CharacterOwnCreate,
       success: Character,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     /**
      * Throwing away a character of your own.
@@ -595,7 +595,7 @@ class CharactersGroup extends HttpApiGroup.make("characters")
       params: { campaignId: CampaignId },
       payload: CharacterCreate,
       success: Character,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.get("findById", "/:characterId", {
       params: { campaignId: CampaignId, characterId: CharacterId },
@@ -606,7 +606,7 @@ class CharactersGroup extends HttpApiGroup.make("characters")
       params: { campaignId: CampaignId, characterId: CharacterId },
       payload: CharacterUpdate,
       success: Character,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     /**
      * Whose character it is — the DM's act, and the one that makes
@@ -873,8 +873,8 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
  * `CreatureLibraryCreate`, where its absence is the decision.
  */
 /**
- * A campaign's **rules vocabulary**: the classes and species a character at this
- * table can be built from.
+ * A campaign's **rules vocabulary**: the classes, races and backgrounds a
+ * character at this table can be built from.
  *
  * The bundle, plus whatever this campaign has copied in — which is
  * `corpusRowReadable`, the same predicate and the same shape as the bestiary
@@ -916,11 +916,11 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
 class CharacterOptionsGroup extends HttpApiGroup.make("options")
   .add(
     /**
-     * Every option this campaign offers — both kinds unless `kind` narrows it.
+     * Every option this campaign offers — all three kinds unless `kind` narrows it.
      *
-     * One request rather than two is the common case and is why `kind` is a
-     * query parameter: the create form wants classes *and* species, and so does
-     * the Rules screen.
+     * One request rather than three is the common case and is why `kind` is a
+     * query parameter: the create form wants classes, races *and* backgrounds,
+     * and so does the Rules screen.
      */
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
@@ -972,13 +972,15 @@ class CharacterOptionsGroup extends HttpApiGroup.make("options")
      * The copy is a **snapshot**. Nothing is read through `derivedFrom`, so
      * editing the original afterwards does not reach it and deleting the
      * original leaves it standing — which is the single most surprising thing
-     * about this feature and is why the dialog over it says so in words.
+     * about this feature and is why the dialog over it says so in words. A body
+     * whose shape contradicts the source kind is a `Conflict`, the same
+     * backstop `update` uses.
      */
     HttpApiEndpoint.post("derive", "/:optionId/derive", {
       params: { campaignId: CampaignId, optionId: CharacterOptionId },
       payload: OptionDerive,
       success: CharacterOption,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/options")
@@ -1047,7 +1049,7 @@ class LibraryGroup extends HttpApiGroup.make("library")
     }),
     /**
      * The account's own **character options** and the bundled ones — the
-     * classes and species it has authored, in no campaign.
+     * classes, races and backgrounds it has authored, in no campaign.
      *
      * The same read as the creature list above with one word changed, because
      * the predicate underneath is literally the same function with a different
@@ -1059,8 +1061,9 @@ class LibraryGroup extends HttpApiGroup.make("library")
       success: Schema.Array(CharacterOption),
     }),
     /**
-     * **Write a class or a species.** The only place either is authored, and
-     * the second statement of the captain's model applied to a second table.
+     * **Write a class, race or background.** The only place any of them is
+     * authored, and the second statement of the captain's model applied to a
+     * second table.
      *
      * No campaign, no `origin`, and no `visibility` — see
      * `OptionLibraryCreate`, where each absence is the decision.

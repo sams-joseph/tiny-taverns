@@ -17,7 +17,7 @@ import { OptionFields } from "./OptionFields";
 import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } from "./optionDraft";
 
 /**
- * Writing a class, a species or a background **for a campaign**, and editing
+ * Writing a class, a race or a background **for a campaign**, and editing
  * the one that table holds.
  *
  * ### It is one dialog and **two different writes**, and the difference is the
@@ -37,9 +37,9 @@ import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } fr
  * **The boxes are `OptionFields`, shared with `OptionForm`** — the Library's
  * own authoring surface, which writes an original with no campaign anywhere
  * near it. What differs between the two shells is the write, the visibility
- * switch and the delete; what must not differ is what a hit die is and whether
- * a background box holding `0` becomes a row, which is why it is one editor
- * rather than two.
+ * switch and the delete; what must not differ is what a hit die is, how a race
+ * bonus is described, or which background lists become rows, which is why it is
+ * one editor rather than two.
  *
  * ### The copy is a snapshot, and this dialog is where that is explained
  *
@@ -74,8 +74,8 @@ import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } fr
 /** What the description under the title says. One map, so the three agree. */
 const BLURB: Record<OptionKind, string> = {
   class: "A class carries the hit die a new character's hit points are worked out from.",
-  species: "A species carries the extra hit points it gives at every level.",
-  background: "A background carries the ability score increases a new character starts with.",
+  race: "A race carries 2014 ability bonuses, speed, size and any contained subraces.",
+  background: "A background carries 2014 proficiencies, equipment and feature text.",
 };
 
 export function OptionDialog({
@@ -142,9 +142,9 @@ export function OptionDialog({
               ? yield* client.library.createOption({
                   payload: { kind: "class", name, body: written.body },
                 })
-              : written.kind === "species"
+              : written.kind === "race"
                 ? yield* client.library.createOption({
-                    payload: { kind: "species", name, body: written.body },
+                    payload: { kind: "race", name, body: written.body },
                   })
                 : yield* client.library.createOption({
                     payload: { kind: "background", name, body: written.body },

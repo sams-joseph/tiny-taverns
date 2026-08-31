@@ -313,8 +313,8 @@ const CreaturesLive = HttpApiBuilder.group(
 );
 
 /**
- * A campaign's rules vocabulary — the classes and species a character at this
- * table is built from.
+ * A campaign's rules vocabulary — the classes, races and backgrounds a
+ * character at this table is built from.
  *
  * **The only list in the product a *player* reads to fill in a control**, which
  * is what makes it different from the bestiary it is otherwise a copy of: the

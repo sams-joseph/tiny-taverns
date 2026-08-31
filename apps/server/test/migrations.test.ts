@@ -138,6 +138,7 @@ describe("migrations", () => {
       { migration_id: 17, name: "character_options" },
       { migration_id: 18, name: "background_option" },
       { migration_id: 19, name: "rules_source_provenance" },
+      { migration_id: 20, name: "2014_character_rules" },
     ]);
   }, 60_000);
 
@@ -167,6 +168,7 @@ describe("migrations", () => {
       { migration_id: 17, name: "character_options" },
       { migration_id: 18, name: "background_option" },
       { migration_id: 19, name: "rules_source_provenance" },
+      { migration_id: 20, name: "2014_character_rules" },
     ]);
   }, 60_000);
 });
@@ -374,14 +376,14 @@ describe("upgrading a database whose characters predate the sheet", () => {
           readonly visibility: string;
           readonly descriptor: string | null;
           readonly level: number | null;
-          readonly species: string | null;
+          readonly race: string | null;
           readonly class_name: string | null;
           readonly account_id: string | null;
           readonly sheet_url: string | null;
           readonly body: { readonly notes: string };
         }>`
           select name, player_name, ac, hp_max, visibility, descriptor,
-                 level, species, class_name, account_id, sheet_url, body
+                 level, species as race, class_name, account_id, sheet_url, body
           from character order by name
         `;
 
@@ -406,12 +408,12 @@ describe("upgrading a database whose characters predate the sheet", () => {
         // The fifth is prose, and the migration does not parse prose: the text
         // is kept verbatim as the sheet's opening note, and the derived
         // descriptor is null until somebody fills in the two columns that make
-        // it. Guessing that "Half-orc paladin" is a species and a class is the
+        // it. Guessing that "Half-orc paladin" is a race and a class is the
         // thing these columns exist to stop.
         body: { notes: "Half-orc paladin", abilities: [], traits: [] },
         descriptor: null,
         level: null,
-        species: null,
+        race: null,
         class_name: null,
         // The hook, inert. Nothing mints a player credential yet.
         account_id: null,
@@ -427,7 +429,7 @@ describe("upgrading a database whose characters predate the sheet", () => {
         body: { notes: "", abilities: [], traits: [] },
         descriptor: null,
         level: null,
-        species: null,
+        race: null,
         class_name: null,
         account_id: null,
         sheet_url: null,
@@ -441,7 +443,7 @@ describe("upgrading a database whose characters predate the sheet", () => {
         body: { notes: "Tiefling bard", abilities: [], traits: [] },
         descriptor: null,
         level: null,
-        species: null,
+        race: null,
         class_name: null,
         account_id: null,
         sheet_url: null,

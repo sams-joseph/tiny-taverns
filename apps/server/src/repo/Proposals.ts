@@ -185,7 +185,10 @@ export class Proposals extends Context.Service<
                 campaignId,
                 {
                   name: proposal.name,
-                  ...(proposal.species === null ? {} : { species: proposal.species }),
+                  ...(proposal.race === null ? {} : { race: proposal.race }),
+                  ...(proposal.subrace === undefined || proposal.subrace === null
+                    ? {}
+                    : { subrace: proposal.subrace }),
                   ...(proposal.className === null ? {} : { className: proposal.className }),
                   ...(proposal.level === undefined ? {} : { level: proposal.level }),
                   ...(proposal.ac === undefined ? {} : { ac: proposal.ac }),

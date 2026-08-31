@@ -34,8 +34,8 @@ export const CreatureId = id("CreatureId");
 export type CreatureId = typeof CreatureId.Type;
 
 /**
- * One piece a character is **built from** — a class or a species, and later a
- * background. Not the character: two characters made from one class are two
+ * One piece a character is **built from** — a class, a race, or a background.
+ * Not the character: two characters made from one class are two
  * rows that share nothing but a label, because the class is read once at
  * creation and never again.
  *
