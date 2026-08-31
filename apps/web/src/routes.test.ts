@@ -180,15 +180,14 @@ describe("the route table", () => {
     expect(landsOn("/campaigns/not-a-uuid/bestiary").at).toBe("/$");
   });
 
-  it("gives the Library a route that names no campaign, because its rows are in none", () => {
-    // A Library entity is owned by an account and sits in no campaign, so
-    // `libraryRowReadable` composes no campaign gate at all — there is nothing
-    // for this URL to carry, and it is the second place in the product (after
-    // `/play/characters`) where that is true. The campaign-scoped bestiary above
-    // is untouched and still its own screen: it holds that campaign's copies,
-    // which is a question the Library cannot be asked. What it lost was its nav
-    // item, not its route.
+  it("gives the Library routes that name no campaign, because their rows are in none", () => {
+    // Library entities are owned by an account and sit in no campaign, so
+    // `libraryRowReadable` composes no campaign gate at all. The two shelves —
+    // creatures, and rules vocabulary — therefore carry no campaign id, while
+    // the campaign-scoped bestiary and Rules screens remain the copies/config
+    // of one table.
     expect(landsOn("/library")).toEqual({ at: "/library", params: {} });
+    expect(landsOn("/library/rules")).toEqual({ at: "/library/rules", params: {} });
     expect(landsOn("/library/anything").at).toBe("/$");
   });
 

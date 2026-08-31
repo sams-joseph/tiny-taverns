@@ -59,13 +59,29 @@ describe("what your library holds", () => {
     expect(screen.getAllByText("No ability score increases written down").length).toBe(4);
   });
 
-  it("counts what is in here and how much of it is yours", async () => {
+  it("counts what is in here and shows it as the Rules shelf of Library", async () => {
     await renderOptionLibrary();
     // Counted by kind rather than by subtraction, so the background's arrival
     // was a clause rather than a silently wrong species count.
     expect(
       await screen.findByText(/13 classes, 11 species, 5 backgrounds · 3 yours/),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", {
+        name: "Library",
+      }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      within(screen.getByRole("navigation", { name: "Sections" })).queryByRole("link", {
+        name: "Rules",
+      }),
+    ).toBeNull();
+    expect(
+      within(screen.getByRole("navigation", { name: "Library shelves" })).getByRole("link", {
+        name: "Rules",
+      }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   /**

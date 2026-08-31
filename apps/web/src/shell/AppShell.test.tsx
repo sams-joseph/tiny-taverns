@@ -240,15 +240,19 @@ describe("the shell's top bar", () => {
       }
     });
 
-    it("is lit at its own URL, and nothing on the campaign row is", async () => {
-      await renderAt("/library");
-      expect(
-        within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
-      ).toBe("page");
-      expect(
-        within(nav()).getByRole("link", { name: "Campaigns" }).getAttribute("aria-current"),
-      ).toBeNull();
-      expect(noCampaignNav()).toBeNull();
+    it("is lit at both Library URLs, with Rules no longer a global peer", async () => {
+      for (const path of ["/library", "/library/rules"]) {
+        await renderAt(path);
+        expect(
+          within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
+        ).toBe("page");
+        expect(
+          within(nav()).getByRole("link", { name: "Campaigns" }).getAttribute("aria-current"),
+        ).toBeNull();
+        expect(within(nav()).queryByRole("link", { name: "Rules" })).toBeNull();
+        expect(noCampaignNav()).toBeNull();
+        cleanup();
+      }
     });
 
     it("took Bestiary off the campaign row, and left the screen reachable", async () => {
@@ -293,7 +297,14 @@ describe("the shell's top bar", () => {
    */
   describe("two tiers", () => {
     it("has no campaign row above a campaign, in either mode", async () => {
-      for (const path of ["/campaigns", "/library", "/play", "/play/characters", "/gallery"]) {
+      for (const path of [
+        "/campaigns",
+        "/library",
+        "/library/rules",
+        "/play",
+        "/play/characters",
+        "/gallery",
+      ]) {
         await renderAt(path);
         expect(noCampaignNav()).toBeNull();
         cleanup();

@@ -268,11 +268,10 @@ const libraryRoute = createRoute({
  * The other half of the same shelf: **the classes and species this account has
  * written**, in no campaign either.
  *
- * A sibling rather than a child of `/library`, because it is a second
- * destination and not a view of the first: the two read different tables
- * through the same predicate, and neither list can ever contain a row of the
- * other's. The bar draws them as two items for that reason, and this URL is the
- * second one.
+ * A second shelf under the global Library destination: the two read different
+ * tables through the same predicate, and neither list can ever contain a row of
+ * the other's. The global bar therefore stays on *Library* while this screen's
+ * own tabs name the shelf.
  *
  * `/library/rules` and not `/library/options`, though the endpoint is
  * `GET /library/options`: the web routes have called this vocabulary *rules*

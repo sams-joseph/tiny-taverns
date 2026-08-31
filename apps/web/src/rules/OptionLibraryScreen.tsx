@@ -3,6 +3,7 @@ import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
+import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { libraryOptionsAtom } from "./load";
@@ -14,7 +15,7 @@ import { OptionSection } from "./OptionSection";
  * **Your library of classes, species and backgrounds** — where one is written,
  * in no campaign at all.
  *
- * `#/library/rules`, on the global row beside *Library*, which is where a
+ * `#/library/rules`, inside the global *Library* destination, which is where a
  * monster is already authored. It is the second screen over the Library model
  * and it is the same model: `character_option` carries the ownership pair
  * `creature` does, and the four predicates behind both were already generic
@@ -109,7 +110,8 @@ export function OptionLibraryScreen() {
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} />}
       topBar={
-        <TopBar title="Rules" subtitle={options === undefined ? undefined : summaryOf(options)}>
+        <TopBar title="Library" subtitle={options === undefined ? undefined : summaryOf(options)}>
+          <LibraryNav />
           {/* **Three controls, so they wrap** — `RulesScreen` records the same
               thing about its four: the shell's action slot is one unwrapped
               row, which is right for the two every other screen has, and the

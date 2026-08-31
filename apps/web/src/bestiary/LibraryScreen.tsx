@@ -6,6 +6,7 @@ import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
+import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CopyIntoCampaign } from "./CopyIntoCampaign";
@@ -128,6 +129,7 @@ export function LibraryScreen() {
               : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
           }
         >
+          <LibraryNav />
           <CorpusControls corpus={corpus} label="Search the library" />
           <Button size="sm" onClick={() => setEditing(null)}>
             <Icon name="plus" size={13} />

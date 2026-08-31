@@ -496,6 +496,16 @@ describe("LibraryScreen", () => {
     });
     expect(item).toHaveAttribute("href", "/#/library");
     expect(item).toHaveAttribute("aria-current", "page");
+    expect(
+      within(screen.getByRole("navigation", { name: "Sections" })).queryByRole("link", {
+        name: "Rules",
+      }),
+    ).toBeNull();
+    expect(
+      within(screen.getByRole("navigation", { name: "Library shelves" })).getByRole("link", {
+        name: "Creatures",
+      }),
+    ).toHaveAttribute("aria-current", "page");
 
     // The second row exists exactly when the route names a campaign, and this
     // one names none — so there is no row rather than an empty one.
