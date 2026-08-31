@@ -61,9 +61,10 @@ export function useMode(): Mode {
  * are screens you go *to* from a campaign rather than views of one.
  *
  * **There is one Library section.** `/library` is the monsters an account has
- * written and `/library/rules` is the classes, races and backgrounds; they
- * are shelves under the same global destination, so both light *Library* on the
- * global row and let the screen's own tabs say which shelf is open.
+ * written; `/library/rules`, `/library/spells` and `/library/equipment` are the
+ * character vocabulary, spells and mundane gear. They are shelves under the same
+ * global destination, so all light *Library* on the global row and let the
+ * screen's own tabs say which shelf is open.
  *
  * **The bestiary stopped being one when the Library took its item.** Its item is
  * on the global row now and points at `/library`, which names no campaign; the
@@ -99,6 +100,7 @@ export type Section =
   | "party"
   | "rules"
   | "spells"
+  | "equipment"
   | "chronicle"
   /* The player's campaign row. */
   | "playOverview"
@@ -129,6 +131,7 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
   if (matchRoute({ to: "/campaigns/$campaignId/rules" })) return "rules";
   if (matchRoute({ to: "/campaigns/$campaignId/spells" })) return "spells";
+  if (matchRoute({ to: "/campaigns/$campaignId/equipment" })) return "equipment";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
   // a fight, the bestiary the Library replaced in the row, and the splat a
   // half-typed section falls back through.

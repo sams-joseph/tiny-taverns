@@ -24,6 +24,7 @@ import { type DmActor, DmActors } from "./repo/DmActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
+import { EquipmentRepo } from "./repo/Equipment.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { Memberships } from "./repo/Memberships.js";
@@ -348,6 +349,25 @@ const SpellsLive = HttpApiBuilder.group(
  * second statement — so a campaign gets an option through `derive` and through
  * nothing else, and the group above it declares no such endpoint to handle.
  */
+const EquipmentLive = HttpApiBuilder.group(
+  TavernsApi,
+  "equipment",
+  Effect.fnUntraced(function* (handlers) {
+    const equipment = yield* EquipmentRepo;
+    return handlers
+      .handle("list", ({ params, query }) => equipment.list(params.campaignId, query))
+      .handle("findById", ({ params }) => equipment.findById(params.campaignId, params.equipmentId))
+      .handle("create", ({ params, payload }) => equipment.create(params.campaignId, payload))
+      .handle("update", ({ params, payload }) =>
+        equipment.update(params.campaignId, params.equipmentId, payload),
+      )
+      .handle("remove", ({ params }) => equipment.remove(params.campaignId, params.equipmentId))
+      .handle("derive", ({ params, payload }) =>
+        equipment.derive(params.campaignId, params.equipmentId, payload),
+      );
+  }),
+);
+
 const CharacterOptionsLive = HttpApiBuilder.group(
   TavernsApi,
   "options",
@@ -390,6 +410,7 @@ const LibraryLive = HttpApiBuilder.group(
     // pair of predicates each composes is the same pair.
     const options = yield* Options;
     const spells = yield* Spells;
+    const equipment = yield* EquipmentRepo;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -410,7 +431,14 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("createSpell", ({ payload }) => spells.libraryCreate(payload))
       .handle("findSpell", ({ params }) => spells.libraryFindById(params.spellId))
       .handle("updateSpell", ({ params, payload }) => spells.libraryUpdate(params.spellId, payload))
-      .handle("removeSpell", ({ params }) => spells.libraryRemove(params.spellId));
+      .handle("removeSpell", ({ params }) => spells.libraryRemove(params.spellId))
+      .handle("equipment", ({ query }) => equipment.library(query))
+      .handle("createEquipment", ({ payload }) => equipment.libraryCreate(payload))
+      .handle("findEquipment", ({ params }) => equipment.libraryFindById(params.equipmentId))
+      .handle("updateEquipment", ({ params, payload }) =>
+        equipment.libraryUpdate(params.equipmentId, payload),
+      )
+      .handle("removeEquipment", ({ params }) => equipment.libraryRemove(params.equipmentId));
   }),
 );
 
@@ -830,6 +858,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     EncountersLive,
     CreaturesLive,
     SpellsLive,
+    EquipmentLive,
     CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,

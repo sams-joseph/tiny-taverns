@@ -71,9 +71,9 @@ export const TAVERNS_STARTER_SOURCE: RulesSourceDefinition = {
 };
 
 /**
- * Metadata for the pinned 2014 character-rules source used by
- * `ruleset:import`. The importer is generated from the local 5e-bits snapshot;
- * it does not fetch at runtime.
+ * Metadata for the pinned 2014 5e-bits/SRD source used by the ruleset, spell
+ * and equipment importers. Each importer reads a checked-in local snapshot; none
+ * fetches at runtime.
  */
 export const FIVE_E_BITS_2014_SOURCE: RulesSourceDefinition = {
   document: {

@@ -31,6 +31,7 @@ import { DmActors } from "./repo/DmActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
+import { EquipmentRepo } from "./repo/Equipment.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { Memberships } from "./repo/Memberships.js";
@@ -203,6 +204,7 @@ export const servicesOver = <E>(
   | EncounterCreatures
   | EncounterRuns
   | Encounters
+  | EquipmentRepo
   | Health
   | Hob
   | HobThreads
@@ -271,6 +273,9 @@ export const servicesOver = <E>(
     // Spells follow the same Library/campaign-copy ownership as creatures, but
     // write no live state and ring no doorbell.
     Spells.layer,
+    // Mundane equipment follows the same Library/campaign-copy ownership as
+    // creatures and spells, and writes no live state.
+    EquipmentRepo.layer,
     // What is live at one table, to a player — the character sheet's banner.
     // A view over three tables and a writer of none, so it needs no
     // `LiveEvents` for the reason `Recap` does not: reading a night's state
@@ -361,6 +366,7 @@ export const applicationOver = <E>(
     | EncounterCreatures
     | EncounterRuns
     | Encounters
+    | EquipmentRepo
     | Health
     | Hob
     | HobThreads

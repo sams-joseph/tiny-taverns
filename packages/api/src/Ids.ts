@@ -37,6 +37,10 @@ export type CreatureId = typeof CreatureId.Type;
 export const SpellId = id("SpellId");
 export type SpellId = typeof SpellId.Type;
 
+/** Mundane 2014 equipment in the shared corpus, an account Library, or a campaign copy. */
+export const EquipmentId = id("EquipmentId");
+export type EquipmentId = typeof EquipmentId.Type;
+
 /**
  * One piece a character is **built from** — a class, a race, or a background.
  * Not the character: two characters made from one class are two

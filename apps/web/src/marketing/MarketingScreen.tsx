@@ -436,7 +436,7 @@ function SiteFooter(): ReactNode {
       </div>
       <div className="mx-auto mt-8 max-w-275 border-t border-strong pt-4 text-caption leading-snug text-on-dark-muted">
         <p>
-          Character rules data is transformed from{" "}
+          Character rules, spells and equipment data are transformed from{" "}
           <a
             href="https://github.com/5e-bits/5e-database/tree/5a7ee5a0489b26655d343e4a41e8f7942a887af2/src/2014/en"
             target="_blank"

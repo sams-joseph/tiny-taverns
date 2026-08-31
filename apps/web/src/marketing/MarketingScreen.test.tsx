@@ -186,7 +186,7 @@ describe("the marketing homepage", () => {
     }
   });
 
-  it("attributes the bundled 2014 rules source and license", async () => {
+  it("attributes the bundled 2014 SRD source and license", async () => {
     await renderHome();
 
     expect(

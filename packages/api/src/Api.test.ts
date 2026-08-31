@@ -9,6 +9,7 @@ import { Combatant, CombatantCreate } from "./Combatant.js";
 import { Creature, CreatureCreate } from "./Creature.js";
 import { Encounter, EncounterCreate } from "./Encounter.js";
 import { EncounterCreature, EncounterCreatureCreate } from "./EncounterCreature.js";
+import { Equipment, EquipmentCreate } from "./Equipment.js";
 import { EncounterRun, EncounterRunStart } from "./EncounterRun.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
@@ -126,6 +127,7 @@ describe("the API declaration", () => {
       "creatures",
       "encounterCreatures",
       "encounters",
+      "equipment",
       "health",
       "hob",
       "invitePreview",
@@ -170,6 +172,7 @@ describe("every content schema", () => {
     PrepItem,
     Creature,
     Spell,
+    Equipment,
     EncounterCreature,
     EncounterRun,
     Combatant,
@@ -202,6 +205,7 @@ describe("every content schema", () => {
       PrepItemCreate,
       CreatureCreate,
       SpellCreate,
+      EquipmentCreate,
       EncounterCreatureCreate,
       EncounterRunStart,
       CombatantCreate,
@@ -225,6 +229,11 @@ describe("every content schema", () => {
         castingTime: "1 action",
         range: "Self",
         duration: "Instantaneous",
+      },
+      EquipmentCreate: {
+        name: "x",
+        equipmentCategory: { index: "adventuring-gear", name: "Adventuring Gear" },
+        cost: { quantity: 1, unit: "gp" },
       },
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },

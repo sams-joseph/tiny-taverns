@@ -125,6 +125,9 @@ export const reads = {
   /** This campaign's spellbook: copied spells, plus the 2014 SRD bundle. */
   spells: (campaignId: CampaignId): ReadKey => key`spells:${campaignId}`,
 
+  /** This campaign's mundane equipment: copied rows, plus the 2014 SRD bundle. */
+  equipment: (campaignId: CampaignId): ReadKey => key`equipment:${campaignId}`,
+
   /**
    * This campaign's rules vocabulary: the classes, races and backgrounds copied
    * into it, plus the bundle.
@@ -176,6 +179,9 @@ export const reads = {
 
   /** The account's spell Library: original spells, plus the 2014 SRD bundle. */
   librarySpells: "library:spells" as ReadKey,
+
+  /** The account's equipment Library: original mundane gear, plus the 2014 SRD bundle. */
+  libraryEquipment: "library:equipment" as ReadKey,
 
   /**
    * The account's Library of **character options** — the classes, races and

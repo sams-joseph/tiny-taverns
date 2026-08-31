@@ -1454,12 +1454,12 @@ and the campaign's vocabulary answered 23 with **no row carrying an `accountId`*
 derived class. So _originals only_ is a fact about which read was made, and neither screen
 applies a filter of its own; one that did would be a second answer to a settled question.
 
-**The Library screen is a second global item, not a view of the monster Library.** _Rules_ on
-the global row beside _Library_, `book-open`, DM-only for the mode reason the monster Library
-records. It is `#/library/rules` rather than `/library/options`, because the web routes have
-called this vocabulary _rules_ since the campaign screen shipped and one word across the two
-levels beats matching the wire. The two are two `Section`s (`shell/location.ts`), so neither
-stays lit on the other's URL — verified in a browser.
+**The Rules Library is a shelf under the one global Library destination, not a view of the
+monster Library.** It is `#/library/rules` rather than `/library/options`, because the web routes
+have called this vocabulary _rules_ since the campaign screen shipped and one word across the two
+levels beats matching the wire. `LibraryNav` is the second row that says which shelf is open;
+`shell/location.ts` keeps them under one `library` section so every Library shelf lights the one
+global item.
 
 **Four files are shared and each is shared for a reason that would otherwise be a silent
 disagreement**, the rule `characters/AbilityFields.tsx` already states:
@@ -1538,6 +1538,29 @@ The web has two shelves over the same table: `#/library/spells` for originals pl
 `#/campaigns/:c/spells` for a campaign's copies plus the bundle. `LibraryNav` is the global shelf;
 the campaign row has a `Spells` item because this is a campaign corpus, while the Library shelf is
 where account originals are written.
+
+## Equipment: the 2014 mundane SRD corpus is a copyable Library table
+
+`equipment` is a dedicated table, not inventory and not another `character_option` kind. The 2014
+mundane corpus needs paged search plus category, gear/armor/weapon/tool/vehicle, cost, weight,
+range, damage and property filters, and its heterogeneous display document lives in `body`. It uses
+the same three-owner Library model as `creature`, `character_option` and `spell`: bundled rows are
+unowned `system`, Library originals have `account_id`, campaign copies have `campaign_id`, and
+`equipment.derive` makes a snapshot. The generic predicates in `repo/visibility.ts` are enough; do
+not add an equipment-specific reach rule.
+
+The bundle is imported by `pnpm -F server equipment:import` from the checked-in
+`apps/server/src/equipment/systemEquipment.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0
+commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`: exactly **237** rows from
+`5e-SRD-Equipment.json`, with source links into equipment categories, gear categories, weapon
+properties, damage types and contained equipment. No runtime fetch. Imported rows record
+`rules_source_*` provenance and are `shared`, because background starting-equipment references and
+player-facing creation flows need the bundled mundane vocabulary to be readable through a shared
+campaign. Keep it mundane only: no magic items, shops, encumbrance or character inventory live here.
+
+The web has two shelves over the same table: `#/library/equipment` for originals plus the bundle,
+and `#/campaigns/:c/equipment` for a campaign's copies plus the bundle. The Library shelf is where
+account originals are written; the campaign shelf is what that campaign can use and copy from.
 
 ## The party: what earns a column on `character`, and what lives in the document
 
@@ -2931,18 +2954,14 @@ Six things about it that are decisions, not details:
   question is always whether _this row_ fits — which the window does not answer.
 - **The rows are the screens that exist, on the route and the mode**, both read off the router.
   _Run_ has never earned an item (a fight is reached from the campaign that owns it); _At the
-  table_ has not either. The DM's global row is four now — **Campaigns, Library, Rules,
-  Components** — where _Library_ is the monsters an account has written and _Rules_ is the
-  classes, races and backgrounds (`#/library/rules`). They are **two items rather than one
-  screen with a switch**, because the two lists are disjoint by predicate and the screens are
-  shaped differently for a reason that is not cosmetic: a bestiary is a corpus somebody browses,
-  so it has a search, chips and pages; a vocabulary is bounded by what it hangs off, so it is the
-  bundle's thirty-eight rows in three labelled two-column sections and a filter over it would be
-  furniture. Both are DM-only, for the mode reason `globalNavFor` records rather than a
-  gate. _Bestiary_ came off the campaign row when _Library_ arrived — nothing appears on both
-  rows — and the campaign row's own _Rules_ stays, because a campaign's vocabulary and an
-  account's are different lists. See the sixth delivery's section, "The Library", and "The
-  screens: two lists over one table".
+  table_ has not either. The DM's global row is three now — **Campaigns, Library, Components** —
+  and _Library_ is a destination with shelves for monsters, rules, spells and mundane equipment.
+  Those shelves stay under one global item because the split is inside the account-owned Library,
+  while the campaign row keeps the campaign-owned copies: _Rules_, _Spells_ and _Equipment_ each
+  point at a campaign corpus distinct from its Library original shelf. _Bestiary_ came off the
+  campaign row when _Library_ arrived — nothing appears on both rows — but the campaign bestiary
+  route still exists and falls through to Overview for its active section. See the sixth delivery's
+  section, "The Library", and the rules/spells/equipment corpus sections.
 - **The name is the first thing to give way, and it gives way whole.** The campaign row needs
   986px with six items, a badge and _Start session_, so below about 1024 something must go.
   Left as a plain shrinking flex item the name squeezed the **chevron** to zero width at 760 and

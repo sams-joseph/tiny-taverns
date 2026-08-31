@@ -61,6 +61,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/library": "/library",
   "/library/rules": "/library/rules",
   "/library/spells": "/library/spells",
+  "/library/equipment": "/library/equipment",
   "/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
@@ -70,6 +71,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
   "/campaigns/$campaignId/rules": `/campaigns/${campaignId}/rules`,
   "/campaigns/$campaignId/spells": `/campaigns/${campaignId}/spells`,
+  "/campaigns/$campaignId/equipment": `/campaigns/${campaignId}/equipment`,
   "/campaigns/$campaignId/sessions/$sessionId/runs/$runId": `/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`,
   "/gallery": "/gallery",
   "/join/$token": "/join/aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -323,7 +325,16 @@ describe("the shell's top bar", () => {
           .map((link) => link.textContent),
         // Bestiary left this row when Library arrived on the one above; Spells
         // is a campaign corpus and the Library shelf is the originals.
-      ).toEqual(["Overview", "Encounters", "Party", "Notes", "Chronicle", "Spells", "Rules"]);
+      ).toEqual([
+        "Overview",
+        "Encounters",
+        "Party",
+        "Notes",
+        "Chronicle",
+        "Spells",
+        "Equipment",
+        "Rules",
+      ]);
       // Every one of them names the campaign, because every endpoint behind
       // them does — which is the same fact that makes the row exist at all.
       for (const link of within(campaignNav()).getAllByRole("link")) {

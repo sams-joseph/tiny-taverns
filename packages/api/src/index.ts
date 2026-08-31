@@ -10,6 +10,7 @@ export * from "./Creature.js";
 export * from "./Encounter.js";
 export * from "./EncounterCreature.js";
 export * from "./EncounterRun.js";
+export * from "./Equipment.js";
 export * from "./Errors.js";
 export * from "./Hob.js";
 export * from "./Ids.js";

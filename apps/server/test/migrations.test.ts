@@ -103,6 +103,7 @@ describe("migrations", () => {
       "encounter",
       "encounter_creature",
       "encounter_run",
+      "equipment",
       "note",
       "prep_item",
       "rules_import_run",
@@ -141,6 +142,7 @@ describe("migrations", () => {
       { migration_id: 19, name: "rules_source_provenance" },
       { migration_id: 20, name: "2014_character_rules" },
       { migration_id: 21, name: "spells" },
+      { migration_id: 22, name: "equipment" },
     ]);
   }, 60_000);
 
@@ -172,6 +174,7 @@ describe("migrations", () => {
       { migration_id: 19, name: "rules_source_provenance" },
       { migration_id: 20, name: "2014_character_rules" },
       { migration_id: 21, name: "spells" },
+      { migration_id: 22, name: "equipment" },
     ]);
   }, 60_000);
 });

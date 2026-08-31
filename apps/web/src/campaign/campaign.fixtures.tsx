@@ -47,6 +47,7 @@ export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
 export const spellId = "2b1f2a1e-0000-4000-8000-000000000f01";
+export const equipmentId = "2b1f2a1e-0000-4000-8000-000000001001";
 
 /**
  * A list endpoint's body: one page, and no more.
@@ -256,6 +257,62 @@ export const hag = {
   crSort: 5,
   ac: 17,
   hp: 82,
+};
+
+export const hempRope = {
+  id: equipmentId,
+  campaignId: null,
+  accountId: null,
+  derivedFrom: null,
+  name: "Rope, hempen (50 feet)",
+  categoryIndex: "adventuring-gear",
+  categoryName: "Adventuring Gear",
+  costQuantity: 1,
+  costUnit: "gp",
+  costGp: 1,
+  weight: 10,
+  gearCategoryIndex: "standard-gear",
+  gearCategoryName: "Standard Gear",
+  armorCategory: null,
+  weaponCategory: null,
+  weaponRange: null,
+  categoryRange: null,
+  toolCategory: null,
+  vehicleCategory: null,
+  armorClassBase: null,
+  armorClassDexBonus: null,
+  armorClassMaxBonus: null,
+  strengthMinimum: null,
+  stealthDisadvantage: null,
+  damageDice: null,
+  damageTypeIndex: null,
+  damageTypeName: null,
+  twoHandedDamageDice: null,
+  rangeNormal: null,
+  rangeLong: null,
+  throwRangeNormal: null,
+  throwRangeLong: null,
+  propertyIndexes: [],
+  propertyNames: [],
+  equipment: {
+    equipmentCategory: {
+      index: "adventuring-gear",
+      name: "Adventuring Gear",
+      url: "/api/2014/equipment-categories/adventuring-gear",
+    },
+    cost: { quantity: 1, unit: "gp" },
+    weight: 10,
+    gearCategory: {
+      index: "standard-gear",
+      name: "Standard Gear",
+      url: "/api/2014/equipment-categories/standard-gear",
+    },
+    desc: ["A rope has 2 hit points and can be burst with a DC 17 Strength check."],
+  },
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  ...stamps,
 };
 
 export const fireball = {
@@ -711,7 +768,9 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
     [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
     [`GET /campaigns/${campaignId}/spells`, { status: 200, body: page([fireball]) }],
+    [`GET /campaigns/${campaignId}/equipment`, { status: 200, body: page([hempRope]) }],
     ["GET /library/spells", { status: 200, body: page([fireball]) }],
+    ["GET /library/equipment", { status: 200, body: page([hempRope]) }],
     // The rules vocabulary this table builds characters from — the Rules
     // screen's list, and the create form's two pickers. A bundled class, a
     // bundled race, and one of each this table has copied in, so a test can

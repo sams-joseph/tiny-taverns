@@ -243,6 +243,11 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       section: "spells",
     },
     {
+      label: "Equipment",
+      link: { to: "/campaigns/$campaignId/equipment", params: { campaignId } },
+      section: "equipment",
+    },
+    {
       // The classes, races and backgrounds this table builds characters from.
       // A campaign item rather than a global one, and unlike *Bestiary* that is
       // where it belongs rather than where it is waiting: the list is *this

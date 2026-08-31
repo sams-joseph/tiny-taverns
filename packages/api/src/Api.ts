@@ -34,6 +34,15 @@ import {
 } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
 import {
+  Equipment,
+  EquipmentCreate,
+  EquipmentFilter,
+  EquipmentLibraryCreate,
+  EquipmentLibraryUpdate,
+  EquipmentSort,
+  EquipmentUpdate,
+} from "./Equipment.js";
+import {
   HobAccepted,
   HobAsk,
   HobEvent,
@@ -67,6 +76,7 @@ import {
   EncounterCreatureId,
   EncounterId,
   EncounterRunId,
+  EquipmentId,
   InviteId,
   SpellId,
   NoteId,
@@ -1040,6 +1050,47 @@ class SpellsGroup extends HttpApiGroup.make("spells")
   )
   .prefix("/campaigns/:campaignId/spells")
   .middleware(Authorization) {}
+
+/** A campaign's mundane equipment copies plus the bundled 2014 SRD equipment corpus. */
+class EquipmentGroup extends HttpApiGroup.make("equipment")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: EquipmentFilter,
+      success: pageOf(Equipment, EquipmentSort),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:equipmentId", {
+      params: { campaignId: CampaignId, equipmentId: EquipmentId },
+      success: Equipment,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: EquipmentCreate,
+      success: Equipment,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:equipmentId", {
+      params: { campaignId: CampaignId, equipmentId: EquipmentId },
+      payload: EquipmentUpdate,
+      success: Equipment,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:equipmentId", {
+      params: { campaignId: CampaignId, equipmentId: EquipmentId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("derive", "/:equipmentId/derive", {
+      params: { campaignId: CampaignId, equipmentId: EquipmentId },
+      payload: EquipmentUpdate,
+      success: Equipment,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/equipment")
+  .middleware(Authorization) {}
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
@@ -1177,6 +1228,30 @@ class LibraryGroup extends HttpApiGroup.make("library")
     }),
     HttpApiEndpoint.delete("removeSpell", "/spells/:spellId", {
       params: { spellId: SpellId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("equipment", "/equipment", {
+      query: EquipmentFilter,
+      success: pageOf(Equipment, EquipmentSort),
+    }),
+    HttpApiEndpoint.post("createEquipment", "/equipment", {
+      payload: EquipmentLibraryCreate,
+      success: Equipment,
+    }),
+    HttpApiEndpoint.get("findEquipment", "/equipment/:equipmentId", {
+      params: { equipmentId: EquipmentId },
+      success: Equipment,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("updateEquipment", "/equipment/:equipmentId", {
+      params: { equipmentId: EquipmentId },
+      payload: EquipmentLibraryUpdate,
+      success: Equipment,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeEquipment", "/equipment/:equipmentId", {
+      params: { equipmentId: EquipmentId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
@@ -1729,6 +1804,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(EncountersGroup)
   .add(CreaturesGroup)
   .add(SpellsGroup)
+  .add(EquipmentGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)

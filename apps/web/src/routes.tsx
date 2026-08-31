@@ -17,6 +17,8 @@ import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { PlayerChronicleScreen } from "./chronicle/PlayerChronicleScreen";
+import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
+import { EquipmentScreen } from "./equipment/EquipmentScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
@@ -297,6 +299,13 @@ const librarySpellsRoute = createRoute({
   component: SpellLibraryScreen,
 });
 
+/** The mundane equipment shelf under the global Library destination. */
+const libraryEquipmentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library/equipment",
+  component: EquipmentLibraryScreen,
+});
+
 /**
  * The Chronicle names a campaign for the same reason the bestiary does: every
  * source it reads — `sessions.list`, `recap.read`, `search.search` — hangs off
@@ -353,6 +362,14 @@ const spellsRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "spells",
   component: SpellbookScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/** The campaign's copied equipment, plus the SRD bundle every campaign reads through it. */
+const equipmentRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "equipment",
+  component: EquipmentScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -601,6 +618,7 @@ export const routeTree = rootRoute.addChildren([
   libraryRoute,
   libraryRulesRoute,
   librarySpellsRoute,
+  libraryEquipmentRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
@@ -608,6 +626,7 @@ export const routeTree = rootRoute.addChildren([
     bestiaryRoute,
     rulesRoute,
     spellsRoute,
+    equipmentRoute,
     chronicleRoute,
     partyRoute,
     runRoute,
@@ -668,12 +687,14 @@ export const routes = {
   library: libraryRoute,
   libraryRules: libraryRulesRoute,
   librarySpells: librarySpellsRoute,
+  libraryEquipment: libraryEquipmentRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,
   bestiary: bestiaryRoute,
   rules: rulesRoute,
   spells: spellsRoute,
+  equipment: equipmentRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
   run: runRoute,
