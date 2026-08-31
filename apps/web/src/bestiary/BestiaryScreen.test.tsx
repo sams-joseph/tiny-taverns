@@ -8,7 +8,14 @@ import {
   mintingSession,
   page,
 } from "../campaign/campaign.fixtures";
-import { bandit, goblin, hag, renderBestiary } from "./bestiary.fixtures";
+import {
+  bandit,
+  bestiaryFacets,
+  emptyCreatureFacets,
+  goblin,
+  hag,
+  renderBestiary,
+} from "./bestiary.fixtures";
 
 /**
  * The bestiary, against a stubbed wire decoded by the real client.
@@ -27,6 +34,7 @@ installMemoryStorage();
 
 const LIST = `GET /campaigns/${campaignId}/creatures`;
 const VOCABULARY = `GET /campaigns/${campaignId}/creatures/environments`;
+const FACETS = `GET /campaigns/${campaignId}/creatures/facets`;
 
 /** What the whole reachable set answers with: the DM's own, then the bundled two. */
 const wholeBestiary = () =>
@@ -38,6 +46,7 @@ beforeEach(() => {
   // The chip row is its own read now — over the corpus rather than over an
   // answer, which is what a paged list forced. See `bestiary/load.ts`.
   server.routes.set(VOCABULARY, { status: 200, body: ["Marsh", "River"] });
+  server.routes.set(FACETS, { status: 200, body: bestiaryFacets });
   window.localStorage.clear();
 });
 
@@ -241,6 +250,7 @@ describe("BestiaryScreen", () => {
   it("draws the designers' empty state, and names how the corpus arrives", async () => {
     server.routes.set(LIST, { status: 200, body: page([]) });
     server.routes.set(VOCABULARY, { status: 200, body: [] });
+    server.routes.set(FACETS, { status: 200, body: emptyCreatureFacets });
     await renderBestiary(mintingSession());
 
     expect(await screen.findByText("Nothing lives here")).toBeInTheDocument();

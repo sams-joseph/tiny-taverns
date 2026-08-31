@@ -1,4 +1,4 @@
-import type { Ability, Creature, Trait } from "@taverns/api";
+import type { Ability, Creature, CreatureFeature, CreatureProficiency, Trait } from "@taverns/api";
 
 /**
  * A creature's stat block, written once and read by two screens.
@@ -67,6 +67,85 @@ function TraitBlock({ trait }: { readonly trait: Trait }) {
   );
 }
 
+const attackDetail = (feature: CreatureFeature): string | undefined => {
+  const pieces: Array<string> = [];
+  if (feature.attackBonus !== undefined)
+    pieces.push(`${feature.attackBonus >= 0 ? "+" : ""}${String(feature.attackBonus)} to hit`);
+  if (feature.damage !== undefined) {
+    pieces.push(
+      ...feature.damage.flatMap((damage) =>
+        damage.damageDice === undefined
+          ? []
+          : [
+              `${damage.damageDice}${damage.damageType === undefined ? "" : ` ${damage.damageType.name.toLowerCase()}`}`,
+            ],
+      ),
+    );
+  }
+  if (feature.dc !== undefined) {
+    pieces.push(
+      `DC ${String(feature.dc.dcValue)} ${feature.dc.dcType.name}${feature.dc.successType === "none" ? "" : ` (${feature.dc.successType})`}`,
+    );
+  }
+  return pieces.length === 0 ? undefined : pieces.join(" · ");
+};
+
+function FeatureBlock({ feature }: { readonly feature: CreatureFeature }) {
+  const detail = attackDetail(feature);
+  return (
+    <div>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className="text-body-s leading-snug font-semibold text-heading">{feature.name}</span>
+        {detail !== undefined && (
+          <span className="rounded-xs bg-slate-50/10 px-1.5 py-px font-mono text-micro leading-tight text-accent-ink">
+            {detail}
+          </span>
+        )}
+      </div>
+      <p className="whitespace-pre-line text-caption leading-body text-on-dark-muted">
+        {feature.desc}
+      </p>
+    </div>
+  );
+}
+
+function FeatureSection({
+  title,
+  features,
+}: {
+  readonly title: string;
+  readonly features: ReadonlyArray<CreatureFeature> | undefined;
+}) {
+  if (features === undefined || features.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-4 border-t border-hairline pt-4">
+      <h3 className="text-label leading-body font-semibold tracking-caps text-heading">{title}</h3>
+      {features.map((feature) => (
+        <FeatureBlock key={feature.name} feature={feature} />
+      ))}
+    </div>
+  );
+}
+
+function ProficiencyList({
+  proficiencies,
+}: {
+  readonly proficiencies: ReadonlyArray<CreatureProficiency> | undefined;
+}) {
+  if (proficiencies === undefined || proficiencies.length === 0) return null;
+  return (
+    <StatLine
+      label="PROF"
+      value={proficiencies
+        .map(
+          (entry) =>
+            `${entry.proficiency.name} ${entry.value >= 0 ? "+" : ""}${String(entry.value)}`,
+        )
+        .join(", ")}
+    />
+  );
+}
+
 export function StatBlockBody({
   creature,
   emptyNote,
@@ -81,7 +160,24 @@ export function StatBlockBody({
     ["HP", block.hp === "" ? String(creature.hp) : block.hp],
     ["SPEED", block.speed],
     ["CR", block.cr === "" ? creature.cr : block.cr],
+    ["LANG", block.languages ?? ""],
+    [
+      "SENSES",
+      block.senses === undefined
+        ? ""
+        : Object.entries(block.senses)
+            .map(([key, value]) => `${key.replaceAll("_", " ")} ${String(value)}`)
+            .join(", "),
+    ],
   ];
+  const hasFeatures =
+    block.traits.length > 0 ||
+    (block.specialAbilities?.length ?? 0) > 0 ||
+    (block.actions?.length ?? 0) > 0 ||
+    (block.bonusActions?.length ?? 0) > 0 ||
+    (block.reactions?.length ?? 0) > 0 ||
+    (block.legendaryActions?.length ?? 0) > 0 ||
+    (block.desc?.length ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-4 border-t border-hairline pt-4">
@@ -107,6 +203,21 @@ export function StatBlockBody({
         </div>
       )}
 
+      <ProficiencyList proficiencies={block.proficiencies} />
+
+      {block.desc !== undefined && block.desc.length > 0 && (
+        <div className="flex flex-col gap-3 border-t border-hairline pt-4">
+          {block.desc.map((paragraph) => (
+            <p
+              key={paragraph}
+              className="whitespace-pre-line text-caption leading-body text-on-dark-muted"
+            >
+              {paragraph}
+            </p>
+          ))}
+        </div>
+      )}
+
       {block.traits.length > 0 && (
         <div className="flex flex-col gap-4 border-t border-hairline pt-4">
           {block.traits.map((trait) => (
@@ -115,7 +226,13 @@ export function StatBlockBody({
         </div>
       )}
 
-      {block.abilities.length === 0 && block.traits.length === 0 && block.meta === "" && (
+      <FeatureSection title="Special abilities" features={block.specialAbilities} />
+      <FeatureSection title="Actions" features={block.actions} />
+      <FeatureSection title="Bonus actions" features={block.bonusActions} />
+      <FeatureSection title="Reactions" features={block.reactions} />
+      <FeatureSection title="Legendary actions" features={block.legendaryActions} />
+
+      {block.abilities.length === 0 && !hasFeatures && block.meta === "" && (
         <p className="text-caption leading-body text-muted-foreground">{emptyNote}</p>
       )}
     </div>

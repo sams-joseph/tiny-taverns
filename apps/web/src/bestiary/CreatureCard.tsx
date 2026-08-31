@@ -31,10 +31,19 @@ import { provenanceOf } from "./provenance";
  * (`Creature.ts`). Both stay capitalised: it is the DM's own vocabulary,
  * rendered as written.
  */
-const typeLine = (creature: Creature): string =>
-  creature.size === null || creature.size === ""
-    ? creature.type
-    : `${creature.size} ${creature.type}`;
+const typeLine = (creature: Creature): string => {
+  const sizeType =
+    creature.size === null || creature.size === ""
+      ? creature.type
+      : `${creature.size} ${creature.type}`;
+  const subtype =
+    creature.subtype === null || creature.subtype === undefined ? "" : ` (${creature.subtype})`;
+  const alignment =
+    creature.alignment === null || creature.alignment === undefined
+      ? ""
+      : `, ${creature.alignment}`;
+  return `${sizeType}${subtype}${alignment}`;
+};
 
 export function CreatureCard({
   creature,
@@ -65,6 +74,7 @@ export function CreatureCard({
         <div className="flex items-start gap-2.5">
           <CardTitle className="min-w-0 flex-1 break-words">{creature.name}</CardTitle>
           {creature.legendary && <Badge variant="info">Legendary</Badge>}
+          {creature.spellcaster === true && <Badge variant="secondary">Spellcaster</Badge>}
           <Badge>CR {creature.cr}</Badge>
         </div>
         <CardDescription className="font-serif italic">{typeLine(creature)}</CardDescription>

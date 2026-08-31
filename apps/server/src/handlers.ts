@@ -303,6 +303,7 @@ const CreaturesLive = HttpApiBuilder.group(
     return handlers
       .handle("list", ({ params, query }) => creatures.list(params.campaignId, query))
       .handle("environments", ({ params }) => creatures.environments(params.campaignId))
+      .handle("facets", ({ params }) => creatures.facets(params.campaignId))
       .handle("create", ({ params, payload }) => creatures.create(params.campaignId, payload))
       .handle("findById", ({ params }) => creatures.findById(params.campaignId, params.creatureId))
       .handle("update", ({ params, payload }) =>
@@ -437,6 +438,7 @@ const LibraryLive = HttpApiBuilder.group(
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
+      .handle("creatureFacets", () => creatures.libraryFacets())
       .handle("create", ({ payload }) => creatures.libraryCreate(payload))
       .handle("findById", ({ params }) => creatures.libraryFindById(params.creatureId))
       .handle("update", ({ params, payload }) =>

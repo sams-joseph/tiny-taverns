@@ -145,6 +145,7 @@ describe("migrations", () => {
       { migration_id: 21, name: "spells" },
       { migration_id: 22, name: "equipment" },
       { migration_id: 23, name: "magic_items" },
+      { migration_id: 24, name: "creature_monster_corpus" },
     ]);
   }, 60_000);
 
@@ -178,6 +179,7 @@ describe("migrations", () => {
       { migration_id: 21, name: "spells" },
       { migration_id: 22, name: "equipment" },
       { migration_id: 23, name: "magic_items" },
+      { migration_id: 24, name: "creature_monster_corpus" },
     ]);
   }, 60_000);
 });

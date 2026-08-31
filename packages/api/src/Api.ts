@@ -25,6 +25,7 @@ import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./
 import {
   Creature,
   CreatureCreate,
+  CreatureFacets,
   CreatureFilter,
   CreatureLibraryCreate,
   CreatureLibraryUpdate,
@@ -804,6 +805,11 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
       success: Schema.Array(Schema.String),
       error: NotFound,
     }),
+    HttpApiEndpoint.get("facets", "/facets", {
+      params: { campaignId: CampaignId },
+      success: CreatureFacets,
+      error: NotFound,
+    }),
     HttpApiEndpoint.post("create", "/", {
       params: { campaignId: CampaignId },
       payload: CreatureCreate,
@@ -1160,6 +1166,9 @@ class LibraryGroup extends HttpApiGroup.make("library")
     /** The chip row's vocabulary, over this Library — see `creatures.environments`. */
     HttpApiEndpoint.get("environments", "/creatures/environments", {
       success: Schema.Array(Schema.String),
+    }),
+    HttpApiEndpoint.get("creatureFacets", "/creatures/facets", {
+      success: CreatureFacets,
     }),
     /**
      * Author a monster. **No campaign, and no `origin`** — the column default

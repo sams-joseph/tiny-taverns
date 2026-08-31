@@ -14,6 +14,7 @@ import {
   bothMemberships,
   goblin,
   hag,
+  libraryFacets,
   otherCampaignId,
   owlbear,
   renderLibrary,
@@ -41,6 +42,7 @@ installMemoryStorage();
 
 const LIST = "GET /library/creatures";
 const VOCABULARY = "GET /library/creatures/environments";
+const FACETS = "GET /library/creatures/facets";
 
 /** What the endpoint answers: this account's two originals, and the bundled two. */
 const wholeLibrary = () => {
@@ -48,6 +50,7 @@ const wholeLibrary = () => {
   // The chip row is its own read now, over the corpus rather than over an
   // answer — see `bestiary/load.ts`. It is the same shape on both lists.
   server.routes.set(VOCABULARY, { status: 200, body: ["Barrow", "Marsh"] });
+  server.routes.set(FACETS, { status: 200, body: libraryFacets });
   server.routes.set("GET /me/campaigns", { status: 200, body: bothMemberships });
 };
 
@@ -108,7 +111,8 @@ describe("LibraryScreen", () => {
       server.calls.some(
         (call) =>
           call.pathname.includes("/creatures/") &&
-          call.pathname !== "/library/creatures/environments",
+          call.pathname !== "/library/creatures/environments" &&
+          call.pathname !== "/library/creatures/facets",
       ),
     ).toBe(false);
   });

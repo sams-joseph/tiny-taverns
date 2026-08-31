@@ -7,7 +7,7 @@ import { useApiAtom } from "../api/atoms";
 import { runApiResult, type TavernsClient } from "../api/client";
 import type { ApiFailure, Resource } from "../api/failure";
 import { useCredential } from "../auth/credential";
-import { NO_QUERY, type CorpusQuery, type CorpusView } from "./load";
+import { NO_QUERY, type CorpusQuery, type CorpusView, type FacetList } from "./load";
 
 /**
  * Reading a list of creatures: the controls, the debounce, the pages, and the
@@ -55,7 +55,23 @@ export interface Corpus<V> {
   readonly setSort: (sort: CreatureSort) => void;
   /** The pressed chips. Any-of, and sent rather than applied to the answer. */
   readonly environments: ReadonlyArray<string>;
-  readonly toggleEnvironment: (environment: string) => void;
+  readonly sizes: ReadonlyArray<string>;
+  readonly types: ReadonlyArray<string>;
+  readonly subtypes: ReadonlyArray<string>;
+  readonly alignments: ReadonlyArray<string>;
+  readonly damageResistances: ReadonlyArray<string>;
+  readonly damageImmunities: ReadonlyArray<string>;
+  readonly conditionImmunities: ReadonlyArray<string>;
+  readonly movementModes: ReadonlyArray<string>;
+  readonly toggleFacet: (facet: FacetList, value: string) => void;
+  readonly crMin: string;
+  readonly setCrMin: (value: string) => void;
+  readonly crMax: string;
+  readonly setCrMax: (value: string) => void;
+  readonly legendary: boolean | undefined;
+  readonly setLegendary: (value: boolean | undefined) => void;
+  readonly spellcaster: boolean | undefined;
+  readonly setSpellcaster: (value: boolean | undefined) => void;
   /** Empties the search and the chips — the way back out of a filter. */
   readonly clear: () => void;
   /**
@@ -119,6 +135,18 @@ export function useCorpus<V extends CorpusView, E, E2>(
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<CreatureSort>(NO_QUERY.sort);
   const [environments, setEnvironments] = useState<ReadonlyArray<string>>([]);
+  const [sizes, setSizes] = useState<ReadonlyArray<string>>([]);
+  const [types, setTypes] = useState<ReadonlyArray<string>>([]);
+  const [subtypes, setSubtypes] = useState<ReadonlyArray<string>>([]);
+  const [alignments, setAlignments] = useState<ReadonlyArray<string>>([]);
+  const [damageResistances, setDamageResistances] = useState<ReadonlyArray<string>>([]);
+  const [damageImmunities, setDamageImmunities] = useState<ReadonlyArray<string>>([]);
+  const [conditionImmunities, setConditionImmunities] = useState<ReadonlyArray<string>>([]);
+  const [movementModes, setMovementModes] = useState<ReadonlyArray<string>>([]);
+  const [crMin, setCrMin] = useState("");
+  const [crMax, setCrMax] = useState("");
+  const [legendary, setLegendary] = useState<boolean | undefined>();
+  const [spellcaster, setSpellcaster] = useState<boolean | undefined>();
 
   useEffect(() => {
     const timer = setTimeout(() => setQ(term), SEARCH_SETTLE_MS);
@@ -130,7 +158,42 @@ export function useCorpus<V extends CorpusView, E, E2>(
   // stable — `Atom.family` compares the query structurally, so an equal query
   // is the same atom however this object was built — but it is still what keeps
   // the *key* cheap to compare on an unrelated re-render.
-  const query = useMemo<CorpusQuery>(() => ({ q, sort, environments }), [q, sort, environments]);
+  const query = useMemo<CorpusQuery>(
+    () => ({
+      q,
+      sort,
+      environments,
+      sizes,
+      types,
+      subtypes,
+      alignments,
+      damageResistances,
+      damageImmunities,
+      conditionImmunities,
+      movementModes,
+      crMin,
+      crMax,
+      legendary,
+      spellcaster,
+    }),
+    [
+      q,
+      sort,
+      environments,
+      sizes,
+      types,
+      subtypes,
+      alignments,
+      damageResistances,
+      damageImmunities,
+      conditionImmunities,
+      movementModes,
+      crMin,
+      crMax,
+      legendary,
+      spellcaster,
+    ],
+  );
   const [resource, reload] = useApiAtom(first(query));
 
   const [shown, setShown] = useState<V>();
@@ -141,7 +204,21 @@ export function useCorpus<V extends CorpusView, E, E2>(
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailure, setMoreFailure] = useState<ApiFailure>();
 
-  const narrowed = q.trim() !== "" || environments.length > 0;
+  const narrowed =
+    q.trim() !== "" ||
+    environments.length > 0 ||
+    sizes.length > 0 ||
+    types.length > 0 ||
+    subtypes.length > 0 ||
+    alignments.length > 0 ||
+    damageResistances.length > 0 ||
+    damageImmunities.length > 0 ||
+    conditionImmunities.length > 0 ||
+    movementModes.length > 0 ||
+    crMin.trim() !== "" ||
+    crMax.trim() !== "" ||
+    legendary !== undefined ||
+    spellcaster !== undefined;
   /**
    * Read inside the effect below rather than depended on, and that is
    * load-bearing rather than tidy.
@@ -192,20 +269,63 @@ export function useCorpus<V extends CorpusView, E, E2>(
     })();
   }, [cursor, loadingMore, query, more, fetchCredential]);
 
-  const toggleEnvironment = useCallback(
-    (environment: string) =>
-      setEnvironments((current) =>
-        current.includes(environment)
-          ? current.filter((entry) => entry !== environment)
-          : [...current, environment],
-      ),
-    [],
+  const toggleFacet = useCallback(
+    (facet: FacetList, value: string) => {
+      const update = (current: ReadonlyArray<string>) =>
+        current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
+      const setters: Record<FacetList, (next: ReadonlyArray<string>) => void> = {
+        environments: setEnvironments,
+        sizes: setSizes,
+        types: setTypes,
+        subtypes: setSubtypes,
+        alignments: setAlignments,
+        damageResistances: setDamageResistances,
+        damageImmunities: setDamageImmunities,
+        conditionImmunities: setConditionImmunities,
+        movementModes: setMovementModes,
+      };
+      const values: Record<FacetList, ReadonlyArray<string>> = {
+        environments,
+        sizes,
+        types,
+        subtypes,
+        alignments,
+        damageResistances,
+        damageImmunities,
+        conditionImmunities,
+        movementModes,
+      };
+      setters[facet](update(values[facet]));
+    },
+    [
+      environments,
+      sizes,
+      types,
+      subtypes,
+      alignments,
+      damageResistances,
+      damageImmunities,
+      conditionImmunities,
+      movementModes,
+    ],
   );
 
   const clear = useCallback(() => {
     setTerm("");
     setQ("");
     setEnvironments([]);
+    setSizes([]);
+    setTypes([]);
+    setSubtypes([]);
+    setAlignments([]);
+    setDamageResistances([]);
+    setDamageImmunities([]);
+    setConditionImmunities([]);
+    setMovementModes([]);
+    setCrMin("");
+    setCrMax("");
+    setLegendary(undefined);
+    setSpellcaster(undefined);
   }, []);
 
   const creatures = useMemo(
@@ -219,7 +339,23 @@ export function useCorpus<V extends CorpusView, E, E2>(
     sort,
     setSort,
     environments,
-    toggleEnvironment,
+    sizes,
+    types,
+    subtypes,
+    alignments,
+    damageResistances,
+    damageImmunities,
+    conditionImmunities,
+    movementModes,
+    toggleFacet,
+    crMin,
+    setCrMin,
+    crMax,
+    setCrMax,
+    legendary,
+    setLegendary,
+    spellcaster,
+    setSpellcaster,
     clear,
     narrowed,
     vocabulary: shown?.vocabulary ?? [],

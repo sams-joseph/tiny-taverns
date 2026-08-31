@@ -1,4 +1,11 @@
-import type { Campaign, CampaignId, Creature, CreatureSort, PageCursor } from "@taverns/api";
+import type {
+  Campaign,
+  CampaignId,
+  Creature,
+  CreatureFacets,
+  CreatureSort,
+  PageCursor,
+} from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -45,14 +52,53 @@ import type { TavernsClient } from "../api/client";
  * rather than before it, because a chip applied to *a page* is not a filter on
  * the list: it would narrow fifty rows and call the result the answer.
  */
+export type FacetList =
+  | "environments"
+  | "sizes"
+  | "types"
+  | "subtypes"
+  | "alignments"
+  | "damageResistances"
+  | "damageImmunities"
+  | "conditionImmunities"
+  | "movementModes";
+
 export interface CorpusQuery {
   readonly q: string;
   readonly sort: CreatureSort;
   /** Any-of. Empty means no narrowing at all, and reaches the wire as no key. */
   readonly environments: ReadonlyArray<string>;
+  readonly sizes: ReadonlyArray<string>;
+  readonly types: ReadonlyArray<string>;
+  readonly subtypes: ReadonlyArray<string>;
+  readonly alignments: ReadonlyArray<string>;
+  readonly damageResistances: ReadonlyArray<string>;
+  readonly damageImmunities: ReadonlyArray<string>;
+  readonly conditionImmunities: ReadonlyArray<string>;
+  readonly movementModes: ReadonlyArray<string>;
+  readonly crMin: string;
+  readonly crMax: string;
+  readonly legendary: boolean | undefined;
+  readonly spellcaster: boolean | undefined;
 }
 
-export const NO_QUERY: CorpusQuery = { q: "", sort: "cr", environments: [] };
+export const NO_QUERY: CorpusQuery = {
+  q: "",
+  sort: "cr",
+  environments: [],
+  sizes: [],
+  types: [],
+  subtypes: [],
+  alignments: [],
+  damageResistances: [],
+  damageImmunities: [],
+  conditionImmunities: [],
+  movementModes: [],
+  crMin: "",
+  crMax: "",
+  legendary: undefined,
+  spellcaster: undefined,
+};
 
 /**
  * How many rows a page of the grid holds.
@@ -62,11 +108,39 @@ export const NO_QUERY: CorpusQuery = { q: "", sort: "cr", environments: [] };
  */
 export const PAGE_SIZE = 24;
 
+const numberFilter = (value: string): number | undefined => {
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const whenAny = (values: ReadonlyArray<string>): ReadonlyArray<string> | undefined =>
+  values.length === 0 ? undefined : values;
+
 /** The filter as the wire takes it — one place, so the two lists cannot drift. */
 const asQuery = (query: CorpusQuery, cursor: PageCursor<CreatureSort> | undefined) => ({
   q: query.q.trim(),
   sort: query.sort,
-  environments: query.environments,
+  ...(whenAny(query.environments) === undefined ? {} : { environments: query.environments }),
+  ...(numberFilter(query.crMin) === undefined ? {} : { crMin: numberFilter(query.crMin) }),
+  ...(numberFilter(query.crMax) === undefined ? {} : { crMax: numberFilter(query.crMax) }),
+  ...(whenAny(query.sizes) === undefined ? {} : { sizes: query.sizes }),
+  ...(whenAny(query.types) === undefined ? {} : { types: query.types }),
+  ...(whenAny(query.subtypes) === undefined ? {} : { subtypes: query.subtypes }),
+  ...(whenAny(query.alignments) === undefined ? {} : { alignments: query.alignments }),
+  ...(whenAny(query.damageResistances) === undefined
+    ? {}
+    : { damageResistances: query.damageResistances }),
+  ...(whenAny(query.damageImmunities) === undefined
+    ? {}
+    : { damageImmunities: query.damageImmunities }),
+  ...(whenAny(query.conditionImmunities) === undefined
+    ? {}
+    : { conditionImmunities: query.conditionImmunities }),
+  ...(whenAny(query.movementModes) === undefined ? {} : { movementModes: query.movementModes }),
+  ...(query.legendary === undefined ? {} : { legendary: query.legendary }),
+  ...(query.spellcaster === undefined ? {} : { spellcaster: query.spellcaster }),
   limit: PAGE_SIZE,
   cursor,
 });
@@ -90,6 +164,7 @@ export interface CorpusView {
    * to get out of a filter. See `Api.ts`'s `creatures.environments`.
    */
   readonly vocabulary: ReadonlyArray<string>;
+  readonly facets: CreatureFacets;
 }
 
 export interface BestiaryView extends CorpusView {
@@ -99,11 +174,11 @@ export interface BestiaryView extends CorpusView {
 export const loadBestiary =
   (campaignId: CampaignId, query: CorpusQuery) => (client: TavernsClient) =>
     Effect.gen(function* () {
-      const [campaign, page, vocabulary] = yield* Effect.all(
+      const [campaign, page, facets] = yield* Effect.all(
         [
           client.campaigns.findById({ params: { campaignId } }),
           client.creatures.list({ params: { campaignId }, query: asQuery(query, undefined) }),
-          client.creatures.environments({ params: { campaignId } }),
+          client.creatures.facets({ params: { campaignId } }),
         ],
         { concurrency: "unbounded" },
       );
@@ -112,7 +187,8 @@ export const loadBestiary =
         campaign,
         creatures: page.items,
         nextCursor: page.nextCursor,
-        vocabulary,
+        vocabulary: facets.environments,
+        facets,
       } satisfies BestiaryView;
     });
 
@@ -153,10 +229,10 @@ export interface LibraryView extends CorpusView {
  */
 export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [page, vocabulary, memberships] = yield* Effect.all(
+    const [page, facets, memberships] = yield* Effect.all(
       [
         client.library.list({ query: asQuery(query, undefined) }),
-        client.library.environments(),
+        client.library.creatureFacets(),
         client.me.campaigns(),
       ],
       { concurrency: "unbounded" },
@@ -165,7 +241,8 @@ export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
     return {
       creatures: page.items,
       nextCursor: page.nextCursor,
-      vocabulary,
+      vocabulary: facets.environments,
+      facets,
       // `role === "dm"` and nothing else: `derive` writes through `rowWritable`,
       // so a table you only sit at is not somewhere a copy can land. There is no
       // `archivedAt === null` filter beside it any more — `GET /me/campaigns` is

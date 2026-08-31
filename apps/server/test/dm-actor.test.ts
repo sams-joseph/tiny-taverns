@@ -564,14 +564,15 @@ describe("the scope, counted", () => {
     // its ordinary job rather than a projection. Gating `list` would take the
     // create form's picker away from the audience it exists for.
     //
-    // The last thirty-three are `repo/Spells.ts`, `repo/Equipment.ts` and
-    // `repo/MagicItems.ts`: three corpora plus the account Library originals
+    // The last thirty-five are `repo/Spells.ts`, `repo/Equipment.ts`,
+    // `repo/MagicItems.ts` and the creature facet reads: three corpora plus
+    // the account Library originals and read-only facet vocabularies
     // behind them. They follow the same ownership model as creatures and
     // options: the Library half names no campaign, while the campaign half
     // either returns the same schema to a player who can read the row or writes
     // through `rowWritable` / `ensureCampaignWritable`, where DM-ness is
     // already the predicate underneath.
-    expect(ungated).toBe(118);
+    expect(ungated).toBe(120);
   });
 });
 

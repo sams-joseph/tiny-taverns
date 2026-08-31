@@ -13,7 +13,7 @@ import {
 import { FailureNotice } from "../ui/states";
 import { CreatureCard } from "./CreatureCard";
 import type { Corpus } from "./corpus";
-import type { CorpusView } from "./load";
+import type { CorpusView, FacetList } from "./load";
 
 /**
  * The three pieces of furniture both creature lists draw, written once.
@@ -80,41 +80,122 @@ export function CorpusControls<V extends CorpusView>({
   );
 }
 
+const FACETS: ReadonlyArray<{
+  readonly key: FacetList;
+  readonly label: string;
+  readonly values: (view: CorpusView) => ReadonlyArray<string>;
+}> = [
+  { key: "environments", label: "Environment", values: (view) => view.facets.environments },
+  { key: "sizes", label: "Size", values: (view) => view.facets.sizes },
+  { key: "types", label: "Type", values: (view) => view.facets.types },
+  { key: "subtypes", label: "Subtype", values: (view) => view.facets.subtypes },
+  { key: "alignments", label: "Alignment", values: (view) => view.facets.alignments },
+  {
+    key: "damageResistances",
+    label: "Resists",
+    values: (view) => view.facets.damageResistances,
+  },
+  {
+    key: "damageImmunities",
+    label: "Immune to damage",
+    values: (view) => view.facets.damageImmunities,
+  },
+  {
+    key: "conditionImmunities",
+    label: "Immune to conditions",
+    values: (view) => view.facets.conditionImmunities,
+  },
+  { key: "movementModes", label: "Movement", values: (view) => view.facets.movementModes },
+];
+
+const activeValues = <V extends CorpusView>(
+  corpus: Corpus<V>,
+  key: FacetList,
+): ReadonlyArray<string> => corpus[key];
+
 /**
- * The environment chips: the vocabulary the corpus actually uses, not the
+ * The creature filters: the vocabulary the corpus actually uses, not the
  * prototype's hard-coded four (`Bestiary.jsx:4`).
  *
- * **Pressing one is a request now**, and the row is read separately for exactly
- * that reason — a vocabulary derived from a narrowed, paged answer could not
- * offer the chip you would press to get back out. See `load.ts`'s `CorpusView`.
- * Renders nothing at all until the corpus has mentioned an environment.
+ * **Pressing one is a request now**, and the rows are read separately for
+ * exactly that reason — a vocabulary derived from a narrowed, paged answer
+ * could not offer the chip you would press to get back out. See `load.ts`'s
+ * `CorpusView`. Renders nothing at all until the corpus has mentioned a facet.
  */
 export function EnvironmentChips<V extends CorpusView>({ corpus }: { readonly corpus: Corpus<V> }) {
-  if (corpus.vocabulary.length === 0) return null;
+  const view = corpus.shown;
+  if (view === undefined) return null;
+  const hasFacets = FACETS.some((facet) => facet.values(view).length > 0);
+  if (!hasFacets && view.facets.crMin === null && view.facets.crMax === null) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Label className="mr-1 text-faint">Environment</Label>
-      {corpus.vocabulary.map((environment) => (
-        <Toggle
-          key={environment}
-          size="sm"
-          pressed={corpus.environments.includes(environment)}
-          onPressedChange={() => corpus.toggleEnvironment(environment)}
-        >
-          {environment}
-        </Toggle>
-      ))}
-      {corpus.narrowed && (
-        <Button variant="ghost" size="sm" onClick={corpus.clear}>
-          Clear
-        </Button>
-      )}
-      {corpus.resource.state === "loading" && (
-        <span role="status" className="text-caption leading-body text-faint">
-          Looking…
-        </span>
-      )}
+    <div className="flex flex-col gap-3 rounded-card border border-line-subtle bg-surface-card p-3 shadow-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <Label className="mr-1 text-faint">Challenge</Label>
+        <Input
+          aria-label="Minimum challenge rating"
+          inputMode="decimal"
+          placeholder={view.facets.crMin === null ? "Min" : `Min ${String(view.facets.crMin)}`}
+          value={corpus.crMin}
+          onChange={(event) => corpus.setCrMin(event.target.value)}
+          className="h-control-sm w-20"
+        />
+        <Input
+          aria-label="Maximum challenge rating"
+          inputMode="decimal"
+          placeholder={view.facets.crMax === null ? "Max" : `Max ${String(view.facets.crMax)}`}
+          value={corpus.crMax}
+          onChange={(event) => corpus.setCrMax(event.target.value)}
+          className="h-control-sm w-20"
+        />
+        {view.facets.legendary && (
+          <Toggle
+            size="sm"
+            pressed={corpus.legendary === true}
+            onPressedChange={(pressed) => corpus.setLegendary(pressed ? true : undefined)}
+          >
+            Legendary
+          </Toggle>
+        )}
+        {view.facets.spellcaster && (
+          <Toggle
+            size="sm"
+            pressed={corpus.spellcaster === true}
+            onPressedChange={(pressed) => corpus.setSpellcaster(pressed ? true : undefined)}
+          >
+            Spellcaster
+          </Toggle>
+        )}
+        {corpus.narrowed && (
+          <Button variant="ghost" size="sm" onClick={corpus.clear}>
+            Clear
+          </Button>
+        )}
+        {corpus.resource.state === "loading" && (
+          <span role="status" className="text-caption leading-body text-faint">
+            Looking…
+          </span>
+        )}
+      </div>
+      {FACETS.map((facet) => {
+        const values = facet.values(view);
+        if (values.length === 0) return null;
+        return (
+          <div key={facet.key} className="flex flex-wrap items-center gap-2">
+            <Label className="mr-1 text-faint">{facet.label}</Label>
+            {values.map((value) => (
+              <Toggle
+                key={value}
+                size="sm"
+                pressed={activeValues(corpus, facet.key).includes(value)}
+                onPressedChange={() => corpus.toggleFacet(facet.key, value)}
+              >
+                {value}
+              </Toggle>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

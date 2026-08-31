@@ -1,10 +1,11 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, Layer } from "effect";
-import { importSystemCreatures } from "../bestiary/import.js";
+import { importSystemBestiary } from "../bestiary/import.js";
 import * as Database from "../Database.js";
 
 /**
- * Loads the bundled bestiary into the shared `system` corpus and exits.
+ * Loads the Taverns starter bestiary and the pinned 2014 SRD monster corpus
+ * into the shared `system` corpus and exits.
  *
  *   pnpm -F server bestiary:import
  *
@@ -13,9 +14,12 @@ import * as Database from "../Database.js";
  * `Database.layer` includes them, so this works on a fresh database.
  */
 NodeRuntime.runMain(
-  importSystemCreatures().pipe(
+  importSystemBestiary().pipe(
     Effect.flatMap((result) =>
-      Console.log(`bestiary: ${result.inserted} inserted, ${result.updated} updated`),
+      Console.log(
+        `bestiary: starter ${result.starter.inserted} inserted, ${result.starter.updated} updated; ` +
+          `2014 SRD monsters ${result.srd.inserted} inserted, ${result.srd.updated} updated (${result.srd.seen} seen)`,
+      ),
     ),
     Effect.provide(Layer.provide(Database.layer, NodeServices.layer)),
   ),

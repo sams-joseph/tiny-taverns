@@ -1103,11 +1103,11 @@ against — an endpoint that could mint one would write rows every campaign can 
 without `CurrentActor` in its requirements**, and that exception is why it is confined to one
 file and a bin script. Since `0019` it upserts on `creature_system_source_entity_key` — the
 stable source entity, not `lower(name)` — so a source rename updates one system row rather than
-inserting a second, and two future source entities may share a display name. The current source it
-records is Taverns' project-authored starter bundle, not 5e-bits or SRD content. It never writes
-`visibility`, so a shared system creature is not un-shared by an upgrade.
+inserting a second, and two future source entities may share a display name. It now records two
+sources: the Taverns project-authored starter bundle and the pinned 2014 SRD monster corpus. It
+never writes `visibility`, so a shared system creature is not un-shared by an upgrade.
 
-### The bundled rules source: bestiary is Taverns-authored, the 2014 corpora are SRD
+### The bundled rules source: starter bestiary is Taverns-authored, the 2014 corpora are SRD
 
 Since `0019`, `origin = 'system'` is not the whole citation. It means _bundled and owned by
 nobody_; the `rules_source_*` tables say which source document/entity/revision a bundled row
@@ -1116,15 +1116,15 @@ reflects. There are now two active source documents and they must not be collaps
 - **Bestiary starter creatures** remain Taverns project-authored data, transcribed from the
   designers' fixture. `bestiary:import` records the `TAVERNS_STARTER_SOURCE` and never writes
   third-party attribution for those six rows.
-- **The 2014 rules corpora** — character options, spells, mundane equipment and magic items — are
-  transformed from the pinned 2014 5e-bits `5e-database` snapshot (`5.10.0`, commit
+- **The 2014 SRD corpora** — monsters, character options, spells, mundane equipment and magic
+  items — are transformed from the pinned 2014 5e-bits `5e-database` snapshot (`5.10.0`, commit
   `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Their importers record the 5e-bits MIT attribution
   and that the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open
   Game License 1.0a. The web footer and README name that attribution.
 
-That split is deliberate: do not relabel the bestiary as SRD, and do not treat the 2014 corpus
-rows as project-authored. A DM's own homebrew prose is still theirs, in their campaign or Library;
-the attribution rule is about what this product bundles and imports as `system`.
+That split is deliberate: do not relabel the starter bestiary as SRD, and do not treat the 2014
+corpus rows as project-authored. A DM's own homebrew prose is still theirs, in their campaign or
+Library; the attribution rule is about what this product bundles and imports as `system`.
 
 **`encounter_creature` hangs off `encounter` with no `campaign_id`,** like `prep_item` under
 `session` and for the same reason. Two things about it are specific:

@@ -4,6 +4,7 @@ import {
   Conflict,
   Creature,
   type CreatureCreate,
+  CreatureFacets,
   type CreatureFilterValues,
   type CreatureId,
   type CreatureLibraryCreate,
@@ -56,12 +57,20 @@ interface CreatureRow extends ProvenanceColumns {
   readonly name: string;
   readonly size: string | null;
   readonly type: string;
+  readonly subtype: string | null;
+  readonly alignment: string | null;
   readonly cr: string;
   readonly cr_sort: number;
   readonly ac: number;
   readonly hp: number;
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly environments: ReadonlyArray<string>;
+  readonly damage_vulnerabilities: ReadonlyArray<string>;
+  readonly damage_resistances: ReadonlyArray<string>;
+  readonly damage_immunities: ReadonlyArray<string>;
+  readonly condition_immunities: ReadonlyArray<string>;
+  readonly movement_modes: ReadonlyArray<string>;
+  readonly spellcaster: boolean;
   readonly legendary: boolean;
   /** The source entity this row snapshots, when it came from an imported source. */
   readonly source_entity_id: string | null;
@@ -80,11 +89,19 @@ const toCreature = (row: CreatureRow): Creature =>
     name: row.name,
     size: row.size,
     type: row.type,
+    subtype: row.subtype,
+    alignment: row.alignment,
     cr: row.cr,
     crSort: row.cr_sort,
     ac: row.ac,
     hp: row.hp,
     environments: row.environments,
+    damageVulnerabilities: row.damage_vulnerabilities,
+    damageResistances: row.damage_resistances,
+    damageImmunities: row.damage_immunities,
+    conditionImmunities: row.condition_immunities,
+    movementModes: row.movement_modes,
+    spellcaster: row.spellcaster,
     legendary: row.legendary,
     statBlock: row.body,
     ...provenanceOf(row),
@@ -165,6 +182,28 @@ const inScope = (sql: SqlClient.SqlClient, scope: CreatureScope): Statement.Frag
  * makes "the Library is anchored on `campaign_id is null`" a property of one
  * line in one method rather than of this helper being used correctly.
  */
+const normalized = (values: ReadonlyArray<string> | undefined): ReadonlyArray<string> => [
+  ...new Set((values ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean)),
+];
+
+const textIn = (
+  sql: SqlClient.SqlClient,
+  column: Statement.Fragment,
+  values: ReadonlyArray<string> | undefined,
+): Statement.Fragment | undefined => {
+  const choices = normalized(values);
+  return choices.length === 0 ? undefined : sql`lower(${column}) = any(${choices})`;
+};
+
+const arrayOverlaps = (
+  sql: SqlClient.SqlClient,
+  column: Statement.Fragment,
+  values: ReadonlyArray<string> | undefined,
+): Statement.Fragment | undefined => {
+  const choices = normalized(values);
+  return choices.length === 0 ? undefined : sql`${column} && ${choices}`;
+};
+
 const narrowedBy = (
   sql: SqlClient.SqlClient,
   filter: LibraryFilterValues,
@@ -178,6 +217,23 @@ const narrowedBy = (
     // which is what a row of toggles means.
     clauses.push(sql`creature.environments && ${filter.environments}`);
   }
+  if (filter.crMin !== undefined) clauses.push(sql`creature.cr_sort >= ${filter.crMin}`);
+  if (filter.crMax !== undefined) clauses.push(sql`creature.cr_sort <= ${filter.crMax}`);
+  for (const clause of [
+    textIn(sql, sql`coalesce(creature.size, '')`, filter.sizes),
+    textIn(sql, sql`creature.type`, filter.types),
+    textIn(sql, sql`coalesce(creature.subtype, '')`, filter.subtypes),
+    textIn(sql, sql`coalesce(creature.alignment, '')`, filter.alignments),
+    arrayOverlaps(sql, sql`creature.damage_resistances`, filter.damageResistances),
+    arrayOverlaps(sql, sql`creature.damage_immunities`, filter.damageImmunities),
+    arrayOverlaps(sql, sql`creature.condition_immunities`, filter.conditionImmunities),
+    arrayOverlaps(sql, sql`creature.movement_modes`, filter.movementModes),
+  ]) {
+    if (clause !== undefined) clauses.push(clause);
+  }
+  if (filter.legendary !== undefined) clauses.push(sql`creature.legendary = ${filter.legendary}`);
+  if (filter.spellcaster !== undefined)
+    clauses.push(sql`creature.spellcaster = ${filter.spellcaster}`);
   return clauses;
 };
 
@@ -205,6 +261,104 @@ const environmentsIn = (
     `,
     (rows) => rows.map((row) => row.environment),
   );
+
+const facetColumn = (
+  sql: SqlClient.SqlClient,
+  readable: Statement.Fragment,
+  column: Statement.Fragment,
+): Effect.Effect<ReadonlyArray<string>, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly value: string }>`
+      select distinct ${column} as value
+      from creature
+      where ${readable}
+        and ${column} is not null
+        and btrim(${column}) <> ''
+      order by value asc
+      limit 200
+    `,
+    (rows) => rows.map((row) => row.value),
+  );
+
+const facetArray = (
+  sql: SqlClient.SqlClient,
+  readable: Statement.Fragment,
+  column: Statement.Fragment,
+): Effect.Effect<ReadonlyArray<string>, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly value: string }>`
+      select distinct value
+      from creature, unnest(${column}) as value
+      where ${readable}
+        and btrim(value) <> ''
+      order by value asc
+      limit 200
+    `,
+    (rows) => rows.map((row) => row.value),
+  );
+
+const facetsIn = (
+  sql: SqlClient.SqlClient,
+  readable: Statement.Fragment,
+): Effect.Effect<CreatureFacets, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const [
+      environments,
+      sizes,
+      types,
+      subtypes,
+      alignments,
+      damageVulnerabilities,
+      damageResistances,
+      damageImmunities,
+      conditionImmunities,
+      movementModes,
+      bounds,
+      flags,
+    ] = yield* Effect.all(
+      [
+        environmentsIn(sql, readable),
+        facetColumn(sql, readable, sql`creature.size`),
+        facetColumn(sql, readable, sql`creature.type`),
+        facetColumn(sql, readable, sql`creature.subtype`),
+        facetColumn(sql, readable, sql`creature.alignment`),
+        facetArray(sql, readable, sql`creature.damage_vulnerabilities`),
+        facetArray(sql, readable, sql`creature.damage_resistances`),
+        facetArray(sql, readable, sql`creature.damage_immunities`),
+        facetArray(sql, readable, sql`creature.condition_immunities`),
+        facetArray(sql, readable, sql`creature.movement_modes`),
+        sql<{ readonly min: number | null; readonly max: number | null }>`
+          select min(creature.cr_sort) as min, max(creature.cr_sort) as max
+          from creature
+          where ${readable}
+        `,
+        sql<{ readonly legendary: boolean; readonly spellcaster: boolean }>`
+          select bool_or(creature.legendary) as legendary,
+                 bool_or(creature.spellcaster) as spellcaster
+          from creature
+          where ${readable}
+        `,
+      ],
+      { concurrency: 4 },
+    );
+
+    return new CreatureFacets({
+      environments,
+      sizes,
+      types,
+      subtypes,
+      alignments,
+      damageVulnerabilities,
+      damageResistances,
+      damageImmunities,
+      conditionImmunities,
+      movementModes,
+      crMin: bounds[0]?.min ?? null,
+      crMax: bounds[0]?.max ?? null,
+      legendary: flags[0]?.legendary ?? false,
+      spellcaster: flags[0]?.spellcaster ?? false,
+    });
+  });
 
 /**
  * `Bestiary.jsx:22-24`'s three orderings. Built from a closed literal union and
@@ -319,6 +473,9 @@ export class Creatures extends Context.Service<
     readonly environments: (
       campaignId: CampaignId,
     ) => Effect.Effect<ReadonlyArray<string>, NotFound, CurrentActor>;
+    readonly facets: (
+      campaignId: CampaignId,
+    ) => Effect.Effect<CreatureFacets, NotFound, CurrentActor>;
     /**
      * The Library — **originals only**: the bundled corpus and the creatures
      * this account has authored, with no campaign in the path and no campaign
@@ -338,6 +495,7 @@ export class Creatures extends Context.Service<
     ) => Effect.Effect<Page<Creature, CreatureSort>, never, CurrentActor>;
     /** The chip row's vocabulary, over this Library — see `environments`. */
     readonly libraryEnvironments: () => Effect.Effect<ReadonlyArray<string>, never, CurrentActor>;
+    readonly libraryFacets: () => Effect.Effect<CreatureFacets, never, CurrentActor>;
     readonly libraryFindById: (id: CreatureId) => Effect.Effect<Creature, NotFound, CurrentActor>;
     /**
      * Author a monster. **The only create in the product that names no
@@ -487,6 +645,15 @@ export class Creatures extends Context.Service<
             }),
           ),
 
+        facets: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              return yield* facetsIn(sql, corpusRowReadable(sql, "creature", campaignId, actor));
+            }),
+          ),
+
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
@@ -511,6 +678,14 @@ export class Creatures extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               return yield* environmentsIn(sql, libraryRowReadable(sql, "creature", actor));
+            }),
+          ),
+
+        libraryFacets: () =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              return yield* facetsIn(sql, libraryRowReadable(sql, "creature", actor));
             }),
           ),
 
@@ -540,11 +715,19 @@ export class Creatures extends Context.Service<
                     name: payload.name,
                     size: payload.size,
                     type: payload.type,
+                    subtype: payload.subtype,
+                    alignment: payload.alignment,
                     cr: payload.cr,
                     cr_sort: payload.crSort ?? crSortFor(payload.cr),
                     ac: payload.ac,
                     hp: payload.hp,
                     environments: payload.environments,
+                    damage_vulnerabilities: payload.damageVulnerabilities,
+                    damage_resistances: payload.damageResistances,
+                    damage_immunities: payload.damageImmunities,
+                    condition_immunities: payload.conditionImmunities,
+                    movement_modes: payload.movementModes,
+                    spellcaster: payload.spellcaster,
                     legendary: payload.legendary,
                     body: payload.statBlock && encodeStatBlock(payload.statBlock),
                   }),
@@ -563,11 +746,19 @@ export class Creatures extends Context.Service<
                 name: patch.name,
                 size: patch.size,
                 type: patch.type,
+                subtype: patch.subtype,
+                alignment: patch.alignment,
                 cr: patch.cr,
                 cr_sort: patch.crSort ?? (patch.cr === undefined ? undefined : crSortFor(patch.cr)),
                 ac: patch.ac,
                 hp: patch.hp,
                 environments: patch.environments,
+                damage_vulnerabilities: patch.damageVulnerabilities,
+                damage_resistances: patch.damageResistances,
+                damage_immunities: patch.damageImmunities,
+                condition_immunities: patch.conditionImmunities,
+                movement_modes: patch.movementModes,
+                spellcaster: patch.spellcaster,
                 legendary: patch.legendary,
                 body: patch.statBlock && encodeStatBlock(patch.statBlock),
               });
@@ -629,11 +820,19 @@ export class Creatures extends Context.Service<
                       name: payload.name,
                       size: payload.size,
                       type: payload.type,
+                      subtype: payload.subtype,
+                      alignment: payload.alignment,
                       cr: payload.cr,
                       cr_sort: payload.crSort ?? crSortFor(payload.cr),
                       ac: payload.ac,
                       hp: payload.hp,
                       environments: payload.environments,
+                      damage_vulnerabilities: payload.damageVulnerabilities,
+                      damage_resistances: payload.damageResistances,
+                      damage_immunities: payload.damageImmunities,
+                      condition_immunities: payload.conditionImmunities,
+                      movement_modes: payload.movementModes,
+                      spellcaster: payload.spellcaster,
                       legendary: payload.legendary,
                       body: payload.statBlock && encodeStatBlock(payload.statBlock),
                       visibility: payload.visibility,
@@ -654,6 +853,8 @@ export class Creatures extends Context.Service<
                 name: patch.name,
                 size: patch.size,
                 type: patch.type,
+                subtype: patch.subtype,
+                alignment: patch.alignment,
                 cr: patch.cr,
                 // A new rating re-derives the sort key unless the patch names
                 // one, so editing `"1"` to `"1/4"` cannot leave it sorting at 1.
@@ -661,6 +862,12 @@ export class Creatures extends Context.Service<
                 ac: patch.ac,
                 hp: patch.hp,
                 environments: patch.environments,
+                damage_vulnerabilities: patch.damageVulnerabilities,
+                damage_resistances: patch.damageResistances,
+                damage_immunities: patch.damageImmunities,
+                condition_immunities: patch.conditionImmunities,
+                movement_modes: patch.movementModes,
+                spellcaster: patch.spellcaster,
                 legendary: patch.legendary,
                 body: patch.statBlock && encodeStatBlock(patch.statBlock),
                 visibility: patch.visibility,
@@ -743,12 +950,22 @@ export class Creatures extends Context.Service<
                       name: patch.name ?? source.name,
                       size: patch.size === undefined ? source.size : patch.size,
                       type: patch.type ?? source.type,
+                      subtype: patch.subtype === undefined ? source.subtype : patch.subtype,
+                      alignment: patch.alignment === undefined ? source.alignment : patch.alignment,
                       cr,
                       cr_sort:
                         patch.crSort ?? (patch.cr === undefined ? source.cr_sort : crSortFor(cr)),
                       ac: patch.ac ?? source.ac,
                       hp: patch.hp ?? source.hp,
                       environments: patch.environments ?? source.environments,
+                      damage_vulnerabilities:
+                        patch.damageVulnerabilities ?? source.damage_vulnerabilities,
+                      damage_resistances: patch.damageResistances ?? source.damage_resistances,
+                      damage_immunities: patch.damageImmunities ?? source.damage_immunities,
+                      condition_immunities:
+                        patch.conditionImmunities ?? source.condition_immunities,
+                      movement_modes: patch.movementModes ?? source.movement_modes,
+                      spellcaster: patch.spellcaster ?? source.spellcaster,
                       legendary: patch.legendary ?? source.legendary,
                       body: encodeStatBlock(patch.statBlock ?? source.body),
                       visibility: patch.visibility,

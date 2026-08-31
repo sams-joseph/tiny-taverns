@@ -93,6 +93,115 @@ export const Trait = Schema.Struct({
 });
 export type Trait = typeof Trait.Type;
 
+const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
+const sourceName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 180));
+const sourceUrl = Schema.String.check(Schema.isLengthBetween(1, 260));
+const longText = Schema.String.check(Schema.isLengthBetween(0, 30_000));
+const numberOrText = Schema.Union([Schema.Finite, Schema.String]);
+const sourcePayload = Schema.Record(Schema.String, Schema.Unknown);
+
+/** A 5e-bits source reference: a stable key, a display name and usually a URL. */
+export const CreatureSourceReference = Schema.Struct({
+  index: sourceKey,
+  name: sourceName,
+  url: Schema.optional(sourceUrl),
+});
+export type CreatureSourceReference = typeof CreatureSourceReference.Type;
+
+/** One armour-class variant exactly as a source stat block may carry it. */
+export const CreatureArmorClass = Schema.Struct({
+  type: sourceName,
+  value: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 })),
+  armor: Schema.optional(Schema.Array(CreatureSourceReference)),
+  condition: Schema.optional(CreatureSourceReference),
+  spell: Schema.optional(CreatureSourceReference),
+  desc: Schema.optional(longText),
+});
+export type CreatureArmorClass = typeof CreatureArmorClass.Type;
+
+export const CreatureProficiency = Schema.Struct({
+  value: Schema.Int,
+  proficiency: CreatureSourceReference,
+});
+export type CreatureProficiency = typeof CreatureProficiency.Type;
+
+export const CreatureDamage = Schema.Struct({
+  damageType: Schema.optional(CreatureSourceReference),
+  damageDice: Schema.optional(Schema.String),
+  /** Choice-shaped damage is kept when the source supplies it. */
+  choice: Schema.optional(sourcePayload),
+});
+export type CreatureDamage = typeof CreatureDamage.Type;
+
+export const CreatureDifficultyClass = Schema.Struct({
+  dcType: CreatureSourceReference,
+  dcValue: Schema.Int,
+  successType: Schema.String,
+  desc: Schema.optional(longText),
+});
+export type CreatureDifficultyClass = typeof CreatureDifficultyClass.Type;
+
+export const CreatureActionUsage = Schema.Struct({
+  type: Schema.String,
+  dice: Schema.optional(Schema.String),
+  minValue: Schema.optional(Schema.Int),
+  times: Schema.optional(Schema.Int),
+  restTypes: Schema.optional(Schema.Array(Schema.String)),
+});
+export type CreatureActionUsage = typeof CreatureActionUsage.Type;
+
+export const CreatureActionItem = Schema.Struct({
+  actionName: Schema.String,
+  count: numberOrText,
+  type: Schema.String,
+});
+export type CreatureActionItem = typeof CreatureActionItem.Type;
+
+export const CreatureAttack = Schema.Struct({
+  name: Schema.String,
+  dc: CreatureDifficultyClass,
+  damage: Schema.optional(Schema.Array(CreatureDamage)),
+});
+export type CreatureAttack = typeof CreatureAttack.Type;
+
+export const CreatureSpellcastingSpell = Schema.Struct({
+  name: Schema.String,
+  level: Schema.Int,
+  url: Schema.String,
+  usage: Schema.optional(CreatureActionUsage),
+  notes: Schema.optional(Schema.String),
+});
+export type CreatureSpellcastingSpell = typeof CreatureSpellcastingSpell.Type;
+
+export const CreatureSpellcasting = Schema.Struct({
+  ability: CreatureSourceReference,
+  componentsRequired: Schema.Array(Schema.String),
+  spells: Schema.Array(CreatureSpellcastingSpell),
+  level: Schema.optional(Schema.Int),
+  dc: Schema.optional(Schema.Int),
+  modifier: Schema.optional(Schema.Int),
+  school: Schema.optional(Schema.String),
+  slots: Schema.optional(Schema.Record(Schema.String, Schema.Int)),
+});
+export type CreatureSpellcasting = typeof CreatureSpellcasting.Type;
+
+/** A named source section: feature, action, reaction or legendary action. */
+export const CreatureFeature = Schema.Struct({
+  name: Schema.NonEmptyString,
+  desc: longText,
+  attackBonus: Schema.optional(Schema.Int),
+  dc: Schema.optional(CreatureDifficultyClass),
+  usage: Schema.optional(CreatureActionUsage),
+  multiattackType: Schema.optional(Schema.String),
+  actions: Schema.optional(Schema.Array(CreatureActionItem)),
+  actionOptions: Schema.optional(sourcePayload),
+  attacks: Schema.optional(Schema.Array(CreatureAttack)),
+  options: Schema.optional(sourcePayload),
+  damage: Schema.optional(Schema.Array(CreatureDamage)),
+  spellcasting: Schema.optional(CreatureSpellcasting),
+});
+export type CreatureFeature = typeof CreatureFeature.Type;
+
 /**
  * The document half: everything on the stat block that has no column.
  *
@@ -118,6 +227,31 @@ export const StatBlock = Schema.Struct({
   cr: Schema.String,
   abilities: Schema.Array(Ability),
   traits: Schema.Array(Trait),
+  /** Source description paragraphs, when a source has prose outside named actions. */
+  desc: Schema.optional(Schema.Array(longText)),
+  armorClass: Schema.optional(Schema.Array(CreatureArmorClass)),
+  hitDice: Schema.optional(Schema.String),
+  hitPointsRoll: Schema.optional(Schema.String),
+  speeds: Schema.optional(
+    Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Boolean])),
+  ),
+  proficiencies: Schema.optional(Schema.Array(CreatureProficiency)),
+  damageVulnerabilities: Schema.optional(Schema.Array(Schema.String)),
+  damageResistances: Schema.optional(Schema.Array(Schema.String)),
+  damageImmunities: Schema.optional(Schema.Array(Schema.String)),
+  conditionImmunities: Schema.optional(Schema.Array(CreatureSourceReference)),
+  senses: Schema.optional(Schema.Record(Schema.String, numberOrText)),
+  languages: Schema.optional(Schema.String),
+  proficiencyBonus: Schema.optional(Schema.Int),
+  xp: Schema.optional(Schema.Int),
+  specialAbilities: Schema.optional(Schema.Array(CreatureFeature)),
+  actions: Schema.optional(Schema.Array(CreatureFeature)),
+  bonusActions: Schema.optional(Schema.Array(CreatureFeature)),
+  reactions: Schema.optional(Schema.Array(CreatureFeature)),
+  legendaryActions: Schema.optional(Schema.Array(CreatureFeature)),
+  forms: Schema.optional(Schema.Array(CreatureSourceReference)),
+  image: Schema.optional(Schema.String),
+  sourceUrl: Schema.optional(Schema.String),
 });
 export type StatBlock = typeof StatBlock.Type;
 
@@ -216,6 +350,10 @@ export class Creature extends Schema.Class<Creature>("Creature")({
   size: Schema.NullOr(Schema.String),
   /** `"Humanoid"`, `"Fey"`, `"Undead"`, `"Beast"` (`data.js:36-41`). */
   type: Schema.String,
+  /** 5e-bits' subtype, when one exists — `"goblinoid"`, `"shapechanger"`. */
+  subtype: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Source alignment text, when a stat block carries one. */
+  alignment: Schema.optional(Schema.NullOr(Schema.String)),
   /**
    * The challenge rating as written: `"1/4"` exists (`data.js:38`), so this is
    * a string and not a number.
@@ -232,6 +370,12 @@ export class Creature extends Schema.Class<Creature>("Creature")({
   hp: Schema.Int,
   /** `["Marsh", "Cave"]` — the filter chips on `Bestiary.jsx:32-35`. */
   environments: Schema.Array(Schema.String),
+  damageVulnerabilities: Schema.optional(Schema.Array(Schema.String)),
+  damageResistances: Schema.optional(Schema.Array(Schema.String)),
+  damageImmunities: Schema.optional(Schema.Array(Schema.String)),
+  conditionImmunities: Schema.optional(Schema.Array(Schema.String)),
+  movementModes: Schema.optional(Schema.Array(Schema.String)),
+  spellcaster: Schema.optional(Schema.Boolean),
   legendary: Schema.Boolean,
   statBlock: StatBlock,
   visibility: Visibility,
@@ -278,6 +422,8 @@ const environments = Schema.Array(shortLabel).check(Schema.isLengthBetween(0, 16
  * `?environments=Cave&environments=River` was a 200.
  */
 const environmentsFilter = queryArray(shortLabel).check(Schema.isLengthBetween(0, 16));
+const facetFilter = queryArray(shortLabel).check(Schema.isLengthBetween(0, 32));
+const crFilter = Schema.NumberFromString.check(Schema.isBetween({ minimum: 0, maximum: 1000 }));
 
 /**
  * Everything a creature is, as a client may state it — and the whole of what a
@@ -295,6 +441,8 @@ const LibraryCreatureCreate = {
   name: Schema.NonEmptyString,
   size: Schema.optional(shortLabel),
   type: shortLabel,
+  subtype: Schema.optional(shortLabel),
+  alignment: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 80))),
   /** Required, because every bestiary card renders `CR {cr}`. `"—"` is a rating. */
   cr: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 20)),
   /** Omit and the server derives it from `cr`. */
@@ -302,6 +450,12 @@ const LibraryCreatureCreate = {
   ac,
   hp,
   environments: Schema.optional(environments),
+  damageVulnerabilities: Schema.optional(environments),
+  damageResistances: Schema.optional(environments),
+  damageImmunities: Schema.optional(environments),
+  conditionImmunities: Schema.optional(environments),
+  movementModes: Schema.optional(environments),
+  spellcaster: Schema.optional(Schema.Boolean),
   legendary: Schema.optional(Schema.Boolean),
   /** Omit and the column default — an empty document — decides. */
   statBlock: Schema.optional(StatBlock),
@@ -330,11 +484,19 @@ const LibraryCreatureUpdate = {
   name: Schema.optional(Schema.NonEmptyString),
   size: Schema.optional(Schema.NullOr(shortLabel)),
   type: Schema.optional(shortLabel),
+  subtype: Schema.optional(Schema.NullOr(shortLabel)),
+  alignment: Schema.optional(Schema.NullOr(Schema.String.check(Schema.isLengthBetween(1, 80)))),
   cr: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 20))),
   crSort: Schema.optional(crSort),
   ac: Schema.optional(ac),
   hp: Schema.optional(hp),
   environments: Schema.optional(environments),
+  damageVulnerabilities: Schema.optional(environments),
+  damageResistances: Schema.optional(environments),
+  damageImmunities: Schema.optional(environments),
+  conditionImmunities: Schema.optional(environments),
+  movementModes: Schema.optional(environments),
+  spellcaster: Schema.optional(Schema.Boolean),
   legendary: Schema.optional(Schema.Boolean),
   statBlock: Schema.optional(StatBlock),
 } as const;
@@ -398,6 +560,18 @@ export const LibraryFilter = {
    * change rather than two.
    */
   environments: Schema.optional(environmentsFilter),
+  crMin: Schema.optional(crFilter),
+  crMax: Schema.optional(crFilter),
+  sizes: Schema.optional(facetFilter),
+  types: Schema.optional(facetFilter),
+  subtypes: Schema.optional(facetFilter),
+  alignments: Schema.optional(facetFilter),
+  damageResistances: Schema.optional(facetFilter),
+  damageImmunities: Schema.optional(facetFilter),
+  conditionImmunities: Schema.optional(facetFilter),
+  movementModes: Schema.optional(facetFilter),
+  legendary: Schema.optional(Schema.Boolean),
+  spellcaster: Schema.optional(Schema.Boolean),
   sort: Schema.optional(CreatureSort),
   ...pageFilter(CreatureSort),
 } as const;
@@ -428,3 +602,20 @@ export const CreatureFilter = {
  */
 export type CreatureFilterValues = typeof CreatureFilterValues.Type;
 const CreatureFilterValues = Schema.Struct(CreatureFilter);
+
+export class CreatureFacets extends Schema.Class<CreatureFacets>("CreatureFacets")({
+  environments: Schema.Array(Schema.String),
+  sizes: Schema.Array(Schema.String),
+  types: Schema.Array(Schema.String),
+  subtypes: Schema.Array(Schema.String),
+  alignments: Schema.Array(Schema.String),
+  damageVulnerabilities: Schema.Array(Schema.String),
+  damageResistances: Schema.Array(Schema.String),
+  damageImmunities: Schema.Array(Schema.String),
+  conditionImmunities: Schema.Array(Schema.String),
+  movementModes: Schema.Array(Schema.String),
+  crMin: Schema.NullOr(Schema.Finite),
+  crMax: Schema.NullOr(Schema.Finite),
+  legendary: Schema.Boolean,
+  spellcaster: Schema.Boolean,
+}) {}

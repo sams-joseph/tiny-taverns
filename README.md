@@ -111,7 +111,7 @@ pnpm --filter web dev   # http://localhost:5173
 pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
-pnpm -F server bestiary:import  # loads the bundled bestiary (optional, idempotent)
+pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (optional, idempotent)
 pnpm -F server ruleset:import   # loads the bundled 2014 classes, races and background (idempotent)
 pnpm -F server spell:import      # loads the bundled 2014 SRD spells (idempotent)
 pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
@@ -223,13 +223,13 @@ header, which a browser's `EventSource` sends by itself). `AGENTS.md` has the fu
 The `Server` section of the web gallery calls the live API through the client derived from
 that same declaration — paste a token there to see it list your campaigns.
 
-**The bestiary is two corpora in one list.** A campaign's own creatures live under it;
-`system` creatures are global, immutable and shared by every campaign, and the only thing
-that writes them is `pnpm -F server bestiary:import` — a shell command rather than an
-endpoint, because global content has no campaign to scope it to. The importer keys those starter rows through `rules_source_*` provenance tables rather
-than by display name; today's bestiary starter bundle is recorded as Taverns-authored data,
-not as 5e-bits or SRD content. A DM who wants to change a system creature derives a copy
-instead:
+**The bestiary is campaign copies plus two bundled corpora in one list.** A campaign's own
+creatures live under it; `system` creatures are global, immutable and shared by every campaign,
+and the only thing that writes them is `pnpm -F server bestiary:import` — a shell command rather
+than an endpoint, because global content has no campaign to scope it to. The importer loads the
+Taverns-authored starter bundle and the 334-row 2014 SRD monster corpus from the checked-in
+5e-bits snapshot, recording each under its own `rules_source_*` provenance instead of by display
+name. A DM who wants to change a system creature derives a copy instead:
 
 ```bash
 curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/derive" \
@@ -250,9 +250,9 @@ own API and Library shelves, with the same copy-as-snapshot rule. The copy is wh
 from, because a player can never read somebody else's library — see `AGENTS.md`, which is also
 where the one thing these importers do differently is written down.
 
-The bundled 2014 character rules, spell data, mundane equipment data and magic item data are transformed from
-`5e-bits/5e-database` under the MIT License; the underlying Dungeons & Dragons 5th Edition SRD 5.1
-material is used under the Open Game License version 1.0a. The source and license metadata are
+The bundled 2014 monster, character-rules, spell, mundane-equipment and magic-item data are transformed
+from `5e-bits/5e-database` under the MIT License; the underlying Dungeons & Dragons 5th Edition SRD
+5.1 material is used under the Open Game License version 1.0a. The source and license metadata are
 stored in `rules_source_document` by the importers and shown in the web footer for attribution; see
 `THIRD_PARTY_NOTICES.md` for the bundled notice text.
 

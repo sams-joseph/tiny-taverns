@@ -49,6 +49,8 @@ export interface SourceLinkInput {
   readonly targetIndex: string;
   readonly ordinal?: number;
   readonly payload?: unknown;
+  /** Fail the import when the target is absent from the pinned source registry. */
+  readonly required?: boolean;
 }
 
 /**
@@ -248,6 +250,11 @@ export const sourceLinkFor = (
         and source_index = ${input.targetIndex}
       limit 1
     `;
+    if (input.required === true && targets.length === 0) {
+      throw new Error(
+        `missing required source link target ${input.targetFamily}/${input.targetIndex} for ${input.relation}`,
+      );
+    }
     yield* sql`
       insert into rules_source_link (
         from_revision_id, relation, to_entity_id, target_family, target_index, ordinal, payload

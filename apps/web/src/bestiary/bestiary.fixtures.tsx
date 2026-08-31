@@ -123,6 +123,41 @@ export const bothMemberships = [
   { campaign: otherCampaign, role: "dm", joinedAt: "2026-06-02T10:00:00.000Z" },
 ];
 
+export const emptyCreatureFacets = {
+  environments: [],
+  sizes: [],
+  types: [],
+  subtypes: [],
+  alignments: [],
+  damageVulnerabilities: [],
+  damageResistances: [],
+  damageImmunities: [],
+  conditionImmunities: [],
+  movementModes: [],
+  crMin: null,
+  crMax: null,
+  legendary: false,
+  spellcaster: false,
+};
+
+export const bestiaryFacets = {
+  ...emptyCreatureFacets,
+  environments: ["Marsh", "River"],
+  sizes: ["Medium", "Small"],
+  types: ["Humanoid"],
+  crMin: 0.25,
+  crMax: 5,
+};
+
+export const libraryFacets = {
+  ...emptyCreatureFacets,
+  environments: ["Barrow", "Marsh"],
+  sizes: ["Large", "Medium", "Small"],
+  types: ["Humanoid", "Monstrosity", "Undead"],
+  crMin: 1,
+  crMax: 5,
+};
+
 export const renderBestiary = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/bestiary`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
