@@ -1102,23 +1102,29 @@ Global content has no campaign to scope it to, so there is no actor an endpoint 
 against — an endpoint that could mint one would write rows every campaign can read.
 `src/bestiary/import.ts` is therefore **the only code in `src/` that touches campaign content
 without `CurrentActor` in its requirements**, and that exception is why it is confined to one
-file and a bin script. It upserts on `creature_system_name_key` (partial unique index over
-`lower(name)` where the row is owned by nobody — **both** columns, since `0015`, and the
-`on conflict … where` clause has to say so because Postgres infers an arbiter index only from an
-inference predicate that implies the index's own), so re-running it updates in place and a DM's
-reskins keep their ancestor. Two accounts may each keep a monster called Goblin Boss; only the
-bundle is unique. It never writes `visibility`, so a shared system creature is not
-un-shared by an upgrade.
+file and a bin script. Since `0019` it upserts on `creature_system_source_entity_key` — the
+stable source entity, not `lower(name)` — so a source rename updates one system row rather than
+inserting a second, and two future source entities may share a display name. The current source it
+records is Taverns' project-authored starter bundle, not 5e-bits or SRD content. It never writes
+`visibility`, so a shared system creature is not un-shared by an upgrade.
 
 ### The bundle carries no third-party prose — this project writes what it ships
 
-**Captain's decision, 2026-08-26, and it is a rule rather than a historical note: nothing the
-product bundles is SRD, licensed or otherwise third-party content.** Everything shipped under
+**Captain's decision, 2026-08-26, and it is a rule rather than a historical note: the current
+starter bundle is not SRD, licensed or otherwise third-party content.** Everything it ships under
 `origin = 'system'` is written by this project — today six fixture creatures
 (`apps/server/src/bestiary/systemCreatures.ts`, transcribed from the designers' own `data.js`) and
 thirty-eight class, species and background rows (`apps/server/src/ruleset/systemOptions.ts`).
 
-**The bundle ships mechanics and names only**: a name, a hit die, an unarmoured-armour rule, hit
+**Since `0019`, `origin = 'system'` is explicitly not the whole citation.** It still means
+_unowned bundled row_, and the structural immutability argument is unchanged; the new
+`rules_source_*` tables say which source document/entity/revision a bundled row reflects. The two
+current importers record **Taverns' project-authored starter bundle** there and must not label those
+rows as 5e-bits, SRD, OGL or Wizards content. The foundation is edition-aware because the next source
+is the captain's 2026-08-31 choice: 5e-bits' **2014** corpus and 2014 gameplay semantics. Broad SRD
+content only arrives through its own importer and source-document attribution.
+
+**The current starter bundle ships mechanics and names only**: a name, a hit die, an unarmoured-armour rule, hit
 points per level. **No feature text, no background mechanical grants, no spell or item
 descriptions.** Those are somebody's expression rather than a number, and the reason is that this
 way the product takes on no attribution obligation and depends on no belief about what a licence
@@ -1345,7 +1351,7 @@ need `corpusRowReadable`'s campaign quantified, which is the shape this change j
   wants the model whole, deleting it plus its handler is a small change and the fixtures that use it
   would move to `library.create` + `derive`. **Ask before assuming either way.**
 - **Two copies of one entity in one campaign is legal**, and nothing refuses it. `derive` has no
-  uniqueness rule and `creature_system_name_key` covers the bundle alone.
+  uniqueness rule and the bundle's own identity is its source entity, not its display name.
 - **`Actor.campaignId` does not narrow the Library**, and the argument is on `libraryRowReadable`:
   scope says which _campaign_ a credential reaches, and there is none here to be about, so applying
   it would mean inventing a second meaning for the field. It changes no answer today because
@@ -1562,9 +1568,9 @@ exhaustive by type — so there is no cast anywhere, which `dm-actor.test.ts` en
   which is the only place a body is told apart by its shape (`bodyKind`).
 - **No `tsvector` and no fifth arm in `repo/Search.ts`.** `0008_beats.ts`'s rule — an index
   nothing reads is worse than none.
-- **The bundle's unique index is `(kind, lower(name))`**, unlike `creature_system_name_key`: a
-  class and a species may share a name, and an index over the name alone would refuse the second
-  with a violation naming an index nobody has heard of.
+- **The bundle's unique index is its source entity**, not `(kind, lower(name))` any more. `kind`
+  still belongs in the source identity — class `Warden` and species `Warden` are different
+  entities — but display names are no longer an upsert key.
 - **A character's background is `sheet.identity.background` and earns no column**, where the
   class and the species are columns. Nothing filters or sorts on it and it is not one of the
   three the generated `descriptor` is built from — adding a fourth would be a migration for a

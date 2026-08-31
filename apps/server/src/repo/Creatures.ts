@@ -63,6 +63,10 @@ interface CreatureRow extends ProvenanceColumns {
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly environments: ReadonlyArray<string>;
   readonly legendary: boolean;
+  /** The source entity this row snapshots, when it came from an imported source. */
+  readonly source_entity_id: string | null;
+  /** The exact source revision this row snapshots. */
+  readonly source_revision_id: string | null;
   /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
   readonly body: StatBlock;
 }
@@ -734,6 +738,8 @@ export class Creatures extends Context.Service<
                     defined({
                       campaign_id: campaignId,
                       derived_from: source.id,
+                      source_entity_id: source.source_entity_id,
+                      source_revision_id: source.source_revision_id,
                       name: patch.name ?? source.name,
                       size: patch.size === undefined ? source.size : patch.size,
                       type: patch.type ?? source.type,

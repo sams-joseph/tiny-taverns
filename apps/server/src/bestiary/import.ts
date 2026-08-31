@@ -2,6 +2,7 @@ import { emptyStatBlock } from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { crSortFor } from "../repo/Creatures.js";
+import { beginRulesImport, sourceRevisionFor, TAVERNS_STARTER_SOURCE } from "../ruleset/source.js";
 import { SYSTEM_CREATURES, type SystemCreature } from "./systemCreatures.js";
 
 /** What one run of the import did. */
@@ -27,21 +28,20 @@ export interface ImportResult {
  * *reason* it is confined to this file and to a bin script, and a second one
  * should be argued for rather than added.
  *
- * Idempotent: upserts on `creature_system_name_key`, the partial unique index
- * over `lower(name)` where the row is owned by nobody. Re-running it after
- * editing this corpus updates the rows in place, so a DM's reskins — which point
- * at these rows through `derived_from` — survive.
+ * Idempotent: upserts on `creature_system_source_entity_key`, the partial
+ * unique index over a stable source identity rather than over a display name.
+ * A source rename therefore updates one row instead of inserting a second one,
+ * and two future source entities may share a name without one overwriting the
+ * other. The source document this importer writes is Taverns' own starter
+ * bundle — not 5e-bits and not SRD content.
  *
- * **The inference clause has to name both ownership columns**, and that is a
- * requirement of Postgres rather than tidiness: `0015_library_creatures.ts`
- * narrowed the index to `campaign_id is null and account_id is null` when a null
- * campaign stopped meaning "nobody's", and an arbiter index is inferred only
- * from an inference predicate that *implies* the index's own. `where campaign_id
- * is null` no longer does, so it would fail to infer any index at all.
+ * Existing development data is disposable for this foundation slice, so there
+ * is deliberately no name-based adoption path. A database that needs the new
+ * identity starts fresh and imports by source key from the first row.
  *
- * `visibility` is never written, so the column default (`dm`) decides on
- * insert and an existing row's value is left alone on update. A DM who shared a
- * system creature with their table does not have it un-shared by an upgrade.
+ * `visibility` is never written, so the column default (`dm`) decides on insert
+ * and an existing row's value is left alone on update. A DM who shared a system
+ * creature with their table does not have it un-shared by an upgrade.
  */
 export const importSystemCreatures = (
   corpus: ReadonlyArray<SystemCreature> = SYSTEM_CREATURES,
@@ -54,30 +54,59 @@ export const importSystemCreatures = (
         let inserted = 0;
         let updated = 0;
 
+        const context = yield* beginRulesImport(sql, TAVERNS_STARTER_SOURCE);
+
         for (const creature of corpus) {
+          const statBlock = creature.statBlock ?? emptyStatBlock;
+          const crSort = creature.crSort ?? crSortFor(creature.cr);
+          const source = yield* sourceRevisionFor(sql, context, {
+            family: "monsters",
+            sourceIndex: creature.sourceIndex,
+            sourceUrl: creature.sourceUrl,
+            name: creature.name,
+            raw: {
+              sourceIndex: creature.sourceIndex,
+              name: creature.name,
+              size: creature.size ?? null,
+              type: creature.type,
+              cr: creature.cr,
+              crSort,
+              ac: creature.ac,
+              hp: creature.hp,
+              environments: creature.environments ?? [],
+              legendary: creature.legendary ?? false,
+              statBlock,
+            },
+          });
+
           // `xmax = 0` is true only for a tuple this statement inserted, which
           // is how an upsert reports which of the two things it did.
           const rows = yield* sql<{ readonly inserted: boolean }>`
             insert into creature (
-              campaign_id, origin, name, size, type, cr, cr_sort,
-              ac, hp, environments, legendary, body
+              campaign_id, origin, source_entity_id, source_revision_id,
+              name, size, type, cr, cr_sort, ac, hp, environments, legendary, body
             )
             values (
               null,
               'system',
+              ${source.sourceEntityId},
+              ${source.sourceRevisionId},
               ${creature.name},
               ${creature.size ?? null},
               ${creature.type},
               ${creature.cr},
-              ${creature.crSort ?? crSortFor(creature.cr)},
+              ${crSort},
               ${creature.ac},
               ${creature.hp},
               ${creature.environments ?? []},
               ${creature.legendary ?? false},
-              ${JSON.stringify(creature.statBlock ?? emptyStatBlock)}
+              ${JSON.stringify(statBlock)}
             )
-            on conflict (lower(name)) where campaign_id is null and account_id is null
+            on conflict (source_entity_id)
+              where campaign_id is null and account_id is null and source_entity_id is not null
             do update set
+              source_revision_id = excluded.source_revision_id,
+              name         = excluded.name,
               size         = excluded.size,
               type         = excluded.type,
               cr           = excluded.cr,

@@ -79,6 +79,8 @@ import type {
 /** One bundled option, as the seeder writes it. */
 export interface SystemOption {
   readonly kind: OptionKind;
+  /** Stable source identity within the Taverns starter bundle; not a display name. */
+  readonly sourceIndex: string;
   readonly name: string;
   readonly body: ClassEntry | SpeciesEntry | BackgroundEntry;
 }
@@ -274,11 +276,69 @@ export const SYSTEM_BACKGROUNDS: ReadonlyArray<{ readonly name: string } & Backg
   BACKGROUND_NAMES.map((name) => ({ name, ...BACKGROUND_BODIES[name] }));
 
 /** The thirty-eight, as rows. */
+const CLASS_SOURCE_INDEXES: Record<BundledClassName, string> = {
+  Barbarian: "barbarian",
+  Bard: "bard",
+  Cleric: "cleric",
+  Druid: "druid",
+  Fighter: "fighter",
+  Monk: "monk",
+  Paladin: "paladin",
+  Ranger: "ranger",
+  Rogue: "rogue",
+  Sorcerer: "sorcerer",
+  Warlock: "warlock",
+  Wizard: "wizard",
+};
+
+const SPECIES_SOURCE_INDEXES: Record<BundledSpeciesName, string> = {
+  Aasimar: "aasimar",
+  Dragonborn: "dragonborn",
+  Dwarf: "dwarf",
+  Elf: "elf",
+  Gnome: "gnome",
+  Goliath: "goliath",
+  Halfling: "halfling",
+  Human: "human",
+  Orc: "orc",
+  Tiefling: "tiefling",
+};
+
+const BACKGROUND_SOURCE_INDEXES: Record<BundledBackgroundName, string> = {
+  Acolyte: "acolyte",
+  Artisan: "artisan",
+  Charlatan: "charlatan",
+  Criminal: "criminal",
+  Entertainer: "entertainer",
+  Farmer: "farmer",
+  Guard: "guard",
+  Guide: "guide",
+  Hermit: "hermit",
+  Merchant: "merchant",
+  Noble: "noble",
+  Sage: "sage",
+  Sailor: "sailor",
+  Scribe: "scribe",
+  Soldier: "soldier",
+  Wayfarer: "wayfarer",
+};
+
 export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
-  ...CLASS_NAMES.map((name) => ({ kind: "class" as const, name, body: CLASS_BODIES[name] })),
-  ...SPECIES_NAMES.map((name) => ({ kind: "species" as const, name, body: SPECIES_BODIES[name] })),
+  ...CLASS_NAMES.map((name) => ({
+    kind: "class" as const,
+    sourceIndex: CLASS_SOURCE_INDEXES[name],
+    name,
+    body: CLASS_BODIES[name],
+  })),
+  ...SPECIES_NAMES.map((name) => ({
+    kind: "species" as const,
+    sourceIndex: SPECIES_SOURCE_INDEXES[name],
+    name,
+    body: SPECIES_BODIES[name],
+  })),
   ...BACKGROUND_NAMES.map((name) => ({
     kind: "background" as const,
+    sourceIndex: BACKGROUND_SOURCE_INDEXES[name],
     name,
     body: BACKGROUND_BODIES[name],
   })),

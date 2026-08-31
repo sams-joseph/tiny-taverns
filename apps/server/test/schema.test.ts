@@ -24,7 +24,17 @@ afterAll(() => runtime.dispose());
  * invitation must never be. Hob has no way to record itself as the author of a
  * credential because there is nowhere on the row to record it.
  */
-const NOT_CONTENT = ["account", "campaign_invite", "campaign_member", "effect_sql_migrations"];
+const NOT_CONTENT = [
+  "account",
+  "campaign_invite",
+  "campaign_member",
+  "effect_sql_migrations",
+  "rules_import_run",
+  "rules_source_document",
+  "rules_source_entity",
+  "rules_source_entity_revision",
+  "rules_source_link",
+];
 
 interface Column {
   readonly table_name: string;

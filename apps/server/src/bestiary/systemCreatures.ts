@@ -7,7 +7,11 @@ import type { CreatureCreate } from "@taverns/api";
  * system creature is `dm` like everything else and there is no reason for this
  * file to be the place that says so.
  */
-export type SystemCreature = Omit<CreatureCreate, "visibility">;
+export interface SystemCreature extends Omit<CreatureCreate, "visibility"> {
+  /** Stable source identity within the Taverns starter bundle; not a display name. */
+  readonly sourceIndex: string;
+  readonly sourceUrl?: string;
+}
 
 /**
  * The bundled bestiary: global, immutable, shared by every campaign.
@@ -30,6 +34,7 @@ export type SystemCreature = Omit<CreatureCreate, "visibility">;
  */
 export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
   {
+    sourceIndex: "goblin-boss",
     name: "Goblin Boss",
     size: "Small",
     type: "Humanoid",
@@ -73,6 +78,7 @@ export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
     },
   },
   {
+    sourceIndex: "marsh-hag",
     name: "Marsh Hag",
     size: "Medium",
     type: "Fey",
@@ -92,6 +98,7 @@ export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
     },
   },
   {
+    sourceIndex: "bullywug-croaker",
     name: "Bullywug Croaker",
     type: "Humanoid",
     cr: "1/4",
@@ -100,6 +107,7 @@ export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
     environments: ["Marsh"],
   },
   {
+    sourceIndex: "will-o-wisp",
     name: "Will-o'-Wisp",
     type: "Undead",
     cr: "2",
@@ -108,6 +116,7 @@ export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
     environments: ["Marsh", "Night"],
   },
   {
+    sourceIndex: "giant-toad",
     name: "Giant Toad",
     type: "Beast",
     cr: "1",
@@ -116,6 +125,7 @@ export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
     environments: ["Marsh"],
   },
   {
+    sourceIndex: "ferrymans-shade",
     name: "Ferryman's Shade",
     type: "Undead",
     cr: "3",

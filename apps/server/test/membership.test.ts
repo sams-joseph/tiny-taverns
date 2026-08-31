@@ -557,7 +557,15 @@ describe("a stranger reads nothing", () => {
           select table_name from information_schema.tables
           where table_schema = 'public'
             and table_name not in (
-              'account', 'campaign_member', 'campaign_invite', 'effect_sql_migrations'
+              'account',
+              'campaign_member',
+              'campaign_invite',
+              'effect_sql_migrations',
+              'rules_import_run',
+              'rules_source_document',
+              'rules_source_entity',
+              'rules_source_entity_revision',
+              'rules_source_link'
             )
           order by table_name
         `;

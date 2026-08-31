@@ -220,8 +220,10 @@ that same declaration — paste a token there to see it list your campaigns.
 **The bestiary is two corpora in one list.** A campaign's own creatures live under it;
 `system` creatures are global, immutable and shared by every campaign, and the only thing
 that writes them is `pnpm -F server bestiary:import` — a shell command rather than an
-endpoint, because global content has no campaign to scope it to. A DM who wants to change
-a system creature derives a copy instead:
+endpoint, because global content has no campaign to scope it to. The importer keys those
+starter rows through `rules_source_*` provenance tables rather than by display name; today's
+starter bundle is recorded as Taverns-authored data, not as 5e-bits or SRD content. A DM who
+wants to change a system creature derives a copy instead:
 
 ```bash
 curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/derive" \
@@ -229,12 +231,14 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
   -d '{"name":"Grask, Boss of the Reeds"}'
 ```
 
-**A campaign can have its own classes and species**, and they follow exactly the same
-model. `pnpm -F server ruleset:import` writes the bundled twelve and ten as global rows;
-a DM writes their own in the campaign's **Rules** screen, which authors the original into
-their library and copies it into the table in one press. The copy is what a player picks
-from, because a player can never read somebody else's library — see `AGENTS.md`, which is
-also where the one thing this importer does differently is written down.
+**A campaign can have its own classes, species and backgrounds**, and they follow exactly
+the same model. `pnpm -F server ruleset:import` writes the bundled starter vocabulary as
+global rows, keyed by stable `rules_source_*` identities; the current bundle remains
+project-authored until a real 2014 5e-bits/SRD importer ships with the required notices. A
+DM writes their own in the campaign's **Rules** screen, which authors the original into their
+library and copies it into the table in one press. The copy is what a player picks from,
+because a player can never read somebody else's library — see `AGENTS.md`, which is also
+where the one thing this importer does differently is written down.
 
 ### Hosted sign-in (optional)
 

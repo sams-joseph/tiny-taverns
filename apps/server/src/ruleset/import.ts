@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { beginRulesImport, sourceRevisionFor, TAVERNS_STARTER_SOURCE } from "./source.js";
 import { SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
 
 /** What one run of the import did. */
@@ -9,8 +10,8 @@ export interface ImportResult {
 }
 
 /**
- * Writes the bundled classes and species into `character_option` as global
- * `system` rows.
+ * Writes the bundled classes, species and backgrounds into `character_option`
+ * as global `system` rows.
  *
  * **The second writer of `origin = 'system'`, and it is deliberately not an
  * HTTP endpoint** — `bestiary/import.ts` states the reasoning at length and it
@@ -24,10 +25,16 @@ export interface ImportResult {
  * touch campaign content without `CurrentActor` in their requirements, and that
  * exception is why each is confined to one file behind one bin script.
  *
- * Idempotent: upserts on `character_option_system_name_key`, the partial unique
- * index over `(kind, lower(name))` where the row is owned by nobody.
- * Re-running it after editing `systemOptions.ts` updates in place, so a DM's
- * copies — which point at these rows through `derived_from` — survive.
+ * Idempotent: upserts on `character_option_system_source_entity_key`, the
+ * partial unique index over a stable source identity rather than over the
+ * display name. A source rename therefore updates one row instead of inserting
+ * another, and two future source entities may share a name without one
+ * overwriting the other. The source document this importer writes is Taverns'
+ * own starter bundle — not 5e-bits and not SRD content.
+ *
+ * Existing development data is disposable for this foundation slice, so there
+ * is deliberately no `(kind, name)` adoption path. A database that needs the
+ * new identity starts fresh and imports by source key from the first row.
  *
  * ### It writes `visibility = 'shared'` on insert, and the bestiary importer
  * does not. That difference is the whole reason this comment is long.
@@ -72,32 +79,57 @@ export const importSystemOptions = (
         let inserted = 0;
         let updated = 0;
 
+        const context = yield* beginRulesImport(sql, TAVERNS_STARTER_SOURCE);
+
         for (const option of corpus) {
+          const source = yield* sourceRevisionFor(sql, context, {
+            family:
+              option.kind === "class"
+                ? "classes"
+                : option.kind === "species"
+                  ? "species"
+                  : "backgrounds",
+            sourceIndex: option.sourceIndex,
+            name: option.name,
+            raw: {
+              kind: option.kind,
+              sourceIndex: option.sourceIndex,
+              name: option.name,
+              body: option.body,
+            },
+          });
+
           // `xmax = 0` is true only for a tuple this statement inserted, which
           // is how an upsert reports which of the two things it did.
-          // `visibility` is named in the `values` list and deliberately
-          // absent from the `do update set` list below — the confirmed rule,
-          // stated at length in this function's doc block.
+          // `visibility` is named in the `values` list and deliberately absent
+          // from the `do update set` list below — the confirmed rule, stated at
+          // length in this function's doc block.
           const rows = yield* sql<{ readonly inserted: boolean }>`
             insert into character_option (
-              campaign_id, account_id, origin, kind, name, body, visibility
+              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              kind, name, body, visibility
             )
             values (
               null,
               null,
               'system',
+              ${source.sourceEntityId},
+              ${source.sourceRevisionId},
               ${option.kind},
               ${option.name},
               ${JSON.stringify(option.body)},
               'shared'
             )
-            on conflict (kind, lower(name))
-              where campaign_id is null and account_id is null
+            on conflict (source_entity_id)
+              where campaign_id is null and account_id is null and source_entity_id is not null
             do update set
               -- visibility is deliberately NOT set here, and IS named on the
               -- insert above. See this function's doc block: a DM who
               -- un-shared a bundled class must not have it re-shared by an
               -- upgrade. Not an omission; do not make the two consistent.
+              source_revision_id = excluded.source_revision_id,
+              kind       = excluded.kind,
+              name       = excluded.name,
               body       = excluded.body,
               updated_at = now()
             returning (xmax = 0) as inserted

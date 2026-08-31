@@ -309,7 +309,7 @@ describe("the bundle", () => {
     const [entry] = SYSTEM_CLASSES;
     if (entry === undefined) throw new Error("expected a bundled class");
     const { name, ...body } = entry;
-    const option: SystemOption = { kind: "class", name, body };
+    const option: SystemOption = { kind: "class", sourceIndex: name.toLowerCase(), name, body };
 
     // Un-shared behind the API, because no shipped write path can reach a
     // bundled row at all — `libraryRowWritable` and `rowWritable` each compare

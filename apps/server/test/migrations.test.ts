@@ -12,6 +12,9 @@ import invites from "../src/migrations/0013_invites.js";
 import characterLive from "../src/migrations/0014_character_live.js";
 import libraryCreatures from "../src/migrations/0015_library_creatures.js";
 import playerThreads from "../src/migrations/0016_player_threads.js";
+import characterOptions from "../src/migrations/0017_character_options.js";
+import backgroundOption from "../src/migrations/0018_background_option.js";
+import sourceProvenance from "../src/migrations/0019_rules_source_provenance.js";
 import prepSurface from "../src/migrations/0003_prep_surface.js";
 import bestiary from "../src/migrations/0004_bestiary.js";
 import liveSession from "../src/migrations/0005_live_session.js";
@@ -52,6 +55,10 @@ afterAll(() => libraryRuntime.dispose());
 /** An eighth, for conversations written before a player could have one. */
 const threadRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_threads"));
 afterAll(() => threadRuntime.dispose());
+
+/** A ninth, for source provenance added after the starter bundle existed. */
+const sourceRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_sources"));
+afterAll(() => sourceRuntime.dispose());
 
 const migrate = Effect.scoped(
   Layer.build(Layer.provide(Database.layerMigrator, NodeServices.layer)),
@@ -98,6 +105,11 @@ describe("migrations", () => {
       "encounter_run",
       "note",
       "prep_item",
+      "rules_import_run",
+      "rules_source_document",
+      "rules_source_entity",
+      "rules_source_entity_revision",
+      "rules_source_link",
       "session",
       "session_event",
     ]);
@@ -125,6 +137,7 @@ describe("migrations", () => {
       { migration_id: 16, name: "player_threads" },
       { migration_id: 17, name: "character_options" },
       { migration_id: 18, name: "background_option" },
+      { migration_id: 19, name: "rules_source_provenance" },
     ]);
   }, 60_000);
 
@@ -153,6 +166,7 @@ describe("migrations", () => {
       { migration_id: 16, name: "player_threads" },
       { migration_id: 17, name: "character_options" },
       { migration_id: 18, name: "background_option" },
+      { migration_id: 19, name: "rules_source_provenance" },
     ]);
   }, 60_000);
 });
@@ -794,5 +808,96 @@ describe("upgrading a database whose conversations predate the player surface", 
       { title: "Who is the ferryman?", account_id: null },
     ]);
     expect(cascaded.map((thread) => thread.title)).toEqual(["Who is the ferryman?"]);
+  }, 60_000);
+});
+
+describe("adding source provenance after the starter bundle existed", () => {
+  it("adds nullable source pointers, drops name identity, and does not backfill disposable data", async () => {
+    // The captain confirmed existing DB data is disposable for this foundation
+    // slice, so `0019` is not a compatibility migration: it adds nullable source
+    // slots and moves future importer identity to source keys. Rows already in a
+    // scratch database stay exactly as they were until the database is reset and
+    // the source-keyed importer writes them fresh.
+    const measured = await sourceRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* init;
+        yield* prepSurface;
+        yield* bestiary;
+        yield* liveSession;
+        yield* sessionFinished;
+        yield* runCarryover;
+        yield* beats;
+        yield* searchIndex;
+        yield* assistantConversation;
+        yield* membership;
+        yield* characterSheet;
+        yield* invites;
+        yield* characterLive;
+        yield* libraryCreatures;
+        yield* playerThreads;
+        yield* characterOptions;
+        yield* backgroundOption;
+
+        yield* sql`
+          insert into creature ${sql.insert({
+            campaign_id: null,
+            origin: "system",
+            name: "Legacy Goblin",
+            type: "Humanoid",
+            cr: "1",
+            ac: 17,
+            hp: 21,
+          })}
+        `;
+        yield* sql`
+          insert into character_option ${sql.insert({
+            campaign_id: null,
+            account_id: null,
+            origin: "system",
+            kind: "class",
+            name: "Legacy Druid",
+            body: { hitDie: 8, unarmouredAc: ["DEX"] },
+            visibility: "shared",
+          })}
+        `;
+
+        yield* sourceProvenance;
+
+        const legacy = yield* sql<{
+          readonly table_name: string;
+          readonly source_entity_id: string | null;
+          readonly source_revision_id: string | null;
+        }>`
+          select 'creature' as table_name, source_entity_id, source_revision_id
+          from creature where name = 'Legacy Goblin'
+          union all
+          select 'character_option' as table_name, source_entity_id, source_revision_id
+          from character_option where name = 'Legacy Druid'
+          order by table_name
+        `;
+
+        const duplicateName = yield* sql`
+          insert into creature ${sql.insert({
+            campaign_id: null,
+            origin: "system",
+            name: "Legacy Goblin",
+            type: "Humanoid",
+            cr: "2",
+            ac: 15,
+            hp: 30,
+          })}
+        `.pipe(Effect.result);
+
+        return { legacy, duplicateName: duplicateName._tag };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.legacy).toEqual([
+      { table_name: "character_option", source_entity_id: null, source_revision_id: null },
+      { table_name: "creature", source_entity_id: null, source_revision_id: null },
+    ]);
+    expect(measured.duplicateName).toBe("Success");
   }, 60_000);
 });
