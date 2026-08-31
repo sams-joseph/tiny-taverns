@@ -34,6 +34,7 @@ import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
+import { Spells } from "./repo/Spells.js";
 import { Sessions } from "./repo/Sessions.js";
 
 /**
@@ -312,6 +313,26 @@ const CreaturesLive = HttpApiBuilder.group(
   }),
 );
 
+/** A campaign's copied spells plus the bundled 2014 SRD spell corpus. */
+const SpellsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "spells",
+  Effect.fnUntraced(function* (handlers) {
+    const spells = yield* Spells;
+    return handlers
+      .handle("list", ({ params, query }) => spells.list(params.campaignId, query))
+      .handle("findById", ({ params }) => spells.findById(params.campaignId, params.spellId))
+      .handle("create", ({ params, payload }) => spells.create(params.campaignId, payload))
+      .handle("update", ({ params, payload }) =>
+        spells.update(params.campaignId, params.spellId, payload),
+      )
+      .handle("remove", ({ params }) => spells.remove(params.campaignId, params.spellId))
+      .handle("derive", ({ params, payload }) =>
+        spells.derive(params.campaignId, params.spellId, payload),
+      );
+  }),
+);
+
 /**
  * A campaign's rules vocabulary — the classes, races and backgrounds a
  * character at this table is built from.
@@ -368,6 +389,7 @@ const LibraryLive = HttpApiBuilder.group(
     // the reason there are two tables — one table gets one mapper — and the
     // pair of predicates each composes is the same pair.
     const options = yield* Options;
+    const spells = yield* Spells;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -383,7 +405,12 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("updateOption", ({ params, payload }) =>
         options.libraryUpdate(params.optionId, payload),
       )
-      .handle("removeOption", ({ params }) => options.libraryRemove(params.optionId));
+      .handle("removeOption", ({ params }) => options.libraryRemove(params.optionId))
+      .handle("spells", ({ query }) => spells.library(query))
+      .handle("createSpell", ({ payload }) => spells.libraryCreate(payload))
+      .handle("findSpell", ({ params }) => spells.libraryFindById(params.spellId))
+      .handle("updateSpell", ({ params, payload }) => spells.libraryUpdate(params.spellId, payload))
+      .handle("removeSpell", ({ params }) => spells.libraryRemove(params.spellId));
   }),
 );
 
@@ -802,6 +829,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     NotesLive,
     EncountersLive,
     CreaturesLive,
+    SpellsLive,
     CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,

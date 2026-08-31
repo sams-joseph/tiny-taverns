@@ -122,6 +122,9 @@ export const reads = {
   /** This campaign's bestiary: its own creatures, plus the bundle. */
   creatures: (campaignId: CampaignId): ReadKey => key`creatures:${campaignId}`,
 
+  /** This campaign's spellbook: copied spells, plus the 2014 SRD bundle. */
+  spells: (campaignId: CampaignId): ReadKey => key`spells:${campaignId}`,
+
   /**
    * This campaign's rules vocabulary: the classes, races and backgrounds copied
    * into it, plus the bundle.
@@ -170,6 +173,9 @@ export const reads = {
 
   /** The account's Library: the creatures it authored, plus the bundle. */
   library: "library" as ReadKey,
+
+  /** The account's spell Library: original spells, plus the 2014 SRD bundle. */
+  librarySpells: "library:spells" as ReadKey,
 
   /**
    * The account's Library of **character options** — the classes, races and

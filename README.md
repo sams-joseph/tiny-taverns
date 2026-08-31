@@ -113,11 +113,12 @@ pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server bestiary:import  # loads the bundled bestiary (optional, idempotent)
 pnpm -F server ruleset:import   # loads the bundled 2014 classes, races and background (idempotent)
+pnpm -F server spell:import     # loads the bundled 2014 SRD spells (idempotent)
 pnpm dev                        # API on :3000, web on :5173
 ```
 
 If an existing development database still carries the pre-2014 character-rules rows, use the
-clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server bestiary:import && pnpm -F server ruleset:import`.
+clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server bestiary:import && pnpm -F server ruleset:import && pnpm -F server spell:import`.
 
 That is the whole setup, and it needs no Clerk account. Paste the token into the Server
 panel's **Machine token** box to reach the authenticated endpoints.
@@ -191,8 +192,8 @@ curl -X POST http://localhost:3000/campaigns \
   -d '{"name":"The Reed Marches","playerCount":4}'
 ```
 
-The API surface is `campaign`, `session`, `character`, `note`, `encounter`, `prep` and
-`creature` CRUD, plus the live session — `run`, `combatant` and the session log — declared
+The API surface is `campaign`, `session`, `character`, `note`, `encounter`, `prep`, `creature`
+and `spell` CRUD, plus the live session — `run`, `combatant` and the session log — declared
 once in `packages/api` as an `HttpApi` and implemented in `apps/server/src/handlers.ts`. Every
 campaign-scoped group sits behind a bearer-token `Authorization` middleware that resolves
 the request's actor; every repository read carries that actor as a type-level requirement
@@ -234,18 +235,18 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
   -d '{"name":"Grask, Boss of the Reeds"}'
 ```
 
-**A campaign can have its own classes, races and backgrounds**, and they follow exactly
-the same model. `pnpm -F server ruleset:import` writes the bundled 2014 SRD vocabulary as
-global rows, keyed by stable `rules_source_*` identities from the pinned 5e-bits
-`5e-database` snapshot (`5.10.0`, commit
-`5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races contain their 2014 subraces in the race
-body; there is no separate unparented subrace option kind. A DM writes their own in the
-campaign's **Rules** screen, which authors the original into their library and copies it into
-the table in one press. The copy is what a player picks from, because a player can never read
-somebody else's library — see `AGENTS.md`, which is also where the one thing this importer
-does differently is written down.
+**A campaign can have its own classes, races, backgrounds and spells**, and they follow exactly
+the same model. `pnpm -F server ruleset:import` writes the bundled 2014 SRD character vocabulary;
+`pnpm -F server spell:import` writes the 319 bundled 2014 SRD spells as global rows. Both are keyed
+by stable `rules_source_*` identities from the pinned 5e-bits `5e-database` snapshot (`5.10.0`,
+commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races contain their 2014 subraces in the race
+body; there is no separate unparented subrace option kind. Character vocabulary is managed in the
+campaign's **Rules** screen; spells have their own API and Library shelf, with the same copy-as-
+snapshot rule. The copy is what a player reads from, because a player can never read somebody
+else's library — see `AGENTS.md`, which is also where the one thing these importers do differently
+is written down.
 
-The bundled 2014 character rules data is transformed from `5e-bits/5e-database` under the
+The bundled 2014 character rules and spell data are transformed from `5e-bits/5e-database` under the
 MIT License; the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the
 Open Game License version 1.0a. The source and license metadata are stored in
 `rules_source_document` by the importer and shown in the web footer for attribution; see

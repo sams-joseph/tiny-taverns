@@ -25,6 +25,8 @@ import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
 import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
 import { RulesScreen } from "./rules/RulesScreen";
 import { RunScreen } from "./run/RunScreen";
+import { SpellbookScreen } from "./spells/SpellbookScreen";
+import { SpellLibraryScreen } from "./spells/SpellLibraryScreen";
 
 /**
  * Where you are, in the URL — TanStack Router over a hash history.
@@ -288,6 +290,13 @@ const libraryRulesRoute = createRoute({
   component: OptionLibraryScreen,
 });
 
+/** The spell shelf under the global Library destination. */
+const librarySpellsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library/spells",
+  component: SpellLibraryScreen,
+});
+
 /**
  * The Chronicle names a campaign for the same reason the bestiary does: every
  * source it reads — `sessions.list`, `recap.read`, `search.search` — hangs off
@@ -336,6 +345,14 @@ const rulesRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "rules",
   component: RulesScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/** The campaign's copied spells, plus the SRD bundle every campaign reads through it. */
+const spellsRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "spells",
+  component: SpellbookScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -583,12 +600,14 @@ export const routeTree = rootRoute.addChildren([
   campaignsRoute,
   libraryRoute,
   libraryRulesRoute,
+  librarySpellsRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
     notesRoute,
     bestiaryRoute,
     rulesRoute,
+    spellsRoute,
     chronicleRoute,
     partyRoute,
     runRoute,
@@ -648,11 +667,13 @@ export const routes = {
   campaigns: campaignsRoute,
   library: libraryRoute,
   libraryRules: libraryRulesRoute,
+  librarySpells: librarySpellsRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,
   bestiary: bestiaryRoute,
   rules: rulesRoute,
+  spells: spellsRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
   run: runRoute,

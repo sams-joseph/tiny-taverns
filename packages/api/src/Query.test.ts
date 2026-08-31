@@ -87,12 +87,20 @@ describe("the query parameters this contract declares", () => {
     const arrays = queryFields().filter((field) => isArray(field.type));
     expect(arrays.map((field) => `${field.endpoint}.${field.name}`)).toEqual([
       "creatures.list.environments",
+      "spells.list.levels",
+      "spells.list.schools",
+      "spells.list.classes",
       "library.list.environments",
+      "library.spells.levels",
+      "library.spells.schools",
+      "library.spells.classes",
     ]);
     for (const field of arrays) {
       const field_ = Schema.make(field.type as never) as Schema.Codec<unknown, unknown>;
-      const one = Schema.decodeUnknownSync(field_)("Cave");
-      expect(one, `${field.endpoint}.${field.name}`).toEqual(["Cave"]);
+      const sample = field.name === "levels" ? "3" : "Cave";
+      const expected = field.name === "levels" ? ["3"] : ["Cave"];
+      const one = Schema.decodeUnknownSync(field_)(sample);
+      expect(one, `${field.endpoint}.${field.name}`).toEqual(expected);
     }
   });
 });

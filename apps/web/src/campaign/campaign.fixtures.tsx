@@ -46,6 +46,7 @@ export const saltRunnerOriginalId = "2b1f2a1e-0000-4000-8000-000000000e08";
 export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
+export const spellId = "2b1f2a1e-0000-4000-8000-000000000f01";
 
 /**
  * A list endpoint's body: one page, and no more.
@@ -255,6 +256,42 @@ export const hag = {
   crSort: 5,
   ac: 17,
   hp: 82,
+};
+
+export const fireball = {
+  id: spellId,
+  campaignId: null,
+  accountId: null,
+  derivedFrom: null,
+  name: "Fireball",
+  level: 3,
+  schoolIndex: "evocation",
+  schoolName: "Evocation",
+  ritual: false,
+  concentration: false,
+  castingTime: "1 action",
+  range: "150 feet",
+  duration: "Instantaneous",
+  classIndexes: ["sorcerer", "wizard"],
+  classNames: ["Sorcerer", "Wizard"],
+  subclassIndexes: [],
+  subclassNames: [],
+  spell: {
+    desc: ["A bright streak flashes from your pointing finger."],
+    components: ["V", "S", "M"],
+    material: "A tiny ball of bat guano and sulfur.",
+    school: { index: "evocation", name: "Evocation" },
+    classes: [
+      { index: "sorcerer", name: "Sorcerer" },
+      { index: "wizard", name: "Wizard" },
+    ],
+    subclasses: [],
+    sourceUrl: "https://www.5esrd.com/database/spells/fireball/",
+  },
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  ...stamps,
 };
 
 /**
@@ -673,6 +710,8 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
     [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
+    [`GET /campaigns/${campaignId}/spells`, { status: 200, body: page([fireball]) }],
+    ["GET /library/spells", { status: 200, body: page([fireball]) }],
     // The rules vocabulary this table builds characters from — the Rules
     // screen's list, and the create form's two pickers. A bundled class, a
     // bundled race, and one of each this table has copied in, so a test can

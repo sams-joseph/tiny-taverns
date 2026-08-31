@@ -28,6 +28,7 @@ import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { Spells } from "../src/repo/Spells.js";
 import { anAccount } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
@@ -48,7 +49,7 @@ import { items } from "./support/paging.js";
  *
  *   1. the two greps, in the shape of `seam.test.ts` and `hob.test.ts`
  *   2. a campaign cannot exist without a DM — the composite key, driven
- *   3. a stranger reads nothing, from all fourteen content tables
+ *   3. a stranger reads nothing, from all sixteen content tables
  *   4. what an account is before anybody invites it
  *
  * The fourth block used to be "no player actor can be minted yet". The invite
@@ -157,16 +158,16 @@ describe("the reach seam, enforced rather than asserted", () => {
     // that predicate is the one every other predicate already composes, so a
     // conversation is reachable exactly while the table it is at is.
     //
-    // `repo/Options.ts` and `ruleset/import.ts` are the seventh and eighth, and
-    // they are `repo/Creatures.ts`'s and `bestiary/import.ts`'s pair over the
-    // second table that carries the Library model —
-    // `character_option.account_id` (`0017`) is whose **Library** a class or a
-    // race is in. Not one new predicate between them: the four Library
-    // predicates in `repo/visibility.ts` have always taken a table name, so the
-    // repository composes them with a different string and the seeder names the
-    // column in the negative for the arbiter-index reason above. If a change
-    // here ever seems to need a predicate of its own, that is a finding rather
-    // than a step.
+    // `repo/Options.ts` / `ruleset/import.ts` and `repo/Spells.ts` /
+    // `spells/import.ts` are the next pairs, and they are
+    // `repo/Creatures.ts`'s and `bestiary/import.ts`'s shape over the other
+    // tables that carry the Library model — `character_option.account_id` and
+    // `spell.account_id` are whose **Library** a rule option or a spell is in.
+    // Not one new predicate between them: the four Library predicates in
+    // `repo/visibility.ts` take a table name, so each repository composes them
+    // with a different string and each seeder names the column in the negative
+    // for the arbiter-index reason above. If a change here ever seems to need a
+    // predicate of its own, that is a finding rather than a step.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "bestiary/import.ts",
       "repo/Campaigns.ts",
@@ -175,8 +176,10 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/HobThreads.ts",
       "repo/Memberships.ts",
       "repo/Options.ts",
+      "repo/Spells.ts",
       "repo/visibility.ts",
       "ruleset/import.ts",
+      "spells/import.ts",
     ]);
   });
 
@@ -238,6 +241,7 @@ const runtime = ManagedRuntime.make(
     PrepItems.layer,
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Spells.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_membership"))),
 );
 afterAll(() => runtime.dispose());
@@ -273,6 +277,7 @@ const makeFixture = Effect.gen(function* () {
   const roster = yield* EncounterCreatures;
   const runs = yield* EncounterRuns;
   const sessions = yield* Sessions;
+  const spells = yield* Spells;
 
   const dm = yield* anAccount("Ada");
   const as = withActor(dm);
@@ -287,6 +292,18 @@ const makeFixture = Effect.gen(function* () {
     beats.create(campaign.id, session.id, { body: "The ferryman would not say his name." }),
   );
   yield* as(prep.create(campaign.id, session.id, { label: "Reread the ford" }));
+  yield* as(
+    spells.create(campaign.id, {
+      name: "Shield",
+      level: 1,
+      school: { index: "abjuration", name: "Abjuration" },
+      castingTime: "1 reaction",
+      range: "Self",
+      duration: "1 round",
+      ritual: false,
+      concentration: false,
+    }),
+  );
 
   const creature = yield* as(
     creatures.create(campaign.id, {
@@ -344,7 +361,7 @@ let fixture: Effect.Success<typeof makeFixture>;
  * The shipped read for each content table, keyed by the table it reads.
  *
  * Table-driven on purpose. The suite proves the positive cases richly and the
- * negative ones case by case, which is what makes the *fifteenth* table the
+ * negative ones case by case, which is what makes the *next* table the
  * dangerous one: it would be read by a new repository, tested for what it
  * returns, and never asked what it returns to somebody who should have nothing.
  * The first assertion below fails if a table is added without an entry here.
@@ -372,6 +389,7 @@ const READS: Record<
     | PrepItems
     | SessionEvents
     | Sessions
+    | Spells
   >
 > = {
   campaign: () => Effect.flatMap(Campaigns, (r) => r.list),
@@ -389,6 +407,7 @@ const READS: Record<
   // leak somebody would have found by using the product rather than by testing
   // it.
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
+  spell: (f) => items(Effect.flatMap(Spells, (r) => r.list(f.campaign.id, {}))),
   encounter: (f) => items(Effect.flatMap(Encounters, (r) => r.list(f.campaign.id, {}))),
   encounter_creature: (f) =>
     Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),

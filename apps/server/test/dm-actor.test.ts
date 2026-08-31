@@ -384,7 +384,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates seventeen methods and leaves the other seventy alone", () => {
+  it("gates seventeen methods and leaves the other ninety-six actor-scoped reads and writes alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -564,11 +564,13 @@ describe("the scope, counted", () => {
     // its ordinary job rather than a projection. Gating `list` would take the
     // create form's picker away from the audience it exists for.
     //
-    // The three writes among them (`update`, `remove`, `derive`) are ungated
-    // for `Characters.assign`'s reason: `rowWritable` and
-    // `ensureCampaignWritable` already require `isDm`, so a proof on top would
-    // be a second answer to a question the predicate underneath answers first.
-    expect(ungated).toBe(85);
+    // The last eleven are `repo/Spells.ts`, the spell corpus and the account Library
+    // originals behind it. They follow the same ownership model as creatures and
+    // options: the Library half names no campaign, while the campaign half either
+    // returns the same spell schema to a player who can read the row or writes
+    // through `rowWritable` / `ensureCampaignWritable`, where DM-ness is already
+    // the predicate underneath.
+    expect(ungated).toBe(96);
   });
 });
 

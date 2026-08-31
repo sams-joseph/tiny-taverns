@@ -900,20 +900,19 @@ non-negotiable, because it is free on day one and a retrofit later.
   `EncounterRuns` (7), `SessionEvents` (3, including the streaming `pollForRun`, which a grep
   for `CurrentActor>` cannot see), `Recap.read` and `Memberships.list` — the roster, whose
   player projection is _nothing_ rather than a narrower schema (see "Membership is the model,
-  and there is no seat"). The other seventy-one actor-scoped methods do
-  not, and should not: they return a `shared` row a player is entitled to see in full, so
-  `GET …/notes` answering the ordinary `Note` discloses nothing. **The Library's five are the
-  newest and the clearest case of the gate not applying**: a proof carries a campaign and those
-  rows are in none, so there is no membership to prove and no player projection to diverge from —
-  the owner is the whole question. `Characters.assign` is ungated for
-  one more reason worth keeping: it is a **write**, and
+  and there is no seat"). The other actor-scoped methods do not, and should not: they return a
+  `shared` row a player is entitled to see in full, so `GET …/notes` answering the ordinary `Note`
+  discloses nothing. **The Library methods for creatures, options and spells are the clearest case
+  of the gate not applying**: a proof carries a campaign and those rows are in none, so there is no
+  membership to prove and no player projection to diverge from — the owner is the whole question.
+  `Characters.assign` is ungated for one more reason worth keeping: it is a **write**, and
   `rowWritable` already requires `isDm`, so a proof on top would be a second answer to a question
-  the predicate underneath answers first. **`Characters.updateOwn` is the newest, and the one
-  method where the gate would answer the _wrong_ question** rather than a redundant one — a
-  `DmActor` proves the caller is the campaign's DM, and the whole point of the player write is that
-  they are not. **`PlayerTable.read` is the seventy-first and is the same shape from the other
-  side**: the gate is for a read whose player projection _diverges_ from the DM's, and that read has
-  no DM projection at all — see "The live table" below. **The gate is a precondition on
+  the predicate underneath answers first. **`Characters.updateOwn` is the method where the gate
+  would answer the _wrong_ question** rather than a redundant one — a `DmActor` proves the caller is
+  the campaign's DM, and the whole point of the player write is that they are not. **`PlayerTable.read`
+  is the same shape from the other side**: the gate is for a read whose player projection _diverges_
+  from the DM's, and that read has no DM projection at all — see "The live table" below. **The gate
+  is a precondition on
   the seam, not a replacement for it** — every gated method still composes `visibility.ts`
   unchanged, so a bug in the gate degrades to today's behaviour rather than to an open door.
   `apps/server/test/dm-actor.test.ts` pins all of it, including seven `@ts-expect-error` lines
@@ -1518,6 +1517,28 @@ entries to the same `seedFor`, and write the same background sheet facts when th
 resolves. A free-text or later-deleted background label still lands only in
 `sheet.identity.background`; no proficiencies, feature, equipment or gold are invented.
 
+## Spells: the 2014 SRD corpus is its own Library-owned table
+
+`spell` is a dedicated table, not `character_option.kind = "spell"`: spells need their own paged
+search, level/school/class/ritual/concentration filters and a spell-shaped document. It uses the
+same three-owner Library model as `creature` and `character_option`: bundled rows are unowned
+`system`, Library originals have `account_id`, campaign copies have `campaign_id`, and using one in
+a campaign is `spells.derive` — a snapshot, never a view of the original. The visibility seam is not
+new: `Spells` composes `libraryRowReadable` / `libraryRowWritable`, `corpusRowReadable`,
+`copyableIntoCampaign` and `rowWritable` exactly like the other copyable corpora.
+
+The bundle is imported by `pnpm -F server spell:import` from the checked-in
+`apps/server/src/spells/systemSpells.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0 commit
+`5a7ee5a0489b26655d343e4a41e8f7942a887af2`, path `src/2014/en/5e-SRD-Spells.json`: exactly 319
+2014 SRD spells. No runtime fetch. Imported rows record `rules_source_*` provenance and source links
+for schools/classes/subclasses/damage/DC references; do not relabel them as Taverns-authored, and do
+not fold them into `ruleset:import` without revisiting the explicit reset/import docs.
+
+The web has two shelves over the same table: `#/library/spells` for originals plus the bundle, and
+`#/campaigns/:c/spells` for a campaign's copies plus the bundle. `LibraryNav` is the global shelf;
+the campaign row has a `Spells` item because this is a campaign corpus, while the Library shelf is
+where account originals are written.
+
 ## The party: what earns a column on `character`, and what lives in the document
 
 `0012_character_sheet.ts` made `character` the same shape as `creature`, and the rule it
@@ -1719,8 +1740,7 @@ Four more things that are decisions rather than details:
   refetches, exactly as it does for a level-up typed between games.
 - **`Characters.updateOwn` is ungated by `DmActor`, and it is the one method where the gate would
   answer the wrong question** rather than a redundant one: the proof says _this account is the
-  campaign's DM_, and the whole point is that its caller is not. `dm-actor.test.ts` counts it as the
-  sixty-fourth ungated method and says so.
+  campaign's DM_, and the whole point is that its caller is not.
 
 **Measured over real HTTP** against the real application and a real Postgres, with a DM, two players
 minted through real invitations and a stranger's table: the durable PATCH answered `200` with
@@ -4636,7 +4656,6 @@ Three more things that are decisions rather than details:
   whose _player projection diverges from the DM's_, and this read has no DM projection: a DM has
   the runner, `runs.list` and `sessions.list`, all of which say more. A DM calling it gets the
   identical narrow answer, which is how _"what will my players see"_ is one request.
-  `dm-actor.test.ts` counts it as the seventy-first ungated method (of seventy-five today).
 - **The campaign's _name_ is not on it.** `GET /me/campaigns` is the read that names campaigns —
   the rule `Character` already follows from the other side.
 

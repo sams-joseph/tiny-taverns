@@ -33,6 +33,10 @@ export type PrepItemId = typeof PrepItemId.Type;
 export const CreatureId = id("CreatureId");
 export type CreatureId = typeof CreatureId.Type;
 
+/** A spell in the shared SRD corpus, an account Library, or a campaign copy. */
+export const SpellId = id("SpellId");
+export type SpellId = typeof SpellId.Type;
+
 /**
  * One piece a character is **built from** — a class, a race, or a background.
  * Not the character: two characters made from one class are two

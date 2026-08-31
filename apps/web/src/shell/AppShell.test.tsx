@@ -60,6 +60,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns": "/campaigns",
   "/library": "/library",
   "/library/rules": "/library/rules",
+  "/library/spells": "/library/spells",
   "/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
@@ -68,6 +69,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
   "/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
   "/campaigns/$campaignId/rules": `/campaigns/${campaignId}/rules`,
+  "/campaigns/$campaignId/spells": `/campaigns/${campaignId}/spells`,
   "/campaigns/$campaignId/sessions/$sessionId/runs/$runId": `/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`,
   "/gallery": "/gallery",
   "/join/$token": "/join/aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -241,7 +243,7 @@ describe("the shell's top bar", () => {
     });
 
     it("is lit at both Library URLs, with Rules no longer a global peer", async () => {
-      for (const path of ["/library", "/library/rules"]) {
+      for (const path of ["/library", "/library/rules", "/library/spells"]) {
         await renderAt(path);
         expect(
           within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
@@ -301,6 +303,7 @@ describe("the shell's top bar", () => {
         "/campaigns",
         "/library",
         "/library/rules",
+        "/library/spells",
         "/play",
         "/play/characters",
         "/gallery",
@@ -318,9 +321,9 @@ describe("the shell's top bar", () => {
         within(campaignNav())
           .getAllByRole("link")
           .map((link) => link.textContent),
-        // Five, not six: *Bestiary* left this row when *Library* arrived on the
-        // one above, which is the delivery's "nothing appears on both rows".
-      ).toEqual(["Overview", "Encounters", "Party", "Notes", "Chronicle", "Rules"]);
+        // Bestiary left this row when Library arrived on the one above; Spells
+        // is a campaign corpus and the Library shelf is the originals.
+      ).toEqual(["Overview", "Encounters", "Party", "Notes", "Chronicle", "Spells", "Rules"]);
       // Every one of them names the campaign, because every endpoint behind
       // them does — which is the same fact that makes the row exist at all.
       for (const link of within(campaignNav()).getAllByRole("link")) {

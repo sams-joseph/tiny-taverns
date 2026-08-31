@@ -98,6 +98,7 @@ export type Section =
   | "notes"
   | "party"
   | "rules"
+  | "spells"
   | "chronicle"
   /* The player's campaign row. */
   | "playOverview"
@@ -127,6 +128,7 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
   if (matchRoute({ to: "/campaigns/$campaignId/rules" })) return "rules";
+  if (matchRoute({ to: "/campaigns/$campaignId/spells" })) return "spells";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
   // a fight, the bestiary the Library replaced in the row, and the splat a
   // half-typed section falls back through.

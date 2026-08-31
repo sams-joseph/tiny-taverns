@@ -11,7 +11,11 @@ import { cn, tabsTriggerVariants } from "@taverns/ui";
  */
 export function LibraryNav() {
   const matchRoute = useMatchRoute();
-  const active = matchRoute({ to: "/library/rules" }) ? "rules" : "creatures";
+  const active = matchRoute({ to: "/library/rules" })
+    ? "rules"
+    : matchRoute({ to: "/library/spells" })
+      ? "spells"
+      : "creatures";
 
   return (
     <nav aria-label="Library shelves" className="flex items-stretch self-stretch">
@@ -20,6 +24,9 @@ export function LibraryNav() {
       </ShelfLink>
       <ShelfLink to="/library/rules" active={active === "rules"}>
         Rules
+      </ShelfLink>
+      <ShelfLink to="/library/spells" active={active === "spells"}>
+        Spells
       </ShelfLink>
     </nav>
   );
@@ -30,7 +37,7 @@ function ShelfLink({
   active,
   children,
 }: {
-  readonly to: "/library" | "/library/rules";
+  readonly to: "/library" | "/library/rules" | "/library/spells";
   readonly active: boolean;
   readonly children: string;
 }) {

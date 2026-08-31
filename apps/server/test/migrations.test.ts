@@ -112,6 +112,7 @@ describe("migrations", () => {
       "rules_source_link",
       "session",
       "session_event",
+      "spell",
     ]);
     // Numbering is load-bearing and the failure is silent: `Migrator.run` keeps
     // only `currentId > latestMigrationId`, so a file numbered below one that
@@ -139,6 +140,7 @@ describe("migrations", () => {
       { migration_id: 18, name: "background_option" },
       { migration_id: 19, name: "rules_source_provenance" },
       { migration_id: 20, name: "2014_character_rules" },
+      { migration_id: 21, name: "spells" },
     ]);
   }, 60_000);
 
@@ -169,6 +171,7 @@ describe("migrations", () => {
       { migration_id: 18, name: "background_option" },
       { migration_id: 19, name: "rules_source_provenance" },
       { migration_id: 20, name: "2014_character_rules" },
+      { migration_id: 21, name: "spells" },
     ]);
   }, 60_000);
 });

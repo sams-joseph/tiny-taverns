@@ -1,6 +1,6 @@
 # Third-party notices
 
-Tiny Taverns bundles a small 2014 D&D 5e rules vocabulary for character creation. The rows are imported by `pnpm -F server ruleset:import` and each imported row records source-document, entity and revision metadata in the `rules_source_*` tables.
+Tiny Taverns bundles a 2014 D&D 5e rules vocabulary for character creation and the 319-spell 2014 SRD spell corpus. The rows are imported by `pnpm -F server ruleset:import` and `pnpm -F server spell:import`; each imported row records source-document, entity and revision metadata in the `rules_source_*` tables.
 
 ## 5e-bits / 5e-database
 

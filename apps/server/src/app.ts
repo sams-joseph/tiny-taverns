@@ -43,6 +43,7 @@ import { Recap } from "./repo/Recap.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
+import { Spells } from "./repo/Spells.js";
 
 /**
  * Which identity provider is behind the seam — the one place in the server
@@ -219,7 +220,8 @@ export const servicesOver = <E>(
   | Recap
   | Search
   | SessionEvents
-  | Sessions,
+  | Sessions
+  | Spells,
   E | Config.ConfigError
 > =>
   Layer.mergeAll(
@@ -266,6 +268,9 @@ export const servicesOver = <E>(
     // a class changes what the *next* character is made from, which is not
     // something a screen watching tonight's fight is waiting for.
     Options.layer,
+    // Spells follow the same Library/campaign-copy ownership as creatures, but
+    // write no live state and ring no doorbell.
+    Spells.layer,
     // What is live at one table, to a player — the character sheet's banner.
     // A view over three tables and a writer of none, so it needs no
     // `LiveEvents` for the reason `Recap` does not: reading a night's state
@@ -370,7 +375,8 @@ export const applicationOver = <E>(
     | Recap
     | Search
     | SessionEvents
-    | Sessions,
+    | Sessions
+    | Spells,
     E
   >,
   options?: { readonly quiet?: boolean },

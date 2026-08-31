@@ -68,6 +68,7 @@ import {
   EncounterId,
   EncounterRunId,
   InviteId,
+  SpellId,
   NoteId,
   PrepItemId,
   SessionId,
@@ -89,6 +90,15 @@ import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
 import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
+import {
+  Spell,
+  SpellCreate,
+  SpellFilter,
+  SpellLibraryCreate,
+  SpellLibraryUpdate,
+  SpellSort,
+  SpellUpdate,
+} from "./Spell.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
 /** Liveness. The one endpoint with no actor and no campaign. */
@@ -986,6 +996,50 @@ class CharacterOptionsGroup extends HttpApiGroup.make("options")
   .prefix("/campaigns/:campaignId/options")
   .middleware(Authorization) {}
 
+/**
+ * A campaign's spellbook: this campaign's copied spells plus the bundled 2014
+ * SRD spell corpus. Unlike character options it is paged and filterable, and
+ * unlike the Library shelf it answers what this campaign can reach.
+ */
+class SpellsGroup extends HttpApiGroup.make("spells")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: SpellFilter,
+      success: pageOf(Spell, SpellSort),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:spellId", {
+      params: { campaignId: CampaignId, spellId: SpellId },
+      success: Spell,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: SpellCreate,
+      success: Spell,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:spellId", {
+      params: { campaignId: CampaignId, spellId: SpellId },
+      payload: SpellUpdate,
+      success: Spell,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:spellId", {
+      params: { campaignId: CampaignId, spellId: SpellId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("derive", "/:spellId/derive", {
+      params: { campaignId: CampaignId, spellId: SpellId },
+      payload: SpellUpdate,
+      success: Spell,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/spells")
+  .middleware(Authorization) {}
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
@@ -1099,6 +1153,30 @@ class LibraryGroup extends HttpApiGroup.make("library")
      */
     HttpApiEndpoint.delete("removeOption", "/options/:optionId", {
       params: { optionId: CharacterOptionId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("spells", "/spells", {
+      query: SpellFilter,
+      success: pageOf(Spell, SpellSort),
+    }),
+    HttpApiEndpoint.post("createSpell", "/spells", {
+      payload: SpellLibraryCreate,
+      success: Spell,
+    }),
+    HttpApiEndpoint.get("findSpell", "/spells/:spellId", {
+      params: { spellId: SpellId },
+      success: Spell,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("updateSpell", "/spells/:spellId", {
+      params: { spellId: SpellId },
+      payload: SpellLibraryUpdate,
+      success: Spell,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeSpell", "/spells/:spellId", {
+      params: { spellId: SpellId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
@@ -1650,6 +1728,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(CreaturesGroup)
+  .add(SpellsGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)

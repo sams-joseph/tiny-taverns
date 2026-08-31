@@ -15,6 +15,7 @@ import { Note, NoteCreate } from "./Note.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
 import { Session, SessionCreate } from "./Session.js";
 import { SessionEvent } from "./SessionEvent.js";
+import { Spell, SpellCreate } from "./Spell.js";
 
 /**
  * The runtime shape this file introspects.
@@ -149,6 +150,7 @@ describe("the API declaration", () => {
       "runs",
       "search",
       "sessions",
+      "spells",
       // What is live at one table, to a player: the read behind the character
       // sheet's banner. Its own group for the reason `recap` is one — it is
       // neither a session nor a run, and its answer is narrower than either.
@@ -167,6 +169,7 @@ describe("every content schema", () => {
     Encounter,
     PrepItem,
     Creature,
+    Spell,
     EncounterCreature,
     EncounterRun,
     Combatant,
@@ -198,6 +201,7 @@ describe("every content schema", () => {
       EncounterCreate,
       PrepItemCreate,
       CreatureCreate,
+      SpellCreate,
       EncounterCreatureCreate,
       EncounterRunStart,
       CombatantCreate,
@@ -214,6 +218,14 @@ describe("every content schema", () => {
       EncounterCreate: { name: "x" },
       PrepItemCreate: { label: "x" },
       CreatureCreate: { name: "x", type: "Humanoid", cr: "1/4", ac: 15, hp: 11 },
+      SpellCreate: {
+        name: "x",
+        level: 0,
+        school: { index: "evocation", name: "Evocation" },
+        castingTime: "1 action",
+        range: "Self",
+        duration: "Instantaneous",
+      },
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       CombatantCreate: { displayName: "x" },

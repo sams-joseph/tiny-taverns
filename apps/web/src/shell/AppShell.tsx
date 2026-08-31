@@ -235,12 +235,19 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       section: "chronicle",
     },
     {
+      // The spellbook is this campaign's copied spell corpus plus the bundled
+      // SRD rows, while `/library/spells` is the account's originals. The two
+      // routes mirror Rules' two shelves rather than replacing one another.
+      label: "Spells",
+      link: { to: "/campaigns/$campaignId/spells", params: { campaignId } },
+      section: "spells",
+    },
+    {
       // The classes, races and backgrounds this table builds characters from.
       // A campaign item rather than a global one, and unlike *Bestiary* that is
       // where it belongs rather than where it is waiting: the list is *this
-      // campaign's* vocabulary, and the account's own originals behind it are
-      // reached through this screen's copy control until a Library screen for
-      // them exists.
+      // campaign's* vocabulary, distinct from `/library/rules`, which holds
+      // the account's originals.
       label: "Rules",
       link: { to: "/campaigns/$campaignId/rules", params: { campaignId } },
       section: "rules",

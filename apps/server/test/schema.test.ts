@@ -94,6 +94,7 @@ describe("every content-bearing table", () => {
       "prep_item",
       "session",
       "session_event",
+      "spell",
     ]);
   });
 

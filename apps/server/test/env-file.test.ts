@@ -25,12 +25,17 @@ const packageJson: { readonly scripts: Record<string, string> } = JSON.parse(
 ) as { readonly scripts: Record<string, string> };
 
 describe("the env file the server reads", () => {
-  it.each(["dev", "start", "migrate", "token:issue", "bestiary:import"])(
-    "`%s` loads apps/server/.env.local through Node, tolerating its absence",
-    (script) => {
-      expect(packageJson.scripts[script]).toContain("--env-file-if-exists=.env.local");
-    },
-  );
+  it.each([
+    "dev",
+    "start",
+    "migrate",
+    "token:issue",
+    "bestiary:import",
+    "ruleset:import",
+    "spell:import",
+  ])("`%s` loads apps/server/.env.local through Node, tolerating its absence", (script) => {
+    expect(packageJson.scripts[script]).toContain("--env-file-if-exists=.env.local");
+  });
 
   it("never uses the plain --env-file form, which fails when the file is absent", () => {
     // `CLERK_JWT_KEY` and every other variable here is optional by design;
