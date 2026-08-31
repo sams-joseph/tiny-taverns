@@ -15,6 +15,7 @@ export * from "./Errors.js";
 export * from "./Hob.js";
 export * from "./Ids.js";
 export * from "./Invite.js";
+export * from "./MagicItem.js";
 export * from "./Membership.js";
 export * from "./Note.js";
 export * from "./Page.js";

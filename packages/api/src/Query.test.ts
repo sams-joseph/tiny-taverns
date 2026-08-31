@@ -98,6 +98,10 @@ describe("the query parameters this contract declares", () => {
       "equipment.list.toolCategories",
       "equipment.list.vehicleCategories",
       "equipment.list.properties",
+      "magicItems.list.categories",
+      "magicItems.list.rarities",
+      "magicItems.list.attunement",
+      "magicItems.list.variantStates",
       "library.list.environments",
       "library.spells.levels",
       "library.spells.schools",
@@ -110,11 +114,22 @@ describe("the query parameters this contract declares", () => {
       "library.equipment.toolCategories",
       "library.equipment.vehicleCategories",
       "library.equipment.properties",
+      "library.magicItems.categories",
+      "library.magicItems.rarities",
+      "library.magicItems.attunement",
+      "library.magicItems.variantStates",
     ]);
     for (const field of arrays) {
       const field_ = Schema.make(field.type as never) as Schema.Codec<unknown, unknown>;
-      const sample = field.name === "levels" ? "3" : "Cave";
-      const expected = field.name === "levels" ? ["3"] : ["Cave"];
+      const sample =
+        field.name === "levels"
+          ? "3"
+          : field.name === "attunement"
+            ? "required"
+            : field.name === "variantStates"
+              ? "variant"
+              : "Cave";
+      const expected = [sample];
       const one = Schema.decodeUnknownSync(field_)(sample);
       expect(one, `${field.endpoint}.${field.name}`).toEqual(expected);
     }

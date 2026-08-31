@@ -91,6 +91,7 @@ describe("every content-bearing table", () => {
       "encounter_creature",
       "encounter_run",
       "equipment",
+      "magic_item",
       "note",
       "prep_item",
       "session",

@@ -104,6 +104,7 @@ describe("migrations", () => {
       "encounter_creature",
       "encounter_run",
       "equipment",
+      "magic_item",
       "note",
       "prep_item",
       "rules_import_run",
@@ -143,6 +144,7 @@ describe("migrations", () => {
       { migration_id: 20, name: "2014_character_rules" },
       { migration_id: 21, name: "spells" },
       { migration_id: 22, name: "equipment" },
+      { migration_id: 23, name: "magic_items" },
     ]);
   }, 60_000);
 
@@ -175,6 +177,7 @@ describe("migrations", () => {
       { migration_id: 20, name: "2014_character_rules" },
       { migration_id: 21, name: "spells" },
       { migration_id: 22, name: "equipment" },
+      { migration_id: 23, name: "magic_items" },
     ]);
   }, 60_000);
 });

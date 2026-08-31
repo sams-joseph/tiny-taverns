@@ -5,8 +5,8 @@ import { cn, tabsTriggerVariants } from "@taverns/ui";
  * The shelves inside the global Library destination.
  *
  * The global row has one *Library* item; the split between monsters,
- * character-building vocabulary, spells and mundane equipment lives one level
- * down, as route tabs. None of these routes names a campaign, because each is
+ * character-building vocabulary, spells, mundane equipment and magic items live
+ * one level down, as route tabs. None of these routes names a campaign, because each is
  * account-owned originals rather than campaign copies.
  */
 export function LibraryNav() {
@@ -17,7 +17,9 @@ export function LibraryNav() {
       ? "spells"
       : matchRoute({ to: "/library/equipment" })
         ? "equipment"
-        : "creatures";
+        : matchRoute({ to: "/library/magic-items" })
+          ? "magic-items"
+          : "creatures";
 
   return (
     <nav aria-label="Library shelves" className="flex items-stretch self-stretch">
@@ -33,6 +35,9 @@ export function LibraryNav() {
       <ShelfLink to="/library/equipment" active={active === "equipment"}>
         Equipment
       </ShelfLink>
+      <ShelfLink to="/library/magic-items" active={active === "magic-items"}>
+        Magic items
+      </ShelfLink>
     </nav>
   );
 }
@@ -42,7 +47,12 @@ function ShelfLink({
   active,
   children,
 }: {
-  readonly to: "/library" | "/library/rules" | "/library/spells" | "/library/equipment";
+  readonly to:
+    | "/library"
+    | "/library/rules"
+    | "/library/spells"
+    | "/library/equipment"
+    | "/library/magic-items";
   readonly active: boolean;
   readonly children: string;
 }) {

@@ -27,6 +27,7 @@ import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
+import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -368,6 +369,27 @@ const EquipmentLive = HttpApiBuilder.group(
   }),
 );
 
+const MagicItemsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "magicItems",
+  Effect.fnUntraced(function* (handlers) {
+    const magicItems = yield* MagicItems;
+    return handlers
+      .handle("list", ({ params, query }) => magicItems.list(params.campaignId, query))
+      .handle("findById", ({ params }) =>
+        magicItems.findById(params.campaignId, params.magicItemId),
+      )
+      .handle("create", ({ params, payload }) => magicItems.create(params.campaignId, payload))
+      .handle("update", ({ params, payload }) =>
+        magicItems.update(params.campaignId, params.magicItemId, payload),
+      )
+      .handle("remove", ({ params }) => magicItems.remove(params.campaignId, params.magicItemId))
+      .handle("derive", ({ params, payload }) =>
+        magicItems.derive(params.campaignId, params.magicItemId, payload),
+      );
+  }),
+);
+
 const CharacterOptionsLive = HttpApiBuilder.group(
   TavernsApi,
   "options",
@@ -411,6 +433,7 @@ const LibraryLive = HttpApiBuilder.group(
     const options = yield* Options;
     const spells = yield* Spells;
     const equipment = yield* EquipmentRepo;
+    const magicItems = yield* MagicItems;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -438,7 +461,14 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("updateEquipment", ({ params, payload }) =>
         equipment.libraryUpdate(params.equipmentId, payload),
       )
-      .handle("removeEquipment", ({ params }) => equipment.libraryRemove(params.equipmentId));
+      .handle("removeEquipment", ({ params }) => equipment.libraryRemove(params.equipmentId))
+      .handle("magicItems", ({ query }) => magicItems.library(query))
+      .handle("createMagicItem", ({ payload }) => magicItems.libraryCreate(payload))
+      .handle("findMagicItem", ({ params }) => magicItems.libraryFindById(params.magicItemId))
+      .handle("updateMagicItem", ({ params, payload }) =>
+        magicItems.libraryUpdate(params.magicItemId, payload),
+      )
+      .handle("removeMagicItem", ({ params }) => magicItems.libraryRemove(params.magicItemId));
   }),
 );
 
@@ -859,6 +889,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CreaturesLive,
     SpellsLive,
     EquipmentLive,
+    MagicItemsLive,
     CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,

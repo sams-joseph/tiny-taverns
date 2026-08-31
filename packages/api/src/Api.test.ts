@@ -11,6 +11,7 @@ import { Encounter, EncounterCreate } from "./Encounter.js";
 import { EncounterCreature, EncounterCreatureCreate } from "./EncounterCreature.js";
 import { Equipment, EquipmentCreate } from "./Equipment.js";
 import { EncounterRun, EncounterRunStart } from "./EncounterRun.js";
+import { MagicItem, MagicItemCreate } from "./MagicItem.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
@@ -139,6 +140,7 @@ describe("the API declaration", () => {
       // a thing only the middleware above it can make true.
       "library",
       "live",
+      "magicItems",
       "me",
       "members",
       "notes",
@@ -173,6 +175,7 @@ describe("every content schema", () => {
     Creature,
     Spell,
     Equipment,
+    MagicItem,
     EncounterCreature,
     EncounterRun,
     Combatant,
@@ -206,6 +209,7 @@ describe("every content schema", () => {
       CreatureCreate,
       SpellCreate,
       EquipmentCreate,
+      MagicItemCreate,
       EncounterCreatureCreate,
       EncounterRunStart,
       CombatantCreate,
@@ -234,6 +238,11 @@ describe("every content schema", () => {
         name: "x",
         equipmentCategory: { index: "adventuring-gear", name: "Adventuring Gear" },
         cost: { quantity: 1, unit: "gp" },
+      },
+      MagicItemCreate: {
+        name: "x",
+        equipmentCategory: { index: "wondrous-items", name: "Wondrous Items" },
+        rarity: { index: "common", name: "Common" },
       },
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },

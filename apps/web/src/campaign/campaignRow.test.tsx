@@ -83,7 +83,7 @@ const actLabel = (): string | undefined =>
 describe("the campaign row, across every destination it offers", () => {
   it("carries the night and the campaign's own press on all of them", async () => {
     const where = await destinations();
-    // Overview, Encounters, Party, Notes, Chronicle, Spells, Equipment, Rules.
+    // Overview, Encounters, Party, Notes, Chronicle, Spells, Equipment, Magic items, Rules.
     // Named so that a row that silently lost an item is a failure rather than a
     // smaller loop.
     expect(where.map((entry) => entry.label)).toEqual([
@@ -94,6 +94,7 @@ describe("the campaign row, across every destination it offers", () => {
       "Chronicle",
       "Spells",
       "Equipment",
+      "Magic items",
       "Rules",
     ]);
 
@@ -121,6 +122,7 @@ describe("the campaign row, across every destination it offers", () => {
       { label: "Chronicle", badge: "Session 12", act: "Start an encounter" },
       { label: "Spells", badge: "Session 12", act: "Start an encounter" },
       { label: "Equipment", badge: "Session 12", act: "Start an encounter" },
+      { label: "Magic items", badge: "Session 12", act: "Start an encounter" },
       { label: "Rules", badge: "Session 12", act: "Start an encounter" },
     ]);
   }, 30_000);
@@ -159,6 +161,7 @@ describe("the campaign row, across every destination it offers", () => {
       { label: "Chronicle", badges: 0, act: "Start session" },
       { label: "Spells", badges: 0, act: "Start session" },
       { label: "Equipment", badges: 0, act: "Start session" },
+      { label: "Magic items", badges: 0, act: "Start session" },
       { label: "Rules", badges: 0, act: "Start session" },
     ]);
   }, 30_000);

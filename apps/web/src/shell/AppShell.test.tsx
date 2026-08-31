@@ -62,6 +62,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/library/rules": "/library/rules",
   "/library/spells": "/library/spells",
   "/library/equipment": "/library/equipment",
+  "/library/magic-items": "/library/magic-items",
   "/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
@@ -72,6 +73,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns/$campaignId/rules": `/campaigns/${campaignId}/rules`,
   "/campaigns/$campaignId/spells": `/campaigns/${campaignId}/spells`,
   "/campaigns/$campaignId/equipment": `/campaigns/${campaignId}/equipment`,
+  "/campaigns/$campaignId/magic-items": `/campaigns/${campaignId}/magic-items`,
   "/campaigns/$campaignId/sessions/$sessionId/runs/$runId": `/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`,
   "/gallery": "/gallery",
   "/join/$token": "/join/aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -245,7 +247,13 @@ describe("the shell's top bar", () => {
     });
 
     it("is lit at both Library URLs, with Rules no longer a global peer", async () => {
-      for (const path of ["/library", "/library/rules", "/library/spells"]) {
+      for (const path of [
+        "/library",
+        "/library/rules",
+        "/library/spells",
+        "/library/equipment",
+        "/library/magic-items",
+      ]) {
         await renderAt(path);
         expect(
           within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
@@ -306,6 +314,8 @@ describe("the shell's top bar", () => {
         "/library",
         "/library/rules",
         "/library/spells",
+        "/library/equipment",
+        "/library/magic-items",
         "/play",
         "/play/characters",
         "/gallery",
@@ -323,8 +333,9 @@ describe("the shell's top bar", () => {
         within(campaignNav())
           .getAllByRole("link")
           .map((link) => link.textContent),
-        // Bestiary left this row when Library arrived on the one above; Spells
-        // is a campaign corpus and the Library shelf is the originals.
+        // Bestiary left this row when Library arrived on the one above; the
+        // three gear shelves are campaign corpora and the Library shelves are
+        // the originals.
       ).toEqual([
         "Overview",
         "Encounters",
@@ -333,6 +344,7 @@ describe("the shell's top bar", () => {
         "Chronicle",
         "Spells",
         "Equipment",
+        "Magic items",
         "Rules",
       ]);
       // Every one of them names the campaign, because every endpoint behind

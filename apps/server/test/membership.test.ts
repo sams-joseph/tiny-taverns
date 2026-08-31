@@ -24,6 +24,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
+import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
@@ -160,25 +161,25 @@ describe("the reach seam, enforced rather than asserted", () => {
     // conversation is reachable exactly while the table it is at is.
     //
     // `repo/Options.ts` / `ruleset/import.ts`, `repo/Spells.ts` /
-    // `spells/import.ts`, and `repo/Equipment.ts` / `equipment/import.ts` are
-    // the next pairs, and they are `repo/Creatures.ts`'s and
-    // `bestiary/import.ts`'s shape over the other tables that carry the Library
-    // model — `character_option.account_id`, `spell.account_id` and
-    // `equipment.account_id` are whose **Library** a rule option, a spell or a
-    // mundane item is in. Not one new predicate between them: the four Library
-    // predicates in `repo/visibility.ts` take a table name, so each repository
-    // composes them with a different string and each seeder names the column in
-    // the negative for the arbiter-index reason above. If a change here ever
-    // seems to need a predicate of its own, that is a finding rather than a
-    // step.
+    // `spells/import.ts`, `repo/Equipment.ts` / `equipment/import.ts`, and
+    // `repo/MagicItems.ts` / `magic-items/import.ts` are the next pairs, and
+    // they are `repo/Creatures.ts`'s and `bestiary/import.ts`'s shape over the
+    // other tables that carry the Library model. Not one new predicate between
+    // them: the four Library predicates in `repo/visibility.ts` take a table
+    // name, so each repository composes them with a different string and each
+    // seeder names the column in the negative for the arbiter-index reason
+    // above. If a change here ever seems to need a predicate of its own, that
+    // is a finding rather than a step.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "bestiary/import.ts",
       "equipment/import.ts",
+      "magic-items/import.ts",
       "repo/Campaigns.ts",
       "repo/Characters.ts",
       "repo/Creatures.ts",
       "repo/Equipment.ts",
       "repo/HobThreads.ts",
+      "repo/MagicItems.ts",
       "repo/Memberships.ts",
       "repo/Options.ts",
       "repo/Spells.ts",
@@ -241,6 +242,7 @@ const runtime = ManagedRuntime.make(
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
     EquipmentRepo.layer,
+    MagicItems.layer,
     HobThreads.layer,
     Notes.layer,
     Options.layer,
@@ -278,6 +280,7 @@ const makeFixture = Effect.gen(function* () {
   const encounters = yield* Encounters;
   const equipment = yield* EquipmentRepo;
   const hob = yield* HobThreads;
+  const magicItems = yield* MagicItems;
   const notes = yield* Notes;
   const options = yield* Options;
   const prep = yield* PrepItems;
@@ -317,6 +320,13 @@ const makeFixture = Effect.gen(function* () {
       equipmentCategory: { index: "adventuring-gear", name: "Adventuring Gear" },
       cost: { quantity: 1, unit: "gp" },
       weight: 10,
+    }),
+  );
+  yield* as(
+    magicItems.create(campaign.id, {
+      name: "Lantern Ring",
+      equipmentCategory: { index: "ring", name: "Ring" },
+      rarity: { index: "uncommon", name: "Uncommon" },
     }),
   );
 
@@ -399,6 +409,7 @@ const READS: Record<
     | EncounterRuns
     | Encounters
     | EquipmentRepo
+    | MagicItems
     | HobThreads
     | Notes
     | Options
@@ -425,6 +436,7 @@ const READS: Record<
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
   spell: (f) => items(Effect.flatMap(Spells, (r) => r.list(f.campaign.id, {}))),
   equipment: (f) => items(Effect.flatMap(EquipmentRepo, (r) => r.list(f.campaign.id, {}))),
+  magic_item: (f) => items(Effect.flatMap(MagicItems, (r) => r.list(f.campaign.id, {}))),
   encounter: (f) => items(Effect.flatMap(Encounters, (r) => r.list(f.campaign.id, {}))),
   encounter_creature: (f) =>
     Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),

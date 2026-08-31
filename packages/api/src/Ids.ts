@@ -41,6 +41,10 @@ export type SpellId = typeof SpellId.Type;
 export const EquipmentId = id("EquipmentId");
 export type EquipmentId = typeof EquipmentId.Type;
 
+/** A 2014 SRD magic item in the bundle, an account Library, or a campaign copy. */
+export const MagicItemId = id("MagicItemId");
+export type MagicItemId = typeof MagicItemId.Type;
+
 /**
  * One piece a character is **built from** — a class, a race, or a background.
  * Not the character: two characters made from one class are two

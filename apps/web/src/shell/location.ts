@@ -61,8 +61,8 @@ export function useMode(): Mode {
  * are screens you go *to* from a campaign rather than views of one.
  *
  * **There is one Library section.** `/library` is the monsters an account has
- * written; `/library/rules`, `/library/spells` and `/library/equipment` are the
- * character vocabulary, spells and mundane gear. They are shelves under the same
+ * written; `/library/rules`, `/library/spells`, `/library/equipment` and
+ * `/library/magic-items` are the character vocabulary, spells, gear and magic items. They are shelves under the same
  * global destination, so all light *Library* on the global row and let the
  * screen's own tabs say which shelf is open.
  *
@@ -101,6 +101,7 @@ export type Section =
   | "rules"
   | "spells"
   | "equipment"
+  | "magicItems"
   | "chronicle"
   /* The player's campaign row. */
   | "playOverview"
@@ -132,6 +133,7 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/rules" })) return "rules";
   if (matchRoute({ to: "/campaigns/$campaignId/spells" })) return "spells";
   if (matchRoute({ to: "/campaigns/$campaignId/equipment" })) return "equipment";
+  if (matchRoute({ to: "/campaigns/$campaignId/magic-items" })) return "magicItems";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
   // a fight, the bestiary the Library replaced in the row, and the splat a
   // half-typed section falls back through.

@@ -15,7 +15,8 @@
     "bestiary:import": "tsx --env-file-if-exists=.env.local src/bin/import-bestiary.ts",
     "ruleset:import": "tsx --env-file-if-exists=.env.local src/bin/import-ruleset.ts",
     "spell:import": "tsx --env-file-if-exists=.env.local src/bin/import-spells.ts",
-    "equipment:import": "tsx --env-file-if-exists=.env.local src/bin/import-equipment.ts"
+    "equipment:import": "tsx --env-file-if-exists=.env.local src/bin/import-equipment.ts",
+    "magic-item:import": "tsx --env-file-if-exists=.env.local src/bin/import-magic-items.ts"
   },
   "dependencies": {
     "@clerk/backend": "3.15.1",

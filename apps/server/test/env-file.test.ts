@@ -34,6 +34,7 @@ describe("the env file the server reads", () => {
     "ruleset:import",
     "spell:import",
     "equipment:import",
+    "magic-item:import",
   ])("`%s` loads apps/server/.env.local through Node, tolerating its absence", (script) => {
     expect(packageJson.scripts[script]).toContain("--env-file-if-exists=.env.local");
   });

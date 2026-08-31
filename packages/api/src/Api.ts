@@ -43,6 +43,15 @@ import {
   EquipmentUpdate,
 } from "./Equipment.js";
 import {
+  MagicItem,
+  MagicItemCreate,
+  MagicItemFilter,
+  MagicItemLibraryCreate,
+  MagicItemLibraryUpdate,
+  MagicItemSort,
+  MagicItemUpdate,
+} from "./MagicItem.js";
+import {
   HobAccepted,
   HobAsk,
   HobEvent,
@@ -78,6 +87,7 @@ import {
   EncounterRunId,
   EquipmentId,
   InviteId,
+  MagicItemId,
   SpellId,
   NoteId,
   PrepItemId,
@@ -1091,6 +1101,47 @@ class EquipmentGroup extends HttpApiGroup.make("equipment")
   )
   .prefix("/campaigns/:campaignId/equipment")
   .middleware(Authorization) {}
+
+/** A campaign's magic item copies plus the bundled 2014 SRD magic item corpus. */
+class MagicItemsGroup extends HttpApiGroup.make("magicItems")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: MagicItemFilter,
+      success: pageOf(MagicItem, MagicItemSort),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:magicItemId", {
+      params: { campaignId: CampaignId, magicItemId: MagicItemId },
+      success: MagicItem,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: MagicItemCreate,
+      success: MagicItem,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:magicItemId", {
+      params: { campaignId: CampaignId, magicItemId: MagicItemId },
+      payload: MagicItemUpdate,
+      success: MagicItem,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:magicItemId", {
+      params: { campaignId: CampaignId, magicItemId: MagicItemId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("derive", "/:magicItemId/derive", {
+      params: { campaignId: CampaignId, magicItemId: MagicItemId },
+      payload: MagicItemUpdate,
+      success: MagicItem,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/magic-items")
+  .middleware(Authorization) {}
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
@@ -1252,6 +1303,30 @@ class LibraryGroup extends HttpApiGroup.make("library")
     }),
     HttpApiEndpoint.delete("removeEquipment", "/equipment/:equipmentId", {
       params: { equipmentId: EquipmentId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("magicItems", "/magic-items", {
+      query: MagicItemFilter,
+      success: pageOf(MagicItem, MagicItemSort),
+    }),
+    HttpApiEndpoint.post("createMagicItem", "/magic-items", {
+      payload: MagicItemLibraryCreate,
+      success: MagicItem,
+    }),
+    HttpApiEndpoint.get("findMagicItem", "/magic-items/:magicItemId", {
+      params: { magicItemId: MagicItemId },
+      success: MagicItem,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("updateMagicItem", "/magic-items/:magicItemId", {
+      params: { magicItemId: MagicItemId },
+      payload: MagicItemLibraryUpdate,
+      success: MagicItem,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeMagicItem", "/magic-items/:magicItemId", {
+      params: { magicItemId: MagicItemId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
@@ -1805,6 +1880,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(CreaturesGroup)
   .add(SpellsGroup)
   .add(EquipmentGroup)
+  .add(MagicItemsGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)

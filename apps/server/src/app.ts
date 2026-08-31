@@ -34,6 +34,7 @@ import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
+import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
 import { Options } from "./repo/Options.js";
@@ -210,6 +211,7 @@ export const servicesOver = <E>(
   | HobThreads
   | Invites
   | LiveEvents
+  | MagicItems
   | Memberships
   | Notes
   // A campaign's rules vocabulary, and the Library originals behind it. An
@@ -276,6 +278,9 @@ export const servicesOver = <E>(
     // Mundane equipment follows the same Library/campaign-copy ownership as
     // creatures and spells, and writes no live state.
     EquipmentRepo.layer,
+    // Magic items are their own copyable corpus because variants, rarity and
+    // attunement are a different domain from mundane equipment.
+    MagicItems.layer,
     // What is live at one table, to a player — the character sheet's banner.
     // A view over three tables and a writer of none, so it needs no
     // `LiveEvents` for the reason `Recap` does not: reading a night's state
@@ -372,6 +377,7 @@ export const applicationOver = <E>(
     | HobThreads
     | Invites
     | LiveEvents
+    | MagicItems
     | Memberships
     | Notes
     | Options

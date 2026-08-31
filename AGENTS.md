@@ -1107,7 +1107,7 @@ inserting a second, and two future source entities may share a display name. The
 records is Taverns' project-authored starter bundle, not 5e-bits or SRD content. It never writes
 `visibility`, so a shared system creature is not un-shared by an upgrade.
 
-### The bundled rules source: bestiary is Taverns-authored, character rules are 2014 SRD
+### The bundled rules source: bestiary is Taverns-authored, the 2014 corpora are SRD
 
 Since `0019`, `origin = 'system'` is not the whole citation. It means _bundled and owned by
 nobody_; the `rules_source_*` tables say which source document/entity/revision a bundled row
@@ -1116,13 +1116,13 @@ reflects. There are now two active source documents and they must not be collaps
 - **Bestiary starter creatures** remain Taverns project-authored data, transcribed from the
   designers' fixture. `bestiary:import` records the `TAVERNS_STARTER_SOURCE` and never writes
   third-party attribution for those six rows.
-- **Character rules options** (`class`, `race`, `background`) are transformed from the pinned
-  2014 5e-bits `5e-database` snapshot (`5.10.0`, commit
-  `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). `ruleset:import` records the 5e-bits MIT
-  attribution and that the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used
-  under the Open Game License 1.0a. The web footer and README name that attribution.
+- **The 2014 rules corpora** — character options, spells, mundane equipment and magic items — are
+  transformed from the pinned 2014 5e-bits `5e-database` snapshot (`5.10.0`, commit
+  `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Their importers record the 5e-bits MIT attribution
+  and that the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open
+  Game License 1.0a. The web footer and README name that attribution.
 
-That split is deliberate: do not relabel the bestiary as SRD, and do not treat the 2014 rules
+That split is deliberate: do not relabel the bestiary as SRD, and do not treat the 2014 corpus
 rows as project-authored. A DM's own homebrew prose is still theirs, in their campaign or Library;
 the attribution rule is about what this product bundles and imports as `system`.
 
@@ -1560,6 +1560,28 @@ campaign. Keep it mundane only: no magic items, shops, encumbrance or character 
 
 The web has two shelves over the same table: `#/library/equipment` for originals plus the bundle,
 and `#/campaigns/:c/equipment` for a campaign's copies plus the bundle. The Library shelf is where
+account originals are written; the campaign shelf is what that campaign can use and copy from.
+
+## Magic items: the 2014 SRD hoard is a copyable Library table
+
+`magic_item` is a dedicated table, not equipment. Magic items need rarity, attunement and source
+variant/base links, and their display document lives in `body`. They use the same three-owner
+Library model as creatures, options, spells and equipment: bundled rows are unowned `system`,
+Library originals have `account_id`, campaign copies have `campaign_id`, and `magicItems.derive`
+makes a snapshot. The generic visibility predicates are enough; do not add a magic-item-specific
+reach rule.
+
+The bundle is imported by `pnpm -F server magic-item:import` from the checked-in
+`apps/server/src/magic-items/systemMagicItems.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0
+commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`: exactly **362** rows from
+`5e-SRD-Magic-Items.json`. Imported rows record `rules_source_*` provenance plus equipment-category,
+magic-item-variant and magic-item-base source links. Variant/base relationships come from the source
+refs, not name parsing, and `magic_item_base_same_scope_fkey` prevents a variant from pointing at a
+base owned by another account/campaign or the system bundle. Authored originals and campaign copies
+are saved as standalone items: no variant metadata is inherited.
+
+The web has two shelves over the same table: `#/library/magic-items` for originals plus the bundle,
+and `#/campaigns/:c/magic-items` for a campaign's copies plus the bundle. The Library shelf is where
 account originals are written; the campaign shelf is what that campaign can use and copy from.
 
 ## The party: what earns a column on `character`, and what lives in the document

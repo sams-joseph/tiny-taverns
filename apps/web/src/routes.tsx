@@ -21,6 +21,8 @@ import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { EquipmentScreen } from "./equipment/EquipmentScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
+import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
+import { MagicItemsScreen } from "./magic-items/MagicItemsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
@@ -306,6 +308,13 @@ const libraryEquipmentRoute = createRoute({
   component: EquipmentLibraryScreen,
 });
 
+/** The magic item shelf under the global Library destination. */
+const libraryMagicItemsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library/magic-items",
+  component: MagicItemLibraryScreen,
+});
+
 /**
  * The Chronicle names a campaign for the same reason the bestiary does: every
  * source it reads — `sessions.list`, `recap.read`, `search.search` — hangs off
@@ -370,6 +379,14 @@ const equipmentRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "equipment",
   component: EquipmentScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/** The campaign's copied magic items, plus the SRD bundle every campaign reads through it. */
+const magicItemsRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "magic-items",
+  component: MagicItemsScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -619,6 +636,7 @@ export const routeTree = rootRoute.addChildren([
   libraryRulesRoute,
   librarySpellsRoute,
   libraryEquipmentRoute,
+  libraryMagicItemsRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
@@ -627,6 +645,7 @@ export const routeTree = rootRoute.addChildren([
     rulesRoute,
     spellsRoute,
     equipmentRoute,
+    magicItemsRoute,
     chronicleRoute,
     partyRoute,
     runRoute,
@@ -688,6 +707,7 @@ export const routes = {
   libraryRules: libraryRulesRoute,
   librarySpells: librarySpellsRoute,
   libraryEquipment: libraryEquipmentRoute,
+  libraryMagicItems: libraryMagicItemsRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,
@@ -695,6 +715,7 @@ export const routes = {
   rules: rulesRoute,
   spells: spellsRoute,
   equipment: equipmentRoute,
+  magicItems: magicItemsRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
   run: runRoute,

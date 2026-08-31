@@ -128,6 +128,9 @@ export const reads = {
   /** This campaign's mundane equipment: copied rows, plus the 2014 SRD bundle. */
   equipment: (campaignId: CampaignId): ReadKey => key`equipment:${campaignId}`,
 
+  /** This campaign's magic items: copied rows, plus the 2014 SRD bundle. */
+  magicItems: (campaignId: CampaignId): ReadKey => key`magic-items:${campaignId}`,
+
   /**
    * This campaign's rules vocabulary: the classes, races and backgrounds copied
    * into it, plus the bundle.
@@ -182,6 +185,9 @@ export const reads = {
 
   /** The account's equipment Library: original mundane gear, plus the 2014 SRD bundle. */
   libraryEquipment: "library:equipment" as ReadKey,
+
+  /** The account's magic item Library: originals, plus the 2014 SRD bundle. */
+  libraryMagicItems: "library:magic-items" as ReadKey,
 
   /**
    * The account's Library of **character options** — the classes, races and

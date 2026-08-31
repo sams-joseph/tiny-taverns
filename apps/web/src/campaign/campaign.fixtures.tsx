@@ -48,6 +48,7 @@ export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
 export const spellId = "2b1f2a1e-0000-4000-8000-000000000f01";
 export const equipmentId = "2b1f2a1e-0000-4000-8000-000000001001";
+export const magicItemId = "2b1f2a1e-0000-4000-8000-000000001101";
 
 /**
  * A list endpoint's body: one page, and no more.
@@ -308,6 +309,41 @@ export const hempRope = {
       url: "/api/2014/equipment-categories/standard-gear",
     },
     desc: ["A rope has 2 hit points and can be burst with a DC 17 Strength check."],
+  },
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  ...stamps,
+};
+
+export const lanternRing = {
+  id: magicItemId,
+  campaignId: null,
+  accountId: null,
+  derivedFrom: null,
+  name: "Ring of Water Walking",
+  categoryIndex: "ring",
+  categoryName: "Ring",
+  rarityIndex: "uncommon",
+  rarityName: "Uncommon",
+  raritySort: 20,
+  requiresAttunement: false,
+  attunementRequirement: null,
+  isVariant: false,
+  variantCount: 0,
+  baseItemId: null,
+  baseItemName: null,
+  variantIds: [],
+  variantNames: [],
+  image: null,
+  magicItem: {
+    item: { index: "ring-of-water-walking", name: "Ring of Water Walking" },
+    equipmentCategory: { index: "ring", name: "Ring", url: "/api/2014/equipment-categories/ring" },
+    rarity: { index: "uncommon", name: "Uncommon" },
+    desc: ["While wearing this ring, you can stand on and move across any liquid surface."],
+    requiresAttunement: false,
+    variant: false,
+    variants: [],
   },
   visibility: "shared",
   origin: "system",
@@ -769,8 +805,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
     [`GET /campaigns/${campaignId}/spells`, { status: 200, body: page([fireball]) }],
     [`GET /campaigns/${campaignId}/equipment`, { status: 200, body: page([hempRope]) }],
+    [`GET /campaigns/${campaignId}/magic-items`, { status: 200, body: page([lanternRing]) }],
     ["GET /library/spells", { status: 200, body: page([fireball]) }],
     ["GET /library/equipment", { status: 200, body: page([hempRope]) }],
+    ["GET /library/magic-items", { status: 200, body: page([lanternRing]) }],
     // The rules vocabulary this table builds characters from — the Rules
     // screen's list, and the create form's two pickers. A bundled class, a
     // bundled race, and one of each this table has copied in, so a test can
