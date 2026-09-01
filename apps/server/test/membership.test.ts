@@ -24,6 +24,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
+import { Feats } from "../src/repo/Feats.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
@@ -181,6 +182,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/ClassProgression.ts",
       "repo/Creatures.ts",
       "repo/Equipment.ts",
+      "repo/Feats.ts",
       "repo/HobThreads.ts",
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
@@ -251,6 +253,7 @@ const runtime = ManagedRuntime.make(
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
     EquipmentRepo.layer,
+    Feats.layer,
     MagicItems.layer,
     HobThreads.layer,
     Notes.layer,
@@ -289,6 +292,7 @@ const makeFixture = Effect.gen(function* () {
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
   const equipment = yield* EquipmentRepo;
+  const feats = yield* Feats;
   const hob = yield* HobThreads;
   const magicItems = yield* MagicItems;
   const notes = yield* Notes;
@@ -372,6 +376,13 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const ruleCopy = yield* as(ruleArticles.derive(campaign.id, houseRules.article.id, {}));
+  const homebrewFeat = yield* as(
+    feats.libraryCreate({
+      name: "Tavern Wrestler",
+      description: ["Hold your ground when the room turns rough."],
+    }),
+  );
+  yield* as(feats.derive(campaign.id, homebrewFeat.id, { visibility: "shared" }));
 
   const sql = yield* SqlClient.SqlClient;
   yield* sql`
@@ -469,6 +480,7 @@ const READS: Record<
     | EncounterRuns
     | Encounters
     | EquipmentRepo
+    | Feats
     | MagicItems
     | HobThreads
     | Notes
@@ -496,6 +508,7 @@ const READS: Record<
   // it.
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
   rule_article: (f) => items(Effect.flatMap(RuleArticles, (r) => r.list(f.campaign.id, {}))),
+  feat: (f) => items(Effect.flatMap(Feats, (r) => r.list(f.campaign.id, {}))),
   rule_section: (f) =>
     Effect.map(
       Effect.flatMap(RuleArticles, (r) => r.findById(f.campaign.id, f.ruleCopy.article.id)),
@@ -714,6 +727,9 @@ describe("a stranger reads nothing", () => {
               'equipment_category',
               'equipment_content',
               'equipment_property',
+              'feat_description',
+              'feat_prerequisite_ability_score',
+              'feat_prerequisite_group',
               'language',
               'magic_item_rarity',
               'magic_item_variant',

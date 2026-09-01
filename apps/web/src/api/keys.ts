@@ -1,4 +1,4 @@
-import type { CampaignId, CharacterOptionId, RuleArticleId, SessionId } from "@taverns/api";
+import type { CampaignId, CharacterOptionId, FeatId, RuleArticleId, SessionId } from "@taverns/api";
 
 /**
  * What a read is *about*, so a write can name it.
@@ -134,6 +134,12 @@ export const reads = {
   /** This campaign's reference compendium: copied rules plus the pinned 2014 rules. */
   ruleArticles: (campaignId: CampaignId): ReadKey => key`rule-articles:${campaignId}`,
 
+  /** This campaign's copied feats plus the pinned 2014 feat baseline. */
+  feats: (campaignId: CampaignId): ReadKey => key`feats:${campaignId}`,
+
+  /** One campaign feat and its prerequisite rows. */
+  feat: (campaignId: CampaignId, featId: FeatId): ReadKey => key`feats:${campaignId}:${featId}`,
+
   /** One campaign compendium article and its ordered sections. */
   ruleArticle: (campaignId: CampaignId, articleId: RuleArticleId): ReadKey =>
     key`rule-articles:${campaignId}:${articleId}`,
@@ -205,6 +211,12 @@ export const reads = {
 
   /** The account's Library of reference rules: originals, plus the pinned 2014 compendium. */
   libraryRuleArticles: "library:rule-articles" as ReadKey,
+
+  /** The account's Library of feats: originals, plus the pinned 2014 baseline. */
+  libraryFeats: "library:feats" as ReadKey,
+
+  /** One Library feat and its prerequisite rows. */
+  libraryFeat: (featId: FeatId): ReadKey => key`library:feats:${featId}`,
 
   /** One Library compendium article and its ordered sections. */
   libraryRuleArticle: (articleId: RuleArticleId): ReadKey =>

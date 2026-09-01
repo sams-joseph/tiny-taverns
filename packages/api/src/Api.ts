@@ -37,6 +37,15 @@ import {
 } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
 import {
+  Feat,
+  FeatDerive,
+  FeatFilter,
+  FeatLibraryCreate,
+  FeatLibraryUpdate,
+  FeatSort,
+  FeatUpdate,
+} from "./Feat.js";
+import {
   Equipment,
   EquipmentCreate,
   EquipmentFilter,
@@ -89,6 +98,7 @@ import {
   EncounterId,
   EncounterRunId,
   EquipmentId,
+  FeatId,
   InviteId,
   MagicItemId,
   RuleArticleId,
@@ -1206,6 +1216,40 @@ class RuleArticlesGroup extends HttpApiGroup.make("ruleArticles")
   .prefix("/campaigns/:campaignId/compendium")
   .middleware(Authorization) {}
 
+class FeatsGroup extends HttpApiGroup.make("feats")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: FeatFilter,
+      success: pageOf(Feat, FeatSort),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:featId", {
+      params: { campaignId: CampaignId, featId: FeatId },
+      success: Feat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:featId", {
+      params: { campaignId: CampaignId, featId: FeatId },
+      payload: FeatUpdate,
+      success: Feat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:featId", {
+      params: { campaignId: CampaignId, featId: FeatId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("derive", "/:featId/derive", {
+      params: { campaignId: CampaignId, featId: FeatId },
+      payload: FeatDerive,
+      success: Feat,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/feats")
+  .middleware(Authorization) {}
+
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
@@ -1354,6 +1398,30 @@ class LibraryGroup extends HttpApiGroup.make("library")
     }),
     HttpApiEndpoint.delete("removeRuleArticle", "/compendium/:ruleArticleId", {
       params: { ruleArticleId: RuleArticleId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("feats", "/feats", {
+      query: FeatFilter,
+      success: pageOf(Feat, FeatSort),
+    }),
+    HttpApiEndpoint.post("createFeat", "/feats", {
+      payload: FeatLibraryCreate,
+      success: Feat,
+    }),
+    HttpApiEndpoint.get("findFeat", "/feats/:featId", {
+      params: { featId: FeatId },
+      success: Feat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("updateFeat", "/feats/:featId", {
+      params: { featId: FeatId },
+      payload: FeatLibraryUpdate,
+      success: Feat,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeFeat", "/feats/:featId", {
+      params: { featId: FeatId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
@@ -1981,6 +2049,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(EquipmentGroup)
   .add(MagicItemsGroup)
   .add(RuleArticlesGroup)
+  .add(FeatsGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)

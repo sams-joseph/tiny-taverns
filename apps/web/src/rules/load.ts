@@ -2,11 +2,15 @@ import type {
   CampaignId,
   CharacterOption,
   CharacterOptionId,
+  Feat,
+  FeatId,
+  FeatSort,
   OptionVocabulary,
 } from "@taverns/api";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
+import { collectPages, WHOLE_LIST } from "../api/page";
 
 /**
  * The two option lists, and the one thing worth knowing before reading either:
@@ -57,6 +61,36 @@ export const libraryOptionsAtom = apiAtom(
   [reads.libraryOptions],
 );
 
+export const campaignFeatsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) =>
+      collectPages<Feat, FeatSort, unknown, never>((cursor) =>
+        client.feats.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+      ),
+    [reads.feats(campaignId)],
+  ),
+);
+
+export const libraryFeatsAtom = apiAtom(
+  (client) =>
+    collectPages<Feat, FeatSort, unknown, never>((cursor) =>
+      client.library.feats({ query: { limit: WHOLE_LIST, cursor } }),
+    ),
+  [reads.libraryFeats],
+);
+
+export const campaignFeatAtom = Atom.family(
+  ({ campaignId, featId }: { readonly campaignId: CampaignId; readonly featId: FeatId }) =>
+    apiAtom(
+      (client) => client.feats.findById({ params: { campaignId, featId } }),
+      [reads.feat(campaignId, featId)],
+    ),
+);
+
+export const libraryFeatAtom = Atom.family((featId: FeatId) =>
+  apiAtom((client) => client.library.findFeat({ params: { featId } }), [reads.libraryFeat(featId)]),
+);
+
 export const campaignOptionVocabularyAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) => client.options.vocabulary({ params: { campaignId } }),
@@ -92,6 +126,7 @@ export const libraryOptionProgressionAtom = Atom.family((optionId: CharacterOpti
 
 export interface LibraryRulesView {
   readonly options: ReadonlyArray<CharacterOption>;
+  readonly feats: ReadonlyArray<Feat>;
   readonly vocabulary: OptionVocabulary;
 }
 
@@ -101,11 +136,13 @@ export const libraryRulesAtom = Atom.readable(
       get,
       AsyncResult.all({
         options: get(libraryOptionsAtom),
+        feats: get(libraryFeatsAtom),
         vocabulary: get(libraryOptionVocabularyAtom),
       }),
     ),
   (refresh) => {
     refresh(libraryOptionsAtom);
+    refresh(libraryFeatsAtom);
     refresh(libraryOptionVocabularyAtom);
   },
 );
@@ -120,6 +157,10 @@ export interface RulesView {
   readonly vocabulary: OptionVocabulary;
   /** Concrete ids a Library original may attach before it is copied. */
   readonly libraryVocabulary: OptionVocabulary;
+  /** Feats this table offers: its copies, plus the bundle. */
+  readonly feats: ReadonlyArray<Feat>;
+  /** Feats this account has written, in no campaign — the copy control's source. */
+  readonly featOriginals: ReadonlyArray<Feat>;
 }
 
 /**
@@ -150,6 +191,8 @@ export const rulesAtom = Atom.family((campaignId: CampaignId) =>
           originals: get(libraryOptionsAtom),
           vocabulary: get(campaignOptionVocabularyAtom(campaignId)),
           libraryVocabulary: get(libraryOptionVocabularyAtom),
+          feats: get(campaignFeatsAtom(campaignId)),
+          featOriginals: get(libraryFeatsAtom),
         }),
       ),
     (refresh) => {
@@ -157,6 +200,8 @@ export const rulesAtom = Atom.family((campaignId: CampaignId) =>
       refresh(libraryOptionsAtom);
       refresh(campaignOptionVocabularyAtom(campaignId));
       refresh(libraryOptionVocabularyAtom);
+      refresh(campaignFeatsAtom(campaignId));
+      refresh(libraryFeatsAtom);
     },
   ),
 );
@@ -174,4 +219,9 @@ export const optionWritesAt = (campaignId: CampaignId) => [
   reads.optionVocabulary(campaignId),
   reads.libraryOptions,
   reads.libraryOptionVocabulary,
+];
+
+export const featWritesAt = (campaignId: CampaignId) => [
+  reads.feats(campaignId),
+  reads.libraryFeats,
 ];

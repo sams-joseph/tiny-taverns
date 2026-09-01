@@ -56,6 +56,11 @@ describe("what your library holds", () => {
     expect(screen.getByText("Salt-runner")).toBeInTheDocument();
     expect(screen.getByText(/Athletics/)).toBeInTheDocument();
     expect(screen.getAllByText("no fixed proficiencies").length).toBe(4);
+
+    const feats = screen.getByRole("region", { name: "Feats" });
+    expect(within(feats).getByText("Grappler")).toBeInTheDocument();
+    expect(within(feats).getByText("Tavern Brawler")).toBeInTheDocument();
+    expect(within(feats).getAllByText("STR 13").length).toBeGreaterThan(0);
   });
 
   it("counts what is in here and shows it as the Rules shelf of Library", async () => {
@@ -107,6 +112,8 @@ describe("what your library holds", () => {
     expect(screen.getByRole("button", { name: "Edit Marshfolk" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit Druid" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit Elf" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit Grappler" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit Tavern Brawler" })).toBeInTheDocument();
   });
 
   /**

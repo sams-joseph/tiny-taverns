@@ -1,5 +1,5 @@
-import type { CharacterOption, OptionKind } from "@taverns/api";
-import { Button, Icon } from "@taverns/ui";
+import type { CharacterOption, Feat, OptionKind } from "@taverns/api";
+import { Button, Icon, Input } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
@@ -7,6 +7,9 @@ import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { ClassProgressionDialog } from "./ClassProgressionDialog";
+import { isLibraryFeatOriginal } from "./feat";
+import { FeatForm } from "./FeatForm";
+import { FeatSection } from "./FeatSection";
 import { libraryRulesAtom } from "./load";
 import { isLibraryOriginal } from "./option";
 import { OptionForm } from "./OptionForm";
@@ -96,6 +99,8 @@ export function OptionLibraryScreen() {
     readonly option: CharacterOption | undefined;
   }>();
   const [progression, setProgression] = useState<CharacterOption>();
+  const [editingFeat, setEditingFeat] = useState<Feat | null>();
+  const [featQuery, setFeatQuery] = useState("");
 
   const [resource, reload] = useApiAtom(libraryRulesAtom);
 
@@ -106,7 +111,9 @@ export function OptionLibraryScreen() {
 
   const options = resource.state === "ready" ? resource.value.options : undefined;
   const vocabulary = resource.state === "ready" ? resource.value.vocabulary : undefined;
+  const feats = resource.state === "ready" ? resource.value.feats : undefined;
   const of = (kind: OptionKind) => (options ?? []).filter((option) => option.kind === kind);
+  const shownFeats = filterFeats(feats ?? [], featQuery);
 
   return (
     <AppShell
@@ -135,6 +142,10 @@ export function OptionLibraryScreen() {
             >
               <Icon name="plus" size={14} />
               Write a race
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setEditingFeat(null)}>
+              <Icon name="plus" size={14} />
+              Write a feat
             </Button>
             <Button size="sm" onClick={() => setEditing({ kind: "class", option: undefined })}>
               <Icon name="plus" size={14} />
@@ -193,6 +204,21 @@ export function OptionLibraryScreen() {
                 : undefined
             }
           />
+          <div className="flex flex-col gap-3">
+            <Input
+              aria-label="Search feats"
+              placeholder="Search feats"
+              value={featQuery}
+              onChange={(event) => setFeatQuery(event.currentTarget.value)}
+            />
+            <FeatSection
+              feats={shownFeats}
+              emptyBody={emptyFeatBody}
+              onEdit={(feat) =>
+                isLibraryFeatOriginal(feat) ? () => setEditingFeat(feat) : undefined
+              }
+            />
+          </div>
         </div>
       )}
 
@@ -212,6 +238,17 @@ export function OptionLibraryScreen() {
         />
       )}
 
+      {editingFeat !== undefined && vocabulary !== undefined && (
+        <FeatForm
+          feat={editingFeat ?? undefined}
+          source="library"
+          campaignId={undefined}
+          vocabulary={vocabulary}
+          onClose={() => setEditingFeat(undefined)}
+          onSaved={() => setEditingFeat(undefined)}
+        />
+      )}
+
       {progression !== undefined && (
         <ClassProgressionDialog option={progression} onClose={() => setProgression(undefined)} />
       )}
@@ -219,12 +256,31 @@ export function OptionLibraryScreen() {
   );
 }
 
+const filterFeats = (feats: ReadonlyArray<Feat>, query: string): ReadonlyArray<Feat> => {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return feats;
+  return feats.filter(
+    (feat) =>
+      feat.name.toLowerCase().includes(needle) ||
+      feat.description.some((line) => line.toLowerCase().includes(needle)) ||
+      feat.prerequisites.some((row) => row.ability.name.toLowerCase().includes(needle)),
+  );
+};
+
 /**
  * The empty state, which on this screen is genuinely reachable: every account
  * reads the bundle, so this is what a database that has never run
  * `ruleset:import` looks like — and it names the fix rather than implying the
  * reader has done something wrong.
  */
+const emptyFeatBody = (
+  <>
+    Write a feat and it lives here, in no campaign until you copy it into one. The bundled 2014
+    baseline arrives with{" "}
+    <code className="font-mono text-mono text-slate-300">pnpm -F server ruleset:import</code>.
+  </>
+);
+
 const emptyBody = (kind: OptionKind) => (
   <>
     Write {kind === "class" ? "a class" : kind === "race" ? "a race" : "a background"} and it lives

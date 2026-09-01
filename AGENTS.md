@@ -1606,6 +1606,12 @@ The web has two shelves over the same table: `#/library/equipment` for originals
 and `#/campaigns/:c/equipment` for a campaign's copies plus the bundle. The Library shelf is where
 account originals are written; the campaign shelf is what that campaign can use and copy from.
 
+## Feats: Grappler is the whole pinned 2014 SRD corpus
+
+`feat` is the final 2014 5e-bits rules corpus table and uses the same three-owner Library model as creatures/options/spells/equipment/magic items/rule articles: bundled rows are unowned `system`, Library originals have `account_id`, campaign copies have `campaign_id`, and `feats.derive` makes a snapshot. The one pinned 2014 SRD feat is **Grappler**. Its Strength 13 prerequisite is concrete: `feat_prerequisite_ability_score.ability_score_id` is an FK to `ability_score`, grouped by `feat_prerequisite_group` so future OR-groups are representable without changing the wire. Description lines and prerequisites are child rows and are copied, so re-importing the system row or editing a Library original never rewrites a campaign copy.
+
+`pnpm -F server ruleset:import` imports feats after `syncSystemVocabularies`, because the prerequisite points at the seeded ability score. There is no separate `feat:import` command. The web shows feats on the Rules Library and campaign Rules screens; authoring happens in the Library and a campaign gets a feat through copy-in.
+
 ## Magic items: the 2014 SRD hoard is a copyable Library table
 
 `magic_item` is a dedicated table, not equipment. Magic items need rarity, attunement and source

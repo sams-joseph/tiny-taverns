@@ -58,6 +58,10 @@ export const equipmentId = "2b1f2a1e-0000-4000-8000-000000001001";
 export const magicItemId = "2b1f2a1e-0000-4000-8000-000000001101";
 export const ruleArticleId = "2b1f2a1e-0000-4000-8000-000000001201";
 export const ruleSectionId = "2b1f2a1e-0000-4000-8000-000000001202";
+export const grapplerFeatId = "2b1f2a1e-0000-4000-8000-000000001301";
+export const grapplerOriginalFeatId = "2b1f2a1e-0000-4000-8000-000000001302";
+export const tavernBrawlerFeatId = "2b1f2a1e-0000-4000-8000-000000001303";
+export const tavernBrawlerOriginalFeatId = "2b1f2a1e-0000-4000-8000-000000001304";
 
 /**
  * A list endpoint's body: one page, and no more.
@@ -671,11 +675,11 @@ const ruleAbility = (id: string, index: string, name: string, fullName: string) 
   desc: [],
 });
 
+const strengthAbility = ruleAbility(abilityStrengthId, "str", "STR", "Strength");
+const constitutionAbility = ruleAbility(abilityConstitutionId, "con", "CON", "Constitution");
+
 export const optionVocabulary = {
-  abilities: [
-    ruleAbility(abilityConstitutionId, "con", "CON", "Constitution"),
-    ruleAbility(abilityStrengthId, "str", "STR", "Strength"),
-  ],
+  abilities: [constitutionAbility, strengthAbility],
   languages: [
     {
       id: commonLanguageId,
@@ -859,6 +863,62 @@ export const combatRuleArticle = {
   ...stamps,
 };
 
+const featPrereqGroupId = "2b1f2a1e-0000-4000-8000-000000001391";
+const grapplerPrerequisite = {
+  abilityScoreId: abilityStrengthId,
+  ability: strengthAbility,
+  minimumScore: 13,
+  groupId: featPrereqGroupId,
+  groupOrdinal: 0,
+  ordinal: 0,
+};
+
+export const grapplerFeat = {
+  id: grapplerFeatId,
+  campaignId: null,
+  accountId: null,
+  derivedFrom: null,
+  sourceIndex: "grappler",
+  name: "Grappler",
+  description: [
+    "You’ve developed the skills necessary to hold your own in close-quarters grappling.",
+    "You have advantage on attack rolls against a creature you are grappling.",
+    "You can use your action to try to pin a creature grappled by you.",
+  ],
+  prerequisites: [grapplerPrerequisite],
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  ...stamps,
+};
+
+export const tavernBrawlerFeat = {
+  id: tavernBrawlerFeatId,
+  campaignId,
+  accountId: null,
+  derivedFrom: tavernBrawlerOriginalFeatId,
+  sourceIndex: null,
+  name: "Tavern Brawler",
+  description: ["Your fists and furniture are both dangerous."],
+  prerequisites: [],
+  visibility: "dm",
+  origin: "authored",
+  assistantTurnId: null,
+  ...stamps,
+};
+
+export const libraryFeats = [
+  grapplerFeat,
+  {
+    ...tavernBrawlerFeat,
+    id: tavernBrawlerOriginalFeatId,
+    campaignId: null,
+    accountId: theDmAccountId,
+  },
+];
+
+export const campaignFeats = [grapplerFeat, tavernBrawlerFeat];
+
 export const combatRuleDetail = {
   article: combatRuleArticle,
   sections: [
@@ -910,6 +970,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/equipment`, { status: 200, body: page([hempRope]) }],
     [`GET /campaigns/${campaignId}/magic-items`, { status: 200, body: page([lanternRing]) }],
     [`GET /campaigns/${campaignId}/compendium`, { status: 200, body: page([combatRuleArticle]) }],
+    [`GET /campaigns/${campaignId}/feats`, { status: 200, body: page(campaignFeats) }],
     [
       `GET /campaigns/${campaignId}/compendium/${ruleArticleId}`,
       { status: 200, body: combatRuleDetail },
@@ -918,6 +979,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     ["GET /library/equipment", { status: 200, body: page([hempRope]) }],
     ["GET /library/magic-items", { status: 200, body: page([lanternRing]) }],
     ["GET /library/compendium", { status: 200, body: page([combatRuleArticle]) }],
+    ["GET /library/feats", { status: 200, body: page(libraryFeats) }],
     [`GET /library/compendium/${ruleArticleId}`, { status: 200, body: combatRuleDetail }],
     // The rules vocabulary this table builds characters from — the Rules
     // screen's list, and the create form's two pickers. A bundled class, a

@@ -1,11 +1,11 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, Layer } from "effect";
 import * as Database from "../Database.js";
-import { importSystemOptions } from "../ruleset/import.js";
+import { importSystemFeats, importSystemOptions } from "../ruleset/import.js";
 import { importSystemRuleArticles } from "../ruleset/rules.js";
 
 /**
- * Loads the bundled classes, races, backgrounds and rules reference into the shared `system`
+ * Loads the bundled classes, races, backgrounds, feats and rules reference into the shared `system`
  * vocabulary and exits.
  *
  *   pnpm -F server ruleset:import
@@ -22,9 +22,11 @@ import { importSystemRuleArticles } from "../ruleset/rules.js";
 NodeRuntime.runMain(
   Effect.gen(function* () {
     const options = yield* importSystemOptions();
+    const feats = yield* importSystemFeats();
     const articles = yield* importSystemRuleArticles();
     yield* Console.log(
       `ruleset: ${options.inserted} options inserted, ${options.updated} options updated; ` +
+        `${feats.inserted} feats inserted, ${feats.updated} feats updated, ${feats.prerequisites} feat prerequisites synced; ` +
         `${articles.articlesInserted} articles inserted, ${articles.articlesUpdated} articles updated, ` +
         `${articles.sections} sections synced`,
     );

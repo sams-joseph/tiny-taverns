@@ -123,6 +123,10 @@ describe("migrations", () => {
       "equipment_category",
       "equipment_content",
       "equipment_property",
+      "feat",
+      "feat_description",
+      "feat_prerequisite_ability_score",
+      "feat_prerequisite_group",
       "feature",
       "language",
       "magic_item",
@@ -186,6 +190,7 @@ describe("migrations", () => {
       { migration_id: 26, name: "class_progression" },
       { migration_id: 27, name: "character_vocabulary_traits" },
       { migration_id: 28, name: "rules_compendium" },
+      { migration_id: 29, name: "feats" },
     ]);
   }, 60_000);
 
@@ -224,6 +229,7 @@ describe("migrations", () => {
       { migration_id: 26, name: "class_progression" },
       { migration_id: 27, name: "character_vocabulary_traits" },
       { migration_id: 28, name: "rules_compendium" },
+      { migration_id: 29, name: "feats" },
     ]);
   }, 60_000);
 });

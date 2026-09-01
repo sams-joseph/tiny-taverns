@@ -1,10 +1,14 @@
-import type { CampaignId, CharacterOption, OptionKind } from "@taverns/api";
+import type { CampaignId, CharacterOption, Feat, OptionKind } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, Input } from "@taverns/ui";
 import { useState } from "react";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { ClassProgressionDialog } from "./ClassProgressionDialog";
+import { CopyFeatIn } from "./CopyFeatIn";
 import { CopyOptionIn } from "./CopyOptionIn";
+import { isCampaignFeatCopy } from "./feat";
+import { FeatForm } from "./FeatForm";
+import { FeatSection } from "./FeatSection";
 import { rulesAtom, type RulesView } from "./load";
 import { isCampaignCopy } from "./option";
 import { OptionDialog } from "./OptionDialog";
@@ -41,10 +45,10 @@ import { RemoveOptionDialog } from "./RemoveOptionDialog";
  *   are indistinguishable from it. That is the honest cost of having no
  *   `class_id`, and the pointer arrives at the slice where something reads it —
  *   the first plausible reader being exactly this count.
- * - **Anything about a subclass or a feat.** A subclass is a *child* of a class
- *   and needs a containment rule this table has none of; a feat is read by
- *   nothing in the product. Both are free text on the sheet today and work.
- *   **The background is here now** as the 2014 source describes it: proficiencies,
+ * - **Subclasses as standalone rows.** A subclass is a *child* of a class and
+ *   stays behind the class-progression dialog; this screen does not make one
+ *   independently copyable. **Feats are here now** as their own 2014 corpus, and
+ *   the background is here as the 2014 source describes it: proficiencies,
  *   languages, equipment and feature text. Ability-score arithmetic belongs to
  *   races and contained subraces.
  *
@@ -72,10 +76,12 @@ const summaryOf = (view: RulesView): string => {
   const hidden = view.offered.filter(
     (option) => isCampaignCopy(option) && option.visibility === "dm",
   ).length;
+  const feats = view.feats.length;
   const counted =
     `${String(classes)} class${classes === 1 ? "" : "es"}, ` +
     `${String(count("race"))} race${count("race") === 1 ? "" : "s"}, ` +
-    `${String(backgrounds)} background${backgrounds === 1 ? "" : "s"}`;
+    `${String(backgrounds)} background${backgrounds === 1 ? "" : "s"}, ` +
+    `${String(feats)} feat${feats === 1 ? "" : "s"}`;
   return hidden === 0 ? counted : `${counted} · ${String(hidden)} your players cannot pick yet`;
 };
 
@@ -87,6 +93,7 @@ export function RulesScreen() {
     readonly option: CharacterOption | undefined;
   }>();
   const [copying, setCopying] = useState(false);
+  const [copyingFeat, setCopyingFeat] = useState(false);
 
   return (
     <CampaignChrome<RulesView>
@@ -104,6 +111,10 @@ export function RulesScreen() {
           <Button variant="secondary" size="sm" onClick={() => setCopying(true)}>
             <Icon name="copy" size={14} />
             Copy from your library
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setCopyingFeat(true)}>
+            <Icon name="copy" size={14} />
+            Copy feat
           </Button>
           <Button
             variant="secondary"
@@ -136,6 +147,8 @@ export function RulesScreen() {
           onEdit={setEditing}
           copying={copying}
           onCopy={setCopying}
+          copyingFeat={copyingFeat}
+          onCopyFeat={setCopyingFeat}
         />
       )}
     </CampaignChrome>
@@ -149,6 +162,8 @@ function Rules({
   onEdit,
   copying,
   onCopy,
+  copyingFeat,
+  onCopyFeat,
 }: {
   readonly slots: CampaignChromeSlots<RulesView>;
   readonly campaignId: CampaignId;
@@ -160,12 +175,17 @@ function Rules({
   ) => void;
   readonly copying: boolean;
   readonly onCopy: (copying: boolean) => void;
+  readonly copyingFeat: boolean;
+  readonly onCopyFeat: (copying: boolean) => void;
 }) {
   const { extra } = slots;
   const [removing, setRemoving] = useState<CharacterOption>();
+  const [editingFeat, setEditingFeat] = useState<Feat>();
+  const [featQuery, setFeatQuery] = useState("");
   const [progression, setProgression] = useState<CharacterOption>();
 
   const of = (kind: OptionKind) => extra.offered.filter((option) => option.kind === kind);
+  const shownFeats = filterFeats(extra.feats, featQuery);
 
   return (
     <>
@@ -208,7 +228,32 @@ function Rules({
           }
           onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
         />
+        <div className="flex flex-col gap-3">
+          <Input
+            aria-label="Search campaign feats"
+            placeholder="Search feats"
+            value={featQuery}
+            onChange={(event) => setFeatQuery(event.currentTarget.value)}
+          />
+          <FeatSection
+            feats={shownFeats}
+            emptyBody="Run the bundled ruleset importer for Grappler, or copy a feat from your Library."
+            onEdit={(feat) => (isCampaignFeatCopy(feat) ? () => setEditingFeat(feat) : undefined)}
+            onRemove={(feat) => (isCampaignFeatCopy(feat) ? () => setEditingFeat(feat) : undefined)}
+          />
+        </div>
       </div>
+
+      {editingFeat !== undefined && (
+        <FeatForm
+          campaignId={campaignId}
+          source="campaign"
+          feat={editingFeat}
+          vocabulary={extra.vocabulary}
+          onClose={() => setEditingFeat(undefined)}
+          onSaved={() => setEditingFeat(undefined)}
+        />
+      )}
 
       {editing !== undefined && (
         <OptionDialog
@@ -235,6 +280,15 @@ function Rules({
         />
       )}
 
+      {copyingFeat && (
+        <CopyFeatIn
+          campaignId={campaignId}
+          originals={extra.featOriginals}
+          onClose={() => onCopyFeat(false)}
+          onCopied={() => undefined}
+        />
+      )}
+
       {removing !== undefined && (
         <RemoveOptionDialog
           campaignId={campaignId}
@@ -254,3 +308,14 @@ function Rules({
     </>
   );
 }
+
+const filterFeats = (feats: ReadonlyArray<Feat>, query: string): ReadonlyArray<Feat> => {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return feats;
+  return feats.filter(
+    (feat) =>
+      feat.name.toLowerCase().includes(needle) ||
+      feat.description.some((line) => line.toLowerCase().includes(needle)) ||
+      feat.prerequisites.some((row) => row.ability.name.toLowerCase().includes(needle)),
+  );
+};

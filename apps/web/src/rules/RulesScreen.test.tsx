@@ -60,6 +60,11 @@ describe("what this table offers", () => {
     expect(screen.getByText(/Athletics/)).toBeInTheDocument();
     expect(screen.getByText("Soldier")).toBeInTheDocument();
     expect(screen.getAllByText("no fixed proficiencies").length).toBeGreaterThan(0);
+
+    const feats = screen.getByRole("region", { name: "Feats" });
+    expect(within(feats).getByText("Grappler")).toBeInTheDocument();
+    expect(within(feats).getByText("Tavern Brawler")).toBeInTheDocument();
+    expect(within(feats).getAllByText("STR 13").length).toBeGreaterThan(0);
   });
 
   it("counts what a DM can act on, and says how much of it a player cannot pick", async () => {
@@ -89,7 +94,9 @@ describe("what this table offers", () => {
     // would be exactly the 404 `isCampaignCopy` exists to prevent.
     expect(screen.queryByRole("button", { name: "Edit Soldier" })).toBeNull();
     // Three copies, three remove buttons, and none on the bundle.
-    expect(screen.getAllByRole("button", { name: /Remove .* from this table/ })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /Remove .* from this table/ })).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: "Edit Grappler" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit Tavern Brawler" })).toBeInTheDocument();
   });
 
   it("opens the campaign copy's concrete progression", async () => {

@@ -53,6 +53,14 @@ export type RuleArticleId = typeof RuleArticleId.Type;
 export const RuleSectionId = id("RuleSectionId");
 export type RuleSectionId = typeof RuleSectionId.Type;
 
+/** A 2014 feat in the bundle, an account Library, or a campaign copy. */
+export const FeatId = id("FeatId");
+export type FeatId = typeof FeatId.Type;
+
+/** One ordered prerequisite group under a feat. */
+export const FeatPrerequisiteGroupId = id("FeatPrerequisiteGroupId");
+export type FeatPrerequisiteGroupId = typeof FeatPrerequisiteGroupId.Type;
+
 /**
  * One piece a character is **built from** — a class, a race, or a background.
  * Not the character: two characters made from one class are two

@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { syncSystemClassProgression } from "./progression.js";
 import { FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
+import { SYSTEM_FEATS, type SystemFeat } from "./systemFeats.js";
 import { SOURCE_RAW, SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
 import { syncImportedOptionRelationships, syncSystemVocabularies } from "./vocabularies.js";
 
@@ -112,6 +113,110 @@ const syncOptionEquipmentReferences = (
  * `character_option` as global `system` rows. The source is a local, generated snapshot of
  * 5e-database commit 5a7ee5a0489b26655d343e4a41e8f7942a887af2; no runtime fetch is performed.
  */
+export interface ImportFeatsResult {
+  readonly inserted: number;
+  readonly updated: number;
+  readonly prerequisites: number;
+}
+
+const abilityScoreIdByKey = (
+  sql: SqlClient.SqlClient,
+  sourceIndex: string,
+): Effect.Effect<string, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: string }>`
+      select id::text from ability_score
+      where source_corpus = ${FIVE_E_BITS_2014_SOURCE.corpus}
+        and source_key = ${sourceIndex}
+      limit 1
+    `;
+    const row = rows[0];
+    if (row === undefined) throw new Error(`missing required feat ability ${sourceIndex}`);
+    return row.id;
+  });
+
+export const syncFeatDefinition = (
+  sql: SqlClient.SqlClient,
+  featId: string,
+  feat: SystemFeat,
+): Effect.Effect<number, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    yield* sql`delete from feat_description where feat_id = ${featId}`;
+    for (const [ordinal, text] of feat.description.entries()) {
+      yield* sql`
+        insert into feat_description (feat_id, ordinal, text)
+        values (${featId}, ${ordinal}, ${text})
+      `;
+    }
+
+    yield* sql`delete from feat_prerequisite_group where feat_id = ${featId}`;
+    if (feat.prerequisites.length === 0) return 0;
+    const group = yield* sql<{ readonly id: string }>`
+      insert into feat_prerequisite_group (feat_id, ordinal)
+      values (${featId}, 0)
+      returning id::text
+    `;
+    const groupId = group[0]!.id;
+    for (const [ordinal, prerequisite] of feat.prerequisites.entries()) {
+      const abilityId = yield* abilityScoreIdByKey(sql, prerequisite.abilityIndex);
+      yield* sql`
+        insert into feat_prerequisite_ability_score (
+          feat_id, group_id, ability_score_id, minimum_score, ordinal
+        )
+        values (${featId}, ${groupId}, ${abilityId}, ${prerequisite.minimumScore}, ${ordinal})
+      `;
+    }
+    return feat.prerequisites.length;
+  });
+
+/**
+ * Writes the complete pinned 2014 5e-bits feat corpus. The pinned upstream file
+ * contains one feat, Grappler; a changed count here means the vendored evidence
+ * in `systemFeats.ts` needs to be regenerated deliberately.
+ */
+export const importSystemFeats = (
+  corpus: ReadonlyArray<SystemFeat> = SYSTEM_FEATS,
+): Effect.Effect<ImportFeatsResult, SqlError.SqlError, SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        let inserted = 0;
+        let updated = 0;
+        let prerequisites = 0;
+
+        yield* syncSystemVocabularies(sql);
+
+        for (const feat of corpus) {
+          const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "feats", feat.sourceIndex);
+          const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
+            insert into feat (
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
+              name, visibility
+            )
+            values (
+              null, null, 'system', ${key.sourceCorpus}, ${key.sourceFamily}, ${key.sourceKey},
+              ${feat.name}, 'shared'
+            )
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
+            do update set
+              name = excluded.name,
+              updated_at = now()
+            returning id::text, (xmax = 0) as inserted
+          `;
+          const row = rows[0];
+          if (row === undefined) throw new Error(`feat ${feat.sourceIndex} was not written`);
+          prerequisites += yield* syncFeatDefinition(sql, row.id, feat);
+          if (row.inserted === true) inserted += 1;
+          else updated += 1;
+        }
+
+        return { inserted, updated, prerequisites };
+      }),
+    );
+  });
+
 export const importSystemOptions = (
   corpus: ReadonlyArray<SystemOption> = SYSTEM_OPTIONS,
 ): Effect.Effect<ImportResult, SqlError.SqlError, SqlClient.SqlClient> =>

@@ -26,6 +26,7 @@ import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
+import { Feats } from "./repo/Feats.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
@@ -393,6 +394,24 @@ const MagicItemsLive = HttpApiBuilder.group(
   }),
 );
 
+const FeatsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "feats",
+  Effect.fnUntraced(function* (handlers) {
+    const feats = yield* Feats;
+    return handlers
+      .handle("list", ({ params, query }) => feats.list(params.campaignId, query))
+      .handle("findById", ({ params }) => feats.findById(params.campaignId, params.featId))
+      .handle("update", ({ params, payload }) =>
+        feats.update(params.campaignId, params.featId, payload),
+      )
+      .handle("remove", ({ params }) => feats.remove(params.campaignId, params.featId))
+      .handle("derive", ({ params, payload }) =>
+        feats.derive(params.campaignId, params.featId, payload),
+      );
+  }),
+);
+
 const RuleArticlesLive = HttpApiBuilder.group(
   TavernsApi,
   "ruleArticles",
@@ -462,6 +481,7 @@ const LibraryLive = HttpApiBuilder.group(
     const equipment = yield* EquipmentRepo;
     const magicItems = yield* MagicItems;
     const ruleArticles = yield* RuleArticles;
+    const feats = yield* Feats;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -488,6 +508,11 @@ const LibraryLive = HttpApiBuilder.group(
         ruleArticles.libraryUpdate(params.ruleArticleId, payload),
       )
       .handle("removeRuleArticle", ({ params }) => ruleArticles.libraryRemove(params.ruleArticleId))
+      .handle("feats", ({ query }) => feats.library(query))
+      .handle("createFeat", ({ payload }) => feats.libraryCreate(payload))
+      .handle("findFeat", ({ params }) => feats.libraryFindById(params.featId))
+      .handle("updateFeat", ({ params, payload }) => feats.libraryUpdate(params.featId, payload))
+      .handle("removeFeat", ({ params }) => feats.libraryRemove(params.featId))
       .handle("spells", ({ query }) => spells.library(query))
       .handle("createSpell", ({ payload }) => spells.libraryCreate(payload))
       .handle("findSpell", ({ params }) => spells.libraryFindById(params.spellId))
@@ -929,6 +954,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     EquipmentLive,
     MagicItemsLive,
     RuleArticlesLive,
+    FeatsLive,
     CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,

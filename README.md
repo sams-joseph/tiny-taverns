@@ -112,7 +112,7 @@ pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
-pnpm -F server ruleset:import   # loads 2014 classes/races/backgrounds plus rules and rule sections (idempotent)
+pnpm -F server ruleset:import   # loads 2014 classes/races/backgrounds, feats, rules and rule sections (idempotent)
 pnpm -F server spell:import      # loads bundled 2014 SRD spells and class/subclass links (optional, idempotent)
 pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (idempotent)
 pnpm -F server magic-item:import # loads the bundled 2014 SRD magic items (idempotent)
@@ -123,7 +123,8 @@ The import order above is deliberate: equipment comes before the ruleset so back
 starting-equipment references resolve to rows, the ruleset seeds the concrete subclass and class
 progression rows before spells create their class/subclass links, and spells/equipment both come
 before the monster corpus so imported monster relationships can be populated. The rules compendium
-is imported by the same `ruleset:import` command; it has no ordering dependency.
+and feats are imported by the same `ruleset:import` command; feats depend only on the ability-score
+vocabulary the command seeds first.
 
 If an existing development database still carries the pre-2014 character-rules rows, use the
 clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server equipment:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server bestiary:import && pnpm -F server magic-item:import`.
@@ -243,12 +244,13 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
   -d '{"name":"Grask, Boss of the Reeds"}'
 ```
 
-**A campaign can have its own classes, races, backgrounds, reference rules, spells, mundane equipment and magic items**, and
+**A campaign can have its own classes, races, backgrounds, feats, reference rules, spells, mundane equipment and magic items**, and
 they follow exactly the same model. `pnpm -F server equipment:import` writes the 237 bundled 2014 SRD
 mundane equipment rows; `pnpm -F server ruleset:import` writes the bundled 2014 SRD character
 options, their concrete ability/language/skill/proficiency/trait vocabularies, their concrete
 subrace grants and choices, their subclass/class-level/feature progression, their concrete
-starting-equipment references, and the 6 top-level 2014 rules with their 33 ordered rule sections;
+starting-equipment references, the one 2014 SRD feat (Grappler) with its concrete Strength 13
+prerequisite, and the 6 top-level 2014 rules with their 33 ordered rule sections;
 `pnpm -F server spell:import` writes the 319 bundled 2014 SRD spells as global rows linked to the
 class and subclass vocabulary; `pnpm -F server magic-item:import` writes the 362 bundled 2014 SRD
 magic items as global rows. All are keyed by stable source keys from the pinned 5e-bits
@@ -262,7 +264,7 @@ and Library shelves, with the same copy-as-snapshot rule. The copy is what a pla
 because a player can never read somebody else's library — see `AGENTS.md`, which is also where the
 one thing these importers do differently is written down.
 
-The bundled 2014 monster, character-rules, reference-rules, spell, mundane-equipment and magic-item data are transformed
+The bundled 2014 monster, character-rules, feat, reference-rules, spell, mundane-equipment and magic-item data are transformed
 from `5e-bits/5e-database` under the MIT License; the underlying Dungeons & Dragons 5th Edition SRD
 5.1 material is used under the Open Game License version 1.0a. The importers store stable source
 keys on rows; attribution is carried in the web footer and README rather than in per-row provenance
