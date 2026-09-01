@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { syncSystemClassProgression } from "./progression.js";
 import { FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
 import { SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
 
@@ -160,6 +161,12 @@ export const importSystemOptions = (
           if (row.inserted === true) inserted += 1;
           else updated += 1;
         }
+
+        // The concrete class-progression import hangs off the class rows above.
+        // Keep the return shape as the domain option count: callers and tests
+        // that seed a tiny custom corpus are asserting those rows, not the 709
+        // child rows in the bundled progression.
+        if (corpus === SYSTEM_OPTIONS) yield* syncSystemClassProgression(sql);
 
         return { inserted, updated };
       }),

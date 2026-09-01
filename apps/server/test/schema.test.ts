@@ -53,6 +53,7 @@ const NOT_CONTENT = [
   "proficiency",
   "spell_class",
   "spell_damage_type",
+  "spell_subclass",
   "weapon_property",
 ];
 
@@ -105,18 +106,21 @@ describe("every content-bearing table", () => {
       // one, and until then the column is inert exactly as every other table's
       // was between `0001` and `0010`.
       "character_option",
+      "class_level",
       "combatant",
       "creature",
       "encounter",
       "encounter_creature",
       "encounter_run",
       "equipment",
+      "feature",
       "magic_item",
       "note",
       "prep_item",
       "session",
       "session_event",
       "spell",
+      "subclass",
     ]);
   });
 

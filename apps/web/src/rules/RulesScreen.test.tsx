@@ -92,6 +92,22 @@ describe("what this table offers", () => {
     expect(screen.getAllByRole("button", { name: /Remove .* from this table/ })).toHaveLength(3);
   });
 
+  it("opens the campaign copy's concrete progression", async () => {
+    await renderRules();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Read Bloodsworn progression" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Bloodsworn progression" });
+    expect(within(dialog).getByText("Star oath")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Subclass level 3")).toHaveLength(2);
+    expect(within(dialog).getByText("Starlit vow")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(sent("GET", `/options/${bloodswornOption.id}/progression`)).toBeDefined();
+    });
+  });
+
   it("says which rows no player can pick, and only about rows that can be shared", async () => {
     await renderRules();
     await screen.findByText("Marshfolk");

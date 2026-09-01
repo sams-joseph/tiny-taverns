@@ -57,6 +57,18 @@ export type MagicItemId = typeof MagicItemId.Type;
 export const CharacterOptionId = id("CharacterOptionId");
 export type CharacterOptionId = typeof CharacterOptionId.Type;
 
+/** A concrete 2014 subclass row, owned by the same Library/campaign model as a class. */
+export const SubclassId = id("SubclassId");
+export type SubclassId = typeof SubclassId.Type;
+
+/** One concrete 2014 class or subclass level. */
+export const ClassLevelId = id("ClassLevelId");
+export type ClassLevelId = typeof ClassLevelId.Type;
+
+/** One concrete 2014 class or subclass feature. */
+export const FeatureId = id("FeatureId");
+export type FeatureId = typeof FeatureId.Type;
+
 /**
  * A creature's place on one encounter's roster — the join row, not the creature.
  * It has an id of its own because the roster line is what a client edits: the

@@ -34,12 +34,15 @@ export function OptionCard({
   option,
   onEdit,
   onRemove,
+  onProgression,
 }: {
   readonly option: CharacterOption;
   /** Open this row for editing. Absent for a row this reader may not write. */
   readonly onEdit?: () => void;
   /** Take it off this table. The campaign's list passes it; the Library does not. */
   readonly onRemove?: () => void;
+  /** Read the concrete subclass, level and feature rows for a class. */
+  readonly onProgression?: () => void;
 }) {
   const owner = ownerOf(option);
   const unshared = owner === "campaign" && option.visibility === "dm";
@@ -80,8 +83,19 @@ export function OptionCard({
           )}
         </div>
 
-        {(onEdit !== undefined || onRemove !== undefined) && (
-          <div className="flex shrink-0 items-center gap-2">
+        {(onEdit !== undefined || onRemove !== undefined || onProgression !== undefined) && (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {onProgression !== undefined && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Read ${option.name} progression`}
+                onClick={onProgression}
+              >
+                <Icon name="layers" size={13} />
+                Progression
+              </Button>
+            )}
             {onEdit !== undefined && (
               <Button variant="ghost" size="sm" aria-label={`Edit ${option.name}`} onClick={onEdit}>
                 <Icon name="pencil" size={13} />

@@ -19,6 +19,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
+import { copyClassProgression } from "./ClassProgression.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
   copyableIntoCampaign,
@@ -437,7 +438,17 @@ export class Options extends Context.Service<
                   )}
                   returning *
                 `;
-                return toOption(rows[0]!);
+                const copy = rows[0]!;
+                if (source.kind === "class") {
+                  yield* copyClassProgression(
+                    sql,
+                    source.id,
+                    copy.id,
+                    { campaign_id: campaignId },
+                    patch.visibility,
+                  );
+                }
+                return toOption(copy);
               }),
             ),
           ),

@@ -326,3 +326,23 @@ export const classOptionForRef = (
     if (row === undefined) throw new Error(`missing required spell class ${reference.index}`);
     return row.id;
   });
+
+export const subclassForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceRefKey(reference, "subclasses");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      select id::text from subclass
+      where source_corpus = ${key.sourceCorpus}
+        and source_family = ${key.sourceFamily}
+        and source_key = ${key.sourceKey}
+        and campaign_id is null
+        and account_id is null
+      limit 1
+    `;
+    const row = rows[0];
+    if (row === undefined) throw new Error(`missing required spell subclass ${reference.index}`);
+    return row.id;
+  });

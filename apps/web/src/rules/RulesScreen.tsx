@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
+import { ClassProgressionDialog } from "./ClassProgressionDialog";
 import { CopyOptionIn } from "./CopyOptionIn";
 import { rulesAtom, type RulesView } from "./load";
 import { isCampaignCopy } from "./option";
@@ -162,6 +163,7 @@ function Rules({
 }) {
   const { extra } = slots;
   const [removing, setRemoving] = useState<CharacterOption>();
+  const [progression, setProgression] = useState<CharacterOption>();
 
   const of = (kind: OptionKind) => extra.offered.filter((option) => option.kind === kind);
 
@@ -181,6 +183,7 @@ function Rules({
             isCampaignCopy(option) ? () => onEdit({ kind: "class", option }) : undefined
           }
           onRemove={(option) => (isCampaignCopy(option) ? () => setRemoving(option) : undefined)}
+          onProgression={(option) => () => setProgression(option)}
         />
         <OptionSection
           title="Race"
@@ -237,6 +240,14 @@ function Rules({
           option={removing}
           onClose={() => setRemoving(undefined)}
           onRemoved={() => setRemoving(undefined)}
+        />
+      )}
+
+      {progression !== undefined && (
+        <ClassProgressionDialog
+          campaignId={campaignId}
+          option={progression}
+          onClose={() => setProgression(undefined)}
         />
       )}
     </>

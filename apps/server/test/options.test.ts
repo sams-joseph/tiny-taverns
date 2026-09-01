@@ -17,6 +17,7 @@ import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
+import { importClassProgression } from "../src/ruleset/progression.js";
 import { SYSTEM_OPTIONS, type SystemOption } from "../src/ruleset/systemOptions.js";
 import { migratedDatabase } from "./support/database.js";
 
@@ -387,6 +388,48 @@ describe("the bundle", () => {
     expect(throughCampaign._tag).toBe("NotFound");
   });
 
+  it("imports the pinned 2014 class progression and updates it idempotently", async () => {
+    const counts = await sql(
+      (client) => client<{ readonly table_name: string; readonly count: number }>`
+        select 'subclass' as table_name, count(*)::int as count from subclass where origin = 'system'
+        union all
+        select 'class_level' as table_name, count(*)::int as count from class_level where origin = 'system'
+        union all
+        select 'feature' as table_name, count(*)::int as count from feature where origin = 'system'
+        order by table_name
+      `,
+    );
+
+    expect(counts._tag).toBe("Success");
+    if (counts._tag !== "Success") return;
+    expect(counts.success).toEqual([
+      { table_name: "class_level", count: 290 },
+      { table_name: "feature", count: 407 },
+      { table_name: "subclass", count: 12 },
+    ]);
+
+    await expect(runtime.runPromise(importClassProgression().pipe(Effect.orDie))).resolves.toEqual({
+      subclasses: { seen: 12, inserted: 0, updated: 12 },
+      levels: { seen: 290, inserted: 0, updated: 290 },
+      features: { seen: 407, inserted: 0, updated: 407 },
+    });
+  });
+
+  it("reads a class's concrete progression through the Library endpoint", async () => {
+    const progression = await as(fixture.jo.token, (client) =>
+      client.library.optionProgression({ params: { optionId: fixture.bundledDruid } }),
+    );
+
+    expect(progression.option.name).toBe("Druid");
+    expect(progression.option.body.subclassCount).toBe(progression.subclasses.length);
+    expect(progression.option.body.levelCount).toBe(progression.levels.length);
+    expect(progression.option.body.featureCount).toBe(progression.features.length);
+    expect(progression.subclasses.map((subclass) => subclass.name)).toContain("Land");
+    expect(progression.features.map((feature) => feature.name)).toContain("Druidic");
+    expect(progression.levels.every((level) => level.campaignId === null)).toBe(true);
+    expect(progression.features.every((feature) => feature.accountId === null)).toBe(true);
+  });
+
   it("refuses an unowned row that does not claim to be the bundle, and the reverse", async () => {
     // `character_option_system_is_unowned` in both directions: `system` implies
     // unowned, so no write path can reach a bundled row; unowned implies
@@ -608,6 +651,101 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
         params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
       }),
     );
+  });
+
+  it("copies a class's progression as a campaign snapshot", async () => {
+    const original = await as(fixture.jo.token, (client) =>
+      client.library.createOption({
+        payload: {
+          kind: "class",
+          name: "Star-pact Warden",
+          body: { hitDie: 8, unarmouredAc: ["DEX"] },
+        },
+      }),
+    );
+    const sourceIds = await runtime.runPromise(
+      Effect.flatMap(SqlClient.SqlClient, (client) =>
+        Effect.gen(function* () {
+          const subclass = yield* client<{ readonly id: string }>`
+            insert into subclass ${client.insert({
+              account_id: fixture.jo.accountId,
+              class_option_id: original.id,
+              name: "Star oath",
+              body: JSON.stringify({ desc: [] }),
+              visibility: "shared",
+            })}
+            returning id::text
+          `;
+          const level = yield* client<{ readonly id: string }>`
+            insert into class_level ${client.insert({
+              account_id: fixture.jo.accountId,
+              class_option_id: original.id,
+              subclass_id: subclass[0]!.id,
+              level: 3,
+              ability_score_bonuses: 0,
+              proficiency_bonus: 2,
+              body: JSON.stringify({ features: [] }),
+              visibility: "shared",
+            })}
+            returning id::text
+          `;
+          const feature = yield* client<{ readonly id: string }>`
+            insert into feature ${client.insert({
+              account_id: fixture.jo.accountId,
+              class_option_id: original.id,
+              subclass_id: subclass[0]!.id,
+              class_level_id: level[0]!.id,
+              name: "Starlit vow",
+              level: 3,
+              body: JSON.stringify({ desc: [], prerequisites: [] }),
+              visibility: "shared",
+            })}
+            returning id::text
+          `;
+          return { subclass: subclass[0]!.id, level: level[0]!.id, feature: feature[0]!.id };
+        }),
+      ).pipe(Effect.orDie),
+    );
+
+    const copy = await as(fixture.jo.token, (client) =>
+      client.options.derive({
+        params: { campaignId: fixture.saltRoad.id, optionId: original.id },
+        payload: { visibility: "shared" },
+      }),
+    );
+    const copied = await as(fixture.jo.token, (client) =>
+      client.options.progression({
+        params: { campaignId: fixture.saltRoad.id, optionId: copy.id },
+      }),
+    );
+
+    expect(copied.subclasses.map((subclass) => subclass.name)).toEqual(["Star oath"]);
+    expect(copied.levels.map((level) => level.level)).toEqual([3]);
+    expect(copied.features.map((feature) => feature.name)).toEqual(["Starlit vow"]);
+    expect(copied.subclasses[0]?.campaignId).toBe(fixture.saltRoad.id);
+    expect(copied.subclasses[0]?.accountId).toBeNull();
+    expect(copied.subclasses[0]?.derivedFrom).toBe(sourceIds.subclass);
+    expect(copied.levels[0]?.derivedFrom).toBe(sourceIds.level);
+    expect(copied.features[0]?.derivedFrom).toBe(sourceIds.feature);
+    expect(copied.features[0]?.subclassId).toBe(copied.subclasses[0]?.id);
+    expect(copied.features[0]?.classLevelId).toBe(copied.levels[0]?.id);
+
+    await runtime.runPromise(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (client) =>
+          client`
+          update subclass set name = 'Star oath, revised'
+          where id = ${sourceIds.subclass}
+        `,
+      ).pipe(Effect.orDie),
+    );
+    const afterSourceEdit = await as(fixture.jo.token, (client) =>
+      client.options.progression({
+        params: { campaignId: fixture.saltRoad.id, optionId: copy.id },
+      }),
+    );
+    expect(afterSourceEdit.subclasses.map((subclass) => subclass.name)).toEqual(["Star oath"]);
   });
 
   it("carries a background's 2014 grants without changing the seed", async () => {

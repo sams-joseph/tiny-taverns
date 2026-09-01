@@ -5,7 +5,9 @@ import {
   bloodswornOption,
   bloodswornOriginalId,
   campaignId,
+  druidOption,
   fullCampaign,
+  libraryOptions,
   marshfolkOption,
   marshfolkOriginalId,
   saltRunnerOption,
@@ -36,6 +38,7 @@ export {
   campaignId,
   campaignOptions,
   druidOption,
+  druidOptionId,
   libraryOptions,
   marshfolkOption,
   marshfolkOptionId,
@@ -46,6 +49,151 @@ export {
 } from "../campaign/campaign.fixtures";
 
 const base = `/campaigns/${campaignId}`;
+
+const libraryDruidOption =
+  libraryOptions.find((option) => option.kind === "class" && option.name === "Druid") ??
+  druidOption;
+export const libraryDruidOptionId = libraryDruidOption.id;
+
+const progressionFields = {
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  createdAt: "2026-08-04T13:03:28.070Z",
+  updatedAt: "2026-08-04T13:03:28.070Z",
+};
+
+export const druidProgression = {
+  option: {
+    ...libraryDruidOption,
+    body: { ...libraryDruidOption.body, subclassCount: 1, levelCount: 2, featureCount: 2 },
+  },
+  subclasses: [
+    {
+      ...progressionFields,
+      id: "2b1f2a1e-0000-4000-8000-000000002001",
+      campaignId: null,
+      accountId: null,
+      derivedFrom: null,
+      classOptionId: libraryDruidOptionId,
+      name: "Land",
+      flavor: "Druid Circle",
+      body: { desc: ["Mystics and sages who safeguard ancient knowledge."] },
+    },
+  ],
+  levels: [
+    {
+      ...progressionFields,
+      id: "2b1f2a1e-0000-4000-8000-000000002101",
+      campaignId: null,
+      accountId: null,
+      derivedFrom: null,
+      classOptionId: libraryDruidOptionId,
+      subclassId: null,
+      level: 1,
+      abilityScoreBonuses: null,
+      proficiencyBonus: 2,
+      body: { features: [{ index: "druidic", name: "Druidic" }] },
+    },
+    {
+      ...progressionFields,
+      id: "2b1f2a1e-0000-4000-8000-000000002102",
+      campaignId: null,
+      accountId: null,
+      derivedFrom: null,
+      classOptionId: libraryDruidOptionId,
+      subclassId: "2b1f2a1e-0000-4000-8000-000000002001",
+      level: 2,
+      abilityScoreBonuses: null,
+      proficiencyBonus: null,
+      body: { features: [{ index: "bonus-cantrip", name: "Bonus Cantrip" }] },
+    },
+  ],
+  features: [
+    {
+      ...progressionFields,
+      id: "2b1f2a1e-0000-4000-8000-000000002201",
+      campaignId: null,
+      accountId: null,
+      derivedFrom: null,
+      classOptionId: libraryDruidOptionId,
+      subclassId: null,
+      classLevelId: "2b1f2a1e-0000-4000-8000-000000002101",
+      parentFeatureId: null,
+      name: "Druidic",
+      level: 1,
+      body: { desc: ["You know Druidic."], prerequisites: [] },
+    },
+    {
+      ...progressionFields,
+      id: "2b1f2a1e-0000-4000-8000-000000002202",
+      campaignId: null,
+      accountId: null,
+      derivedFrom: null,
+      classOptionId: libraryDruidOptionId,
+      subclassId: "2b1f2a1e-0000-4000-8000-000000002001",
+      classLevelId: "2b1f2a1e-0000-4000-8000-000000002102",
+      parentFeatureId: null,
+      name: "Bonus Cantrip",
+      level: 2,
+      body: { desc: ["You learn one additional druid cantrip."], prerequisites: [] },
+    },
+  ],
+};
+
+export const bloodswornProgression = {
+  option: {
+    ...bloodswornOption,
+    body: { ...bloodswornOption.body, subclassCount: 1, levelCount: 1, featureCount: 1 },
+  },
+  subclasses: [
+    {
+      ...progressionFields,
+      origin: "authored",
+      id: "2b1f2a1e-0000-4000-8000-000000002301",
+      campaignId,
+      accountId: null,
+      derivedFrom: "2b1f2a1e-0000-4000-8000-000000002001",
+      classOptionId: bloodswornOption.id,
+      name: "Star oath",
+      flavor: null,
+      body: { desc: [] },
+    },
+  ],
+  levels: [
+    {
+      ...progressionFields,
+      origin: "authored",
+      id: "2b1f2a1e-0000-4000-8000-000000002401",
+      campaignId,
+      accountId: null,
+      derivedFrom: "2b1f2a1e-0000-4000-8000-000000002101",
+      classOptionId: bloodswornOption.id,
+      subclassId: "2b1f2a1e-0000-4000-8000-000000002301",
+      level: 3,
+      abilityScoreBonuses: 0,
+      proficiencyBonus: 2,
+      body: { features: [] },
+    },
+  ],
+  features: [
+    {
+      ...progressionFields,
+      origin: "authored",
+      id: "2b1f2a1e-0000-4000-8000-000000002501",
+      campaignId,
+      accountId: null,
+      derivedFrom: "2b1f2a1e-0000-4000-8000-000000002201",
+      classOptionId: bloodswornOption.id,
+      subclassId: "2b1f2a1e-0000-4000-8000-000000002301",
+      classLevelId: "2b1f2a1e-0000-4000-8000-000000002401",
+      parentFeatureId: null,
+      name: "Starlit vow",
+      level: 3,
+      body: { desc: [], prerequisites: [] },
+    },
+  ],
+};
 
 /** What a fully populated Rules screen answers, before a test re-aims it. */
 export const fullRules = (): Map<string, Answer> => {
@@ -77,6 +225,14 @@ export const fullRules = (): Map<string, Answer> => {
     body: { ...marshfolkOption, visibility: "shared" },
   });
   routes.set(`DELETE ${base}/options/${bloodswornOption.id}`, { status: 204, body: null });
+  routes.set(`GET ${base}/options/${libraryDruidOptionId}/progression`, {
+    status: 200,
+    body: druidProgression,
+  });
+  routes.set(`GET ${base}/options/${bloodswornOption.id}/progression`, {
+    status: 200,
+    body: bloodswornProgression,
+  });
 
   // The Library's own writes, which name no campaign at all. Both screens over
   // this table share one wire because they share one read — a class written on
@@ -87,6 +243,10 @@ export const fullRules = (): Map<string, Answer> => {
     body: { ...bloodswornOption, id: bloodswornOriginalId, campaignId: null },
   });
   routes.set(`DELETE /library/options/${marshfolkOriginalId}`, { status: 204, body: null });
+  routes.set(`GET /library/options/${libraryDruidOptionId}/progression`, {
+    status: 200,
+    body: druidProgression,
+  });
   return routes;
 };
 

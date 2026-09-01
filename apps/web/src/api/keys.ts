@@ -1,4 +1,4 @@
-import type { CampaignId, SessionId } from "@taverns/api";
+import type { CampaignId, CharacterOptionId, SessionId } from "@taverns/api";
 
 /**
  * What a read is *about*, so a write can name it.
@@ -144,6 +144,10 @@ export const reads = {
    */
   options: (campaignId: CampaignId): ReadKey => key`options:${campaignId}`,
 
+  /** One campaign class's concrete subclass, level and feature rows. */
+  optionProgression: (campaignId: CampaignId, optionId: CharacterOptionId): ReadKey =>
+    key`options:${campaignId}:progression:${optionId}`,
+
   // ----------------------------------------------------------------- a night
 
   /** *Before you sit down* — one night's checklist. */
@@ -198,4 +202,8 @@ export const reads = {
    * one on a write to the other would be a request nobody is waiting for.
    */
   libraryOptions: "library:options" as ReadKey,
+
+  /** One Library class's concrete subclass, level and feature rows. */
+  libraryOptionProgression: (optionId: CharacterOptionId): ReadKey =>
+    key`library:options:progression:${optionId}`,
 } as const;

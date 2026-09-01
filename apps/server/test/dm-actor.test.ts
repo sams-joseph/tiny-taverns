@@ -564,6 +564,10 @@ describe("the scope, counted", () => {
     // its ordinary job rather than a projection. Gating `list` would take the
     // create form's picker away from the audience it exists for.
     //
+    // The class-progression reads hang off an already-readable class option
+    // and return the same schema to DM and player, so they follow `Options`:
+    // the row-level predicates underneath are the boundary, not a DM proof.
+    //
     // The last thirty-five are `repo/Spells.ts`, `repo/Equipment.ts`,
     // `repo/MagicItems.ts` and the creature facet reads: three corpora plus
     // the account Library originals and read-only facet vocabularies
@@ -572,7 +576,7 @@ describe("the scope, counted", () => {
     // either returns the same schema to a player who can read the row or writes
     // through `rowWritable` / `ensureCampaignWritable`, where DM-ness is
     // already the predicate underneath.
-    expect(ungated).toBe(120);
+    expect(ungated).toBe(122);
   });
 });
 

@@ -6,6 +6,7 @@ import { Hob, useHobPanel } from "../hob";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
+import { ClassProgressionDialog } from "./ClassProgressionDialog";
 import { libraryOptionsAtom } from "./load";
 import { isLibraryOriginal } from "./option";
 import { OptionForm } from "./OptionForm";
@@ -94,6 +95,7 @@ export function OptionLibraryScreen() {
     readonly kind: OptionKind;
     readonly option: CharacterOption | undefined;
   }>();
+  const [progression, setProgression] = useState<CharacterOption>();
 
   const [resource, reload] = useApiAtom(libraryOptionsAtom);
 
@@ -164,6 +166,7 @@ export function OptionLibraryScreen() {
             onEdit={(option) =>
               isLibraryOriginal(option) ? () => setEditing({ kind: "class", option }) : undefined
             }
+            onProgression={(option) => () => setProgression(option)}
           />
           <OptionSection
             title="Race"
@@ -205,6 +208,10 @@ export function OptionLibraryScreen() {
           // answer, the second interrupting the first.
           onSaved={() => setEditing(undefined)}
         />
+      )}
+
+      {progression !== undefined && (
+        <ClassProgressionDialog option={progression} onClose={() => setProgression(undefined)} />
       )}
     </AppShell>
   );

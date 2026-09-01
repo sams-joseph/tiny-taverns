@@ -1,4 +1,4 @@
-import type { CampaignId, CharacterOption } from "@taverns/api";
+import type { CampaignId, CharacterOption, CharacterOptionId } from "@taverns/api";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -50,6 +50,27 @@ export const campaignOptionsAtom = Atom.family((campaignId: CampaignId) =>
 export const libraryOptionsAtom = apiAtom(
   (client) => client.library.options({ query: {} }),
   [reads.libraryOptions],
+);
+
+export const campaignOptionProgressionAtom = Atom.family(
+  ({
+    campaignId,
+    optionId,
+  }: {
+    readonly campaignId: CampaignId;
+    readonly optionId: CharacterOptionId;
+  }) =>
+    apiAtom(
+      (client) => client.options.progression({ params: { campaignId, optionId } }),
+      [reads.optionProgression(campaignId, optionId)],
+    ),
+);
+
+export const libraryOptionProgressionAtom = Atom.family((optionId: CharacterOptionId) =>
+  apiAtom(
+    (client) => client.library.optionProgression({ params: { optionId } }),
+    [reads.libraryOptionProgression(optionId)],
+  ),
 );
 
 /** What the Rules screen reads beyond the campaign view. */

@@ -1,5 +1,12 @@
 import { Schema } from "effect";
-import { AccountId, CampaignId, CharacterOptionId } from "./Ids.js";
+import {
+  AccountId,
+  CampaignId,
+  CharacterOptionId,
+  ClassLevelId,
+  FeatureId,
+  SubclassId,
+} from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { AbilityBonus, AbilityBonusChoice, AbilityKey } from "./Ruleset.js";
 
@@ -10,17 +17,27 @@ export type OptionKind = typeof OptionKind.Type;
 const summary = Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 500)));
 const textLine = Schema.String.check(Schema.isLengthBetween(0, 500));
 const textList = Schema.Array(textLine).check(Schema.isLengthBetween(0, 50));
+const longTextLine = Schema.String.check(Schema.isLengthBetween(0, 10_000));
+const longTextList = Schema.Array(longTextLine).check(Schema.isLengthBetween(0, 50));
 const hitDie = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
 const unarmouredAc = Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6));
 const speed = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 200 }));
 const hpPerLevel = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 20 }));
+const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
+const sourceName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 180));
+const sourceReference = Schema.Struct({ index: sourceKey, name: sourceName });
+const jsonObject = Schema.Record(Schema.String, Schema.Unknown);
 
 export const ClassBody = Schema.Struct({
   hitDie,
   unarmouredAc,
-  /** Projected creation-facing source facts; not a class-progression model. */
+  /** Projected creation-facing source facts; the concrete progression rows live beside it. */
   proficiencies: Schema.optional(textList),
   savingThrows: Schema.optional(textList),
+  /** Counts of concrete progression rows, filled by readers that join that domain. */
+  subclassCount: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 200 }))),
+  levelCount: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 500 }))),
+  featureCount: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 }))),
   summary,
 });
 export type ClassBody = typeof ClassBody.Type;
@@ -99,6 +116,82 @@ export type BackgroundOption = typeof BackgroundOption.Type;
 
 export const CharacterOption = Schema.Union([ClassOption, RaceOption, BackgroundOption]);
 export type CharacterOption = typeof CharacterOption.Type;
+
+const progressionFields = {
+  campaignId: Schema.NullOr(CampaignId),
+  accountId: Schema.NullOr(AccountId),
+  ...provenanceFields,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+} as const;
+
+export const SubclassBody = Schema.Struct({
+  flavor: Schema.optional(textLine),
+  desc: longTextList,
+});
+export type SubclassBody = typeof SubclassBody.Type;
+
+export const ClassLevelBody = Schema.Struct({
+  classSpecific: Schema.optional(jsonObject),
+  subclassSpecific: Schema.optional(jsonObject),
+  spellcasting: Schema.optional(jsonObject),
+  features: Schema.Array(sourceReference).check(Schema.isLengthBetween(0, 50)),
+});
+export type ClassLevelBody = typeof ClassLevelBody.Type;
+
+export const FeatureBody = Schema.Struct({
+  desc: longTextList,
+  prerequisites: Schema.Array(Schema.Unknown).check(Schema.isLengthBetween(0, 50)),
+  featureSpecific: Schema.optional(jsonObject),
+  reference: Schema.optional(sourceReference),
+});
+export type FeatureBody = typeof FeatureBody.Type;
+
+export const Subclass = Schema.Struct({
+  ...progressionFields,
+  id: SubclassId,
+  classOptionId: CharacterOptionId,
+  derivedFrom: Schema.NullOr(SubclassId),
+  name: Schema.String,
+  flavor: Schema.NullOr(Schema.String),
+  body: SubclassBody,
+});
+export type Subclass = typeof Subclass.Type;
+
+export const ClassLevel = Schema.Struct({
+  ...progressionFields,
+  id: ClassLevelId,
+  classOptionId: CharacterOptionId,
+  subclassId: Schema.NullOr(SubclassId),
+  derivedFrom: Schema.NullOr(ClassLevelId),
+  level: Schema.Int,
+  abilityScoreBonuses: Schema.NullOr(Schema.Int),
+  proficiencyBonus: Schema.NullOr(Schema.Int),
+  body: ClassLevelBody,
+});
+export type ClassLevel = typeof ClassLevel.Type;
+
+export const Feature = Schema.Struct({
+  ...progressionFields,
+  id: FeatureId,
+  classOptionId: CharacterOptionId,
+  subclassId: Schema.NullOr(SubclassId),
+  classLevelId: Schema.NullOr(ClassLevelId),
+  parentFeatureId: Schema.NullOr(FeatureId),
+  derivedFrom: Schema.NullOr(FeatureId),
+  name: Schema.String,
+  level: Schema.Int,
+  body: FeatureBody,
+});
+export type Feature = typeof Feature.Type;
+
+export const ClassProgression = Schema.Struct({
+  option: ClassOption,
+  subclasses: Schema.Array(Subclass),
+  levels: Schema.Array(ClassLevel),
+  features: Schema.Array(Feature),
+});
+export type ClassProgression = typeof ClassProgression.Type;
 
 export const isClassOption = (option: CharacterOption): option is ClassOption =>
   option.kind === "class";

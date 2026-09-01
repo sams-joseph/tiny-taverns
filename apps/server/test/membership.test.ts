@@ -16,6 +16,7 @@ import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
+import { ClassProgression } from "../src/repo/ClassProgression.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { type DmActor, DmActors } from "../src/repo/DmActor.js";
@@ -176,6 +177,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "magic-items/import.ts",
       "repo/Campaigns.ts",
       "repo/Characters.ts",
+      "repo/ClassProgression.ts",
       "repo/Creatures.ts",
       "repo/Equipment.ts",
       "repo/HobThreads.ts",
@@ -185,6 +187,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Spells.ts",
       "repo/visibility.ts",
       "ruleset/import.ts",
+      "ruleset/progression.ts",
       "ruleset/source.ts",
       "spells/import.ts",
     ]);
@@ -236,6 +239,7 @@ const runtime = ManagedRuntime.make(
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    ClassProgression.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
     DmActors.layer,
@@ -354,7 +358,39 @@ const makeFixture = Effect.gen(function* () {
       body: { hitDie: 10, unarmouredAc: ["DEX", "CON"] },
     }),
   );
-  yield* as(options.derive(campaign.id, homebrew.id, { visibility: "shared" }));
+  const classCopy = yield* as(options.derive(campaign.id, homebrew.id, { visibility: "shared" }));
+
+  const sql = yield* SqlClient.SqlClient;
+  const subclass = yield* sql<{ readonly id: string }>`
+    insert into subclass ${sql.insert({
+      campaign_id: campaign.id,
+      class_option_id: classCopy.id,
+      name: "Oathkept",
+      visibility: "shared",
+    })}
+    returning id::text
+  `;
+  const level = yield* sql<{ readonly id: string }>`
+    insert into class_level ${sql.insert({
+      campaign_id: campaign.id,
+      class_option_id: classCopy.id,
+      subclass_id: subclass[0]!.id,
+      level: 1,
+      visibility: "shared",
+    })}
+    returning id::text
+  `;
+  yield* sql`
+    insert into feature ${sql.insert({
+      campaign_id: campaign.id,
+      class_option_id: classCopy.id,
+      subclass_id: subclass[0]!.id,
+      class_level_id: level[0]!.id,
+      name: "Blood vow",
+      level: 1,
+      visibility: "shared",
+    })}
+  `;
 
   const asDm = yield* as(dmOf(campaign.id));
   const run = yield* as(runs.start(asDm, session.id, { encounterId: encounter.id }));
@@ -378,6 +414,7 @@ const makeFixture = Effect.gen(function* () {
     encounter,
     run,
     thread,
+    classCopy,
   };
 }).pipe(Effect.orDie);
 
@@ -402,6 +439,7 @@ const READS: Record<
     | Beats
     | Campaigns
     | Characters
+    | ClassProgression
     | Combatants
     | Creatures
     | CurrentActor
@@ -435,6 +473,21 @@ const READS: Record<
   // leak somebody would have found by using the product rather than by testing
   // it.
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
+  subclass: (f) =>
+    Effect.map(
+      Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
+      (progression) => progression.subclasses,
+    ),
+  class_level: (f) =>
+    Effect.map(
+      Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
+      (progression) => progression.levels,
+    ),
+  feature: (f) =>
+    Effect.map(
+      Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
+      (progression) => progression.features,
+    ),
   spell: (f) => items(Effect.flatMap(Spells, (r) => r.list(f.campaign.id, {}))),
   equipment: (f) => items(Effect.flatMap(EquipmentRepo, (r) => r.list(f.campaign.id, {}))),
   magic_item: (f) => items(Effect.flatMap(MagicItems, (r) => r.list(f.campaign.id, {}))),
@@ -629,6 +682,7 @@ describe("a stranger reads nothing", () => {
               'proficiency',
               'spell_class',
               'spell_damage_type',
+              'spell_subclass',
               'weapon_property'
             )
           order by table_name

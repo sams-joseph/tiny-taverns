@@ -99,6 +99,7 @@ describe("migrations", () => {
       "character",
       "character_option",
       "character_option_equipment_reference",
+      "class_level",
       "combatant",
       "condition",
       "creature",
@@ -117,6 +118,7 @@ describe("migrations", () => {
       "equipment_category",
       "equipment_content",
       "equipment_property",
+      "feature",
       "magic_item",
       "magic_item_rarity",
       "magic_item_variant",
@@ -129,6 +131,8 @@ describe("migrations", () => {
       "spell",
       "spell_class",
       "spell_damage_type",
+      "spell_subclass",
+      "subclass",
       "weapon_property",
     ]);
     // Numbering is load-bearing and the failure is silent: `Migrator.run` keeps
@@ -162,6 +166,7 @@ describe("migrations", () => {
       { migration_id: 23, name: "magic_items" },
       { migration_id: 24, name: "creature_monster_corpus" },
       { migration_id: 25, name: "concrete_source_relationships" },
+      { migration_id: 26, name: "class_progression" },
     ]);
   }, 60_000);
 
@@ -197,6 +202,7 @@ describe("migrations", () => {
       { migration_id: 23, name: "magic_items" },
       { migration_id: 24, name: "creature_monster_corpus" },
       { migration_id: 25, name: "concrete_source_relationships" },
+      { migration_id: 26, name: "class_progression" },
     ]);
   }, 60_000);
 });

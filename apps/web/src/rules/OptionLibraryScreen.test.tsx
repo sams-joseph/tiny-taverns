@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   bloodswornOriginalId,
   campaignId,
+  libraryDruidOptionId,
   installRulesServer,
   marshfolkOriginalId,
   renderOptionLibrary,
@@ -122,6 +123,21 @@ describe("what your library holds", () => {
     expect(screen.queryByText(/until you share it/)).toBeNull();
     // The one badge that does belong: a row nobody owns.
     expect(screen.getAllByText("Standard").length).toBeGreaterThan(0);
+  });
+
+  it("opens a class's concrete progression without naming a campaign", async () => {
+    await renderOptionLibrary();
+    await userEvent.click(await screen.findByRole("button", { name: "Read Druid progression" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Druid progression" });
+    expect(within(dialog).getByText("Land")).toBeInTheDocument();
+    expect(within(dialog).getByText("Druidic")).toBeInTheDocument();
+    expect(within(dialog).getByText("Bonus Cantrip")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(sent("GET", `/library/options/${libraryDruidOptionId}/progression`)).toBeDefined();
+    });
+    expect(server.calls.some((call) => call.pathname.includes("/campaigns/"))).toBe(false);
   });
 
   it("has no way to copy one into a campaign, because it names none", async () => {

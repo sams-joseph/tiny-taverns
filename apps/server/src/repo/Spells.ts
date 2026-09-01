@@ -404,7 +404,15 @@ export class Spells extends Context.Service<
                 )}
                 returning *
               `;
-                return toSpell(rows[0]!);
+                const copy = rows[0]!;
+                yield* sql`
+                  insert into spell_subclass (spell_id, subclass_id, ordinal)
+                  select ${copy.id}, subclass_id, ordinal
+                  from spell_subclass
+                  where spell_id = ${source.id}
+                  on conflict do nothing
+                `;
+                return toSpell(copy);
               }),
             ),
           ),

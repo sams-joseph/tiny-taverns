@@ -129,6 +129,12 @@ describe("2014 SRD spells", () => {
         join spell_damage_type on spell_damage_type.spell_id = spell.id
         join damage_type on damage_type.id = spell_damage_type.damage_type_id
         where spell.source_key = 'fireball'
+        union all
+        select 'subclass' as relation, subclass.source_family as target_family, subclass.source_key as target_index
+        from spell
+        join spell_subclass on spell_subclass.spell_id = spell.id
+        join subclass on subclass.id = spell_subclass.subclass_id
+        where spell.source_key = 'acid-arrow'
         order by relation, target_index
       `,
     );
@@ -140,6 +146,8 @@ describe("2014 SRD spells", () => {
         { relation: "class", target_family: "classes", target_index: "wizard" },
         { relation: "damage-type", target_family: "damage-types", target_index: "fire" },
         { relation: "dc-type", target_family: "ability-scores", target_index: "dex" },
+        { relation: "subclass", target_family: "subclasses", target_index: "land" },
+        { relation: "subclass", target_family: "subclasses", target_index: "lore" },
       ]),
     );
   });

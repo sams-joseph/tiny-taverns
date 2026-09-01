@@ -25,6 +25,7 @@ import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
 import { DmActors } from "./repo/DmActor.js";
@@ -199,6 +200,7 @@ export const servicesOver = <E>(
   | Beats
   | Campaigns
   | Characters
+  | ClassProgression
   | Combatants
   | Creatures
   | DmActors
@@ -239,6 +241,9 @@ export const servicesOver = <E>(
     // the character in the same transaction, and a character written during a
     // session rings the doorbell. So this is a live repository too.
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // The concrete class progression rows under the Rules shelves. Read-only;
+    // the importer and option derive path are the only writers today.
+    ClassProgression.layer,
     // The live repositories ring the in-process fan-out after they commit, so
     // they take it as a dependency. It is merged in as well, because the
     // streaming handler subscribes to it — and `Layer` memoises by identity, so
@@ -365,6 +370,7 @@ export const applicationOver = <E>(
     | Beats
     | Campaigns
     | Characters
+    | ClassProgression
     | Combatants
     | Creatures
     | DmActors

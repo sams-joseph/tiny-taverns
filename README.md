@@ -112,17 +112,17 @@ pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
-pnpm -F server ruleset:import   # loads the bundled 2014 classes, races and background (idempotent)
-pnpm -F server spell:import      # loads the bundled 2014 SRD spells (optional, idempotent)
+pnpm -F server ruleset:import   # loads 2014 classes, subclasses, progression, races and backgrounds (idempotent)
+pnpm -F server spell:import      # loads bundled 2014 SRD spells and class/subclass links (optional, idempotent)
 pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (idempotent)
 pnpm -F server magic-item:import # loads the bundled 2014 SRD magic items (idempotent)
 pnpm dev                         # API on :3000, web on :5173
 ```
 
 The import order above is deliberate: equipment comes before the ruleset so background
-starting-equipment references resolve to rows, spells come after the class vocabulary they link to,
-and spells/equipment both come before the monster corpus so imported monster relationships can be
-populated.
+starting-equipment references resolve to rows, the ruleset seeds the concrete subclass and class
+progression rows before spells create their class/subclass links, and spells/equipment both come
+before the monster corpus so imported monster relationships can be populated.
 
 If an existing development database still carries the pre-2014 character-rules rows, use the
 clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server equipment:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server bestiary:import && pnpm -F server magic-item:import`.
@@ -245,13 +245,16 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
 **A campaign can have its own classes, races, backgrounds, spells, mundane equipment and magic items**, and
 they follow exactly the same model. `pnpm -F server equipment:import` writes the 237 bundled 2014 SRD
 mundane equipment rows; `pnpm -F server ruleset:import` writes the bundled 2014 SRD character
-vocabulary and its concrete starting-equipment references; `pnpm -F server spell:import` writes the
-319 bundled 2014 SRD spells as global rows linked to that class vocabulary; `pnpm -F server
-magic-item:import` writes the 362 bundled 2014 SRD magic items as global rows. All are keyed by
+vocabulary, its concrete subclass/class-level/feature progression and its concrete
+starting-equipment references; `pnpm -F server spell:import` writes the 319 bundled 2014 SRD spells
+as global rows linked to the class and subclass vocabulary; `pnpm -F server magic-item:import`
+writes the 362 bundled 2014 SRD magic items as global rows. All are keyed by
 stable source keys from the pinned 5e-bits `5e-database`
 snapshot (`5.10.0`, commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races
 contain their 2014 subraces in the race body; there is no separate unparented subrace option kind.
-Character vocabulary is managed in the campaign's **Rules** screen; spells, equipment and magic items have their
+Class progression has concrete subclass, class-level and feature rows, and spell-to-subclass links
+use those subclass rows rather than free text. Character vocabulary is managed in the campaign's
+**Rules** screen; spells, equipment and magic items have their
 own API and Library shelves, with the same copy-as-snapshot rule. The copy is what a player reads
 from, because a player can never read somebody else's library — see `AGENTS.md`, which is also
 where the one thing these importers do differently is written down.

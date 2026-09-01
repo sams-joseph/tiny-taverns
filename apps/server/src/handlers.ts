@@ -17,6 +17,7 @@ import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
 import { Options } from "./repo/Options.js";
@@ -396,9 +397,11 @@ const CharacterOptionsLive = HttpApiBuilder.group(
   "options",
   Effect.fnUntraced(function* (handlers) {
     const options = yield* Options;
+    const progression = yield* ClassProgression;
     return handlers
       .handle("list", ({ params, query }) => options.list(params.campaignId, query))
       .handle("findById", ({ params }) => options.findById(params.campaignId, params.optionId))
+      .handle("progression", ({ params }) => progression.read(params.campaignId, params.optionId))
       .handle("update", ({ params, payload }) =>
         options.update(params.campaignId, params.optionId, payload),
       )
@@ -432,6 +435,7 @@ const LibraryLive = HttpApiBuilder.group(
     // the reason there are two tables — one table gets one mapper — and the
     // pair of predicates each composes is the same pair.
     const options = yield* Options;
+    const progression = yield* ClassProgression;
     const spells = yield* Spells;
     const equipment = yield* EquipmentRepo;
     const magicItems = yield* MagicItems;
@@ -448,6 +452,7 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("options", ({ query }) => options.library(query))
       .handle("createOption", ({ payload }) => options.libraryCreate(payload))
       .handle("findOption", ({ params }) => options.libraryFindById(params.optionId))
+      .handle("optionProgression", ({ params }) => progression.libraryRead(params.optionId))
       .handle("updateOption", ({ params, payload }) =>
         options.libraryUpdate(params.optionId, payload),
       )

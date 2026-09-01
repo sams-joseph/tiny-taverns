@@ -1115,12 +1115,12 @@ Since `0025`, `origin = 'system'` means _bundled and owned by nobody_ again; the
 stable source triplet (`source_corpus`, `source_family`, `source_key`), and relationships from the
 2014 data live in concrete lookup/domain tables: `magic_school`, `ability_score`, `damage_type`,
 `equipment_category`, `weapon_property`, `magic_item_rarity`, `proficiency`, `condition`, plus the
-join tables `spell_class`, `spell_damage_type`, `equipment_property`, `equipment_content`,
-`magic_item_variant`, `character_option_equipment_reference`, and the creature relation tables.
-There is no generic `rules_term`, no `term_id` relationship and no `spell_subclass` table; a future
-subclass domain earns its own table when a screen actually reads it. No source URLs, raw payloads,
-content hashes or import runs are stored; generated snapshots may still contain 5e-bits transport
-URLs only as importer input.
+join tables `spell_class`, `spell_subclass`, `spell_damage_type`, `equipment_property`,
+`equipment_content`, `magic_item_variant`, `character_option_equipment_reference`, and the creature
+relation tables. `subclass`, `class_level` and `feature` are concrete domain tables under
+`character_option`, and spell-to-subclass is a real FK into `subclass`. There is no generic
+`rules_term` and no `term_id` relationship. No source URLs, raw payloads, content hashes or import
+runs are stored; generated snapshots may still contain 5e-bits transport URLs only as importer input.
 
 - **Bestiary starter creatures** remain Taverns project-authored data, transcribed from the
   designers' fixture. `bestiary:import` keys them under `taverns-starter/monsters/*` and never
@@ -1540,8 +1540,8 @@ The bundle is imported by `pnpm -F server spell:import` from the checked-in
 `apps/server/src/spells/systemSpells.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0 commit
 `5a7ee5a0489b26655d343e4a41e8f7942a887af2`, path `src/2014/en/5e-SRD-Spells.json`: exactly 319
 2014 SRD spells. No runtime fetch. Imported rows keep stable source keys and concrete relationships
-for schools, classes, damage types and DC abilities. Subclasses are deliberately not stored as a
-relationship until a concrete subclass domain exists. Do not relabel the spell bundle as
+for schools, classes, subclasses, damage types and DC abilities; `spell_subclass` can be populated
+only after `ruleset:import` has seeded `subclass`. Do not relabel the spell bundle as
 Taverns-authored, and do not fold it into `ruleset:import` without revisiting the explicit
 reset/import docs.
 

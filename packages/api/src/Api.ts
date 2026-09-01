@@ -15,6 +15,7 @@ import {
 } from "./Character.js";
 import {
   CharacterOption,
+  ClassProgression,
   OptionDerive,
   OptionFilter,
   OptionLibraryCreate,
@@ -969,6 +970,11 @@ class CharacterOptionsGroup extends HttpApiGroup.make("options")
       success: CharacterOption,
       error: NotFound,
     }),
+    HttpApiEndpoint.get("progression", "/:optionId/progression", {
+      params: { campaignId: CampaignId, optionId: CharacterOptionId },
+      success: ClassProgression,
+      error: NotFound,
+    }),
     /**
      * Edit this campaign's copy — **including whether the players can see it**,
      * which is the one field a copy has that an original does not.
@@ -1240,6 +1246,11 @@ class LibraryGroup extends HttpApiGroup.make("library")
     HttpApiEndpoint.get("findOption", "/options/:optionId", {
       params: { optionId: CharacterOptionId },
       success: CharacterOption,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("optionProgression", "/options/:optionId/progression", {
+      params: { optionId: CharacterOptionId },
+      success: ClassProgression,
       error: NotFound,
     }),
     /**

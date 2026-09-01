@@ -27,6 +27,7 @@ export function OptionSection({
   emptyBody,
   onEdit,
   onRemove,
+  onProgression,
 }: {
   readonly title: string;
   readonly options: ReadonlyArray<CharacterOption>;
@@ -36,6 +37,8 @@ export function OptionSection({
   readonly onEdit: (option: CharacterOption) => (() => void) | undefined;
   /** Absent entirely where the list has no remove at all. */
   readonly onRemove?: (option: CharacterOption) => (() => void) | undefined;
+  /** Absent for non-class sections, where no progression exists. */
+  readonly onProgression?: (option: CharacterOption) => (() => void) | undefined;
 }) {
   return (
     <section aria-label={title} className="flex flex-col gap-3">
@@ -61,6 +64,7 @@ export function OptionSection({
                 option={option}
                 onEdit={onEdit(option)}
                 onRemove={onRemove?.(option)}
+                onProgression={onProgression?.(option)}
               />
             ))}
           </div>

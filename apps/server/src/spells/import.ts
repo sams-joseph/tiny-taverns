@@ -9,6 +9,7 @@ import {
   magicSchoolForRef,
   requireDamageTypeForRef,
   sourceKeyFor,
+  subclassForRef,
 } from "../ruleset/source.js";
 import { ABILITY_SCORE_RAW, DAMAGE_TYPE_RAW, MAGIC_SCHOOL_RAW, SPELL_RAW } from "./systemSpells.js";
 
@@ -218,6 +219,7 @@ const syncSpellRelationships = (
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.gen(function* () {
     yield* sql`delete from spell_class where spell_id = ${spellId}`;
+    yield* sql`delete from spell_subclass where spell_id = ${spellId}`;
     yield* sql`delete from spell_damage_type where spell_id = ${spellId}`;
 
     for (const [ordinal, reference] of spell.classes.entries()) {
@@ -227,6 +229,14 @@ const syncSpellRelationships = (
         values (${spellId}, ${classOptionId}, ${ordinal})
       `;
     }
+    for (const [ordinal, reference] of spell.subclasses.entries()) {
+      const subclassId = yield* subclassForRef(sql, reference);
+      yield* sql`
+        insert into spell_subclass (spell_id, subclass_id, ordinal)
+        values (${spellId}, ${subclassId}, ${ordinal})
+      `;
+    }
+
     const damageType = spell.body.damage?.damageType;
     if (damageType !== undefined) {
       const damageTypeId = yield* requireDamageTypeForRef(sql, damageType, "spell-damage-type");
