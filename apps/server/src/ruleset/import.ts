@@ -1,19 +1,7 @@
 import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
-import {
-  beginRulesImport,
-  FIVE_E_BITS_2014_SOURCE,
-  sourceLinkFor,
-  sourceRevisionFor,
-  type SourceRevision,
-} from "./source.js";
-import {
-  SOURCE_REFERENCES,
-  SOURCE_SUBRACES,
-  SYSTEM_OPTIONS,
-  type SourceReference,
-  type SystemOption,
-} from "./systemOptions.js";
+import { FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
+import { SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
 
 /** What one run of the import did. Counts the domain `character_option` upserts. */
 export interface ImportResult {
@@ -21,83 +9,99 @@ export interface ImportResult {
   readonly updated: number;
 }
 
-const sourceUrlFor = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : `https://www.dnd5eapi.co${url}`;
+interface EquipmentReference {
+  readonly index: string;
+  readonly quantity: number;
+}
 
-const targetOf = (ref: SourceReference) => ({
-  targetFamily: ref.family,
-  targetIndex: ref.index,
-});
+const maybeRecord = (value: unknown): Record<string, unknown> | undefined => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+};
 
-const refsIn = (value: unknown): ReadonlyArray<SourceReference> => {
-  const found: SourceReference[] = [];
-  const walk = (item: unknown): void => {
-    if (item !== null && typeof item === "object") {
-      const row = item as {
-        readonly index?: unknown;
-        readonly name?: unknown;
-        readonly url?: unknown;
-      };
-      if (
-        typeof row.index === "string" &&
-        typeof row.name === "string" &&
-        typeof row.url === "string"
-      ) {
-        const match = row.url.match(/^\/api\/2014\/([^/]+)\//);
-        if (match?.[1] !== undefined) {
-          found.push({ family: match[1], index: row.index, name: row.name, url: row.url });
-        }
-      }
-      if (Array.isArray(item)) for (const child of item) walk(child);
-      else for (const child of Object.values(item)) walk(child);
+const sourceIndexOf = (value: unknown): string | undefined => {
+  const record = maybeRecord(value);
+  const index = record?.index;
+  return typeof index === "string" && index.trim() !== "" ? index : undefined;
+};
+
+const quantityOf = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+
+const walkEquipmentOptions = (value: unknown, found: EquipmentReference[]): void => {
+  const record = maybeRecord(value);
+  if (record === undefined) {
+    if (Array.isArray(value)) for (const item of value) walkEquipmentOptions(item, found);
+    return;
+  }
+
+  const optionType = record.option_type;
+  if (optionType === "counted_reference") {
+    const index = sourceIndexOf(record.of);
+    const quantity = quantityOf(record.count) ?? 1;
+    if (index !== undefined) found.push({ index, quantity });
+    return;
+  }
+
+  const equipmentIndex = sourceIndexOf(record.equipment);
+  if (equipmentIndex !== undefined) {
+    found.push({ index: equipmentIndex, quantity: quantityOf(record.quantity) ?? 1 });
+  }
+
+  for (const child of Object.values(record)) walkEquipmentOptions(child, found);
+};
+
+const optionEquipmentReferences = (raw: unknown): ReadonlyArray<EquipmentReference> => {
+  const found: EquipmentReference[] = [];
+  const record = maybeRecord(raw);
+  const starting = record?.starting_equipment;
+  if (Array.isArray(starting)) {
+    for (const item of starting) {
+      const row = maybeRecord(item);
+      const index = sourceIndexOf(row?.equipment);
+      if (index !== undefined) found.push({ index, quantity: quantityOf(row?.quantity) ?? 1 });
     }
-  };
-  walk(value);
+  }
+
+  const options = record?.starting_equipment_options;
+  if (Array.isArray(options)) for (const option of options) walkEquipmentOptions(option, found);
+
   return found;
 };
 
-const importReferencedEntity = (
+const systemEquipmentId = (
   sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  ref: SourceReference,
-) =>
-  sourceRevisionFor(sql, context, {
-    family: ref.family,
-    sourceIndex: ref.index,
-    sourceUrl: sourceUrlFor(ref.url),
-    name: ref.name,
-    raw: ref.raw ?? ref,
+  sourceIndex: string,
+): Effect.Effect<string, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: string }>`
+      select id::text from equipment
+      where source_corpus = ${FIVE_E_BITS_2014_SOURCE.corpus}
+        and source_family = 'equipment'
+        and source_key = ${sourceIndex}
+        and campaign_id is null
+        and account_id is null
+      limit 1
+    `;
+    const row = rows[0];
+    if (row === undefined) throw new Error(`missing required option equipment ${sourceIndex}`);
+    return row.id;
   });
 
-const importSubrace = (
+const syncOptionEquipmentReferences = (
   sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  subrace: Record<string, unknown>,
-): Effect.Effect<SourceRevision, SqlError.SqlError> =>
-  sourceRevisionFor(sql, context, {
-    family: "subraces",
-    sourceIndex: String(subrace.index),
-    sourceUrl: sourceUrlFor(typeof subrace.url === "string" ? subrace.url : undefined),
-    name: String(subrace.name),
-    raw: subrace,
-  });
-
-const linkAllReferences = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  from: SourceRevision,
+  optionId: string,
   raw: unknown,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.gen(function* () {
-    let ordinal = 0;
-    for (const ref of refsIn(raw)) {
-      yield* sourceLinkFor(sql, context, from, {
-        relation: "references",
-        ...targetOf(ref),
-        ordinal,
-        payload: { name: ref.name, url: ref.url },
-      });
-      ordinal += 1;
+    yield* sql`delete from character_option_equipment_reference where option_id = ${optionId}`;
+    for (const [ordinal, reference] of optionEquipmentReferences(raw).entries()) {
+      const equipmentId = yield* systemEquipmentId(sql, reference.index);
+      yield* sql`
+        insert into character_option_equipment_reference (option_id, equipment_id, quantity, ordinal)
+        values (${optionId}, ${equipmentId}, ${reference.quantity}, ${ordinal})
+        on conflict do nothing
+      `;
     }
   });
 
@@ -116,87 +120,44 @@ export const importSystemOptions = (
       Effect.gen(function* () {
         let inserted = 0;
         let updated = 0;
-        const context = yield* beginRulesImport(sql, FIVE_E_BITS_2014_SOURCE);
-
-        for (const ref of SOURCE_REFERENCES) {
-          if (["classes", "races", "backgrounds", "subraces"].includes(ref.family)) continue;
-          yield* importReferencedEntity(sql, context, ref);
-        }
-
-        const domainSources = new Map<string, SourceRevision>();
-        for (const option of corpus) {
-          const source = yield* sourceRevisionFor(sql, context, {
-            family: option.sourceFamily,
-            sourceIndex: option.sourceIndex,
-            sourceUrl: sourceUrlFor(option.sourceUrl),
-            name: option.name,
-            raw: option.raw,
-          });
-          domainSources.set(`${option.sourceFamily}:${option.sourceIndex}`, source);
-        }
-
-        for (const subrace of SOURCE_SUBRACES) {
-          const revision = yield* importSubrace(sql, context, subrace);
-          yield* linkAllReferences(sql, context, revision, subrace);
-          const race = (subrace.race ?? {}) as {
-            readonly index?: unknown;
-            readonly name?: unknown;
-          };
-          if (typeof race.index === "string") {
-            yield* sourceLinkFor(sql, context, revision, {
-              relation: "parent-race",
-              targetFamily: "races",
-              targetIndex: race.index,
-              payload: { name: race.name },
-            });
-          }
-        }
 
         for (const option of corpus) {
-          const source = domainSources.get(`${option.sourceFamily}:${option.sourceIndex}`)!;
-          yield* linkAllReferences(sql, context, source, option.raw);
+          const key = sourceKeyFor(
+            FIVE_E_BITS_2014_SOURCE,
+            option.sourceFamily,
+            option.sourceIndex,
+          );
 
-          if (option.kind === "race") {
-            for (const subrace of option.body.subraces) {
-              const raw = SOURCE_SUBRACES.find((row) => row.name === subrace.name);
-              if (typeof raw?.index === "string") {
-                yield* sourceLinkFor(sql, context, source, {
-                  relation: "subrace",
-                  targetFamily: "subraces",
-                  targetIndex: raw.index,
-                  payload: { name: subrace.name },
-                });
-              }
-            }
-          }
-
-          const rows = yield* sql<{ readonly inserted: boolean }>`
+          const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into character_option (
-              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
               kind, name, body, visibility
             )
             values (
               null,
               null,
               'system',
-              ${source.sourceEntityId},
-              ${source.sourceRevisionId},
+              ${key.sourceCorpus},
+              ${key.sourceFamily},
+              ${key.sourceKey},
               ${option.kind},
               ${option.name},
               ${JSON.stringify(option.body)},
               'shared'
             )
-            on conflict (source_entity_id)
-              where campaign_id is null and account_id is null and source_entity_id is not null
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
             do update set
-              source_revision_id = excluded.source_revision_id,
               kind       = excluded.kind,
               name       = excluded.name,
               body       = excluded.body,
               updated_at = now()
-            returning (xmax = 0) as inserted
+            returning id::text, (xmax = 0) as inserted
           `;
-          if (rows[0]?.inserted === true) inserted += 1;
+          const row = rows[0];
+          if (row === undefined) throw new Error(`option ${option.sourceIndex} was not written`);
+          yield* syncOptionEquipmentReferences(sql, row.id, option.raw);
+          if (row.inserted === true) inserted += 1;
           else updated += 1;
         }
 

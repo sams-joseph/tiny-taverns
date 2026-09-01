@@ -14,7 +14,8 @@
  *
  * 5e-bits project data is MIT licensed; underlying Dungeons & Dragons 5th Edition
  * SRD 5.1 material is used under the Open Game License version 1.0a. See
- * THIRD_PARTY_NOTICES.md and rules_source_document rows written by bestiary:import.
+ * THIRD_PARTY_NOTICES.md; bestiary:import stores stable source keys, not per-row
+ * source-document provenance.
  */
 
 export const FIVE_E_BITS_2014_COMMIT = "5a7ee5a0489b26655d343e4a41e8f7942a887af2";
@@ -51,40 +52,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -111,8 +107,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -143,8 +138,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -153,16 +147,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+5"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d12"
           }
@@ -176,8 +168,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d6+5"
           }
@@ -193,8 +184,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -217,16 +207,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "psychic",
-              "name": "Psychic",
-              "url": "/api/2014/damage-types/psychic"
+              "name": "Psychic"
             },
             "damage_dice": "3d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/aboleth.png",
-    "url": "/api/2014/monsters/aboleth"
+    "image": "/api/images/monsters/aboleth.png"
   },
   {
     "index": "acolyte",
@@ -259,16 +247,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-medicine",
-          "name": "Skill: Medicine",
-          "url": "/api/2014/proficiencies/skill-medicine"
+          "name": "Skill: Medicine"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -291,8 +277,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 1,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 12,
           "modifier": 4,
@@ -308,33 +293,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Light",
-              "level": 0,
-              "url": "/api/2014/spells/light"
+              "level": 0
             },
             {
               "name": "Sacred Flame",
-              "level": 0,
-              "url": "/api/2014/spells/sacred-flame"
+              "level": 0
             },
             {
               "name": "Thaumaturgy",
-              "level": 0,
-              "url": "/api/2014/spells/thaumaturgy"
+              "level": 0
             },
             {
               "name": "Bless",
-              "level": 1,
-              "url": "/api/2014/spells/bless"
+              "level": 1
             },
             {
               "name": "Cure Wounds",
-              "level": 1,
-              "url": "/api/2014/spells/cure-wounds"
+              "level": 1
             },
             {
               "name": "Sanctuary",
-              "level": 1,
-              "url": "/api/2014/spells/sanctuary"
+              "level": 1
             }
           ]
         }
@@ -349,16 +328,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/acolyte.png",
-    "url": "/api/2014/monsters/acolyte"
+    "image": "/api/images/monsters/acolyte.png"
   },
   {
     "index": "adult-black-dragon",
@@ -391,48 +368,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -496,16 +467,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d8"
           }
@@ -519,8 +488,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -534,8 +502,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+6"
           }
@@ -547,8 +514,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -565,8 +531,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 18,
           "success_type": "half"
@@ -575,8 +540,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "12d8"
           }
@@ -598,8 +562,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -608,16 +571,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-black-dragon.png",
-    "url": "/api/2014/monsters/adult-black-dragon"
+    "image": "/api/images/monsters/adult-black-dragon.png"
   },
   {
     "index": "adult-blue-dragon",
@@ -650,48 +611,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -751,16 +706,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+7"
           },
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "1d10"
           }
@@ -774,8 +727,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+7"
           }
@@ -789,8 +741,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+7"
           }
@@ -802,8 +753,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 17,
           "success_type": "none"
@@ -820,8 +770,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 19,
           "success_type": "half"
@@ -830,8 +779,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "12d10"
           }
@@ -853,8 +801,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 20,
           "success_type": "none"
@@ -863,16 +810,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+7"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-blue-dragon.png",
-    "url": "/api/2014/monsters/adult-blue-dragon"
+    "image": "/api/images/monsters/adult-blue-dragon.png"
   },
   {
     "index": "adult-brass-dragon",
@@ -905,64 +850,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -1022,8 +959,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           }
@@ -1037,8 +973,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -1052,8 +987,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+6"
           }
@@ -1065,8 +999,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -1092,8 +1025,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 18,
                   "success_type": "half"
@@ -1102,8 +1034,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "13d6"
                   }
@@ -1115,8 +1046,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 18,
                   "success_type": "none"
@@ -1142,8 +1072,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -1152,16 +1081,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-brass-dragon.png",
-    "url": "/api/2014/monsters/adult-brass-dragon"
+    "image": "/api/images/monsters/adult-brass-dragon.png"
   },
   {
     "index": "adult-bronze-dragon",
@@ -1194,56 +1121,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -1307,8 +1227,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+7"
           }
@@ -1322,8 +1241,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+7"
           }
@@ -1337,8 +1255,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+7"
           }
@@ -1350,8 +1267,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 17,
           "success_type": "none"
@@ -1377,8 +1293,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 19,
                   "success_type": "half"
@@ -1387,8 +1302,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "lightning",
-                      "name": "Lightning",
-                      "url": "/api/2014/damage-types/lightning"
+                      "name": "Lightning"
                     },
                     "damage_dice": "12d10"
                   }
@@ -1400,8 +1314,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 19,
                   "success_type": "none"
@@ -1427,8 +1340,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 20,
           "success_type": "none"
@@ -1437,16 +1349,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+7"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-bronze-dragon.png",
-    "url": "/api/2014/monsters/adult-bronze-dragon"
+    "image": "/api/images/monsters/adult-bronze-dragon.png"
   },
   {
     "index": "adult-copper-dragon",
@@ -1479,56 +1389,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -1588,8 +1491,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           }
@@ -1603,8 +1505,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -1618,8 +1519,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+6"
           }
@@ -1631,8 +1531,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -1658,8 +1557,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 18,
                   "success_type": "half"
@@ -1668,8 +1566,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "acid",
-                      "name": "Acid",
-                      "url": "/api/2014/damage-types/acid"
+                      "name": "Acid"
                     },
                     "damage_dice": "12d8"
                   }
@@ -1681,8 +1578,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 18,
                   "success_type": "none"
@@ -1708,8 +1604,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -1718,16 +1613,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-copper-dragon.png",
-    "url": "/api/2014/monsters/adult-copper-dragon"
+    "image": "/api/images/monsters/adult-copper-dragon.png"
   },
   {
     "index": "adult-gold-dragon",
@@ -1760,64 +1653,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -1881,8 +1766,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           }
@@ -1896,8 +1780,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -1911,8 +1794,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -1924,8 +1806,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 21,
           "success_type": "none"
@@ -1951,8 +1832,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 21,
                   "success_type": "half"
@@ -1961,8 +1841,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "12d10"
                   }
@@ -1974,8 +1853,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 21,
                   "success_type": "none"
@@ -2001,8 +1879,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 22,
           "success_type": "none"
@@ -2011,16 +1888,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-gold-dragon.png",
-    "url": "/api/2014/monsters/adult-gold-dragon"
+    "image": "/api/images/monsters/adult-gold-dragon.png"
   },
   {
     "index": "adult-green-dragon",
@@ -2053,72 +1928,63 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -2130,8 +1996,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -2188,16 +2053,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "2d6"
           }
@@ -2211,8 +2074,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -2226,8 +2088,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+6"
           }
@@ -2239,8 +2100,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -2257,8 +2117,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 18,
           "success_type": "half"
@@ -2267,8 +2126,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "16d6"
           }
@@ -2290,8 +2148,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -2300,16 +2157,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-green-dragon.png",
-    "url": "/api/2014/monsters/adult-green-dragon"
+    "image": "/api/images/monsters/adult-green-dragon.png"
   },
   {
     "index": "adult-red-dragon",
@@ -2342,48 +2197,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -2443,16 +2292,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -2466,8 +2313,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -2481,8 +2327,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -2494,8 +2339,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -2512,8 +2356,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 21,
           "success_type": "none"
@@ -2522,8 +2365,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "18d6"
           }
@@ -2545,8 +2387,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 22,
           "success_type": "none"
@@ -2555,16 +2396,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-red-dragon.png",
-    "url": "/api/2014/monsters/adult-red-dragon"
+    "image": "/api/images/monsters/adult-red-dragon.png"
   },
   {
     "index": "adult-silver-dragon",
@@ -2596,64 +2435,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -2713,8 +2544,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           }
@@ -2728,8 +2558,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -2743,8 +2572,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -2756,8 +2584,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 18,
           "success_type": "none"
@@ -2783,8 +2610,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 20,
                   "success_type": "half"
@@ -2793,8 +2619,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "cold",
-                      "name": "Cold",
-                      "url": "/api/2014/damage-types/cold"
+                      "name": "Cold"
                     },
                     "damage_dice": "13d8"
                   }
@@ -2806,8 +2631,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 20,
                   "success_type": "none"
@@ -2833,8 +2657,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 22,
           "success_type": "none"
@@ -2843,16 +2666,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-silver-dragon.png",
-    "url": "/api/2014/monsters/adult-silver-dragon"
+    "image": "/api/images/monsters/adult-silver-dragon.png"
   },
   {
     "index": "adult-white-dragon",
@@ -2886,48 +2707,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -2991,16 +2806,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "1d8"
           }
@@ -3014,8 +2827,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -3029,8 +2841,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+6"
           }
@@ -3042,8 +2853,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -3060,8 +2870,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 19,
           "success_type": "half"
@@ -3070,8 +2879,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "12d8"
           }
@@ -3093,8 +2901,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -3103,16 +2910,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/adult-white-dragon.png",
-    "url": "/api/2014/monsters/adult-white-dragon"
+    "image": "/api/images/monsters/adult-white-dragon.png"
   },
   {
     "index": "air-elemental",
@@ -3152,43 +2957,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -3226,8 +3023,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+5"
           }
@@ -3243,8 +3039,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/air-elemental.png",
-    "url": "/api/2014/monsters/air-elemental"
+    "image": "/api/images/monsters/air-elemental.png"
   },
   {
     "index": "ancient-black-dragon",
@@ -3277,48 +3072,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -3382,16 +3171,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "2d8"
           }
@@ -3405,8 +3192,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -3420,8 +3206,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -3433,8 +3218,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -3451,8 +3235,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 22,
           "success_type": "half"
@@ -3461,8 +3244,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "15d8"
           }
@@ -3484,8 +3266,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 23,
           "success_type": "none"
@@ -3494,16 +3275,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-black-dragon.png",
-    "url": "/api/2014/monsters/ancient-black-dragon"
+    "image": "/api/images/monsters/ancient-black-dragon.png"
   },
   {
     "index": "ancient-blue-dragon",
@@ -3536,48 +3315,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 15,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 17,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -3637,16 +3410,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+9"
           },
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "2d10"
           }
@@ -3660,8 +3431,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+9"
           }
@@ -3675,8 +3445,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+9"
           }
@@ -3688,8 +3457,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 20,
           "success_type": "none"
@@ -3706,8 +3474,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 23,
           "success_type": "half"
@@ -3716,8 +3483,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "16d10"
           }
@@ -3739,8 +3505,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 24,
           "success_type": "none"
@@ -3749,16 +3514,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+9"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-blue-dragon.png",
-    "url": "/api/2014/monsters/ancient-blue-dragon"
+    "image": "/api/images/monsters/ancient-blue-dragon.png"
   },
   {
     "index": "ancient-brass-dragon",
@@ -3791,64 +3554,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -3908,8 +3663,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           }
@@ -3923,8 +3677,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -3938,8 +3691,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -3951,8 +3703,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 18,
           "success_type": "none"
@@ -3978,8 +3729,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 21,
                   "success_type": "half"
@@ -3988,8 +3738,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "16d6"
                   }
@@ -4001,8 +3750,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 21,
                   "success_type": "none"
@@ -4032,8 +3780,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 22,
           "success_type": "none"
@@ -4042,16 +3789,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-brass-dragon.png",
-    "url": "/api/2014/monsters/ancient-brass-dragon"
+    "image": "/api/images/monsters/ancient-brass-dragon.png"
   },
   {
     "index": "ancient-bronze-dragon",
@@ -4084,56 +3829,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 15,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 17,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -4197,8 +3935,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+9"
           }
@@ -4212,8 +3949,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+9"
           }
@@ -4227,8 +3963,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+9"
           }
@@ -4240,8 +3975,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 20,
           "success_type": "none"
@@ -4267,8 +4001,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 23,
                   "success_type": "half"
@@ -4277,8 +4010,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "lightning",
-                      "name": "Lightning",
-                      "url": "/api/2014/damage-types/lightning"
+                      "name": "Lightning"
                     },
                     "damage_dice": "16d10"
                   }
@@ -4290,8 +4022,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 23,
                   "success_type": "none"
@@ -4321,8 +4052,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 24,
           "success_type": "none"
@@ -4331,16 +4061,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+9"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-bronze-dragon.png",
-    "url": "/api/2014/monsters/ancient-bronze-dragon"
+    "image": "/api/images/monsters/ancient-bronze-dragon.png"
   },
   {
     "index": "ancient-copper-dragon",
@@ -4373,56 +4101,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 17,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -4482,8 +4203,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           }
@@ -4497,8 +4217,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -4512,8 +4231,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -4525,8 +4243,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -4552,8 +4269,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 22,
                   "success_type": "half"
@@ -4562,8 +4278,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "acid",
-                      "name": "Acid",
-                      "url": "/api/2014/damage-types/acid"
+                      "name": "Acid"
                     },
                     "damage_dice": "14d8"
                   }
@@ -4575,8 +4290,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 22,
                   "success_type": "none"
@@ -4606,8 +4320,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 23,
           "success_type": "none"
@@ -4616,16 +4329,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-copper-dragon.png",
-    "url": "/api/2014/monsters/ancient-copper-dragon"
+    "image": "/api/images/monsters/ancient-copper-dragon.png"
   },
   {
     "index": "ancient-gold-dragon",
@@ -4658,64 +4369,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 17,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -4779,8 +4482,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+10"
           }
@@ -4794,8 +4496,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+10"
           }
@@ -4809,8 +4510,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+10"
           }
@@ -4822,8 +4522,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 24,
           "success_type": "none"
@@ -4849,8 +4548,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 24,
                   "success_type": "half"
@@ -4859,8 +4557,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "13d10"
                   }
@@ -4872,8 +4569,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 24,
                   "success_type": "none"
@@ -4903,8 +4599,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 25,
           "success_type": "none"
@@ -4913,16 +4608,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-gold-dragon.png",
-    "url": "/api/2014/monsters/ancient-gold-dragon"
+    "image": "/api/images/monsters/ancient-gold-dragon.png"
   },
   {
     "index": "ancient-green-dragon",
@@ -4955,72 +4648,63 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 17,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -5032,8 +4716,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -5090,16 +4773,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "3d6"
           }
@@ -5113,8 +4794,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "4d6+8"
           }
@@ -5128,8 +4808,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -5141,8 +4820,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 19,
           "success_type": "none"
@@ -5159,8 +4837,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 22,
           "success_type": "half"
@@ -5169,8 +4846,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "22d6"
           }
@@ -5192,8 +4868,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 23,
           "success_type": "none"
@@ -5202,16 +4877,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-green-dragon.png",
-    "url": "/api/2014/monsters/ancient-green-dragon"
+    "image": "/api/images/monsters/ancient-green-dragon.png"
   },
   {
     "index": "ancient-red-dragon",
@@ -5244,48 +4917,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -5345,16 +5012,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+10"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "4d6"
           }
@@ -5368,8 +5033,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+10"
           }
@@ -5383,8 +5047,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+10"
           }
@@ -5396,8 +5059,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 21,
           "success_type": "none"
@@ -5414,8 +5076,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 24,
           "success_type": "half"
@@ -5424,8 +5085,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "26d6"
           }
@@ -5447,8 +5107,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 25,
           "success_type": "none"
@@ -5457,16 +5116,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-red-dragon.png",
-    "url": "/api/2014/monsters/ancient-red-dragon"
+    "image": "/api/images/monsters/ancient-red-dragon.png"
   },
   {
     "index": "ancient-silver-dragon",
@@ -5498,64 +5155,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 16,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -5615,8 +5264,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+10"
           }
@@ -5630,8 +5278,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+10"
           }
@@ -5645,8 +5292,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+10"
           }
@@ -5658,8 +5304,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 21,
           "success_type": "none"
@@ -5685,8 +5330,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 24,
                   "success_type": "half"
@@ -5695,8 +5339,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "cold",
-                      "name": "Cold",
-                      "url": "/api/2014/damage-types/cold"
+                      "name": "Cold"
                     },
                     "damage_dice": "15d8"
                   }
@@ -5708,8 +5351,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 24,
                   "success_type": "none"
@@ -5739,8 +5381,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 25,
           "success_type": "none"
@@ -5749,16 +5390,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-silver-dragon.png",
-    "url": "/api/2014/monsters/ancient-silver-dragon"
+    "image": "/api/images/monsters/ancient-silver-dragon.png"
   },
   {
     "index": "ancient-white-dragon",
@@ -5792,48 +5431,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -5897,16 +5530,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+8"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "2d8"
           }
@@ -5920,8 +5551,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           }
@@ -5935,8 +5565,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+8"
           }
@@ -5948,8 +5577,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -5966,8 +5594,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 22,
           "success_type": "none"
@@ -5976,8 +5603,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "16d8"
           }
@@ -5999,8 +5625,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 22,
           "success_type": "none"
@@ -6009,16 +5634,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ancient-white-dragon.png",
-    "url": "/api/2014/monsters/ancient-white-dragon"
+    "image": "/api/images/monsters/ancient-white-dragon.png"
   },
   {
     "index": "androsphinx",
@@ -6050,56 +5673,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 15,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -6112,13 +5728,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       }
     ],
     "senses": {
@@ -6145,8 +5759,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 12,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 18,
           "modifier": 10,
@@ -6166,78 +5779,63 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Sacred Flame",
-              "level": 0,
-              "url": "/api/2014/spells/sacred-flame"
+              "level": 0
             },
             {
               "name": "Spare the Dying",
-              "level": 0,
-              "url": "/api/2014/spells/spare-the-dying"
+              "level": 0
             },
             {
               "name": "Thaumaturgy",
-              "level": 0,
-              "url": "/api/2014/spells/thaumaturgy"
+              "level": 0
             },
             {
               "name": "Command",
-              "level": 1,
-              "url": "/api/2014/spells/command"
+              "level": 1
             },
             {
               "name": "Detect Evil and Good",
-              "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good"
+              "level": 1
             },
             {
               "name": "Detect Magic",
-              "level": 1,
-              "url": "/api/2014/spells/detect-magic"
+              "level": 1
             },
             {
               "name": "Lesser Restoration",
-              "level": 2,
-              "url": "/api/2014/spells/lesser-restoration"
+              "level": 2
             },
             {
               "name": "Zone of Truth",
-              "level": 2,
-              "url": "/api/2014/spells/zone-of-truth"
+              "level": 2
             },
             {
               "name": "Dispel Magic",
-              "level": 3,
-              "url": "/api/2014/spells/dispel-magic"
+              "level": 3
             },
             {
               "name": "Tongues",
-              "level": 3,
-              "url": "/api/2014/spells/tongues"
+              "level": 3
             },
             {
               "name": "Banishment",
-              "level": 4,
-              "url": "/api/2014/spells/banishment"
+              "level": 4
             },
             {
               "name": "Freedom of Movement",
-              "level": 4,
-              "url": "/api/2014/spells/freedom-of-movement"
+              "level": 4
             },
             {
               "name": "Flame Strike",
-              "level": 5,
-              "url": "/api/2014/spells/flame-strike"
+              "level": 5
             },
             {
               "name": "Greater Restoration",
-              "level": 5,
-              "url": "/api/2014/spells/greater-restoration"
+              "level": 5
             },
             {
               "name": "Heroes' Feast",
-              "level": 6,
-              "url": "/api/2014/spells/heroes-feast"
+              "level": 6
             }
           ]
         }
@@ -6264,8 +5862,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d10+6"
           }
@@ -6284,8 +5881,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             "dc": {
               "dc_type": {
                 "index": "wis",
-                "name": "WIS",
-                "url": "/api/2014/ability-scores/wis"
+                "name": "WIS"
               },
               "dc_value": 18,
               "success_type": "none"
@@ -6296,8 +5892,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             "dc": {
               "dc_type": {
                 "index": "wis",
-                "name": "WIS",
-                "url": "/api/2014/ability-scores/wis"
+                "name": "WIS"
               },
               "dc_value": 18,
               "success_type": "none"
@@ -6308,8 +5903,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             "dc": {
               "dc_type": {
                 "index": "con",
-                "name": "CON",
-                "url": "/api/2014/ability-scores/con"
+                "name": "CON"
               },
               "dc_value": 18,
               "success_type": "half"
@@ -6318,8 +5912,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               {
                 "damage_type": {
                   "index": "thunder",
-                  "name": "Thunder",
-                  "url": "/api/2014/damage-types/thunder"
+                  "name": "Thunder"
                 },
                 "damage_dice": "8d10"
               }
@@ -6342,8 +5935,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The sphinx casts a spell from its list of prepared spells, using a spell slot as normal."
       }
     ],
-    "image": "/api/images/monsters/androsphinx.png",
-    "url": "/api/2014/monsters/androsphinx"
+    "image": "/api/images/monsters/androsphinx.png"
   },
   {
     "index": "animated-armor",
@@ -6379,43 +5971,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "deafened",
-        "name": "Deafened",
-        "url": "/api/2014/conditions/deafened"
+        "name": "Deafened"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -6457,16 +6041,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/animated-armor.png",
-    "url": "/api/2014/monsters/animated-armor"
+    "image": "/api/images/monsters/animated-armor.png"
   },
   {
     "index": "ankheg",
@@ -6484,8 +6066,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 11,
         "condition": {
           "index": "prone",
-          "name": "Prone",
-          "url": "/api/2014/conditions/prone"
+          "name": "Prone"
         }
       }
     ],
@@ -6525,16 +6106,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d6"
           }
@@ -6551,8 +6130,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 13,
           "success_type": "half"
@@ -6561,16 +6139,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "3d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ankheg.png",
-    "url": "/api/2014/monsters/ankheg"
+    "image": "/api/images/monsters/ankheg.png"
   },
   {
     "index": "ape",
@@ -6602,16 +6178,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -6647,8 +6221,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+3"
           }
@@ -6662,16 +6235,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ape.png",
-    "url": "/api/2014/monsters/ape"
+    "image": "/api/images/monsters/ape.png"
   },
   {
     "index": "archmage",
@@ -6691,8 +6262,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 15,
         "spell": {
           "index": "mage-armor",
-          "name": "Mage Armor",
-          "url": "/api/2014/spells/mage-armor"
+          "name": "Mage Armor"
         }
       }
     ],
@@ -6713,32 +6283,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       }
     ],
@@ -6768,8 +6334,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 18,
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 17,
           "modifier": 9,
@@ -6794,7 +6359,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Disguise Self",
               "level": 1,
-              "url": "/api/2014/spells/disguise-self",
               "usage": {
                 "type": "at will"
               }
@@ -6802,138 +6366,112 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Invisibility",
               "level": 2,
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "at will"
               }
             },
             {
               "name": "Fire Bolt",
-              "level": 0,
-              "url": "/api/2014/spells/fire-bolt"
+              "level": 0
             },
             {
               "name": "Light",
-              "level": 0,
-              "url": "/api/2014/spells/light"
+              "level": 0
             },
             {
               "name": "Mage Hand",
-              "level": 0,
-              "url": "/api/2014/spells/mage-hand"
+              "level": 0
             },
             {
               "name": "Prestidigitation",
-              "level": 0,
-              "url": "/api/2014/spells/prestidigitation"
+              "level": 0
             },
             {
               "name": "Shocking Grasp",
-              "level": 0,
-              "url": "/api/2014/spells/shocking-grasp"
+              "level": 0
             },
             {
               "name": "Detect Magic",
-              "level": 1,
-              "url": "/api/2014/spells/detect-magic"
+              "level": 1
             },
             {
               "name": "Identify",
-              "level": 1,
-              "url": "/api/2014/spells/identify"
+              "level": 1
             },
             {
               "name": "Mage Armor",
               "level": 1,
-              "url": "/api/2014/spells/mage-armor",
               "notes": "Cast on self before combat"
             },
             {
               "name": "Magic Missile",
-              "level": 1,
-              "url": "/api/2014/spells/magic-missile"
+              "level": 1
             },
             {
               "name": "Detect Thoughts",
-              "level": 2,
-              "url": "/api/2014/spells/detect-thoughts"
+              "level": 2
             },
             {
               "name": "Mirror Image",
-              "level": 2,
-              "url": "/api/2014/spells/mirror-image"
+              "level": 2
             },
             {
               "name": "Misty Step",
-              "level": 2,
-              "url": "/api/2014/spells/misty-step"
+              "level": 2
             },
             {
               "name": "Counterspell",
-              "level": 3,
-              "url": "/api/2014/spells/counterspell"
+              "level": 3
             },
             {
               "name": "Fly",
-              "level": 3,
-              "url": "/api/2014/spells/fly"
+              "level": 3
             },
             {
               "name": "Lightning Bolt",
-              "level": 3,
-              "url": "/api/2014/spells/lightning-bolt"
+              "level": 3
             },
             {
               "name": "Banishment",
-              "level": 4,
-              "url": "/api/2014/spells/banishment"
+              "level": 4
             },
             {
               "name": "Fire Shield",
-              "level": 4,
-              "url": "/api/2014/spells/fire-shield"
+              "level": 4
             },
             {
               "name": "Stoneskin",
               "level": 4,
-              "url": "/api/2014/spells/stoneskin",
               "notes": "Cast on self before combat"
             },
             {
               "name": "Cone of Cold",
-              "level": 5,
-              "url": "/api/2014/spells/cone-of-cold"
+              "level": 5
             },
             {
               "name": "Scrying",
-              "level": 5,
-              "url": "/api/2014/spells/scrying"
+              "level": 5
             },
             {
               "name": "Wall of Force",
-              "level": 5,
-              "url": "/api/2014/spells/wall-of-force"
+              "level": 5
             },
             {
               "name": "Globe of Invulnerability",
-              "level": 6,
-              "url": "/api/2014/spells/globe-of-invulnerability"
+              "level": 6
             },
             {
               "name": "Teleport",
-              "level": 7,
-              "url": "/api/2014/spells/teleport"
+              "level": 7
             },
             {
               "name": "Mind Blank",
               "level": 8,
-              "url": "/api/2014/spells/mind-blank",
               "notes": "Cast on self before combat"
             },
             {
               "name": "Time Stop",
-              "level": 9,
-              "url": "/api/2014/spells/time-stop"
+              "level": 9
             }
           ]
         }
@@ -6948,16 +6486,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/archmage.png",
-    "url": "/api/2014/monsters/archmage"
+    "image": "/api/images/monsters/archmage.png"
   },
   {
     "index": "assassin",
@@ -6974,8 +6510,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "studded-leather-armor",
-            "name": "Studded Leather Armor",
-            "url": "/api/2014/equipment/studded-leather-armor"
+            "name": "Studded Leather Armor"
           }
         ]
       }
@@ -6997,48 +6532,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-acrobatics",
-          "name": "Skill: Acrobatics",
-          "url": "/api/2014/proficiencies/skill-acrobatics"
+          "name": "Skill: Acrobatics"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -7090,8 +6619,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           },
@@ -7099,16 +6627,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             "dc": {
               "dc_type": {
                 "index": "con",
-                "name": "CON",
-                "url": "/api/2014/ability-scores/con"
+                "name": "CON"
               },
               "dc_value": 15,
               "success_type": "half"
             },
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "7d6"
           }
@@ -7122,8 +6648,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           },
@@ -7131,24 +6656,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             "dc": {
               "dc_type": {
                 "index": "con",
-                "name": "CON",
-                "url": "/api/2014/ability-scores/con"
+                "name": "CON"
               },
               "dc_value": 15,
               "success_type": "half"
             },
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "7d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/assassin.png",
-    "url": "/api/2014/monsters/assassin"
+    "image": "/api/images/monsters/assassin.png"
   },
   {
     "index": "awakened-shrub",
@@ -7206,16 +6728,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4-1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/awakened-shrub.png",
-    "url": "/api/2014/monsters/awakened-shrub"
+    "image": "/api/images/monsters/awakened-shrub.png"
   },
   {
     "index": "awakened-tree",
@@ -7274,16 +6794,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/awakened-tree.png",
-    "url": "/api/2014/monsters/awakened-tree"
+    "image": "/api/images/monsters/awakened-tree.png"
   },
   {
     "index": "axe-beak",
@@ -7331,16 +6849,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/axe-beak.png",
-    "url": "/api/2014/monsters/axe-beak"
+    "image": "/api/images/monsters/axe-beak.png"
   },
   {
     "index": "azer",
@@ -7359,8 +6875,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -7382,8 +6897,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       }
     ],
@@ -7396,8 +6910,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -7415,8 +6928,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d10"
           }
@@ -7429,8 +6941,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d6"
           }
@@ -7450,24 +6961,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d8+3"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/azer.png",
-    "url": "/api/2014/monsters/azer"
+    "image": "/api/images/monsters/azer.png"
   },
   {
     "index": "baboon",
@@ -7521,16 +7029,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4-1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/baboon.png",
-    "url": "/api/2014/monsters/baboon"
+    "image": "/api/images/monsters/baboon.png"
   },
   {
     "index": "badger",
@@ -7585,16 +7091,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/badger.png",
-    "url": "/api/2014/monsters/badger"
+    "image": "/api/images/monsters/badger.png"
   },
   {
     "index": "balor",
@@ -7627,32 +7131,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 14,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -7669,8 +7169,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -7688,8 +7187,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 20,
           "success_type": "half"
@@ -7698,8 +7196,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "20d6"
           }
@@ -7712,8 +7209,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "3d6"
           }
@@ -7754,16 +7250,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "3d8+8"
           },
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "3d8"
           }
@@ -7777,16 +7271,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+8"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "3d6"
           }
@@ -7797,8 +7289,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The balor magically teleports, along with any equipment it is wearing or carrying, up to 120 feet to an unoccupied space it can see."
       }
     ],
-    "image": "/api/images/monsters/balor.png",
-    "url": "/api/2014/monsters/balor"
+    "image": "/api/images/monsters/balor.png"
   },
   {
     "index": "bandit",
@@ -7815,8 +7306,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -7854,8 +7344,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+1"
           }
@@ -7869,16 +7358,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/bandit.png",
-    "url": "/api/2014/monsters/bandit"
+    "image": "/api/images/monsters/bandit.png"
   },
   {
     "index": "bandit-captain",
@@ -7895,8 +7382,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "studded-leather-armor",
-            "name": "Studded Leather Armor",
-            "url": "/api/2014/equipment/studded-leather-armor"
+            "name": "Studded Leather Armor"
           }
         ]
       }
@@ -7918,40 +7404,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       }
     ],
@@ -8012,8 +7493,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
@@ -8027,8 +7507,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+3"
           }
@@ -8041,8 +7520,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The captain adds 2 to its AC against one melee attack that would hit it. To do so, the captain must see the attacker and be wielding a melee weapon."
       }
     ],
-    "image": "/api/images/monsters/bandit-captain.png",
-    "url": "/api/2014/monsters/bandit-captain"
+    "image": "/api/images/monsters/bandit-captain.png"
   },
   {
     "index": "barbed-devil",
@@ -8074,56 +7552,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -8139,8 +7610,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -8159,8 +7629,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10"
           }
@@ -8221,8 +7690,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
@@ -8236,8 +7704,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           }
@@ -8251,16 +7718,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "3d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/barbed-devil.png",
-    "url": "/api/2014/monsters/barbed-devil"
+    "image": "/api/images/monsters/barbed-devil.png"
   },
   {
     "index": "basilisk",
@@ -8306,8 +7771,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 12,
           "success_type": "none"
@@ -8323,24 +7787,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/basilisk.png",
-    "url": "/api/2014/monsters/basilisk"
+    "image": "/api/images/monsters/basilisk.png"
   },
   {
     "index": "bat",
@@ -8399,16 +7860,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/bat.png",
-    "url": "/api/2014/monsters/bat"
+    "image": "/api/images/monsters/bat.png"
   },
   {
     "index": "bearded-devil",
@@ -8440,24 +7899,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -8473,8 +7929,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -8525,8 +7980,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
@@ -8540,16 +7994,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d10+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/bearded-devil.png",
-    "url": "/api/2014/monsters/bearded-devil"
+    "image": "/api/images/monsters/bearded-devil.png"
   },
   {
     "index": "behir",
@@ -8581,16 +8033,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -8634,8 +8084,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d10+6"
           }
@@ -8649,16 +8098,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d10+6"
           },
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d10+6"
           }
@@ -8675,8 +8122,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 16,
           "success_type": "half"
@@ -8685,8 +8131,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "12d10"
           }
@@ -8699,16 +8144,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "6d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/behir.png",
-    "url": "/api/2014/monsters/behir"
+    "image": "/api/images/monsters/behir.png"
   },
   {
     "index": "berserker",
@@ -8724,8 +8167,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "hide-armor",
-            "name": "Hide Armor",
-            "url": "/api/2014/equipment/hide-armor"
+            "name": "Hide Armor"
           }
         ]
       }
@@ -8769,16 +8211,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d12+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/berserker.png",
-    "url": "/api/2014/monsters/berserker"
+    "image": "/api/images/monsters/berserker.png"
   },
   {
     "index": "black-bear",
@@ -8849,8 +8289,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -8864,16 +8303,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/black-bear.png",
-    "url": "/api/2014/monsters/black-bear"
+    "image": "/api/images/monsters/black-bear.png"
   },
   {
     "index": "black-dragon-wyrmling",
@@ -8906,48 +8343,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -8981,16 +8412,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d4"
           }
@@ -9007,8 +8436,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 11,
           "success_type": "half"
@@ -9017,16 +8445,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "5d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/black-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/black-dragon-wyrmling"
+    "image": "/api/images/monsters/black-dragon-wyrmling.png"
   },
   {
     "index": "black-pudding",
@@ -9065,28 +8491,23 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       }
     ],
     "senses": {
@@ -9109,8 +8530,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d8"
           }
@@ -9130,16 +8550,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+3"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "4d8"
           }
@@ -9152,8 +8570,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "When a pudding that is Medium or larger is subjected to lightning or slashing damage, it splits into two new puddings if it has at least 10 hit points. Each new pudding has hit points equal to half the original pudding's, rounded down. New puddings are one size smaller than the original pudding."
       }
     ],
-    "image": "/api/images/monsters/black-pudding.png",
-    "url": "/api/2014/monsters/black-pudding"
+    "image": "/api/images/monsters/black-pudding.png"
   },
   {
     "index": "blink-dog",
@@ -9185,16 +8602,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -9224,8 +8639,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+1"
           }
@@ -9241,8 +8655,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/blink-dog.png",
-    "url": "/api/2014/monsters/blink-dog"
+    "image": "/api/images/monsters/blink-dog.png"
   },
   {
     "index": "blood-hawk",
@@ -9275,8 +8688,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -9310,16 +8722,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/blood-hawk.png",
-    "url": "/api/2014/monsters/blood-hawk"
+    "image": "/api/images/monsters/blood-hawk.png"
   },
   {
     "index": "blue-dragon-wyrmling",
@@ -9352,48 +8762,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -9421,16 +8825,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+3"
           },
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "1d6"
           }
@@ -9447,8 +8849,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 12,
           "success_type": "half"
@@ -9457,16 +8858,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "4d10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/blue-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/blue-dragon-wyrmling"
+    "image": "/api/images/monsters/blue-dragon-wyrmling.png"
   },
   {
     "index": "boar",
@@ -9512,8 +8911,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6"
           }
@@ -9540,16 +8938,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/boar.png",
-    "url": "/api/2014/monsters/boar"
+    "image": "/api/images/monsters/boar.png"
   },
   {
     "index": "bone-devil",
@@ -9582,40 +8978,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       }
     ],
@@ -9631,8 +9022,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -9679,8 +9069,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+4"
           }
@@ -9694,24 +9083,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+4"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "5d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/bone-devil.png",
-    "url": "/api/2014/monsters/bone-devil"
+    "image": "/api/images/monsters/bone-devil.png"
   },
   {
     "index": "brass-dragon-wyrmling",
@@ -9744,48 +9130,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -9813,8 +9193,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           }
@@ -9840,8 +9219,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 11,
                   "success_type": "half"
@@ -9850,8 +9228,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "4d6"
                   }
@@ -9863,8 +9240,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 11,
                   "success_type": "none"
@@ -9875,8 +9251,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/brass-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/brass-dragon-wyrmling"
+    "image": "/api/images/monsters/brass-dragon-wyrmling.png"
   },
   {
     "index": "bronze-dragon-wyrmling",
@@ -9909,48 +9284,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -9984,8 +9353,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+3"
           }
@@ -10011,8 +9379,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 12,
                   "success_type": "half"
@@ -10021,8 +9388,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "lightning",
-                      "name": "Lightning",
-                      "url": "/api/2014/damage-types/lightning"
+                      "name": "Lightning"
                     },
                     "damage_dice": "3d10"
                   }
@@ -10034,8 +9400,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 12,
                   "success_type": "none"
@@ -10046,8 +9411,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/bronze-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/bronze-dragon-wyrmling"
+    "image": "/api/images/monsters/bronze-dragon-wyrmling.png"
   },
   {
     "index": "brown-bear",
@@ -10079,8 +9443,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -10127,8 +9490,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+4"
           }
@@ -10142,16 +9504,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/brown-bear.png",
-    "url": "/api/2014/monsters/brown-bear"
+    "image": "/api/images/monsters/brown-bear.png"
   },
   {
     "index": "bugbear",
@@ -10167,13 +9527,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           },
           {
             "index": "hide-armor",
-            "name": "Hide Armor",
-            "url": "/api/2014/equipment/hide-armor"
+            "name": "Hide Armor"
           }
         ]
       }
@@ -10195,16 +9553,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-survival",
-          "name": "Skill: Survival",
-          "url": "/api/2014/proficiencies/skill-survival"
+          "name": "Skill: Survival"
         }
       }
     ],
@@ -10239,8 +9595,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+2"
           }
@@ -10254,16 +9609,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/bugbear.png",
-    "url": "/api/2014/monsters/bugbear"
+    "image": "/api/images/monsters/bugbear.png"
   },
   {
     "index": "bulette",
@@ -10295,8 +9648,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -10328,8 +9680,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d12+4"
           }
@@ -10340,8 +9691,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "If the bulette jumps at least 15 ft. as part of its movement, it can then use this action to land on its feet in a space that contains one or more other creatures. Each of those creatures must succeed on a DC 16 Strength or Dexterity saving throw (target's choice) or be knocked prone and take 14 (3d6 + 4) bludgeoning damage plus 14 (3d6 + 4) slashing damage. On a successful save, the creature takes only half the damage, isn't knocked prone, and is pushed 5 ft. out of the bulette's space into an unoccupied space of the creature's choice. If no unoccupied space is within range, the creature instead falls prone in the bulette's space."
       }
     ],
-    "image": "/api/images/monsters/bulette.png",
-    "url": "/api/2014/monsters/bulette"
+    "image": "/api/images/monsters/bulette.png"
   },
   {
     "index": "camel",
@@ -10388,16 +9738,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/camel.png",
-    "url": "/api/2014/monsters/camel"
+    "image": "/api/images/monsters/camel.png"
   },
   {
     "index": "cat",
@@ -10429,16 +9777,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -10468,16 +9814,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/cat.png",
-    "url": "/api/2014/monsters/cat"
+    "image": "/api/images/monsters/cat.png"
   },
   {
     "index": "centaur",
@@ -10508,24 +9852,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-survival",
-          "name": "Skill: Survival",
-          "url": "/api/2014/proficiencies/skill-survival"
+          "name": "Skill: Survival"
         }
       }
     ],
@@ -10548,8 +9889,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d6"
           }
@@ -10602,8 +9942,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+4"
           }
@@ -10617,8 +9956,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
@@ -10632,16 +9970,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/centaur.png",
-    "url": "/api/2014/monsters/centaur"
+    "image": "/api/images/monsters/centaur.png"
   },
   {
     "index": "chain-devil",
@@ -10673,24 +10009,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -10706,8 +10039,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -10749,8 +10081,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -10775,16 +10106,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 14,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/chain-devil.png",
-    "url": "/api/2014/monsters/chain-devil"
+    "image": "/api/images/monsters/chain-devil.png"
   },
   {
     "index": "chimera",
@@ -10816,8 +10145,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -10925,8 +10253,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
@@ -10940,8 +10267,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d12+4"
           }
@@ -10955,8 +10281,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -10973,8 +10298,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 15,
           "success_type": "half"
@@ -10983,16 +10307,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "7d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/chimera.png",
-    "url": "/api/2014/monsters/chimera"
+    "image": "/api/images/monsters/chimera.png"
   },
   {
     "index": "chuul",
@@ -11024,8 +10346,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -11037,8 +10358,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -11105,8 +10425,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
@@ -11118,16 +10437,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 13,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/chuul.png",
-    "url": "/api/2014/monsters/chuul"
+    "image": "/api/images/monsters/chuul.png"
   },
   {
     "index": "clay-golem",
@@ -11165,33 +10482,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -11245,8 +10556,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d10+5"
           }
@@ -11262,8 +10572,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/clay-golem.png",
-    "url": "/api/2014/monsters/clay-golem"
+    "image": "/api/images/monsters/clay-golem.png"
   },
   {
     "index": "cloaker",
@@ -11295,8 +10604,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -11352,8 +10660,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           }
@@ -11367,8 +10674,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+3"
           }
@@ -11380,8 +10686,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 13,
           "success_type": "none"
@@ -11399,8 +10704,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/cloaker.png",
-    "url": "/api/2014/monsters/cloaker"
+    "image": "/api/images/monsters/cloaker.png"
   },
   {
     "index": "cloud-giant",
@@ -11431,40 +10735,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -11490,8 +10789,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "components_required": [
             "V",
@@ -11501,7 +10799,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -11509,7 +10806,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Fog Cloud",
               "level": 1,
-              "url": "/api/2014/spells/fog-cloud",
               "usage": {
                 "type": "at will"
               }
@@ -11517,7 +10813,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Light",
               "level": 0,
-              "url": "/api/2014/spells/light",
               "usage": {
                 "type": "at will"
               }
@@ -11525,7 +10820,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Feather Fall",
               "level": 1,
-              "url": "/api/2014/spells/feather-fall",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -11534,7 +10828,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Fly",
               "level": 3,
-              "url": "/api/2014/spells/fly",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -11543,7 +10836,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Misty Step",
               "level": 2,
-              "url": "/api/2014/spells/misty-step",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -11552,7 +10844,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Telekinesis",
               "level": 5,
-              "url": "/api/2014/spells/telekinesis",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -11561,7 +10852,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Control Weather",
               "level": 8,
-              "url": "/api/2014/spells/control-weather",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -11570,7 +10860,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Gaseous Form",
               "level": 3,
-              "url": "/api/2014/spells/gaseous-form",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -11601,8 +10890,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d8+8"
           }
@@ -11616,16 +10904,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d10+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/cloud-giant.png",
-    "url": "/api/2014/monsters/cloud-giant"
+    "image": "/api/images/monsters/cloud-giant.png"
   },
   {
     "index": "cockatrice",
@@ -11674,16 +10960,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/cockatrice.png",
-    "url": "/api/2014/monsters/cockatrice"
+    "image": "/api/images/monsters/cockatrice.png"
   },
   {
     "index": "commoner",
@@ -11732,16 +11016,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/commoner.png",
-    "url": "/api/2014/monsters/commoner"
+    "image": "/api/images/monsters/commoner.png"
   },
   {
     "index": "constrictor-snake",
@@ -11790,8 +11072,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -11805,16 +11086,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/constrictor-snake.png",
-    "url": "/api/2014/monsters/constrictor-snake"
+    "image": "/api/images/monsters/constrictor-snake.png"
   },
   {
     "index": "copper-dragon-wyrmling",
@@ -11847,48 +11126,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -11916,8 +11189,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           }
@@ -11943,8 +11215,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 11,
                   "success_type": "half"
@@ -11953,8 +11224,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "acid",
-                      "name": "Acid",
-                      "url": "/api/2014/damage-types/acid"
+                      "name": "Acid"
                     },
                     "damage_dice": "4d8"
                   }
@@ -11966,8 +11236,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 11,
                   "success_type": "none"
@@ -11978,8 +11247,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/copper-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/copper-dragon-wyrmling"
+    "image": "/api/images/monsters/copper-dragon-wyrmling.png"
   },
   {
     "index": "couatl",
@@ -12011,24 +11279,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -12056,8 +11321,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 14,
           "components_required": [
@@ -12067,7 +11331,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Evil and Good",
               "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good",
               "usage": {
                 "type": "at will"
               }
@@ -12075,7 +11338,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -12083,7 +11345,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Thoughts",
               "level": 2,
-              "url": "/api/2014/spells/detect-thoughts",
               "usage": {
                 "type": "at will"
               }
@@ -12091,7 +11352,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Bless",
               "level": 1,
-              "url": "/api/2014/spells/bless",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12100,7 +11360,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Create Food and Water",
               "level": 3,
-              "url": "/api/2014/spells/create-food-and-water",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12109,7 +11368,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Cure Wounds",
               "level": 1,
-              "url": "/api/2014/spells/cure-wounds",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12118,7 +11376,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Lesser Restoration",
               "level": 2,
-              "url": "/api/2014/spells/lesser-restoration",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12127,7 +11384,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Protection from Poison",
               "level": 2,
-              "url": "/api/2014/spells/protection-from-poison",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12136,7 +11392,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Sanctuary",
               "level": 1,
-              "url": "/api/2014/spells/sanctuary",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12145,7 +11400,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Shield",
               "level": 1,
-              "url": "/api/2014/spells/shield",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -12154,7 +11408,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dream",
               "level": 5,
-              "url": "/api/2014/spells/dream",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -12163,7 +11416,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Greater Restoration",
               "level": 5,
-              "url": "/api/2014/spells/greater-restoration",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -12172,7 +11424,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Scrying",
               "level": 5,
-              "url": "/api/2014/spells/scrying",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -12199,8 +11450,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+5"
           }
@@ -12214,8 +11464,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+3"
           }
@@ -12226,8 +11475,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The couatl magically polymorphs into a humanoid or beast that has a challenge rating equal to or less than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the couatl's choice).\nIn a new form, the couatl retains its game statistics and ability to speak, but its AC, movement modes, Strength, Dexterity, and other actions are replaced by those of the new form, and it gains any statistics and capabilities (except class features, legendary actions, and lair actions) that the new form has but that it lacks. If the new form has a bite attack, the couatl can use its bite in that form."
       }
     ],
-    "image": "/api/images/monsters/couatl.png",
-    "url": "/api/2014/monsters/couatl"
+    "image": "/api/images/monsters/couatl.png"
   },
   {
     "index": "crab",
@@ -12259,8 +11507,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -12291,16 +11538,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/crab.png",
-    "url": "/api/2014/monsters/crab"
+    "image": "/api/images/monsters/crab.png"
   },
   {
     "index": "crocodile",
@@ -12332,8 +11577,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -12363,16 +11607,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/crocodile.png",
-    "url": "/api/2014/monsters/crocodile"
+    "image": "/api/images/monsters/crocodile.png"
   },
   {
     "index": "cult-fanatic",
@@ -12389,8 +11631,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -12412,24 +11653,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -12456,8 +11694,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 4,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 11,
           "modifier": 3,
@@ -12474,43 +11711,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Light",
-              "level": 0,
-              "url": "/api/2014/spells/light"
+              "level": 0
             },
             {
               "name": "Sacred Flame",
-              "level": 0,
-              "url": "/api/2014/spells/sacred-flame"
+              "level": 0
             },
             {
               "name": "Thaumaturgy",
-              "level": 0,
-              "url": "/api/2014/spells/thaumaturgy"
+              "level": 0
             },
             {
               "name": "Command",
-              "level": 1,
-              "url": "/api/2014/spells/command"
+              "level": 1
             },
             {
               "name": "Inflict Wounds",
-              "level": 1,
-              "url": "/api/2014/spells/inflict-wounds"
+              "level": 1
             },
             {
               "name": "Shield of Faith",
-              "level": 1,
-              "url": "/api/2014/spells/shield-of-faith"
+              "level": 1
             },
             {
               "name": "Hold Person",
-              "level": 2,
-              "url": "/api/2014/spells/hold-person"
+              "level": 2
             },
             {
               "name": "Spiritual Weapon",
-              "level": 2,
-              "url": "/api/2014/spells/spiritual-weapon"
+              "level": 2
             }
           ]
         }
@@ -12537,16 +11766,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/cult-fanatic.png",
-    "url": "/api/2014/monsters/cult-fanatic"
+    "image": "/api/images/monsters/cult-fanatic.png"
   },
   {
     "index": "cultist",
@@ -12563,8 +11790,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -12586,16 +11812,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -12625,16 +11849,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/cultist.png",
-    "url": "/api/2014/monsters/cultist"
+    "image": "/api/images/monsters/cultist.png"
   },
   {
     "index": "darkmantle",
@@ -12666,8 +11888,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -12702,8 +11923,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+3"
           }
@@ -12718,8 +11938,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/darkmantle.png",
-    "url": "/api/2014/monsters/darkmantle"
+    "image": "/api/images/monsters/darkmantle.png"
   },
   {
     "index": "death-dog",
@@ -12751,16 +11970,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -12803,16 +12020,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/death-dog.png",
-    "url": "/api/2014/monsters/death-dog"
+    "image": "/api/images/monsters/death-dog.png"
   },
   {
     "index": "deep-gnome-svirfneblin",
@@ -12828,8 +12043,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "chain-shirt",
-            "name": "Chain Shirt",
-            "url": "/api/2014/equipment/chain-shirt"
+            "name": "Chain Shirt"
           }
         ]
       }
@@ -12851,24 +12065,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-investigation",
-          "name": "Skill: Investigation",
-          "url": "/api/2014/proficiencies/skill-investigation"
+          "name": "Skill: Investigation"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -12899,8 +12110,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 11,
           "components_required": [
@@ -12912,7 +12122,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Nondetection",
               "level": 3,
               "notes": "Self only",
-              "url": "/api/2014/spells/nondetection",
               "usage": {
                 "type": "at will"
               }
@@ -12920,7 +12129,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Blindness/Deafness",
               "level": 2,
-              "url": "/api/2014/spells/blindness-deafness",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -12929,7 +12137,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Blur",
               "level": 2,
-              "url": "/api/2014/spells/blur",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -12938,7 +12145,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Disguise Self",
               "level": 1,
-              "url": "/api/2014/spells/disguise-self",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -12957,8 +12163,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
@@ -12972,16 +12177,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/deep-gnome-svirfneblin.png",
-    "url": "/api/2014/monsters/deep-gnome-svirfneblin"
+    "image": "/api/images/monsters/deep-gnome-svirfneblin.png"
   },
   {
     "index": "deer",
@@ -13028,16 +12231,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/deer.png",
-    "url": "/api/2014/monsters/deer"
+    "image": "/api/images/monsters/deer.png"
   },
   {
     "index": "deva",
@@ -13069,32 +12270,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -13107,18 +12304,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       }
     ],
     "senses": {
@@ -13140,8 +12334,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 17,
           "components_required": [
@@ -13151,7 +12344,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Evil and Good",
               "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good",
               "usage": {
                 "type": "at will"
               }
@@ -13159,7 +12351,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Commune",
               "level": 5,
-              "url": "/api/2014/spells/commune",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13168,7 +12359,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Raise Dead",
               "level": 5,
-              "url": "/api/2014/spells/raise-dead",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13203,16 +12393,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+4"
           },
           {
             "damage_type": {
               "index": "radiant",
-              "name": "Radiant",
-              "url": "/api/2014/damage-types/radiant"
+              "name": "Radiant"
             },
             "damage_dice": "4d8"
           }
@@ -13231,8 +12419,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The deva magically polymorphs into a humanoid or beast that has a challenge rating equal to or less than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the deva's choice).\nIn a new form, the deva retains its game statistics and ability to speak, but its AC, movement modes, Strength, Dexterity, and special senses are replaced by those of the new form, and it gains any statistics and capabilities (except class features, legendary actions, and lair actions) that the new form has but that it lacks."
       }
     ],
-    "image": "/api/images/monsters/deva.png",
-    "url": "/api/2014/monsters/deva"
+    "image": "/api/images/monsters/deva.png"
   },
   {
     "index": "dire-wolf",
@@ -13263,16 +12450,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -13306,16 +12491,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/dire-wolf.png",
-    "url": "/api/2014/monsters/dire-wolf"
+    "image": "/api/images/monsters/dire-wolf.png"
   },
   {
     "index": "djinni",
@@ -13347,24 +12530,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -13394,8 +12574,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 17,
           "modifier": 9,
@@ -13407,7 +12586,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Evil and Good",
               "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good",
               "usage": {
                 "type": "at will"
               }
@@ -13415,7 +12593,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -13423,7 +12600,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Thunderwave",
               "level": 1,
-              "url": "/api/2014/spells/thunderwave",
               "usage": {
                 "type": "at will"
               }
@@ -13432,7 +12608,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Create Food and Water",
               "level": 3,
               "notes": "Can create wine instead of water",
-              "url": "/api/2014/spells/create-food-and-water",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -13441,7 +12616,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Tongues",
               "level": 3,
-              "url": "/api/2014/spells/tongues",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -13450,7 +12624,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Wind Walk",
               "level": 6,
-              "url": "/api/2014/spells/wind-walk",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -13460,7 +12633,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Conjure Elemental",
               "level": 5,
               "notes": "Air Elemental Only",
-              "url": "/api/2014/spells/conjure-elemental",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13469,7 +12641,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Creation",
               "level": 5,
-              "url": "/api/2014/spells/creation",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13478,7 +12649,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Gaseous Form",
               "level": 3,
-              "url": "/api/2014/spells/gaseous-form",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13487,7 +12657,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Invisibility",
               "level": 2,
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13496,7 +12665,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Major Image",
               "level": 3,
-              "url": "/api/2014/spells/major-image",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13505,7 +12673,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Plane Shift",
               "level": 7,
-              "url": "/api/2014/spells/plane-shift",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -13536,8 +12703,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+5"
           },
@@ -13551,8 +12717,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "lightning",
-                    "name": "Lightning",
-                    "url": "/api/2014/damage-types/lightning"
+                    "name": "Lightning"
                   },
                   "damage_dice": "1d6"
                 },
@@ -13560,8 +12725,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "thunder",
-                    "name": "Thunder",
-                    "url": "/api/2014/damage-types/thunder"
+                    "name": "Thunder"
                   },
                   "damage_dice": "1d6"
                 }
@@ -13576,16 +12740,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 18,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/djinni.png",
-    "url": "/api/2014/monsters/djinni"
+    "image": "/api/images/monsters/djinni.png"
   },
   {
     "index": "doppelganger",
@@ -13617,16 +12779,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       }
     ],
@@ -13636,8 +12796,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       }
     ],
     "senses": {
@@ -13683,8 +12842,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+4"
           }
@@ -13695,8 +12853,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The doppelganger magically reads the surface thoughts of one creature within 60 ft. of it. The effect can penetrate barriers, but 3 ft. of wood or dirt, 2 ft. of stone, 2 inches of metal, or a thin sheet of lead blocks it. While the target is in range, the doppelganger can continue reading its thoughts, as long as the doppelganger's concentration isn't broken (as if concentrating on a spell). While reading the target's mind, the doppelganger has advantage on Wisdom (Insight) and Charisma (Deception, Intimidation, and Persuasion) checks against the target."
       }
     ],
-    "image": "/api/images/monsters/doppelganger.png",
-    "url": "/api/2014/monsters/doppelganger"
+    "image": "/api/images/monsters/doppelganger.png"
   },
   {
     "index": "draft-horse",
@@ -13743,16 +12900,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/draft-horse.png",
-    "url": "/api/2014/monsters/draft-horse"
+    "image": "/api/images/monsters/draft-horse.png"
   },
   {
     "index": "dragon-turtle",
@@ -13784,24 +12939,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -13882,8 +13034,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d12+7"
           }
@@ -13897,8 +13048,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+7"
           }
@@ -13912,8 +13062,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d12+7"
           }
@@ -13930,8 +13079,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 18,
           "success_type": "half"
@@ -13940,16 +13088,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "15d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/dragon-turtle.png",
-    "url": "/api/2014/monsters/dragon-turtle"
+    "image": "/api/images/monsters/dragon-turtle.png"
   },
   {
     "index": "dretch",
@@ -13989,8 +13135,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -14027,8 +13172,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6"
           }
@@ -14042,8 +13186,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4"
           }
@@ -14059,16 +13202,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 11,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/dretch.png",
-    "url": "/api/2014/monsters/dretch"
+    "image": "/api/images/monsters/dretch.png"
   },
   {
     "index": "drider",
@@ -14100,16 +13241,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -14136,8 +13275,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 13,
           "components_required": [
@@ -14148,7 +13286,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dancing Lights",
               "level": 1,
-              "url": "/api/2014/spells/dancing-lights",
               "usage": {
                 "type": "at will"
               }
@@ -14156,7 +13293,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Darkness",
               "level": 2,
-              "url": "/api/2014/spells/darkness",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14165,7 +13301,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Faerie Fire",
               "level": 1,
-              "url": "/api/2014/spells/faerie-fire",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14256,16 +13391,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "2d8"
           }
@@ -14286,8 +13419,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d8+3",
                   "notes": "One handed"
@@ -14296,8 +13428,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d10+3",
                   "notes": "Two handed"
@@ -14315,24 +13446,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "1d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/drider.png",
-    "url": "/api/2014/monsters/drider"
+    "image": "/api/images/monsters/drider.png"
   },
   {
     "index": "drow",
@@ -14348,8 +13476,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "chain-shirt",
-            "name": "Chain Shirt",
-            "url": "/api/2014/equipment/chain-shirt"
+            "name": "Chain Shirt"
           }
         ]
       }
@@ -14371,16 +13498,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -14407,8 +13532,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 11,
           "modifier": 0,
@@ -14420,7 +13544,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dancing Lights",
               "level": 0,
-              "url": "/api/2014/spells/dancing-lights",
               "usage": {
                 "type": "at will"
               }
@@ -14428,7 +13551,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Darkness",
               "level": 2,
-              "url": "/api/2014/spells/darkness",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14437,7 +13559,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Faerie Fire",
               "level": 1,
-              "url": "/api/2014/spells/faerie-fire",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14460,8 +13581,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -14475,16 +13595,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/drow.png",
-    "url": "/api/2014/monsters/drow"
+    "image": "/api/images/monsters/drow.png"
   },
   {
     "index": "druid",
@@ -14504,8 +13622,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 16,
         "spell": {
           "index": "barkskin",
-          "name": "Barkskin",
-          "url": "/api/2014/spells/barkskin"
+          "name": "Barkskin"
         }
       }
     ],
@@ -14526,24 +13643,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-medicine",
-          "name": "Skill: Medicine",
-          "url": "/api/2014/proficiencies/skill-medicine"
+          "name": "Skill: Medicine"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-nature",
-          "name": "Skill: Nature",
-          "url": "/api/2014/proficiencies/skill-nature"
+          "name": "Skill: Nature"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -14566,8 +13680,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 4,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 12,
           "modifier": 4,
@@ -14584,48 +13697,39 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Druidcraft",
-              "level": 0,
-              "url": "/api/2014/spells/druidcraft"
+              "level": 0
             },
             {
               "name": "Produce Flame",
-              "level": 0,
-              "url": "/api/2014/spells/produce-flame"
+              "level": 0
             },
             {
               "name": "Shillelagh",
-              "level": 0,
-              "url": "/api/2014/spells/shillelagh"
+              "level": 0
             },
             {
               "name": "Entangle",
-              "level": 1,
-              "url": "/api/2014/spells/entangle"
+              "level": 1
             },
             {
               "name": "Longstrider",
-              "level": 1,
-              "url": "/api/2014/spells/longstrider"
+              "level": 1
             },
             {
               "name": "Speak with Animals",
-              "level": 1,
-              "url": "/api/2014/spells/speak-with-animals"
+              "level": 1
             },
             {
               "name": "Thunderwave",
-              "level": 1,
-              "url": "/api/2014/spells/thunderwave"
+              "level": 1
             },
             {
               "name": "Animal Messenger",
-              "level": 2,
-              "url": "/api/2014/spells/animal-messenger"
+              "level": 2
             },
             {
               "name": "Barkskin",
-              "level": 2,
-              "url": "/api/2014/spells/barkskin"
+              "level": 2
             }
           ]
         }
@@ -14647,8 +13751,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "bludgeoning",
-                    "name": "Bludgeoning",
-                    "url": "/api/2014/damage-types/bludgeoning"
+                    "name": "Bludgeoning"
                   },
                   "damage_dice": "1d6",
                   "notes": "One handed"
@@ -14657,8 +13760,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "bludgeoning",
-                    "name": "Bludgeoning",
-                    "url": "/api/2014/damage-types/bludgeoning"
+                    "name": "Bludgeoning"
                   },
                   "damage_dice": "1d8",
                   "notes": "Two handed"
@@ -14667,8 +13769,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "bludgeoning",
-                    "name": "Bludgeoning",
-                    "url": "/api/2014/damage-types/bludgeoning"
+                    "name": "Bludgeoning"
                   },
                   "damage_dice": "1d8+2",
                   "notes": "With shillelagh"
@@ -14679,8 +13780,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         ]
       }
     ],
-    "image": "/api/images/monsters/druid.png",
-    "url": "/api/2014/monsters/druid"
+    "image": "/api/images/monsters/druid.png"
   },
   {
     "index": "dryad",
@@ -14698,8 +13798,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 16,
         "spell": {
           "index": "barkskin",
-          "name": "Barkskin",
-          "url": "/api/2014/spells/barkskin"
+          "name": "Barkskin"
         }
       }
     ],
@@ -14720,16 +13819,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -14752,8 +13849,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 14,
           "components_required": [
@@ -14764,7 +13860,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Druidcraft",
               "level": 0,
-              "url": "/api/2014/spells/druidcraft",
               "usage": {
                 "type": "at will"
               }
@@ -14772,7 +13867,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Entangle",
               "level": 1,
-              "url": "/api/2014/spells/entangle",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -14781,7 +13875,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Goodberry",
               "level": 1,
-              "url": "/api/2014/spells/goodberry",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -14790,7 +13883,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Barkskin",
               "level": 2,
-              "url": "/api/2014/spells/barkskin",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14799,7 +13891,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Pass Without Trace",
               "level": 2,
-              "url": "/api/2014/spells/pass-without-trace",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14808,7 +13899,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Shillelagh",
               "level": 0,
-              "url": "/api/2014/spells/shillelagh",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -14839,8 +13929,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4"
           }
@@ -14852,16 +13941,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 14,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/dryad.png",
-    "url": "/api/2014/monsters/dryad"
+    "image": "/api/images/monsters/dryad.png"
   },
   {
     "index": "duergar",
@@ -14877,13 +13964,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "scale-mail",
-            "name": "Scale Mail",
-            "url": "/api/2014/equipment/scale-mail"
+            "name": "Scale Mail"
           },
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -14945,8 +14030,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
@@ -14960,8 +14044,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -14979,8 +14062,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/duergar.png",
-    "url": "/api/2014/monsters/duergar"
+    "image": "/api/images/monsters/duergar.png"
   },
   {
     "index": "dust-mephit",
@@ -15012,16 +14094,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -15035,8 +14115,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -15054,8 +14133,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -15067,8 +14145,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 10,
           "components_required": [
@@ -15079,7 +14156,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Sleep",
               "level": 1,
-              "url": "/api/2014/spells/sleep",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15098,8 +14174,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4+2"
           }
@@ -15116,16 +14191,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 10,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/dust-mephit.png",
-    "url": "/api/2014/monsters/dust-mephit"
+    "image": "/api/images/monsters/dust-mephit.png"
   },
   {
     "index": "eagle",
@@ -15157,8 +14230,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -15188,16 +14260,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/eagle.png",
-    "url": "/api/2014/monsters/eagle"
+    "image": "/api/images/monsters/eagle.png"
   },
   {
     "index": "earth-elemental",
@@ -15237,28 +14307,23 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -15301,16 +14366,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/earth-elemental.png",
-    "url": "/api/2014/monsters/earth-elemental"
+    "image": "/api/images/monsters/earth-elemental.png"
   },
   {
     "index": "efreeti",
@@ -15342,24 +14405,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -15388,8 +14448,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 15,
           "modifier": 7,
@@ -15401,7 +14460,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -15409,7 +14467,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Enlarge/Reduce",
               "level": 2,
-              "url": "/api/2014/spells/enlarge-reduce",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -15418,7 +14475,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Tongues",
               "level": 3,
-              "url": "/api/2014/spells/tongues",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -15428,7 +14484,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Conjure Elemental",
               "level": 5,
               "notes": "Fire Elemental only",
-              "url": "/api/2014/spells/conjure-elemental",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15437,7 +14492,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Gaseous Form",
               "level": 3,
-              "url": "/api/2014/spells/gaseous-form",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15446,7 +14500,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Invisibility",
               "level": 2,
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15455,7 +14508,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Major Image",
               "level": 3,
-              "url": "/api/2014/spells/major-image",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15464,7 +14516,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Plane Shift",
               "level": 7,
-              "url": "/api/2014/spells/plane-shift",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15473,7 +14524,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Wall of Fire",
               "level": 4,
-              "url": "/api/2014/spells/wall-of-fire",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -15518,16 +14568,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -15541,16 +14589,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "5d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/efreeti.png",
-    "url": "/api/2014/monsters/efreeti"
+    "image": "/api/images/monsters/efreeti.png"
   },
   {
     "index": "elephant",
@@ -15603,8 +14649,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d8+6"
           }
@@ -15618,16 +14663,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d10+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/elephant.png",
-    "url": "/api/2014/monsters/elephant"
+    "image": "/api/images/monsters/elephant.png"
   },
   {
     "index": "elk",
@@ -15680,8 +14723,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+3"
           }
@@ -15695,16 +14737,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/elk.png",
-    "url": "/api/2014/monsters/elk"
+    "image": "/api/images/monsters/elk.png"
   },
   {
     "index": "erinyes",
@@ -15720,8 +14760,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "plate-armor",
-            "name": "Plate Armor",
-            "url": "/api/2014/equipment/plate-armor"
+            "name": "Plate Armor"
           }
         ]
       }
@@ -15744,32 +14783,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -15785,8 +14820,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -15883,8 +14917,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d8+4",
                   "notes": "One handed"
@@ -15893,8 +14926,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "option_type": "damage",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d10+4",
                   "notes": "Two handed"
@@ -15905,8 +14937,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "3d8"
           }
@@ -15920,16 +14951,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "3d8"
           }
@@ -15942,8 +14971,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The erinyes adds 4 to its AC against one melee attack that would hit it. To do so, the erinyes must see the attacker and be wielding a melee weapon."
       }
     ],
-    "image": "/api/images/monsters/erinyes.png",
-    "url": "/api/2014/monsters/erinyes"
+    "image": "/api/images/monsters/erinyes.png"
   },
   {
     "index": "ettercap",
@@ -15975,24 +15003,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-survival",
-          "name": "Skill: Survival",
-          "url": "/api/2014/proficiencies/skill-survival"
+          "name": "Skill: Survival"
         }
       }
     ],
@@ -16048,16 +15073,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "1d8"
           }
@@ -16071,8 +15094,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+2"
           }
@@ -16089,8 +15111,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 4
       }
     ],
-    "image": "/api/images/monsters/ettercap.png",
-    "url": "/api/2014/monsters/ettercap"
+    "image": "/api/images/monsters/ettercap.png"
   },
   {
     "index": "ettin",
@@ -16121,8 +15142,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -16174,8 +15194,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+5"
           }
@@ -16189,16 +15208,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ettin.png",
-    "url": "/api/2014/monsters/ettin"
+    "image": "/api/images/monsters/ettin.png"
   },
   {
     "index": "fire-elemental",
@@ -16236,43 +15253,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -16291,8 +15300,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d10"
           }
@@ -16328,16 +15336,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/fire-elemental.png",
-    "url": "/api/2014/monsters/fire-elemental"
+    "image": "/api/images/monsters/fire-elemental.png"
   },
   {
     "index": "fire-giant",
@@ -16352,8 +15358,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "plate-armor",
-            "name": "Plate Armor",
-            "url": "/api/2014/equipment/plate-armor"
+            "name": "Plate Armor"
           }
         ]
       }
@@ -16375,40 +15380,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -16446,8 +15446,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "6d6+7"
           }
@@ -16461,16 +15460,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d10+7"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/fire-giant.png",
-    "url": "/api/2014/monsters/fire-giant"
+    "image": "/api/images/monsters/fire-giant.png"
   },
   {
     "index": "flesh-golem",
@@ -16507,33 +15504,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -16591,16 +15582,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/flesh-golem.png",
-    "url": "/api/2014/monsters/flesh-golem"
+    "image": "/api/images/monsters/flesh-golem.png"
   },
   {
     "index": "flying-snake",
@@ -16657,24 +15646,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "3d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/flying-snake.png",
-    "url": "/api/2014/monsters/flying-snake"
+    "image": "/api/images/monsters/flying-snake.png"
   },
   {
     "index": "flying-sword",
@@ -16707,8 +15693,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       }
     ],
@@ -16721,38 +15706,31 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -16782,16 +15760,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/flying-sword.png",
-    "url": "/api/2014/monsters/flying-sword"
+    "image": "/api/images/monsters/flying-sword.png"
   },
   {
     "index": "frog",
@@ -16824,16 +15800,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 1,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -16859,8 +15833,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The frog's long jump is up to 10 ft. and its high jump is up to 5 ft., with or without a running start."
       }
     ],
-    "image": "/api/images/monsters/frog.png",
-    "url": "/api/2014/monsters/frog"
+    "image": "/api/images/monsters/frog.png"
   },
   {
     "index": "frost-giant",
@@ -16892,40 +15865,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -16963,8 +15931,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "3d12+6"
           }
@@ -16978,16 +15945,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d10+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/frost-giant.png",
-    "url": "/api/2014/monsters/frost-giant"
+    "image": "/api/images/monsters/frost-giant.png"
   },
   {
     "index": "gargoyle",
@@ -17025,18 +15990,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -17079,8 +16041,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -17094,16 +16055,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/gargoyle.png",
-    "url": "/api/2014/monsters/gargoyle"
+    "image": "/api/images/monsters/gargoyle.png"
   },
   {
     "index": "gelatinous-cube",
@@ -17136,33 +16095,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "deafened",
-        "name": "Deafened",
-        "url": "/api/2014/conditions/deafened"
+        "name": "Deafened"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       }
     ],
     "senses": {
@@ -17192,8 +16145,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "3d6"
           }
@@ -17205,8 +16157,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 12,
           "success_type": "none"
@@ -17215,16 +16166,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "3d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/gelatinous-cube.png",
-    "url": "/api/2014/monsters/gelatinous-cube"
+    "image": "/api/images/monsters/gelatinous-cube.png"
   },
   {
     "index": "ghast",
@@ -17261,18 +16210,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       }
     ],
     "senses": {
@@ -17290,8 +16236,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -17311,8 +16256,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+3"
           }
@@ -17326,16 +16270,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ghast.png",
-    "url": "/api/2014/monsters/ghast"
+    "image": "/api/images/monsters/ghast.png"
   },
   {
     "index": "ghost",
@@ -17380,48 +16322,39 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       }
     ],
     "senses": {
@@ -17451,8 +16384,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "4d6+3"
           }
@@ -17468,8 +16400,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 13,
           "success_type": "none"
@@ -17486,16 +16417,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc_value": 13,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/ghost.png",
-    "url": "/api/2014/monsters/ghost"
+    "image": "/api/images/monsters/ghost.png"
   },
   {
     "index": "ghoul",
@@ -17530,18 +16459,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       }
     ],
     "senses": {
@@ -17561,8 +16487,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+2"
           }
@@ -17576,16 +16501,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ghoul.png",
-    "url": "/api/2014/monsters/ghoul"
+    "image": "/api/images/monsters/ghoul.png"
   },
   {
     "index": "giant-ape",
@@ -17617,16 +16540,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -17662,8 +16583,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d10+6"
           }
@@ -17677,16 +16597,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "7d6+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-ape.png",
-    "url": "/api/2014/monsters/giant-ape"
+    "image": "/api/images/monsters/giant-ape.png"
   },
   {
     "index": "giant-badger",
@@ -17758,8 +16676,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+1"
           }
@@ -17773,16 +16690,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-badger.png",
-    "url": "/api/2014/monsters/giant-badger"
+    "image": "/api/images/monsters/giant-badger.png"
   },
   {
     "index": "giant-bat",
@@ -17841,16 +16756,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-bat.png",
-    "url": "/api/2014/monsters/giant-bat"
+    "image": "/api/images/monsters/giant-bat.png"
   },
   {
     "index": "giant-boar",
@@ -17914,16 +16827,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-boar.png",
-    "url": "/api/2014/monsters/giant-boar"
+    "image": "/api/images/monsters/giant-boar.png"
   },
   {
     "index": "giant-centipede",
@@ -17972,16 +16883,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-centipede.png",
-    "url": "/api/2014/monsters/giant-centipede"
+    "image": "/api/images/monsters/giant-centipede.png"
   },
   {
     "index": "giant-constrictor-snake",
@@ -18013,8 +16922,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -18039,8 +16947,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
@@ -18054,16 +16961,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-constrictor-snake.png",
-    "url": "/api/2014/monsters/giant-constrictor-snake"
+    "image": "/api/images/monsters/giant-constrictor-snake.png"
   },
   {
     "index": "giant-crab",
@@ -18095,8 +17000,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -18127,16 +17031,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-crab.png",
-    "url": "/api/2014/monsters/giant-crab"
+    "image": "/api/images/monsters/giant-crab.png"
   },
   {
     "index": "giant-crocodile",
@@ -18168,8 +17070,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -18216,8 +17117,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d10+5"
           }
@@ -18231,16 +17131,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-crocodile.png",
-    "url": "/api/2014/monsters/giant-crocodile"
+    "image": "/api/images/monsters/giant-crocodile.png"
   },
   {
     "index": "giant-eagle",
@@ -18273,8 +17171,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -18321,8 +17218,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
@@ -18336,16 +17232,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-eagle.png",
-    "url": "/api/2014/monsters/giant-eagle"
+    "image": "/api/images/monsters/giant-eagle.png"
   },
   {
     "index": "giant-elk",
@@ -18377,8 +17271,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -18408,8 +17301,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
@@ -18423,16 +17315,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-elk.png",
-    "url": "/api/2014/monsters/giant-elk"
+    "image": "/api/images/monsters/giant-elk.png"
   },
   {
     "index": "giant-fire-beetle",
@@ -18487,16 +17377,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6-1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-fire-beetle.png",
-    "url": "/api/2014/monsters/giant-fire-beetle"
+    "image": "/api/images/monsters/giant-fire-beetle.png"
   },
   {
     "index": "giant-frog",
@@ -18528,16 +17416,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -18572,8 +17458,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+1"
           }
@@ -18584,8 +17469,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The frog makes one bite attack against a Small or smaller target it is grappling. If the attack hits, the target is swallowed, and the grapple ends. The swallowed target is blinded and restrained, it has total cover against attacks and other effects outside the frog, and it takes 5 (2d4) acid damage at the start of each of the frog's turns. The frog can have only one target swallowed at a time. If the frog dies, a swallowed creature is no longer restrained by it and can escape from the corpse using 5 ft. of movement, exiting prone."
       }
     ],
-    "image": "/api/images/monsters/giant-frog.png",
-    "url": "/api/2014/monsters/giant-frog"
+    "image": "/api/images/monsters/giant-frog.png"
   },
   {
     "index": "giant-goat",
@@ -18642,16 +17526,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-goat.png",
-    "url": "/api/2014/monsters/giant-goat"
+    "image": "/api/images/monsters/giant-goat.png"
   },
   {
     "index": "giant-hyena",
@@ -18682,8 +17564,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -18713,16 +17594,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-hyena.png",
-    "url": "/api/2014/monsters/giant-hyena"
+    "image": "/api/images/monsters/giant-hyena.png"
   },
   {
     "index": "giant-lizard",
@@ -18772,16 +17651,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-lizard.png",
-    "url": "/api/2014/monsters/giant-lizard"
+    "image": "/api/images/monsters/giant-lizard.png"
   },
   {
     "index": "giant-octopus",
@@ -18813,16 +17690,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -18861,8 +17736,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+3"
           }
@@ -18880,8 +17754,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/giant-octopus.png",
-    "url": "/api/2014/monsters/giant-octopus"
+    "image": "/api/images/monsters/giant-octopus.png"
   },
   {
     "index": "giant-owl",
@@ -18913,16 +17786,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -18957,16 +17828,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-owl.png",
-    "url": "/api/2014/monsters/giant-owl"
+    "image": "/api/images/monsters/giant-owl.png"
   },
   {
     "index": "giant-poisonous-snake",
@@ -18998,8 +17867,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -19024,16 +17892,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-poisonous-snake.png",
-    "url": "/api/2014/monsters/giant-poisonous-snake"
+    "image": "/api/images/monsters/giant-poisonous-snake.png"
   },
   {
     "index": "giant-rat",
@@ -19091,16 +17957,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-rat.png",
-    "url": "/api/2014/monsters/giant-rat"
+    "image": "/api/images/monsters/giant-rat.png"
   },
   {
     "index": "giant-rat-diseased",
@@ -19158,16 +18022,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-rat-diseased.png",
-    "url": "/api/2014/monsters/giant-rat-diseased"
+    "image": "/api/images/monsters/giant-rat-diseased.png"
   },
   {
     "index": "giant-scorpion",
@@ -19215,8 +18077,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d8+2"
           }
@@ -19247,16 +18108,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-scorpion.png",
-    "url": "/api/2014/monsters/giant-scorpion"
+    "image": "/api/images/monsters/giant-scorpion.png"
   },
   {
     "index": "giant-sea-horse",
@@ -19315,16 +18174,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-sea-horse.png",
-    "url": "/api/2014/monsters/giant-sea-horse"
+    "image": "/api/images/monsters/giant-sea-horse.png"
   },
   {
     "index": "giant-shark",
@@ -19356,8 +18213,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -19392,16 +18248,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d10+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-shark.png",
-    "url": "/api/2014/monsters/giant-shark"
+    "image": "/api/images/monsters/giant-shark.png"
   },
   {
     "index": "giant-spider",
@@ -19434,8 +18288,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -19475,8 +18328,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           }
@@ -19493,8 +18345,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 5
       }
     ],
-    "image": "/api/images/monsters/giant-spider.png",
-    "url": "/api/2014/monsters/giant-spider"
+    "image": "/api/images/monsters/giant-spider.png"
   },
   {
     "index": "giant-toad",
@@ -19553,16 +18404,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "1d10"
           }
@@ -19573,8 +18422,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The toad makes one bite attack against a Medium or smaller target it is grappling. If the attack hits, the target is swallowed, and the grapple ends. The swallowed target is blinded and restrained, it has total cover against attacks and other effects outside the toad, and it takes 10 (3d6) acid damage at the start of each of the toad's turns. The toad can have only one target swallowed at a time.\nIf the toad dies, a swallowed creature is no longer restrained by it and can escape from the corpse using 5 feet of movement, exiting prone."
       }
     ],
-    "image": "/api/images/monsters/giant-toad.png",
-    "url": "/api/2014/monsters/giant-toad"
+    "image": "/api/images/monsters/giant-toad.png"
   },
   {
     "index": "giant-vulture",
@@ -19607,8 +18455,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -19659,8 +18506,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d4+2"
           }
@@ -19674,16 +18520,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-vulture.png",
-    "url": "/api/2014/monsters/giant-vulture"
+    "image": "/api/images/monsters/giant-vulture.png"
   },
   {
     "index": "giant-wasp",
@@ -19732,16 +18576,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-wasp.png",
-    "url": "/api/2014/monsters/giant-wasp"
+    "image": "/api/images/monsters/giant-wasp.png"
   },
   {
     "index": "giant-weasel",
@@ -19772,16 +18614,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -19812,16 +18652,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-weasel.png",
-    "url": "/api/2014/monsters/giant-weasel"
+    "image": "/api/images/monsters/giant-weasel.png"
   },
   {
     "index": "giant-wolf-spider",
@@ -19854,16 +18692,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -19903,16 +18739,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/giant-wolf-spider.png",
-    "url": "/api/2014/monsters/giant-wolf-spider"
+    "image": "/api/images/monsters/giant-wolf-spider.png"
   },
   {
     "index": "gibbering-mouther",
@@ -19946,8 +18780,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       }
     ],
     "senses": {
@@ -19969,8 +18802,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -20003,8 +18835,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "5d6"
           }
@@ -20021,16 +18852,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 13,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/gibbering-mouther.png",
-    "url": "/api/2014/monsters/gibbering-mouther"
+    "image": "/api/images/monsters/gibbering-mouther.png"
   },
   {
     "index": "glabrezu",
@@ -20062,32 +18891,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -20104,8 +18929,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -20123,8 +18947,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 16,
           "components_required": [
@@ -20135,7 +18958,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Darkness",
               "level": 2,
-              "url": "/api/2014/spells/darkness",
               "usage": {
                 "type": "at will"
               }
@@ -20143,7 +18965,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -20151,7 +18972,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dispel Magic",
               "level": 3,
-              "url": "/api/2014/spells/dispel-magic",
               "usage": {
                 "type": "at will"
               }
@@ -20159,7 +18979,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Confusion",
               "level": 4,
-              "url": "/api/2014/spells/confusion",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -20168,7 +18987,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Fly",
               "level": 3,
-              "url": "/api/2014/spells/fly",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -20177,7 +18995,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Power Word Stun",
               "level": 8,
-              "url": "/api/2014/spells/power-word-stun",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -20248,8 +19065,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d10+5"
           }
@@ -20263,16 +19079,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/glabrezu.png",
-    "url": "/api/2014/monsters/glabrezu"
+    "image": "/api/images/monsters/glabrezu.png"
   },
   {
     "index": "gladiator",
@@ -20289,13 +19103,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "studded-leather-armor",
-            "name": "Studded Leather Armor",
-            "url": "/api/2014/equipment/studded-leather-armor"
+            "name": "Studded Leather Armor"
           },
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -20317,40 +19129,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-intimidation",
-          "name": "Skill: Intimidation",
-          "url": "/api/2014/proficiencies/skill-intimidation"
+          "name": "Skill: Intimidation"
         }
       }
     ],
@@ -20458,8 +19265,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "2d6+4"
                 },
@@ -20468,8 +19274,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "2d8+4"
                 }
@@ -20486,8 +19291,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+4"
           }
@@ -20500,8 +19304,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The gladiator adds 3 to its AC against one melee attack that would hit it. To do so, the gladiator must see the attacker and be wielding a melee weapon."
       }
     ],
-    "image": "/api/images/monsters/gladiator.png",
-    "url": "/api/2014/monsters/gladiator"
+    "image": "/api/images/monsters/gladiator.png"
   },
   {
     "index": "gnoll",
@@ -20517,13 +19320,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "hide-armor",
-            "name": "Hide Armor",
-            "url": "/api/2014/equipment/hide-armor"
+            "name": "Hide Armor"
           },
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -20568,8 +19369,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
@@ -20591,8 +19391,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d6+2"
                 },
@@ -20601,8 +19400,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d8+2"
                 }
@@ -20619,16 +19417,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/gnoll.png",
-    "url": "/api/2014/monsters/gnoll"
+    "image": "/api/images/monsters/gnoll.png"
   },
   {
     "index": "goat",
@@ -20685,16 +19481,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/goat.png",
-    "url": "/api/2014/monsters/goat"
+    "image": "/api/images/monsters/goat.png"
   },
   {
     "index": "goblin",
@@ -20710,13 +19504,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           },
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -20738,8 +19530,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -20770,8 +19561,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+2"
           }
@@ -20785,16 +19575,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/goblin.png",
-    "url": "/api/2014/monsters/goblin"
+    "image": "/api/images/monsters/goblin.png"
   },
   {
     "index": "gold-dragon-wyrmling",
@@ -20827,48 +19615,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -20902,8 +19684,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+4"
           }
@@ -20929,8 +19710,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 13,
                   "success_type": "half"
@@ -20939,8 +19719,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "4d10"
                   }
@@ -20952,8 +19731,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 13,
                   "success_type": "none"
@@ -20964,8 +19742,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/gold-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/gold-dragon-wyrmling"
+    "image": "/api/images/monsters/gold-dragon-wyrmling.png"
   },
   {
     "index": "gorgon",
@@ -20996,8 +19773,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -21007,8 +19783,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       }
     ],
     "senses": {
@@ -21034,8 +19809,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d12+5"
           }
@@ -21049,8 +19823,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d10+5"
           }
@@ -21067,16 +19840,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 13,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/gorgon.png",
-    "url": "/api/2014/monsters/gorgon"
+    "image": "/api/images/monsters/gorgon.png"
   },
   {
     "index": "gray-ooze",
@@ -21108,8 +19879,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -21123,33 +19893,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "deafened",
-        "name": "Deafened",
-        "url": "/api/2014/conditions/deafened"
+        "name": "Deafened"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       }
     ],
     "senses": {
@@ -21183,24 +19947,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+1"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/gray-ooze.png",
-    "url": "/api/2014/monsters/gray-ooze"
+    "image": "/api/images/monsters/gray-ooze.png"
   },
   {
     "index": "green-dragon-wyrmling",
@@ -21233,48 +19994,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -21286,8 +20041,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -21314,16 +20068,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "1d6"
           }
@@ -21340,8 +20092,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 11,
           "success_type": "none"
@@ -21350,16 +20101,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "6d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/green-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/green-dragon-wyrmling"
+    "image": "/api/images/monsters/green-dragon-wyrmling.png"
   },
   {
     "index": "green-hag",
@@ -21390,32 +20139,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -21442,8 +20187,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 12,
           "components_required": [
@@ -21454,7 +20198,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dancing Lights",
               "level": 0,
-              "url": "/api/2014/spells/dancing-lights",
               "usage": {
                 "type": "at will"
               }
@@ -21462,7 +20205,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Minor Illusion",
               "level": 0,
-              "url": "/api/2014/spells/minor-illusion",
               "usage": {
                 "type": "at will"
               }
@@ -21470,7 +20212,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Vicious Mockery",
               "level": 0,
-              "url": "/api/2014/spells/vicious-mockery",
               "usage": {
                 "type": "at will"
               }
@@ -21492,8 +20233,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
@@ -21508,8 +20248,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The hag magically turns invisible until she attacks or casts a spell, or until her concentration ends (as if concentrating on a spell). While invisible, she leaves no physical evidence of her passage, so she can be tracked only by magic. Any equipment she wears or carries is invisible with her."
       }
     ],
-    "image": "/api/images/monsters/green-hag.png",
-    "url": "/api/2014/monsters/green-hag"
+    "image": "/api/images/monsters/green-hag.png"
   },
   {
     "index": "grick",
@@ -21583,8 +20322,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+2"
           }
@@ -21598,16 +20336,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/grick.png",
-    "url": "/api/2014/monsters/grick"
+    "image": "/api/images/monsters/grick.png"
   },
   {
     "index": "griffon",
@@ -21639,8 +20375,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -21688,8 +20423,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+4"
           }
@@ -21703,16 +20437,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/griffon.png",
-    "url": "/api/2014/monsters/griffon"
+    "image": "/api/images/monsters/griffon.png"
   },
   {
     "index": "grimlock",
@@ -21744,24 +20476,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -21771,8 +20500,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       }
     ],
     "senses": {
@@ -21806,24 +20534,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4+3"
           },
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/grimlock.png",
-    "url": "/api/2014/monsters/grimlock"
+    "image": "/api/images/monsters/grimlock.png"
   },
   {
     "index": "guard",
@@ -21840,13 +20565,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "chain-shirt",
-            "name": "Chain Shirt",
-            "url": "/api/2014/equipment/chain-shirt"
+            "name": "Chain Shirt"
           },
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -21868,8 +20591,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -21901,8 +20623,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d6+1"
                 },
@@ -21911,8 +20632,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d8+1"
                 }
@@ -21922,8 +20642,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         ]
       }
     ],
-    "image": "/api/images/monsters/guard.png",
-    "url": "/api/2014/monsters/guard"
+    "image": "/api/images/monsters/guard.png"
   },
   {
     "index": "guardian-naga",
@@ -21954,40 +20673,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -21999,13 +20713,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -22028,8 +20740,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 11,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 16,
           "modifier": 8,
@@ -22048,78 +20759,63 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Mending",
-              "level": 0,
-              "url": "/api/2014/spells/mending"
+              "level": 0
             },
             {
               "name": "Sacred Flame",
-              "level": 0,
-              "url": "/api/2014/spells/sacred-flame"
+              "level": 0
             },
             {
               "name": "Thaumaturgy",
-              "level": 0,
-              "url": "/api/2014/spells/thaumaturgy"
+              "level": 0
             },
             {
               "name": "Command",
-              "level": 1,
-              "url": "/api/2014/spells/command"
+              "level": 1
             },
             {
               "name": "Cure Wounds",
-              "level": 1,
-              "url": "/api/2014/spells/cure-wounds"
+              "level": 1
             },
             {
               "name": "Shield of Faith",
-              "level": 1,
-              "url": "/api/2014/spells/shield-of-faith"
+              "level": 1
             },
             {
               "name": "Calm Emotions",
-              "level": 2,
-              "url": "/api/2014/spells/calm-emotions"
+              "level": 2
             },
             {
               "name": "Hold Person",
-              "level": 2,
-              "url": "/api/2014/spells/hold-person"
+              "level": 2
             },
             {
               "name": "Bestow Curse",
-              "level": 3,
-              "url": "/api/2014/spells/bestow-curse"
+              "level": 3
             },
             {
               "name": "Clairvoyance",
-              "level": 3,
-              "url": "/api/2014/spells/clairvoyance"
+              "level": 3
             },
             {
               "name": "Banishment",
-              "level": 4,
-              "url": "/api/2014/spells/banishment"
+              "level": 4
             },
             {
               "name": "Freedom of Movement",
-              "level": 4,
-              "url": "/api/2014/spells/freedom-of-movement"
+              "level": 4
             },
             {
               "name": "Flame Strike",
-              "level": 5,
-              "url": "/api/2014/spells/flame-strike"
+              "level": 5
             },
             {
               "name": "Geas",
-              "level": 5,
-              "url": "/api/2014/spells/geas"
+              "level": 5
             },
             {
               "name": "True Seeing",
-              "level": 6,
-              "url": "/api/2014/spells/true-seeing"
+              "level": 6
             }
           ]
         }
@@ -22134,8 +20830,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+4"
           }
@@ -22147,8 +20842,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 8
       }
     ],
-    "image": "/api/images/monsters/guardian-naga.png",
-    "url": "/api/2014/monsters/guardian-naga"
+    "image": "/api/images/monsters/guardian-naga.png"
   },
   {
     "index": "gynosphinx",
@@ -22180,32 +20874,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 12,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -22219,13 +20909,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       }
     ],
     "senses": {
@@ -22252,8 +20940,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 9,
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 16,
           "modifier": 8,
@@ -22272,78 +20959,63 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Mage Hand",
-              "level": 0,
-              "url": "/api/2014/spells/mage-hand"
+              "level": 0
             },
             {
               "name": "Minor Illusion",
-              "level": 0,
-              "url": "/api/2014/spells/minor-illusion"
+              "level": 0
             },
             {
               "name": "Prestidigitation",
-              "level": 0,
-              "url": "/api/2014/spells/prestidigitation"
+              "level": 0
             },
             {
               "name": "Detect Magic",
-              "level": 1,
-              "url": "/api/2014/spells/detect-magic"
+              "level": 1
             },
             {
               "name": "Identify",
-              "level": 1,
-              "url": "/api/2014/spells/identify"
+              "level": 1
             },
             {
               "name": "Shield",
-              "level": 1,
-              "url": "/api/2014/spells/shield"
+              "level": 1
             },
             {
               "name": "Darkness",
-              "level": 2,
-              "url": "/api/2014/spells/darkness"
+              "level": 2
             },
             {
               "name": "Locate Object",
-              "level": 2,
-              "url": "/api/2014/spells/locate-object"
+              "level": 2
             },
             {
               "name": "Suggestion",
-              "level": 2,
-              "url": "/api/2014/spells/suggestion"
+              "level": 2
             },
             {
               "name": "Dispel Magic",
-              "level": 3,
-              "url": "/api/2014/spells/dispel-magic"
+              "level": 3
             },
             {
               "name": "Remove Curse",
-              "level": 3,
-              "url": "/api/2014/spells/remove-curse"
+              "level": 3
             },
             {
               "name": "Tongues",
-              "level": 3,
-              "url": "/api/2014/spells/tongues"
+              "level": 3
             },
             {
               "name": "Banishment",
-              "level": 4,
-              "url": "/api/2014/spells/banishment"
+              "level": 4
             },
             {
               "name": "Greater Invisibility",
-              "level": 4,
-              "url": "/api/2014/spells/greater-invisibility"
+              "level": 4
             },
             {
               "name": "Legend Lore",
-              "level": 5,
-              "url": "/api/2014/spells/legend-lore"
+              "level": 5
             }
           ]
         }
@@ -22370,8 +21042,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
@@ -22392,8 +21063,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The sphinx casts a spell from its list of prepared spells, using a spell slot as normal."
       }
     ],
-    "image": "/api/images/monsters/gynosphinx.png",
-    "url": "/api/2014/monsters/gynosphinx"
+    "image": "/api/images/monsters/gynosphinx.png"
   },
   {
     "index": "half-red-dragon-veteran",
@@ -22409,8 +21079,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "plate-armor",
-            "name": "Plate Armor",
-            "url": "/api/2014/equipment/plate-armor"
+            "name": "Plate Armor"
           }
         ]
       }
@@ -22477,8 +21146,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d8+3"
                 },
@@ -22487,8 +21155,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d10+3"
                 }
@@ -22505,8 +21172,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
@@ -22520,8 +21186,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+1"
           }
@@ -22538,8 +21203,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 15,
           "success_type": "half"
@@ -22548,16 +21212,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "7d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/half-red-dragon-veteran.png",
-    "url": "/api/2014/monsters/half-red-dragon-veteran"
+    "image": "/api/images/monsters/half-red-dragon-veteran.png"
   },
   {
     "index": "harpy",
@@ -22622,8 +21284,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+1"
           }
@@ -22637,8 +21298,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4+1"
           }
@@ -22649,8 +21309,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The harpy sings a magical melody. Every humanoid and giant within 300 ft. of the harpy that can hear the song must succeed on a DC 11 Wisdom saving throw or be charmed until the song ends. The harpy must take a bonus action on its subsequent turns to continue singing. It can stop singing at any time. The song ends if the harpy is incapacitated.\nWhile charmed by the harpy, a target is incapacitated and ignores the songs of other harpies. If the charmed target is more than 5 ft. away from the harpy, the must move on its turn toward the harpy by the most direct route. It doesn't avoid opportunity attacks, but before moving into damaging terrain, such as lava or a pit, and whenever it takes damage from a source other than the harpy, a target can repeat the saving throw. A creature can also repeat the saving throw at the end of each of its turns. If a creature's saving throw is successful, the effect ends on it.\nA target that successfully saves is immune to this harpy's song for the next 24 hours."
       }
     ],
-    "image": "/api/images/monsters/harpy.png",
-    "url": "/api/2014/monsters/harpy"
+    "image": "/api/images/monsters/harpy.png"
   },
   {
     "index": "hawk",
@@ -22682,8 +21341,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -22713,16 +21371,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hawk.png",
-    "url": "/api/2014/monsters/hawk"
+    "image": "/api/images/monsters/hawk.png"
   },
   {
     "index": "hell-hound",
@@ -22753,8 +21409,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -22791,16 +21446,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -22817,8 +21470,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 12,
           "success_type": "half"
@@ -22827,16 +21479,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "6d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hell-hound.png",
-    "url": "/api/2014/monsters/hell-hound"
+    "image": "/api/images/monsters/hell-hound.png"
   },
   {
     "index": "hezrou",
@@ -22868,24 +21518,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -22902,8 +21549,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -22925,8 +21571,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -22959,8 +21604,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           }
@@ -22974,16 +21618,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hezrou.png",
-    "url": "/api/2014/monsters/hezrou"
+    "image": "/api/images/monsters/hezrou.png"
   },
   {
     "index": "hill-giant",
@@ -23014,8 +21656,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -23051,8 +21692,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d8+5"
           }
@@ -23066,16 +21706,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d10+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hill-giant.png",
-    "url": "/api/2014/monsters/hill-giant"
+    "image": "/api/images/monsters/hill-giant.png"
   },
   {
     "index": "hippogriff",
@@ -23107,8 +21745,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -23155,8 +21792,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+3"
           }
@@ -23170,16 +21806,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hippogriff.png",
-    "url": "/api/2014/monsters/hippogriff"
+    "image": "/api/images/monsters/hippogriff.png"
   },
   {
     "index": "hobgoblin",
@@ -23195,13 +21829,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "chain-mail",
-            "name": "Chain Mail",
-            "url": "/api/2014/equipment/chain-mail"
+            "name": "Chain Mail"
           },
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -23254,8 +21886,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d8+1"
                 },
@@ -23264,8 +21895,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d10+1"
                 }
@@ -23282,16 +21912,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hobgoblin.png",
-    "url": "/api/2014/monsters/hobgoblin"
+    "image": "/api/images/monsters/hobgoblin.png"
   },
   {
     "index": "homunculus",
@@ -23327,13 +21955,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -23359,16 +21985,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/homunculus.png",
-    "url": "/api/2014/monsters/homunculus"
+    "image": "/api/images/monsters/homunculus.png"
   },
   {
     "index": "horned-devil",
@@ -23401,32 +22025,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 10,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -23442,8 +22062,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -23544,8 +22163,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+6"
           }
@@ -23559,8 +22177,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+6"
           }
@@ -23574,16 +22191,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "4d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/horned-devil.png",
-    "url": "/api/2014/monsters/horned-devil"
+    "image": "/api/images/monsters/horned-devil.png"
   },
   {
     "index": "hunter-shark",
@@ -23615,8 +22230,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -23651,16 +22265,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hunter-shark.png",
-    "url": "/api/2014/monsters/hunter-shark"
+    "image": "/api/images/monsters/hunter-shark.png"
   },
   {
     "index": "hydra",
@@ -23692,8 +22304,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -23748,16 +22359,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hydra.png",
-    "url": "/api/2014/monsters/hydra"
+    "image": "/api/images/monsters/hydra.png"
   },
   {
     "index": "hyena",
@@ -23788,8 +22397,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -23819,16 +22427,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/hyena.png",
-    "url": "/api/2014/monsters/hyena"
+    "image": "/api/images/monsters/hyena.png"
   },
   {
     "index": "ice-devil",
@@ -23860,32 +22466,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -23900,8 +22502,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -23954,16 +22555,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+5"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "3d6"
           }
@@ -23977,16 +22576,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+5"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "3d6"
           }
@@ -24000,16 +22597,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+5"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "3d6"
           }
@@ -24020,8 +22615,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The devil magically forms an opaque wall of ice on a solid surface it can see within 60 feet of it. The wall is 1 foot thick and up to 30 feet long and 10 feet high, or it's a hemispherical dome up to 20 feet in diameter.\nWhen the wall appears, each creature in its space is pushed out of it by the shortest route. The creature chooses which side of the wall to end up on, unless the creature is incapacitated. The creature then makes a DC 17 Dexterity saving throw, taking 35 (10d6) cold damage on a failed save, or half as much damage on a successful one.\nThe wall lasts for 1 minute or until the devil is incapacitated or dies. The wall can be damaged and breached; each 10-foot section has AC 5, 30 hit points, vulnerability to fire damage, and immunity to acid, cold, necrotic, poison, and psychic damage. If a section is destroyed, it leaves behind a sheet of frigid air in the space the wall occupied. Whenever a creature finishes moving through the frigid air on a turn, willingly or otherwise, the creature must make a DC 17 Constitution saving throw, taking 17 (5d6) cold damage on a failed save, or half as much damage on a successful one. The frigid air dissipates when the rest of the wall vanishes."
       }
     ],
-    "image": "/api/images/monsters/ice-devil.png",
-    "url": "/api/2014/monsters/ice-devil"
+    "image": "/api/images/monsters/ice-devil.png"
   },
   {
     "index": "ice-mephit",
@@ -24053,16 +22647,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -24078,8 +22670,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -24097,8 +22688,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 10,
           "success_type": "half"
@@ -24107,8 +22697,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8"
           }
@@ -24124,8 +22713,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "components_required": [
             "V",
@@ -24135,7 +22723,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Fog Cloud",
               "level": 1,
-              "url": "/api/2014/spells/fog-cloud",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -24154,16 +22741,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4+1"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "1d4"
           }
@@ -24180,8 +22765,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 10,
           "success_type": "half"
@@ -24190,16 +22774,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "2d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ice-mephit.png",
-    "url": "/api/2014/monsters/ice-mephit"
+    "image": "/api/images/monsters/ice-mephit.png"
   },
   {
     "index": "imp",
@@ -24232,32 +22814,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -24273,8 +22851,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -24308,8 +22885,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+3"
           }
@@ -24320,8 +22896,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The imp magically turns invisible until it attacks, or until its concentration ends (as if concentrating on a spell). Any equipment the imp wears or carries is invisible with it."
       }
     ],
-    "image": "/api/images/monsters/imp.png",
-    "url": "/api/2014/monsters/imp"
+    "image": "/api/images/monsters/imp.png"
   },
   {
     "index": "invisible-stalker",
@@ -24354,16 +22929,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -24377,43 +22950,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -24455,16 +23020,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/invisible-stalker.png",
-    "url": "/api/2014/monsters/invisible-stalker"
+    "image": "/api/images/monsters/invisible-stalker.png"
   },
   {
     "index": "iron-golem",
@@ -24502,33 +23065,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -24609,8 +23166,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d8+7"
           }
@@ -24624,8 +23180,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "3d10+7"
           }
@@ -24642,8 +23197,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 19,
           "success_type": "half"
@@ -24652,16 +23206,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "10d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/iron-golem.png",
-    "url": "/api/2014/monsters/iron-golem"
+    "image": "/api/images/monsters/iron-golem.png"
   },
   {
     "index": "jackal",
@@ -24692,8 +23244,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -24727,16 +23278,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4-1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/jackal.png",
-    "url": "/api/2014/monsters/jackal"
+    "image": "/api/images/monsters/jackal.png"
   },
   {
     "index": "killer-whale",
@@ -24767,8 +23316,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -24807,16 +23355,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "5d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/killer-whale.png",
-    "url": "/api/2014/monsters/killer-whale"
+    "image": "/api/images/monsters/killer-whale.png"
   },
   {
     "index": "knight",
@@ -24833,8 +23379,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "plate-armor",
-            "name": "Plate Armor",
-            "url": "/api/2014/equipment/plate-armor"
+            "name": "Plate Armor"
           }
         ]
       }
@@ -24856,16 +23401,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -24907,8 +23450,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
@@ -24922,8 +23464,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10"
           }
@@ -24947,8 +23488,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The knight adds 2 to its AC against one melee attack that would hit it. To do so, the knight must see the attacker and be wielding a melee weapon."
       }
     ],
-    "image": "/api/images/monsters/knight.png",
-    "url": "/api/2014/monsters/knight"
+    "image": "/api/images/monsters/knight.png"
   },
   {
     "index": "kobold",
@@ -25007,8 +23547,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
@@ -25022,16 +23561,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/kobold.png",
-    "url": "/api/2014/monsters/kobold"
+    "image": "/api/images/monsters/kobold.png"
   },
   {
     "index": "kraken",
@@ -25064,40 +23601,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 17,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -25110,13 +23642,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       }
     ],
     "senses": {
@@ -25210,8 +23740,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d8+10"
           }
@@ -25225,8 +23754,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d6+10"
           }
@@ -25242,8 +23770,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 23,
           "success_type": "half"
@@ -25252,8 +23779,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "4d10"
           }
@@ -25277,8 +23803,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 23,
           "success_type": "half"
@@ -25287,16 +23812,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "3d10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/kraken.png",
-    "url": "/api/2014/monsters/kraken"
+    "image": "/api/images/monsters/kraken.png"
   },
   {
     "index": "lamia",
@@ -25327,24 +23850,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -25367,8 +23887,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 13,
           "components_required": [
@@ -25379,7 +23898,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Disguise Self",
               "level": 1,
-              "url": "/api/2014/spells/disguise-self",
               "notes": "Any Humanoid Form",
               "usage": {
                 "type": "at will"
@@ -25388,7 +23906,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Major Image",
               "level": 3,
-              "url": "/api/2014/spells/major-image",
               "usage": {
                 "type": "at will"
               }
@@ -25396,7 +23913,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Charm Person",
               "level": 1,
-              "url": "/api/2014/spells/charm-person",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -25405,7 +23921,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Mirror Image",
               "level": 2,
-              "url": "/api/2014/spells/mirror-image",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -25414,7 +23929,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Scrying",
               "level": 5,
-              "url": "/api/2014/spells/scrying",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -25423,7 +23937,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Suggestion",
               "level": 2,
-              "url": "/api/2014/spells/suggestion",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -25432,7 +23945,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Geas",
               "level": 5,
-              "url": "/api/2014/spells/geas",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -25499,8 +24011,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d10+3"
           }
@@ -25514,8 +24025,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+3"
           }
@@ -25527,8 +24037,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 5
       }
     ],
-    "image": "/api/images/monsters/lamia.png",
-    "url": "/api/2014/monsters/lamia"
+    "image": "/api/images/monsters/lamia.png"
   },
   {
     "index": "lemure",
@@ -25567,18 +24076,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -25608,16 +24114,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/lemure.png",
-    "url": "/api/2014/monsters/lemure"
+    "image": "/api/images/monsters/lemure.png"
   },
   {
     "index": "lich",
@@ -25648,56 +24152,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 18,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -25714,28 +24211,23 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -25766,8 +24258,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 18,
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 20,
           "modifier": 12,
@@ -25791,133 +24282,107 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Mage Hand",
-              "level": 0,
-              "url": "/api/2014/spells/mage-hand"
+              "level": 0
             },
             {
               "name": "Prestidigitation",
-              "level": 0,
-              "url": "/api/2014/spells/prestidigitation"
+              "level": 0
             },
             {
               "name": "Ray of Frost",
-              "level": 0,
-              "url": "/api/2014/spells/ray-of-frost"
+              "level": 0
             },
             {
               "name": "Detect Magic",
-              "level": 1,
-              "url": "/api/2014/spells/detect-magic"
+              "level": 1
             },
             {
               "name": "Magic Missile",
-              "level": 1,
-              "url": "/api/2014/spells/magic-missile"
+              "level": 1
             },
             {
               "name": "Shield",
-              "level": 1,
-              "url": "/api/2014/spells/shield"
+              "level": 1
             },
             {
               "name": "Thunderwave",
-              "level": 1,
-              "url": "/api/2014/spells/thunderwave"
+              "level": 1
             },
             {
               "name": "Acid Arrow",
-              "level": 2,
-              "url": "/api/2014/spells/acid-arrow"
+              "level": 2
             },
             {
               "name": "Detect Thoughts",
-              "level": 2,
-              "url": "/api/2014/spells/detect-thoughts"
+              "level": 2
             },
             {
               "name": "Invisibility",
-              "level": 2,
-              "url": "/api/2014/spells/invisibility"
+              "level": 2
             },
             {
               "name": "Mirror Image",
-              "level": 2,
-              "url": "/api/2014/spells/mirror-image"
+              "level": 2
             },
             {
               "name": "Animate Dead",
-              "level": 3,
-              "url": "/api/2014/spells/animate-dead"
+              "level": 3
             },
             {
               "name": "Counterspell",
-              "level": 3,
-              "url": "/api/2014/spells/counterspell"
+              "level": 3
             },
             {
               "name": "Dispel Magic",
-              "level": 3,
-              "url": "/api/2014/spells/dispel-magic"
+              "level": 3
             },
             {
               "name": "Fireball",
-              "level": 3,
-              "url": "/api/2014/spells/fireball"
+              "level": 3
             },
             {
               "name": "Blight",
-              "level": 4,
-              "url": "/api/2014/spells/blight"
+              "level": 4
             },
             {
               "name": "Dimension Door",
-              "level": 4,
-              "url": "/api/2014/spells/dimension-door"
+              "level": 4
             },
             {
               "name": "Cloudkill",
-              "level": 5,
-              "url": "/api/2014/spells/cloudkill"
+              "level": 5
             },
             {
               "name": "Scrying",
-              "level": 5,
-              "url": "/api/2014/spells/scrying"
+              "level": 5
             },
             {
               "name": "Disintegrate",
-              "level": 6,
-              "url": "/api/2014/spells/disintegrate"
+              "level": 6
             },
             {
               "name": "Globe of Invulnerability",
-              "level": 6,
-              "url": "/api/2014/spells/globe-of-invulnerability"
+              "level": 6
             },
             {
               "name": "Finger of Death",
-              "level": 7,
-              "url": "/api/2014/spells/finger-of-death"
+              "level": 7
             },
             {
               "name": "Plane Shift",
-              "level": 7,
-              "url": "/api/2014/spells/plane-shift"
+              "level": 7
             },
             {
               "name": "Dominate Monster",
-              "level": 8,
-              "url": "/api/2014/spells/dominate-monster"
+              "level": 8
             },
             {
               "name": "Power Word Stun",
-              "level": 8,
-              "url": "/api/2014/spells/power-word-stun"
+              "level": 8
             },
             {
               "name": "Power Word Kill",
-              "level": 9,
-              "url": "/api/2014/spells/power-word-kill"
+              "level": 9
             }
           ]
         }
@@ -25936,8 +24401,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "3d6"
           }
@@ -25959,8 +24423,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 18,
           "success_type": "none"
@@ -25972,8 +24435,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 18,
           "success_type": "none"
@@ -25982,16 +24444,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "6d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/lich.png",
-    "url": "/api/2014/monsters/lich"
+    "image": "/api/images/monsters/lich.png"
   },
   {
     "index": "lion",
@@ -26022,16 +24482,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -26061,8 +24519,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 13,
           "success_type": "none"
@@ -26082,8 +24539,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           }
@@ -26097,16 +24553,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/lion.png",
-    "url": "/api/2014/monsters/lion"
+    "image": "/api/images/monsters/lion.png"
   },
   {
     "index": "lizard",
@@ -26155,16 +24609,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/lizard.png",
-    "url": "/api/2014/monsters/lizard"
+    "image": "/api/images/monsters/lizard.png"
   },
   {
     "index": "lizardfolk",
@@ -26184,8 +24636,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "shield",
-            "name": "Shield",
-            "url": "/api/2014/equipment/shield"
+            "name": "Shield"
           }
         ]
       }
@@ -26208,24 +24659,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-survival",
-          "name": "Skill: Survival",
-          "url": "/api/2014/proficiencies/skill-survival"
+          "name": "Skill: Survival"
         }
       }
     ],
@@ -26371,8 +24819,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -26386,8 +24833,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+2"
           }
@@ -26401,8 +24847,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -26416,16 +24861,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/lizardfolk.png",
-    "url": "/api/2014/monsters/lizardfolk"
+    "image": "/api/images/monsters/lizardfolk.png"
   },
   {
     "index": "mage",
@@ -26445,8 +24888,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 15,
         "spell": {
           "index": "mage-armor",
-          "name": "Mage Armor",
-          "url": "/api/2014/spells/mage-armor"
+          "name": "Mage Armor"
         }
       }
     ],
@@ -26467,32 +24909,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       }
     ],
@@ -26515,8 +24953,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 9,
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 14,
           "modifier": 6,
@@ -26536,83 +24973,67 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Fire Bolt",
-              "level": 0,
-              "url": "/api/2014/spells/fire-bolt"
+              "level": 0
             },
             {
               "name": "Light",
-              "level": 0,
-              "url": "/api/2014/spells/light"
+              "level": 0
             },
             {
               "name": "Mage Hand",
-              "level": 0,
-              "url": "/api/2014/spells/mage-hand"
+              "level": 0
             },
             {
               "name": "Prestidigitation",
-              "level": 0,
-              "url": "/api/2014/spells/prestidigitation"
+              "level": 0
             },
             {
               "name": "Detect Magic",
-              "level": 1,
-              "url": "/api/2014/spells/detect-magic"
+              "level": 1
             },
             {
               "name": "Mage Armor",
-              "level": 1,
-              "url": "/api/2014/spells/mage-armor"
+              "level": 1
             },
             {
               "name": "Magic Missile",
-              "level": 1,
-              "url": "/api/2014/spells/magic-missile"
+              "level": 1
             },
             {
               "name": "Shield",
-              "level": 1,
-              "url": "/api/2014/spells/shield"
+              "level": 1
             },
             {
               "name": "Misty Step",
-              "level": 2,
-              "url": "/api/2014/spells/misty-step"
+              "level": 2
             },
             {
               "name": "Suggestion",
-              "level": 2,
-              "url": "/api/2014/spells/suggestion"
+              "level": 2
             },
             {
               "name": "Counterspell",
-              "level": 3,
-              "url": "/api/2014/spells/counterspell"
+              "level": 3
             },
             {
               "name": "Fireball",
-              "level": 3,
-              "url": "/api/2014/spells/fireball"
+              "level": 3
             },
             {
               "name": "Fly",
-              "level": 3,
-              "url": "/api/2014/spells/fly"
+              "level": 3
             },
             {
               "name": "Greater Invisibility",
-              "level": 4,
-              "url": "/api/2014/spells/greater-invisibility"
+              "level": 4
             },
             {
               "name": "Ice Storm",
-              "level": 4,
-              "url": "/api/2014/spells/ice-storm"
+              "level": 4
             },
             {
               "name": "Cone of Cold",
-              "level": 5,
-              "url": "/api/2014/spells/cone-of-cold"
+              "level": 5
             }
           ]
         }
@@ -26627,16 +25048,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/mage.png",
-    "url": "/api/2014/monsters/mage"
+    "image": "/api/images/monsters/mage.png"
   },
   {
     "index": "magma-mephit",
@@ -26668,8 +25087,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -26684,8 +25102,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -26703,8 +25120,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 11,
           "success_type": "half"
@@ -26713,8 +25129,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -26730,8 +25145,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "components_required": [
             "V",
@@ -26742,7 +25156,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Heat Metal",
               "level": 2,
-              "url": "/api/2014/spells/heat-metal",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -26761,16 +25174,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4+1"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d4"
           }
@@ -26787,8 +25198,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 11,
           "success_type": "half"
@@ -26797,16 +25207,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/magma-mephit.png",
-    "url": "/api/2014/monsters/magma-mephit"
+    "image": "/api/images/monsters/magma-mephit.png"
   },
   {
     "index": "magmin",
@@ -26856,8 +25264,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 11,
           "success_type": "half"
@@ -26866,8 +25273,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -26887,16 +25293,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/magmin.png",
-    "url": "/api/2014/monsters/magmin"
+    "image": "/api/images/monsters/magmin.png"
   },
   {
     "index": "mammoth",
@@ -26950,8 +25354,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d8+7"
           }
@@ -26965,16 +25368,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d10+7"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/mammoth.png",
-    "url": "/api/2014/monsters/mammoth"
+    "image": "/api/images/monsters/mammoth.png"
   },
   {
     "index": "manticore",
@@ -27066,8 +25467,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           }
@@ -27081,8 +25481,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
@@ -27096,16 +25495,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/manticore.png",
-    "url": "/api/2014/monsters/manticore"
+    "image": "/api/images/monsters/manticore.png"
   },
   {
     "index": "marilith",
@@ -27137,32 +25534,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -27179,8 +25572,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -27231,8 +25623,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
@@ -27246,8 +25637,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d10+4"
           }
@@ -27264,8 +25654,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The marilith adds 5 to its AC against one melee attack that would hit it. To do so, the marilith must see the attacker and be wielding a melee weapon."
       }
     ],
-    "image": "/api/images/monsters/marilith.png",
-    "url": "/api/2014/monsters/marilith"
+    "image": "/api/images/monsters/marilith.png"
   },
   {
     "index": "mastiff",
@@ -27297,8 +25686,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -27328,16 +25716,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/mastiff.png",
-    "url": "/api/2014/monsters/mastiff"
+    "image": "/api/images/monsters/mastiff.png"
   },
   {
     "index": "medusa",
@@ -27368,32 +25754,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -27416,8 +25798,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -27470,16 +25851,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "4d6"
           }
@@ -27493,8 +25872,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -27508,24 +25886,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/medusa.png",
-    "url": "/api/2014/monsters/medusa"
+    "image": "/api/images/monsters/medusa.png"
   },
   {
     "index": "merfolk",
@@ -27558,8 +25933,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -27597,8 +25971,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d6"
                 },
@@ -27607,8 +25980,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d8"
                 }
@@ -27618,8 +25990,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         ]
       }
     ],
-    "image": "/api/images/monsters/merfolk.png",
-    "url": "/api/2014/monsters/merfolk"
+    "image": "/api/images/monsters/merfolk.png"
   },
   {
     "index": "merrow",
@@ -27739,8 +26110,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+4"
           }
@@ -27754,8 +26124,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+4"
           }
@@ -27769,16 +26138,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/merrow.png",
-    "url": "/api/2014/monsters/merrow"
+    "image": "/api/images/monsters/merrow.png"
   },
   {
     "index": "mimic",
@@ -27810,8 +26177,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -27823,8 +26189,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       }
     ],
     "senses": {
@@ -27862,8 +26227,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d8+3"
           }
@@ -27877,24 +26241,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+3"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/mimic.png",
-    "url": "/api/2014/monsters/mimic"
+    "image": "/api/images/monsters/mimic.png"
   },
   {
     "index": "minotaur",
@@ -27925,8 +26286,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -27965,8 +26325,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d12+4"
           }
@@ -27980,16 +26339,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/minotaur.png",
-    "url": "/api/2014/monsters/minotaur"
+    "image": "/api/images/monsters/minotaur.png"
   },
   {
     "index": "minotaur-skeleton",
@@ -28026,13 +26383,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -28058,8 +26413,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d12+4"
           }
@@ -28073,16 +26427,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/minotaur-skeleton.png",
-    "url": "/api/2014/monsters/minotaur-skeleton"
+    "image": "/api/images/monsters/minotaur-skeleton.png"
   },
   {
     "index": "mule",
@@ -28139,16 +26491,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/mule.png",
-    "url": "/api/2014/monsters/mule"
+    "image": "/api/images/monsters/mule.png"
   },
   {
     "index": "mummy",
@@ -28179,8 +26529,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -28197,28 +26546,23 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -28255,16 +26599,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+3"
           },
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "3d6"
           }
@@ -28276,16 +26618,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 11,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/mummy.png",
-    "url": "/api/2014/monsters/mummy"
+    "image": "/api/images/monsters/mummy.png"
   },
   {
     "index": "mummy-lord",
@@ -28316,48 +26656,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -28373,28 +26707,23 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -28421,8 +26750,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 10,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 17,
           "modifier": 9,
@@ -28443,78 +26771,63 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Sacred Flame",
-              "level": 0,
-              "url": "/api/2014/spells/sacred-flame"
+              "level": 0
             },
             {
               "name": "Thaumaturgy",
-              "level": 0,
-              "url": "/api/2014/spells/thaumaturgy"
+              "level": 0
             },
             {
               "name": "Command",
-              "level": 1,
-              "url": "/api/2014/spells/command"
+              "level": 1
             },
             {
               "name": "Guiding Bolt",
-              "level": 1,
-              "url": "/api/2014/spells/guiding-bolt"
+              "level": 1
             },
             {
               "name": "Shield of Faith",
-              "level": 1,
-              "url": "/api/2014/spells/shield-of-faith"
+              "level": 1
             },
             {
               "name": "Hold Person",
-              "level": 2,
-              "url": "/api/2014/spells/hold-person"
+              "level": 2
             },
             {
               "name": "Silence",
-              "level": 2,
-              "url": "/api/2014/spells/silence"
+              "level": 2
             },
             {
               "name": "Spiritual Weapon",
-              "level": 2,
-              "url": "/api/2014/spells/spiritual-weapon"
+              "level": 2
             },
             {
               "name": "Animate Dead",
-              "level": 3,
-              "url": "/api/2014/spells/animate-dead"
+              "level": 3
             },
             {
               "name": "Dispel Magic",
-              "level": 3,
-              "url": "/api/2014/spells/dispel-magic"
+              "level": 3
             },
             {
               "name": "Divination",
-              "level": 4,
-              "url": "/api/2014/spells/divination"
+              "level": 4
             },
             {
               "name": "Guardian of Faith",
-              "level": 4,
-              "url": "/api/2014/spells/guardian-of-faith"
+              "level": 4
             },
             {
               "name": "Contagion",
-              "level": 5,
-              "url": "/api/2014/spells/contagion"
+              "level": 5
             },
             {
               "name": "Insect Plague",
-              "level": 5,
-              "url": "/api/2014/spells/insect-plague"
+              "level": 5
             },
             {
               "name": "Harm",
-              "level": 6,
-              "url": "/api/2014/spells/harm"
+              "level": 6
             }
           ]
         }
@@ -28546,16 +26859,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d6+4"
           },
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "6d6"
           }
@@ -28567,8 +26878,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -28586,8 +26896,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -28599,8 +26908,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 16,
           "success_type": "none"
@@ -28615,8 +26923,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The mummy lord magically transforms into a whirlwind of sand, moves up to 60 feet, and reverts to its normal form. While in whirlwind form, the mummy lord is immune to all damage, and it can't be grappled, petrified, knocked prone, restrained, or stunned. Equipment worn or carried by the mummy lord remain in its possession."
       }
     ],
-    "image": "/api/images/monsters/mummy-lord.png",
-    "url": "/api/2014/monsters/mummy-lord"
+    "image": "/api/images/monsters/mummy-lord.png"
   },
   {
     "index": "nalfeshnee",
@@ -28649,32 +26956,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -28691,8 +26994,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -28740,8 +27042,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "5d10+5"
           }
@@ -28755,8 +27056,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "3d6+5"
           }
@@ -28773,8 +27073,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 15,
           "success_type": "none"
@@ -28785,8 +27084,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The nalfeshnee magically teleports, along with any equipment it is wearing or carrying, up to 120 feet to an unoccupied space it can see."
       }
     ],
-    "image": "/api/images/monsters/nalfeshnee.png",
-    "url": "/api/2014/monsters/nalfeshnee"
+    "image": "/api/images/monsters/nalfeshnee.png"
   },
   {
     "index": "night-hag",
@@ -28817,32 +27115,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -28856,8 +27150,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       }
     ],
     "senses": {
@@ -28875,8 +27168,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 14,
           "modifier": 6,
@@ -28888,7 +27180,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -28896,7 +27187,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Magic Missile",
               "level": 1,
-              "url": "/api/2014/spells/magic-missile",
               "usage": {
                 "type": "at will"
               }
@@ -28905,7 +27195,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Plane Shift",
               "level": 7,
               "notes": "Self Only",
-              "url": "/api/2014/spells/plane-shift",
               "usage": {
                 "type": "per day",
                 "times": 2
@@ -28914,7 +27203,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Ray of Enfeeblement",
               "level": 2,
-              "url": "/api/2014/spells/ray-of-enfeeblement",
               "usage": {
                 "type": "per day",
                 "times": 2
@@ -28923,7 +27211,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Sleep",
               "level": 1,
-              "url": "/api/2014/spells/sleep",
               "usage": {
                 "type": "per day",
                 "times": 2
@@ -28950,8 +27237,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
@@ -28974,8 +27260,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/night-hag.png",
-    "url": "/api/2014/monsters/night-hag"
+    "image": "/api/images/monsters/night-hag.png"
   },
   {
     "index": "nightmare",
@@ -29035,16 +27320,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -29055,8 +27338,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The nightmare and up to three willing creatures within 5 feet of it magically enter the Ethereal Plane from the Material Plane, or vice versa."
       }
     ],
-    "image": "/api/images/monsters/nightmare.png",
-    "url": "/api/2014/monsters/nightmare"
+    "image": "/api/images/monsters/nightmare.png"
   },
   {
     "index": "noble",
@@ -29073,8 +27355,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "breastplate",
-            "name": "Breastplate",
-            "url": "/api/2014/equipment/breastplate"
+            "name": "Breastplate"
           }
         ]
       }
@@ -29096,24 +27377,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       }
     ],
@@ -29137,8 +27415,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+1"
           }
@@ -29151,8 +27428,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The noble adds 2 to its AC against one melee attack that would hit it. To do so, the noble must see the attacker and be wielding a melee weapon."
       }
     ],
-    "image": "/api/images/monsters/noble.png",
-    "url": "/api/2014/monsters/noble"
+    "image": "/api/images/monsters/noble.png"
   },
   {
     "index": "ochre-jelly",
@@ -29191,33 +27467,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       }
     ],
     "senses": {
@@ -29247,16 +27517,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+2"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d6"
           }
@@ -29269,8 +27537,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "When a jelly that is Medium or larger is subjected to lightning or slashing damage, it splits into two new jellies if it has at least 10 hit points. Each new jelly has hit points equal to half the original jelly's, rounded down. New jellies are one size smaller than the original jelly."
       }
     ],
-    "image": "/api/images/monsters/ochre-jelly.png",
-    "url": "/api/2014/monsters/ochre-jelly"
+    "image": "/api/images/monsters/ochre-jelly.png"
   },
   {
     "index": "octopus",
@@ -29302,16 +27569,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -29350,8 +27615,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1"
           }
@@ -29370,8 +27634,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 0
       }
     ],
-    "image": "/api/images/monsters/octopus.png",
-    "url": "/api/2014/monsters/octopus"
+    "image": "/api/images/monsters/octopus.png"
   },
   {
     "index": "ogre",
@@ -29386,8 +27649,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "hide-armor",
-            "name": "Hide Armor",
-            "url": "/api/2014/equipment/hide-armor"
+            "name": "Hide Armor"
           }
         ]
       }
@@ -29426,8 +27688,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
@@ -29441,16 +27702,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ogre.png",
-    "url": "/api/2014/monsters/ogre"
+    "image": "/api/images/monsters/ogre.png"
   },
   {
     "index": "ogre-zombie",
@@ -29481,8 +27740,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 0,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -29494,8 +27752,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -29521,16 +27778,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/ogre-zombie.png",
-    "url": "/api/2014/monsters/ogre-zombie"
+    "image": "/api/images/monsters/ogre-zombie.png"
   },
   {
     "index": "oni",
@@ -29545,8 +27800,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "chain-mail",
-            "name": "Chain Mail",
-            "url": "/api/2014/equipment/chain-mail"
+            "name": "Chain Mail"
           }
         ]
       }
@@ -29569,56 +27823,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -29641,8 +27888,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 13,
           "components_required": [
@@ -29653,7 +27899,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Darkness",
               "level": 2,
-              "url": "/api/2014/spells/darkness",
               "usage": {
                 "type": "at will"
               }
@@ -29661,7 +27906,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Invisibility",
               "level": 2,
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "at will"
               }
@@ -29669,7 +27913,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Charm Person",
               "level": 1,
-              "url": "/api/2014/spells/charm-person",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -29678,7 +27921,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Cone of Cold",
               "level": 5,
-              "url": "/api/2014/spells/cone-of-cold",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -29687,7 +27929,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Gaseous Form",
               "level": 3,
-              "url": "/api/2014/spells/gaseous-form",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -29696,7 +27937,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Sleep",
               "level": 1,
-              "url": "/api/2014/spells/sleep",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -29768,8 +28008,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+4"
           }
@@ -29783,8 +28022,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d10+4"
           }
@@ -29795,8 +28033,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The oni magically polymorphs into a Small or Medium humanoid, into a Large giant, or back into its true form. Other than its size, its statistics are the same in each form. The only equipment that is transformed is its glaive, which shrinks so that it can be wielded in humanoid form. If the oni dies, it reverts to its true form, and its glaive reverts to its normal size."
       }
     ],
-    "image": "/api/images/monsters/oni.png",
-    "url": "/api/2014/monsters/oni"
+    "image": "/api/images/monsters/oni.png"
   },
   {
     "index": "orc",
@@ -29812,8 +28049,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "hide-armor",
-            "name": "Hide Armor",
-            "url": "/api/2014/equipment/hide-armor"
+            "name": "Hide Armor"
           }
         ]
       }
@@ -29835,8 +28071,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-intimidation",
-          "name": "Skill: Intimidation",
-          "url": "/api/2014/proficiencies/skill-intimidation"
+          "name": "Skill: Intimidation"
         }
       }
     ],
@@ -29867,8 +28102,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d12+3"
           }
@@ -29882,16 +28116,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/orc.png",
-    "url": "/api/2014/monsters/orc"
+    "image": "/api/images/monsters/orc.png"
   },
   {
     "index": "otyugh",
@@ -29922,8 +28154,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       }
     ],
@@ -29971,8 +28202,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+3"
           }
@@ -29986,16 +28216,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d8+3"
           },
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8"
           }
@@ -30007,16 +28235,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "half"
         }
       }
     ],
-    "image": "/api/images/monsters/otyugh.png",
-    "url": "/api/2014/monsters/otyugh"
+    "image": "/api/images/monsters/otyugh.png"
   },
   {
     "index": "owl",
@@ -30048,16 +28274,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -30092,16 +28316,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/owl.png",
-    "url": "/api/2014/monsters/owl"
+    "image": "/api/images/monsters/owl.png"
   },
   {
     "index": "owlbear",
@@ -30132,8 +28354,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -30181,8 +28402,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+5"
           }
@@ -30196,16 +28416,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/owlbear.png",
-    "url": "/api/2014/monsters/owlbear"
+    "image": "/api/images/monsters/owlbear.png"
   },
   {
     "index": "panther",
@@ -30237,16 +28455,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -30272,8 +28488,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 12,
           "success_type": "none"
@@ -30289,8 +28504,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -30304,16 +28518,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/panther.png",
-    "url": "/api/2014/monsters/panther"
+    "image": "/api/images/monsters/panther.png"
   },
   {
     "index": "pegasus",
@@ -30345,32 +28557,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -30394,16 +28602,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/pegasus.png",
-    "url": "/api/2014/monsters/pegasus"
+    "image": "/api/images/monsters/pegasus.png"
   },
   {
     "index": "phase-spider",
@@ -30436,8 +28642,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -30476,16 +28681,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/phase-spider.png",
-    "url": "/api/2014/monsters/phase-spider"
+    "image": "/api/images/monsters/phase-spider.png"
   },
   {
     "index": "pit-fiend",
@@ -30518,24 +28721,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 8,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 13,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -30551,8 +28751,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -30570,8 +28769,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 21,
           "success_type": "none"
@@ -30591,8 +28789,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 21,
           "components_required": [
@@ -30603,7 +28800,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -30611,7 +28807,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Fireball",
               "level": 3,
-              "url": "/api/2014/spells/fireball",
               "usage": {
                 "type": "at will"
               }
@@ -30619,7 +28814,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Hold Monster",
               "level": 5,
-              "url": "/api/2014/spells/hold-monster",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -30628,7 +28822,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Wall of Fire",
               "level": 4,
-              "url": "/api/2014/spells/wall-of-fire",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -30674,8 +28867,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d6+8"
           }
@@ -30689,8 +28881,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+8"
           }
@@ -30704,8 +28895,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+8"
           }
@@ -30719,16 +28909,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d10+8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/pit-fiend.png",
-    "url": "/api/2014/monsters/pit-fiend"
+    "image": "/api/images/monsters/pit-fiend.png"
   },
   {
     "index": "planetar",
@@ -30760,32 +28948,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 12,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 11,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -30798,18 +28982,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       }
     ],
     "senses": {
@@ -30835,8 +29016,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 20,
           "components_required": [
@@ -30847,7 +29027,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Evil and Good",
               "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good",
               "usage": {
                 "type": "at will"
               }
@@ -30856,7 +29035,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Invisibility",
               "level": 2,
               "notes": "Self Only",
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "at will"
               }
@@ -30864,7 +29042,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Blade Barrier",
               "level": 6,
-              "url": "/api/2014/spells/blade-barrier",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -30873,7 +29050,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dispel Evil and Good",
               "level": 5,
-              "url": "/api/2014/spells/dispel-evil-and-good",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -30882,7 +29058,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Flame Strike",
               "level": 5,
-              "url": "/api/2014/spells/flame-strike",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -30891,7 +29066,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Raise Dead",
               "level": 5,
-              "url": "/api/2014/spells/raise-dead",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -30900,7 +29074,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Commune",
               "level": 5,
-              "url": "/api/2014/spells/commune",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -30909,7 +29082,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Control Weather",
               "level": 8,
-              "url": "/api/2014/spells/control-weather",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -30918,7 +29090,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Insect Plague",
               "level": 5,
-              "url": "/api/2014/spells/insect-plague",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -30953,16 +29124,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "4d6+7"
           },
           {
             "damage_type": {
               "index": "radiant",
-              "name": "Radiant",
-              "url": "/api/2014/damage-types/radiant"
+              "name": "Radiant"
             },
             "damage_dice": "5d8"
           }
@@ -30977,8 +29146,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/planetar.png",
-    "url": "/api/2014/monsters/planetar"
+    "image": "/api/images/monsters/planetar.png"
   },
   {
     "index": "plesiosaurus",
@@ -31010,16 +29178,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -31049,16 +29215,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/plesiosaurus.png",
-    "url": "/api/2014/monsters/plesiosaurus"
+    "image": "/api/images/monsters/plesiosaurus.png"
   },
   {
     "index": "poisonous-snake",
@@ -31107,16 +29271,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/poisonous-snake.png",
-    "url": "/api/2014/monsters/poisonous-snake"
+    "image": "/api/images/monsters/poisonous-snake.png"
   },
   {
     "index": "polar-bear",
@@ -31148,8 +29310,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -31196,8 +29357,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+5"
           }
@@ -31211,16 +29371,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/polar-bear.png",
-    "url": "/api/2014/monsters/polar-bear"
+    "image": "/api/images/monsters/polar-bear.png"
   },
   {
     "index": "pony",
@@ -31267,16 +29425,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/pony.png",
-    "url": "/api/2014/monsters/pony"
+    "image": "/api/images/monsters/pony.png"
   },
   {
     "index": "priest",
@@ -31293,8 +29449,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "chain-shirt",
-            "name": "Chain Shirt",
-            "url": "/api/2014/equipment/chain-shirt"
+            "name": "Chain Shirt"
           }
         ]
       }
@@ -31316,24 +29471,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-medicine",
-          "name": "Skill: Medicine",
-          "url": "/api/2014/proficiencies/skill-medicine"
+          "name": "Skill: Medicine"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-religion",
-          "name": "Skill: Religion",
-          "url": "/api/2014/proficiencies/skill-religion"
+          "name": "Skill: Religion"
         }
       }
     ],
@@ -31360,8 +29512,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 5,
           "ability": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc": 13,
           "modifier": 5,
@@ -31379,53 +29530,43 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Light",
-              "level": 0,
-              "url": "/api/2014/spells/light"
+              "level": 0
             },
             {
               "name": "Sacred Flame",
-              "level": 0,
-              "url": "/api/2014/spells/sacred-flame"
+              "level": 0
             },
             {
               "name": "Thaumaturgy",
-              "level": 0,
-              "url": "/api/2014/spells/thaumaturgy"
+              "level": 0
             },
             {
               "name": "Cure Wounds",
-              "level": 1,
-              "url": "/api/2014/spells/cure-wounds"
+              "level": 1
             },
             {
               "name": "Guiding Bolt",
-              "level": 1,
-              "url": "/api/2014/spells/guiding-bolt"
+              "level": 1
             },
             {
               "name": "Sanctuary",
-              "level": 1,
-              "url": "/api/2014/spells/sanctuary"
+              "level": 1
             },
             {
               "name": "Lesser Restoration",
-              "level": 2,
-              "url": "/api/2014/spells/lesser-restoration"
+              "level": 2
             },
             {
               "name": "Spiritual Weapon",
-              "level": 2,
-              "url": "/api/2014/spells/spiritual-weapon"
+              "level": 2
             },
             {
               "name": "Dispel Magic",
-              "level": 3,
-              "url": "/api/2014/spells/dispel-magic"
+              "level": 3
             },
             {
               "name": "Spirit Guardians",
-              "level": 3,
-              "url": "/api/2014/spells/spirit-guardians"
+              "level": 3
             }
           ]
         }
@@ -31440,16 +29581,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/priest.png",
-    "url": "/api/2014/monsters/priest"
+    "image": "/api/images/monsters/priest.png"
   },
   {
     "index": "pseudodragon",
@@ -31481,16 +29620,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -31530,8 +29667,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
@@ -31545,16 +29681,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/pseudodragon.png",
-    "url": "/api/2014/monsters/pseudodragon"
+    "image": "/api/images/monsters/pseudodragon.png"
   },
   {
     "index": "purple-worm",
@@ -31586,16 +29720,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 11,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -31644,8 +29776,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d8+9"
           }
@@ -31659,16 +29790,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d6+9"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/purple-worm.png",
-    "url": "/api/2014/monsters/purple-worm"
+    "image": "/api/images/monsters/purple-worm.png"
   },
   {
     "index": "quasit",
@@ -31700,8 +29829,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -31718,8 +29846,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -31749,8 +29876,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+3"
           }
@@ -31766,8 +29892,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -31778,8 +29903,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The quasit magically turns invisible until it attacks or uses Scare, or until its concentration ends (as if concentrating on a spell). Any equipment the quasit wears or carries is invisible with it."
       }
     ],
-    "image": "/api/images/monsters/quasit.png",
-    "url": "/api/2014/monsters/quasit"
+    "image": "/api/images/monsters/quasit.png"
   },
   {
     "index": "quipper",
@@ -31838,16 +29962,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/quipper.png",
-    "url": "/api/2014/monsters/quipper"
+    "image": "/api/images/monsters/quipper.png"
   },
   {
     "index": "rakshasa",
@@ -31878,16 +30000,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 10,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       }
     ],
@@ -31918,8 +30038,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 18,
           "modifier": 10,
@@ -31931,7 +30050,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Thoughts",
               "level": 2,
-              "url": "/api/2014/spells/detect-thoughts",
               "usage": {
                 "type": "at will"
               }
@@ -31939,7 +30057,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Disguise Self",
               "level": 1,
-              "url": "/api/2014/spells/disguise-self",
               "usage": {
                 "type": "at will"
               }
@@ -31947,7 +30064,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Mage Hand",
               "level": 0,
-              "url": "/api/2014/spells/mage-hand",
               "usage": {
                 "type": "at will"
               }
@@ -31955,7 +30071,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Minor Illusion",
               "level": 0,
-              "url": "/api/2014/spells/minor-illusion",
               "usage": {
                 "type": "at will"
               }
@@ -31963,7 +30078,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Charm Person",
               "level": 1,
-              "url": "/api/2014/spells/charm-person",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -31972,7 +30086,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -31981,7 +30094,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Invisibility",
               "level": 2,
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -31990,7 +30102,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Major Image",
               "level": 3,
-              "url": "/api/2014/spells/major-image",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -31999,7 +30110,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Suggestion",
               "level": 2,
-              "url": "/api/2014/spells/suggestion",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -32008,7 +30118,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dominate Person",
               "level": 5,
-              "url": "/api/2014/spells/dominate-person",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -32017,7 +30126,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Fly",
               "level": 3,
-              "url": "/api/2014/spells/fly",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -32026,7 +30134,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Plane Shift",
               "level": 7,
-              "url": "/api/2014/spells/plane-shift",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -32035,7 +30142,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "True Seeing",
               "level": 6,
-              "url": "/api/2014/spells/true-seeing",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -32066,16 +30172,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/rakshasa.png",
-    "url": "/api/2014/monsters/rakshasa"
+    "image": "/api/images/monsters/rakshasa.png"
   },
   {
     "index": "rat",
@@ -32129,16 +30233,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/rat.png",
-    "url": "/api/2014/monsters/rat"
+    "image": "/api/images/monsters/rat.png"
   },
   {
     "index": "raven",
@@ -32170,8 +30272,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -32201,16 +30302,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/raven.png",
-    "url": "/api/2014/monsters/raven"
+    "image": "/api/images/monsters/raven.png"
   },
   {
     "index": "red-dragon-wyrmling",
@@ -32243,48 +30342,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -32312,16 +30405,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+4"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d6"
           }
@@ -32338,8 +30429,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 13,
           "success_type": "half"
@@ -32348,16 +30438,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "7d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/red-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/red-dragon-wyrmling"
+    "image": "/api/images/monsters/red-dragon-wyrmling.png"
   },
   {
     "index": "reef-shark",
@@ -32389,8 +30477,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -32425,16 +30512,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/reef-shark.png",
-    "url": "/api/2014/monsters/reef-shark"
+    "image": "/api/images/monsters/reef-shark.png"
   },
   {
     "index": "remorhaz",
@@ -32486,8 +30571,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "3d6"
           }
@@ -32503,16 +30587,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "6d10+7"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "3d6"
           }
@@ -32523,8 +30605,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The remorhaz makes one bite attack against a Medium or smaller creature it is grappling. If the attack hits, that creature takes the bite's damage and is swallowed, and the grapple ends. While swallowed, the creature is blinded and restrained, it has total cover against attacks and other effects outside the remorhaz, and it takes 21 (6d6) acid damage at the start of each of the remorhaz's turns.\nIf the remorhaz takes 30 damage or more on a single turn from a creature inside it, the remorhaz must succeed on a DC 15 Constitution saving throw at the end of that turn or regurgitate all swallowed creatures, which fall prone in a space within 10 feet of the remorhaz. If the remorhaz dies, a swallowed creature is no longer restrained by it and can escape from the corpse using 15 feet of movement, exiting prone."
       }
     ],
-    "image": "/api/images/monsters/remorhaz.png",
-    "url": "/api/2014/monsters/remorhaz"
+    "image": "/api/images/monsters/remorhaz.png"
   },
   {
     "index": "rhinoceros",
@@ -32577,16 +30658,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/rhinoceros.png",
-    "url": "/api/2014/monsters/rhinoceros"
+    "image": "/api/images/monsters/rhinoceros.png"
   },
   {
     "index": "riding-horse",
@@ -32633,16 +30712,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/riding-horse.png",
-    "url": "/api/2014/monsters/riding-horse"
+    "image": "/api/images/monsters/riding-horse.png"
   },
   {
     "index": "roc",
@@ -32674,40 +30751,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -32754,8 +30826,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d8+9"
           }
@@ -32769,16 +30840,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "4d6+9"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/roc.png",
-    "url": "/api/2014/monsters/roc"
+    "image": "/api/images/monsters/roc.png"
   },
   {
     "index": "roper",
@@ -32810,16 +30879,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -32880,8 +30947,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d8+4"
           }
@@ -32897,8 +30963,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The roper pulls each creature grappled by it up to 25 ft. straight toward it."
       }
     ],
-    "image": "/api/images/monsters/roper.png",
-    "url": "/api/2014/monsters/roper"
+    "image": "/api/images/monsters/roper.png"
   },
   {
     "index": "rug-of-smothering",
@@ -32934,38 +30999,31 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -32997,8 +31055,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 5
       }
     ],
-    "image": "/api/images/monsters/rug-of-smothering.png",
-    "url": "/api/2014/monsters/rug-of-smothering"
+    "image": "/api/images/monsters/rug-of-smothering.png"
   },
   {
     "index": "rust-monster",
@@ -33056,8 +31113,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+1"
           }
@@ -33068,8 +31124,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The rust monster corrodes a nonmagical ferrous metal object it can see within 5 feet of it. If the object isn't being worn or carried, the touch destroys a 1-foot cube of it. If the object is being worn or carried by a creature, the creature can make a DC 11 Dexterity saving throw to avoid the rust monster's touch.\nIf the object touched is either metal armor or a metal shield being worn or carried, its takes a permanent and cumulative -1 penalty to the AC it offers. Armor reduced to an AC of 10 or a shield that drops to a +0 bonus is destroyed. If the object touched is a held metal weapon, it rusts as described in the Rust Metal trait."
       }
     ],
-    "image": "/api/images/monsters/rust-monster.png",
-    "url": "/api/2014/monsters/rust-monster"
+    "image": "/api/images/monsters/rust-monster.png"
   },
   {
     "index": "saber-toothed-tiger",
@@ -33100,16 +31155,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -33135,8 +31188,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -33152,8 +31204,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+5"
           }
@@ -33167,16 +31218,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+5"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/saber-toothed-tiger.png",
-    "url": "/api/2014/monsters/saber-toothed-tiger"
+    "image": "/api/images/monsters/saber-toothed-tiger.png"
   },
   {
     "index": "sahuagin",
@@ -33209,8 +31258,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -33297,8 +31345,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+1"
           }
@@ -33312,8 +31359,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4+1"
           }
@@ -33335,8 +31381,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d6+1"
                 },
@@ -33345,8 +31390,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d8+1"
                 }
@@ -33356,8 +31400,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         ]
       }
     ],
-    "image": "/api/images/monsters/sahuagin.png",
-    "url": "/api/2014/monsters/sahuagin"
+    "image": "/api/images/monsters/sahuagin.png"
   },
   {
     "index": "salamander",
@@ -33410,8 +31453,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
@@ -33456,8 +31498,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "2d6+4"
                 },
@@ -33466,8 +31507,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "2d8+4"
                 }
@@ -33477,8 +31517,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d6"
           }
@@ -33492,24 +31531,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/salamander.png",
-    "url": "/api/2014/monsters/salamander"
+    "image": "/api/images/monsters/salamander.png"
   },
   {
     "index": "satyr",
@@ -33524,8 +31560,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -33547,24 +31582,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-performance",
-          "name": "Skill: Performance",
-          "url": "/api/2014/proficiencies/skill-performance"
+          "name": "Skill: Performance"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -33594,8 +31626,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d4+1"
           }
@@ -33609,8 +31640,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
@@ -33624,16 +31654,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/satyr.png",
-    "url": "/api/2014/monsters/satyr"
+    "image": "/api/images/monsters/satyr.png"
   },
   {
     "index": "scorpion",
@@ -33681,16 +31709,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/scorpion.png",
-    "url": "/api/2014/monsters/scorpion"
+    "image": "/api/images/monsters/scorpion.png"
   },
   {
     "index": "scout",
@@ -33707,8 +31733,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -33730,32 +31755,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-nature",
-          "name": "Skill: Nature",
-          "url": "/api/2014/proficiencies/skill-nature"
+          "name": "Skill: Nature"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-survival",
-          "name": "Skill: Survival",
-          "url": "/api/2014/proficiencies/skill-survival"
+          "name": "Skill: Survival"
         }
       }
     ],
@@ -33811,8 +31832,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -33826,16 +31846,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/scout.png",
-    "url": "/api/2014/monsters/scout"
+    "image": "/api/images/monsters/scout.png"
   },
   {
     "index": "sea-hag",
@@ -33894,8 +31912,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
@@ -33907,8 +31924,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 11,
           "success_type": "none"
@@ -33919,8 +31935,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The hag covers herself and anything she is wearing or carrying with a magical illusion that makes her look like an ugly creature of her general size and humanoid shape. The effect ends if the hag takes a bonus action to end it or if she dies.\nThe changes wrought by this effect fail to hold up to physical inspection. For example, the hag could appear to have no claws, but someone touching her hand might feel the claws. Otherwise, a creature must take an action to visually inspect the illusion and succeed on a DC 16 Intelligence (Investigation) check to discern that the hag is disguised."
       }
     ],
-    "image": "/api/images/monsters/sea-hag.png",
-    "url": "/api/2014/monsters/sea-hag"
+    "image": "/api/images/monsters/sea-hag.png"
   },
   {
     "index": "sea-horse",
@@ -33964,8 +31979,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The sea horse can breathe only underwater."
       }
     ],
-    "image": "/api/images/monsters/sea-horse.png",
-    "url": "/api/2014/monsters/sea-horse"
+    "image": "/api/images/monsters/sea-horse.png"
   },
   {
     "index": "shadow",
@@ -33996,8 +32010,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -34019,43 +32032,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       }
     ],
     "senses": {
@@ -34089,16 +32094,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "2d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/shadow.png",
-    "url": "/api/2014/monsters/shadow"
+    "image": "/api/images/monsters/shadow.png"
   },
   {
     "index": "shambling-mound",
@@ -34130,8 +32133,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -34146,18 +32148,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       }
     ],
     "senses": {
@@ -34200,8 +32199,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
@@ -34212,8 +32210,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The shambling mound engulfs a Medium or smaller creature grappled by it. The engulfed target is blinded, restrained, and unable to breathe, and it must succeed on a DC 14 Constitution saving throw at the start of each of the mound's turns or take 13 (2d8 + 4) bludgeoning damage. If the mound moves, the engulfed target moves with it. The mound can have only one creature engulfed at a time."
       }
     ],
-    "image": "/api/images/monsters/shambling-mound.png",
-    "url": "/api/2014/monsters/shambling-mound"
+    "image": "/api/images/monsters/shambling-mound.png"
   },
   {
     "index": "shield-guardian",
@@ -34248,28 +32245,23 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -34316,8 +32308,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
@@ -34330,8 +32321,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "When a creature makes an attack against the wearer of the guardian's amulet, the guardian grants a +2 bonus to the wearer's AC if the guardian is within 5 feet of the wearer."
       }
     ],
-    "image": "/api/images/monsters/shield-guardian.png",
-    "url": "/api/2014/monsters/shield-guardian"
+    "image": "/api/images/monsters/shield-guardian.png"
   },
   {
     "index": "shrieker",
@@ -34364,18 +32354,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       }
     ],
     "senses": {
@@ -34398,8 +32385,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "When bright light or a creature is within 30 feet of the shrieker, it emits a shriek audible within 300 feet of it. The shrieker continues to shriek until the disturbance moves out of range and for 1d4 of the shrieker's turns afterward"
       }
     ],
-    "image": "/api/images/monsters/shrieker.png",
-    "url": "/api/2014/monsters/shrieker"
+    "image": "/api/images/monsters/shrieker.png"
   },
   {
     "index": "silver-dragon-wyrmling",
@@ -34431,48 +32417,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -34500,8 +32480,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+4"
           }
@@ -34527,8 +32506,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 13,
                   "success_type": "half"
@@ -34537,8 +32515,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "cold",
-                      "name": "Cold",
-                      "url": "/api/2014/damage-types/cold"
+                      "name": "Cold"
                     },
                     "damage_dice": "4d8"
                   }
@@ -34550,8 +32527,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 13,
                   "success_type": "none"
@@ -34562,8 +32538,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/silver-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/silver-dragon-wyrmling"
+    "image": "/api/images/monsters/silver-dragon-wyrmling.png"
   },
   {
     "index": "skeleton",
@@ -34601,13 +32576,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       }
     ],
     "senses": {
@@ -34627,8 +32600,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -34642,16 +32614,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/skeleton.png",
-    "url": "/api/2014/monsters/skeleton"
+    "image": "/api/images/monsters/skeleton.png"
   },
   {
     "index": "solar",
@@ -34683,32 +32653,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 14,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 17,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -34724,23 +32690,19 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -34766,8 +32728,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 25,
           "components_required": [
@@ -34778,7 +32739,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Evil and Good",
               "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good",
               "usage": {
                 "type": "at will"
               }
@@ -34787,7 +32747,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
               "name": "Invisibility",
               "level": 2,
               "notes": "Self Only",
-              "url": "/api/2014/spells/invisibility",
               "usage": {
                 "type": "at will"
               }
@@ -34795,7 +32754,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Blade Barrier",
               "level": 6,
-              "url": "/api/2014/spells/blade-barrier",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -34804,7 +32762,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dispel Evil and Good",
               "level": 5,
-              "url": "/api/2014/spells/dispel-evil-and-good",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -34813,7 +32770,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Resurrection",
               "level": 7,
-              "url": "/api/2014/spells/resurrection",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -34822,7 +32778,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Commune",
               "level": 5,
-              "url": "/api/2014/spells/commune",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -34831,7 +32786,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Control Weather",
               "level": 8,
-              "url": "/api/2014/spells/control-weather",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -34866,16 +32820,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "4d6+8"
           },
           {
             "damage_type": {
               "index": "radiant",
-              "name": "Radiant",
-              "url": "/api/2014/damage-types/radiant"
+              "name": "Radiant"
             },
             "damage_dice": "6d8"
           }
@@ -34889,16 +32841,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d8+6"
           },
           {
             "damage_type": {
               "index": "radiant",
-              "name": "Radiant",
-              "url": "/api/2014/damage-types/radiant"
+              "name": "Radiant"
             },
             "damage_dice": "6d8"
           }
@@ -34928,8 +32878,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 23,
           "success_type": "half"
@@ -34938,16 +32887,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "4d6"
           },
           {
             "damage_type": {
               "index": "radiant",
-              "name": "Radiant",
-              "url": "/api/2014/damage-types/radiant"
+              "name": "Radiant"
             },
             "damage_dice": "4d6"
           }
@@ -34959,16 +32906,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 15,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/solar.png",
-    "url": "/api/2014/monsters/solar"
+    "image": "/api/images/monsters/solar.png"
   },
   {
     "index": "specter",
@@ -35013,48 +32958,39 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -35084,16 +33020,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "3d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/specter.png",
-    "url": "/api/2014/monsters/specter"
+    "image": "/api/images/monsters/specter.png"
   },
   {
     "index": "spider",
@@ -35125,8 +33059,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -35165,16 +33098,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/spider.png",
-    "url": "/api/2014/monsters/spider"
+    "image": "/api/images/monsters/spider.png"
   },
   {
     "index": "spirit-naga",
@@ -35205,32 +33136,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -35242,13 +33169,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -35271,8 +33196,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "level": 10,
           "ability": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "dc": 14,
           "modifier": 6,
@@ -35290,68 +33214,55 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           "spells": [
             {
               "name": "Mage Hand",
-              "level": 0,
-              "url": "/api/2014/spells/mage-hand"
+              "level": 0
             },
             {
               "name": "Minor Illusion",
-              "level": 0,
-              "url": "/api/2014/spells/minor-illusion"
+              "level": 0
             },
             {
               "name": "Ray of Frost",
-              "level": 0,
-              "url": "/api/2014/spells/ray-of-frost"
+              "level": 0
             },
             {
               "name": "Charm Person",
-              "level": 1,
-              "url": "/api/2014/spells/charm-person"
+              "level": 1
             },
             {
               "name": "Detect Magic",
-              "level": 1,
-              "url": "/api/2014/spells/detect-magic"
+              "level": 1
             },
             {
               "name": "Sleep",
-              "level": 1,
-              "url": "/api/2014/spells/sleep"
+              "level": 1
             },
             {
               "name": "Detect Thoughts",
-              "level": 2,
-              "url": "/api/2014/spells/detect-thoughts"
+              "level": 2
             },
             {
               "name": "Hold Person",
-              "level": 2,
-              "url": "/api/2014/spells/hold-person"
+              "level": 2
             },
             {
               "name": "Lightning Bolt",
-              "level": 3,
-              "url": "/api/2014/spells/lightning-bolt"
+              "level": 3
             },
             {
               "name": "Water Breathing",
-              "level": 3,
-              "url": "/api/2014/spells/water-breathing"
+              "level": 3
             },
             {
               "name": "Blight",
-              "level": 4,
-              "url": "/api/2014/spells/blight"
+              "level": 4
             },
             {
               "name": "Dimension Door",
-              "level": 4,
-              "url": "/api/2014/spells/dimension-door"
+              "level": 4
             },
             {
               "name": "Dominate Person",
-              "level": 5,
-              "url": "/api/2014/spells/dominate-person"
+              "level": 5
             }
           ]
         }
@@ -35366,16 +33277,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/spirit-naga.png",
-    "url": "/api/2014/monsters/spirit-naga"
+    "image": "/api/images/monsters/spirit-naga.png"
   },
   {
     "index": "sprite",
@@ -35390,8 +33299,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -35414,16 +33322,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -35447,8 +33353,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1"
           }
@@ -35462,8 +33367,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
@@ -35475,8 +33379,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -35487,8 +33390,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The sprite magically turns invisible until it attacks or casts a spell, or until its concentration ends (as if concentrating on a spell). Any equipment the sprite wears or carries is invisible with it."
       }
     ],
-    "image": "/api/images/monsters/sprite.png",
-    "url": "/api/2014/monsters/sprite"
+    "image": "/api/images/monsters/sprite.png"
   },
   {
     "index": "spy",
@@ -35521,48 +33423,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-investigation",
-          "name": "Skill: Investigation",
-          "url": "/api/2014/proficiencies/skill-investigation"
+          "name": "Skill: Investigation"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -35608,8 +33504,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -35623,16 +33518,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/spy.png",
-    "url": "/api/2014/monsters/spy"
+    "image": "/api/images/monsters/spy.png"
   },
   {
     "index": "steam-mephit",
@@ -35669,8 +33562,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -35688,8 +33580,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -35698,8 +33589,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d8"
           }
@@ -35711,8 +33601,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 11,
           "components_required": [
@@ -35723,7 +33612,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Blur",
               "level": 2,
-              "url": "/api/2014/spells/blur",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -35742,16 +33630,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d4"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d4"
           }
@@ -35768,8 +33654,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 10,
           "success_type": "half"
@@ -35778,16 +33663,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/steam-mephit.png",
-    "url": "/api/2014/monsters/steam-mephit"
+    "image": "/api/images/monsters/steam-mephit.png"
   },
   {
     "index": "stirge",
@@ -35836,16 +33719,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/stirge.png",
-    "url": "/api/2014/monsters/stirge"
+    "image": "/api/images/monsters/stirge.png"
   },
   {
     "index": "stone-giant",
@@ -35876,40 +33757,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 12,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -35952,8 +33828,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d8+6"
           }
@@ -35967,8 +33842,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d10+6"
           }
@@ -35981,8 +33855,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "If a rock or similar object is hurled at the giant, the giant can, with a successful DC 10 Dexterity saving throw, catch the missile and take no bludgeoning damage from it."
       }
     ],
-    "image": "/api/images/monsters/stone-giant.png",
-    "url": "/api/2014/monsters/stone-giant"
+    "image": "/api/images/monsters/stone-giant.png"
   },
   {
     "index": "stone-golem",
@@ -36019,33 +33892,27 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -36091,8 +33958,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d8+6"
           }
@@ -36109,16 +33975,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 17,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/stone-golem.png",
-    "url": "/api/2014/monsters/stone-golem"
+    "image": "/api/images/monsters/stone-golem.png"
   },
   {
     "index": "storm-giant",
@@ -36133,8 +33997,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "scale-mail",
-            "name": "Scale Mail",
-            "url": "/api/2014/equipment/scale-mail"
+            "name": "Scale Mail"
           }
         ]
       }
@@ -36157,64 +34020,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 14,
         "proficiency": {
           "index": "saving-throw-str",
-          "name": "Saving Throw: STR",
-          "url": "/api/2014/proficiencies/saving-throw-str"
+          "name": "Saving Throw: STR"
         }
       },
       {
         "value": 10,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 14,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -36245,8 +34100,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 17,
           "components_required": [
@@ -36257,7 +34111,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Magic",
               "level": 1,
-              "url": "/api/2014/spells/detect-magic",
               "usage": {
                 "type": "at will"
               }
@@ -36265,7 +34118,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Feather Fall",
               "level": 1,
-              "url": "/api/2014/spells/feather-fall",
               "usage": {
                 "type": "at will"
               }
@@ -36273,7 +34125,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Levitate",
               "level": 2,
-              "url": "/api/2014/spells/levitate",
               "usage": {
                 "type": "at will"
               }
@@ -36281,7 +34132,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Light",
               "level": 0,
-              "url": "/api/2014/spells/light",
               "usage": {
                 "type": "at will"
               }
@@ -36289,7 +34139,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Control Weather",
               "level": 8,
-              "url": "/api/2014/spells/control-weather",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -36298,7 +34147,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Water Breathing",
               "level": 3,
-              "url": "/api/2014/spells/water-breathing",
               "usage": {
                 "type": "per day",
                 "times": 3
@@ -36329,8 +34177,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "6d6+9"
           }
@@ -36344,8 +34191,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d12+9"
           }
@@ -36362,8 +34208,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 17,
           "success_type": "half"
@@ -36372,16 +34217,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "12d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/storm-giant.png",
-    "url": "/api/2014/monsters/storm-giant"
+    "image": "/api/images/monsters/storm-giant.png"
   },
   {
     "index": "succubus-incubus",
@@ -36414,40 +34257,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -36488,8 +34326,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
@@ -36501,8 +34338,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 15,
           "success_type": "none"
@@ -36515,8 +34351,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "psychic",
-              "name": "Psychic",
-              "url": "/api/2014/damage-types/psychic"
+              "name": "Psychic"
             },
             "damage_dice": "5d10+5"
           }
@@ -36527,8 +34362,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The fiend magically enters the Ethereal Plane from the Material Plane, or vice versa."
       }
     ],
-    "image": "/api/images/monsters/succubus-incubus.png",
-    "url": "/api/2014/monsters/succubus-incubus"
+    "image": "/api/images/monsters/succubus-incubus.png"
   },
   {
     "index": "swarm-of-bats",
@@ -36566,43 +34400,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -36636,16 +34462,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-bats.png",
-    "url": "/api/2014/monsters/swarm-of-bats"
+    "image": "/api/images/monsters/swarm-of-bats.png"
   },
   {
     "index": "swarm-of-beetles",
@@ -36684,43 +34508,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -36746,16 +34562,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-beetles.png",
-    "url": "/api/2014/monsters/swarm-of-beetles"
+    "image": "/api/images/monsters/swarm-of-beetles.png"
   },
   {
     "index": "swarm-of-centipedes",
@@ -36793,43 +34607,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -36855,16 +34661,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-centipedes.png",
-    "url": "/api/2014/monsters/swarm-of-centipedes"
+    "image": "/api/images/monsters/swarm-of-centipedes.png"
   },
   {
     "index": "swarm-of-insects",
@@ -36902,43 +34706,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -36964,16 +34760,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-insects.png",
-    "url": "/api/2014/monsters/swarm-of-insects"
+    "image": "/api/images/monsters/swarm-of-insects.png"
   },
   {
     "index": "swarm-of-poisonous-snakes",
@@ -37011,43 +34805,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -37073,16 +34859,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-poisonous-snakes.png",
-    "url": "/api/2014/monsters/swarm-of-poisonous-snakes"
+    "image": "/api/images/monsters/swarm-of-poisonous-snakes.png"
   },
   {
     "index": "swarm-of-quippers",
@@ -37120,43 +34904,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -37190,16 +34966,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-quippers.png",
-    "url": "/api/2014/monsters/swarm-of-quippers"
+    "image": "/api/images/monsters/swarm-of-quippers.png"
   },
   {
     "index": "swarm-of-rats",
@@ -37236,43 +35010,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -37302,16 +35068,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-rats.png",
-    "url": "/api/2014/monsters/swarm-of-rats"
+    "image": "/api/images/monsters/swarm-of-rats.png"
   },
   {
     "index": "swarm-of-ravens",
@@ -37349,43 +35113,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -37410,16 +35166,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-ravens.png",
-    "url": "/api/2014/monsters/swarm-of-ravens"
+    "image": "/api/images/monsters/swarm-of-ravens.png"
   },
   {
     "index": "swarm-of-spiders",
@@ -37457,38 +35211,31 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -37526,16 +35273,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-spiders.png",
-    "url": "/api/2014/monsters/swarm-of-spiders"
+    "image": "/api/images/monsters/swarm-of-spiders.png"
   },
   {
     "index": "swarm-of-wasps",
@@ -37573,43 +35318,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "stunned",
-        "name": "Stunned",
-        "url": "/api/2014/conditions/stunned"
+        "name": "Stunned"
       }
     ],
     "senses": {
@@ -37635,16 +35372,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/swarm-of-wasps.png",
-    "url": "/api/2014/monsters/swarm-of-wasps"
+    "image": "/api/images/monsters/swarm-of-wasps.png"
   },
   {
     "index": "tarrasque",
@@ -37676,24 +35411,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-int",
-          "name": "Saving Throw: INT",
-          "url": "/api/2014/proficiencies/saving-throw-int"
+          "name": "Saving Throw: INT"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -37707,23 +35439,19 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -37850,8 +35578,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d12+10"
           }
@@ -37865,8 +35592,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "4d8+10"
           }
@@ -37880,8 +35606,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d10+10"
           }
@@ -37895,8 +35620,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d6+10"
           }
@@ -37908,8 +35632,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 17,
           "success_type": "none"
@@ -37934,8 +35657,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The tarrasque makes one bite attack or uses its Swallow."
       }
     ],
-    "image": "/api/images/monsters/tarrasque.png",
-    "url": "/api/2014/monsters/tarrasque"
+    "image": "/api/images/monsters/tarrasque.png"
   },
   {
     "index": "thug",
@@ -37952,8 +35674,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "leather-armor",
-            "name": "Leather Armor",
-            "url": "/api/2014/equipment/leather-armor"
+            "name": "Leather Armor"
           }
         ]
       }
@@ -37975,8 +35696,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-intimidation",
-          "name": "Skill: Intimidation",
-          "url": "/api/2014/proficiencies/skill-intimidation"
+          "name": "Skill: Intimidation"
         }
       }
     ],
@@ -38018,8 +35738,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+2"
           }
@@ -38033,16 +35752,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/thug.png",
-    "url": "/api/2014/monsters/thug"
+    "image": "/api/images/monsters/thug.png"
   },
   {
     "index": "tiger",
@@ -38073,16 +35790,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -38109,8 +35824,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 13,
           "success_type": "none"
@@ -38126,8 +35840,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+3"
           }
@@ -38141,16 +35854,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/tiger.png",
-    "url": "/api/2014/monsters/tiger"
+    "image": "/api/images/monsters/tiger.png"
   },
   {
     "index": "treant",
@@ -38224,8 +35935,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d6+6"
           }
@@ -38239,8 +35949,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "4d10+6"
           }
@@ -38255,8 +35964,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/treant.png",
-    "url": "/api/2014/monsters/treant"
+    "image": "/api/images/monsters/treant.png"
   },
   {
     "index": "tribal-warrior",
@@ -38273,8 +35981,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "hide-armor",
-            "name": "Hide Armor",
-            "url": "/api/2014/equipment/hide-armor"
+            "name": "Hide Armor"
           }
         ]
       }
@@ -38326,8 +36033,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d6+1"
                 },
@@ -38336,8 +36042,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d8+1"
                 }
@@ -38347,8 +36052,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         ]
       }
     ],
-    "image": "/api/images/monsters/tribal-warrior.png",
-    "url": "/api/2014/monsters/tribal-warrior"
+    "image": "/api/images/monsters/tribal-warrior.png"
   },
   {
     "index": "triceratops",
@@ -38401,8 +36105,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d8+6"
           }
@@ -38416,16 +36119,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d10+6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/triceratops.png",
-    "url": "/api/2014/monsters/triceratops"
+    "image": "/api/images/monsters/triceratops.png"
   },
   {
     "index": "troll",
@@ -38456,8 +36157,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -38509,8 +36209,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+4"
           }
@@ -38524,16 +36223,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/troll.png",
-    "url": "/api/2014/monsters/troll"
+    "image": "/api/images/monsters/troll.png"
   },
   {
     "index": "tyrannosaurus-rex",
@@ -38564,8 +36261,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -38606,8 +36302,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "4d12+7"
           }
@@ -38621,16 +36316,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "3d8+7"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/tyrannosaurus-rex.png",
-    "url": "/api/2014/monsters/tyrannosaurus-rex"
+    "image": "/api/images/monsters/tyrannosaurus-rex.png"
   },
   {
     "index": "unicorn",
@@ -38665,18 +36358,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -38698,8 +36388,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "spellcasting": {
           "ability": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "dc": 14,
           "components_required": [],
@@ -38707,7 +36396,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Detect Evil and Good",
               "level": 1,
-              "url": "/api/2014/spells/detect-evil-and-good",
               "usage": {
                 "type": "at will"
               }
@@ -38715,7 +36403,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Druidcraft",
               "level": 0,
-              "url": "/api/2014/spells/druidcraft",
               "usage": {
                 "type": "at will"
               }
@@ -38723,7 +36410,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Pass Without Trace",
               "level": 2,
-              "url": "/api/2014/spells/pass-without-trace",
               "usage": {
                 "type": "at will"
               }
@@ -38731,7 +36417,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Calm Emotions",
               "level": 2,
-              "url": "/api/2014/spells/calm-emotions",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -38740,7 +36425,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Dispel Evil and Good",
               "level": 5,
-              "url": "/api/2014/spells/dispel-evil-and-good",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -38749,7 +36433,6 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
             {
               "name": "Entangle",
               "level": 1,
-              "url": "/api/2014/spells/entangle",
               "usage": {
                 "type": "per day",
                 "times": 1
@@ -38793,8 +36476,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
@@ -38808,8 +36490,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+4"
           }
@@ -38846,8 +36527,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The unicorn magically regains 11 (2d8 + 2) hit points."
       }
     ],
-    "image": "/api/images/monsters/unicorn.png",
-    "url": "/api/2014/monsters/unicorn"
+    "image": "/api/images/monsters/unicorn.png"
   },
   {
     "index": "vampire-vampire",
@@ -38871,13 +36551,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "vampire-bat",
-        "name": "Vampire, Bat Form",
-        "url": "/api/2014/monsters/vampire-bat"
+        "name": "Vampire, Bat Form"
       },
       {
         "index": "vampire-mist",
-        "name": "Vampire, Mist Form",
-        "url": "/api/2014/monsters/vampire-mist"
+        "name": "Vampire, Mist Form"
       }
     ],
     "strength": 18,
@@ -38891,40 +36569,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -39019,8 +36692,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d8+4"
           }
@@ -39034,16 +36706,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+4"
           },
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "3d6"
           }
@@ -39055,8 +36725,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 17,
           "success_type": "none"
@@ -39088,8 +36757,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 0
       }
     ],
-    "image": "/api/images/monsters/vampire-vampire.png",
-    "url": "/api/2014/monsters/vampire-vampire"
+    "image": "/api/images/monsters/vampire-vampire.png"
   },
   {
     "index": "vampire-bat",
@@ -39114,13 +36782,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "vampire-vampire",
-        "name": "Vampire, Vampire Form",
-        "url": "/api/2014/monsters/vampire-vampire"
+        "name": "Vampire, Vampire Form"
       },
       {
         "index": "vampire-mist",
-        "name": "Vampire, Mist Form",
-        "url": "/api/2014/monsters/vampire-mist"
+        "name": "Vampire, Mist Form"
       }
     ],
     "strength": 18,
@@ -39134,40 +36800,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -39225,16 +36886,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+4"
           },
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "3d6"
           }
@@ -39246,8 +36905,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "dc_value": 17,
           "success_type": "none"
@@ -39279,8 +36937,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 0
       }
     ],
-    "image": "/api/images/monsters/vampire-bat.png",
-    "url": "/api/2014/monsters/vampire-bat"
+    "image": "/api/images/monsters/vampire-bat.png"
   },
   {
     "index": "vampire-mist",
@@ -39304,13 +36961,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "vampire-vampire",
-        "name": "Vampire, Vampire Form",
-        "url": "/api/2014/monsters/vampire-vampire"
+        "name": "Vampire, Vampire Form"
       },
       {
         "index": "vampire-bat",
-        "name": "Vampire, Bat Form",
-        "url": "/api/2014/monsters/vampire-bat"
+        "name": "Vampire, Bat Form"
       }
     ],
     "strength": 18,
@@ -39324,40 +36979,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 9,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -39424,8 +37074,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "attack_bonus": 0
       }
     ],
-    "image": "/api/images/monsters/vampire-mist.png",
-    "url": "/api/2014/monsters/vampire-mist"
+    "image": "/api/images/monsters/vampire-mist.png"
   },
   {
     "index": "vampire-spawn",
@@ -39456,32 +37105,28 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -39560,16 +37205,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           },
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "2d6"
           }
@@ -39583,16 +37226,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/vampire-spawn.png",
-    "url": "/api/2014/monsters/vampire-spawn"
+    "image": "/api/images/monsters/vampire-spawn.png"
   },
   {
     "index": "veteran",
@@ -39609,8 +37250,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "splint-armor",
-            "name": "Splint Armor",
-            "url": "/api/2014/equipment/splint-armor"
+            "name": "Splint Armor"
           }
         ]
       }
@@ -39632,16 +37272,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-athletics",
-          "name": "Skill: Athletics",
-          "url": "/api/2014/proficiencies/skill-athletics"
+          "name": "Skill: Athletics"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -39690,8 +37328,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d8+3"
                 },
@@ -39700,8 +37337,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d10+3"
                 }
@@ -39718,8 +37354,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+3"
           }
@@ -39733,16 +37368,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/veteran.png",
-    "url": "/api/2014/monsters/veteran"
+    "image": "/api/images/monsters/veteran.png"
   },
   {
     "index": "violet-fungus",
@@ -39775,18 +37408,15 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "blinded",
-        "name": "Blinded",
-        "url": "/api/2014/conditions/blinded"
+        "name": "Blinded"
       },
       {
         "index": "frightened",
-        "name": "Frightened",
-        "url": "/api/2014/conditions/frightened"
+        "name": "Frightened"
       }
     ],
     "senses": {
@@ -39824,16 +37454,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "1d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/violet-fungus.png",
-    "url": "/api/2014/monsters/violet-fungus"
+    "image": "/api/images/monsters/violet-fungus.png"
   },
   {
     "index": "vrock",
@@ -39866,24 +37494,21 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       }
     ],
@@ -39900,8 +37525,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -39944,8 +37568,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           }
@@ -39959,8 +37582,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d10+3"
           }
@@ -39977,8 +37599,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -39994,16 +37615,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "none"
         }
       }
     ],
-    "image": "/api/images/monsters/vrock.png",
-    "url": "/api/2014/monsters/vrock"
+    "image": "/api/images/monsters/vrock.png"
   },
   {
     "index": "vulture",
@@ -40035,8 +37654,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -40070,16 +37688,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/vulture.png",
-    "url": "/api/2014/monsters/vulture"
+    "image": "/api/images/monsters/vulture.png"
   },
   {
     "index": "warhorse",
@@ -40132,16 +37748,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/warhorse.png",
-    "url": "/api/2014/monsters/warhorse"
+    "image": "/api/images/monsters/warhorse.png"
   },
   {
     "index": "warhorse-skeleton",
@@ -40179,13 +37793,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -40205,16 +37817,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/warhorse-skeleton.png",
-    "url": "/api/2014/monsters/warhorse-skeleton"
+    "image": "/api/images/monsters/warhorse-skeleton.png"
   },
   {
     "index": "water-elemental",
@@ -40253,43 +37863,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -40331,8 +37933,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
@@ -40349,8 +37950,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 15,
           "success_type": "none"
@@ -40359,16 +37959,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/water-elemental.png",
-    "url": "/api/2014/monsters/water-elemental"
+    "image": "/api/images/monsters/water-elemental.png"
   },
   {
     "index": "weasel",
@@ -40399,16 +37997,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -40438,16 +38034,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/weasel.png",
-    "url": "/api/2014/monsters/weasel"
+    "image": "/api/images/monsters/weasel.png"
   },
   {
     "index": "werebear-bear",
@@ -40467,13 +38061,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "werebear-human",
-        "name": "Werebear, Human Form",
-        "url": "/api/2014/monsters/werebear-human"
+        "name": "Werebear, Human Form"
       },
       {
         "index": "werebear-hybrid",
-        "name": "Werebear, Hybrid Form",
-        "url": "/api/2014/monsters/werebear-hybrid"
+        "name": "Werebear, Hybrid Form"
       }
     ],
     "hit_points_roll": "18d8+54",
@@ -40492,8 +38084,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -40541,8 +38132,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           }
@@ -40556,16 +38146,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/werebear-bear.png",
-    "url": "/api/2014/monsters/werebear-bear"
+    "image": "/api/images/monsters/werebear-bear.png"
   },
   {
     "index": "werebear-human",
@@ -40585,13 +38173,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "werebear-bear",
-        "name": "Werebear, Bear Form",
-        "url": "/api/2014/monsters/werebear-bear"
+        "name": "Werebear, Bear Form"
       },
       {
         "index": "werebear-hybrid",
-        "name": "Werebear, Hybrid Form",
-        "url": "/api/2014/monsters/werebear-hybrid"
+        "name": "Werebear, Hybrid Form"
       }
     ],
     "hit_points_roll": "18d8+54",
@@ -40609,8 +38195,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -40658,16 +38243,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d12+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/werebear-human.png",
-    "url": "/api/2014/monsters/werebear-human"
+    "image": "/api/images/monsters/werebear-human.png"
   },
   {
     "index": "werebear-hybrid",
@@ -40687,13 +38270,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "werebear-bear",
-        "name": "Werebear, Bear Form",
-        "url": "/api/2014/monsters/werebear-bear"
+        "name": "Werebear, Bear Form"
       },
       {
         "index": "werebear-human",
-        "name": "Werebear, Human Form",
-        "url": "/api/2014/monsters/werebear-human"
+        "name": "Werebear, Human Form"
       }
     ],
     "hit_points_roll": "18d8+54",
@@ -40712,8 +38293,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -40792,8 +38372,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           }
@@ -40807,8 +38386,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
@@ -40822,16 +38400,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d12+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/werebear-hybrid.png",
-    "url": "/api/2014/monsters/werebear-hybrid"
+    "image": "/api/images/monsters/werebear-hybrid.png"
   },
   {
     "index": "wereboar-boar",
@@ -40851,13 +38427,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "wereboar-human",
-        "name": "Wereboar, Human Form",
-        "url": "/api/2014/monsters/wereboar-human"
+        "name": "Wereboar, Human Form"
       },
       {
         "index": "wereboar-hybrid",
-        "name": "Wereboar, Hybrid Form",
-        "url": "/api/2014/monsters/wereboar-hybrid"
+        "name": "Wereboar, Hybrid Form"
       }
     ],
     "hit_points_roll": "12d8+24",
@@ -40875,8 +38449,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -40923,16 +38496,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wereboar-boar.png",
-    "url": "/api/2014/monsters/wereboar-boar"
+    "image": "/api/images/monsters/wereboar-boar.png"
   },
   {
     "index": "wereboar-human",
@@ -40952,13 +38523,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "wereboar-boar",
-        "name": "Wereboar, Boar Form",
-        "url": "/api/2014/monsters/wereboar-boar"
+        "name": "Wereboar, Boar Form"
       },
       {
         "index": "wereboar-hybrid",
-        "name": "Wereboar, Hybrid Form",
-        "url": "/api/2014/monsters/wereboar-hybrid"
+        "name": "Wereboar, Hybrid Form"
       }
     ],
     "hit_points_roll": "12d8+24",
@@ -40976,8 +38545,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -41032,16 +38600,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wereboar-human.png",
-    "url": "/api/2014/monsters/wereboar-human"
+    "image": "/api/images/monsters/wereboar-human.png"
   },
   {
     "index": "wereboar-hybrid",
@@ -41061,13 +38627,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "wereboar-boar",
-        "name": "Wereboar, Boar Form",
-        "url": "/api/2014/monsters/wereboar-boar"
+        "name": "Wereboar, Boar Form"
       },
       {
         "index": "wereboar-human",
-        "name": "Wereboar, Human Form",
-        "url": "/api/2014/monsters/wereboar-human"
+        "name": "Wereboar, Human Form"
       }
     ],
     "hit_points_roll": "12d8+24",
@@ -41085,8 +38649,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -41170,8 +38733,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "2d6+3"
           }
@@ -41185,16 +38747,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wereboar-hybrid.png",
-    "url": "/api/2014/monsters/wereboar-hybrid"
+    "image": "/api/images/monsters/wereboar-hybrid.png"
   },
   {
     "index": "wererat-human",
@@ -41214,13 +38774,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "wererat-hybrid",
-        "name": "Wererat, Hybrid Form",
-        "url": "/api/2014/monsters/wererat-hybrid"
+        "name": "Wererat, Hybrid Form"
       },
       {
         "index": "wererat-rat",
-        "name": "Wererat, Rat Form",
-        "url": "/api/2014/monsters/wererat-rat"
+        "name": "Wererat, Rat Form"
       }
     ],
     "hit_points_roll": "6d8+6",
@@ -41238,16 +38796,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -41326,8 +38882,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -41341,16 +38896,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wererat-human.png",
-    "url": "/api/2014/monsters/wererat-human"
+    "image": "/api/images/monsters/wererat-human.png"
   },
   {
     "index": "wererat-hybrid",
@@ -41370,13 +38923,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "wererat-human",
-        "name": "Wererat, Human Form",
-        "url": "/api/2014/monsters/wererat-human"
+        "name": "Wererat, Human Form"
       },
       {
         "index": "wererat-rat",
-        "name": "Wererat, Rat Form",
-        "url": "/api/2014/monsters/wererat-rat"
+        "name": "Wererat, Rat Form"
       }
     ],
     "hit_points_roll": "6d8+6",
@@ -41394,16 +38945,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -41516,8 +39065,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
@@ -41531,8 +39079,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
@@ -41546,16 +39093,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d6+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wererat-hybrid.png",
-    "url": "/api/2014/monsters/wererat-hybrid"
+    "image": "/api/images/monsters/wererat-hybrid.png"
   },
   {
     "index": "wererat-rat",
@@ -41575,13 +39120,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "wererat-human",
-        "name": "Wererat, Human Form",
-        "url": "/api/2014/monsters/wererat-human"
+        "name": "Wererat, Human Form"
       },
       {
         "index": "wererat-hybrid",
-        "name": "Wererat, Hybrid Form",
-        "url": "/api/2014/monsters/wererat-hybrid"
+        "name": "Wererat, Hybrid Form"
       }
     ],
     "hit_points_roll": "6d8+6",
@@ -41599,16 +39142,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -41645,16 +39186,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wererat-rat.png",
-    "url": "/api/2014/monsters/wererat-rat"
+    "image": "/api/images/monsters/wererat-rat.png"
   },
   {
     "index": "weretiger-human",
@@ -41674,13 +39213,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "weretiger-hybrid",
-        "name": "Weretiger, Hybrid Form",
-        "url": "/api/2014/monsters/weretiger-hybrid"
+        "name": "Weretiger, Hybrid Form"
       },
       {
         "index": "weretiger-tiger",
-        "name": "Weretiger, Tiger Form",
-        "url": "/api/2014/monsters/weretiger-tiger"
+        "name": "Weretiger, Tiger Form"
       }
     ],
     "hit_points_roll": "16d8+48",
@@ -41698,16 +39235,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -41770,8 +39305,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
@@ -41785,16 +39319,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/weretiger-human.png",
-    "url": "/api/2014/monsters/weretiger-human"
+    "image": "/api/images/monsters/weretiger-human.png"
   },
   {
     "index": "weretiger-hybrid",
@@ -41814,13 +39346,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "weretiger-human",
-        "name": "Weretiger, Human Form",
-        "url": "/api/2014/monsters/weretiger-human"
+        "name": "Weretiger, Human Form"
       },
       {
         "index": "weretiger-tiger",
-        "name": "Weretiger, Tiger Form",
-        "url": "/api/2014/monsters/weretiger-tiger"
+        "name": "Weretiger, Tiger Form"
       }
     ],
     "hit_points_roll": "16d8+48",
@@ -41838,16 +39368,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -41880,8 +39408,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -41929,8 +39456,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+3"
           }
@@ -41944,8 +39470,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+3"
           }
@@ -41959,8 +39484,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
@@ -41974,16 +39498,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/weretiger-hybrid.png",
-    "url": "/api/2014/monsters/weretiger-hybrid"
+    "image": "/api/images/monsters/weretiger-hybrid.png"
   },
   {
     "index": "weretiger-tiger",
@@ -42003,13 +39525,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "weretiger-human",
-        "name": "Weretiger, Human Form",
-        "url": "/api/2014/monsters/weretiger-human"
+        "name": "Weretiger, Human Form"
       },
       {
         "index": "weretiger-hybrid",
-        "name": "Weretiger, Hybrid Form",
-        "url": "/api/2014/monsters/weretiger-hybrid"
+        "name": "Weretiger, Hybrid Form"
       }
     ],
     "hit_points_roll": "16d8+48",
@@ -42027,16 +39547,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -42069,8 +39587,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "dc_value": 14,
           "success_type": "none"
@@ -42086,8 +39603,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+3"
           }
@@ -42101,16 +39617,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d8+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/weretiger-tiger.png",
-    "url": "/api/2014/monsters/weretiger-tiger"
+    "image": "/api/images/monsters/weretiger-tiger.png"
   },
   {
     "index": "werewolf-human",
@@ -42130,13 +39644,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "werewolf-hybrid",
-        "name": "Werewolf, Hybrid Form",
-        "url": "/api/2014/monsters/werewolf-hybrid"
+        "name": "Werewolf, Hybrid Form"
       },
       {
         "index": "werewolf-wolf",
-        "name": "Werewolf, Wolf Form",
-        "url": "/api/2014/monsters/werewolf-wolf"
+        "name": "Werewolf, Wolf Form"
       }
     ],
     "hit_points_roll": "9d8+18",
@@ -42154,8 +39666,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -42211,8 +39722,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d6+2"
                 },
@@ -42221,8 +39731,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "piercing",
-                    "name": "Piercing",
-                    "url": "/api/2014/damage-types/piercing"
+                    "name": "Piercing"
                   },
                   "damage_dice": "1d8+2"
                 }
@@ -42232,8 +39741,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         ]
       }
     ],
-    "image": "/api/images/monsters/werewolf-human.png",
-    "url": "/api/2014/monsters/werewolf-human"
+    "image": "/api/images/monsters/werewolf-human.png"
   },
   {
     "index": "werewolf-hybrid",
@@ -42253,13 +39761,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "werewolf-human",
-        "name": "Werewolf, Human Form",
-        "url": "/api/2014/monsters/werewolf-human"
+        "name": "Werewolf, Human Form"
       },
       {
         "index": "werewolf-wolf",
-        "name": "Werewolf, Wolf Form",
-        "url": "/api/2014/monsters/werewolf-wolf"
+        "name": "Werewolf, Wolf Form"
       }
     ],
     "hit_points_roll": "9d8+18",
@@ -42277,8 +39783,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -42331,8 +39836,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
@@ -42346,16 +39850,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/werewolf-hybrid.png",
-    "url": "/api/2014/monsters/werewolf-hybrid"
+    "image": "/api/images/monsters/werewolf-hybrid.png"
   },
   {
     "index": "werewolf-wolf",
@@ -42375,13 +39877,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "forms": [
       {
         "index": "werewolf-human",
-        "name": "Werewolf, Human Form",
-        "url": "/api/2014/monsters/werewolf-human"
+        "name": "Werewolf, Human Form"
       },
       {
         "index": "werewolf-hybrid",
-        "name": "Werewolf, Hybrid Form",
-        "url": "/api/2014/monsters/werewolf-hybrid"
+        "name": "Werewolf, Hybrid Form"
       }
     ],
     "hit_points_roll": "9d8+18",
@@ -42399,8 +39899,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -42436,16 +39935,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/werewolf-wolf.png",
-    "url": "/api/2014/monsters/werewolf-wolf"
+    "image": "/api/images/monsters/werewolf-wolf.png"
   },
   {
     "index": "white-dragon-wyrmling",
@@ -42479,48 +39976,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 2,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 2,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -42548,16 +40039,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d10+2"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "1d4"
           }
@@ -42574,8 +40063,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 12,
           "success_type": "half"
@@ -42584,16 +40072,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "5d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/white-dragon-wyrmling.png",
-    "url": "/api/2014/monsters/white-dragon-wyrmling"
+    "image": "/api/images/monsters/white-dragon-wyrmling.png"
   },
   {
     "index": "wight",
@@ -42608,8 +40094,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "armor": [
           {
             "index": "studded-leather-armor",
-            "name": "Studded Leather Armor",
-            "url": "/api/2014/equipment/studded-leather-armor"
+            "name": "Studded Leather Armor"
           }
         ]
       }
@@ -42631,16 +40116,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -42655,13 +40138,11 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -42730,8 +40211,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "1d6+2"
           }
@@ -42753,8 +40233,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "One handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d8+2"
                 },
@@ -42763,8 +40242,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   "notes": "Two handed",
                   "damage_type": {
                     "index": "slashing",
-                    "name": "Slashing",
-                    "url": "/api/2014/damage-types/slashing"
+                    "name": "Slashing"
                   },
                   "damage_dice": "1d10+2"
                 }
@@ -42781,16 +40259,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "1d8+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wight.png",
-    "url": "/api/2014/monsters/wight"
+    "image": "/api/images/monsters/wight.png"
   },
   {
     "index": "will-o-wisp",
@@ -42835,38 +40311,31 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       },
       {
         "index": "unconscious",
-        "name": "Unconscious",
-        "url": "/api/2014/conditions/unconscious"
+        "name": "Unconscious"
       }
     ],
     "senses": {
@@ -42884,8 +40353,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 10,
           "success_type": "none"
@@ -42913,8 +40381,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "2d8"
           }
@@ -42925,8 +40392,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The will-o'-wisp and its light magically become invisible until it attacks or uses its Consume Life, or until its concentration ends (as if concentrating on a spell)."
       }
     ],
-    "image": "/api/images/monsters/will-o-wisp.png",
-    "url": "/api/2014/monsters/will-o-wisp"
+    "image": "/api/images/monsters/will-o-wisp.png"
   },
   {
     "index": "winter-wolf",
@@ -42958,16 +40424,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -43007,8 +40471,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
@@ -43025,8 +40488,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 12,
           "success_type": "none"
@@ -43035,16 +40497,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "4d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/winter-wolf.png",
-    "url": "/api/2014/monsters/winter-wolf"
+    "image": "/api/images/monsters/winter-wolf.png"
   },
   {
     "index": "wolf",
@@ -43075,16 +40535,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -43118,16 +40576,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d4+2"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wolf.png",
-    "url": "/api/2014/monsters/wolf"
+    "image": "/api/images/monsters/wolf.png"
   },
   {
     "index": "worg",
@@ -43159,8 +40615,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -43191,16 +40646,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/worg.png",
-    "url": "/api/2014/monsters/worg"
+    "image": "/api/images/monsters/worg.png"
   },
   {
     "index": "wraith",
@@ -43245,43 +40698,35 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "charmed",
-        "name": "Charmed",
-        "url": "/api/2014/conditions/charmed"
+        "name": "Charmed"
       },
       {
         "index": "exhaustion",
-        "name": "Exhaustion",
-        "url": "/api/2014/conditions/exhaustion"
+        "name": "Exhaustion"
       },
       {
         "index": "grappled",
-        "name": "Grappled",
-        "url": "/api/2014/conditions/grappled"
+        "name": "Grappled"
       },
       {
         "index": "paralyzed",
-        "name": "Paralyzed",
-        "url": "/api/2014/conditions/paralyzed"
+        "name": "Paralyzed"
       },
       {
         "index": "petrified",
-        "name": "Petrified",
-        "url": "/api/2014/conditions/petrified"
+        "name": "Petrified"
       },
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       },
       {
         "index": "prone",
-        "name": "Prone",
-        "url": "/api/2014/conditions/prone"
+        "name": "Prone"
       },
       {
         "index": "restrained",
-        "name": "Restrained",
-        "url": "/api/2014/conditions/restrained"
+        "name": "Restrained"
       }
     ],
     "senses": {
@@ -43311,8 +40756,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "necrotic",
-              "name": "Necrotic",
-              "url": "/api/2014/damage-types/necrotic"
+              "name": "Necrotic"
             },
             "damage_dice": "4d8+3"
           }
@@ -43323,8 +40767,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "desc": "The wraith targets a humanoid within 10 feet of it that has been dead for no longer than 1 minute and died violently. The target's spirit rises as a specter in the space of its corpse or in the nearest unoccupied space. The specter is under the wraith's control. The wraith can have no more than seven specters under its control at one time."
       }
     ],
-    "image": "/api/images/monsters/wraith.png",
-    "url": "/api/2014/monsters/wraith"
+    "image": "/api/images/monsters/wraith.png"
   },
   {
     "index": "wyvern",
@@ -43356,8 +40799,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       }
     ],
@@ -43447,8 +40889,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
@@ -43462,8 +40903,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d8+4"
           }
@@ -43477,16 +40917,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d6+4"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/wyvern.png",
-    "url": "/api/2014/monsters/wyvern"
+    "image": "/api/images/monsters/wyvern.png"
   },
   {
     "index": "xorn",
@@ -43518,16 +40956,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -43586,8 +41022,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "3d6+3"
           }
@@ -43601,16 +41036,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "1d6+3"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/xorn.png",
-    "url": "/api/2014/monsters/xorn"
+    "image": "/api/images/monsters/xorn.png"
   },
   {
     "index": "young-black-dragon",
@@ -43643,48 +41076,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 5,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -43735,16 +41162,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           },
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "1d8"
           }
@@ -43758,8 +41183,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -43776,8 +41200,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 14,
           "success_type": "half"
@@ -43786,16 +41209,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "acid",
-              "name": "Acid",
-              "url": "/api/2014/damage-types/acid"
+              "name": "Acid"
             },
             "damage_dice": "11d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/young-black-dragon.png",
-    "url": "/api/2014/monsters/young-black-dragon"
+    "image": "/api/images/monsters/young-black-dragon.png"
   },
   {
     "index": "young-blue-dragon",
@@ -43828,48 +41249,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -43914,16 +41329,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+5"
           },
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "1d10"
           }
@@ -43937,8 +41350,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+5"
           }
@@ -43955,8 +41367,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 16,
           "success_type": "half"
@@ -43965,16 +41376,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "lightning",
-              "name": "Lightning",
-              "url": "/api/2014/damage-types/lightning"
+              "name": "Lightning"
             },
             "damage_dice": "10d10"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/young-blue-dragon.png",
-    "url": "/api/2014/monsters/young-blue-dragon"
+    "image": "/api/images/monsters/young-blue-dragon.png"
   },
   {
     "index": "young-brass-dragon",
@@ -44007,56 +41416,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -44101,8 +41503,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           }
@@ -44116,8 +41517,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -44143,8 +41543,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 14,
                   "success_type": "half"
@@ -44153,8 +41552,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "12d6"
                   }
@@ -44166,8 +41564,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 14,
                   "success_type": "none"
@@ -44178,8 +41575,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/young-brass-dragon.png",
-    "url": "/api/2014/monsters/young-brass-dragon"
+    "image": "/api/images/monsters/young-brass-dragon.png"
   },
   {
     "index": "young-bronze-dragon",
@@ -44212,56 +41608,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -44312,8 +41701,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+5"
           }
@@ -44327,8 +41715,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+5"
           }
@@ -44354,8 +41741,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 15,
                   "success_type": "half"
@@ -44364,8 +41750,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "lightning",
-                      "name": "Lightning",
-                      "url": "/api/2014/damage-types/lightning"
+                      "name": "Lightning"
                     },
                     "damage_dice": "10d10"
                   }
@@ -44377,8 +41762,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 15,
                   "success_type": "none"
@@ -44389,8 +41773,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/young-bronze-dragon.png",
-    "url": "/api/2014/monsters/young-bronze-dragon"
+    "image": "/api/images/monsters/young-bronze-dragon.png"
   },
   {
     "index": "young-copper-dragon",
@@ -44423,56 +41806,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -44517,8 +41893,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           }
@@ -44532,8 +41907,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -44559,8 +41933,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 14,
                   "success_type": "half"
@@ -44569,8 +41942,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "acid",
-                      "name": "Acid",
-                      "url": "/api/2014/damage-types/acid"
+                      "name": "Acid"
                     },
                     "damage_dice": "9d8"
                   }
@@ -44582,8 +41954,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 14,
                   "success_type": "none"
@@ -44594,8 +41965,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/young-copper-dragon.png",
-    "url": "/api/2014/monsters/young-copper-dragon"
+    "image": "/api/images/monsters/young-copper-dragon.png"
   },
   {
     "index": "young-gold-dragon",
@@ -44628,64 +41998,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 6,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-insight",
-          "name": "Skill: Insight",
-          "url": "/api/2014/proficiencies/skill-insight"
+          "name": "Skill: Insight"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "skill-persuasion",
-          "name": "Skill: Persuasion",
-          "url": "/api/2014/proficiencies/skill-persuasion"
+          "name": "Skill: Persuasion"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -44736,8 +42098,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           }
@@ -44751,8 +42112,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -44778,8 +42138,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "dex",
-                    "name": "DEX",
-                    "url": "/api/2014/ability-scores/dex"
+                    "name": "DEX"
                   },
                   "dc_value": 17,
                   "success_type": "half"
@@ -44788,8 +42147,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "fire",
-                      "name": "Fire",
-                      "url": "/api/2014/damage-types/fire"
+                      "name": "Fire"
                     },
                     "damage_dice": "10d10"
                   }
@@ -44801,8 +42159,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "str",
-                    "name": "STR",
-                    "url": "/api/2014/ability-scores/str"
+                    "name": "STR"
                   },
                   "dc_value": 17,
                   "success_type": "none"
@@ -44813,8 +42170,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/young-gold-dragon.png",
-    "url": "/api/2014/monsters/young-gold-dragon"
+    "image": "/api/images/monsters/young-gold-dragon.png"
   },
   {
     "index": "young-green-dragon",
@@ -44847,56 +42203,49 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 5,
         "proficiency": {
           "index": "skill-deception",
-          "name": "Skill: Deception",
-          "url": "/api/2014/proficiencies/skill-deception"
+          "name": "Skill: Deception"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -44908,8 +42257,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -44953,16 +42301,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           },
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "2d6"
           }
@@ -44976,8 +42322,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -44994,8 +42339,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 14,
           "success_type": "half"
@@ -45004,16 +42348,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "poison",
-              "name": "Poison",
-              "url": "/api/2014/damage-types/poison"
+              "name": "Poison"
             },
             "damage_dice": "12d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/young-green-dragon.png",
-    "url": "/api/2014/monsters/young-green-dragon"
+    "image": "/api/images/monsters/young-green-dragon.png"
   },
   {
     "index": "young-red-dragon",
@@ -45046,48 +42388,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -45132,16 +42468,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           },
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "1d6"
           }
@@ -45155,8 +42489,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -45173,8 +42506,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "dc_value": 17,
           "success_type": "half"
@@ -45183,16 +42515,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "fire",
-              "name": "Fire",
-              "url": "/api/2014/damage-types/fire"
+              "name": "Fire"
             },
             "damage_dice": "16d6"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/young-red-dragon.png",
-    "url": "/api/2014/monsters/young-red-dragon"
+    "image": "/api/images/monsters/young-red-dragon.png"
   },
   {
     "index": "young-silver-dragon",
@@ -45224,64 +42554,56 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 4,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 9,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-arcana",
-          "name": "Skill: Arcana",
-          "url": "/api/2014/proficiencies/skill-arcana"
+          "name": "Skill: Arcana"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-history",
-          "name": "Skill: History",
-          "url": "/api/2014/proficiencies/skill-history"
+          "name": "Skill: History"
         }
       },
       {
         "value": 8,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -45326,8 +42648,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+6"
           }
@@ -45341,8 +42662,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+6"
           }
@@ -45368,8 +42688,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 17,
                   "success_type": "half"
@@ -45378,8 +42697,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                   {
                     "damage_type": {
                       "index": "cold",
-                      "name": "Cold",
-                      "url": "/api/2014/damage-types/cold"
+                      "name": "Cold"
                     },
                     "damage_dice": "12d8"
                   }
@@ -45391,8 +42709,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
                 "dc": {
                   "dc_type": {
                     "index": "con",
-                    "name": "CON",
-                    "url": "/api/2014/ability-scores/con"
+                    "name": "CON"
                   },
                   "dc_value": 17,
                   "success_type": "none"
@@ -45403,8 +42720,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "image": "/api/images/monsters/young-silver-dragon.png",
-    "url": "/api/2014/monsters/young-silver-dragon"
+    "image": "/api/images/monsters/young-silver-dragon.png"
   },
   {
     "index": "young-white-dragon",
@@ -45438,48 +42754,42 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 3,
         "proficiency": {
           "index": "saving-throw-dex",
-          "name": "Saving Throw: DEX",
-          "url": "/api/2014/proficiencies/saving-throw-dex"
+          "name": "Saving Throw: DEX"
         }
       },
       {
         "value": 7,
         "proficiency": {
           "index": "saving-throw-con",
-          "name": "Saving Throw: CON",
-          "url": "/api/2014/proficiencies/saving-throw-con"
+          "name": "Saving Throw: CON"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       },
       {
         "value": 4,
         "proficiency": {
           "index": "saving-throw-cha",
-          "name": "Saving Throw: CHA",
-          "url": "/api/2014/proficiencies/saving-throw-cha"
+          "name": "Saving Throw: CHA"
         }
       },
       {
         "value": 6,
         "proficiency": {
           "index": "skill-perception",
-          "name": "Skill: Perception",
-          "url": "/api/2014/proficiencies/skill-perception"
+          "name": "Skill: Perception"
         }
       },
       {
         "value": 3,
         "proficiency": {
           "index": "skill-stealth",
-          "name": "Skill: Stealth",
-          "url": "/api/2014/proficiencies/skill-stealth"
+          "name": "Skill: Stealth"
         }
       }
     ],
@@ -45530,16 +42840,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "piercing",
-              "name": "Piercing",
-              "url": "/api/2014/damage-types/piercing"
+              "name": "Piercing"
             },
             "damage_dice": "2d10+4"
           },
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "1d8"
           }
@@ -45553,8 +42861,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "slashing",
-              "name": "Slashing",
-              "url": "/api/2014/damage-types/slashing"
+              "name": "Slashing"
             },
             "damage_dice": "2d6+4"
           }
@@ -45571,8 +42878,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "dc": {
           "dc_type": {
             "index": "con",
-            "name": "CON",
-            "url": "/api/2014/ability-scores/con"
+            "name": "CON"
           },
           "dc_value": 15,
           "success_type": "half"
@@ -45581,16 +42887,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "cold",
-              "name": "Cold",
-              "url": "/api/2014/damage-types/cold"
+              "name": "Cold"
             },
             "damage_dice": "10d8"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/young-white-dragon.png",
-    "url": "/api/2014/monsters/young-white-dragon"
+    "image": "/api/images/monsters/young-white-dragon.png"
   },
   {
     "index": "zombie",
@@ -45621,8 +42925,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
         "value": 0,
         "proficiency": {
           "index": "saving-throw-wis",
-          "name": "Saving Throw: WIS",
-          "url": "/api/2014/proficiencies/saving-throw-wis"
+          "name": "Saving Throw: WIS"
         }
       }
     ],
@@ -45634,8 +42937,7 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
     "condition_immunities": [
       {
         "index": "poisoned",
-        "name": "Poisoned",
-        "url": "/api/2014/conditions/poisoned"
+        "name": "Poisoned"
       }
     ],
     "senses": {
@@ -45661,16 +42963,14 @@ export const MONSTER_RAW = JSON.parse(String.raw`[
           {
             "damage_type": {
               "index": "bludgeoning",
-              "name": "Bludgeoning",
-              "url": "/api/2014/damage-types/bludgeoning"
+              "name": "Bludgeoning"
             },
             "damage_dice": "1d6+1"
           }
         ]
       }
     ],
-    "image": "/api/images/monsters/zombie.png",
-    "url": "/api/2014/monsters/zombie"
+    "image": "/api/images/monsters/zombie.png"
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -45682,46 +42982,37 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/light-armor",
     "reference": {
       "index": "light-armor",
-      "name": "Light Armor",
-      "url": "/api/2014/equipment-categories/light-armor"
+      "name": "Light Armor"
     }
   },
   {
@@ -45731,31 +43022,25 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/medium-armor",
     "reference": {
       "index": "medium-armor",
-      "name": "Medium Armor",
-      "url": "/api/2014/equipment-categories/medium-armor"
+      "name": "Medium Armor"
     }
   },
   {
@@ -45764,11 +43049,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Heavy Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/heavy-armor",
     "reference": {
       "index": "heavy-armor",
-      "name": "Heavy Armor",
-      "url": "/api/2014/equipment-categories/heavy-armor"
+      "name": "Heavy Armor"
     }
   },
   {
@@ -45778,21 +43061,17 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "fighter",
-        "name": "Fighter",
-        "url": "/api/2014/classes/fighter"
+        "name": "Fighter"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/all-armor",
     "reference": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     }
   },
   {
@@ -45801,11 +43080,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Padded Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/padded-armor",
     "reference": {
       "index": "padded-armor",
-      "name": "Padded Armor",
-      "url": "/api/2014/equipment/padded-armor"
+      "name": "Padded Armor"
     }
   },
   {
@@ -45814,11 +43091,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Leather Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/leather-armor",
     "reference": {
       "index": "leather-armor",
-      "name": "Leather Armor",
-      "url": "/api/2014/equipment/leather-armor"
+      "name": "Leather Armor"
     }
   },
   {
@@ -45827,11 +43102,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Studded Leather Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/studded-leather-armor",
     "reference": {
       "index": "studded-leather-armor",
-      "name": "Studded Leather Armor",
-      "url": "/api/2014/equipment/studded-leather-armor"
+      "name": "Studded Leather Armor"
     }
   },
   {
@@ -45840,11 +43113,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Hide Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/hide-armor",
     "reference": {
       "index": "hide-armor",
-      "name": "Hide Armor",
-      "url": "/api/2014/equipment/hide-armor"
+      "name": "Hide Armor"
     }
   },
   {
@@ -45853,11 +43124,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Chain Shirt",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/chain-shirt",
     "reference": {
       "index": "chain-shirt",
-      "name": "Chain Shirt",
-      "url": "/api/2014/equipment/chain-shirt"
+      "name": "Chain Shirt"
     }
   },
   {
@@ -45866,11 +43135,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Scale Mail",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/scale-mail",
     "reference": {
       "index": "scale-mail",
-      "name": "Scale Mail",
-      "url": "/api/2014/equipment/scale-mail"
+      "name": "Scale Mail"
     }
   },
   {
@@ -45879,11 +43146,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Breastplate",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/breastplate",
     "reference": {
       "index": "breastplate",
-      "name": "Breastplate",
-      "url": "/api/2014/equipment/breastplate"
+      "name": "Breastplate"
     }
   },
   {
@@ -45892,11 +43157,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Half Plate Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/half-plate-armor",
     "reference": {
       "index": "half-plate-armor",
-      "name": "Half Plate Armor",
-      "url": "/api/2014/equipment/half-plate-armor"
+      "name": "Half Plate Armor"
     }
   },
   {
@@ -45905,11 +43168,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Ring Mail",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/ring-mail",
     "reference": {
       "index": "ring-mail",
-      "name": "Ring Mail",
-      "url": "/api/2014/equipment/ring-mail"
+      "name": "Ring Mail"
     }
   },
   {
@@ -45918,11 +43179,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Chain Mail",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/chain-mail",
     "reference": {
       "index": "chain-mail",
-      "name": "Chain Mail",
-      "url": "/api/2014/equipment/chain-mail"
+      "name": "Chain Mail"
     }
   },
   {
@@ -45931,11 +43190,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Splint Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/splint-armor",
     "reference": {
       "index": "splint-armor",
-      "name": "Splint Armor",
-      "url": "/api/2014/equipment/splint-armor"
+      "name": "Splint Armor"
     }
   },
   {
@@ -45944,11 +43201,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Plate Armor",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/plate-armor",
     "reference": {
       "index": "plate-armor",
-      "name": "Plate Armor",
-      "url": "/api/2014/equipment/plate-armor"
+      "name": "Plate Armor"
     }
   },
   {
@@ -45958,41 +43213,33 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "fighter",
-        "name": "Fighter",
-        "url": "/api/2014/classes/fighter"
+        "name": "Fighter"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/shields",
     "reference": {
       "index": "shield",
-      "name": "Shield",
-      "url": "/api/2014/equipment/shield"
+      "name": "Shield"
     }
   },
   {
@@ -46002,56 +43249,45 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "fighter",
-        "name": "Fighter",
-        "url": "/api/2014/classes/fighter"
+        "name": "Fighter"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/classes/monk"
+        "name": "Monk"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/simple-weapons",
     "reference": {
       "index": "simple-weapons",
-      "name": "Simple Weapons",
-      "url": "/api/2014/equipment-categories/simple-weapons"
+      "name": "Simple Weapons"
     }
   },
   {
@@ -46061,31 +43297,25 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "fighter",
-        "name": "Fighter",
-        "url": "/api/2014/classes/fighter"
+        "name": "Fighter"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/martial-weapons",
     "reference": {
       "index": "martial-weapons",
-      "name": "Martial Weapons",
-      "url": "/api/2014/equipment-categories/martial-weapons"
+      "name": "Martial Weapons"
     }
   },
   {
@@ -46095,16 +43325,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/clubs",
     "reference": {
       "index": "club",
-      "name": "Club",
-      "url": "/api/2014/equipment/club"
+      "name": "Club"
     }
   },
   {
@@ -46114,26 +43341,21 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/daggers",
     "reference": {
       "index": "dagger",
-      "name": "Dagger",
-      "url": "/api/2014/equipment/dagger"
+      "name": "Dagger"
     }
   },
   {
@@ -46142,11 +43364,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Greatclubs",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/greatclubs",
     "reference": {
       "index": "greatclub",
-      "name": "Greatclub",
-      "url": "/api/2014/equipment/greatclub"
+      "name": "Greatclub"
     }
   },
   {
@@ -46157,15 +43377,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "dwarf",
-        "name": "Dwarf",
-        "url": "/api/2014/races/dwarf"
+        "name": "Dwarf"
       }
     ],
-    "url": "/api/2014/proficiencies/handaxes",
     "reference": {
       "index": "handaxe",
-      "name": "Handaxe",
-      "url": "/api/2014/equipment/handaxe"
+      "name": "Handaxe"
     }
   },
   {
@@ -46175,16 +43392,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/javelins",
     "reference": {
       "index": "javelin",
-      "name": "Javelin",
-      "url": "/api/2014/equipment/javelin"
+      "name": "Javelin"
     }
   },
   {
@@ -46195,15 +43409,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "dwarf",
-        "name": "Dwarf",
-        "url": "/api/2014/races/dwarf"
+        "name": "Dwarf"
       }
     ],
-    "url": "/api/2014/proficiencies/light-hammers",
     "reference": {
       "index": "light-hammer",
-      "name": "Light hammer",
-      "url": "/api/2014/equipment/light-hammer"
+      "name": "Light hammer"
     }
   },
   {
@@ -46213,16 +43424,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/maces",
     "reference": {
       "index": "mace",
-      "name": "Mace",
-      "url": "/api/2014/equipment/mace"
+      "name": "Mace"
     }
   },
   {
@@ -46232,26 +43440,21 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/quarterstaffs",
     "reference": {
       "index": "quarterstaff",
-      "name": "Quarterstaff",
-      "url": "/api/2014/equipment/quarterstaff"
+      "name": "Quarterstaff"
     }
   },
   {
@@ -46261,16 +43464,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/sickles",
     "reference": {
       "index": "sickle",
-      "name": "Sickle",
-      "url": "/api/2014/equipment/sickle"
+      "name": "Sickle"
     }
   },
   {
@@ -46280,16 +43480,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/spears",
     "reference": {
       "index": "spear",
-      "name": "Spear",
-      "url": "/api/2014/equipment/spear"
+      "name": "Spear"
     }
   },
   {
@@ -46299,21 +43496,17 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/crossbows-light",
     "reference": {
       "index": "crossbow-light",
-      "name": "Crossbow, light",
-      "url": "/api/2014/equipment/crossbow-light"
+      "name": "Crossbow, light"
     }
   },
   {
@@ -46323,26 +43516,21 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/darts",
     "reference": {
       "index": "dart",
-      "name": "Dart",
-      "url": "/api/2014/equipment/dart"
+      "name": "Dart"
     }
   },
   {
@@ -46353,15 +43541,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "high-elf",
-        "name": "High Elf",
-        "url": "/api/2014/subraces/high-elf"
+        "name": "High Elf"
       }
     ],
-    "url": "/api/2014/proficiencies/shortbows",
     "reference": {
       "index": "shortbow",
-      "name": "Shortbow",
-      "url": "/api/2014/equipment/shortbow"
+      "name": "Shortbow"
     }
   },
   {
@@ -46371,26 +43556,21 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/slings",
     "reference": {
       "index": "sling",
-      "name": "Sling",
-      "url": "/api/2014/equipment/sling"
+      "name": "Sling"
     }
   },
   {
@@ -46401,15 +43581,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "dwarf",
-        "name": "Dwarf",
-        "url": "/api/2014/races/dwarf"
+        "name": "Dwarf"
       }
     ],
-    "url": "/api/2014/proficiencies/battleaxes",
     "reference": {
       "index": "battleaxe",
-      "name": "Battleaxe",
-      "url": "/api/2014/equipment/battleaxe"
+      "name": "Battleaxe"
     }
   },
   {
@@ -46418,11 +43595,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Flails",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/flails",
     "reference": {
       "index": "flail",
-      "name": "Flail",
-      "url": "/api/2014/equipment/flail"
+      "name": "Flail"
     }
   },
   {
@@ -46431,11 +43606,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Glaives",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/glaives",
     "reference": {
       "index": "glaive",
-      "name": "Glaive",
-      "url": "/api/2014/equipment/glaive"
+      "name": "Glaive"
     }
   },
   {
@@ -46444,11 +43617,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Greataxes",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/greataxes",
     "reference": {
       "index": "greataxe",
-      "name": "Greataxe",
-      "url": "/api/2014/equipment/greataxe"
+      "name": "Greataxe"
     }
   },
   {
@@ -46457,11 +43628,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Greatswords",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/greatswords",
     "reference": {
       "index": "greatsword",
-      "name": "Greatsword",
-      "url": "/api/2014/equipment/greatsword"
+      "name": "Greatsword"
     }
   },
   {
@@ -46470,11 +43639,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Halberds",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/halberds",
     "reference": {
       "index": "halberd",
-      "name": "Halberd",
-      "url": "/api/2014/equipment/halberd"
+      "name": "Halberd"
     }
   },
   {
@@ -46483,11 +43650,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Lances",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/lances",
     "reference": {
       "index": "lance",
-      "name": "Lance",
-      "url": "/api/2014/equipment/lance"
+      "name": "Lance"
     }
   },
   {
@@ -46497,27 +43662,22 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       }
     ],
     "races": [
       {
         "index": "high-elf",
-        "name": "High Elf",
-        "url": "/api/2014/subraces/high-elf"
+        "name": "High Elf"
       }
     ],
-    "url": "/api/2014/proficiencies/longswords",
     "reference": {
       "index": "longsword",
-      "name": "Longsword",
-      "url": "/api/2014/equipment/longsword"
+      "name": "Longsword"
     }
   },
   {
@@ -46526,11 +43686,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Mauls",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/mauls",
     "reference": {
       "index": "maul",
-      "name": "Maul",
-      "url": "/api/2014/equipment/maul"
+      "name": "Maul"
     }
   },
   {
@@ -46539,11 +43697,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Morningstars",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/morningstars",
     "reference": {
       "index": "morningstar",
-      "name": "Morningstar",
-      "url": "/api/2014/equipment/morningstar"
+      "name": "Morningstar"
     }
   },
   {
@@ -46552,11 +43708,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Pikes",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/pikes",
     "reference": {
       "index": "pike",
-      "name": "Pike",
-      "url": "/api/2014/equipment/pike"
+      "name": "Pike"
     }
   },
   {
@@ -46566,21 +43720,17 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/rapiers",
     "reference": {
       "index": "rapier",
-      "name": "Rapier",
-      "url": "/api/2014/equipment/rapier"
+      "name": "Rapier"
     }
   },
   {
@@ -46590,16 +43740,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/scimitars",
     "reference": {
       "index": "scimitar",
-      "name": "Scimitar",
-      "url": "/api/2014/equipment/scimitar"
+      "name": "Scimitar"
     }
   },
   {
@@ -46609,32 +43756,26 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/classes/monk"
+        "name": "Monk"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       }
     ],
     "races": [
       {
         "index": "high-elf",
-        "name": "High Elf",
-        "url": "/api/2014/subraces/high-elf"
+        "name": "High Elf"
       }
     ],
-    "url": "/api/2014/proficiencies/shortswords",
     "reference": {
       "index": "shortsword",
-      "name": "Shortsword",
-      "url": "/api/2014/equipment/shortsword"
+      "name": "Shortsword"
     }
   },
   {
@@ -46643,11 +43784,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Tridents",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/tridents",
     "reference": {
       "index": "trident",
-      "name": "Trident",
-      "url": "/api/2014/equipment/trident"
+      "name": "Trident"
     }
   },
   {
@@ -46656,11 +43795,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "War picks",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/war-picks",
     "reference": {
       "index": "war-pick",
-      "name": "War pick",
-      "url": "/api/2014/equipment/war-pick"
+      "name": "War pick"
     }
   },
   {
@@ -46671,15 +43808,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "dwarf",
-        "name": "Dwarf",
-        "url": "/api/2014/races/dwarf"
+        "name": "Dwarf"
       }
     ],
-    "url": "/api/2014/proficiencies/warhammers",
     "reference": {
       "index": "warhammer",
-      "name": "Warhammer",
-      "url": "/api/2014/equipment/warhammer"
+      "name": "Warhammer"
     }
   },
   {
@@ -46688,11 +43822,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Whips",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/whips",
     "reference": {
       "index": "whip",
-      "name": "Whip",
-      "url": "/api/2014/equipment/whip"
+      "name": "Whip"
     }
   },
   {
@@ -46701,11 +43833,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Blowguns",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/blowguns",
     "reference": {
       "index": "blowgun",
-      "name": "Blowgun",
-      "url": "/api/2014/equipment/blowgun"
+      "name": "Blowgun"
     }
   },
   {
@@ -46715,21 +43845,17 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/hand-crossbows",
     "reference": {
       "index": "crossbow-hand",
-      "name": "Crossbow, hand",
-      "url": "/api/2014/equipment/crossbow-hand"
+      "name": "Crossbow, hand"
     }
   },
   {
@@ -46738,11 +43864,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Crossbows, heavy",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/crossbows-heavy",
     "reference": {
       "index": "crossbow-heavy",
-      "name": "Crossbow, heavy",
-      "url": "/api/2014/equipment/crossbow-heavy"
+      "name": "Crossbow, heavy"
     }
   },
   {
@@ -46753,15 +43877,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "high-elf",
-        "name": "High Elf",
-        "url": "/api/2014/subraces/high-elf"
+        "name": "High Elf"
       }
     ],
-    "url": "/api/2014/proficiencies/longbows",
     "reference": {
       "index": "longbow",
-      "name": "Longbow",
-      "url": "/api/2014/equipment/longbow"
+      "name": "Longbow"
     }
   },
   {
@@ -46770,11 +43891,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Nets",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/nets",
     "reference": {
       "index": "net",
-      "name": "Net",
-      "url": "/api/2014/equipment/net"
+      "name": "Net"
     }
   },
   {
@@ -46783,11 +43902,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Alchemist's Supplies",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/alchemists-supplies",
     "reference": {
       "index": "alchemists-supplies",
-      "name": "Alchemist's Supplies",
-      "url": "/api/2014/equipment/alchemists-supplies"
+      "name": "Alchemist's Supplies"
     }
   },
   {
@@ -46796,11 +43913,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Brewer's Supplies",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/brewers-supplies",
     "reference": {
       "index": "brewers-supplies",
-      "name": "Brewer's Supplies",
-      "url": "/api/2014/equipment/brewers-supplies"
+      "name": "Brewer's Supplies"
     }
   },
   {
@@ -46809,11 +43924,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Calligrapher's Supplies",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/calligraphers-supplies",
     "reference": {
       "index": "calligraphers-supplies",
-      "name": "Calligrapher's Supplies",
-      "url": "/api/2014/equipment/calligraphers-supplies"
+      "name": "Calligrapher's Supplies"
     }
   },
   {
@@ -46822,11 +43935,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Carpenter's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/carpenters-tools",
     "reference": {
       "index": "carpenters-tools",
-      "name": "Carpenter's Tools",
-      "url": "/api/2014/equipment/carpenters-tools"
+      "name": "Carpenter's Tools"
     }
   },
   {
@@ -46835,11 +43946,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Cartographer's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/cartographers-tools",
     "reference": {
       "index": "cartographers-tools",
-      "name": "Cartographer's Tools",
-      "url": "/api/2014/equipment/cartographers-tools"
+      "name": "Cartographer's Tools"
     }
   },
   {
@@ -46848,11 +43957,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Cobbler's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/cobblers-tools",
     "reference": {
       "index": "cobblers-tools",
-      "name": "Cobbler's Tools",
-      "url": "/api/2014/equipment/cobblers-tools"
+      "name": "Cobbler's Tools"
     }
   },
   {
@@ -46861,11 +43968,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Cook's utensils",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/cooks-utensils",
     "reference": {
       "index": "cooks-utensils",
-      "name": "Cook's utensils",
-      "url": "/api/2014/equipment/cooks-utensils"
+      "name": "Cook's utensils"
     }
   },
   {
@@ -46874,11 +43979,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Glassblower's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/glassblowers-tools",
     "reference": {
       "index": "glassblowers-tools",
-      "name": "Glassblower's Tools",
-      "url": "/api/2014/equipment/glassblowers-tools"
+      "name": "Glassblower's Tools"
     }
   },
   {
@@ -46887,11 +43990,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Jeweler's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/jewelers-tools",
     "reference": {
       "index": "jewelers-tools",
-      "name": "Jeweler's Tools",
-      "url": "/api/2014/equipment/jewelers-tools"
+      "name": "Jeweler's Tools"
     }
   },
   {
@@ -46900,11 +44001,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Leatherworker's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/leatherworkers-tools",
     "reference": {
       "index": "leatherworkers-tools",
-      "name": "Leatherworker's Tools",
-      "url": "/api/2014/equipment/leatherworkers-tools"
+      "name": "Leatherworker's Tools"
     }
   },
   {
@@ -46913,11 +44012,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Mason's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/masons-tools",
     "reference": {
       "index": "masons-tools",
-      "name": "Mason's Tools",
-      "url": "/api/2014/equipment/masons-tools"
+      "name": "Mason's Tools"
     }
   },
   {
@@ -46926,11 +44023,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Painter's Supplies",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/painters-supplies",
     "reference": {
       "index": "painters-supplies",
-      "name": "Painter's Supplies",
-      "url": "/api/2014/equipment/painters-supplies"
+      "name": "Painter's Supplies"
     }
   },
   {
@@ -46939,11 +44034,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Potter's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/potters-tools",
     "reference": {
       "index": "potters-tools",
-      "name": "Potter's Tools",
-      "url": "/api/2014/equipment/potters-tools"
+      "name": "Potter's Tools"
     }
   },
   {
@@ -46952,11 +44045,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Smith's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/smiths-tools",
     "reference": {
       "index": "smiths-tools",
-      "name": "Smith's Tools",
-      "url": "/api/2014/equipment/smiths-tools"
+      "name": "Smith's Tools"
     }
   },
   {
@@ -46965,11 +44056,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Tinker's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/tinkers-tools",
     "reference": {
       "index": "tinkers-tools",
-      "name": "Tinker's Tools",
-      "url": "/api/2014/equipment/tinkers-tools"
+      "name": "Tinker's Tools"
     }
   },
   {
@@ -46978,11 +44067,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Weaver's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/weavers-tools",
     "reference": {
       "index": "weavers-tools",
-      "name": "Weaver's Tools",
-      "url": "/api/2014/equipment/weavers-tools"
+      "name": "Weaver's Tools"
     }
   },
   {
@@ -46991,11 +44078,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Woodcarver's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/woodcarvers-tools",
     "reference": {
       "index": "woodcarvers-tools",
-      "name": "Woodcarver's Tools",
-      "url": "/api/2014/equipment/woodcarvers-tools"
+      "name": "Woodcarver's Tools"
     }
   },
   {
@@ -47004,11 +44089,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Disguise Kit",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/disguise-kit",
     "reference": {
       "index": "disguise-kit",
-      "name": "Disguise Kit",
-      "url": "/api/2014/equipment/disguise-kit"
+      "name": "Disguise Kit"
     }
   },
   {
@@ -47017,11 +44100,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Forgery Kit",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/forgery-kit",
     "reference": {
       "index": "forgery-kit",
-      "name": "Forgery Kit",
-      "url": "/api/2014/equipment/forgery-kit"
+      "name": "Forgery Kit"
     }
   },
   {
@@ -47030,11 +44111,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Dice Set",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/dice-set",
     "reference": {
       "index": "dice-set",
-      "name": "Dice Set",
-      "url": "/api/2014/equipment/dice-set"
+      "name": "Dice Set"
     }
   },
   {
@@ -47043,11 +44122,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Playing Card Set",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/playing-card-set",
     "reference": {
       "index": "playing-card-set",
-      "name": "Playing Card Set",
-      "url": "/api/2014/equipment/playing-card-set"
+      "name": "Playing Card Set"
     }
   },
   {
@@ -47056,11 +44133,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Bagpipes",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/bagpipes",
     "reference": {
       "index": "bagpipes",
-      "name": "Bagpipes",
-      "url": "/api/2014/equipment/bagpipes"
+      "name": "Bagpipes"
     }
   },
   {
@@ -47069,11 +44144,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Drum",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/drum",
     "reference": {
       "index": "drum",
-      "name": "Drum",
-      "url": "/api/2014/equipment/drum"
+      "name": "Drum"
     }
   },
   {
@@ -47082,11 +44155,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Dulcimer",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/dulcimer",
     "reference": {
       "index": "dulcimer",
-      "name": "Dulcimer",
-      "url": "/api/2014/equipment/dulcimer"
+      "name": "Dulcimer"
     }
   },
   {
@@ -47095,11 +44166,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Flute",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/flute",
     "reference": {
       "index": "flute",
-      "name": "Flute",
-      "url": "/api/2014/equipment/flute"
+      "name": "Flute"
     }
   },
   {
@@ -47108,11 +44177,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Lute",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/lute",
     "reference": {
       "index": "lute",
-      "name": "Lute",
-      "url": "/api/2014/equipment/lute"
+      "name": "Lute"
     }
   },
   {
@@ -47121,11 +44188,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Lyre",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/lyre",
     "reference": {
       "index": "lyre",
-      "name": "Lyre",
-      "url": "/api/2014/equipment/lyre"
+      "name": "Lyre"
     }
   },
   {
@@ -47134,11 +44199,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Horn",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/horn",
     "reference": {
       "index": "horn",
-      "name": "Horn",
-      "url": "/api/2014/equipment/horn"
+      "name": "Horn"
     }
   },
   {
@@ -47147,11 +44210,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Pan flute",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/pan-flute",
     "reference": {
       "index": "pan-flute",
-      "name": "Pan flute",
-      "url": "/api/2014/equipment/pan-flute"
+      "name": "Pan flute"
     }
   },
   {
@@ -47160,11 +44221,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Shawm",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/shawm",
     "reference": {
       "index": "shawm",
-      "name": "Shawm",
-      "url": "/api/2014/equipment/shawm"
+      "name": "Shawm"
     }
   },
   {
@@ -47173,11 +44232,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Viol",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/viol",
     "reference": {
       "index": "viol",
-      "name": "Viol",
-      "url": "/api/2014/equipment/viol"
+      "name": "Viol"
     }
   },
   {
@@ -47187,16 +44244,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/herbalism-kit",
     "reference": {
       "index": "herbalism-kit",
-      "name": "Herbalism Kit",
-      "url": "/api/2014/equipment/herbalism-kit"
+      "name": "Herbalism Kit"
     }
   },
   {
@@ -47205,11 +44259,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Navigator's Tools",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/navigators-tools",
     "reference": {
       "index": "navigators-tools",
-      "name": "Navigator's Tools",
-      "url": "/api/2014/equipment/navigators-tools"
+      "name": "Navigator's Tools"
     }
   },
   {
@@ -47218,11 +44270,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Poisoner's Kit",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/poisoners-kit",
     "reference": {
       "index": "poisoners-kit",
-      "name": "Poisoner's Kit",
-      "url": "/api/2014/equipment/poisoners-kit"
+      "name": "Poisoner's Kit"
     }
   },
   {
@@ -47232,16 +44282,13 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/thieves-tools",
     "reference": {
       "index": "thieves-tools",
-      "name": "Thieves' Tools",
-      "url": "/api/2014/equipment/thieves-tools"
+      "name": "Thieves' Tools"
     }
   },
   {
@@ -47250,11 +44297,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Land Vehicles",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/land-vehicles",
     "reference": {
       "index": "land-vehicles",
-      "name": "Land Vehicles",
-      "url": "/api/2014/equipment-categories/land-vehicles"
+      "name": "Land Vehicles"
     }
   },
   {
@@ -47263,11 +44308,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Water Vehicles",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/water-vehicles",
     "reference": {
       "index": "waterborne-vehicles",
-      "name": "Waterborne Vehicles",
-      "url": "/api/2014/equipment-categories/waterborne-vehicles"
+      "name": "Waterborne Vehicles"
     }
   },
   {
@@ -47277,31 +44320,25 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "fighter",
-        "name": "Fighter",
-        "url": "/api/2014/classes/fighter"
+        "name": "Fighter"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/classes/monk"
+        "name": "Monk"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/saving-throw-str",
     "reference": {
       "index": "str",
-      "name": "STR",
-      "url": "/api/2014/ability-scores/str"
+      "name": "STR"
     }
   },
   {
@@ -47311,31 +44348,25 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/classes/monk"
+        "name": "Monk"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/saving-throw-dex",
     "reference": {
       "index": "dex",
-      "name": "DEX",
-      "url": "/api/2014/ability-scores/dex"
+      "name": "DEX"
     }
   },
   {
@@ -47345,26 +44376,21 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "barbarian",
-        "name": "Barbarian",
-        "url": "/api/2014/classes/barbarian"
+        "name": "Barbarian"
       },
       {
         "index": "fighter",
-        "name": "Fighter",
-        "url": "/api/2014/classes/fighter"
+        "name": "Fighter"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/saving-throw-con",
     "reference": {
       "index": "con",
-      "name": "CON",
-      "url": "/api/2014/ability-scores/con"
+      "name": "CON"
     }
   },
   {
@@ -47374,26 +44400,21 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "rogue",
-        "name": "Rogue",
-        "url": "/api/2014/classes/rogue"
+        "name": "Rogue"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/saving-throw-int",
     "reference": {
       "index": "int",
-      "name": "INT",
-      "url": "/api/2014/ability-scores/int"
+      "name": "INT"
     }
   },
   {
@@ -47403,36 +44424,29 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/saving-throw-wis",
     "reference": {
       "index": "wis",
-      "name": "WIS",
-      "url": "/api/2014/ability-scores/wis"
+      "name": "WIS"
     }
   },
   {
@@ -47442,36 +44456,29 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
     "races": [],
-    "url": "/api/2014/proficiencies/saving-throw-cha",
     "reference": {
       "index": "cha",
-      "name": "CHA",
-      "url": "/api/2014/ability-scores/cha"
+      "name": "CHA"
     }
   },
   {
@@ -47480,11 +44487,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Acrobatics",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-acrobatics",
     "reference": {
       "index": "acrobatics",
-      "name": "Acrobatics",
-      "url": "/api/2014/skills/acrobatics"
+      "name": "Acrobatics"
     }
   },
   {
@@ -47493,11 +44498,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Animal Handling",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-animal-handling",
     "reference": {
       "index": "animal-handling",
-      "name": "Animal Handling",
-      "url": "/api/2014/skills/animal-handling"
+      "name": "Animal Handling"
     }
   },
   {
@@ -47506,11 +44509,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Arcana",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-arcana",
     "reference": {
       "index": "arcana",
-      "name": "Arcana",
-      "url": "/api/2014/skills/arcana"
+      "name": "Arcana"
     }
   },
   {
@@ -47519,11 +44520,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Athletics",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-athletics",
     "reference": {
       "index": "athletics",
-      "name": "Athletics",
-      "url": "/api/2014/skills/athletics"
+      "name": "Athletics"
     }
   },
   {
@@ -47532,11 +44531,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Deception",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-deception",
     "reference": {
       "index": "deception",
-      "name": "Deception",
-      "url": "/api/2014/skills/deception"
+      "name": "Deception"
     }
   },
   {
@@ -47545,11 +44542,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: History",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-history",
     "reference": {
       "index": "history",
-      "name": "History",
-      "url": "/api/2014/skills/history"
+      "name": "History"
     }
   },
   {
@@ -47558,11 +44553,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Insight",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-insight",
     "reference": {
       "index": "insight",
-      "name": "Insight",
-      "url": "/api/2014/skills/insight"
+      "name": "Insight"
     }
   },
   {
@@ -47571,11 +44564,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Intimidation",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-intimidation",
     "reference": {
       "index": "intimidation",
-      "name": "Intimidation",
-      "url": "/api/2014/skills/intimidation"
+      "name": "Intimidation"
     }
   },
   {
@@ -47584,11 +44575,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Investigation",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-investigation",
     "reference": {
       "index": "investigation",
-      "name": "Investigation",
-      "url": "/api/2014/skills/investigation"
+      "name": "Investigation"
     }
   },
   {
@@ -47597,11 +44586,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Medicine",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-medicine",
     "reference": {
       "index": "medicine",
-      "name": "Medicine",
-      "url": "/api/2014/skills/medicine"
+      "name": "Medicine"
     }
   },
   {
@@ -47610,11 +44597,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Nature",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-nature",
     "reference": {
       "index": "nature",
-      "name": "Nature",
-      "url": "/api/2014/skills/nature"
+      "name": "Nature"
     }
   },
   {
@@ -47625,15 +44610,12 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "races": [
       {
         "index": "elf",
-        "name": "Elf",
-        "url": "/api/2014/races/elf"
+        "name": "Elf"
       }
     ],
-    "url": "/api/2014/proficiencies/skill-perception",
     "reference": {
       "index": "perception",
-      "name": "Perception",
-      "url": "/api/2014/skills/perception"
+      "name": "Perception"
     }
   },
   {
@@ -47642,11 +44624,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Performance",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-performance",
     "reference": {
       "index": "performance",
-      "name": "Performance",
-      "url": "/api/2014/skills/performance"
+      "name": "Performance"
     }
   },
   {
@@ -47655,11 +44635,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Persuasion",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-persuasion",
     "reference": {
       "index": "persuasion",
-      "name": "Persuasion",
-      "url": "/api/2014/skills/persuasion"
+      "name": "Persuasion"
     }
   },
   {
@@ -47668,11 +44646,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Religion",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-religion",
     "reference": {
       "index": "religion",
-      "name": "Religion",
-      "url": "/api/2014/skills/religion"
+      "name": "Religion"
     }
   },
   {
@@ -47681,11 +44657,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Sleight of Hand",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-sleight-of-hand",
     "reference": {
       "index": "sleight-of-hand",
-      "name": "Sleight of Hand",
-      "url": "/api/2014/skills/sleight-of-hand"
+      "name": "Sleight of Hand"
     }
   },
   {
@@ -47694,11 +44668,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Stealth",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-stealth",
     "reference": {
       "index": "stealth",
-      "name": "Stealth",
-      "url": "/api/2014/skills/stealth"
+      "name": "Stealth"
     }
   },
   {
@@ -47707,11 +44679,9 @@ export const MONSTER_PROFICIENCY_RAW = JSON.parse(String.raw`[
     "name": "Skill: Survival",
     "classes": [],
     "races": [],
-    "url": "/api/2014/proficiencies/skill-survival",
     "reference": {
       "index": "survival",
-      "name": "Survival",
-      "url": "/api/2014/skills/survival"
+      "name": "Survival"
     }
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
@@ -47723,8 +44693,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
     "desc": [
       "- A blinded creature can't see and automatically fails any ability check that requires sight.",
       "- Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
-    ],
-    "url": "/api/2014/conditions/blinded"
+    ]
   },
   {
     "index": "charmed",
@@ -47732,16 +44701,14 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
     "desc": [
       "- A charmed creature can't attack the charmer or target the charmer with harmful abilities or magical effects.",
       "- The charmer has advantage on any ability check to interact socially with the creature."
-    ],
-    "url": "/api/2014/conditions/charmed"
+    ]
   },
   {
     "index": "deafened",
     "name": "Deafened",
     "desc": [
       "- A deafened creature can't hear and automatically fails any ability check that requires hearing."
-    ],
-    "url": "/api/2014/conditions/deafened"
+    ]
   },
   {
     "index": "frightened",
@@ -47749,8 +44716,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
     "desc": [
       "- A frightened creature has disadvantage on ability checks and attack rolls while the source of its fear is within line of sight.",
       "- The creature can't willingly move closer to the source of its fear."
-    ],
-    "url": "/api/2014/conditions/frightened"
+    ]
   },
   {
     "index": "grappled",
@@ -47759,16 +44725,14 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- A grappled creature's speed becomes 0, and it can't benefit from any bonus to its speed.",
       "- The condition ends if the grappler is incapacitated (see the condition).",
       "- The condition also ends if an effect removes the grappled creature from the reach of the grappler or grappling effect, such as when a creature is hurled away by the thunderwave spell."
-    ],
-    "url": "/api/2014/conditions/grappled"
+    ]
   },
   {
     "index": "incapacitated",
     "name": "Incapacitated",
     "desc": [
       "- An incapacitated creature can't take actions or reactions."
-    ],
-    "url": "/api/2014/conditions/incapacitated"
+    ]
   },
   {
     "index": "invisible",
@@ -47776,8 +44740,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
     "desc": [
       "- An invisible creature is impossible to see without the aid of magic or a special sense. For the purpose of hiding, the creature is heavily obscured. The creature's location can be detected by any noise it makes or any tracks it leaves.",
       "- Attack rolls against the creature have disadvantage, and the creature's attack rolls have advantage."
-    ],
-    "url": "/api/2014/conditions/invisible"
+    ]
   },
   {
     "index": "paralyzed",
@@ -47787,8 +44750,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- The creature automatically fails Strength and Dexterity saving throws.",
       "- Attack rolls against the creature have advantage.",
       "- Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature."
-    ],
-    "url": "/api/2014/conditions/paralyzed"
+    ]
   },
   {
     "index": "petrified",
@@ -47800,16 +44762,14 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- The creature automatically fails Strength and Dexterity saving throws.",
       "- The creature has resistance to all damage.",
       "- The creature is immune to poison and disease, although a poison or disease already in its system is suspended, not neutralized."
-    ],
-    "url": "/api/2014/conditions/petrified"
+    ]
   },
   {
     "index": "poisoned",
     "name": "Poisoned",
     "desc": [
       "- A poisoned creature has disadvantage on attack rolls and ability checks."
-    ],
-    "url": "/api/2014/conditions/poisoned"
+    ]
   },
   {
     "index": "prone",
@@ -47818,8 +44778,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- A prone creature's only movement option is to crawl, unless it stands up and thereby ends the condition.",
       "- The creature has disadvantage on attack rolls.",
       "- An attack roll against the creature has advantage if the attacker is within 5 feet of the creature. Otherwise, the attack roll has disadvantage."
-    ],
-    "url": "/api/2014/conditions/prone"
+    ]
   },
   {
     "index": "restrained",
@@ -47828,8 +44787,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- A restrained creature's speed becomes 0, and it can't benefit from any bonus to its speed.",
       "- Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage.",
       "- The creature has disadvantage on Dexterity saving throws."
-    ],
-    "url": "/api/2014/conditions/restrained"
+    ]
   },
   {
     "index": "stunned",
@@ -47838,8 +44796,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- A stunned creature is incapacitated (see the condition), can't move, and can speak only falteringly.",
       "- The creature automatically fails Strength and Dexterity saving throws.",
       "- Attack rolls against the creature have advantage."
-    ],
-    "url": "/api/2014/conditions/stunned"
+    ]
   },
   {
     "index": "unconscious",
@@ -47850,8 +44807,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "- The creature automatically fails Strength and Dexterity saving throws.",
       "- Attack rolls against the creature have advantage.",
       "- Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature."
-    ],
-    "url": "/api/2014/conditions/unconscious"
+    ]
   },
   {
     "index": "exhaustion",
@@ -47868,8 +44824,7 @@ export const MONSTER_CONDITION_RAW = JSON.parse(String.raw`[
       "A creature suffers the effect of its current level of exhaustion as well as all lower levels. For example, a creature suffering level 2 exhaustion has its speed halved and has disadvantage on ability checks.",
       "An effect that removes exhaustion reduces its level as specified in the effect's description, with all exhaustion effects ending if a creature's exhaustion level is reduced below 1.",
       "Finishing a long rest reduces a creature's exhaustion level by 1, provided that the creature has also ingested some food and drink."
-    ],
-    "url": "/api/2014/conditions/exhaustion"
+    ]
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -47879,103 +44834,90 @@ export const MONSTER_DAMAGE_TYPE_RAW = JSON.parse(String.raw`[
     "name": "Acid",
     "desc": [
       "The corrosive spray of a black dragon's breath and the dissolving enzymes secreted by a black pudding deal acid damage."
-    ],
-    "url": "/api/2014/damage-types/acid"
+    ]
   },
   {
     "index": "bludgeoning",
     "name": "Bludgeoning",
     "desc": [
       "Blunt force attacks, falling, constriction, and the like deal bludgeoning damage."
-    ],
-    "url": "/api/2014/damage-types/bludgeoning"
+    ]
   },
   {
     "index": "cold",
     "name": "Cold",
     "desc": [
       "The infernal chill radiating from an ice devil's spear and the frigid blast of a white dragon's breath deal cold damage."
-    ],
-    "url": "/api/2014/damage-types/cold"
+    ]
   },
   {
     "index": "fire",
     "name": "Fire",
     "desc": [
       "Red dragons breathe fire, and many spells conjure flames to deal fire damage."
-    ],
-    "url": "/api/2014/damage-types/fire"
+    ]
   },
   {
     "index": "force",
     "name": "Force",
     "desc": [
       "Force is pure magical energy focused into a damaging form. Most effects that deal force damage are spells, including magic missile and spiritual weapon."
-    ],
-    "url": "/api/2014/damage-types/force"
+    ]
   },
   {
     "index": "lightning",
     "name": "Lightning",
     "desc": [
       "A lightning bolt spell and a blue dragon's breath deal lightning damage."
-    ],
-    "url": "/api/2014/damage-types/lightning"
+    ]
   },
   {
     "index": "necrotic",
     "name": "Necrotic",
     "desc": [
       "Necrotic damage, dealt by certain undead and a spell such as chill touch, withers matter and even the soul."
-    ],
-    "url": "/api/2014/damage-types/necrotic"
+    ]
   },
   {
     "index": "piercing",
     "name": "Piercing",
     "desc": [
       "Puncturing and impaling attacks, including spears and monsters' bites, deal piercing damage."
-    ],
-    "url": "/api/2014/damage-types/piercing"
+    ]
   },
   {
     "index": "poison",
     "name": "Poison",
     "desc": [
       "Venomous stings and the toxic gas of a green dragon's breath deal poison damage."
-    ],
-    "url": "/api/2014/damage-types/poison"
+    ]
   },
   {
     "index": "psychic",
     "name": "Psychic",
     "desc": [
       "Mental abilities such as a psionic blast deal psychic damage."
-    ],
-    "url": "/api/2014/damage-types/psychic"
+    ]
   },
   {
     "index": "radiant",
     "name": "Radiant",
     "desc": [
       "Radiant damage, dealt by a cleric's flame strike spell or an angel's smiting weapon, sears the flesh like fire and overloads the spirit with power."
-    ],
-    "url": "/api/2014/damage-types/radiant"
+    ]
   },
   {
     "index": "slashing",
     "name": "Slashing",
     "desc": [
       "Swords, axes, and monsters' claws deal slashing damage."
-    ],
-    "url": "/api/2014/damage-types/slashing"
+    ]
   },
   {
     "index": "thunder",
     "name": "Thunder",
     "desc": [
       "A concussive burst of sound, such as the effect of the thunderwave spell, deals thunder damage."
-    ],
-    "url": "/api/2014/damage-types/thunder"
+    ]
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;

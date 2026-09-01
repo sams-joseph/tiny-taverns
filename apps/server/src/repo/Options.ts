@@ -39,10 +39,10 @@ interface OptionRow extends ProvenanceColumns {
   readonly derived_from: CharacterOptionId | null;
   readonly kind: OptionKind;
   readonly name: string;
-  /** The source entity this row snapshots, when it came from an imported source. */
-  readonly source_entity_id: string | null;
-  /** The exact source revision this row snapshots. */
-  readonly source_revision_id: string | null;
+  /** Minimal source key this row snapshots, when it came from an imported source. */
+  readonly source_corpus: string | null;
+  readonly source_family: string | null;
+  readonly source_key: string | null;
   /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
   readonly body: ClassBody | RaceBody | BackgroundBody;
 }
@@ -413,8 +413,9 @@ export class Options extends Context.Service<
                     defined({
                       campaign_id: campaignId,
                       derived_from: source.id,
-                      source_entity_id: source.source_entity_id,
-                      source_revision_id: source.source_revision_id,
+                      source_corpus: source.source_corpus,
+                      source_family: source.source_family,
+                      source_key: source.source_key,
                       // Not from the patch, and there is no field for it: a
                       // class that arrived as a race would carry a document
                       // its own column contradicts. What a copy is, is what the

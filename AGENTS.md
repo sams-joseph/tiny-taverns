@@ -1101,26 +1101,34 @@ Global content has no campaign to scope it to, so there is no actor an endpoint 
 against — an endpoint that could mint one would write rows every campaign can read.
 `src/bestiary/import.ts` is therefore **the only code in `src/` that touches campaign content
 without `CurrentActor` in its requirements**, and that exception is why it is confined to one
-file and a bin script. Since `0019` it upserts on `creature_system_source_entity_key` — the
-stable source entity, not `lower(name)` — so a source rename updates one system row rather than
-inserting a second, and two future source entities may share a display name. It now records two
-sources: the Taverns project-authored starter bundle and the pinned 2014 SRD monster corpus. It
-never writes `visibility`, so a shared system creature is not un-shared by an upgrade.
+file and a bin script. Since `0025` it upserts on `creature_system_source_key` — the stable
+`source_corpus` / `source_family` / `source_key` triplet, not `lower(name)` — so a source rename
+updates one system row rather than inserting a second, and two future source entities may share a
+display name. It now records two sources: the Taverns project-authored starter bundle and the
+pinned 2014 SRD monster corpus. It never writes `visibility`, so a shared system creature is not
+un-shared by an upgrade.
 
-### The bundled rules source: starter bestiary is Taverns-authored, the 2014 corpora are SRD
+### The bundled rules source: concrete relationships, and no source graph
 
-Since `0019`, `origin = 'system'` is not the whole citation. It means _bundled and owned by
-nobody_; the `rules_source_*` tables say which source document/entity/revision a bundled row
-reflects. There are now two active source documents and they must not be collapsed:
+Since `0025`, `origin = 'system'` means _bundled and owned by nobody_ again; the old
+`rules_source_*` document/entity/revision/link graph is gone. Imported domain rows keep only the
+stable source triplet (`source_corpus`, `source_family`, `source_key`), and relationships from the
+2014 data live in concrete lookup/domain tables: `magic_school`, `ability_score`, `damage_type`,
+`equipment_category`, `weapon_property`, `magic_item_rarity`, `proficiency`, `condition`, plus the
+join tables `spell_class`, `spell_damage_type`, `equipment_property`, `equipment_content`,
+`magic_item_variant`, `character_option_equipment_reference`, and the creature relation tables.
+There is no generic `rules_term`, no `term_id` relationship and no `spell_subclass` table; a future
+subclass domain earns its own table when a screen actually reads it. No source URLs, raw payloads,
+content hashes or import runs are stored; generated snapshots may still contain 5e-bits transport
+URLs only as importer input.
 
 - **Bestiary starter creatures** remain Taverns project-authored data, transcribed from the
-  designers' fixture. `bestiary:import` records the `TAVERNS_STARTER_SOURCE` and never writes
-  third-party attribution for those six rows.
+  designers' fixture. `bestiary:import` keys them under `taverns-starter/monsters/*` and never
+  labels them as SRD.
 - **The 2014 SRD corpora** — monsters, character options, spells, mundane equipment and magic
   items — are transformed from the pinned 2014 5e-bits `5e-database` snapshot (`5.10.0`, commit
-  `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Their importers record the 5e-bits MIT attribution
-  and that the underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open
-  Game License 1.0a. The web footer and README name that attribution.
+  `5a7ee5a0489b26655d343e4a41e8f7942a887af2`) and keyed under `5e-bits-2014`. The web footer and
+  README carry the attribution; it is not per-row database provenance.
 
 That split is deliberate: do not relabel the starter bestiary as SRD, and do not treat the 2014
 corpus rows as project-authored. A DM's own homebrew prose is still theirs, in their campaign or
@@ -1324,7 +1332,7 @@ need `corpusRowReadable`'s campaign quantified, which is the shape this change j
   wants the model whole, deleting it plus its handler is a small change and the fixtures that use it
   would move to `library.create` + `derive`. **Ask before assuming either way.**
 - **Two copies of one entity in one campaign is legal**, and nothing refuses it. `derive` has no
-  uniqueness rule and the bundle's own identity is its source entity, not its display name.
+  uniqueness rule and the bundle's own identity is its stable source key, not its display name.
 - **`Actor.campaignId` does not narrow the Library**, and the argument is on `libraryRowReadable`:
   scope says which _campaign_ a credential reaches, and there is none here to be about, so applying
   it would mean inventing a second meaning for the field. It changes no answer today because
@@ -1359,15 +1367,16 @@ must say **race**.
 The bundled rules vocabulary is pinned 2014 5e-bits data (`5e-database` 5.10.0, commit
 `5a7ee5a0489b26655d343e4a41e8f7942a887af2`) and is imported by
 `apps/server/src/ruleset/import.ts` from the generated local snapshot in `systemOptions.ts` — no
-runtime fetch. The source-document row records the 5e-bits MIT attribution and the SRD 5.1 / OGL
-1.0a notice; the bestiary starter bundle remains the Taverns-authored one. Do not collapse those
-two source documents. Existing development databases from the pre-2014 vocabulary should use the
-clean reset/reseed path in `README.md`, not a compatibility backfill.
+runtime fetch. Since `0025` there is no source-document table; rows carry only stable source keys,
+and the web footer/README carry the 5e-bits MIT plus SRD 5.1 / OGL 1.0a attribution. The bestiary
+starter bundle remains Taverns-authored. Do not collapse those two source families. Existing
+development databases from the pre-2014 vocabulary should use the clean reset/reseed path in
+`README.md`, not a compatibility backfill.
 
 ### Races contain subraces; there is no fourth option kind
 
 A subrace is a child in `RaceBody.subraces`, not `character_option.kind = "subrace"`. That shape is
-what keeps the race/subrace pair contained by one source entity and one campaign copy. The UI and
+what keeps the race/subrace pair contained by one source-keyed race and one campaign copy. The UI and
 Hob both resolve subraces through `subraceNamed(race, label)`, and the repository validates manual
 character writes that name a subrace: a free-text race may stand alone, but `subrace` must be a
 child of a readable race option in that campaign.
@@ -1410,7 +1419,7 @@ Library original ──derive──▶ campaign copy ──seed at creation─�
 
 A race/class/background copied into a campaign is a snapshot. A character seeded from it is another
 snapshot: no pointer is stored on `character`, and there must be no recompute-all-sheets button. The
-one explicit cost is accepted: the product cannot later answer which exact source entity a character
+one explicit cost is accepted: the product cannot later answer which exact source row a character
 was originally seeded from.
 
 ### Seven smaller things that are decisions
@@ -1428,7 +1437,7 @@ was originally seeded from.
   `repo/Options.ts`, which is the only place a body is told apart by its shape (`bodyKind`).
 - **No `tsvector` and no fifth arm in `repo/Search.ts`.** `0008_beats.ts`'s rule — an index
   nothing reads is worse than none.
-- **The bundle's unique index is its source entity**, not `(kind, lower(name))` any more. `kind`
+- **The bundle's unique index is its stable source key**, not `(kind, lower(name))` any more. `kind`
   still belongs in the source identity — class `Warden` and race `Warden` are different entities —
   but display names are no longer an upsert key.
 - **A character's background is `sheet.identity.background` and earns no column**, where the
@@ -1530,9 +1539,11 @@ new: `Spells` composes `libraryRowReadable` / `libraryRowWritable`, `corpusRowRe
 The bundle is imported by `pnpm -F server spell:import` from the checked-in
 `apps/server/src/spells/systemSpells.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0 commit
 `5a7ee5a0489b26655d343e4a41e8f7942a887af2`, path `src/2014/en/5e-SRD-Spells.json`: exactly 319
-2014 SRD spells. No runtime fetch. Imported rows record `rules_source_*` provenance and source links
-for schools/classes/subclasses/damage/DC references; do not relabel them as Taverns-authored, and do
-not fold them into `ruleset:import` without revisiting the explicit reset/import docs.
+2014 SRD spells. No runtime fetch. Imported rows keep stable source keys and concrete relationships
+for schools, classes, damage types and DC abilities. Subclasses are deliberately not stored as a
+relationship until a concrete subclass domain exists. Do not relabel the spell bundle as
+Taverns-authored, and do not fold it into `ruleset:import` without revisiting the explicit
+reset/import docs.
 
 The web has two shelves over the same table: `#/library/spells` for originals plus the bundle, and
 `#/campaigns/:c/spells` for a campaign's copies plus the bundle. `LibraryNav` is the global shelf;
@@ -1552,11 +1563,11 @@ not add an equipment-specific reach rule.
 The bundle is imported by `pnpm -F server equipment:import` from the checked-in
 `apps/server/src/equipment/systemEquipment.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0
 commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`: exactly **237** rows from
-`5e-SRD-Equipment.json`, with source links into equipment categories, gear categories, weapon
-properties, damage types and contained equipment. No runtime fetch. Imported rows record
-`rules_source_*` provenance and are `shared`, because background starting-equipment references and
-player-facing creation flows need the bundled mundane vocabulary to be readable through a shared
-campaign. Keep it mundane only: no magic items, shops, encumbrance or character inventory live here.
+`5e-SRD-Equipment.json`, with concrete relationships into equipment categories, gear categories,
+weapon properties, damage types and contained equipment. No runtime fetch. Imported rows keep stable
+source keys and are `shared`, because background starting-equipment references and player-facing
+creation flows need the bundled mundane vocabulary to be readable through a shared campaign. Keep it
+mundane only: no magic items, shops, encumbrance or character inventory live here.
 
 The web has two shelves over the same table: `#/library/equipment` for originals plus the bundle,
 and `#/campaigns/:c/equipment` for a campaign's copies plus the bundle. The Library shelf is where
@@ -1574,8 +1585,8 @@ reach rule.
 The bundle is imported by `pnpm -F server magic-item:import` from the checked-in
 `apps/server/src/magic-items/systemMagicItems.ts` snapshot of pinned 5e-bits `5e-database` 5.10.0
 commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`: exactly **362** rows from
-`5e-SRD-Magic-Items.json`. Imported rows record `rules_source_*` provenance plus equipment-category,
-magic-item-variant and magic-item-base source links. Variant/base relationships come from the source
+`5e-SRD-Magic-Items.json`. Imported rows keep stable source keys plus concrete equipment-category,
+magic-item-variant and magic-item-base relationships. Variant/base relationships come from source
 refs, not name parsing, and `magic_item_base_same_scope_fkey` prevents a variant from pointing at a
 base owned by another account/campaign or the system bundle. Authored originals and campaign copies
 are saved as standalone items: no variant metadata is inherited.

@@ -13,7 +13,8 @@
  *
  * 5e-bits project data is MIT licensed; underlying D&D 5th Edition SRD 5.1
  * material is used under the Open Game License version 1.0a. See
- * THIRD_PARTY_NOTICES.md and rules_source_document rows written by spell:import.
+ * THIRD_PARTY_NOTICES.md; spell:import stores stable source keys, not per-row
+ * source-document provenance.
  */
 
 export const FIVE_E_BITS_2014_COMMIT = "5a7ee5a0489b26655d343e4a41e8f7942a887af2";
@@ -45,8 +46,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "acid",
-        "name": "Acid",
-        "url": "/api/2014/damage-types/acid"
+        "name": "Acid"
       },
       "damage_at_slot_level": {
         "2": "4d4",
@@ -61,29 +61,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/acid-arrow"
+    ]
   },
   {
     "index": "acid-splash",
@@ -105,8 +100,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "acid",
-        "name": "Acid",
-        "url": "/api/2014/damage-types/acid"
+        "name": "Acid"
       },
       "damage_at_character_level": {
         "1": "1d6",
@@ -118,36 +112,30 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/acid-splash"
+    ]
   },
   {
     "index": "aid",
@@ -182,29 +170,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/aid"
+    ]
   },
   {
     "index": "alarm",
@@ -232,29 +215,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/alarm"
+    ]
   },
   {
     "index": "alter-self",
@@ -277,29 +255,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/alter-self"
+    ]
   },
   {
     "index": "animal-friendship",
@@ -322,35 +295,29 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/animal-friendship"
+    "subclasses": []
   },
   {
     "index": "animal-messenger",
@@ -376,34 +343,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/animal-messenger"
+    ]
   },
   {
     "index": "animal-shapes",
@@ -425,18 +386,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/animal-shapes"
+    "subclasses": []
   },
   {
     "index": "animate-dead",
@@ -463,29 +421,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/animate-dead"
+    ]
   },
   {
     "index": "animate-objects",
@@ -519,28 +472,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/animate-objects"
+    "subclasses": []
   },
   {
     "index": "antilife-shell",
@@ -566,18 +514,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/antilife-shell"
+    "subclasses": []
   },
   {
     "index": "antimagic-field",
@@ -612,23 +557,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/antimagic-field"
+    "subclasses": []
   },
   {
     "index": "antipathy-sympathy",
@@ -659,23 +600,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/antipathy-sympathy"
+    "subclasses": []
   },
   {
     "index": "arcane-eye",
@@ -703,23 +640,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/arcane-eye"
+    "subclasses": []
   },
   {
     "index": "arcane-hand",
@@ -750,18 +683,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/arcane-hand"
+    "subclasses": []
   },
   {
     "index": "arcane-lock",
@@ -784,24 +714,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/arcane-lock"
+    ]
   },
   {
     "index": "arcane-sword",
@@ -826,8 +752,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "force",
-        "name": "Force",
-        "url": "/api/2014/damage-types/force"
+        "name": "Force"
       },
       "damage_at_slot_level": {
         "7": "3d10"
@@ -835,23 +760,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/arcane-sword"
+    "subclasses": []
   },
   {
     "index": "arcanists-magic-aura",
@@ -876,24 +797,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/arcanists-magic-aura"
+    ]
   },
   {
     "index": "astral-projection",
@@ -920,28 +837,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/astral-projection"
+    "subclasses": []
   },
   {
     "index": "augury",
@@ -969,24 +881,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/augury"
+    ]
   },
   {
     "index": "awaken",
@@ -1009,23 +917,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/awaken"
+    "subclasses": []
   },
   {
     "index": "bane",
@@ -1051,36 +955,30 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/bane"
+    ]
   },
   {
     "index": "banishment",
@@ -1108,45 +1006,37 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/banishment"
+    "subclasses": []
   },
   {
     "index": "barkskin",
@@ -1168,34 +1058,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/barkskin"
+    ]
   },
   {
     "index": "beacon-of-hope",
@@ -1215,34 +1099,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/beacon-of-hope"
+    ]
   },
   {
     "index": "bestow-curse",
@@ -1271,42 +1149,35 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On fail, become cursed for the duration of the spell."
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/bestow-curse"
+    ]
   },
   {
     "index": "black-tentacles",
@@ -1331,8 +1202,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       },
       "damage_at_slot_level": {
         "4": "3d6"
@@ -1341,8 +1211,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none",
       "desc": "A creature restrained by the tentacles can use its action to make a Strength or Dexterity check (its choice) against your spell save DC. On a success, it frees itself."
@@ -1353,18 +1222,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/black-tentacles"
+    "subclasses": []
   },
   {
     "index": "blade-barrier",
@@ -1386,8 +1252,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       },
       "damage_at_slot_level": {
         "6": "6d10"
@@ -1396,8 +1261,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -1407,18 +1271,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/blade-barrier"
+    "subclasses": []
   },
   {
     "index": "bless",
@@ -1443,34 +1304,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/bless"
+    ]
   },
   {
     "index": "blight",
@@ -1496,8 +1351,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_slot_level": {
         "4": "8d8",
@@ -1511,46 +1365,38 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/blight"
+    ]
   },
   {
     "index": "blindness-deafness",
@@ -1573,51 +1419,42 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/blindness-deafness"
+    ]
   },
   {
     "index": "blink",
@@ -1638,29 +1475,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/blink"
+    ]
   },
   {
     "index": "blur",
@@ -1679,34 +1511,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/blur"
+    ]
   },
   {
     "index": "branding-smite",
@@ -1729,8 +1555,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "2": "2d6",
@@ -1745,18 +1570,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/branding-smite"
+    "subclasses": []
   },
   {
     "index": "burning-hands",
@@ -1781,8 +1603,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "1": "3d6",
@@ -1799,8 +1620,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -1810,34 +1630,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/burning-hands"
+    ]
   },
   {
     "index": "call-lightning",
@@ -1863,8 +1677,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "lightning",
-        "name": "Lightning",
-        "url": "/api/2014/damage-types/lightning"
+        "name": "Lightning"
       },
       "damage_at_slot_level": {
         "3": "3d10",
@@ -1882,29 +1695,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/call-lightning"
+    ]
   },
   {
     "index": "calm-emotions",
@@ -1926,8 +1734,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none"
     },
@@ -1937,29 +1744,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/calm-emotions"
+    ]
   },
   {
     "index": "chain-lightning",
@@ -1986,8 +1788,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "lightning",
-        "name": "Lightning",
-        "url": "/api/2014/damage-types/lightning"
+        "name": "Lightning"
       },
       "damage_at_slot_level": {
         "6": "10d8"
@@ -1996,30 +1797,25 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/chain-lightning"
+    "subclasses": []
   },
   {
     "index": "charm-person",
@@ -2043,51 +1839,42 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/charm-person"
+    ]
   },
   {
     "index": "chill-touch",
@@ -2111,8 +1898,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_character_level": {
         "1": "1d8",
@@ -2123,34 +1909,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/chill-touch"
+    ]
   },
   {
     "index": "circle-of-death",
@@ -2176,8 +1956,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_slot_level": {
         "6": "8d6",
@@ -2189,8 +1968,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
@@ -2200,28 +1978,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/circle-of-death"
+    "subclasses": []
   },
   {
     "index": "clairvoyance",
@@ -2245,39 +2018,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/clairvoyance"
+    ]
   },
   {
     "index": "clone",
@@ -2300,18 +2066,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/clone"
+    "subclasses": []
   },
   {
     "index": "cloudkill",
@@ -2337,8 +2100,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "poison",
-        "name": "Poison",
-        "url": "/api/2014/damage-types/poison"
+        "name": "Poison"
       },
       "damage_at_slot_level": {
         "5": "5d8",
@@ -2351,8 +2113,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half",
       "desc": "Creatures are affected even if they hold their breath or don't need to breathe."
@@ -2363,29 +2124,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/cloudkill"
+    ]
   },
   {
     "index": "color-spray",
@@ -2415,29 +2171,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/color-spray"
+    ]
   },
   {
     "index": "command",
@@ -2466,41 +2217,34 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/command"
+    ]
   },
   {
     "index": "commune",
@@ -2524,24 +2268,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/commune"
+    ]
   },
   {
     "index": "commune-with-nature",
@@ -2568,29 +2308,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/commune-with-nature"
+    ]
   },
   {
     "index": "comprehend-languages",
@@ -2613,39 +2348,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/comprehend-languages"
+    ]
   },
   {
     "index": "compulsion",
@@ -2667,25 +2395,21 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/compulsion"
+    "subclasses": []
   },
   {
     "index": "cone-of-cold",
@@ -2712,8 +2436,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "cold",
-        "name": "Cold",
-        "url": "/api/2014/damage-types/cold"
+        "name": "Cold"
       },
       "damage_at_slot_level": {
         "5": "8d8",
@@ -2726,8 +2449,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half",
       "desc": "A creature killed by this spell becomes a frozen statue until it thaws."
@@ -2738,29 +2460,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/cone-of-cold"
+    ]
   },
   {
     "index": "confusion",
@@ -2794,8 +2511,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
@@ -2805,33 +2521,27 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/confusion"
+    "subclasses": []
   },
   {
     "index": "conjure-animals",
@@ -2861,29 +2571,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/conjure-animals"
+    ]
   },
   {
     "index": "conjure-celestial",
@@ -2908,18 +2613,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 7,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/conjure-celestial"
+    "subclasses": []
   },
   {
     "index": "conjure-elemental",
@@ -2951,29 +2653,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/conjure-elemental"
+    ]
   },
   {
     "index": "conjure-fey",
@@ -2999,23 +2696,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/conjure-fey"
+    "subclasses": []
   },
   {
     "index": "conjure-minor-elementals",
@@ -3045,23 +2738,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/conjure-minor-elementals"
+    "subclasses": []
   },
   {
     "index": "conjure-woodland-beings",
@@ -3093,23 +2782,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/conjure-woodland-beings"
+    "subclasses": []
   },
   {
     "index": "contact-other-plane",
@@ -3130,31 +2815,26 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "int",
-        "name": "INT",
-        "url": "/api/2014/ability-scores/int"
+        "name": "INT"
       },
       "dc_success": "other",
       "desc": "On a failure, you take 6d6 psychic damage and are insane until you finish a long rest."
     },
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/contact-other-plane"
+    "subclasses": []
   },
   {
     "index": "contagion",
@@ -3184,31 +2864,26 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "other",
       "desc": "After succeeding on three of these saving throws, the creature recovers from the disease, and the spell ends."
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/contagion"
+    "subclasses": []
   },
   {
     "index": "contingency",
@@ -3232,18 +2907,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/contingency"
+    "subclasses": []
   },
   {
     "index": "continual-flame",
@@ -3265,29 +2937,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/continual-flame"
+    ]
   },
   {
     "index": "control-water",
@@ -3318,8 +2985,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       },
       "damage_at_slot_level": {
         "4": "2d8"
@@ -3328,8 +2994,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       "dc_success": "half"
     },
@@ -3339,28 +3004,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/control-water"
+    "subclasses": []
   },
   {
     "index": "control-weather",
@@ -3409,34 +3069,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/control-weather"
+    ]
   },
   {
     "index": "counterspell",
@@ -3458,28 +3112,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/counterspell"
+    "subclasses": []
   },
   {
     "index": "create-food-and-water",
@@ -3499,39 +3148,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/create-food-and-water"
+    ]
   },
   {
     "index": "create-undead",
@@ -3558,28 +3200,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/create-undead"
+    "subclasses": []
   },
   {
     "index": "create-or-destroy-water",
@@ -3610,29 +3247,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/create-or-destroy-water"
+    ]
   },
   {
     "index": "creation",
@@ -3670,23 +3302,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/creation"
+    "subclasses": []
   },
   {
     "index": "cure-wounds",
@@ -3720,49 +3348,40 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/cure-wounds"
+    ]
   },
   {
     "index": "dancing-lights",
@@ -3785,34 +3404,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/dancing-lights"
+    ]
   },
   {
     "index": "darkness",
@@ -3839,39 +3452,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/darkness"
+    ]
   },
   {
     "index": "darkvision",
@@ -3893,39 +3499,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/darkvision"
+    ]
   },
   {
     "index": "daylight",
@@ -3951,49 +3550,40 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/daylight"
+    ]
   },
   {
     "index": "death-ward",
@@ -4015,29 +3605,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/death-ward"
+    ]
   },
   {
     "index": "delayed-blast-fireball",
@@ -4066,8 +3651,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "7": "12d6",
@@ -4078,8 +3662,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -4089,23 +3672,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/delayed-blast-fireball"
+    "subclasses": []
   },
   {
     "index": "demiplane",
@@ -4125,23 +3704,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/demiplane"
+    "subclasses": []
   },
   {
     "index": "detect-evil-and-good",
@@ -4166,29 +3741,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/detect-evil-and-good"
+    ]
   },
   {
     "index": "detect-magic",
@@ -4213,54 +3783,44 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/detect-magic"
+    ]
   },
   {
     "index": "detect-poison-and-disease",
@@ -4287,39 +3847,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/detect-poison-and-disease"
+    ]
   },
   {
     "index": "detect-thoughts",
@@ -4345,34 +3898,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/detect-thoughts"
+    ]
   },
   {
     "index": "dimension-door",
@@ -4394,8 +3941,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "force",
-        "name": "Force",
-        "url": "/api/2014/damage-types/force"
+        "name": "Force"
       },
       "damage_at_slot_level": {
         "4": "4d6"
@@ -4403,33 +3949,27 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/dimension-door"
+    "subclasses": []
   },
   {
     "index": "disguise-self",
@@ -4451,34 +3991,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/disguise-self"
+    ]
   },
   {
     "index": "disintegrate",
@@ -4507,8 +4041,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "force",
-        "name": "Force",
-        "url": "/api/2014/damage-types/force"
+        "name": "Force"
       },
       "damage_at_slot_level": {
         "6": "10d6 + 40"
@@ -4517,8 +4050,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
@@ -4528,23 +4060,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/disintegrate"
+    "subclasses": []
   },
   {
     "index": "dispel-evil-and-good",
@@ -4570,31 +4098,26 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "other",
       "desc": "The creature must succeed on a charisma saving throw or be sent back to its home plane (if it isn't there already)"
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/dispel-evil-and-good"
+    "subclasses": []
   },
   {
     "index": "dispel-magic",
@@ -4617,59 +4140,48 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/dispel-magic"
+    ]
   },
   {
     "index": "divination",
@@ -4693,24 +4205,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/divination"
+    ]
   },
   {
     "index": "divine-favor",
@@ -4731,8 +4239,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "1": "1d4"
@@ -4740,24 +4247,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/divine-favor"
+    ]
   },
   {
     "index": "divine-word",
@@ -4782,26 +4285,22 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none",
       "desc": "On a failed save, a creature suffers an effect based on its current hit points."
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/divine-word"
+    "subclasses": []
   },
   {
     "index": "dominate-beast",
@@ -4827,30 +4326,25 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/dominate-beast"
+    "subclasses": []
   },
   {
     "index": "dominate-monster",
@@ -4877,41 +4371,34 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On failure, the creature is charmed by you for the duration."
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/dominate-monster"
+    "subclasses": []
   },
   {
     "index": "dominate-person",
@@ -4938,36 +4425,30 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "other",
       "desc": "Each time the target takes damage, it makes a new wisdom saving throw against the spell. If the saving throw succeeds, the spell ends."
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/dominate-person"
+    "subclasses": []
   },
   {
     "index": "dream",
@@ -4994,8 +4475,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "psychic",
-        "name": "Psychic",
-        "url": "/api/2014/damage-types/psychic"
+        "name": "Psychic"
       },
       "damage_at_slot_level": {
         "5": "3d6"
@@ -5004,42 +4484,35 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On a failed save, echoes of the phantasmal monstrosity spawn a nightmare that lasts the duration of the target's sleep and prevents the target from gaining any benefit from that rest."
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/dream"
+    ]
   },
   {
     "index": "druidcraft",
@@ -5063,18 +4536,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/druidcraft"
+    "subclasses": []
   },
   {
     "index": "earthquake",
@@ -5106,28 +4576,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/earthquake"
+    "subclasses": []
   },
   {
     "index": "eldritch-blast",
@@ -5149,8 +4614,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "force",
-        "name": "Force",
-        "url": "/api/2014/damage-types/force"
+        "name": "Force"
       },
       "damage_at_character_level": {
         "1": "1d10",
@@ -5161,24 +4625,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/eldritch-blast"
+    ]
   },
   {
     "index": "enhance-ability",
@@ -5209,39 +4669,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/enhance-ability"
+    ]
   },
   {
     "index": "enlarge-reduce",
@@ -5267,36 +4720,30 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/enlarge-reduce"
+    ]
   },
   {
     "index": "entangle",
@@ -5319,8 +4766,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       "dc_success": "none"
     },
@@ -5330,24 +4776,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/entangle"
+    ]
   },
   {
     "index": "enthrall",
@@ -5368,36 +4810,30 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/enthrall"
+    ]
   },
   {
     "index": "etherealness",
@@ -5424,38 +4860,31 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 7,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/etherealness"
+    "subclasses": []
   },
   {
     "index": "expeditious-retreat",
@@ -5475,34 +4904,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/expeditious-retreat"
+    ]
   },
   {
     "index": "eyebite",
@@ -5526,41 +4949,34 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On failure, the target can be affected by one of the following effects of your choice for the duration. [Asleep. The target falls unconscious. It wakes up if it takes any damage or if another creature uses its action to shake the sleeper awake.] [Panicked. The target is frightened of you. On each of its turns, the frightened creature must take the Dash action and move away from you by the safest and shortest available route, unless there is nowhere to move. If the target moves to a place at least 60 feet away from you where it can no longer see you, this effect ends.] [Sickened. The target has disadvantage on attack rolls and ability checks. At the end of each of its turns, it can make another wisdom saving throw. If it succeeds, the effect ends.]"
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/eyebite"
+    "subclasses": []
   },
   {
     "index": "fabricate",
@@ -5582,18 +4998,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/fabricate"
+    "subclasses": []
   },
   {
     "index": "faerie-fire",
@@ -5614,8 +5027,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
@@ -5625,24 +5037,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/faerie-fire"
+    ]
   },
   {
     "index": "faithful-hound",
@@ -5668,8 +5076,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       },
       "damage_at_slot_level": {
         "4": "4d8"
@@ -5677,18 +5084,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/faithful-hound"
+    "subclasses": []
   },
   {
     "index": "false-life",
@@ -5724,29 +5128,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/false-life"
+    ]
   },
   {
     "index": "fear",
@@ -5770,8 +5169,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On fail, A creature drop whatever it is holding and become frightened for the duration."
@@ -5782,39 +5180,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/fear"
+    ]
   },
   {
     "index": "feather-fall",
@@ -5835,34 +5226,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/feather-fall"
+    ]
   },
   {
     "index": "feeblemind",
@@ -5888,8 +5273,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "psychic",
-        "name": "Psychic",
-        "url": "/api/2014/damage-types/psychic"
+        "name": "Psychic"
       },
       "damage_at_slot_level": {
         "8": "4d6"
@@ -5898,41 +5282,34 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "int",
-        "name": "INT",
-        "url": "/api/2014/ability-scores/int"
+        "name": "INT"
       },
       "dc_success": "other",
       "desc": "The target always takes the damage. On a failed save, the creature's Intelligence and Charisma scores become 1."
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/feeblemind"
+    "subclasses": []
   },
   {
     "index": "find-familiar",
@@ -5960,18 +5337,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/find-familiar"
+    "subclasses": []
   },
   {
     "index": "find-steed",
@@ -5995,24 +5369,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/find-steed"
+    ]
   },
   {
     "index": "find-traps",
@@ -6033,34 +5403,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/find-traps"
+    ]
   },
   {
     "index": "find-the-path",
@@ -6083,28 +5447,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/find-the-path"
+    "subclasses": []
   },
   {
     "index": "finger-of-death",
@@ -6126,8 +5485,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_slot_level": {
         "7": "7d8 + 30"
@@ -6136,35 +5494,29 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/finger-of-death"
+    "subclasses": []
   },
   {
     "index": "fire-bolt",
@@ -6187,8 +5539,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_character_level": {
         "1": "1d10",
@@ -6199,23 +5550,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/fire-bolt"
+    "subclasses": []
   },
   {
     "index": "fire-shield",
@@ -6240,8 +5587,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "4": "2d8"
@@ -6253,24 +5599,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/fire-shield"
+    ]
   },
   {
     "index": "fire-storm",
@@ -6292,8 +5634,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "7": "7d10"
@@ -6302,8 +5643,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -6313,28 +5653,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/fire-storm"
+    "subclasses": []
   },
   {
     "index": "fireball",
@@ -6361,8 +5696,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "3": "8d6",
@@ -6377,8 +5711,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -6388,34 +5721,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/fireball"
+    ]
   },
   {
     "index": "flame-blade",
@@ -6443,8 +5770,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "2": "3d6",
@@ -6455,24 +5781,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/flame-blade"
+    ]
   },
   {
     "index": "flame-strike",
@@ -6498,8 +5820,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "5": "4d6 + 4d6",
@@ -6512,8 +5833,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -6523,29 +5843,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/flame-strike"
+    ]
   },
   {
     "index": "flaming-sphere",
@@ -6573,8 +5888,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "2": "2d6",
@@ -6589,29 +5903,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/flaming-sphere"
+    ]
   },
   {
     "index": "flesh-to-stone",
@@ -6637,31 +5946,26 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none",
       "desc": "On a failed save, the target is restrained as its flesh begins to harden."
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/flesh-to-stone"
+    "subclasses": []
   },
   {
     "index": "floating-disk",
@@ -6685,24 +5989,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/floating-disk"
+    ]
   },
   {
     "index": "fly",
@@ -6727,34 +6027,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/fly"
+    ]
   },
   {
     "index": "fog-cloud",
@@ -6781,39 +6075,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/fog-cloud"
+    ]
   },
   {
     "index": "forbiddance",
@@ -6842,18 +6129,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/forbiddance"
+    "subclasses": []
   },
   {
     "index": "forcecage",
@@ -6884,28 +6168,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/forcecage"
+    "subclasses": []
   },
   {
     "index": "foresight",
@@ -6928,33 +6207,27 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/foresight"
+    "subclasses": []
   },
   {
     "index": "freedom-of-movement",
@@ -6977,44 +6250,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/freedom-of-movement"
+    ]
   },
   {
     "index": "freezing-sphere",
@@ -7042,8 +6307,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "cold",
-        "name": "Cold",
-        "url": "/api/2014/damage-types/cold"
+        "name": "Cold"
       },
       "damage_at_slot_level": {
         "6": "10d6"
@@ -7052,8 +6316,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
@@ -7063,18 +6326,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/freezing-sphere"
+    "subclasses": []
   },
   {
     "index": "gaseous-form",
@@ -7098,39 +6358,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/gaseous-form"
+    ]
   },
   {
     "index": "gate",
@@ -7155,28 +6408,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/gate"
+    "subclasses": []
   },
   {
     "index": "geas",
@@ -7201,45 +6449,37 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/geas"
+    "subclasses": []
   },
   {
     "index": "gentle-repose",
@@ -7262,29 +6502,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/gentle-repose"
+    ]
   },
   {
     "index": "giant-insect",
@@ -7307,18 +6542,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/giant-insect"
+    "subclasses": []
   },
   {
     "index": "glibness",
@@ -7337,23 +6569,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/glibness"
+    "subclasses": []
   },
   {
     "index": "globe-of-invulnerability",
@@ -7383,23 +6611,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/globe-of-invulnerability"
+    "subclasses": []
   },
   {
     "index": "glyph-of-warding",
@@ -7430,34 +6654,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/glyph-of-warding"
+    ]
   },
   {
     "index": "goodberry",
@@ -7480,23 +6698,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/goodberry"
+    "subclasses": []
   },
   {
     "index": "grease",
@@ -7520,8 +6734,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
@@ -7531,24 +6744,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/grease"
+    ]
   },
   {
     "index": "greater-invisibility",
@@ -7568,34 +6777,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/greater-invisibility"
+    ]
   },
   {
     "index": "greater-restoration",
@@ -7621,28 +6824,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/greater-restoration"
+    "subclasses": []
   },
   {
     "index": "guardian-of-faith",
@@ -7663,8 +6861,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "4": "20"
@@ -7673,8 +6870,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -7684,18 +6880,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/guardian-of-faith"
+    "subclasses": []
   },
   {
     "index": "guards-and-wards",
@@ -7734,23 +6927,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/guards-and-wards"
+    "subclasses": []
   },
   {
     "index": "guidance",
@@ -7770,29 +6959,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/guidance"
+    ]
   },
   {
     "index": "guiding-bolt",
@@ -7817,8 +7001,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "1": "4d6",
@@ -7834,24 +7017,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/guiding-bolt"
+    ]
   },
   {
     "index": "gust-of-wind",
@@ -7877,8 +7056,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       "dc_success": "none"
     },
@@ -7888,34 +7066,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/gust-of-wind"
+    ]
   },
   {
     "index": "hallow",
@@ -7950,8 +7122,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none"
     },
@@ -7961,24 +7132,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/hallow"
+    ]
   },
   {
     "index": "hallucinatory-terrain",
@@ -8005,39 +7172,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/hallucinatory-terrain"
+    ]
   },
   {
     "index": "harm",
@@ -8058,8 +7218,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_slot_level": {
         "6": "14d6"
@@ -8068,25 +7227,21 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/harm"
+    "subclasses": []
   },
   {
     "index": "haste",
@@ -8109,34 +7264,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/haste"
+    ]
   },
   {
     "index": "heal",
@@ -8165,23 +7314,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/heal"
+    "subclasses": []
   },
   {
     "index": "healing-word",
@@ -8214,34 +7359,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/healing-word"
+    ]
   },
   {
     "index": "heat-metal",
@@ -8268,8 +7407,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "2": "2d8",
@@ -8285,37 +7423,31 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "other",
       "desc": "Can choose to not drop the object"
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/heat-metal"
+    ]
   },
   {
     "index": "hellish-rebuke",
@@ -8339,8 +7471,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "1": "2d10",
@@ -8357,25 +7488,21 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/hellish-rebuke"
+    "subclasses": []
   },
   {
     "index": "heroes-feast",
@@ -8398,23 +7525,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/heroes-feast"
+    "subclasses": []
   },
   {
     "index": "heroism",
@@ -8434,29 +7557,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/heroism"
+    ]
   },
   {
     "index": "hideous-laughter",
@@ -8480,36 +7598,30 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/hideous-laughter"
+    ]
   },
   {
     "index": "hold-monster",
@@ -8535,40 +7647,33 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/hold-monster"
+    "subclasses": []
   },
   {
     "index": "hold-person",
@@ -8594,61 +7699,50 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/hold-person"
+    ]
   },
   {
     "index": "holy-aura",
@@ -8674,18 +7768,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/holy-aura"
+    "subclasses": []
   },
   {
     "index": "hunters-mark",
@@ -8707,18 +7798,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/hunters-mark"
+    "subclasses": []
   },
   {
     "index": "hypnotic-pattern",
@@ -8741,47 +7829,39 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On a failed save, the creature becomes charmed for the duration."
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/hypnotic-pattern"
+    ]
   },
   {
     "index": "ice-storm",
@@ -8808,8 +7888,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       },
       "damage_at_slot_level": {
         "4": "2d8 + 4d6",
@@ -8823,8 +7902,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -8834,34 +7912,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/ice-storm"
+    ]
   },
   {
     "index": "identify",
@@ -8884,29 +7956,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/identify"
+    ]
   },
   {
     "index": "illusory-script",
@@ -8930,34 +7997,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/illusory-script"
+    ]
   },
   {
     "index": "imprisonment",
@@ -8994,31 +8055,26 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "If the creature succeeds, it is immune to this spell if you cast it again"
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/imprisonment"
+    "subclasses": []
   },
   {
     "index": "incendiary-cloud",
@@ -9041,8 +8097,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "8": "10d8"
@@ -9051,8 +8106,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -9062,23 +8116,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/incendiary-cloud"
+    "subclasses": []
   },
   {
     "index": "inflict-wounds",
@@ -9103,8 +8153,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_slot_level": {
         "1": "3d10",
@@ -9120,24 +8169,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/inflict-wounds"
+    ]
   },
   {
     "index": "insect-plague",
@@ -9164,8 +8209,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       },
       "damage_at_slot_level": {
         "5": "4d10",
@@ -9178,8 +8222,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
@@ -9189,34 +8232,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/insect-plague"
+    ]
   },
   {
     "index": "instant-summons",
@@ -9241,18 +8278,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/instant-summons"
+    "subclasses": []
   },
   {
     "index": "invisibility",
@@ -9277,44 +8311,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/invisibility"
+    ]
   },
   {
     "index": "irresistible-dance",
@@ -9334,23 +8360,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/irresistible-dance"
+    "subclasses": []
   },
   {
     "index": "jump",
@@ -9372,39 +8394,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/jump"
+    ]
   },
   {
     "index": "knock",
@@ -9426,34 +8441,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/knock"
+    ]
   },
   {
     "index": "legend-lore",
@@ -9476,28 +8485,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/legend-lore"
+    "subclasses": []
   },
   {
     "index": "lesser-restoration",
@@ -9517,54 +8521,44 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/lesser-restoration"
+    ]
   },
   {
     "index": "levitate",
@@ -9588,29 +8582,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/levitate"
+    ]
   },
   {
     "index": "light",
@@ -9633,46 +8622,38 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/light"
+    ]
   },
   {
     "index": "lightning-bolt",
@@ -9699,8 +8680,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "lightning",
-        "name": "Lightning",
-        "url": "/api/2014/damage-types/lightning"
+        "name": "Lightning"
       },
       "damage_at_slot_level": {
         "3": "8d6",
@@ -9715,8 +8695,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -9726,34 +8705,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/lightning-bolt"
+    ]
   },
   {
     "index": "locate-animals-or-plants",
@@ -9775,34 +8748,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/locate-animals-or-plants"
+    ]
   },
   {
     "index": "locate-creature",
@@ -9826,49 +8793,40 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/locate-creature"
+    ]
   },
   {
     "index": "locate-object",
@@ -9892,49 +8850,40 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/locate-object"
+    ]
   },
   {
     "index": "longstrider",
@@ -9959,39 +8908,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/longstrider"
+    ]
   },
   {
     "index": "mage-armor",
@@ -10013,29 +8955,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/mage-armor"
+    ]
   },
   {
     "index": "mage-hand",
@@ -10057,39 +8994,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/mage-hand"
+    ]
   },
   {
     "index": "magic-circle",
@@ -10124,47 +9054,39 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "other",
       "desc": "If the creature tries to use teleportation or interplanar travel to do so, it must first succeed on a Charisma saving throw."
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/magic-circle"
+    ]
   },
   {
     "index": "magic-jar",
@@ -10193,26 +9115,22 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "other",
       "desc": "On a failure, your soul moves into the target's body, and the target's soul becomes trapped in the container. On a success, the target resists your efforts to possess it, and you can't attempt to possess it again for 24 hours."
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/magic-jar"
+    "subclasses": []
   },
   {
     "index": "magic-missile",
@@ -10236,8 +9154,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "force",
-        "name": "Force",
-        "url": "/api/2014/damage-types/force"
+        "name": "Force"
       },
       "damage_at_slot_level": {
         "1": "3d4 + 3",
@@ -10253,29 +9170,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/magic-missile"
+    ]
   },
   {
     "index": "magic-mouth",
@@ -10300,29 +9212,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/magic-mouth"
+    ]
   },
   {
     "index": "magic-weapon",
@@ -10345,29 +9252,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/magic-weapon"
+    ]
   },
   {
     "index": "magnificent-mansion",
@@ -10395,23 +9297,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/magnificent-mansion"
+    "subclasses": []
   },
   {
     "index": "major-image",
@@ -10438,39 +9336,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/major-image"
+    ]
   },
   {
     "index": "mass-cure-wounds",
@@ -10504,34 +9395,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/mass-cure-wounds"
+    ]
   },
   {
     "index": "mass-heal",
@@ -10554,18 +9439,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/mass-heal"
+    "subclasses": []
   },
   {
     "index": "mass-healing-word",
@@ -10596,24 +9478,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/mass-healing-word"
+    ]
   },
   {
     "index": "mass-suggestion",
@@ -10641,40 +9519,33 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/mass-suggestion"
+    "subclasses": []
   },
   {
     "index": "maze",
@@ -10696,18 +9567,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/maze"
+    "subclasses": []
   },
   {
     "index": "meld-into-stone",
@@ -10729,29 +9597,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/meld-into-stone"
+    ]
   },
   {
     "index": "mending",
@@ -10774,44 +9637,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/mending"
+    ]
   },
   {
     "index": "message",
@@ -10834,34 +9689,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/message"
+    ]
   },
   {
     "index": "meteor-swarm",
@@ -10883,8 +9732,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "9": "20d6 + 20d6"
@@ -10893,8 +9741,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -10904,23 +9751,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/meteor-swarm"
+    "subclasses": []
   },
   {
     "index": "mind-blank",
@@ -10940,23 +9783,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/mind-blank"
+    "subclasses": []
   },
   {
     "index": "minor-illusion",
@@ -10980,39 +9819,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/minor-illusion"
+    ]
   },
   {
     "index": "mirage-arcane",
@@ -11039,28 +9871,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/mirage-arcane"
+    "subclasses": []
   },
   {
     "index": "mirror-image",
@@ -11084,39 +9911,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/mirror-image"
+    ]
   },
   {
     "index": "mislead",
@@ -11137,23 +9957,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/mislead"
+    "subclasses": []
   },
   {
     "index": "misty-step",
@@ -11172,39 +9988,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/misty-step"
+    ]
   },
   {
     "index": "modify-memory",
@@ -11232,30 +10041,25 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/modify-memory"
+    "subclasses": []
   },
   {
     "index": "moonbeam",
@@ -11284,8 +10088,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "2": "2d10",
@@ -11301,8 +10104,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
@@ -11312,24 +10114,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/moonbeam"
+    ]
   },
   {
     "index": "move-earth",
@@ -11359,28 +10157,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/move-earth"
+    "subclasses": []
   },
   {
     "index": "nondetection",
@@ -11402,34 +10195,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/nondetection"
+    ]
   },
   {
     "index": "pass-without-trace",
@@ -11451,34 +10238,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/pass-without-trace"
+    ]
   },
   {
     "index": "passwall",
@@ -11501,24 +10282,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/passwall"
+    ]
   },
   {
     "index": "phantasmal-killer",
@@ -11542,8 +10319,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "psychic",
-        "name": "Psychic",
-        "url": "/api/2014/damage-types/psychic"
+        "name": "Psychic"
       },
       "damage_at_slot_level": {
         "4": "4d10"
@@ -11552,25 +10328,21 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/phantasmal-killer"
+    "subclasses": []
   },
   {
     "index": "phantom-steed",
@@ -11591,24 +10363,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/phantom-steed"
+    ]
   },
   {
     "index": "planar-ally",
@@ -11633,18 +10401,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/planar-ally"
+    "subclasses": []
   },
   {
     "index": "planar-binding",
@@ -11671,40 +10436,33 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/planar-binding"
+    "subclasses": []
   },
   {
     "index": "plane-shift",
@@ -11730,46 +10488,38 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "dc_success": "none",
       "desc": "If the creature fails this save, it is transported to a random location on the plane of existence you specify. A creature so transported must find its own way back to your current plane of existence."
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/plane-shift"
+    "subclasses": []
   },
   {
     "index": "plant-growth",
@@ -11792,39 +10542,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/plant-growth"
+    ]
   },
   {
     "index": "poison-spray",
@@ -11846,8 +10589,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "poison",
-        "name": "Poison",
-        "url": "/api/2014/damage-types/poison"
+        "name": "Poison"
       },
       "damage_at_character_level": {
         "1": "1d12",
@@ -11859,40 +10601,33 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/poison-spray"
+    "subclasses": []
   },
   {
     "index": "polymorph",
@@ -11919,40 +10654,33 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/polymorph"
+    "subclasses": []
   },
   {
     "index": "power-word-kill",
@@ -11971,33 +10699,27 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/power-word-kill"
+    "subclasses": []
   },
   {
     "index": "power-word-stun",
@@ -12017,33 +10739,27 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 8,
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/power-word-stun"
+    "subclasses": []
   },
   {
     "index": "prayer-of-healing",
@@ -12075,24 +10791,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/prayer-of-healing"
+    ]
   },
   {
     "index": "prestidigitation",
@@ -12119,39 +10831,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/prestidigitation"
+    ]
   },
   {
     "index": "prismatic-spray",
@@ -12185,8 +10890,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "other",
       "desc": "For each target, roll a d8 to determine which color ray affects it."
@@ -12197,23 +10901,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/prismatic-spray"
+    "subclasses": []
   },
   {
     "index": "prismatic-wall",
@@ -12248,18 +10948,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/prismatic-wall"
+    "subclasses": []
   },
   {
     "index": "private-sanctum",
@@ -12296,18 +10993,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/private-sanctum"
+    "subclasses": []
   },
   {
     "index": "produce-flame",
@@ -12331,8 +11025,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_character_level": {
         "1": "1d8",
@@ -12343,24 +11036,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/produce-flame"
+    ]
   },
   {
     "index": "programmed-illusion",
@@ -12389,23 +11078,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/programmed-illusion"
+    "subclasses": []
   },
   {
     "index": "project-image",
@@ -12430,23 +11115,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 7,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/project-image"
+    "subclasses": []
   },
   {
     "index": "protection-from-energy",
@@ -12466,49 +11147,40 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/protection-from-energy"
+    ]
   },
   {
     "index": "protection-from-evil-and-good",
@@ -12531,44 +11203,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/protection-from-evil-and-good"
+    ]
   },
   {
     "index": "protection-from-poison",
@@ -12589,39 +11253,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/protection-from-poison"
+    ]
   },
   {
     "index": "purify-food-and-drink",
@@ -12641,34 +11298,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/purify-food-and-drink"
+    ]
   },
   {
     "index": "raise-dead",
@@ -12693,34 +11344,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/raise-dead"
+    ]
   },
   {
     "index": "ray-of-enfeeblement",
@@ -12742,37 +11387,31 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none"
     },
     "attack_type": "ranged",
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/ray-of-enfeeblement"
+    ]
   },
   {
     "index": "ray-of-frost",
@@ -12795,8 +11434,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "cold",
-        "name": "Cold",
-        "url": "/api/2014/damage-types/cold"
+        "name": "Cold"
       },
       "damage_at_character_level": {
         "1": "1d8",
@@ -12807,29 +11445,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/ray-of-frost"
+    ]
   },
   {
     "index": "regenerate",
@@ -12855,28 +11488,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/regenerate"
+    "subclasses": []
   },
   {
     "index": "reincarnate",
@@ -12916,18 +11544,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/reincarnate"
+    "subclasses": []
   },
   {
     "index": "remove-curse",
@@ -12947,39 +11572,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/remove-curse"
+    ]
   },
   {
     "index": "resilient-sphere",
@@ -13005,25 +11623,21 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/resilient-sphere"
+    "subclasses": []
   },
   {
     "index": "resistance",
@@ -13045,29 +11659,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/resistance"
+    ]
   },
   {
     "index": "resurrection",
@@ -13093,23 +11702,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 7,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/resurrection"
+    "subclasses": []
   },
   {
     "index": "reverse-gravity",
@@ -13134,8 +11739,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "other",
       "desc": "A creature can make a dexterity saving throw to grab onto a fixed object it can reach, thus avoiding the fall."
@@ -13146,28 +11750,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/reverse-gravity"
+    "subclasses": []
   },
   {
     "index": "revivify",
@@ -13189,34 +11788,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/revivify"
+    ]
   },
   {
     "index": "rope-trick",
@@ -13241,24 +11834,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/rope-trick"
+    ]
   },
   {
     "index": "sacred-flame",
@@ -13280,8 +11869,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_character_level": {
         "1": "1d8",
@@ -13293,31 +11881,26 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/sacred-flame"
+    ]
   },
   {
     "index": "sanctuary",
@@ -13340,29 +11923,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/sanctuary"
+    ]
   },
   {
     "index": "scorching-ray",
@@ -13387,8 +11965,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "2": "2d6"
@@ -13396,34 +11973,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/scorching-ray"
+    ]
   },
   {
     "index": "scrying",
@@ -13460,51 +12031,42 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/scrying"
+    ]
   },
   {
     "index": "secret-chest",
@@ -13528,18 +12090,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/secret-chest"
+    "subclasses": []
   },
   {
     "index": "see-invisibility",
@@ -13561,34 +12120,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/see-invisibility"
+    ]
   },
   {
     "index": "seeming",
@@ -13611,28 +12164,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/seeming"
+    "subclasses": []
   },
   {
     "index": "sending",
@@ -13655,34 +12203,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/sending"
+    ]
   },
   {
     "index": "sequester",
@@ -13706,18 +12248,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 7,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/sequester"
+    "subclasses": []
   },
   {
     "index": "shapechange",
@@ -13744,23 +12283,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/shapechange"
+    "subclasses": []
   },
   {
     "index": "shatter",
@@ -13787,8 +12322,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "thunder",
-        "name": "Thunder",
-        "url": "/api/2014/damage-types/thunder"
+        "name": "Thunder"
       },
       "damage_at_slot_level": {
         "2": "3d8",
@@ -13804,8 +12338,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
@@ -13815,39 +12348,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/shatter"
+    ]
   },
   {
     "index": "shield",
@@ -13867,29 +12393,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/shield"
+    ]
   },
   {
     "index": "shield-of-faith",
@@ -13911,29 +12432,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/shield-of-faith"
+    ]
   },
   {
     "index": "shillelagh",
@@ -13955,24 +12471,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/shillelagh"
+    ]
   },
   {
     "index": "shocking-grasp",
@@ -13995,8 +12507,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "lightning",
-        "name": "Lightning",
-        "url": "/api/2014/damage-types/lightning"
+        "name": "Lightning"
       },
       "damage_at_character_level": {
         "1": "1d8",
@@ -14007,29 +12518,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/shocking-grasp"
+    ]
   },
   {
     "index": "silence",
@@ -14054,39 +12560,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/silence"
+    ]
   },
   {
     "index": "silent-image",
@@ -14114,34 +12613,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/silent-image"
+    ]
   },
   {
     "index": "simulacrum",
@@ -14166,18 +12659,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 7,
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/simulacrum"
+    "subclasses": []
   },
   {
     "index": "sleep",
@@ -14213,34 +12703,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/sleep"
+    ]
   },
   {
     "index": "sleet-storm",
@@ -14268,39 +12752,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/sleet-storm"
+    ]
   },
   {
     "index": "slow",
@@ -14326,8 +12803,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none",
       "desc": "On failed save, the creature is slowed."
@@ -14338,34 +12814,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/slow"
+    ]
   },
   {
     "index": "spare-the-dying",
@@ -14385,18 +12855,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/spare-the-dying"
+    "subclasses": []
   },
   {
     "index": "speak-with-animals",
@@ -14416,34 +12883,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/speak-with-animals"
+    ]
   },
   {
     "index": "speak-with-dead",
@@ -14466,29 +12927,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/speak-with-dead"
+    ]
   },
   {
     "index": "speak-with-plants",
@@ -14516,34 +12972,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/speak-with-plants"
+    ]
   },
   {
     "index": "spider-climb",
@@ -14565,39 +13015,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/spider-climb"
+    ]
   },
   {
     "index": "spike-growth",
@@ -14624,34 +13067,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/spike-growth"
+    ]
   },
   {
     "index": "spirit-guardians",
@@ -14677,24 +13114,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/spirit-guardians"
+    ]
   },
   {
     "index": "spiritual-weapon",
@@ -14721,8 +13154,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "force",
-        "name": "Force",
-        "url": "/api/2014/damage-types/force"
+        "name": "Force"
       },
       "damage_at_slot_level": {
         "2": "1d8 + MOD",
@@ -14737,29 +13169,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
-    ],
-    "url": "/api/2014/spells/spiritual-weapon"
+    ]
   },
   {
     "index": "stinking-cloud",
@@ -14784,8 +13211,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none",
       "desc": "On a failed save, the creature spends its action that turn retching and reeling."
@@ -14796,44 +13222,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       },
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/stinking-cloud"
+    ]
   },
   {
     "index": "stone-shape",
@@ -14855,34 +13273,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/stone-shape"
+    ]
   },
   {
     "index": "stoneskin",
@@ -14904,39 +13316,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 4,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/stoneskin"
+    ]
   },
   {
     "index": "storm-of-vengeance",
@@ -14962,8 +13367,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "thunder",
-        "name": "Thunder",
-        "url": "/api/2014/damage-types/thunder"
+        "name": "Thunder"
       },
       "damage_at_slot_level": {
         "9": "2d6"
@@ -14972,8 +13376,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "none",
       "desc": "On a failed save, a creature takes 2d6 thunder damage and becomes deafened for 5 minutes."
@@ -14984,18 +13387,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/storm-of-vengeance"
+    "subclasses": []
   },
   {
     "index": "suggestion",
@@ -15020,46 +13420,38 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/suggestion"
+    ]
   },
   {
     "index": "sunbeam",
@@ -15084,8 +13476,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "6": "6d8"
@@ -15094,8 +13485,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half",
       "desc": "On a failed save, the creature is blinded until your next turn. On a successful save, it isn't blinded by this spell."
@@ -15106,28 +13496,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/sunbeam"
+    "subclasses": []
   },
   {
     "index": "sunburst",
@@ -15152,8 +13537,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "radiant",
-        "name": "Radiant",
-        "url": "/api/2014/damage-types/radiant"
+        "name": "Radiant"
       },
       "damage_at_slot_level": {
         "8": "12d6"
@@ -15162,8 +13546,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half",
       "desc": "On failure, the creature is also blinded for 1 minute."
@@ -15174,28 +13557,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/sunburst"
+    "subclasses": []
   },
   {
     "index": "symbol",
@@ -15233,28 +13611,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/symbol"
+    "subclasses": []
   },
   {
     "index": "telekinesis",
@@ -15283,23 +13656,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/telekinesis"
+    "subclasses": []
   },
   {
     "index": "telepathic-bond",
@@ -15322,18 +13691,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/telepathic-bond"
+    "subclasses": []
   },
   {
     "index": "teleport",
@@ -15377,28 +13743,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/teleport"
+    "subclasses": []
   },
   {
     "index": "teleportation-circle",
@@ -15425,28 +13786,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/teleportation-circle"
+    "subclasses": []
   },
   {
     "index": "thaumaturgy",
@@ -15472,24 +13828,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/thaumaturgy"
+    ]
   },
   {
     "index": "thunderwave",
@@ -15514,8 +13866,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "thunder",
-        "name": "Thunder",
-        "url": "/api/2014/damage-types/thunder"
+        "name": "Thunder"
       },
       "damage_at_slot_level": {
         "1": "2d8",
@@ -15532,8 +13883,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       "dc_success": "half"
     },
@@ -15543,39 +13893,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/thunderwave"
+    ]
   },
   {
     "index": "time-stop",
@@ -15595,23 +13938,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/time-stop"
+    "subclasses": []
   },
   {
     "index": "tiny-hut",
@@ -15639,29 +13978,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/tiny-hut"
+    ]
   },
   {
     "index": "tongues",
@@ -15682,44 +14016,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/tongues"
+    ]
   },
   {
     "index": "transport-via-plants",
@@ -15739,18 +14065,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/transport-via-plants"
+    "subclasses": []
   },
   {
     "index": "tree-stride",
@@ -15771,29 +14094,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/tree-stride"
+    ]
   },
   {
     "index": "true-polymorph",
@@ -15823,28 +14141,23 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/true-polymorph"
+    "subclasses": []
   },
   {
     "index": "true-resurrection",
@@ -15868,23 +14181,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/true-resurrection"
+    "subclasses": []
   },
   {
     "index": "true-seeing",
@@ -15906,38 +14215,31 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/true-seeing"
+    "subclasses": []
   },
   {
     "index": "true-strike",
@@ -15956,39 +14258,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 0,
     "school": {
       "index": "divination",
-      "name": "Divination",
-      "url": "/api/2014/magic-schools/divination"
+      "name": "Divination"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/true-strike"
+    ]
   },
   {
     "index": "unseen-servant",
@@ -16012,34 +14307,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 1,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/unseen-servant"
+    ]
   },
   {
     "index": "vampiric-touch",
@@ -16064,8 +14353,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "necrotic",
-        "name": "Necrotic",
-        "url": "/api/2014/damage-types/necrotic"
+        "name": "Necrotic"
       },
       "damage_at_slot_level": {
         "3": "3d6",
@@ -16079,29 +14367,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "necromancy",
-      "name": "Necromancy",
-      "url": "/api/2014/magic-schools/necromancy"
+      "name": "Necromancy"
     },
     "classes": [
       {
         "index": "warlock",
-        "name": "Warlock",
-        "url": "/api/2014/classes/warlock"
+        "name": "Warlock"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/vampiric-touch"
+    ]
   },
   {
     "index": "vicious-mockery",
@@ -16122,8 +14405,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "psychic",
-        "name": "Psychic",
-        "url": "/api/2014/damage-types/psychic"
+        "name": "Psychic"
       },
       "damage_at_character_level": {
         "1": "1d4",
@@ -16135,25 +14417,21 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/vicious-mockery"
+    "subclasses": []
   },
   {
     "index": "wall-of-fire",
@@ -16182,8 +14460,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "fire",
-        "name": "Fire",
-        "url": "/api/2014/damage-types/fire"
+        "name": "Fire"
       },
       "damage_at_slot_level": {
         "4": "5d8"
@@ -16192,8 +14469,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -16203,34 +14479,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
-    ],
-    "url": "/api/2014/spells/wall-of-fire"
+    ]
   },
   {
     "index": "wall-of-force",
@@ -16253,18 +14523,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/wall-of-force"
+    "subclasses": []
   },
   {
     "index": "wall-of-ice",
@@ -16292,8 +14559,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "cold",
-        "name": "Cold",
-        "url": "/api/2014/damage-types/cold"
+        "name": "Cold"
       },
       "damage_at_slot_level": {
         "6": "10d6",
@@ -16305,8 +14571,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -16316,18 +14581,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/wall-of-ice"
+    "subclasses": []
   },
   {
     "index": "wall-of-stone",
@@ -16354,34 +14616,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 5,
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/wall-of-stone"
+    ]
   },
   {
     "index": "wall-of-thorns",
@@ -16409,8 +14665,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       },
       "damage_at_slot_level": {
         "6": "7d8",
@@ -16422,8 +14677,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       "dc_success": "half"
     },
@@ -16433,18 +14687,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/wall-of-thorns"
+    "subclasses": []
   },
   {
     "index": "warding-bond",
@@ -16468,24 +14719,20 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 2,
     "school": {
       "index": "abjuration",
-      "name": "Abjuration",
-      "url": "/api/2014/magic-schools/abjuration"
+      "name": "Abjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/warding-bond"
+    ]
   },
   {
     "index": "water-breathing",
@@ -16507,44 +14754,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/water-breathing"
+    ]
   },
   {
     "index": "water-walk",
@@ -16567,44 +14806,36 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 3,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       },
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/water-walk"
+    ]
   },
   {
     "index": "web",
@@ -16634,34 +14865,28 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
-    ],
-    "url": "/api/2014/spells/web"
+    ]
   },
   {
     "index": "weird",
@@ -16682,8 +14907,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "dc_success": "none"
     },
@@ -16693,18 +14917,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "illusion",
-      "name": "Illusion",
-      "url": "/api/2014/magic-schools/illusion"
+      "name": "Illusion"
     },
     "classes": [
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/weird"
+    "subclasses": []
   },
   {
     "index": "wind-walk",
@@ -16727,18 +14948,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 6,
     "school": {
       "index": "transmutation",
-      "name": "Transmutation",
-      "url": "/api/2014/magic-schools/transmutation"
+      "name": "Transmutation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/wind-walk"
+    "subclasses": []
   },
   {
     "index": "wind-wall",
@@ -16763,8 +14981,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "damage": {
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       },
       "damage_at_slot_level": {
         "3": "3d8"
@@ -16773,8 +14990,7 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "dc": {
       "dc_type": {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       "dc_success": "half"
     },
@@ -16784,29 +15000,24 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "evocation",
-      "name": "Evocation",
-      "url": "/api/2014/magic-schools/evocation"
+      "name": "Evocation"
     },
     "classes": [
       {
         "index": "druid",
-        "name": "Druid",
-        "url": "/api/2014/classes/druid"
+        "name": "Druid"
       },
       {
         "index": "ranger",
-        "name": "Ranger",
-        "url": "/api/2014/classes/ranger"
+        "name": "Ranger"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
-    ],
-    "url": "/api/2014/spells/wind-wall"
+    ]
   },
   {
     "index": "wish",
@@ -16834,23 +15045,19 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     "level": 9,
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "sorcerer",
-        "name": "Sorcerer",
-        "url": "/api/2014/classes/sorcerer"
+        "name": "Sorcerer"
       },
       {
         "index": "wizard",
-        "name": "Wizard",
-        "url": "/api/2014/classes/wizard"
+        "name": "Wizard"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/wish"
+    "subclasses": []
   },
   {
     "index": "word-of-recall",
@@ -16874,18 +15081,15 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "conjuration",
-      "name": "Conjuration",
-      "url": "/api/2014/magic-schools/conjuration"
+      "name": "Conjuration"
     },
     "classes": [
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       }
     ],
-    "subclasses": [],
-    "url": "/api/2014/spells/word-of-recall"
+    "subclasses": []
   },
   {
     "index": "zone-of-truth",
@@ -16910,39 +15114,32 @@ export const SPELL_RAW = JSON.parse(String.raw`[
     },
     "school": {
       "index": "enchantment",
-      "name": "Enchantment",
-      "url": "/api/2014/magic-schools/enchantment"
+      "name": "Enchantment"
     },
     "classes": [
       {
         "index": "bard",
-        "name": "Bard",
-        "url": "/api/2014/classes/bard"
+        "name": "Bard"
       },
       {
         "index": "cleric",
-        "name": "Cleric",
-        "url": "/api/2014/classes/cleric"
+        "name": "Cleric"
       },
       {
         "index": "paladin",
-        "name": "Paladin",
-        "url": "/api/2014/classes/paladin"
+        "name": "Paladin"
       }
     ],
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       },
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
-    ],
-    "url": "/api/2014/spells/zone-of-truth"
+    ]
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -16950,50 +15147,42 @@ export const MAGIC_SCHOOL_RAW = JSON.parse(String.raw`[
   {
     "index": "abjuration",
     "name": "Abjuration",
-    "desc": "Abjuration spells are protective in nature, though some of them have aggressive uses. They create magical barriers, negate harmful effects, harm trespassers, or banish creatures to other planes of existence.",
-    "url": "/api/2014/magic-schools/abjuration"
+    "desc": "Abjuration spells are protective in nature, though some of them have aggressive uses. They create magical barriers, negate harmful effects, harm trespassers, or banish creatures to other planes of existence."
   },
   {
     "index": "conjuration",
     "name": "Conjuration",
-    "desc": "Conjuration spells involve the transportation of objects and creatures from one location to another. Some spells summon creatures or objects to the caster's side, whereas others allow the caster to teleport to another location. Some conjurations create objects or effects out of nothing.",
-    "url": "/api/2014/magic-schools/conjuration"
+    "desc": "Conjuration spells involve the transportation of objects and creatures from one location to another. Some spells summon creatures or objects to the caster's side, whereas others allow the caster to teleport to another location. Some conjurations create objects or effects out of nothing."
   },
   {
     "index": "divination",
     "name": "Divination",
-    "desc": "Divination spells reveal information, whether in the form of secrets long forgotten, glimpses of the future, the locations of hidden things, the truth behind illusions, or visions of distant people or places.",
-    "url": "/api/2014/magic-schools/divination"
+    "desc": "Divination spells reveal information, whether in the form of secrets long forgotten, glimpses of the future, the locations of hidden things, the truth behind illusions, or visions of distant people or places."
   },
   {
     "index": "enchantment",
     "name": "Enchantment",
-    "desc": "Enchantment spells affect the minds of others, influencing or controlling their behavior. Such spells can make enemies see the caster as a friend, force creatures to take a course of action, or even control another creature like a puppet.",
-    "url": "/api/2014/magic-schools/enchantment"
+    "desc": "Enchantment spells affect the minds of others, influencing or controlling their behavior. Such spells can make enemies see the caster as a friend, force creatures to take a course of action, or even control another creature like a puppet."
   },
   {
     "index": "evocation",
     "name": "Evocation",
-    "desc": "Evocation spells manipulate magical energy to produce a desired effect. Some call up blasts of fire or lightning. Others channel positive energy to heal wounds.",
-    "url": "/api/2014/magic-schools/evocation"
+    "desc": "Evocation spells manipulate magical energy to produce a desired effect. Some call up blasts of fire or lightning. Others channel positive energy to heal wounds."
   },
   {
     "index": "illusion",
     "name": "Illusion",
-    "desc": "Illusion spells deceive the senses or minds of others. They cause people to see things that are not there, to miss things that are there, to hear phantom noises, or to remember things that never happened. Some illusions create phantom images that any creature can see, but the most insidious illusions plant an image directly in the mind of a creature.",
-    "url": "/api/2014/magic-schools/illusion"
+    "desc": "Illusion spells deceive the senses or minds of others. They cause people to see things that are not there, to miss things that are there, to hear phantom noises, or to remember things that never happened. Some illusions create phantom images that any creature can see, but the most insidious illusions plant an image directly in the mind of a creature."
   },
   {
     "index": "necromancy",
     "name": "Necromancy",
-    "desc": "Necromancy spells manipulate the energies of life and death. Such spells can grant an extra reserve of life force, drain the life energy from another creature, create the undead, or even bring the dead back to life.",
-    "url": "/api/2014/magic-schools/necromancy"
+    "desc": "Necromancy spells manipulate the energies of life and death. Such spells can grant an extra reserve of life force, drain the life energy from another creature, create the undead, or even bring the dead back to life."
   },
   {
     "index": "transmutation",
     "name": "Transmutation",
-    "desc": "Transmutation spells change the properties of a creature, object, or environment. They might turn an enemy into a harmless creature, bolster the strength of an ally, make an object move at the caster's command, or enhance a creature's innate healing abilities to rapidly recover from injury.",
-    "url": "/api/2014/magic-schools/transmutation"
+    "desc": "Transmutation spells change the properties of a creature, object, or environment. They might turn an enemy into a harmless creature, bolster the strength of an ally, make an object move at the caster's command, or enhance a creature's innate healing abilities to rapidly recover from injury."
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -17014,48 +15203,42 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-animal-handling",
-                "name": "Skill: Animal Handling",
-                "url": "/api/2014/proficiencies/skill-animal-handling"
+                "name": "Skill: Animal Handling"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-nature",
-                "name": "Skill: Nature",
-                "url": "/api/2014/proficiencies/skill-nature"
+                "name": "Skill: Nature"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-perception",
-                "name": "Skill: Perception",
-                "url": "/api/2014/proficiencies/skill-perception"
+                "name": "Skill: Perception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-survival",
-                "name": "Skill: Survival",
-                "url": "/api/2014/proficiencies/skill-survival"
+                "name": "Skill: Survival"
               }
             }
           ]
@@ -17065,66 +15248,55 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "medium-armor",
-        "name": "Medium Armor",
-        "url": "/api/2014/proficiencies/medium-armor"
+        "name": "Medium Armor"
       },
       {
         "index": "shields",
-        "name": "Shields",
-        "url": "/api/2014/proficiencies/shields"
+        "name": "Shields"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "martial-weapons",
-        "name": "Martial Weapons",
-        "url": "/api/2014/proficiencies/martial-weapons"
+        "name": "Martial Weapons"
       },
       {
         "index": "saving-throw-str",
-        "name": "Saving Throw: STR",
-        "url": "/api/2014/proficiencies/saving-throw-str"
+        "name": "Saving Throw: STR"
       },
       {
         "index": "saving-throw-con",
-        "name": "Saving Throw: CON",
-        "url": "/api/2014/proficiencies/saving-throw-con"
+        "name": "Saving Throw: CON"
       }
     ],
     "saving_throws": [
       {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "explorers-pack",
-          "name": "Explorer's Pack",
-          "url": "/api/2014/equipment/explorers-pack"
+          "name": "Explorer's Pack"
         },
         "quantity": 1
       },
       {
         "equipment": {
           "index": "javelin",
-          "name": "Javelin",
-          "url": "/api/2014/equipment/javelin"
+          "name": "Javelin"
         },
         "quantity": 4
       }
@@ -17142,8 +15314,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "greataxe",
-                "name": "Greataxe",
-                "url": "/api/2014/equipment/greataxe"
+                "name": "Greataxe"
               }
             },
             {
@@ -17156,8 +15327,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "martial-melee-weapons",
-                    "name": "Martial Melee Weapons",
-                    "url": "/api/2014/equipment-categories/martial-melee-weapons"
+                    "name": "Martial Melee Weapons"
                   }
                 }
               }
@@ -17177,8 +15347,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 2,
               "of": {
                 "index": "handaxe",
-                "name": "Handaxe",
-                "url": "/api/2014/equipment/handaxe"
+                "name": "Handaxe"
               }
             },
             {
@@ -17191,8 +15360,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -17201,14 +15369,12 @@ export const CLASS_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "class_levels": "/api/2014/classes/barbarian/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "minimum_score": 13
         }
@@ -17216,29 +15382,24 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "shields",
-          "name": "Shields",
-          "url": "/api/2014/proficiencies/shields"
+          "name": "Shields"
         },
         {
           "index": "simple-weapons",
-          "name": "Simple Weapons",
-          "url": "/api/2014/proficiencies/simple-weapons"
+          "name": "Simple Weapons"
         },
         {
           "index": "martial-weapons",
-          "name": "Martial Weapons",
-          "url": "/api/2014/proficiencies/martial-weapons"
+          "name": "Martial Weapons"
         }
       ]
     },
     "subclasses": [
       {
         "index": "berserker",
-        "name": "Berserker",
-        "url": "/api/2014/subclasses/berserker"
+        "name": "Berserker"
       }
-    ],
-    "url": "/api/2014/classes/barbarian"
+    ]
   },
   {
     "index": "bard",
@@ -17256,144 +15417,126 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-acrobatics",
-                "name": "Skill: Acrobatics",
-                "url": "/api/2014/proficiencies/skill-acrobatics"
+                "name": "Skill: Acrobatics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-animal-handling",
-                "name": "Skill: Animal Handling",
-                "url": "/api/2014/proficiencies/skill-animal-handling"
+                "name": "Skill: Animal Handling"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-arcana",
-                "name": "Skill: Arcana",
-                "url": "/api/2014/proficiencies/skill-arcana"
+                "name": "Skill: Arcana"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-deception",
-                "name": "Skill: Deception",
-                "url": "/api/2014/proficiencies/skill-deception"
+                "name": "Skill: Deception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-history",
-                "name": "Skill: History",
-                "url": "/api/2014/proficiencies/skill-history"
+                "name": "Skill: History"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-investigation",
-                "name": "Skill: Investigation",
-                "url": "/api/2014/proficiencies/skill-investigation"
+                "name": "Skill: Investigation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-medicine",
-                "name": "Skill: Medicine",
-                "url": "/api/2014/proficiencies/skill-medicine"
+                "name": "Skill: Medicine"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-nature",
-                "name": "Skill: Nature",
-                "url": "/api/2014/proficiencies/skill-nature"
+                "name": "Skill: Nature"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-perception",
-                "name": "Skill: Perception",
-                "url": "/api/2014/proficiencies/skill-perception"
+                "name": "Skill: Perception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-performance",
-                "name": "Skill: Performance",
-                "url": "/api/2014/proficiencies/skill-performance"
+                "name": "Skill: Performance"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-persuasion",
-                "name": "Skill: Persuasion",
-                "url": "/api/2014/proficiencies/skill-persuasion"
+                "name": "Skill: Persuasion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-sleight-of-hand",
-                "name": "Skill: Sleight of Hand",
-                "url": "/api/2014/proficiencies/skill-sleight-of-hand"
+                "name": "Skill: Sleight of Hand"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-stealth",
-                "name": "Skill: Stealth",
-                "url": "/api/2014/proficiencies/skill-stealth"
+                "name": "Skill: Stealth"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-survival",
-                "name": "Skill: Survival",
-                "url": "/api/2014/proficiencies/skill-survival"
+                "name": "Skill: Survival"
               }
             }
           ]
@@ -17410,80 +15553,70 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "bagpipes",
-                "name": "Bagpipes",
-                "url": "/api/2014/proficiencies/bagpipes"
+                "name": "Bagpipes"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "drum",
-                "name": "Drum",
-                "url": "/api/2014/proficiencies/drum"
+                "name": "Drum"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "dulcimer",
-                "name": "Dulcimer",
-                "url": "/api/2014/proficiencies/dulcimer"
+                "name": "Dulcimer"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "flute",
-                "name": "Flute",
-                "url": "/api/2014/proficiencies/flute"
+                "name": "Flute"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "lute",
-                "name": "Lute",
-                "url": "/api/2014/proficiencies/lute"
+                "name": "Lute"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "lyre",
-                "name": "Lyre",
-                "url": "/api/2014/proficiencies/lyre"
+                "name": "Lyre"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "horn",
-                "name": "Horn",
-                "url": "/api/2014/proficiencies/horn"
+                "name": "Horn"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "pan-flute",
-                "name": "Pan flute",
-                "url": "/api/2014/proficiencies/pan-flute"
+                "name": "Pan flute"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "shawm",
-                "name": "Shawm",
-                "url": "/api/2014/proficiencies/shawm"
+                "name": "Shawm"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "viol",
-                "name": "Viol",
-                "url": "/api/2014/proficiencies/viol"
+                "name": "Viol"
               }
             }
           ]
@@ -17493,71 +15626,59 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "longswords",
-        "name": "Longswords",
-        "url": "/api/2014/proficiencies/longswords"
+        "name": "Longswords"
       },
       {
         "index": "rapiers",
-        "name": "Rapiers",
-        "url": "/api/2014/proficiencies/rapiers"
+        "name": "Rapiers"
       },
       {
         "index": "shortswords",
-        "name": "Shortswords",
-        "url": "/api/2014/proficiencies/shortswords"
+        "name": "Shortswords"
       },
       {
         "index": "hand-crossbows",
-        "name": "Hand crossbows",
-        "url": "/api/2014/proficiencies/hand-crossbows"
+        "name": "Hand crossbows"
       },
       {
         "index": "saving-throw-dex",
-        "name": "Saving Throw: DEX",
-        "url": "/api/2014/proficiencies/saving-throw-dex"
+        "name": "Saving Throw: DEX"
       },
       {
         "index": "saving-throw-cha",
-        "name": "Saving Throw: CHA",
-        "url": "/api/2014/proficiencies/saving-throw-cha"
+        "name": "Saving Throw: CHA"
       }
     ],
     "saving_throws": [
       {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "leather-armor",
-          "name": "Leather Armor",
-          "url": "/api/2014/equipment/leather-armor"
+          "name": "Leather Armor"
         },
         "quantity": 1
       },
       {
         "equipment": {
           "index": "dagger",
-          "name": "Dagger",
-          "url": "/api/2014/equipment/dagger"
+          "name": "Dagger"
         },
         "quantity": 1
       }
@@ -17575,8 +15696,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "rapier",
-                "name": "Rapier",
-                "url": "/api/2014/equipment/rapier"
+                "name": "Rapier"
               }
             },
             {
@@ -17584,8 +15704,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "longsword",
-                "name": "Longsword",
-                "url": "/api/2014/equipment/longsword"
+                "name": "Longsword"
               }
             },
             {
@@ -17598,8 +15717,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -17619,8 +15737,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "diplomats-pack",
-                "name": "Diplomat's Pack",
-                "url": "/api/2014/equipment/diplomats-pack"
+                "name": "Diplomat's Pack"
               }
             },
             {
@@ -17628,8 +15745,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "entertainers-pack",
-                "name": "Entertainer's Pack",
-                "url": "/api/2014/equipment/entertainers-pack"
+                "name": "Entertainer's Pack"
               }
             }
           ]
@@ -17647,8 +15763,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "lute",
-                "name": "Lute",
-                "url": "/api/2014/equipment/lute"
+                "name": "Lute"
               }
             },
             {
@@ -17661,8 +15776,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "musical-instruments",
-                    "name": "Musical Instruments",
-                    "url": "/api/2014/equipment-categories/musical-instruments"
+                    "name": "Musical Instruments"
                   }
                 }
               }
@@ -17671,14 +15785,12 @@ export const CLASS_RAW = JSON.parse(String.raw`[
         }
       }
     ],
-    "class_levels": "/api/2014/classes/bard/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "minimum_score": 13
         }
@@ -17686,8 +15798,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         }
       ],
       "proficiency_choices": [
@@ -17702,144 +15813,126 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                 "option_type": "reference",
                 "item": {
                   "index": "skill-acrobatics",
-                  "name": "Skill: Acrobatics",
-                  "url": "/api/2014/proficiencies/skill-acrobatics"
+                  "name": "Skill: Acrobatics"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-animal-handling",
-                  "name": "Skill: Animal Handling",
-                  "url": "/api/2014/proficiencies/skill-animal-handling"
+                  "name": "Skill: Animal Handling"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-arcana",
-                  "name": "Skill: Arcana",
-                  "url": "/api/2014/proficiencies/skill-arcana"
+                  "name": "Skill: Arcana"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-athletics",
-                  "name": "Skill: Athletics",
-                  "url": "/api/2014/proficiencies/skill-athletics"
+                  "name": "Skill: Athletics"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-deception",
-                  "name": "Skill: Deception",
-                  "url": "/api/2014/proficiencies/skill-deception"
+                  "name": "Skill: Deception"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-history",
-                  "name": "Skill: History",
-                  "url": "/api/2014/proficiencies/skill-history"
+                  "name": "Skill: History"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-insight",
-                  "name": "Skill: Insight",
-                  "url": "/api/2014/proficiencies/skill-insight"
+                  "name": "Skill: Insight"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-intimidation",
-                  "name": "Skill: Intimidation",
-                  "url": "/api/2014/proficiencies/skill-intimidation"
+                  "name": "Skill: Intimidation"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-investigation",
-                  "name": "Skill: Investigation",
-                  "url": "/api/2014/proficiencies/skill-investigation"
+                  "name": "Skill: Investigation"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-medicine",
-                  "name": "Skill: Medicine",
-                  "url": "/api/2014/proficiencies/skill-medicine"
+                  "name": "Skill: Medicine"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-nature",
-                  "name": "Skill: Nature",
-                  "url": "/api/2014/proficiencies/skill-nature"
+                  "name": "Skill: Nature"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-perception",
-                  "name": "Skill: Perception",
-                  "url": "/api/2014/proficiencies/skill-perception"
+                  "name": "Skill: Perception"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-performance",
-                  "name": "Skill: Performance",
-                  "url": "/api/2014/proficiencies/skill-performance"
+                  "name": "Skill: Performance"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-persuasion",
-                  "name": "Skill: Persuasion",
-                  "url": "/api/2014/proficiencies/skill-persuasion"
+                  "name": "Skill: Persuasion"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-religion",
-                  "name": "Skill: Religion",
-                  "url": "/api/2014/proficiencies/skill-religion"
+                  "name": "Skill: Religion"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-sleight-of-hand",
-                  "name": "Skill: Sleight of Hand",
-                  "url": "/api/2014/proficiencies/skill-sleight-of-hand"
+                  "name": "Skill: Sleight of Hand"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-stealth",
-                  "name": "Skill: Stealth",
-                  "url": "/api/2014/proficiencies/skill-stealth"
+                  "name": "Skill: Stealth"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-survival",
-                  "name": "Skill: Survival",
-                  "url": "/api/2014/proficiencies/skill-survival"
+                  "name": "Skill: Survival"
                 }
               }
             ]
@@ -17856,80 +15949,70 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                 "option_type": "reference",
                 "item": {
                   "index": "bagpipes",
-                  "name": "Bagpipes",
-                  "url": "/api/2014/proficiencies/bagpipes"
+                  "name": "Bagpipes"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "drum",
-                  "name": "Drum",
-                  "url": "/api/2014/proficiencies/drum"
+                  "name": "Drum"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "dulcimer",
-                  "name": "Dulcimer",
-                  "url": "/api/2014/proficiencies/dulcimer"
+                  "name": "Dulcimer"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "flute",
-                  "name": "Flute",
-                  "url": "/api/2014/proficiencies/flute"
+                  "name": "Flute"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "lute",
-                  "name": "Lute",
-                  "url": "/api/2014/proficiencies/lute"
+                  "name": "Lute"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "lyre",
-                  "name": "Lyre",
-                  "url": "/api/2014/proficiencies/lyre"
+                  "name": "Lyre"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "horn",
-                  "name": "Horn",
-                  "url": "/api/2014/proficiencies/horn"
+                  "name": "Horn"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "pan-flute",
-                  "name": "Pan flute",
-                  "url": "/api/2014/proficiencies/pan-flute"
+                  "name": "Pan flute"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "shawm",
-                  "name": "Shawm",
-                  "url": "/api/2014/proficiencies/shawm"
+                  "name": "Shawm"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "viol",
-                  "name": "Viol",
-                  "url": "/api/2014/proficiencies/viol"
+                  "name": "Viol"
                 }
               }
             ]
@@ -17940,16 +16023,14 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "subclasses": [
       {
         "index": "lore",
-        "name": "Lore",
-        "url": "/api/2014/subclasses/lore"
+        "name": "Lore"
       }
     ],
     "spellcasting": {
       "level": 1,
       "spellcasting_ability": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "info": [
         {
@@ -17995,9 +16076,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/bard/spells",
-    "url": "/api/2014/classes/bard"
+    }
   },
   {
     "index": "cleric",
@@ -18015,40 +16094,35 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-history",
-                "name": "Skill: History",
-                "url": "/api/2014/proficiencies/skill-history"
+                "name": "Skill: History"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-medicine",
-                "name": "Skill: Medicine",
-                "url": "/api/2014/proficiencies/skill-medicine"
+                "name": "Skill: Medicine"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-persuasion",
-                "name": "Skill: Persuasion",
-                "url": "/api/2014/proficiencies/skill-persuasion"
+                "name": "Skill: Persuasion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             }
           ]
@@ -18058,53 +16132,44 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "medium-armor",
-        "name": "Medium Armor",
-        "url": "/api/2014/proficiencies/medium-armor"
+        "name": "Medium Armor"
       },
       {
         "index": "shields",
-        "name": "Shields",
-        "url": "/api/2014/proficiencies/shields"
+        "name": "Shields"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "saving-throw-wis",
-        "name": "Saving Throw: WIS",
-        "url": "/api/2014/proficiencies/saving-throw-wis"
+        "name": "Saving Throw: WIS"
       },
       {
         "index": "saving-throw-cha",
-        "name": "Saving Throw: CHA",
-        "url": "/api/2014/proficiencies/saving-throw-cha"
+        "name": "Saving Throw: CHA"
       }
     ],
     "saving_throws": [
       {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "shield",
-          "name": "Shield",
-          "url": "/api/2014/equipment/shield"
+          "name": "Shield"
         },
         "quantity": 1
       }
@@ -18122,8 +16187,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "mace",
-                "name": "Mace",
-                "url": "/api/2014/equipment/mace"
+                "name": "Mace"
               }
             },
             {
@@ -18131,16 +16195,14 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "warhammer",
-                "name": "Warhammer",
-                "url": "/api/2014/equipment/warhammer"
+                "name": "Warhammer"
               },
               "prerequisites": [
                 {
                   "type": "proficiency",
                   "proficiency": {
                     "index": "warhammers",
-                    "name": "Warhammers",
-                    "url": "/api/2014/proficiencies/warhammers"
+                    "name": "Warhammers"
                   }
                 }
               ]
@@ -18160,8 +16222,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "scale-mail",
-                "name": "Scale Mail",
-                "url": "/api/2014/equipment/scale-mail"
+                "name": "Scale Mail"
               }
             },
             {
@@ -18169,8 +16230,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "leather-armor",
-                "name": "Leather Armor",
-                "url": "/api/2014/equipment/leather-armor"
+                "name": "Leather Armor"
               }
             },
             {
@@ -18178,16 +16238,14 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "chain-mail",
-                "name": "Chain Mail",
-                "url": "/api/2014/equipment/chain-mail"
+                "name": "Chain Mail"
               },
               "prerequisites": [
                 {
                   "type": "proficiency",
                   "proficiency": {
                     "index": "chain-mail",
-                    "name": "Chain Mail",
-                    "url": "/api/2014/proficiencies/chain-mail"
+                    "name": "Chain Mail"
                   }
                 }
               ]
@@ -18210,8 +16268,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "crossbow-light",
-                    "name": "Crossbow, light",
-                    "url": "/api/2014/equipment/crossbow-light"
+                    "name": "Crossbow, light"
                   }
                 },
                 {
@@ -18219,8 +16276,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 20,
                   "of": {
                     "index": "crossbow-bolt",
-                    "name": "Crossbow bolt",
-                    "url": "/api/2014/equipment/crossbow-bolt"
+                    "name": "Crossbow bolt"
                   }
                 }
               ]
@@ -18235,8 +16291,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -18256,8 +16311,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "priests-pack",
-                "name": "Priest's Pack",
-                "url": "/api/2014/equipment/priests-pack"
+                "name": "Priest's Pack"
               }
             },
             {
@@ -18265,8 +16319,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
@@ -18280,20 +16333,17 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           "option_set_type": "equipment_category",
           "equipment_category": {
             "index": "holy-symbols",
-            "name": "Holy Symbols",
-            "url": "/api/2014/equipment-categories/holy-symbols"
+            "name": "Holy Symbols"
           }
         }
       }
     ],
-    "class_levels": "/api/2014/classes/cleric/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "minimum_score": 13
         }
@@ -18301,34 +16351,29 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "medium-armor",
-          "name": "Medium Armor",
-          "url": "/api/2014/proficiencies/medium-armor"
+          "name": "Medium Armor"
         },
         {
           "index": "shields",
-          "name": "Shields",
-          "url": "/api/2014/proficiencies/shields"
+          "name": "Shields"
         }
       ]
     },
     "subclasses": [
       {
         "index": "life",
-        "name": "Life",
-        "url": "/api/2014/subclasses/life"
+        "name": "Life"
       }
     ],
     "spellcasting": {
       "level": 1,
       "spellcasting_ability": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "info": [
         {
@@ -18367,9 +16412,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/cleric/spells",
-    "url": "/api/2014/classes/cleric"
+    }
   },
   {
     "index": "druid",
@@ -18387,64 +16430,56 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-arcana",
-                "name": "Skill: Arcana",
-                "url": "/api/2014/proficiencies/skill-arcana"
+                "name": "Skill: Arcana"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-animal-handling",
-                "name": "Skill: Animal Handling",
-                "url": "/api/2014/proficiencies/skill-animal-handling"
+                "name": "Skill: Animal Handling"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-medicine",
-                "name": "Skill: Medicine",
-                "url": "/api/2014/proficiencies/skill-medicine"
+                "name": "Skill: Medicine"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-nature",
-                "name": "Skill: Nature",
-                "url": "/api/2014/proficiencies/skill-nature"
+                "name": "Skill: Nature"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-perception",
-                "name": "Skill: Perception",
-                "url": "/api/2014/proficiencies/skill-perception"
+                "name": "Skill: Perception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-survival",
-                "name": "Skill: Survival",
-                "url": "/api/2014/proficiencies/skill-survival"
+                "name": "Skill: Survival"
               }
             }
           ]
@@ -18454,111 +16489,91 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "medium-armor",
-        "name": "Medium Armor",
-        "url": "/api/2014/proficiencies/medium-armor"
+        "name": "Medium Armor"
       },
       {
         "index": "shields",
-        "name": "Shields",
-        "url": "/api/2014/proficiencies/shields"
+        "name": "Shields"
       },
       {
         "index": "clubs",
-        "name": "Clubs",
-        "url": "/api/2014/proficiencies/clubs"
+        "name": "Clubs"
       },
       {
         "index": "daggers",
-        "name": "Daggers",
-        "url": "/api/2014/proficiencies/daggers"
+        "name": "Daggers"
       },
       {
         "index": "javelins",
-        "name": "Javelins",
-        "url": "/api/2014/proficiencies/javelins"
+        "name": "Javelins"
       },
       {
         "index": "maces",
-        "name": "Maces",
-        "url": "/api/2014/proficiencies/maces"
+        "name": "Maces"
       },
       {
         "index": "quarterstaffs",
-        "name": "Quarterstaffs",
-        "url": "/api/2014/proficiencies/quarterstaffs"
+        "name": "Quarterstaffs"
       },
       {
         "index": "sickles",
-        "name": "Sickles",
-        "url": "/api/2014/proficiencies/sickles"
+        "name": "Sickles"
       },
       {
         "index": "spears",
-        "name": "Spears",
-        "url": "/api/2014/proficiencies/spears"
+        "name": "Spears"
       },
       {
         "index": "darts",
-        "name": "Darts",
-        "url": "/api/2014/proficiencies/darts"
+        "name": "Darts"
       },
       {
         "index": "slings",
-        "name": "Slings",
-        "url": "/api/2014/proficiencies/slings"
+        "name": "Slings"
       },
       {
         "index": "scimitars",
-        "name": "Scimitars",
-        "url": "/api/2014/proficiencies/scimitars"
+        "name": "Scimitars"
       },
       {
         "index": "herbalism-kit",
-        "name": "Herbalism Kit",
-        "url": "/api/2014/proficiencies/herbalism-kit"
+        "name": "Herbalism Kit"
       },
       {
         "index": "saving-throw-int",
-        "name": "Saving Throw: INT",
-        "url": "/api/2014/proficiencies/saving-throw-int"
+        "name": "Saving Throw: INT"
       },
       {
         "index": "saving-throw-wis",
-        "name": "Saving Throw: WIS",
-        "url": "/api/2014/proficiencies/saving-throw-wis"
+        "name": "Saving Throw: WIS"
       }
     ],
     "saving_throws": [
       {
         "index": "int",
-        "name": "INT",
-        "url": "/api/2014/ability-scores/int"
+        "name": "INT"
       },
       {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "leather-armor",
-          "name": "Leather Armor",
-          "url": "/api/2014/equipment/leather-armor"
+          "name": "Leather Armor"
         },
         "quantity": 1
       },
       {
         "equipment": {
           "index": "explorers-pack",
-          "name": "Explorer's Pack",
-          "url": "/api/2014/equipment/explorers-pack"
+          "name": "Explorer's Pack"
         },
         "quantity": 1
       }
@@ -18576,8 +16591,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "shield",
-                "name": "Shield",
-                "url": "/api/2014/equipment/shield"
+                "name": "Shield"
               }
             },
             {
@@ -18590,8 +16604,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -18611,8 +16624,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "scimitar",
-                "name": "Scimitar",
-                "url": "/api/2014/equipment/scimitar"
+                "name": "Scimitar"
               }
             },
             {
@@ -18625,8 +16637,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-melee-weapons",
-                    "name": "Simple Melee Weapons",
-                    "url": "/api/2014/equipment-categories/simple-melee-weapons"
+                    "name": "Simple Melee Weapons"
                   }
                 }
               }
@@ -18642,20 +16653,17 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           "option_set_type": "equipment_category",
           "equipment_category": {
             "index": "druidic-foci",
-            "name": "Druidic Foci",
-            "url": "/api/2014/equipment-categories/druidic-foci"
+            "name": "Druidic Foci"
           }
         }
       }
     ],
-    "class_levels": "/api/2014/classes/druid/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "minimum_score": 13
         }
@@ -18663,34 +16671,29 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "medium-armor",
-          "name": "Medium Armor",
-          "url": "/api/2014/proficiencies/medium-armor"
+          "name": "Medium Armor"
         },
         {
           "index": "shields",
-          "name": "Shields",
-          "url": "/api/2014/proficiencies/shields"
+          "name": "Shields"
         }
       ]
     },
     "subclasses": [
       {
         "index": "land",
-        "name": "Land",
-        "url": "/api/2014/subclasses/land"
+        "name": "Land"
       }
     ],
     "spellcasting": {
       "level": 1,
       "spellcasting_ability": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "info": [
         {
@@ -18729,9 +16732,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/druid/spells",
-    "url": "/api/2014/classes/druid"
+    }
   },
   {
     "index": "fighter",
@@ -18749,64 +16750,56 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-acrobatics",
-                "name": "Skill: Acrobatics",
-                "url": "/api/2014/proficiencies/skill-acrobatics"
+                "name": "Skill: Acrobatics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-animal-handling",
-                "name": "Skill: Animal Handling",
-                "url": "/api/2014/proficiencies/skill-animal-handling"
+                "name": "Skill: Animal Handling"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-history",
-                "name": "Skill: History",
-                "url": "/api/2014/proficiencies/skill-history"
+                "name": "Skill: History"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-perception",
-                "name": "Skill: Perception",
-                "url": "/api/2014/proficiencies/skill-perception"
+                "name": "Skill: Perception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-survival",
-                "name": "Skill: Survival",
-                "url": "/api/2014/proficiencies/skill-survival"
+                "name": "Skill: Survival"
               }
             }
           ]
@@ -18816,45 +16809,37 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "all-armor",
-        "name": "All armor",
-        "url": "/api/2014/proficiencies/all-armor"
+        "name": "All armor"
       },
       {
         "index": "shields",
-        "name": "Shields",
-        "url": "/api/2014/proficiencies/shields"
+        "name": "Shields"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "martial-weapons",
-        "name": "Martial Weapons",
-        "url": "/api/2014/proficiencies/martial-weapons"
+        "name": "Martial Weapons"
       },
       {
         "index": "saving-throw-str",
-        "name": "Saving Throw: STR",
-        "url": "/api/2014/proficiencies/saving-throw-str"
+        "name": "Saving Throw: STR"
       },
       {
         "index": "saving-throw-con",
-        "name": "Saving Throw: CON",
-        "url": "/api/2014/proficiencies/saving-throw-con"
+        "name": "Saving Throw: CON"
       }
     ],
     "saving_throws": [
       {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       }
     ],
     "starting_equipment": [],
@@ -18871,8 +16856,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "chain-mail",
-                "name": "Chain Mail",
-                "url": "/api/2014/equipment/chain-mail"
+                "name": "Chain Mail"
               }
             },
             {
@@ -18883,8 +16867,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "leather-armor",
-                    "name": "Leather Armor",
-                    "url": "/api/2014/equipment/leather-armor"
+                    "name": "Leather Armor"
                   }
                 },
                 {
@@ -18892,8 +16875,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "longbow",
-                    "name": "Longbow",
-                    "url": "/api/2014/equipment/longbow"
+                    "name": "Longbow"
                   }
                 },
                 {
@@ -18901,8 +16883,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 20,
                   "of": {
                     "index": "arrow",
-                    "name": "Arrow",
-                    "url": "/api/2014/equipment/arrow"
+                    "name": "Arrow"
                   }
                 }
               ]
@@ -18930,8 +16911,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                       "option_set_type": "equipment_category",
                       "equipment_category": {
                         "index": "martial-weapons",
-                        "name": "Martial Weapons",
-                        "url": "/api/2014/equipment-categories/martial-weapons"
+                        "name": "Martial Weapons"
                       }
                     }
                   }
@@ -18941,8 +16921,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "shield",
-                    "name": "Shield",
-                    "url": "/api/2014/equipment/shield"
+                    "name": "Shield"
                   }
                 }
               ]
@@ -18957,8 +16936,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "martial-weapons",
-                    "name": "Martial Weapons",
-                    "url": "/api/2014/equipment-categories/martial-weapons"
+                    "name": "Martial Weapons"
                   }
                 }
               }
@@ -18981,8 +16959,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "crossbow-light",
-                    "name": "Crossbow, light",
-                    "url": "/api/2014/equipment/crossbow-light"
+                    "name": "Crossbow, light"
                   }
                 },
                 {
@@ -18990,8 +16967,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 20,
                   "of": {
                     "index": "crossbow-bolt",
-                    "name": "Crossbow bolt",
-                    "url": "/api/2014/equipment/crossbow-bolt"
+                    "name": "Crossbow bolt"
                   }
                 }
               ]
@@ -19001,8 +16977,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 2,
               "of": {
                 "index": "handaxe",
-                "name": "Handaxe",
-                "url": "/api/2014/equipment/handaxe"
+                "name": "Handaxe"
               }
             }
           ]
@@ -19020,8 +16995,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dungeoneers-pack",
-                "name": "Dungeoneer's Pack",
-                "url": "/api/2014/equipment/dungeoneers-pack"
+                "name": "Dungeoneer's Pack"
               }
             },
             {
@@ -19029,15 +17003,13 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
         }
       }
     ],
-    "class_levels": "/api/2014/classes/fighter/levels",
     "multi_classing": {
       "prerequisite_options": {
         "type": "ability-scores",
@@ -19049,8 +17021,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "score_prerequisite",
               "ability_score": {
                 "index": "str",
-                "name": "STR",
-                "url": "/api/2014/ability-scores/str"
+                "name": "STR"
               },
               "minimum_score": 13
             },
@@ -19058,8 +17029,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "score_prerequisite",
               "ability_score": {
                 "index": "dex",
-                "name": "DEX",
-                "url": "/api/2014/ability-scores/dex"
+                "name": "DEX"
               },
               "minimum_score": 13
             }
@@ -19069,39 +17039,32 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "medium-armor",
-          "name": "Medium Armor",
-          "url": "/api/2014/proficiencies/medium-armor"
+          "name": "Medium Armor"
         },
         {
           "index": "shields",
-          "name": "Shields",
-          "url": "/api/2014/proficiencies/shields"
+          "name": "Shields"
         },
         {
           "index": "simple-weapons",
-          "name": "Simple Weapons",
-          "url": "/api/2014/proficiencies/simple-weapons"
+          "name": "Simple Weapons"
         },
         {
           "index": "martial-weapons",
-          "name": "Martial Weapons",
-          "url": "/api/2014/proficiencies/martial-weapons"
+          "name": "Martial Weapons"
         }
       ]
     },
     "subclasses": [
       {
         "index": "champion",
-        "name": "Champion",
-        "url": "/api/2014/subclasses/champion"
+        "name": "Champion"
       }
-    ],
-    "url": "/api/2014/classes/fighter"
+    ]
   },
   {
     "index": "monk",
@@ -19119,48 +17082,42 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-acrobatics",
-                "name": "Skill: Acrobatics",
-                "url": "/api/2014/proficiencies/skill-acrobatics"
+                "name": "Skill: Acrobatics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-history",
-                "name": "Skill: History",
-                "url": "/api/2014/proficiencies/skill-history"
+                "name": "Skill: History"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-stealth",
-                "name": "Skill: Stealth",
-                "url": "/api/2014/proficiencies/skill-stealth"
+                "name": "Skill: Stealth"
               }
             }
           ]
@@ -19186,152 +17143,133 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                       "option_type": "reference",
                       "item": {
                         "index": "alchemists-supplies",
-                        "name": "Alchemist's Supplies",
-                        "url": "/api/2014/proficiencies/alchemists-supplies"
+                        "name": "Alchemist's Supplies"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "brewers-supplies",
-                        "name": "Brewer's Supplies",
-                        "url": "/api/2014/proficiencies/brewers-supplies"
+                        "name": "Brewer's Supplies"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "calligraphers-supplies",
-                        "name": "Calligrapher's Supplies",
-                        "url": "/api/2014/proficiencies/calligraphers-supplies"
+                        "name": "Calligrapher's Supplies"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "carpenters-tools",
-                        "name": "Carpenter's Tools",
-                        "url": "/api/2014/proficiencies/carpenters-tools"
+                        "name": "Carpenter's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "cartographers-tools",
-                        "name": "Cartographer's Tools",
-                        "url": "/api/2014/proficiencies/cartographers-tools"
+                        "name": "Cartographer's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "cobblers-tools",
-                        "name": "Cobbler's Tools",
-                        "url": "/api/2014/proficiencies/cobblers-tools"
+                        "name": "Cobbler's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "cooks-utensils",
-                        "name": "Cook's utensils",
-                        "url": "/api/2014/proficiencies/cooks-utensils"
+                        "name": "Cook's utensils"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "glassblowers-tools",
-                        "name": "Glassblower's Tools",
-                        "url": "/api/2014/proficiencies/glassblowers-tools"
+                        "name": "Glassblower's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "jewelers-tools",
-                        "name": "Jeweler's Tools",
-                        "url": "/api/2014/proficiencies/jewelers-tools"
+                        "name": "Jeweler's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "leatherworkers-tools",
-                        "name": "Leatherworker's Tools",
-                        "url": "/api/2014/proficiencies/leatherworkers-tools"
+                        "name": "Leatherworker's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "masons-tools",
-                        "name": "Mason's Tools",
-                        "url": "/api/2014/proficiencies/masons-tools"
+                        "name": "Mason's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "painters-supplies",
-                        "name": "Painter's Supplies",
-                        "url": "/api/2014/proficiencies/painters-supplies"
+                        "name": "Painter's Supplies"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "potters-tools",
-                        "name": "Potter's Tools",
-                        "url": "/api/2014/proficiencies/potters-tools"
+                        "name": "Potter's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "smiths-tools",
-                        "name": "Smith's Tools",
-                        "url": "/api/2014/proficiencies/smiths-tools"
+                        "name": "Smith's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "tinkers-tools",
-                        "name": "Tinker's Tools",
-                        "url": "/api/2014/proficiencies/tinkers-tools"
+                        "name": "Tinker's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "weavers-tools",
-                        "name": "Weaver's Tools",
-                        "url": "/api/2014/proficiencies/weavers-tools"
+                        "name": "Weaver's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "woodcarvers-tools",
-                        "name": "Woodcarver's Tools",
-                        "url": "/api/2014/proficiencies/woodcarvers-tools"
+                        "name": "Woodcarver's Tools"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "disguise-kit",
-                        "name": "Disguise Kit",
-                        "url": "/api/2014/proficiencies/disguise-kit"
+                        "name": "Disguise Kit"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "forgery-kit",
-                        "name": "Forgery Kit",
-                        "url": "/api/2014/proficiencies/forgery-kit"
+                        "name": "Forgery Kit"
                       }
                     }
                   ]
@@ -19351,80 +17289,70 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                       "option_type": "reference",
                       "item": {
                         "index": "bagpipes",
-                        "name": "Bagpipes",
-                        "url": "/api/2014/proficiencies/bagpipes"
+                        "name": "Bagpipes"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "drum",
-                        "name": "Drum",
-                        "url": "/api/2014/proficiencies/drum"
+                        "name": "Drum"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "dulcimer",
-                        "name": "Dulcimer",
-                        "url": "/api/2014/proficiencies/dulcimer"
+                        "name": "Dulcimer"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "flute",
-                        "name": "Flute",
-                        "url": "/api/2014/proficiencies/flute"
+                        "name": "Flute"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "lute",
-                        "name": "Lute",
-                        "url": "/api/2014/proficiencies/lute"
+                        "name": "Lute"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "lyre",
-                        "name": "Lyre",
-                        "url": "/api/2014/proficiencies/lyre"
+                        "name": "Lyre"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "horn",
-                        "name": "Horn",
-                        "url": "/api/2014/proficiencies/horn"
+                        "name": "Horn"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "pan-flute",
-                        "name": "Pan flute",
-                        "url": "/api/2014/proficiencies/pan-flute"
+                        "name": "Pan flute"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "shawm",
-                        "name": "Shawm",
-                        "url": "/api/2014/proficiencies/shawm"
+                        "name": "Shawm"
                       }
                     },
                     {
                       "option_type": "reference",
                       "item": {
                         "index": "viol",
-                        "name": "Viol",
-                        "url": "/api/2014/proficiencies/viol"
+                        "name": "Viol"
                       }
                     }
                   ]
@@ -19438,43 +17366,36 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "shortswords",
-        "name": "Shortswords",
-        "url": "/api/2014/proficiencies/shortswords"
+        "name": "Shortswords"
       },
       {
         "index": "saving-throw-dex",
-        "name": "Saving Throw: DEX",
-        "url": "/api/2014/proficiencies/saving-throw-dex"
+        "name": "Saving Throw: DEX"
       },
       {
         "index": "saving-throw-str",
-        "name": "Saving Throw: STR",
-        "url": "/api/2014/proficiencies/saving-throw-str"
+        "name": "Saving Throw: STR"
       }
     ],
     "saving_throws": [
       {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "dart",
-          "name": "Dart",
-          "url": "/api/2014/equipment/dart"
+          "name": "Dart"
         },
         "quantity": 10
       }
@@ -19492,8 +17413,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "shortsword",
-                "name": "Shortsword",
-                "url": "/api/2014/equipment/shortsword"
+                "name": "Shortsword"
               }
             },
             {
@@ -19506,8 +17426,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -19527,8 +17446,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dungeoneers-pack",
-                "name": "Dungeoneer's Pack",
-                "url": "/api/2014/equipment/dungeoneers-pack"
+                "name": "Dungeoneer's Pack"
               }
             },
             {
@@ -19536,30 +17454,26 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
         }
       }
     ],
-    "class_levels": "/api/2014/classes/monk/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "minimum_score": 13
         },
         {
           "ability_score": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "minimum_score": 13
         }
@@ -19567,24 +17481,20 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "simple-weapons",
-          "name": "Simple Weapons",
-          "url": "/api/2014/proficiencies/simple-weapons"
+          "name": "Simple Weapons"
         },
         {
           "index": "shortswords",
-          "name": "Shortswords",
-          "url": "/api/2014/proficiencies/shortswords"
+          "name": "Shortswords"
         }
       ]
     },
     "subclasses": [
       {
         "index": "open-hand",
-        "name": "Open Hand",
-        "url": "/api/2014/subclasses/open-hand"
+        "name": "Open Hand"
       }
-    ],
-    "url": "/api/2014/classes/monk"
+    ]
   },
   {
     "index": "paladin",
@@ -19602,48 +17512,42 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-medicine",
-                "name": "Skill: Medicine",
-                "url": "/api/2014/proficiencies/skill-medicine"
+                "name": "Skill: Medicine"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-persuasion",
-                "name": "Skill: Persuasion",
-                "url": "/api/2014/proficiencies/skill-persuasion"
+                "name": "Skill: Persuasion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             }
           ]
@@ -19653,53 +17557,44 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "all-armor",
-        "name": "All armor",
-        "url": "/api/2014/proficiencies/all-armor"
+        "name": "All armor"
       },
       {
         "index": "shields",
-        "name": "Shields",
-        "url": "/api/2014/proficiencies/shields"
+        "name": "Shields"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "martial-weapons",
-        "name": "Martial Weapons",
-        "url": "/api/2014/proficiencies/martial-weapons"
+        "name": "Martial Weapons"
       },
       {
         "index": "saving-throw-wis",
-        "name": "Saving Throw: WIS",
-        "url": "/api/2014/proficiencies/saving-throw-wis"
+        "name": "Saving Throw: WIS"
       },
       {
         "index": "saving-throw-cha",
-        "name": "Saving Throw: CHA",
-        "url": "/api/2014/proficiencies/saving-throw-cha"
+        "name": "Saving Throw: CHA"
       }
     ],
     "saving_throws": [
       {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "chain-mail",
-          "name": "Chain Mail",
-          "url": "/api/2014/equipment/chain-mail"
+          "name": "Chain Mail"
         },
         "quantity": 1
       }
@@ -19725,8 +17620,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                       "option_set_type": "equipment_category",
                       "equipment_category": {
                         "name": "Martial Weapons",
-                        "index": "martial-weapons",
-                        "url": "/api/2014/equipment-categories/martial-weapons"
+                        "index": "martial-weapons"
                       }
                     }
                   }
@@ -19736,8 +17630,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "shield",
-                    "name": "Shield",
-                    "url": "/api/2014/equipment/shield"
+                    "name": "Shield"
                   }
                 }
               ]
@@ -19752,8 +17645,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "martial-weapons",
-                    "name": "Martial Weapons",
-                    "url": "/api/2014/equipment-categories/martial-weapons"
+                    "name": "Martial Weapons"
                   }
                 }
               }
@@ -19773,8 +17665,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 5,
               "of": {
                 "index": "javelin",
-                "name": "Javelin",
-                "url": "/api/2014/equipment/javelin"
+                "name": "Javelin"
               }
             },
             {
@@ -19787,8 +17678,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -19808,8 +17698,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "priests-pack",
-                "name": "Priest's Pack",
-                "url": "/api/2014/equipment/priests-pack"
+                "name": "Priest's Pack"
               }
             },
             {
@@ -19817,8 +17706,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
@@ -19832,28 +17720,24 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           "option_set_type": "equipment_category",
           "equipment_category": {
             "index": "holy-symbols",
-            "name": "Holy Symbols",
-            "url": "/api/2014/equipment-categories/holy-symbols"
+            "name": "Holy Symbols"
           }
         }
       }
     ],
-    "class_levels": "/api/2014/classes/paladin/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "str",
-            "name": "STR",
-            "url": "/api/2014/ability-scores/str"
+            "name": "STR"
           },
           "minimum_score": 13
         },
         {
           "ability_score": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "minimum_score": 13
         }
@@ -19861,44 +17745,37 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "medium-armor",
-          "name": "Medium Armor",
-          "url": "/api/2014/proficiencies/medium-armor"
+          "name": "Medium Armor"
         },
         {
           "index": "shields",
-          "name": "Shields",
-          "url": "/api/2014/proficiencies/shields"
+          "name": "Shields"
         },
         {
           "index": "simple-weapons",
-          "name": "Simple Weapons",
-          "url": "/api/2014/proficiencies/simple-weapons"
+          "name": "Simple Weapons"
         },
         {
           "index": "martial-weapons",
-          "name": "Martial Weapons",
-          "url": "/api/2014/proficiencies/martial-weapons"
+          "name": "Martial Weapons"
         }
       ]
     },
     "subclasses": [
       {
         "index": "devotion",
-        "name": "Devotion",
-        "url": "/api/2014/subclasses/devotion"
+        "name": "Devotion"
       }
     ],
     "spellcasting": {
       "level": 2,
       "spellcasting_ability": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "info": [
         {
@@ -19925,9 +17802,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/paladin/spells",
-    "url": "/api/2014/classes/paladin"
+    }
   },
   {
     "index": "ranger",
@@ -19945,64 +17820,56 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-animal-handling",
-                "name": "Skill: Animal Handling",
-                "url": "/api/2014/proficiencies/skill-animal-handling"
+                "name": "Skill: Animal Handling"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-investigation",
-                "name": "Skill: Investigation",
-                "url": "/api/2014/proficiencies/skill-investigation"
+                "name": "Skill: Investigation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-nature",
-                "name": "Skill: Nature",
-                "url": "/api/2014/proficiencies/skill-nature"
+                "name": "Skill: Nature"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-perception",
-                "name": "Skill: Perception",
-                "url": "/api/2014/proficiencies/skill-perception"
+                "name": "Skill: Perception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-stealth",
-                "name": "Skill: Stealth",
-                "url": "/api/2014/proficiencies/skill-stealth"
+                "name": "Skill: Stealth"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-survival",
-                "name": "Skill: Survival",
-                "url": "/api/2014/proficiencies/skill-survival"
+                "name": "Skill: Survival"
               }
             }
           ]
@@ -20012,66 +17879,55 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "medium-armor",
-        "name": "Medium Armor",
-        "url": "/api/2014/proficiencies/medium-armor"
+        "name": "Medium Armor"
       },
       {
         "index": "shields",
-        "name": "Shields",
-        "url": "/api/2014/proficiencies/shields"
+        "name": "Shields"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "martial-weapons",
-        "name": "Martial Weapons",
-        "url": "/api/2014/proficiencies/martial-weapons"
+        "name": "Martial Weapons"
       },
       {
         "index": "saving-throw-dex",
-        "name": "Saving Throw: DEX",
-        "url": "/api/2014/proficiencies/saving-throw-dex"
+        "name": "Saving Throw: DEX"
       },
       {
         "index": "saving-throw-str",
-        "name": "Saving Throw: STR",
-        "url": "/api/2014/proficiencies/saving-throw-str"
+        "name": "Saving Throw: STR"
       }
     ],
     "saving_throws": [
       {
         "index": "str",
-        "name": "STR",
-        "url": "/api/2014/ability-scores/str"
+        "name": "STR"
       },
       {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "longbow",
-          "name": "Longbow",
-          "url": "/api/2014/equipment/longbow"
+          "name": "Longbow"
         },
         "quantity": 1
       },
       {
         "equipment": {
           "index": "arrow",
-          "name": "Arrow",
-          "url": "/api/2014/equipment/arrow"
+          "name": "Arrow"
         },
         "quantity": 20
       }
@@ -20089,8 +17945,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "scale-mail",
-                "name": "Scale Mail",
-                "url": "/api/2014/equipment/scale-mail"
+                "name": "Scale Mail"
               }
             },
             {
@@ -20098,8 +17953,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "leather-armor",
-                "name": "Leather Armor",
-                "url": "/api/2014/equipment/leather-armor"
+                "name": "Leather Armor"
               }
             }
           ]
@@ -20117,8 +17971,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 2,
               "of": {
                 "index": "shortsword",
-                "name": "Shortsword",
-                "url": "/api/2014/equipment/shortsword"
+                "name": "Shortsword"
               }
             },
             {
@@ -20131,8 +17984,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-melee-weapons",
-                    "name": "Simple Melee Weapons",
-                    "url": "/api/2014/equipment-categories/simple-melee-weapons"
+                    "name": "Simple Melee Weapons"
                   }
                 }
               }
@@ -20152,8 +18004,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dungeoneers-pack",
-                "name": "Dungeoneer's Pack",
-                "url": "/api/2014/equipment/dungeoneers-pack"
+                "name": "Dungeoneer's Pack"
               }
             },
             {
@@ -20161,30 +18012,26 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
         }
       }
     ],
-    "class_levels": "/api/2014/classes/ranger/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "minimum_score": 13
         },
         {
           "ability_score": {
             "index": "wis",
-            "name": "WIS",
-            "url": "/api/2014/ability-scores/wis"
+            "name": "WIS"
           },
           "minimum_score": 13
         }
@@ -20192,28 +18039,23 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "medium-armor",
-          "name": "Medium Armor",
-          "url": "/api/2014/proficiencies/medium-armor"
+          "name": "Medium Armor"
         },
         {
           "index": "shields",
-          "name": "Shields",
-          "url": "/api/2014/proficiencies/shields"
+          "name": "Shields"
         },
         {
           "index": "simple-weapons",
-          "name": "Simple Weapons",
-          "url": "/api/2014/proficiencies/simple-weapons"
+          "name": "Simple Weapons"
         },
         {
           "index": "martial-weapons",
-          "name": "Martial Weapons",
-          "url": "/api/2014/proficiencies/martial-weapons"
+          "name": "Martial Weapons"
         }
       ],
       "proficiency_choices": [
@@ -20227,64 +18069,56 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                 "option_type": "reference",
                 "item": {
                   "index": "skill-animal-handling",
-                  "name": "Skill: Animal Handling",
-                  "url": "/api/2014/proficiencies/skill-animal-handling"
+                  "name": "Skill: Animal Handling"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-athletics",
-                  "name": "Skill: Athletics",
-                  "url": "/api/2014/proficiencies/skill-athletics"
+                  "name": "Skill: Athletics"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-insight",
-                  "name": "Skill: Insight",
-                  "url": "/api/2014/proficiencies/skill-insight"
+                  "name": "Skill: Insight"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-investigation",
-                  "name": "Skill: Investigation",
-                  "url": "/api/2014/proficiencies/skill-investigation"
+                  "name": "Skill: Investigation"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-nature",
-                  "name": "Skill: Nature",
-                  "url": "/api/2014/proficiencies/skill-nature"
+                  "name": "Skill: Nature"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-perception",
-                  "name": "Skill: Perception",
-                  "url": "/api/2014/proficiencies/skill-perception"
+                  "name": "Skill: Perception"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-stealth",
-                  "name": "Skill: Stealth",
-                  "url": "/api/2014/proficiencies/skill-stealth"
+                  "name": "Skill: Stealth"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-survival",
-                  "name": "Skill: Survival",
-                  "url": "/api/2014/proficiencies/skill-survival"
+                  "name": "Skill: Survival"
                 }
               }
             ]
@@ -20295,16 +18129,14 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "subclasses": [
       {
         "index": "hunter",
-        "name": "Hunter",
-        "url": "/api/2014/subclasses/hunter"
+        "name": "Hunter"
       }
     ],
     "spellcasting": {
       "level": 2,
       "spellcasting_ability": {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       "info": [
         {
@@ -20331,9 +18163,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/ranger/spells",
-    "url": "/api/2014/classes/ranger"
+    }
   },
   {
     "index": "rogue",
@@ -20351,88 +18181,77 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-acrobatics",
-                "name": "Skill: Acrobatics",
-                "url": "/api/2014/proficiencies/skill-acrobatics"
+                "name": "Skill: Acrobatics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-athletics",
-                "name": "Skill: Athletics",
-                "url": "/api/2014/proficiencies/skill-athletics"
+                "name": "Skill: Athletics"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-deception",
-                "name": "Skill: Deception",
-                "url": "/api/2014/proficiencies/skill-deception"
+                "name": "Skill: Deception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-investigation",
-                "name": "Skill: Investigation",
-                "url": "/api/2014/proficiencies/skill-investigation"
+                "name": "Skill: Investigation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-perception",
-                "name": "Skill: Perception",
-                "url": "/api/2014/proficiencies/skill-perception"
+                "name": "Skill: Perception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-performance",
-                "name": "Skill: Performance",
-                "url": "/api/2014/proficiencies/skill-performance"
+                "name": "Skill: Performance"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-persuasion",
-                "name": "Skill: Persuasion",
-                "url": "/api/2014/proficiencies/skill-persuasion"
+                "name": "Skill: Persuasion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-sleight-of-hand",
-                "name": "Skill: Sleight of Hand",
-                "url": "/api/2014/proficiencies/skill-sleight-of-hand"
+                "name": "Skill: Sleight of Hand"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-stealth",
-                "name": "Skill: Stealth",
-                "url": "/api/2014/proficiencies/skill-stealth"
+                "name": "Skill: Stealth"
               }
             }
           ]
@@ -20442,84 +18261,70 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "longswords",
-        "name": "Longswords",
-        "url": "/api/2014/proficiencies/longswords"
+        "name": "Longswords"
       },
       {
         "index": "rapiers",
-        "name": "Rapiers",
-        "url": "/api/2014/proficiencies/rapiers"
+        "name": "Rapiers"
       },
       {
         "index": "shortswords",
-        "name": "Shortswords",
-        "url": "/api/2014/proficiencies/shortswords"
+        "name": "Shortswords"
       },
       {
         "index": "hand-crossbows",
-        "name": "Hand crossbows",
-        "url": "/api/2014/proficiencies/hand-crossbows"
+        "name": "Hand crossbows"
       },
       {
         "index": "thieves-tools",
-        "name": "Thieves' Tools",
-        "url": "/api/2014/proficiencies/thieves-tools"
+        "name": "Thieves' Tools"
       },
       {
         "index": "saving-throw-dex",
-        "name": "Saving Throw: DEX",
-        "url": "/api/2014/proficiencies/saving-throw-dex"
+        "name": "Saving Throw: DEX"
       },
       {
         "index": "saving-throw-int",
-        "name": "Saving Throw: INT",
-        "url": "/api/2014/proficiencies/saving-throw-int"
+        "name": "Saving Throw: INT"
       }
     ],
     "saving_throws": [
       {
         "index": "dex",
-        "name": "DEX",
-        "url": "/api/2014/ability-scores/dex"
+        "name": "DEX"
       },
       {
         "index": "int",
-        "name": "INT",
-        "url": "/api/2014/ability-scores/int"
+        "name": "INT"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "leather-armor",
-          "name": "Leather Armor",
-          "url": "/api/2014/equipment/leather-armor"
+          "name": "Leather Armor"
         },
         "quantity": 1
       },
       {
         "equipment": {
           "index": "dagger",
-          "name": "Dagger",
-          "url": "/api/2014/equipment/dagger"
+          "name": "Dagger"
         },
         "quantity": 2
       },
       {
         "equipment": {
           "index": "thieves-tools",
-          "name": "Thieves' Tools",
-          "url": "/api/2014/equipment/thieves-tools"
+          "name": "Thieves' Tools"
         },
         "quantity": 1
       }
@@ -20537,8 +18342,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "rapier",
-                "name": "Rapier",
-                "url": "/api/2014/equipment/rapier"
+                "name": "Rapier"
               }
             },
             {
@@ -20546,8 +18350,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "shortsword",
-                "name": "Shortsword",
-                "url": "/api/2014/equipment/shortsword"
+                "name": "Shortsword"
               }
             }
           ]
@@ -20568,8 +18371,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "shortbow",
-                    "name": "Shortbow",
-                    "url": "/api/2014/equipment/shortbow"
+                    "name": "Shortbow"
                   }
                 },
                 {
@@ -20577,8 +18379,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 20,
                   "of": {
                     "index": "arrow",
-                    "name": "Arrow",
-                    "url": "/api/2014/equipment/arrow"
+                    "name": "Arrow"
                   }
                 }
               ]
@@ -20588,8 +18389,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "shortsword",
-                "name": "Shortsword",
-                "url": "/api/2014/equipment/shortsword"
+                "name": "Shortsword"
               }
             }
           ]
@@ -20607,8 +18407,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "burglars-pack",
-                "name": "Burglar's Pack",
-                "url": "/api/2014/equipment/burglars-pack"
+                "name": "Burglar's Pack"
               }
             },
             {
@@ -20616,8 +18415,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dungeoneers-pack",
-                "name": "Dungeoneer's Pack",
-                "url": "/api/2014/equipment/dungeoneers-pack"
+                "name": "Dungeoneer's Pack"
               }
             },
             {
@@ -20625,22 +18423,19 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
         }
       }
     ],
-    "class_levels": "/api/2014/classes/rogue/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "dex",
-            "name": "DEX",
-            "url": "/api/2014/ability-scores/dex"
+            "name": "DEX"
           },
           "minimum_score": 13
         }
@@ -20648,13 +18443,11 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "thieves-tools",
-          "name": "Thieves' Tools",
-          "url": "/api/2014/proficiencies/thieves-tools"
+          "name": "Thieves' Tools"
         }
       ],
       "proficiency_choices": [
@@ -20668,88 +18461,77 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                 "option_type": "reference",
                 "item": {
                   "index": "skill-acrobatics",
-                  "name": "Skill: Acrobatics",
-                  "url": "/api/2014/proficiencies/skill-acrobatics"
+                  "name": "Skill: Acrobatics"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-athletics",
-                  "name": "Skill: Athletics",
-                  "url": "/api/2014/proficiencies/skill-athletics"
+                  "name": "Skill: Athletics"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-deception",
-                  "name": "Skill: Deception",
-                  "url": "/api/2014/proficiencies/skill-deception"
+                  "name": "Skill: Deception"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-insight",
-                  "name": "Skill: Insight",
-                  "url": "/api/2014/proficiencies/skill-insight"
+                  "name": "Skill: Insight"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-intimidation",
-                  "name": "Skill: Intimidation",
-                  "url": "/api/2014/proficiencies/skill-intimidation"
+                  "name": "Skill: Intimidation"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-investigation",
-                  "name": "Skill: Investigation",
-                  "url": "/api/2014/proficiencies/skill-investigation"
+                  "name": "Skill: Investigation"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-perception",
-                  "name": "Skill: Perception",
-                  "url": "/api/2014/proficiencies/skill-perception"
+                  "name": "Skill: Perception"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-performance",
-                  "name": "Skill: Performance",
-                  "url": "/api/2014/proficiencies/skill-performance"
+                  "name": "Skill: Performance"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-persuasion",
-                  "name": "Skill: Persuasion",
-                  "url": "/api/2014/proficiencies/skill-persuasion"
+                  "name": "Skill: Persuasion"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-sleight-of-hand",
-                  "name": "Skill: Sleight of Hand",
-                  "url": "/api/2014/proficiencies/skill-sleight-of-hand"
+                  "name": "Skill: Sleight of Hand"
                 }
               },
               {
                 "option_type": "reference",
                 "item": {
                   "index": "skill-stealth",
-                  "name": "Skill: Stealth",
-                  "url": "/api/2014/proficiencies/skill-stealth"
+                  "name": "Skill: Stealth"
                 }
               }
             ]
@@ -20760,11 +18542,9 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "subclasses": [
       {
         "index": "thief",
-        "name": "Thief",
-        "url": "/api/2014/subclasses/thief"
+        "name": "Thief"
       }
-    ],
-    "url": "/api/2014/classes/rogue"
+    ]
   },
   {
     "index": "sorcerer",
@@ -20782,48 +18562,42 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-arcana",
-                "name": "Skill: Arcana",
-                "url": "/api/2014/proficiencies/skill-arcana"
+                "name": "Skill: Arcana"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-deception",
-                "name": "Skill: Deception",
-                "url": "/api/2014/proficiencies/skill-deception"
+                "name": "Skill: Deception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-persuasion",
-                "name": "Skill: Persuasion",
-                "url": "/api/2014/proficiencies/skill-persuasion"
+                "name": "Skill: Persuasion"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             }
           ]
@@ -20833,58 +18607,48 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "daggers",
-        "name": "Daggers",
-        "url": "/api/2014/proficiencies/daggers"
+        "name": "Daggers"
       },
       {
         "index": "darts",
-        "name": "Darts",
-        "url": "/api/2014/proficiencies/darts"
+        "name": "Darts"
       },
       {
         "index": "slings",
-        "name": "Slings",
-        "url": "/api/2014/proficiencies/slings"
+        "name": "Slings"
       },
       {
         "index": "quarterstaffs",
-        "name": "Quarterstaffs",
-        "url": "/api/2014/proficiencies/quarterstaffs"
+        "name": "Quarterstaffs"
       },
       {
         "index": "crossbows-light",
-        "name": "Crossbows, light",
-        "url": "/api/2014/proficiencies/crossbows-light"
+        "name": "Crossbows, light"
       },
       {
         "index": "saving-throw-con",
-        "name": "Saving Throw: CON",
-        "url": "/api/2014/proficiencies/saving-throw-con"
+        "name": "Saving Throw: CON"
       },
       {
         "index": "saving-throw-cha",
-        "name": "Saving Throw: CHA",
-        "url": "/api/2014/proficiencies/saving-throw-cha"
+        "name": "Saving Throw: CHA"
       }
     ],
     "saving_throws": [
       {
         "index": "con",
-        "name": "CON",
-        "url": "/api/2014/ability-scores/con"
+        "name": "CON"
       },
       {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "dagger",
-          "name": "Dagger",
-          "url": "/api/2014/equipment/dagger"
+          "name": "Dagger"
         },
         "quantity": 2
       }
@@ -20905,8 +18669,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "crossbow-light",
-                    "name": "Crossbow, light",
-                    "url": "/api/2014/equipment/crossbow-light"
+                    "name": "Crossbow, light"
                   }
                 },
                 {
@@ -20914,8 +18677,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 20,
                   "of": {
                     "index": "crossbow-bolt",
-                    "name": "Crossbow bolt",
-                    "url": "/api/2014/equipment/crossbow-bolt"
+                    "name": "Crossbow bolt"
                   }
                 }
               ]
@@ -20930,8 +18692,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -20951,8 +18712,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "component-pouch",
-                "name": "Component pouch",
-                "url": "/api/2014/equipment/component-pouch"
+                "name": "Component pouch"
               }
             },
             {
@@ -20965,8 +18725,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "arcane-foci",
-                    "name": "Arcane Foci",
-                    "url": "/api/2014/equipment-categories/arcane-foci"
+                    "name": "Arcane Foci"
                   }
                 }
               }
@@ -20986,8 +18745,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dungeoneers-pack",
-                "name": "Dungeoneer's Pack",
-                "url": "/api/2014/equipment/dungeoneers-pack"
+                "name": "Dungeoneer's Pack"
               }
             },
             {
@@ -20995,22 +18753,19 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
         }
       }
     ],
-    "class_levels": "/api/2014/classes/sorcerer/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "minimum_score": 13
         }
@@ -21020,16 +18775,14 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "subclasses": [
       {
         "index": "draconic",
-        "name": "Draconic",
-        "url": "/api/2014/subclasses/draconic"
+        "name": "Draconic"
       }
     ],
     "spellcasting": {
       "level": 1,
       "spellcasting_ability": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "info": [
         {
@@ -21068,9 +18821,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/sorcerer/spells",
-    "url": "/api/2014/classes/sorcerer"
+    }
   },
   {
     "index": "warlock",
@@ -21088,56 +18839,49 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-arcana",
-                "name": "Skill: Arcana",
-                "url": "/api/2014/proficiencies/skill-arcana"
+                "name": "Skill: Arcana"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-deception",
-                "name": "Skill: Deception",
-                "url": "/api/2014/proficiencies/skill-deception"
+                "name": "Skill: Deception"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-history",
-                "name": "Skill: History",
-                "url": "/api/2014/proficiencies/skill-history"
+                "name": "Skill: History"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-intimidation",
-                "name": "Skill: Intimidation",
-                "url": "/api/2014/proficiencies/skill-intimidation"
+                "name": "Skill: Intimidation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-investigation",
-                "name": "Skill: Investigation",
-                "url": "/api/2014/proficiencies/skill-investigation"
+                "name": "Skill: Investigation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-nature",
-                "name": "Skill: Nature",
-                "url": "/api/2014/proficiencies/skill-nature"
+                "name": "Skill: Nature"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             }
           ]
@@ -21147,51 +18891,43 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "light-armor",
-        "name": "Light Armor",
-        "url": "/api/2014/proficiencies/light-armor"
+        "name": "Light Armor"
       },
       {
         "index": "simple-weapons",
-        "name": "Simple Weapons",
-        "url": "/api/2014/proficiencies/simple-weapons"
+        "name": "Simple Weapons"
       },
       {
         "index": "saving-throw-wis",
-        "name": "Saving Throw: WIS",
-        "url": "/api/2014/proficiencies/saving-throw-wis"
+        "name": "Saving Throw: WIS"
       },
       {
         "index": "saving-throw-cha",
-        "name": "Saving Throw: CHA",
-        "url": "/api/2014/proficiencies/saving-throw-cha"
+        "name": "Saving Throw: CHA"
       }
     ],
     "saving_throws": [
       {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       },
       {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "dagger",
-          "name": "Dagger",
-          "url": "/api/2014/equipment/dagger"
+          "name": "Dagger"
         },
         "quantity": 2
       },
       {
         "equipment": {
           "index": "leather-armor",
-          "name": "Leather Armor",
-          "url": "/api/2014/equipment/leather-armor"
+          "name": "Leather Armor"
         },
         "quantity": 1
       }
@@ -21212,8 +18948,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 1,
                   "of": {
                     "index": "crossbow-light",
-                    "name": "Crossbow, light",
-                    "url": "/api/2014/equipment/crossbow-light"
+                    "name": "Crossbow, light"
                   }
                 },
                 {
@@ -21221,8 +18956,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "count": 20,
                   "of": {
                     "index": "crossbow-bolt",
-                    "name": "Crossbow bolt",
-                    "url": "/api/2014/equipment/crossbow-bolt"
+                    "name": "Crossbow bolt"
                   }
                 }
               ]
@@ -21237,8 +18971,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "simple-weapons",
-                    "name": "Simple Weapons",
-                    "url": "/api/2014/equipment-categories/simple-weapons"
+                    "name": "Simple Weapons"
                   }
                 }
               }
@@ -21258,8 +18991,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "component-pouch",
-                "name": "Component pouch",
-                "url": "/api/2014/equipment/component-pouch"
+                "name": "Component pouch"
               }
             },
             {
@@ -21272,8 +19004,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "arcane-foci",
-                    "name": "Arcane Foci",
-                    "url": "/api/2014/equipment-categories/arcane-foci"
+                    "name": "Arcane Foci"
                   }
                 }
               }
@@ -21293,8 +19024,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "scholars-pack",
-                "name": "Scholar's Pack",
-                "url": "/api/2014/equipment/scholars-pack"
+                "name": "Scholar's Pack"
               }
             },
             {
@@ -21302,8 +19032,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dungeoneers-pack",
-                "name": "Dungeoneer's Pack",
-                "url": "/api/2014/equipment/dungeoneers-pack"
+                "name": "Dungeoneer's Pack"
               }
             }
           ]
@@ -21317,20 +19046,17 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           "option_set_type": "equipment_category",
           "equipment_category": {
             "index": "simple-weapons",
-            "name": "Simple Weapons",
-            "url": "/api/2014/equipment-categories/simple-weapons"
+            "name": "Simple Weapons"
           }
         }
       }
     ],
-    "class_levels": "/api/2014/classes/warlock/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "cha",
-            "name": "CHA",
-            "url": "/api/2014/ability-scores/cha"
+            "name": "CHA"
           },
           "minimum_score": 13
         }
@@ -21338,29 +19064,25 @@ export const CLASS_RAW = JSON.parse(String.raw`[
       "proficiencies": [
         {
           "index": "light-armor",
-          "name": "Light Armor",
-          "url": "/api/2014/proficiencies/light-armor"
+          "name": "Light Armor"
         },
         {
           "index": "simple-weapons",
-          "name": "Simple Weapons",
-          "url": "/api/2014/proficiencies/simple-weapons"
+          "name": "Simple Weapons"
         }
       ]
     },
     "subclasses": [
       {
         "index": "fiend",
-        "name": "Fiend",
-        "url": "/api/2014/subclasses/fiend"
+        "name": "Fiend"
       }
     ],
     "spellcasting": {
       "level": 1,
       "spellcasting_ability": {
         "index": "cha",
-        "name": "CHA",
-        "url": "/api/2014/ability-scores/cha"
+        "name": "CHA"
       },
       "info": [
         {
@@ -21400,9 +19122,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/warlock/spells",
-    "url": "/api/2014/classes/warlock"
+    }
   },
   {
     "index": "wizard",
@@ -21420,48 +19140,42 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "option_type": "reference",
               "item": {
                 "index": "skill-arcana",
-                "name": "Skill: Arcana",
-                "url": "/api/2014/proficiencies/skill-arcana"
+                "name": "Skill: Arcana"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-history",
-                "name": "Skill: History",
-                "url": "/api/2014/proficiencies/skill-history"
+                "name": "Skill: History"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-insight",
-                "name": "Skill: Insight",
-                "url": "/api/2014/proficiencies/skill-insight"
+                "name": "Skill: Insight"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-investigation",
-                "name": "Skill: Investigation",
-                "url": "/api/2014/proficiencies/skill-investigation"
+                "name": "Skill: Investigation"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-medicine",
-                "name": "Skill: Medicine",
-                "url": "/api/2014/proficiencies/skill-medicine"
+                "name": "Skill: Medicine"
               }
             },
             {
               "option_type": "reference",
               "item": {
                 "index": "skill-religion",
-                "name": "Skill: Religion",
-                "url": "/api/2014/proficiencies/skill-religion"
+                "name": "Skill: Religion"
               }
             }
           ]
@@ -21471,58 +19185,48 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "proficiencies": [
       {
         "index": "daggers",
-        "name": "Daggers",
-        "url": "/api/2014/proficiencies/daggers"
+        "name": "Daggers"
       },
       {
         "index": "darts",
-        "name": "Darts",
-        "url": "/api/2014/proficiencies/darts"
+        "name": "Darts"
       },
       {
         "index": "slings",
-        "name": "Slings",
-        "url": "/api/2014/proficiencies/slings"
+        "name": "Slings"
       },
       {
         "index": "quarterstaffs",
-        "name": "Quarterstaffs",
-        "url": "/api/2014/proficiencies/quarterstaffs"
+        "name": "Quarterstaffs"
       },
       {
         "index": "crossbows-light",
-        "name": "Crossbows, light",
-        "url": "/api/2014/proficiencies/crossbows-light"
+        "name": "Crossbows, light"
       },
       {
         "index": "saving-throw-int",
-        "name": "Saving Throw: INT",
-        "url": "/api/2014/proficiencies/saving-throw-int"
+        "name": "Saving Throw: INT"
       },
       {
         "index": "saving-throw-wis",
-        "name": "Saving Throw: WIS",
-        "url": "/api/2014/proficiencies/saving-throw-wis"
+        "name": "Saving Throw: WIS"
       }
     ],
     "saving_throws": [
       {
         "index": "int",
-        "name": "INT",
-        "url": "/api/2014/ability-scores/int"
+        "name": "INT"
       },
       {
         "index": "wis",
-        "name": "WIS",
-        "url": "/api/2014/ability-scores/wis"
+        "name": "WIS"
       }
     ],
     "starting_equipment": [
       {
         "equipment": {
           "index": "spellbook",
-          "name": "Spellbook",
-          "url": "/api/2014/equipment/spellbook"
+          "name": "Spellbook"
         },
         "quantity": 1
       }
@@ -21540,8 +19244,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "quarterstaff",
-                "name": "Quarterstaff",
-                "url": "/api/2014/equipment/quarterstaff"
+                "name": "Quarterstaff"
               }
             },
             {
@@ -21549,8 +19252,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "dagger",
-                "name": "Dagger",
-                "url": "/api/2014/equipment/dagger"
+                "name": "Dagger"
               }
             }
           ]
@@ -21568,8 +19270,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "component-pouch",
-                "name": "Component pouch",
-                "url": "/api/2014/equipment/component-pouch"
+                "name": "Component pouch"
               }
             },
             {
@@ -21582,8 +19283,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
                   "option_set_type": "equipment_category",
                   "equipment_category": {
                     "index": "arcane-foci",
-                    "name": "Arcane Foci",
-                    "url": "/api/2014/equipment-categories/arcane-foci"
+                    "name": "Arcane Foci"
                   }
                 }
               }
@@ -21603,8 +19303,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "scholars-pack",
-                "name": "Scholar's Pack",
-                "url": "/api/2014/equipment/scholars-pack"
+                "name": "Scholar's Pack"
               }
             },
             {
@@ -21612,22 +19311,19 @@ export const CLASS_RAW = JSON.parse(String.raw`[
               "count": 1,
               "of": {
                 "index": "explorers-pack",
-                "name": "Explorer's Pack",
-                "url": "/api/2014/equipment/explorers-pack"
+                "name": "Explorer's Pack"
               }
             }
           ]
         }
       }
     ],
-    "class_levels": "/api/2014/classes/wizard/levels",
     "multi_classing": {
       "prerequisites": [
         {
           "ability_score": {
             "index": "int",
-            "name": "INT",
-            "url": "/api/2014/ability-scores/int"
+            "name": "INT"
           },
           "minimum_score": 13
         }
@@ -21637,16 +19333,14 @@ export const CLASS_RAW = JSON.parse(String.raw`[
     "subclasses": [
       {
         "index": "evocation",
-        "name": "Evocation",
-        "url": "/api/2014/subclasses/evocation"
+        "name": "Evocation"
       }
     ],
     "spellcasting": {
       "level": 1,
       "spellcasting_ability": {
         "index": "int",
-        "name": "INT",
-        "url": "/api/2014/ability-scores/int"
+        "name": "INT"
       },
       "info": [
         {
@@ -21691,9 +19385,7 @@ export const CLASS_RAW = JSON.parse(String.raw`[
           ]
         }
       ]
-    },
-    "spells": "/api/2014/classes/wizard/spells",
-    "url": "/api/2014/classes/wizard"
+    }
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -21702,38 +19394,31 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
     "index": "berserker",
     "class": {
       "index": "barbarian",
-      "name": "Barbarian",
-      "url": "/api/2014/classes/barbarian"
+      "name": "Barbarian"
     },
     "name": "Berserker",
     "subclass_flavor": "Primal Path",
     "desc": [
       "For some barbarians, rage is a means to an end--that end being violence. The Path of the Berserker is a path of untrammeled fury, slick with blood. As you enter the berserker's rage, you thrill in the chaos of battle, heedless of your own health or well-being."
-    ],
-    "subclass_levels": "/api/2014/subclasses/berserker/levels",
-    "url": "/api/2014/subclasses/berserker"
+    ]
   },
   {
     "index": "lore",
     "class": {
       "index": "bard",
-      "name": "Bard",
-      "url": "/api/2014/classes/bard"
+      "name": "Bard"
     },
     "name": "Lore",
     "subclass_flavor": "Bard College",
     "desc": [
       "Bards of the College of Lore know something about most things, collecting bits of knowledge from sources as diverse as scholarly tomes and peasant tales. Whether singing folk ballads in taverns or elaborate compositions in royal courts, these bards use their gifts to hold audiences spellbound. When the applause dies down, the audience members might find themselves questioning everything they held to be true, from their faith in the priesthood of the local temple to their loyalty to the king. The loyalty of these bards lies in the pursuit of beauty and truth, not in fealty to a monarch or following the tenets of a deity. A noble who keeps such a bard as a herald or advisor knows that the bard would rather be honest than politic. The college's members gather in libraries and sometimes in actual colleges, complete with classrooms and dormitories, to share their lore with one another. They also meet at festivals or affairs of state, where they can expose corruption, unravel lies, and poke fun at self-important figures of authority."
-    ],
-    "subclass_levels": "/api/2014/subclasses/lore/levels",
-    "url": "/api/2014/subclasses/lore"
+    ]
   },
   {
     "index": "life",
     "class": {
       "index": "cleric",
-      "name": "Cleric",
-      "url": "/api/2014/classes/cleric"
+      "name": "Cleric"
     },
     "name": "Life",
     "subclass_flavor": "Divine Domain",
@@ -21746,14 +19431,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-1",
             "type": "level",
-            "name": "Cleric 1",
-            "url": "/api/2014/classes/cleric/levels/1"
+            "name": "Cleric 1"
           }
         ],
         "spell": {
           "index": "bless",
-          "name": "Bless",
-          "url": "/api/2014/spells/bless"
+          "name": "Bless"
         }
       },
       {
@@ -21761,14 +19444,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-1",
             "type": "level",
-            "name": "Cleric 1",
-            "url": "/api/2014/classes/cleric/levels/1"
+            "name": "Cleric 1"
           }
         ],
         "spell": {
           "index": "cure-wounds",
-          "name": "Cure Wounds",
-          "url": "/api/2014/spells/cure-wounds"
+          "name": "Cure Wounds"
         }
       },
       {
@@ -21776,14 +19457,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-3",
             "type": "level",
-            "name": "Cleric 3",
-            "url": "/api/2014/classes/cleric/levels/3"
+            "name": "Cleric 3"
           }
         ],
         "spell": {
           "index": "lesser-restoration",
-          "name": "Lesser Restoration",
-          "url": "/api/2014/spells/lesser-restoration"
+          "name": "Lesser Restoration"
         }
       },
       {
@@ -21791,14 +19470,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-3",
             "type": "level",
-            "name": "Cleric 3",
-            "url": "/api/2014/classes/cleric/levels/3"
+            "name": "Cleric 3"
           }
         ],
         "spell": {
           "index": "spiritual-weapon",
-          "name": "Spiritual Weapon",
-          "url": "/api/2014/spells/spiritual-weapon"
+          "name": "Spiritual Weapon"
         }
       },
       {
@@ -21806,14 +19483,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-5",
             "type": "level",
-            "name": "Cleric 5",
-            "url": "/api/2014/classes/cleric/levels/5"
+            "name": "Cleric 5"
           }
         ],
         "spell": {
           "index": "beacon-of-hope",
-          "name": "Beacon of Hope",
-          "url": "/api/2014/spells/beacon-of-hope"
+          "name": "Beacon of Hope"
         }
       },
       {
@@ -21821,14 +19496,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-5",
             "type": "level",
-            "name": "Cleric 5",
-            "url": "/api/2014/classes/cleric/levels/5"
+            "name": "Cleric 5"
           }
         ],
         "spell": {
           "index": "revivify",
-          "name": "Revivify",
-          "url": "/api/2014/spells/revivify"
+          "name": "Revivify"
         }
       },
       {
@@ -21836,14 +19509,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-7",
             "type": "level",
-            "name": "Cleric 7",
-            "url": "/api/2014/classes/cleric/levels/7"
+            "name": "Cleric 7"
           }
         ],
         "spell": {
           "index": "death-ward",
-          "name": "Death Ward",
-          "url": "/api/2014/spells/death-ward"
+          "name": "Death Ward"
         }
       },
       {
@@ -21851,14 +19522,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-9",
             "type": "level",
-            "name": "Cleric 9",
-            "url": "/api/2014/classes/cleric/levels/9"
+            "name": "Cleric 9"
           }
         ],
         "spell": {
           "index": "mass-cure-wounds",
-          "name": "Mass Cure Wounds",
-          "url": "/api/2014/spells/mass-cure-wounds"
+          "name": "Mass Cure Wounds"
         }
       },
       {
@@ -21866,26 +19535,21 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "cleric-9",
             "type": "level",
-            "name": "Cleric 9",
-            "url": "/api/2014/classes/cleric/levels/9"
+            "name": "Cleric 9"
           }
         ],
         "spell": {
           "index": "raise-dead",
-          "name": "Raise Dead",
-          "url": "/api/2014/spells/raise-dead"
+          "name": "Raise Dead"
         }
       }
-    ],
-    "subclass_levels": "/api/2014/subclasses/life/levels",
-    "url": "/api/2014/subclasses/life"
+    ]
   },
   {
     "index": "land",
     "class": {
       "index": "druid",
-      "name": "Druid",
-      "url": "/api/2014/classes/druid"
+      "name": "Druid"
     },
     "name": "Land",
     "subclass_flavor": "Druid Circle",
@@ -21898,20 +19562,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "hold-person",
-          "name": "Hold Person",
-          "url": "/api/2014/spells/hold-person"
+          "name": "Hold Person"
         }
       },
       {
@@ -21919,20 +19580,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "spike-growth",
-          "name": "Spike Growth",
-          "url": "/api/2014/spells/spike-growth"
+          "name": "Spike Growth"
         }
       },
       {
@@ -21940,20 +19598,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "sleet-storm",
-          "name": "Sleet Storm",
-          "url": "/api/2014/spells/sleet-storm"
+          "name": "Sleet Storm"
         }
       },
       {
@@ -21961,20 +19616,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "slow",
-          "name": "Slow",
-          "url": "/api/2014/spells/slow"
+          "name": "Slow"
         }
       },
       {
@@ -21982,20 +19634,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "freedom-of-movement",
-          "name": "Freedom of Movement",
-          "url": "/api/2014/spells/freedom-of-movement"
+          "name": "Freedom of Movement"
         }
       },
       {
@@ -22003,20 +19652,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "ice-storm",
-          "name": "Ice Storm",
-          "url": "/api/2014/spells/ice-storm"
+          "name": "Ice Storm"
         }
       },
       {
@@ -22024,20 +19670,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "commune-with-nature",
-          "name": "Commune With Nature",
-          "url": "/api/2014/spells/commune-with-nature"
+          "name": "Commune With Nature"
         }
       },
       {
@@ -22045,20 +19688,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-arctic",
             "type": "feature",
-            "name": "Circle of the Land: Arctic",
-            "url": "/api/2014/features/circle-of-the-land-arctic"
+            "name": "Circle of the Land: Arctic"
           }
         ],
         "spell": {
           "index": "cone-of-cold",
-          "name": "Cone of Cold",
-          "url": "/api/2014/spells/cone-of-cold"
+          "name": "Cone of Cold"
         }
       },
       {
@@ -22066,20 +19706,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "mirror-image",
-          "name": "Mirror Image",
-          "url": "/api/2014/spells/mirror-image"
+          "name": "Mirror Image"
         }
       },
       {
@@ -22087,20 +19724,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "misty-step",
-          "name": "Misty Step",
-          "url": "/api/2014/spells/misty-step"
+          "name": "Misty Step"
         }
       },
       {
@@ -22108,20 +19742,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "water-breathing",
-          "name": "Water Breathing",
-          "url": "/api/2014/spells/water-breathing"
+          "name": "Water Breathing"
         }
       },
       {
@@ -22129,20 +19760,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "water-walk",
-          "name": "Water Walk",
-          "url": "/api/2014/spells/water-walk"
+          "name": "Water Walk"
         }
       },
       {
@@ -22150,20 +19778,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "control-water",
-          "name": "Control Water",
-          "url": "/api/2014/spells/control-water"
+          "name": "Control Water"
         }
       },
       {
@@ -22171,20 +19796,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "freedom-of-movement",
-          "name": "Freedom of Movement",
-          "url": "/api/2014/spells/freedom-of-movement"
+          "name": "Freedom of Movement"
         }
       },
       {
@@ -22192,20 +19814,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "conjure-elemental",
-          "name": "Conjure Elemental",
-          "url": "/api/2014/spells/conjure-elemental"
+          "name": "Conjure Elemental"
         }
       },
       {
@@ -22213,20 +19832,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-coast",
             "type": "feature",
-            "name": "Circle of the Land: Coast",
-            "url": "/api/2014/features/circle-of-the-land-coast"
+            "name": "Circle of the Land: Coast"
           }
         ],
         "spell": {
           "index": "scrying",
-          "name": "Scrying",
-          "url": "/api/2014/spells/scrying"
+          "name": "Scrying"
         }
       },
       {
@@ -22234,20 +19850,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "blur",
-          "name": "Blur",
-          "url": "/api/2014/spells/blur"
+          "name": "Blur"
         }
       },
       {
@@ -22255,20 +19868,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "silence",
-          "name": "Silence",
-          "url": "/api/2014/spells/silence"
+          "name": "Silence"
         }
       },
       {
@@ -22276,20 +19886,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "create-food-and-water",
-          "name": "Create Food and Water",
-          "url": "/api/2014/spells/create-food-and-water"
+          "name": "Create Food and Water"
         }
       },
       {
@@ -22297,20 +19904,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "protection-from-energy",
-          "name": "Protection From Energy",
-          "url": "/api/2014/spells/protection-from-energy"
+          "name": "Protection From Energy"
         }
       },
       {
@@ -22318,20 +19922,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "blight",
-          "name": "Blight",
-          "url": "/api/2014/spells/blight"
+          "name": "Blight"
         }
       },
       {
@@ -22339,20 +19940,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "hallucinatory-terrain",
-          "name": "Hallucinatory Terrain",
-          "url": "/api/2014/spells/hallucinatory-terrain"
+          "name": "Hallucinatory Terrain"
         }
       },
       {
@@ -22360,20 +19958,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "insect-plague",
-          "name": "Insect Plague",
-          "url": "/api/2014/spells/insect-plague"
+          "name": "Insect Plague"
         }
       },
       {
@@ -22381,20 +19976,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-desert",
             "type": "feature",
-            "name": "Circle of the Land: Desert",
-            "url": "/api/2014/features/circle-of-the-land-desert"
+            "name": "Circle of the Land: Desert"
           }
         ],
         "spell": {
           "index": "wall-of-stone",
-          "name": "Wall of Stone",
-          "url": "/api/2014/spells/wall-of-stone"
+          "name": "Wall of Stone"
         }
       },
       {
@@ -22402,20 +19994,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "barkskin",
-          "name": "Barkskin",
-          "url": "/api/2014/spells/barkskin"
+          "name": "Barkskin"
         }
       },
       {
@@ -22423,20 +20012,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "spider-climb",
-          "name": "Spider Climb",
-          "url": "/api/2014/spells/spider-climb"
+          "name": "Spider Climb"
         }
       },
       {
@@ -22444,20 +20030,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "call-lightning",
-          "name": "Call Lightning",
-          "url": "/api/2014/spells/call-lightning"
+          "name": "Call Lightning"
         }
       },
       {
@@ -22465,20 +20048,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "plant-growth",
-          "name": "Plant Growth",
-          "url": "/api/2014/spells/plant-growth"
+          "name": "Plant Growth"
         }
       },
       {
@@ -22486,20 +20066,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "divination",
-          "name": "Divination",
-          "url": "/api/2014/spells/divination"
+          "name": "Divination"
         }
       },
       {
@@ -22507,20 +20084,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "freedom-of-movement",
-          "name": "Freedom of Movement",
-          "url": "/api/2014/spells/freedom-of-movement"
+          "name": "Freedom of Movement"
         }
       },
       {
@@ -22528,20 +20102,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "commune-with-nature",
-          "name": "Commune With Nature",
-          "url": "/api/2014/spells/commune-with-nature"
+          "name": "Commune With Nature"
         }
       },
       {
@@ -22549,20 +20120,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-forest",
             "type": "feature",
-            "name": "Circle of the Land: Forest",
-            "url": "/api/2014/features/circle-of-the-land-forest"
+            "name": "Circle of the Land: Forest"
           }
         ],
         "spell": {
           "index": "tree-stride",
-          "name": "Tree Stride",
-          "url": "/api/2014/spells/tree-stride"
+          "name": "Tree Stride"
         }
       },
       {
@@ -22570,20 +20138,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "invisibility",
-          "name": "Invisibility",
-          "url": "/api/2014/spells/invisibility"
+          "name": "Invisibility"
         }
       },
       {
@@ -22591,20 +20156,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "pass-without-trace",
-          "name": "Pass Without Trace",
-          "url": "/api/2014/spells/pass-without-trace"
+          "name": "Pass Without Trace"
         }
       },
       {
@@ -22612,20 +20174,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "daylight",
-          "name": "Daylight",
-          "url": "/api/2014/spells/daylight"
+          "name": "Daylight"
         }
       },
       {
@@ -22633,20 +20192,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "haste",
-          "name": "Haste",
-          "url": "/api/2014/spells/haste"
+          "name": "Haste"
         }
       },
       {
@@ -22654,20 +20210,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "divination",
-          "name": "Divination",
-          "url": "/api/2014/spells/divination"
+          "name": "Divination"
         }
       },
       {
@@ -22675,20 +20228,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "freedom-of-movement",
-          "name": "Freedom of Movement",
-          "url": "/api/2014/spells/freedom-of-movement"
+          "name": "Freedom of Movement"
         }
       },
       {
@@ -22696,20 +20246,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "dream",
-          "name": "Dream",
-          "url": "/api/2014/spells/dream"
+          "name": "Dream"
         }
       },
       {
@@ -22717,20 +20264,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-grassland",
             "type": "feature",
-            "name": "Circle of the Land: Grassland",
-            "url": "/api/2014/features/circle-of-the-land-grassland"
+            "name": "Circle of the Land: Grassland"
           }
         ],
         "spell": {
           "index": "insect-plague",
-          "name": "Insect Plague",
-          "url": "/api/2014/spells/insect-plague"
+          "name": "Insect Plague"
         }
       },
       {
@@ -22738,20 +20282,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "spider-climb",
-          "name": "Spider Climb",
-          "url": "/api/2014/spells/spider-climb"
+          "name": "Spider Climb"
         }
       },
       {
@@ -22759,20 +20300,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "spike-growth",
-          "name": "Spike Growth",
-          "url": "/api/2014/spells/spike-growth"
+          "name": "Spike Growth"
         }
       },
       {
@@ -22780,20 +20318,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "lightning-bolt",
-          "name": "Lightning Bolt",
-          "url": "/api/2014/spells/lightning-bolt"
+          "name": "Lightning Bolt"
         }
       },
       {
@@ -22801,20 +20336,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "meld-into-stone",
-          "name": "Meld Into Stone",
-          "url": "/api/2014/spells/meld-into-stone"
+          "name": "Meld Into Stone"
         }
       },
       {
@@ -22822,20 +20354,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "stone-shape",
-          "name": "Stone Shape",
-          "url": "/api/2014/spells/stone-shape"
+          "name": "Stone Shape"
         }
       },
       {
@@ -22843,20 +20372,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "stoneskin",
-          "name": "Stoneskin",
-          "url": "/api/2014/spells/stoneskin"
+          "name": "Stoneskin"
         }
       },
       {
@@ -22864,20 +20390,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "passwall",
-          "name": "Passwall",
-          "url": "/api/2014/spells/passwall"
+          "name": "Passwall"
         }
       },
       {
@@ -22885,20 +20408,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-mountain",
             "type": "feature",
-            "name": "Circle of the Land: Mountain",
-            "url": "/api/2014/features/circle-of-the-land-mountain"
+            "name": "Circle of the Land: Mountain"
           }
         ],
         "spell": {
           "index": "wall-of-stone",
-          "name": "Wall of Stone",
-          "url": "/api/2014/spells/wall-of-stone"
+          "name": "Wall of Stone"
         }
       },
       {
@@ -22906,20 +20426,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "acid-arrow",
-          "name": "Acid Arrow",
-          "url": "/api/2014/spells/acid-arrow"
+          "name": "Acid Arrow"
         }
       },
       {
@@ -22927,20 +20444,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-3",
             "type": "level",
-            "name": "Druid 3",
-            "url": "/api/2014/classes/druid/levels/3"
+            "name": "Druid 3"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "darkness",
-          "name": "Darkness",
-          "url": "/api/2014/spells/darkness"
+          "name": "Darkness"
         }
       },
       {
@@ -22948,20 +20462,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "water-walk",
-          "name": "Water Walk",
-          "url": "/api/2014/spells/water-walk"
+          "name": "Water Walk"
         }
       },
       {
@@ -22969,20 +20480,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-5",
             "type": "level",
-            "name": "Druid 5",
-            "url": "/api/2014/classes/druid/levels/5"
+            "name": "Druid 5"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "stinking-cloud",
-          "name": "Stinking Cloud",
-          "url": "/api/2014/spells/stinking-cloud"
+          "name": "Stinking Cloud"
         }
       },
       {
@@ -22990,20 +20498,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "freedom-of-movement",
-          "name": "Freedom of Movement",
-          "url": "/api/2014/spells/freedom-of-movement"
+          "name": "Freedom of Movement"
         }
       },
       {
@@ -23011,20 +20516,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-7",
             "type": "level",
-            "name": "Druid 7",
-            "url": "/api/2014/classes/druid/levels/7"
+            "name": "Druid 7"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "locate-creature",
-          "name": "Locate Creature",
-          "url": "/api/2014/spells/locate-creature"
+          "name": "Locate Creature"
         }
       },
       {
@@ -23032,20 +20534,17 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "insect-plague",
-          "name": "Insect Plague",
-          "url": "/api/2014/spells/insect-plague"
+          "name": "Insect Plague"
         }
       },
       {
@@ -23053,62 +20552,50 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "druid-9",
             "type": "level",
-            "name": "Druid 9",
-            "url": "/api/2014/classes/druid/levels/9"
+            "name": "Druid 9"
           },
           {
             "index": "circle-of-the-land-swamp",
             "type": "feature",
-            "name": "Circle of the Land: Swamp",
-            "url": "/api/2014/features/circle-of-the-land-swamp"
+            "name": "Circle of the Land: Swamp"
           }
         ],
         "spell": {
           "index": "scrying",
-          "name": "Scrying",
-          "url": "/api/2014/spells/scrying"
+          "name": "Scrying"
         }
       }
-    ],
-    "subclass_levels": "/api/2014/subclasses/land/levels",
-    "url": "/api/2014/subclasses/land"
+    ]
   },
   {
     "index": "champion",
     "class": {
       "index": "fighter",
-      "name": "Fighter",
-      "url": "/api/2014/classes/fighter"
+      "name": "Fighter"
     },
     "name": "Champion",
     "subclass_flavor": "Martial Archetype",
     "desc": [
       "The archetypal Champion focuses on the development of raw physical power honed to deadly perfection. Those who model themselves on this archetype combine rigorous training with physical excellence to deal devastating blows."
-    ],
-    "subclass_levels": "/api/2014/subclasses/champion/levels",
-    "url": "/api/2014/subclasses/champion"
+    ]
   },
   {
     "index": "open-hand",
     "class": {
       "index": "monk",
-      "name": "Monk",
-      "url": "/api/2014/classes/monk"
+      "name": "Monk"
     },
     "name": "Open Hand",
     "subclass_flavor": "Monastic Tradition",
     "desc": [
       "Monks of the Way of the Open Hand are the ultimate masters of martial arts combat, whether armed or unarmed. They learn techniques to push and trip their opponents, manipulate ki to heal damage to their bodies, and practice advanced meditation that can protect them from harm."
-    ],
-    "subclass_levels": "/api/2014/subclasses/open-hand/levels",
-    "url": "/api/2014/subclasses/open-hand"
+    ]
   },
   {
     "index": "devotion",
     "class": {
       "index": "paladin",
-      "name": "Paladin",
-      "url": "/api/2014/classes/paladin"
+      "name": "Paladin"
     },
     "name": "Devotion",
     "subclass_flavor": "Sacred Oath",
@@ -23121,14 +20608,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-3",
             "type": "level",
-            "name": "Paladin 3",
-            "url": "/api/2014/classes/paladin/levels/3"
+            "name": "Paladin 3"
           }
         ],
         "spell": {
           "index": "protection-from-evil-and-good",
-          "name": "Protection from Evil and Good",
-          "url": "/api/2014/spells/protection-from-evil-and-good"
+          "name": "Protection from Evil and Good"
         }
       },
       {
@@ -23136,14 +20621,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-3",
             "type": "level",
-            "name": "Paladin 3",
-            "url": "/api/2014/classes/paladin/levels/3"
+            "name": "Paladin 3"
           }
         ],
         "spell": {
           "index": "sanctuary",
-          "name": "Sanctuary",
-          "url": "/api/2014/spells/sanctuary"
+          "name": "Sanctuary"
         }
       },
       {
@@ -23151,14 +20634,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-5",
             "type": "level",
-            "name": "Paladin 5",
-            "url": "/api/2014/classes/paladin/levels/5"
+            "name": "Paladin 5"
           }
         ],
         "spell": {
           "index": "lesser-restoration",
-          "name": "Lesser Restoration",
-          "url": "/api/2014/spells/lesser-restoration"
+          "name": "Lesser Restoration"
         }
       },
       {
@@ -23166,14 +20647,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-5",
             "type": "level",
-            "name": "Paladin 5",
-            "url": "/api/2014/classes/paladin/levels/5"
+            "name": "Paladin 5"
           }
         ],
         "spell": {
           "index": "zone-of-truth",
-          "name": "Zone of Truth",
-          "url": "/api/2014/spells/zone-of-truth"
+          "name": "Zone of Truth"
         }
       },
       {
@@ -23181,14 +20660,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-9",
             "type": "level",
-            "name": "Paladin 9",
-            "url": "/api/2014/classes/paladin/levels/9"
+            "name": "Paladin 9"
           }
         ],
         "spell": {
           "index": "beacon-of-hope",
-          "name": "Beacon of Hope",
-          "url": "/api/2014/spells/beacon-of-hope"
+          "name": "Beacon of Hope"
         }
       },
       {
@@ -23196,14 +20673,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-9",
             "type": "level",
-            "name": "Paladin 9",
-            "url": "/api/2014/classes/paladin/levels/9"
+            "name": "Paladin 9"
           }
         ],
         "spell": {
           "index": "dispel-magic",
-          "name": "Dispel Magic",
-          "url": "/api/2014/spells/dispel-magic"
+          "name": "Dispel Magic"
         }
       },
       {
@@ -23211,14 +20686,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-13",
             "type": "level",
-            "name": "Paladin 13",
-            "url": "/api/2014/classes/paladin/levels/13"
+            "name": "Paladin 13"
           }
         ],
         "spell": {
           "index": "freedom-of-movement",
-          "name": "Freedom of Movement",
-          "url": "/api/2014/spells/freedom-of-movement"
+          "name": "Freedom of Movement"
         }
       },
       {
@@ -23226,14 +20699,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-13",
             "type": "level",
-            "name": "Paladin 13",
-            "url": "/api/2014/classes/paladin/levels/13"
+            "name": "Paladin 13"
           }
         ],
         "spell": {
           "index": "guardian-of-faith",
-          "name": "Guardian of Faith",
-          "url": "/api/2014/spells/guardian-of-faith"
+          "name": "Guardian of Faith"
         }
       },
       {
@@ -23241,14 +20712,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-17",
             "type": "level",
-            "name": "Paladin 17",
-            "url": "/api/2014/classes/paladin/levels/17"
+            "name": "Paladin 17"
           }
         ],
         "spell": {
           "index": "commune",
-          "name": "Commune",
-          "url": "/api/2014/spells/commune"
+          "name": "Commune"
         }
       },
       {
@@ -23256,71 +20725,57 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "paladin-17",
             "type": "level",
-            "name": "Paladin 17",
-            "url": "/api/2014/classes/paladin/levels/17"
+            "name": "Paladin 17"
           }
         ],
         "spell": {
           "index": "flame-strike",
-          "name": "Flame Strike",
-          "url": "/api/2014/spells/flame-strike"
+          "name": "Flame Strike"
         }
       }
-    ],
-    "subclass_levels": "/api/2014/subclasses/devotion/levels",
-    "url": "/api/2014/subclasses/devotion"
+    ]
   },
   {
     "index": "hunter",
     "class": {
       "index": "ranger",
-      "name": "Ranger",
-      "url": "/api/2014/classes/ranger"
+      "name": "Ranger"
     },
     "name": "Hunter",
     "subclass_flavor": "Ranger Archetype",
     "desc": [
       "Emulating the Hunter archetype means accepting your place as a bulwark between civilization and the terrors of the wilderness. As you walk the Hunter's path, you learn specialized techniques for fighting the threats you face, from rampaging ogres and hordes of orcs to towering giants and terrifying dragons."
-    ],
-    "subclass_levels": "/api/2014/subclasses/hunter/levels",
-    "url": "/api/2014/subclasses/hunter"
+    ]
   },
   {
     "index": "thief",
     "class": {
       "index": "rogue",
-      "name": "Rogue",
-      "url": "/api/2014/classes/rogue"
+      "name": "Rogue"
     },
     "name": "Thief",
     "subclass_flavor": "Roguish Archetype",
     "desc": [
       "You hone your skills in the larcenous arts. Burglars, bandits, cutpurses, and other criminals typically follow this archetype, but so do rogues who prefer to think of themselves as professional treasure seekers, explorers, delvers, and investigators. In addition to improving your agility and stealth, you learn skills useful for delving into ancient ruins, reading unfamiliar languages, and using magic items you normally couldn't employ."
-    ],
-    "subclass_levels": "/api/2014/subclasses/thief/levels",
-    "url": "/api/2014/subclasses/thief"
+    ]
   },
   {
     "index": "draconic",
     "class": {
       "index": "sorcerer",
-      "name": "Sorcerer",
-      "url": "/api/2014/classes/sorcerer"
+      "name": "Sorcerer"
     },
     "name": "Draconic",
     "subclass_flavor": "Sorcerous Origin",
     "desc": [
       "Your innate magic comes from draconic magic that was mingled with your blood or that of your ancestors. Most often, sorcerers with this origin trace their descent back to a mighty sorcerer of ancient times who made a bargain with a dragon or who might even have claimed a dragon parent. Some of these bloodlines are well established in the world, but most are obscure. Any given sorcerer could be the first of a new bloodline, as a result of a pact or some other exceptional circumstance."
-    ],
-    "subclass_levels": "/api/2014/subclasses/draconic/levels",
-    "url": "/api/2014/subclasses/draconic"
+    ]
   },
   {
     "index": "fiend",
     "class": {
       "index": "warlock",
-      "name": "Warlock",
-      "url": "/api/2014/classes/warlock"
+      "name": "Warlock"
     },
     "name": "Fiend",
     "subclass_flavor": "Otherworldly Patron",
@@ -23333,14 +20788,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-1",
             "type": "level",
-            "name": "Warlock 1",
-            "url": "/api/2014/classes/warlock/levels/1"
+            "name": "Warlock 1"
           }
         ],
         "spell": {
           "index": "burning-hands",
-          "name": "Burning Hands",
-          "url": "/api/2014/spells/burning-hands"
+          "name": "Burning Hands"
         }
       },
       {
@@ -23348,14 +20801,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-1",
             "type": "level",
-            "name": "Warlock 1",
-            "url": "/api/2014/classes/warlock/levels/1"
+            "name": "Warlock 1"
           }
         ],
         "spell": {
           "index": "command",
-          "name": "Command",
-          "url": "/api/2014/spells/command"
+          "name": "Command"
         }
       },
       {
@@ -23363,14 +20814,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-3",
             "type": "level",
-            "name": "Warlock 3",
-            "url": "/api/2014/classes/warlock/levels/3"
+            "name": "Warlock 3"
           }
         ],
         "spell": {
           "index": "blindness-deafness",
-          "name": "Blindness/Deafness",
-          "url": "/api/2014/spells/blindness-deafness"
+          "name": "Blindness/Deafness"
         }
       },
       {
@@ -23378,14 +20827,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-3",
             "type": "level",
-            "name": "Warlock 3",
-            "url": "/api/2014/classes/warlock/levels/3"
+            "name": "Warlock 3"
           }
         ],
         "spell": {
           "index": "scorching-ray",
-          "name": "Scorching Ray",
-          "url": "/api/2014/spells/scorching-ray"
+          "name": "Scorching Ray"
         }
       },
       {
@@ -23393,14 +20840,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-5",
             "type": "level",
-            "name": "Warlock 5",
-            "url": "/api/2014/classes/warlock/levels/5"
+            "name": "Warlock 5"
           }
         ],
         "spell": {
           "index": "fireball",
-          "name": "Fireball",
-          "url": "/api/2014/spells/fireball"
+          "name": "Fireball"
         }
       },
       {
@@ -23408,14 +20853,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-5",
             "type": "level",
-            "name": "Warlock 5",
-            "url": "/api/2014/classes/warlock/levels/5"
+            "name": "Warlock 5"
           }
         ],
         "spell": {
           "index": "stinking-cloud",
-          "name": "Stinking Cloud",
-          "url": "/api/2014/spells/stinking-cloud"
+          "name": "Stinking Cloud"
         }
       },
       {
@@ -23423,14 +20866,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-7",
             "type": "level",
-            "name": "Warlock 7",
-            "url": "/api/2014/classes/warlock/levels/7"
+            "name": "Warlock 7"
           }
         ],
         "spell": {
           "index": "fire-shield",
-          "name": "Fire Shield",
-          "url": "/api/2014/spells/fire-shield"
+          "name": "Fire Shield"
         }
       },
       {
@@ -23438,14 +20879,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-7",
             "type": "level",
-            "name": "Warlock 7",
-            "url": "/api/2014/classes/warlock/levels/7"
+            "name": "Warlock 7"
           }
         ],
         "spell": {
           "index": "wall-of-fire",
-          "name": "Wall of Fire",
-          "url": "/api/2014/spells/wall-of-fire"
+          "name": "Wall of Fire"
         }
       },
       {
@@ -23453,14 +20892,12 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-9",
             "type": "level",
-            "name": "Warlock 9",
-            "url": "/api/2014/classes/warlock/levels/9"
+            "name": "Warlock 9"
           }
         ],
         "spell": {
           "index": "flame-strike",
-          "name": "Flame Strike",
-          "url": "/api/2014/spells/flame-strike"
+          "name": "Flame Strike"
         }
       },
       {
@@ -23468,34 +20905,27 @@ export const SUBCLASS_RAW = JSON.parse(String.raw`[
           {
             "index": "warlock-9",
             "type": "level",
-            "name": "Warlock 9",
-            "url": "/api/2014/classes/warlock/levels/9"
+            "name": "Warlock 9"
           }
         ],
         "spell": {
           "index": "hallow",
-          "name": "Hallow",
-          "url": "/api/2014/spells/hallow"
+          "name": "Hallow"
         }
       }
-    ],
-    "subclass_levels": "/api/2014/subclasses/fiend/levels",
-    "url": "/api/2014/subclasses/fiend"
+    ]
   },
   {
     "index": "evocation",
     "class": {
       "index": "wizard",
-      "name": "Wizard",
-      "url": "/api/2014/classes/wizard"
+      "name": "Wizard"
     },
     "name": "Evocation",
     "subclass_flavor": "Arcane Tradition",
     "desc": [
       "You focus your study on magic that creates powerful elemental effects such as bitter cold, searing flame, rolling thunder, crackling lightning, and burning acid. Some evokers find employment in military forces, serving as artillery to blast enemy armies from afar. Others use their spectacular power to protect the weak, while some seek their own gain as bandits, adventurers, or aspiring tyrants."
-    ],
-    "subclass_levels": "/api/2014/subclasses/evocation/levels",
-    "url": "/api/2014/subclasses/evocation"
+    ]
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -23505,104 +20935,91 @@ export const DAMAGE_TYPE_RAW = JSON.parse(String.raw`[
     "name": "Acid",
     "desc": [
       "The corrosive spray of a black dragon's breath and the dissolving enzymes secreted by a black pudding deal acid damage."
-    ],
-    "url": "/api/2014/damage-types/acid"
+    ]
   },
   {
     "index": "bludgeoning",
     "name": "Bludgeoning",
     "desc": [
       "Blunt force attacks, falling, constriction, and the like deal bludgeoning damage."
-    ],
-    "url": "/api/2014/damage-types/bludgeoning"
+    ]
   },
   {
     "index": "cold",
     "name": "Cold",
     "desc": [
       "The infernal chill radiating from an ice devil's spear and the frigid blast of a white dragon's breath deal cold damage."
-    ],
-    "url": "/api/2014/damage-types/cold"
+    ]
   },
   {
     "index": "fire",
     "name": "Fire",
     "desc": [
       "Red dragons breathe fire, and many spells conjure flames to deal fire damage."
-    ],
-    "url": "/api/2014/damage-types/fire"
+    ]
   },
   {
     "index": "force",
     "name": "Force",
     "desc": [
       "Force is pure magical energy focused into a damaging form. Most effects that deal force damage are spells, including magic missile and spiritual weapon."
-    ],
-    "url": "/api/2014/damage-types/force"
+    ]
   },
   {
     "index": "lightning",
     "name": "Lightning",
     "desc": [
       "A lightning bolt spell and a blue dragon's breath deal lightning damage."
-    ],
-    "url": "/api/2014/damage-types/lightning"
+    ]
   },
   {
     "index": "necrotic",
     "name": "Necrotic",
     "desc": [
       "Necrotic damage, dealt by certain undead and a spell such as chill touch, withers matter and even the soul."
-    ],
-    "url": "/api/2014/damage-types/necrotic"
+    ]
   },
   {
     "index": "piercing",
     "name": "Piercing",
     "desc": [
       "Puncturing and impaling attacks, including spears and monsters' bites, deal piercing damage."
-    ],
-    "url": "/api/2014/damage-types/piercing"
+    ]
   },
   {
     "index": "poison",
     "name": "Poison",
     "desc": [
       "Venomous stings and the toxic gas of a green dragon's breath deal poison damage."
-    ],
-    "url": "/api/2014/damage-types/poison"
+    ]
   },
   {
     "index": "psychic",
     "name": "Psychic",
     "desc": [
       "Mental abilities such as a psionic blast deal psychic damage."
-    ],
-    "url": "/api/2014/damage-types/psychic"
+    ]
   },
   {
     "index": "radiant",
     "name": "Radiant",
     "desc": [
       "Radiant damage, dealt by a cleric's flame strike spell or an angel's smiting weapon, sears the flesh like fire and overloads the spirit with power."
-    ],
-    "url": "/api/2014/damage-types/radiant"
+    ]
   },
   {
     "index": "slashing",
     "name": "Slashing",
     "desc": [
       "Swords, axes, and monsters' claws deal slashing damage."
-    ],
-    "url": "/api/2014/damage-types/slashing"
+    ]
   },
   {
     "index": "thunder",
     "name": "Thunder",
     "desc": [
       "A concussive burst of sound, such as the effect of the thunderwave spell, deals thunder damage."
-    ],
-    "url": "/api/2014/damage-types/thunder"
+    ]
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;
 
@@ -23618,11 +21035,9 @@ export const ABILITY_SCORE_RAW = JSON.parse(String.raw`[
     "skills": [
       {
         "name": "Athletics",
-        "index": "athletics",
-        "url": "/api/2014/skills/athletics"
+        "index": "athletics"
       }
-    ],
-    "url": "/api/2014/ability-scores/str"
+    ]
   },
   {
     "index": "dex",
@@ -23635,21 +21050,17 @@ export const ABILITY_SCORE_RAW = JSON.parse(String.raw`[
     "skills": [
       {
         "name": "Acrobatics",
-        "index": "acrobatics",
-        "url": "/api/2014/skills/acrobatics"
+        "index": "acrobatics"
       },
       {
         "name": "Sleight of Hand",
-        "index": "sleight-of-hand",
-        "url": "/api/2014/skills/sleight-of-hand"
+        "index": "sleight-of-hand"
       },
       {
         "name": "Stealth",
-        "index": "stealth",
-        "url": "/api/2014/skills/stealth"
+        "index": "stealth"
       }
-    ],
-    "url": "/api/2014/ability-scores/dex"
+    ]
   },
   {
     "index": "con",
@@ -23659,8 +21070,7 @@ export const ABILITY_SCORE_RAW = JSON.parse(String.raw`[
       "Constitution measures health, stamina, and vital force.",
       "Constitution checks are uncommon, and no skills apply to Constitution checks, because the endurance this ability represents is largely passive rather than involving a specific effort on the part of a character or monster."
     ],
-    "skills": [],
-    "url": "/api/2014/ability-scores/con"
+    "skills": []
   },
   {
     "index": "int",
@@ -23673,31 +21083,25 @@ export const ABILITY_SCORE_RAW = JSON.parse(String.raw`[
     "skills": [
       {
         "name": "Arcana",
-        "index": "arcana",
-        "url": "/api/2014/skills/arcana"
+        "index": "arcana"
       },
       {
         "name": "History",
-        "index": "history",
-        "url": "/api/2014/skills/history"
+        "index": "history"
       },
       {
         "name": "Investigation",
-        "index": "investigation",
-        "url": "/api/2014/skills/investigation"
+        "index": "investigation"
       },
       {
         "name": "Nature",
-        "index": "nature",
-        "url": "/api/2014/skills/nature"
+        "index": "nature"
       },
       {
         "name": "Religion",
-        "index": "religion",
-        "url": "/api/2014/skills/religion"
+        "index": "religion"
       }
-    ],
-    "url": "/api/2014/ability-scores/int"
+    ]
   },
   {
     "index": "wis",
@@ -23710,31 +21114,25 @@ export const ABILITY_SCORE_RAW = JSON.parse(String.raw`[
     "skills": [
       {
         "name": "Animal Handling",
-        "index": "animal-handling",
-        "url": "/api/2014/skills/animal-handling"
+        "index": "animal-handling"
       },
       {
         "name": "Insight",
-        "index": "insight",
-        "url": "/api/2014/skills/insight"
+        "index": "insight"
       },
       {
         "name": "Medicine",
-        "index": "medicine",
-        "url": "/api/2014/skills/medicine"
+        "index": "medicine"
       },
       {
         "name": "Perception",
-        "index": "perception",
-        "url": "/api/2014/skills/perception"
+        "index": "perception"
       },
       {
         "name": "Survival",
-        "index": "survival",
-        "url": "/api/2014/skills/survival"
+        "index": "survival"
       }
-    ],
-    "url": "/api/2014/ability-scores/wis"
+    ]
   },
   {
     "index": "cha",
@@ -23747,25 +21145,20 @@ export const ABILITY_SCORE_RAW = JSON.parse(String.raw`[
     "skills": [
       {
         "name": "Deception",
-        "index": "deception",
-        "url": "/api/2014/skills/deception"
+        "index": "deception"
       },
       {
         "name": "Intimidation",
-        "index": "intimidation",
-        "url": "/api/2014/skills/intimidation"
+        "index": "intimidation"
       },
       {
         "name": "Performance",
-        "index": "performance",
-        "url": "/api/2014/skills/performance"
+        "index": "performance"
       },
       {
         "name": "Persuasion",
-        "index": "persuasion",
-        "url": "/api/2014/skills/persuasion"
+        "index": "persuasion"
       }
-    ],
-    "url": "/api/2014/ability-scores/cha"
+    ]
   }
 ]`) as ReadonlyArray<Record<string, unknown>>;

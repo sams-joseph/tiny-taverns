@@ -3,18 +3,9 @@ import type { BackgroundBody, ClassBody, RaceBody } from "@taverns/api";
 export const FIVE_E_BITS_2014_COMMIT = "5a7ee5a0489b26655d343e4a41e8f7942a887af2";
 export const FIVE_E_BITS_2014_VERSION = "5e-database 5.10.0";
 
-export interface SourceReference {
-  readonly family: string;
-  readonly index: string;
-  readonly name: string;
-  readonly url?: string;
-  readonly raw?: unknown;
-}
-
 interface SourceOptionFields {
   readonly sourceFamily: string;
   readonly sourceIndex: string;
-  readonly sourceUrl?: string;
   readonly name: string;
   readonly raw: unknown;
 }
@@ -42,7 +33,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-animal-handling",
                 name: "Skill: Animal Handling",
-                url: "/api/2014/proficiencies/skill-animal-handling",
               },
             },
             {
@@ -50,7 +40,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -58,7 +47,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -66,7 +54,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-nature",
                 name: "Skill: Nature",
-                url: "/api/2014/proficiencies/skill-nature",
               },
             },
             {
@@ -74,7 +61,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-perception",
                 name: "Skill: Perception",
-                url: "/api/2014/proficiencies/skill-perception",
               },
             },
             {
@@ -82,7 +68,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-survival",
                 name: "Skill: Survival",
-                url: "/api/2014/proficiencies/skill-survival",
               },
             },
           ],
@@ -93,49 +78,40 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "medium-armor",
         name: "Medium Armor",
-        url: "/api/2014/proficiencies/medium-armor",
       },
       {
         index: "shields",
         name: "Shields",
-        url: "/api/2014/proficiencies/shields",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "martial-weapons",
         name: "Martial Weapons",
-        url: "/api/2014/proficiencies/martial-weapons",
       },
       {
         index: "saving-throw-str",
         name: "Saving Throw: STR",
-        url: "/api/2014/proficiencies/saving-throw-str",
       },
       {
         index: "saving-throw-con",
         name: "Saving Throw: CON",
-        url: "/api/2014/proficiencies/saving-throw-con",
       },
     ],
     saving_throws: [
       {
         index: "str",
         name: "STR",
-        url: "/api/2014/ability-scores/str",
       },
       {
         index: "con",
         name: "CON",
-        url: "/api/2014/ability-scores/con",
       },
     ],
     starting_equipment: [
@@ -143,7 +119,6 @@ const CLASS_RAW = [
         equipment: {
           index: "explorers-pack",
           name: "Explorer's Pack",
-          url: "/api/2014/equipment/explorers-pack",
         },
         quantity: 1,
       },
@@ -151,7 +126,6 @@ const CLASS_RAW = [
         equipment: {
           index: "javelin",
           name: "Javelin",
-          url: "/api/2014/equipment/javelin",
         },
         quantity: 4,
       },
@@ -170,7 +144,6 @@ const CLASS_RAW = [
               of: {
                 index: "greataxe",
                 name: "Greataxe",
-                url: "/api/2014/equipment/greataxe",
               },
             },
             {
@@ -184,7 +157,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "martial-melee-weapons",
                     name: "Martial Melee Weapons",
-                    url: "/api/2014/equipment-categories/martial-melee-weapons",
                   },
                 },
               },
@@ -205,7 +177,6 @@ const CLASS_RAW = [
               of: {
                 index: "handaxe",
                 name: "Handaxe",
-                url: "/api/2014/equipment/handaxe",
               },
             },
             {
@@ -219,7 +190,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -228,14 +198,12 @@ const CLASS_RAW = [
         },
       },
     ],
-    class_levels: "/api/2014/classes/barbarian/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "str",
             name: "STR",
-            url: "/api/2014/ability-scores/str",
           },
           minimum_score: 13,
         },
@@ -244,17 +212,14 @@ const CLASS_RAW = [
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
       ],
     },
@@ -262,10 +227,8 @@ const CLASS_RAW = [
       {
         index: "berserker",
         name: "Berserker",
-        url: "/api/2014/subclasses/berserker",
       },
     ],
-    url: "/api/2014/classes/barbarian",
   },
   {
     index: "bard",
@@ -284,7 +247,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-acrobatics",
                 name: "Skill: Acrobatics",
-                url: "/api/2014/proficiencies/skill-acrobatics",
               },
             },
             {
@@ -292,7 +254,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-animal-handling",
                 name: "Skill: Animal Handling",
-                url: "/api/2014/proficiencies/skill-animal-handling",
               },
             },
             {
@@ -300,7 +261,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-arcana",
                 name: "Skill: Arcana",
-                url: "/api/2014/proficiencies/skill-arcana",
               },
             },
             {
@@ -308,7 +268,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -316,7 +275,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-deception",
                 name: "Skill: Deception",
-                url: "/api/2014/proficiencies/skill-deception",
               },
             },
             {
@@ -324,7 +282,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-history",
                 name: "Skill: History",
-                url: "/api/2014/proficiencies/skill-history",
               },
             },
             {
@@ -332,7 +289,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -340,7 +296,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -348,7 +303,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-investigation",
                 name: "Skill: Investigation",
-                url: "/api/2014/proficiencies/skill-investigation",
               },
             },
             {
@@ -356,7 +310,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-medicine",
                 name: "Skill: Medicine",
-                url: "/api/2014/proficiencies/skill-medicine",
               },
             },
             {
@@ -364,7 +317,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-nature",
                 name: "Skill: Nature",
-                url: "/api/2014/proficiencies/skill-nature",
               },
             },
             {
@@ -372,7 +324,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-perception",
                 name: "Skill: Perception",
-                url: "/api/2014/proficiencies/skill-perception",
               },
             },
             {
@@ -380,7 +331,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-performance",
                 name: "Skill: Performance",
-                url: "/api/2014/proficiencies/skill-performance",
               },
             },
             {
@@ -388,7 +338,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-persuasion",
                 name: "Skill: Persuasion",
-                url: "/api/2014/proficiencies/skill-persuasion",
               },
             },
             {
@@ -396,7 +345,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
             {
@@ -404,7 +352,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-sleight-of-hand",
                 name: "Skill: Sleight of Hand",
-                url: "/api/2014/proficiencies/skill-sleight-of-hand",
               },
             },
             {
@@ -412,7 +359,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-stealth",
                 name: "Skill: Stealth",
-                url: "/api/2014/proficiencies/skill-stealth",
               },
             },
             {
@@ -420,7 +366,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-survival",
                 name: "Skill: Survival",
-                url: "/api/2014/proficiencies/skill-survival",
               },
             },
           ],
@@ -438,7 +383,6 @@ const CLASS_RAW = [
               item: {
                 index: "bagpipes",
                 name: "Bagpipes",
-                url: "/api/2014/proficiencies/bagpipes",
               },
             },
             {
@@ -446,7 +390,6 @@ const CLASS_RAW = [
               item: {
                 index: "drum",
                 name: "Drum",
-                url: "/api/2014/proficiencies/drum",
               },
             },
             {
@@ -454,7 +397,6 @@ const CLASS_RAW = [
               item: {
                 index: "dulcimer",
                 name: "Dulcimer",
-                url: "/api/2014/proficiencies/dulcimer",
               },
             },
             {
@@ -462,7 +404,6 @@ const CLASS_RAW = [
               item: {
                 index: "flute",
                 name: "Flute",
-                url: "/api/2014/proficiencies/flute",
               },
             },
             {
@@ -470,7 +411,6 @@ const CLASS_RAW = [
               item: {
                 index: "lute",
                 name: "Lute",
-                url: "/api/2014/proficiencies/lute",
               },
             },
             {
@@ -478,7 +418,6 @@ const CLASS_RAW = [
               item: {
                 index: "lyre",
                 name: "Lyre",
-                url: "/api/2014/proficiencies/lyre",
               },
             },
             {
@@ -486,7 +425,6 @@ const CLASS_RAW = [
               item: {
                 index: "horn",
                 name: "Horn",
-                url: "/api/2014/proficiencies/horn",
               },
             },
             {
@@ -494,7 +432,6 @@ const CLASS_RAW = [
               item: {
                 index: "pan-flute",
                 name: "Pan flute",
-                url: "/api/2014/proficiencies/pan-flute",
               },
             },
             {
@@ -502,7 +439,6 @@ const CLASS_RAW = [
               item: {
                 index: "shawm",
                 name: "Shawm",
-                url: "/api/2014/proficiencies/shawm",
               },
             },
             {
@@ -510,7 +446,6 @@ const CLASS_RAW = [
               item: {
                 index: "viol",
                 name: "Viol",
-                url: "/api/2014/proficiencies/viol",
               },
             },
           ],
@@ -521,54 +456,44 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "longswords",
         name: "Longswords",
-        url: "/api/2014/proficiencies/longswords",
       },
       {
         index: "rapiers",
         name: "Rapiers",
-        url: "/api/2014/proficiencies/rapiers",
       },
       {
         index: "shortswords",
         name: "Shortswords",
-        url: "/api/2014/proficiencies/shortswords",
       },
       {
         index: "hand-crossbows",
         name: "Hand crossbows",
-        url: "/api/2014/proficiencies/hand-crossbows",
       },
       {
         index: "saving-throw-dex",
         name: "Saving Throw: DEX",
-        url: "/api/2014/proficiencies/saving-throw-dex",
       },
       {
         index: "saving-throw-cha",
         name: "Saving Throw: CHA",
-        url: "/api/2014/proficiencies/saving-throw-cha",
       },
     ],
     saving_throws: [
       {
         index: "dex",
         name: "DEX",
-        url: "/api/2014/ability-scores/dex",
       },
       {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
     ],
     starting_equipment: [
@@ -576,7 +501,6 @@ const CLASS_RAW = [
         equipment: {
           index: "leather-armor",
           name: "Leather Armor",
-          url: "/api/2014/equipment/leather-armor",
         },
         quantity: 1,
       },
@@ -584,7 +508,6 @@ const CLASS_RAW = [
         equipment: {
           index: "dagger",
           name: "Dagger",
-          url: "/api/2014/equipment/dagger",
         },
         quantity: 1,
       },
@@ -603,7 +526,6 @@ const CLASS_RAW = [
               of: {
                 index: "rapier",
                 name: "Rapier",
-                url: "/api/2014/equipment/rapier",
               },
             },
             {
@@ -612,7 +534,6 @@ const CLASS_RAW = [
               of: {
                 index: "longsword",
                 name: "Longsword",
-                url: "/api/2014/equipment/longsword",
               },
             },
             {
@@ -626,7 +547,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -647,7 +567,6 @@ const CLASS_RAW = [
               of: {
                 index: "diplomats-pack",
                 name: "Diplomat's Pack",
-                url: "/api/2014/equipment/diplomats-pack",
               },
             },
             {
@@ -656,7 +575,6 @@ const CLASS_RAW = [
               of: {
                 index: "entertainers-pack",
                 name: "Entertainer's Pack",
-                url: "/api/2014/equipment/entertainers-pack",
               },
             },
           ],
@@ -675,7 +593,6 @@ const CLASS_RAW = [
               of: {
                 index: "lute",
                 name: "Lute",
-                url: "/api/2014/equipment/lute",
               },
             },
             {
@@ -689,7 +606,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "musical-instruments",
                     name: "Musical Instruments",
-                    url: "/api/2014/equipment-categories/musical-instruments",
                   },
                 },
               },
@@ -698,14 +614,12 @@ const CLASS_RAW = [
         },
       },
     ],
-    class_levels: "/api/2014/classes/bard/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           minimum_score: 13,
         },
@@ -714,7 +628,6 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
       ],
       proficiency_choices: [
@@ -730,7 +643,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-acrobatics",
                   name: "Skill: Acrobatics",
-                  url: "/api/2014/proficiencies/skill-acrobatics",
                 },
               },
               {
@@ -738,7 +650,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -746,7 +657,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-arcana",
                   name: "Skill: Arcana",
-                  url: "/api/2014/proficiencies/skill-arcana",
                 },
               },
               {
@@ -754,7 +664,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -762,7 +671,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-deception",
                   name: "Skill: Deception",
-                  url: "/api/2014/proficiencies/skill-deception",
                 },
               },
               {
@@ -770,7 +678,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -778,7 +685,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -786,7 +692,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -794,7 +699,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -802,7 +706,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-medicine",
                   name: "Skill: Medicine",
-                  url: "/api/2014/proficiencies/skill-medicine",
                 },
               },
               {
@@ -810,7 +713,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -818,7 +720,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -826,7 +727,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-performance",
                   name: "Skill: Performance",
-                  url: "/api/2014/proficiencies/skill-performance",
                 },
               },
               {
@@ -834,7 +734,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -842,7 +741,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
               {
@@ -850,7 +748,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-sleight-of-hand",
                   name: "Skill: Sleight of Hand",
-                  url: "/api/2014/proficiencies/skill-sleight-of-hand",
                 },
               },
               {
@@ -858,7 +755,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
               {
@@ -866,7 +762,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -884,7 +779,6 @@ const CLASS_RAW = [
                 item: {
                   index: "bagpipes",
                   name: "Bagpipes",
-                  url: "/api/2014/proficiencies/bagpipes",
                 },
               },
               {
@@ -892,7 +786,6 @@ const CLASS_RAW = [
                 item: {
                   index: "drum",
                   name: "Drum",
-                  url: "/api/2014/proficiencies/drum",
                 },
               },
               {
@@ -900,7 +793,6 @@ const CLASS_RAW = [
                 item: {
                   index: "dulcimer",
                   name: "Dulcimer",
-                  url: "/api/2014/proficiencies/dulcimer",
                 },
               },
               {
@@ -908,7 +800,6 @@ const CLASS_RAW = [
                 item: {
                   index: "flute",
                   name: "Flute",
-                  url: "/api/2014/proficiencies/flute",
                 },
               },
               {
@@ -916,7 +807,6 @@ const CLASS_RAW = [
                 item: {
                   index: "lute",
                   name: "Lute",
-                  url: "/api/2014/proficiencies/lute",
                 },
               },
               {
@@ -924,7 +814,6 @@ const CLASS_RAW = [
                 item: {
                   index: "lyre",
                   name: "Lyre",
-                  url: "/api/2014/proficiencies/lyre",
                 },
               },
               {
@@ -932,7 +821,6 @@ const CLASS_RAW = [
                 item: {
                   index: "horn",
                   name: "Horn",
-                  url: "/api/2014/proficiencies/horn",
                 },
               },
               {
@@ -940,7 +828,6 @@ const CLASS_RAW = [
                 item: {
                   index: "pan-flute",
                   name: "Pan flute",
-                  url: "/api/2014/proficiencies/pan-flute",
                 },
               },
               {
@@ -948,7 +835,6 @@ const CLASS_RAW = [
                 item: {
                   index: "shawm",
                   name: "Shawm",
-                  url: "/api/2014/proficiencies/shawm",
                 },
               },
               {
@@ -956,7 +842,6 @@ const CLASS_RAW = [
                 item: {
                   index: "viol",
                   name: "Viol",
-                  url: "/api/2014/proficiencies/viol",
                 },
               },
             ],
@@ -968,7 +853,6 @@ const CLASS_RAW = [
       {
         index: "lore",
         name: "Lore",
-        url: "/api/2014/subclasses/lore",
       },
     ],
     spellcasting: {
@@ -976,7 +860,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
       info: [
         {
@@ -1023,8 +906,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/bard/spells",
-    url: "/api/2014/classes/bard",
   },
   {
     index: "cleric",
@@ -1043,7 +924,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-history",
                 name: "Skill: History",
-                url: "/api/2014/proficiencies/skill-history",
               },
             },
             {
@@ -1051,7 +931,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -1059,7 +938,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-medicine",
                 name: "Skill: Medicine",
-                url: "/api/2014/proficiencies/skill-medicine",
               },
             },
             {
@@ -1067,7 +945,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-persuasion",
                 name: "Skill: Persuasion",
-                url: "/api/2014/proficiencies/skill-persuasion",
               },
             },
             {
@@ -1075,7 +952,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
           ],
@@ -1086,44 +962,36 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "medium-armor",
         name: "Medium Armor",
-        url: "/api/2014/proficiencies/medium-armor",
       },
       {
         index: "shields",
         name: "Shields",
-        url: "/api/2014/proficiencies/shields",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "saving-throw-wis",
         name: "Saving Throw: WIS",
-        url: "/api/2014/proficiencies/saving-throw-wis",
       },
       {
         index: "saving-throw-cha",
         name: "Saving Throw: CHA",
-        url: "/api/2014/proficiencies/saving-throw-cha",
       },
     ],
     saving_throws: [
       {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
       {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
     ],
     starting_equipment: [
@@ -1131,7 +999,6 @@ const CLASS_RAW = [
         equipment: {
           index: "shield",
           name: "Shield",
-          url: "/api/2014/equipment/shield",
         },
         quantity: 1,
       },
@@ -1150,7 +1017,6 @@ const CLASS_RAW = [
               of: {
                 index: "mace",
                 name: "Mace",
-                url: "/api/2014/equipment/mace",
               },
             },
             {
@@ -1159,7 +1025,6 @@ const CLASS_RAW = [
               of: {
                 index: "warhammer",
                 name: "Warhammer",
-                url: "/api/2014/equipment/warhammer",
               },
               prerequisites: [
                 {
@@ -1167,7 +1032,6 @@ const CLASS_RAW = [
                   proficiency: {
                     index: "warhammers",
                     name: "Warhammers",
-                    url: "/api/2014/proficiencies/warhammers",
                   },
                 },
               ],
@@ -1188,7 +1052,6 @@ const CLASS_RAW = [
               of: {
                 index: "scale-mail",
                 name: "Scale Mail",
-                url: "/api/2014/equipment/scale-mail",
               },
             },
             {
@@ -1197,7 +1060,6 @@ const CLASS_RAW = [
               of: {
                 index: "leather-armor",
                 name: "Leather Armor",
-                url: "/api/2014/equipment/leather-armor",
               },
             },
             {
@@ -1206,7 +1068,6 @@ const CLASS_RAW = [
               of: {
                 index: "chain-mail",
                 name: "Chain Mail",
-                url: "/api/2014/equipment/chain-mail",
               },
               prerequisites: [
                 {
@@ -1214,7 +1075,6 @@ const CLASS_RAW = [
                   proficiency: {
                     index: "chain-mail",
                     name: "Chain Mail",
-                    url: "/api/2014/proficiencies/chain-mail",
                   },
                 },
               ],
@@ -1238,7 +1098,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-light",
                     name: "Crossbow, light",
-                    url: "/api/2014/equipment/crossbow-light",
                   },
                 },
                 {
@@ -1247,7 +1106,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-bolt",
                     name: "Crossbow bolt",
-                    url: "/api/2014/equipment/crossbow-bolt",
                   },
                 },
               ],
@@ -1263,7 +1121,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -1284,7 +1141,6 @@ const CLASS_RAW = [
               of: {
                 index: "priests-pack",
                 name: "Priest's Pack",
-                url: "/api/2014/equipment/priests-pack",
               },
             },
             {
@@ -1293,7 +1149,6 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
@@ -1308,19 +1163,16 @@ const CLASS_RAW = [
           equipment_category: {
             index: "holy-symbols",
             name: "Holy Symbols",
-            url: "/api/2014/equipment-categories/holy-symbols",
           },
         },
       },
     ],
-    class_levels: "/api/2014/classes/cleric/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "wis",
             name: "WIS",
-            url: "/api/2014/ability-scores/wis",
           },
           minimum_score: 13,
         },
@@ -1329,17 +1181,14 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
       ],
     },
@@ -1347,7 +1196,6 @@ const CLASS_RAW = [
       {
         index: "life",
         name: "Life",
-        url: "/api/2014/subclasses/life",
       },
     ],
     spellcasting: {
@@ -1355,7 +1203,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
       info: [
         {
@@ -1395,8 +1242,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/cleric/spells",
-    url: "/api/2014/classes/cleric",
   },
   {
     index: "druid",
@@ -1415,7 +1260,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-arcana",
                 name: "Skill: Arcana",
-                url: "/api/2014/proficiencies/skill-arcana",
               },
             },
             {
@@ -1423,7 +1267,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-animal-handling",
                 name: "Skill: Animal Handling",
-                url: "/api/2014/proficiencies/skill-animal-handling",
               },
             },
             {
@@ -1431,7 +1274,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -1439,7 +1281,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-medicine",
                 name: "Skill: Medicine",
-                url: "/api/2014/proficiencies/skill-medicine",
               },
             },
             {
@@ -1447,7 +1288,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-nature",
                 name: "Skill: Nature",
-                url: "/api/2014/proficiencies/skill-nature",
               },
             },
             {
@@ -1455,7 +1295,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-perception",
                 name: "Skill: Perception",
-                url: "/api/2014/proficiencies/skill-perception",
               },
             },
             {
@@ -1463,7 +1302,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
             {
@@ -1471,7 +1309,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-survival",
                 name: "Skill: Survival",
-                url: "/api/2014/proficiencies/skill-survival",
               },
             },
           ],
@@ -1482,94 +1319,76 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "medium-armor",
         name: "Medium Armor",
-        url: "/api/2014/proficiencies/medium-armor",
       },
       {
         index: "shields",
         name: "Shields",
-        url: "/api/2014/proficiencies/shields",
       },
       {
         index: "clubs",
         name: "Clubs",
-        url: "/api/2014/proficiencies/clubs",
       },
       {
         index: "daggers",
         name: "Daggers",
-        url: "/api/2014/proficiencies/daggers",
       },
       {
         index: "javelins",
         name: "Javelins",
-        url: "/api/2014/proficiencies/javelins",
       },
       {
         index: "maces",
         name: "Maces",
-        url: "/api/2014/proficiencies/maces",
       },
       {
         index: "quarterstaffs",
         name: "Quarterstaffs",
-        url: "/api/2014/proficiencies/quarterstaffs",
       },
       {
         index: "sickles",
         name: "Sickles",
-        url: "/api/2014/proficiencies/sickles",
       },
       {
         index: "spears",
         name: "Spears",
-        url: "/api/2014/proficiencies/spears",
       },
       {
         index: "darts",
         name: "Darts",
-        url: "/api/2014/proficiencies/darts",
       },
       {
         index: "slings",
         name: "Slings",
-        url: "/api/2014/proficiencies/slings",
       },
       {
         index: "scimitars",
         name: "Scimitars",
-        url: "/api/2014/proficiencies/scimitars",
       },
       {
         index: "herbalism-kit",
         name: "Herbalism Kit",
-        url: "/api/2014/proficiencies/herbalism-kit",
       },
       {
         index: "saving-throw-int",
         name: "Saving Throw: INT",
-        url: "/api/2014/proficiencies/saving-throw-int",
       },
       {
         index: "saving-throw-wis",
         name: "Saving Throw: WIS",
-        url: "/api/2014/proficiencies/saving-throw-wis",
       },
     ],
     saving_throws: [
       {
         index: "int",
         name: "INT",
-        url: "/api/2014/ability-scores/int",
       },
       {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
     ],
     starting_equipment: [
@@ -1577,7 +1396,6 @@ const CLASS_RAW = [
         equipment: {
           index: "leather-armor",
           name: "Leather Armor",
-          url: "/api/2014/equipment/leather-armor",
         },
         quantity: 1,
       },
@@ -1585,7 +1403,6 @@ const CLASS_RAW = [
         equipment: {
           index: "explorers-pack",
           name: "Explorer's Pack",
-          url: "/api/2014/equipment/explorers-pack",
         },
         quantity: 1,
       },
@@ -1604,7 +1421,6 @@ const CLASS_RAW = [
               of: {
                 index: "shield",
                 name: "Shield",
-                url: "/api/2014/equipment/shield",
               },
             },
             {
@@ -1618,7 +1434,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -1639,7 +1454,6 @@ const CLASS_RAW = [
               of: {
                 index: "scimitar",
                 name: "Scimitar",
-                url: "/api/2014/equipment/scimitar",
               },
             },
             {
@@ -1653,7 +1467,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-melee-weapons",
                     name: "Simple Melee Weapons",
-                    url: "/api/2014/equipment-categories/simple-melee-weapons",
                   },
                 },
               },
@@ -1670,19 +1483,16 @@ const CLASS_RAW = [
           equipment_category: {
             index: "druidic-foci",
             name: "Druidic Foci",
-            url: "/api/2014/equipment-categories/druidic-foci",
           },
         },
       },
     ],
-    class_levels: "/api/2014/classes/druid/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "wis",
             name: "WIS",
-            url: "/api/2014/ability-scores/wis",
           },
           minimum_score: 13,
         },
@@ -1691,17 +1501,14 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
       ],
     },
@@ -1709,7 +1516,6 @@ const CLASS_RAW = [
       {
         index: "land",
         name: "Land",
-        url: "/api/2014/subclasses/land",
       },
     ],
     spellcasting: {
@@ -1717,7 +1523,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
       info: [
         {
@@ -1757,8 +1562,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/druid/spells",
-    url: "/api/2014/classes/druid",
   },
   {
     index: "fighter",
@@ -1777,7 +1580,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-acrobatics",
                 name: "Skill: Acrobatics",
-                url: "/api/2014/proficiencies/skill-acrobatics",
               },
             },
             {
@@ -1785,7 +1587,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-animal-handling",
                 name: "Skill: Animal Handling",
-                url: "/api/2014/proficiencies/skill-animal-handling",
               },
             },
             {
@@ -1793,7 +1594,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -1801,7 +1601,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-history",
                 name: "Skill: History",
-                url: "/api/2014/proficiencies/skill-history",
               },
             },
             {
@@ -1809,7 +1608,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -1817,7 +1615,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -1825,7 +1622,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-perception",
                 name: "Skill: Perception",
-                url: "/api/2014/proficiencies/skill-perception",
               },
             },
             {
@@ -1833,7 +1629,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-survival",
                 name: "Skill: Survival",
-                url: "/api/2014/proficiencies/skill-survival",
               },
             },
           ],
@@ -1844,44 +1639,36 @@ const CLASS_RAW = [
       {
         index: "all-armor",
         name: "All armor",
-        url: "/api/2014/proficiencies/all-armor",
       },
       {
         index: "shields",
         name: "Shields",
-        url: "/api/2014/proficiencies/shields",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "martial-weapons",
         name: "Martial Weapons",
-        url: "/api/2014/proficiencies/martial-weapons",
       },
       {
         index: "saving-throw-str",
         name: "Saving Throw: STR",
-        url: "/api/2014/proficiencies/saving-throw-str",
       },
       {
         index: "saving-throw-con",
         name: "Saving Throw: CON",
-        url: "/api/2014/proficiencies/saving-throw-con",
       },
     ],
     saving_throws: [
       {
         index: "str",
         name: "STR",
-        url: "/api/2014/ability-scores/str",
       },
       {
         index: "con",
         name: "CON",
-        url: "/api/2014/ability-scores/con",
       },
     ],
     starting_equipment: [],
@@ -1899,7 +1686,6 @@ const CLASS_RAW = [
               of: {
                 index: "chain-mail",
                 name: "Chain Mail",
-                url: "/api/2014/equipment/chain-mail",
               },
             },
             {
@@ -1911,7 +1697,6 @@ const CLASS_RAW = [
                   of: {
                     index: "leather-armor",
                     name: "Leather Armor",
-                    url: "/api/2014/equipment/leather-armor",
                   },
                 },
                 {
@@ -1920,7 +1705,6 @@ const CLASS_RAW = [
                   of: {
                     index: "longbow",
                     name: "Longbow",
-                    url: "/api/2014/equipment/longbow",
                   },
                 },
                 {
@@ -1929,7 +1713,6 @@ const CLASS_RAW = [
                   of: {
                     index: "arrow",
                     name: "Arrow",
-                    url: "/api/2014/equipment/arrow",
                   },
                 },
               ],
@@ -1958,7 +1741,6 @@ const CLASS_RAW = [
                       equipment_category: {
                         index: "martial-weapons",
                         name: "Martial Weapons",
-                        url: "/api/2014/equipment-categories/martial-weapons",
                       },
                     },
                   },
@@ -1969,7 +1751,6 @@ const CLASS_RAW = [
                   of: {
                     index: "shield",
                     name: "Shield",
-                    url: "/api/2014/equipment/shield",
                   },
                 },
               ],
@@ -1985,7 +1766,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "martial-weapons",
                     name: "Martial Weapons",
-                    url: "/api/2014/equipment-categories/martial-weapons",
                   },
                 },
               },
@@ -2009,7 +1789,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-light",
                     name: "Crossbow, light",
-                    url: "/api/2014/equipment/crossbow-light",
                   },
                 },
                 {
@@ -2018,7 +1797,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-bolt",
                     name: "Crossbow bolt",
-                    url: "/api/2014/equipment/crossbow-bolt",
                   },
                 },
               ],
@@ -2029,7 +1807,6 @@ const CLASS_RAW = [
               of: {
                 index: "handaxe",
                 name: "Handaxe",
-                url: "/api/2014/equipment/handaxe",
               },
             },
           ],
@@ -2048,7 +1825,6 @@ const CLASS_RAW = [
               of: {
                 index: "dungeoneers-pack",
                 name: "Dungeoneer's Pack",
-                url: "/api/2014/equipment/dungeoneers-pack",
               },
             },
             {
@@ -2057,14 +1833,12 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
         },
       },
     ],
-    class_levels: "/api/2014/classes/fighter/levels",
     multi_classing: {
       prerequisite_options: {
         type: "ability-scores",
@@ -2077,7 +1851,6 @@ const CLASS_RAW = [
               ability_score: {
                 index: "str",
                 name: "STR",
-                url: "/api/2014/ability-scores/str",
               },
               minimum_score: 13,
             },
@@ -2086,7 +1859,6 @@ const CLASS_RAW = [
               ability_score: {
                 index: "dex",
                 name: "DEX",
-                url: "/api/2014/ability-scores/dex",
               },
               minimum_score: 13,
             },
@@ -2097,27 +1869,22 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
       ],
     },
@@ -2125,10 +1892,8 @@ const CLASS_RAW = [
       {
         index: "champion",
         name: "Champion",
-        url: "/api/2014/subclasses/champion",
       },
     ],
-    url: "/api/2014/classes/fighter",
   },
   {
     index: "monk",
@@ -2147,7 +1912,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-acrobatics",
                 name: "Skill: Acrobatics",
-                url: "/api/2014/proficiencies/skill-acrobatics",
               },
             },
             {
@@ -2155,7 +1919,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -2163,7 +1926,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-history",
                 name: "Skill: History",
-                url: "/api/2014/proficiencies/skill-history",
               },
             },
             {
@@ -2171,7 +1933,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -2179,7 +1940,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
             {
@@ -2187,7 +1947,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-stealth",
                 name: "Skill: Stealth",
-                url: "/api/2014/proficiencies/skill-stealth",
               },
             },
           ],
@@ -2214,7 +1973,6 @@ const CLASS_RAW = [
                       item: {
                         index: "alchemists-supplies",
                         name: "Alchemist's Supplies",
-                        url: "/api/2014/proficiencies/alchemists-supplies",
                       },
                     },
                     {
@@ -2222,7 +1980,6 @@ const CLASS_RAW = [
                       item: {
                         index: "brewers-supplies",
                         name: "Brewer's Supplies",
-                        url: "/api/2014/proficiencies/brewers-supplies",
                       },
                     },
                     {
@@ -2230,7 +1987,6 @@ const CLASS_RAW = [
                       item: {
                         index: "calligraphers-supplies",
                         name: "Calligrapher's Supplies",
-                        url: "/api/2014/proficiencies/calligraphers-supplies",
                       },
                     },
                     {
@@ -2238,7 +1994,6 @@ const CLASS_RAW = [
                       item: {
                         index: "carpenters-tools",
                         name: "Carpenter's Tools",
-                        url: "/api/2014/proficiencies/carpenters-tools",
                       },
                     },
                     {
@@ -2246,7 +2001,6 @@ const CLASS_RAW = [
                       item: {
                         index: "cartographers-tools",
                         name: "Cartographer's Tools",
-                        url: "/api/2014/proficiencies/cartographers-tools",
                       },
                     },
                     {
@@ -2254,7 +2008,6 @@ const CLASS_RAW = [
                       item: {
                         index: "cobblers-tools",
                         name: "Cobbler's Tools",
-                        url: "/api/2014/proficiencies/cobblers-tools",
                       },
                     },
                     {
@@ -2262,7 +2015,6 @@ const CLASS_RAW = [
                       item: {
                         index: "cooks-utensils",
                         name: "Cook's utensils",
-                        url: "/api/2014/proficiencies/cooks-utensils",
                       },
                     },
                     {
@@ -2270,7 +2022,6 @@ const CLASS_RAW = [
                       item: {
                         index: "glassblowers-tools",
                         name: "Glassblower's Tools",
-                        url: "/api/2014/proficiencies/glassblowers-tools",
                       },
                     },
                     {
@@ -2278,7 +2029,6 @@ const CLASS_RAW = [
                       item: {
                         index: "jewelers-tools",
                         name: "Jeweler's Tools",
-                        url: "/api/2014/proficiencies/jewelers-tools",
                       },
                     },
                     {
@@ -2286,7 +2036,6 @@ const CLASS_RAW = [
                       item: {
                         index: "leatherworkers-tools",
                         name: "Leatherworker's Tools",
-                        url: "/api/2014/proficiencies/leatherworkers-tools",
                       },
                     },
                     {
@@ -2294,7 +2043,6 @@ const CLASS_RAW = [
                       item: {
                         index: "masons-tools",
                         name: "Mason's Tools",
-                        url: "/api/2014/proficiencies/masons-tools",
                       },
                     },
                     {
@@ -2302,7 +2050,6 @@ const CLASS_RAW = [
                       item: {
                         index: "painters-supplies",
                         name: "Painter's Supplies",
-                        url: "/api/2014/proficiencies/painters-supplies",
                       },
                     },
                     {
@@ -2310,7 +2057,6 @@ const CLASS_RAW = [
                       item: {
                         index: "potters-tools",
                         name: "Potter's Tools",
-                        url: "/api/2014/proficiencies/potters-tools",
                       },
                     },
                     {
@@ -2318,7 +2064,6 @@ const CLASS_RAW = [
                       item: {
                         index: "smiths-tools",
                         name: "Smith's Tools",
-                        url: "/api/2014/proficiencies/smiths-tools",
                       },
                     },
                     {
@@ -2326,7 +2071,6 @@ const CLASS_RAW = [
                       item: {
                         index: "tinkers-tools",
                         name: "Tinker's Tools",
-                        url: "/api/2014/proficiencies/tinkers-tools",
                       },
                     },
                     {
@@ -2334,7 +2078,6 @@ const CLASS_RAW = [
                       item: {
                         index: "weavers-tools",
                         name: "Weaver's Tools",
-                        url: "/api/2014/proficiencies/weavers-tools",
                       },
                     },
                     {
@@ -2342,7 +2085,6 @@ const CLASS_RAW = [
                       item: {
                         index: "woodcarvers-tools",
                         name: "Woodcarver's Tools",
-                        url: "/api/2014/proficiencies/woodcarvers-tools",
                       },
                     },
                     {
@@ -2350,7 +2092,6 @@ const CLASS_RAW = [
                       item: {
                         index: "disguise-kit",
                         name: "Disguise Kit",
-                        url: "/api/2014/proficiencies/disguise-kit",
                       },
                     },
                     {
@@ -2358,7 +2099,6 @@ const CLASS_RAW = [
                       item: {
                         index: "forgery-kit",
                         name: "Forgery Kit",
-                        url: "/api/2014/proficiencies/forgery-kit",
                       },
                     },
                   ],
@@ -2379,7 +2119,6 @@ const CLASS_RAW = [
                       item: {
                         index: "bagpipes",
                         name: "Bagpipes",
-                        url: "/api/2014/proficiencies/bagpipes",
                       },
                     },
                     {
@@ -2387,7 +2126,6 @@ const CLASS_RAW = [
                       item: {
                         index: "drum",
                         name: "Drum",
-                        url: "/api/2014/proficiencies/drum",
                       },
                     },
                     {
@@ -2395,7 +2133,6 @@ const CLASS_RAW = [
                       item: {
                         index: "dulcimer",
                         name: "Dulcimer",
-                        url: "/api/2014/proficiencies/dulcimer",
                       },
                     },
                     {
@@ -2403,7 +2140,6 @@ const CLASS_RAW = [
                       item: {
                         index: "flute",
                         name: "Flute",
-                        url: "/api/2014/proficiencies/flute",
                       },
                     },
                     {
@@ -2411,7 +2147,6 @@ const CLASS_RAW = [
                       item: {
                         index: "lute",
                         name: "Lute",
-                        url: "/api/2014/proficiencies/lute",
                       },
                     },
                     {
@@ -2419,7 +2154,6 @@ const CLASS_RAW = [
                       item: {
                         index: "lyre",
                         name: "Lyre",
-                        url: "/api/2014/proficiencies/lyre",
                       },
                     },
                     {
@@ -2427,7 +2161,6 @@ const CLASS_RAW = [
                       item: {
                         index: "horn",
                         name: "Horn",
-                        url: "/api/2014/proficiencies/horn",
                       },
                     },
                     {
@@ -2435,7 +2168,6 @@ const CLASS_RAW = [
                       item: {
                         index: "pan-flute",
                         name: "Pan flute",
-                        url: "/api/2014/proficiencies/pan-flute",
                       },
                     },
                     {
@@ -2443,7 +2175,6 @@ const CLASS_RAW = [
                       item: {
                         index: "shawm",
                         name: "Shawm",
-                        url: "/api/2014/proficiencies/shawm",
                       },
                     },
                     {
@@ -2451,7 +2182,6 @@ const CLASS_RAW = [
                       item: {
                         index: "viol",
                         name: "Viol",
-                        url: "/api/2014/proficiencies/viol",
                       },
                     },
                   ],
@@ -2466,34 +2196,28 @@ const CLASS_RAW = [
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "shortswords",
         name: "Shortswords",
-        url: "/api/2014/proficiencies/shortswords",
       },
       {
         index: "saving-throw-dex",
         name: "Saving Throw: DEX",
-        url: "/api/2014/proficiencies/saving-throw-dex",
       },
       {
         index: "saving-throw-str",
         name: "Saving Throw: STR",
-        url: "/api/2014/proficiencies/saving-throw-str",
       },
     ],
     saving_throws: [
       {
         index: "str",
         name: "STR",
-        url: "/api/2014/ability-scores/str",
       },
       {
         index: "dex",
         name: "DEX",
-        url: "/api/2014/ability-scores/dex",
       },
     ],
     starting_equipment: [
@@ -2501,7 +2225,6 @@ const CLASS_RAW = [
         equipment: {
           index: "dart",
           name: "Dart",
-          url: "/api/2014/equipment/dart",
         },
         quantity: 10,
       },
@@ -2520,7 +2243,6 @@ const CLASS_RAW = [
               of: {
                 index: "shortsword",
                 name: "Shortsword",
-                url: "/api/2014/equipment/shortsword",
               },
             },
             {
@@ -2534,7 +2256,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -2555,7 +2276,6 @@ const CLASS_RAW = [
               of: {
                 index: "dungeoneers-pack",
                 name: "Dungeoneer's Pack",
-                url: "/api/2014/equipment/dungeoneers-pack",
               },
             },
             {
@@ -2564,21 +2284,18 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
         },
       },
     ],
-    class_levels: "/api/2014/classes/monk/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "dex",
             name: "DEX",
-            url: "/api/2014/ability-scores/dex",
           },
           minimum_score: 13,
         },
@@ -2586,7 +2303,6 @@ const CLASS_RAW = [
           ability_score: {
             index: "wis",
             name: "WIS",
-            url: "/api/2014/ability-scores/wis",
           },
           minimum_score: 13,
         },
@@ -2595,12 +2311,10 @@ const CLASS_RAW = [
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "shortswords",
           name: "Shortswords",
-          url: "/api/2014/proficiencies/shortswords",
         },
       ],
     },
@@ -2608,10 +2322,8 @@ const CLASS_RAW = [
       {
         index: "open-hand",
         name: "Open Hand",
-        url: "/api/2014/subclasses/open-hand",
       },
     ],
-    url: "/api/2014/classes/monk",
   },
   {
     index: "paladin",
@@ -2630,7 +2342,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -2638,7 +2349,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -2646,7 +2356,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -2654,7 +2363,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-medicine",
                 name: "Skill: Medicine",
-                url: "/api/2014/proficiencies/skill-medicine",
               },
             },
             {
@@ -2662,7 +2370,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-persuasion",
                 name: "Skill: Persuasion",
-                url: "/api/2014/proficiencies/skill-persuasion",
               },
             },
             {
@@ -2670,7 +2377,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
           ],
@@ -2681,44 +2387,36 @@ const CLASS_RAW = [
       {
         index: "all-armor",
         name: "All armor",
-        url: "/api/2014/proficiencies/all-armor",
       },
       {
         index: "shields",
         name: "Shields",
-        url: "/api/2014/proficiencies/shields",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "martial-weapons",
         name: "Martial Weapons",
-        url: "/api/2014/proficiencies/martial-weapons",
       },
       {
         index: "saving-throw-wis",
         name: "Saving Throw: WIS",
-        url: "/api/2014/proficiencies/saving-throw-wis",
       },
       {
         index: "saving-throw-cha",
         name: "Saving Throw: CHA",
-        url: "/api/2014/proficiencies/saving-throw-cha",
       },
     ],
     saving_throws: [
       {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
       {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
     ],
     starting_equipment: [
@@ -2726,7 +2424,6 @@ const CLASS_RAW = [
         equipment: {
           index: "chain-mail",
           name: "Chain Mail",
-          url: "/api/2014/equipment/chain-mail",
         },
         quantity: 1,
       },
@@ -2753,7 +2450,6 @@ const CLASS_RAW = [
                       equipment_category: {
                         name: "Martial Weapons",
                         index: "martial-weapons",
-                        url: "/api/2014/equipment-categories/martial-weapons",
                       },
                     },
                   },
@@ -2764,7 +2460,6 @@ const CLASS_RAW = [
                   of: {
                     index: "shield",
                     name: "Shield",
-                    url: "/api/2014/equipment/shield",
                   },
                 },
               ],
@@ -2780,7 +2475,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "martial-weapons",
                     name: "Martial Weapons",
-                    url: "/api/2014/equipment-categories/martial-weapons",
                   },
                 },
               },
@@ -2801,7 +2495,6 @@ const CLASS_RAW = [
               of: {
                 index: "javelin",
                 name: "Javelin",
-                url: "/api/2014/equipment/javelin",
               },
             },
             {
@@ -2815,7 +2508,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -2836,7 +2528,6 @@ const CLASS_RAW = [
               of: {
                 index: "priests-pack",
                 name: "Priest's Pack",
-                url: "/api/2014/equipment/priests-pack",
               },
             },
             {
@@ -2845,7 +2536,6 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
@@ -2860,19 +2550,16 @@ const CLASS_RAW = [
           equipment_category: {
             index: "holy-symbols",
             name: "Holy Symbols",
-            url: "/api/2014/equipment-categories/holy-symbols",
           },
         },
       },
     ],
-    class_levels: "/api/2014/classes/paladin/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "str",
             name: "STR",
-            url: "/api/2014/ability-scores/str",
           },
           minimum_score: 13,
         },
@@ -2880,7 +2567,6 @@ const CLASS_RAW = [
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           minimum_score: 13,
         },
@@ -2889,27 +2575,22 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
       ],
     },
@@ -2917,7 +2598,6 @@ const CLASS_RAW = [
       {
         index: "devotion",
         name: "Devotion",
-        url: "/api/2014/subclasses/devotion",
       },
     ],
     spellcasting: {
@@ -2925,7 +2605,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
       info: [
         {
@@ -2951,8 +2630,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/paladin/spells",
-    url: "/api/2014/classes/paladin",
   },
   {
     index: "ranger",
@@ -2971,7 +2648,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-animal-handling",
                 name: "Skill: Animal Handling",
-                url: "/api/2014/proficiencies/skill-animal-handling",
               },
             },
             {
@@ -2979,7 +2655,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -2987,7 +2662,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -2995,7 +2669,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-investigation",
                 name: "Skill: Investigation",
-                url: "/api/2014/proficiencies/skill-investigation",
               },
             },
             {
@@ -3003,7 +2676,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-nature",
                 name: "Skill: Nature",
-                url: "/api/2014/proficiencies/skill-nature",
               },
             },
             {
@@ -3011,7 +2683,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-perception",
                 name: "Skill: Perception",
-                url: "/api/2014/proficiencies/skill-perception",
               },
             },
             {
@@ -3019,7 +2690,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-stealth",
                 name: "Skill: Stealth",
-                url: "/api/2014/proficiencies/skill-stealth",
               },
             },
             {
@@ -3027,7 +2697,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-survival",
                 name: "Skill: Survival",
-                url: "/api/2014/proficiencies/skill-survival",
               },
             },
           ],
@@ -3038,49 +2707,40 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "medium-armor",
         name: "Medium Armor",
-        url: "/api/2014/proficiencies/medium-armor",
       },
       {
         index: "shields",
         name: "Shields",
-        url: "/api/2014/proficiencies/shields",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "martial-weapons",
         name: "Martial Weapons",
-        url: "/api/2014/proficiencies/martial-weapons",
       },
       {
         index: "saving-throw-dex",
         name: "Saving Throw: DEX",
-        url: "/api/2014/proficiencies/saving-throw-dex",
       },
       {
         index: "saving-throw-str",
         name: "Saving Throw: STR",
-        url: "/api/2014/proficiencies/saving-throw-str",
       },
     ],
     saving_throws: [
       {
         index: "str",
         name: "STR",
-        url: "/api/2014/ability-scores/str",
       },
       {
         index: "dex",
         name: "DEX",
-        url: "/api/2014/ability-scores/dex",
       },
     ],
     starting_equipment: [
@@ -3088,7 +2748,6 @@ const CLASS_RAW = [
         equipment: {
           index: "longbow",
           name: "Longbow",
-          url: "/api/2014/equipment/longbow",
         },
         quantity: 1,
       },
@@ -3096,7 +2755,6 @@ const CLASS_RAW = [
         equipment: {
           index: "arrow",
           name: "Arrow",
-          url: "/api/2014/equipment/arrow",
         },
         quantity: 20,
       },
@@ -3115,7 +2773,6 @@ const CLASS_RAW = [
               of: {
                 index: "scale-mail",
                 name: "Scale Mail",
-                url: "/api/2014/equipment/scale-mail",
               },
             },
             {
@@ -3124,7 +2781,6 @@ const CLASS_RAW = [
               of: {
                 index: "leather-armor",
                 name: "Leather Armor",
-                url: "/api/2014/equipment/leather-armor",
               },
             },
           ],
@@ -3143,7 +2799,6 @@ const CLASS_RAW = [
               of: {
                 index: "shortsword",
                 name: "Shortsword",
-                url: "/api/2014/equipment/shortsword",
               },
             },
             {
@@ -3157,7 +2812,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-melee-weapons",
                     name: "Simple Melee Weapons",
-                    url: "/api/2014/equipment-categories/simple-melee-weapons",
                   },
                 },
               },
@@ -3178,7 +2832,6 @@ const CLASS_RAW = [
               of: {
                 index: "dungeoneers-pack",
                 name: "Dungeoneer's Pack",
-                url: "/api/2014/equipment/dungeoneers-pack",
               },
             },
             {
@@ -3187,21 +2840,18 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
         },
       },
     ],
-    class_levels: "/api/2014/classes/ranger/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "dex",
             name: "DEX",
-            url: "/api/2014/ability-scores/dex",
           },
           minimum_score: 13,
         },
@@ -3209,7 +2859,6 @@ const CLASS_RAW = [
           ability_score: {
             index: "wis",
             name: "WIS",
-            url: "/api/2014/ability-scores/wis",
           },
           minimum_score: 13,
         },
@@ -3218,27 +2867,22 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
       ],
       proficiency_choices: [
@@ -3253,7 +2897,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -3261,7 +2904,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -3269,7 +2911,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -3277,7 +2918,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -3285,7 +2925,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -3293,7 +2932,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -3301,7 +2939,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
               {
@@ -3309,7 +2946,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -3321,7 +2957,6 @@ const CLASS_RAW = [
       {
         index: "hunter",
         name: "Hunter",
-        url: "/api/2014/subclasses/hunter",
       },
     ],
     spellcasting: {
@@ -3329,7 +2964,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
       info: [
         {
@@ -3357,8 +2991,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/ranger/spells",
-    url: "/api/2014/classes/ranger",
   },
   {
     index: "rogue",
@@ -3377,7 +3009,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-acrobatics",
                 name: "Skill: Acrobatics",
-                url: "/api/2014/proficiencies/skill-acrobatics",
               },
             },
             {
@@ -3385,7 +3016,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-athletics",
                 name: "Skill: Athletics",
-                url: "/api/2014/proficiencies/skill-athletics",
               },
             },
             {
@@ -3393,7 +3023,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-deception",
                 name: "Skill: Deception",
-                url: "/api/2014/proficiencies/skill-deception",
               },
             },
             {
@@ -3401,7 +3030,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -3409,7 +3037,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -3417,7 +3044,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-investigation",
                 name: "Skill: Investigation",
-                url: "/api/2014/proficiencies/skill-investigation",
               },
             },
             {
@@ -3425,7 +3051,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-perception",
                 name: "Skill: Perception",
-                url: "/api/2014/proficiencies/skill-perception",
               },
             },
             {
@@ -3433,7 +3058,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-performance",
                 name: "Skill: Performance",
-                url: "/api/2014/proficiencies/skill-performance",
               },
             },
             {
@@ -3441,7 +3065,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-persuasion",
                 name: "Skill: Persuasion",
-                url: "/api/2014/proficiencies/skill-persuasion",
               },
             },
             {
@@ -3449,7 +3072,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-sleight-of-hand",
                 name: "Skill: Sleight of Hand",
-                url: "/api/2014/proficiencies/skill-sleight-of-hand",
               },
             },
             {
@@ -3457,7 +3079,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-stealth",
                 name: "Skill: Stealth",
-                url: "/api/2014/proficiencies/skill-stealth",
               },
             },
           ],
@@ -3468,59 +3089,48 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "longswords",
         name: "Longswords",
-        url: "/api/2014/proficiencies/longswords",
       },
       {
         index: "rapiers",
         name: "Rapiers",
-        url: "/api/2014/proficiencies/rapiers",
       },
       {
         index: "shortswords",
         name: "Shortswords",
-        url: "/api/2014/proficiencies/shortswords",
       },
       {
         index: "hand-crossbows",
         name: "Hand crossbows",
-        url: "/api/2014/proficiencies/hand-crossbows",
       },
       {
         index: "thieves-tools",
         name: "Thieves' Tools",
-        url: "/api/2014/proficiencies/thieves-tools",
       },
       {
         index: "saving-throw-dex",
         name: "Saving Throw: DEX",
-        url: "/api/2014/proficiencies/saving-throw-dex",
       },
       {
         index: "saving-throw-int",
         name: "Saving Throw: INT",
-        url: "/api/2014/proficiencies/saving-throw-int",
       },
     ],
     saving_throws: [
       {
         index: "dex",
         name: "DEX",
-        url: "/api/2014/ability-scores/dex",
       },
       {
         index: "int",
         name: "INT",
-        url: "/api/2014/ability-scores/int",
       },
     ],
     starting_equipment: [
@@ -3528,7 +3138,6 @@ const CLASS_RAW = [
         equipment: {
           index: "leather-armor",
           name: "Leather Armor",
-          url: "/api/2014/equipment/leather-armor",
         },
         quantity: 1,
       },
@@ -3536,7 +3145,6 @@ const CLASS_RAW = [
         equipment: {
           index: "dagger",
           name: "Dagger",
-          url: "/api/2014/equipment/dagger",
         },
         quantity: 2,
       },
@@ -3544,7 +3152,6 @@ const CLASS_RAW = [
         equipment: {
           index: "thieves-tools",
           name: "Thieves' Tools",
-          url: "/api/2014/equipment/thieves-tools",
         },
         quantity: 1,
       },
@@ -3563,7 +3170,6 @@ const CLASS_RAW = [
               of: {
                 index: "rapier",
                 name: "Rapier",
-                url: "/api/2014/equipment/rapier",
               },
             },
             {
@@ -3572,7 +3178,6 @@ const CLASS_RAW = [
               of: {
                 index: "shortsword",
                 name: "Shortsword",
-                url: "/api/2014/equipment/shortsword",
               },
             },
           ],
@@ -3594,7 +3199,6 @@ const CLASS_RAW = [
                   of: {
                     index: "shortbow",
                     name: "Shortbow",
-                    url: "/api/2014/equipment/shortbow",
                   },
                 },
                 {
@@ -3603,7 +3207,6 @@ const CLASS_RAW = [
                   of: {
                     index: "arrow",
                     name: "Arrow",
-                    url: "/api/2014/equipment/arrow",
                   },
                 },
               ],
@@ -3614,7 +3217,6 @@ const CLASS_RAW = [
               of: {
                 index: "shortsword",
                 name: "Shortsword",
-                url: "/api/2014/equipment/shortsword",
               },
             },
           ],
@@ -3633,7 +3235,6 @@ const CLASS_RAW = [
               of: {
                 index: "burglars-pack",
                 name: "Burglar's Pack",
-                url: "/api/2014/equipment/burglars-pack",
               },
             },
             {
@@ -3642,7 +3243,6 @@ const CLASS_RAW = [
               of: {
                 index: "dungeoneers-pack",
                 name: "Dungeoneer's Pack",
-                url: "/api/2014/equipment/dungeoneers-pack",
               },
             },
             {
@@ -3651,21 +3251,18 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
         },
       },
     ],
-    class_levels: "/api/2014/classes/rogue/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "dex",
             name: "DEX",
-            url: "/api/2014/ability-scores/dex",
           },
           minimum_score: 13,
         },
@@ -3674,12 +3271,10 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "thieves-tools",
           name: "Thieves' Tools",
-          url: "/api/2014/proficiencies/thieves-tools",
         },
       ],
       proficiency_choices: [
@@ -3694,7 +3289,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-acrobatics",
                   name: "Skill: Acrobatics",
-                  url: "/api/2014/proficiencies/skill-acrobatics",
                 },
               },
               {
@@ -3702,7 +3296,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -3710,7 +3303,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-deception",
                   name: "Skill: Deception",
-                  url: "/api/2014/proficiencies/skill-deception",
                 },
               },
               {
@@ -3718,7 +3310,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -3726,7 +3317,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -3734,7 +3324,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -3742,7 +3331,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -3750,7 +3338,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-performance",
                   name: "Skill: Performance",
-                  url: "/api/2014/proficiencies/skill-performance",
                 },
               },
               {
@@ -3758,7 +3345,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -3766,7 +3352,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-sleight-of-hand",
                   name: "Skill: Sleight of Hand",
-                  url: "/api/2014/proficiencies/skill-sleight-of-hand",
                 },
               },
               {
@@ -3774,7 +3359,6 @@ const CLASS_RAW = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
             ],
@@ -3786,10 +3370,8 @@ const CLASS_RAW = [
       {
         index: "thief",
         name: "Thief",
-        url: "/api/2014/subclasses/thief",
       },
     ],
-    url: "/api/2014/classes/rogue",
   },
   {
     index: "sorcerer",
@@ -3808,7 +3390,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-arcana",
                 name: "Skill: Arcana",
-                url: "/api/2014/proficiencies/skill-arcana",
               },
             },
             {
@@ -3816,7 +3397,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-deception",
                 name: "Skill: Deception",
-                url: "/api/2014/proficiencies/skill-deception",
               },
             },
             {
@@ -3824,7 +3404,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -3832,7 +3411,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -3840,7 +3418,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-persuasion",
                 name: "Skill: Persuasion",
-                url: "/api/2014/proficiencies/skill-persuasion",
               },
             },
             {
@@ -3848,7 +3425,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
           ],
@@ -3859,49 +3435,40 @@ const CLASS_RAW = [
       {
         index: "daggers",
         name: "Daggers",
-        url: "/api/2014/proficiencies/daggers",
       },
       {
         index: "darts",
         name: "Darts",
-        url: "/api/2014/proficiencies/darts",
       },
       {
         index: "slings",
         name: "Slings",
-        url: "/api/2014/proficiencies/slings",
       },
       {
         index: "quarterstaffs",
         name: "Quarterstaffs",
-        url: "/api/2014/proficiencies/quarterstaffs",
       },
       {
         index: "crossbows-light",
         name: "Crossbows, light",
-        url: "/api/2014/proficiencies/crossbows-light",
       },
       {
         index: "saving-throw-con",
         name: "Saving Throw: CON",
-        url: "/api/2014/proficiencies/saving-throw-con",
       },
       {
         index: "saving-throw-cha",
         name: "Saving Throw: CHA",
-        url: "/api/2014/proficiencies/saving-throw-cha",
       },
     ],
     saving_throws: [
       {
         index: "con",
         name: "CON",
-        url: "/api/2014/ability-scores/con",
       },
       {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
     ],
     starting_equipment: [
@@ -3909,7 +3476,6 @@ const CLASS_RAW = [
         equipment: {
           index: "dagger",
           name: "Dagger",
-          url: "/api/2014/equipment/dagger",
         },
         quantity: 2,
       },
@@ -3931,7 +3497,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-light",
                     name: "Crossbow, light",
-                    url: "/api/2014/equipment/crossbow-light",
                   },
                 },
                 {
@@ -3940,7 +3505,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-bolt",
                     name: "Crossbow bolt",
-                    url: "/api/2014/equipment/crossbow-bolt",
                   },
                 },
               ],
@@ -3956,7 +3520,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -3977,7 +3540,6 @@ const CLASS_RAW = [
               of: {
                 index: "component-pouch",
                 name: "Component pouch",
-                url: "/api/2014/equipment/component-pouch",
               },
             },
             {
@@ -3991,7 +3553,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "arcane-foci",
                     name: "Arcane Foci",
-                    url: "/api/2014/equipment-categories/arcane-foci",
                   },
                 },
               },
@@ -4012,7 +3573,6 @@ const CLASS_RAW = [
               of: {
                 index: "dungeoneers-pack",
                 name: "Dungeoneer's Pack",
-                url: "/api/2014/equipment/dungeoneers-pack",
               },
             },
             {
@@ -4021,21 +3581,18 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
         },
       },
     ],
-    class_levels: "/api/2014/classes/sorcerer/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           minimum_score: 13,
         },
@@ -4046,7 +3603,6 @@ const CLASS_RAW = [
       {
         index: "draconic",
         name: "Draconic",
-        url: "/api/2014/subclasses/draconic",
       },
     ],
     spellcasting: {
@@ -4054,7 +3610,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
       info: [
         {
@@ -4092,8 +3647,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/sorcerer/spells",
-    url: "/api/2014/classes/sorcerer",
   },
   {
     index: "warlock",
@@ -4112,7 +3665,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-arcana",
                 name: "Skill: Arcana",
-                url: "/api/2014/proficiencies/skill-arcana",
               },
             },
             {
@@ -4120,7 +3672,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-deception",
                 name: "Skill: Deception",
-                url: "/api/2014/proficiencies/skill-deception",
               },
             },
             {
@@ -4128,7 +3679,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-history",
                 name: "Skill: History",
-                url: "/api/2014/proficiencies/skill-history",
               },
             },
             {
@@ -4136,7 +3686,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-intimidation",
                 name: "Skill: Intimidation",
-                url: "/api/2014/proficiencies/skill-intimidation",
               },
             },
             {
@@ -4144,7 +3693,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-investigation",
                 name: "Skill: Investigation",
-                url: "/api/2014/proficiencies/skill-investigation",
               },
             },
             {
@@ -4152,7 +3700,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-nature",
                 name: "Skill: Nature",
-                url: "/api/2014/proficiencies/skill-nature",
               },
             },
             {
@@ -4160,7 +3707,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
           ],
@@ -4171,34 +3717,28 @@ const CLASS_RAW = [
       {
         index: "light-armor",
         name: "Light Armor",
-        url: "/api/2014/proficiencies/light-armor",
       },
       {
         index: "simple-weapons",
         name: "Simple Weapons",
-        url: "/api/2014/proficiencies/simple-weapons",
       },
       {
         index: "saving-throw-wis",
         name: "Saving Throw: WIS",
-        url: "/api/2014/proficiencies/saving-throw-wis",
       },
       {
         index: "saving-throw-cha",
         name: "Saving Throw: CHA",
-        url: "/api/2014/proficiencies/saving-throw-cha",
       },
     ],
     saving_throws: [
       {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
       {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
     ],
     starting_equipment: [
@@ -4206,7 +3746,6 @@ const CLASS_RAW = [
         equipment: {
           index: "dagger",
           name: "Dagger",
-          url: "/api/2014/equipment/dagger",
         },
         quantity: 2,
       },
@@ -4214,7 +3753,6 @@ const CLASS_RAW = [
         equipment: {
           index: "leather-armor",
           name: "Leather Armor",
-          url: "/api/2014/equipment/leather-armor",
         },
         quantity: 1,
       },
@@ -4236,7 +3774,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-light",
                     name: "Crossbow, light",
-                    url: "/api/2014/equipment/crossbow-light",
                   },
                 },
                 {
@@ -4245,7 +3782,6 @@ const CLASS_RAW = [
                   of: {
                     index: "crossbow-bolt",
                     name: "Crossbow bolt",
-                    url: "/api/2014/equipment/crossbow-bolt",
                   },
                 },
               ],
@@ -4261,7 +3797,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "simple-weapons",
                     name: "Simple Weapons",
-                    url: "/api/2014/equipment-categories/simple-weapons",
                   },
                 },
               },
@@ -4282,7 +3817,6 @@ const CLASS_RAW = [
               of: {
                 index: "component-pouch",
                 name: "Component pouch",
-                url: "/api/2014/equipment/component-pouch",
               },
             },
             {
@@ -4296,7 +3830,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "arcane-foci",
                     name: "Arcane Foci",
-                    url: "/api/2014/equipment-categories/arcane-foci",
                   },
                 },
               },
@@ -4317,7 +3850,6 @@ const CLASS_RAW = [
               of: {
                 index: "scholars-pack",
                 name: "Scholar's Pack",
-                url: "/api/2014/equipment/scholars-pack",
               },
             },
             {
@@ -4326,7 +3858,6 @@ const CLASS_RAW = [
               of: {
                 index: "dungeoneers-pack",
                 name: "Dungeoneer's Pack",
-                url: "/api/2014/equipment/dungeoneers-pack",
               },
             },
           ],
@@ -4341,19 +3872,16 @@ const CLASS_RAW = [
           equipment_category: {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/equipment-categories/simple-weapons",
           },
         },
       },
     ],
-    class_levels: "/api/2014/classes/warlock/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           minimum_score: 13,
         },
@@ -4362,12 +3890,10 @@ const CLASS_RAW = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
       ],
     },
@@ -4375,7 +3901,6 @@ const CLASS_RAW = [
       {
         index: "fiend",
         name: "Fiend",
-        url: "/api/2014/subclasses/fiend",
       },
     ],
     spellcasting: {
@@ -4383,7 +3908,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "cha",
         name: "CHA",
-        url: "/api/2014/ability-scores/cha",
       },
       info: [
         {
@@ -4422,8 +3946,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/warlock/spells",
-    url: "/api/2014/classes/warlock",
   },
   {
     index: "wizard",
@@ -4442,7 +3964,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-arcana",
                 name: "Skill: Arcana",
-                url: "/api/2014/proficiencies/skill-arcana",
               },
             },
             {
@@ -4450,7 +3971,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-history",
                 name: "Skill: History",
-                url: "/api/2014/proficiencies/skill-history",
               },
             },
             {
@@ -4458,7 +3978,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-insight",
                 name: "Skill: Insight",
-                url: "/api/2014/proficiencies/skill-insight",
               },
             },
             {
@@ -4466,7 +3985,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-investigation",
                 name: "Skill: Investigation",
-                url: "/api/2014/proficiencies/skill-investigation",
               },
             },
             {
@@ -4474,7 +3992,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-medicine",
                 name: "Skill: Medicine",
-                url: "/api/2014/proficiencies/skill-medicine",
               },
             },
             {
@@ -4482,7 +3999,6 @@ const CLASS_RAW = [
               item: {
                 index: "skill-religion",
                 name: "Skill: Religion",
-                url: "/api/2014/proficiencies/skill-religion",
               },
             },
           ],
@@ -4493,49 +4009,40 @@ const CLASS_RAW = [
       {
         index: "daggers",
         name: "Daggers",
-        url: "/api/2014/proficiencies/daggers",
       },
       {
         index: "darts",
         name: "Darts",
-        url: "/api/2014/proficiencies/darts",
       },
       {
         index: "slings",
         name: "Slings",
-        url: "/api/2014/proficiencies/slings",
       },
       {
         index: "quarterstaffs",
         name: "Quarterstaffs",
-        url: "/api/2014/proficiencies/quarterstaffs",
       },
       {
         index: "crossbows-light",
         name: "Crossbows, light",
-        url: "/api/2014/proficiencies/crossbows-light",
       },
       {
         index: "saving-throw-int",
         name: "Saving Throw: INT",
-        url: "/api/2014/proficiencies/saving-throw-int",
       },
       {
         index: "saving-throw-wis",
         name: "Saving Throw: WIS",
-        url: "/api/2014/proficiencies/saving-throw-wis",
       },
     ],
     saving_throws: [
       {
         index: "int",
         name: "INT",
-        url: "/api/2014/ability-scores/int",
       },
       {
         index: "wis",
         name: "WIS",
-        url: "/api/2014/ability-scores/wis",
       },
     ],
     starting_equipment: [
@@ -4543,7 +4050,6 @@ const CLASS_RAW = [
         equipment: {
           index: "spellbook",
           name: "Spellbook",
-          url: "/api/2014/equipment/spellbook",
         },
         quantity: 1,
       },
@@ -4562,7 +4068,6 @@ const CLASS_RAW = [
               of: {
                 index: "quarterstaff",
                 name: "Quarterstaff",
-                url: "/api/2014/equipment/quarterstaff",
               },
             },
             {
@@ -4571,7 +4076,6 @@ const CLASS_RAW = [
               of: {
                 index: "dagger",
                 name: "Dagger",
-                url: "/api/2014/equipment/dagger",
               },
             },
           ],
@@ -4590,7 +4094,6 @@ const CLASS_RAW = [
               of: {
                 index: "component-pouch",
                 name: "Component pouch",
-                url: "/api/2014/equipment/component-pouch",
               },
             },
             {
@@ -4604,7 +4107,6 @@ const CLASS_RAW = [
                   equipment_category: {
                     index: "arcane-foci",
                     name: "Arcane Foci",
-                    url: "/api/2014/equipment-categories/arcane-foci",
                   },
                 },
               },
@@ -4625,7 +4127,6 @@ const CLASS_RAW = [
               of: {
                 index: "scholars-pack",
                 name: "Scholar's Pack",
-                url: "/api/2014/equipment/scholars-pack",
               },
             },
             {
@@ -4634,21 +4135,18 @@ const CLASS_RAW = [
               of: {
                 index: "explorers-pack",
                 name: "Explorer's Pack",
-                url: "/api/2014/equipment/explorers-pack",
               },
             },
           ],
         },
       },
     ],
-    class_levels: "/api/2014/classes/wizard/levels",
     multi_classing: {
       prerequisites: [
         {
           ability_score: {
             index: "int",
             name: "INT",
-            url: "/api/2014/ability-scores/int",
           },
           minimum_score: 13,
         },
@@ -4659,7 +4157,6 @@ const CLASS_RAW = [
       {
         index: "evocation",
         name: "Evocation",
-        url: "/api/2014/subclasses/evocation",
       },
     ],
     spellcasting: {
@@ -4667,7 +4164,6 @@ const CLASS_RAW = [
       spellcasting_ability: {
         index: "int",
         name: "INT",
-        url: "/api/2014/ability-scores/int",
       },
       info: [
         {
@@ -4711,8 +4207,6 @@ const CLASS_RAW = [
         },
       ],
     },
-    spells: "/api/2014/classes/wizard/spells",
-    url: "/api/2014/classes/wizard",
   },
 ] satisfies ReadonlyArray<Record<string, unknown>>;
 
@@ -4726,7 +4220,6 @@ const RACE_RAW = [
         ability_score: {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
         bonus: 2,
       },
@@ -4741,12 +4234,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "dwarvish",
         name: "Dwarvish",
-        url: "/api/2014/languages/dwarvish",
       },
     ],
     language_desc:
@@ -4755,37 +4246,30 @@ const RACE_RAW = [
       {
         index: "darkvision",
         name: "Darkvision",
-        url: "/api/2014/traits/darkvision",
       },
       {
         index: "dwarven-resilience",
         name: "Dwarven Resilience",
-        url: "/api/2014/traits/dwarven-resilience",
       },
       {
         index: "stonecunning",
         name: "Stonecunning",
-        url: "/api/2014/traits/stonecunning",
       },
       {
         index: "dwarven-combat-training",
         name: "Dwarven Combat Training",
-        url: "/api/2014/traits/dwarven-combat-training",
       },
       {
         index: "tool-proficiency",
         name: "Tool Proficiency",
-        url: "/api/2014/traits/tool-proficiency",
       },
     ],
     subraces: [
       {
         index: "hill-dwarf",
         name: "Hill Dwarf",
-        url: "/api/2014/subraces/hill-dwarf",
       },
     ],
-    url: "/api/2014/races/dwarf",
   },
   {
     index: "elf",
@@ -4796,7 +4280,6 @@ const RACE_RAW = [
         ability_score: {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
         bonus: 2,
       },
@@ -4811,12 +4294,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "elvish",
         name: "Elvish",
-        url: "/api/2014/languages/elvish",
       },
     ],
     language_desc:
@@ -4825,32 +4306,26 @@ const RACE_RAW = [
       {
         index: "darkvision",
         name: "Darkvision",
-        url: "/api/2014/traits/darkvision",
       },
       {
         index: "fey-ancestry",
         name: "Fey Ancestry",
-        url: "/api/2014/traits/fey-ancestry",
       },
       {
         index: "trance",
         name: "Trance",
-        url: "/api/2014/traits/trance",
       },
       {
         index: "keen-senses",
         name: "Keen Senses",
-        url: "/api/2014/traits/keen-senses",
       },
     ],
     subraces: [
       {
         index: "high-elf",
         name: "High Elf",
-        url: "/api/2014/subraces/high-elf",
       },
     ],
-    url: "/api/2014/races/elf",
   },
   {
     index: "halfling",
@@ -4861,7 +4336,6 @@ const RACE_RAW = [
         ability_score: {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
         bonus: 2,
       },
@@ -4876,12 +4350,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "halfling",
         name: "Halfling",
-        url: "/api/2014/languages/halfling",
       },
     ],
     language_desc:
@@ -4890,27 +4362,22 @@ const RACE_RAW = [
       {
         index: "brave",
         name: "Brave",
-        url: "/api/2014/traits/brave",
       },
       {
         index: "halfling-nimbleness",
         name: "Halfling Nimbleness",
-        url: "/api/2014/traits/halfling-nimbleness",
       },
       {
         index: "lucky",
         name: "Lucky",
-        url: "/api/2014/traits/lucky",
       },
     ],
     subraces: [
       {
         index: "lightfoot-halfling",
         name: "Lightfoot Halfling",
-        url: "/api/2014/subraces/lightfoot-halfling",
       },
     ],
-    url: "/api/2014/races/halfling",
   },
   {
     index: "human",
@@ -4921,7 +4388,6 @@ const RACE_RAW = [
         ability_score: {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         bonus: 1,
       },
@@ -4929,7 +4395,6 @@ const RACE_RAW = [
         ability_score: {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
         bonus: 1,
       },
@@ -4937,7 +4402,6 @@ const RACE_RAW = [
         ability_score: {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
         bonus: 1,
       },
@@ -4945,7 +4409,6 @@ const RACE_RAW = [
         ability_score: {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         bonus: 1,
       },
@@ -4953,7 +4416,6 @@ const RACE_RAW = [
         ability_score: {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         bonus: 1,
       },
@@ -4961,7 +4423,6 @@ const RACE_RAW = [
         ability_score: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         bonus: 1,
       },
@@ -4976,7 +4437,6 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
     ],
     language_options: {
@@ -4990,7 +4450,6 @@ const RACE_RAW = [
             item: {
               index: "dwarvish",
               name: "Dwarvish",
-              url: "/api/2014/languages/dwarvish",
             },
           },
           {
@@ -4998,7 +4457,6 @@ const RACE_RAW = [
             item: {
               index: "elvish",
               name: "Elvish",
-              url: "/api/2014/languages/elvish",
             },
           },
           {
@@ -5006,7 +4464,6 @@ const RACE_RAW = [
             item: {
               index: "giant",
               name: "Giant",
-              url: "/api/2014/languages/giant",
             },
           },
           {
@@ -5014,7 +4471,6 @@ const RACE_RAW = [
             item: {
               index: "gnomish",
               name: "Gnomish",
-              url: "/api/2014/languages/gnomish",
             },
           },
           {
@@ -5022,7 +4478,6 @@ const RACE_RAW = [
             item: {
               index: "goblin",
               name: "Goblin",
-              url: "/api/2014/languages/goblin",
             },
           },
           {
@@ -5030,7 +4485,6 @@ const RACE_RAW = [
             item: {
               index: "halfling",
               name: "Halfling",
-              url: "/api/2014/languages/halfling",
             },
           },
           {
@@ -5038,7 +4492,6 @@ const RACE_RAW = [
             item: {
               index: "orc",
               name: "Orc",
-              url: "/api/2014/languages/orc",
             },
           },
           {
@@ -5046,7 +4499,6 @@ const RACE_RAW = [
             item: {
               index: "abyssal",
               name: "Abyssal",
-              url: "/api/2014/languages/abyssal",
             },
           },
           {
@@ -5054,7 +4506,6 @@ const RACE_RAW = [
             item: {
               index: "celestial",
               name: "Celestial",
-              url: "/api/2014/languages/celestial",
             },
           },
           {
@@ -5062,7 +4513,6 @@ const RACE_RAW = [
             item: {
               index: "draconic",
               name: "Draconic",
-              url: "/api/2014/languages/draconic",
             },
           },
           {
@@ -5070,7 +4520,6 @@ const RACE_RAW = [
             item: {
               index: "deep-speech",
               name: "Deep Speech",
-              url: "/api/2014/languages/deep-speech",
             },
           },
           {
@@ -5078,7 +4527,6 @@ const RACE_RAW = [
             item: {
               index: "infernal",
               name: "Infernal",
-              url: "/api/2014/languages/infernal",
             },
           },
           {
@@ -5086,7 +4534,6 @@ const RACE_RAW = [
             item: {
               index: "primordial",
               name: "Primordial",
-              url: "/api/2014/languages/primordial",
             },
           },
           {
@@ -5094,7 +4541,6 @@ const RACE_RAW = [
             item: {
               index: "sylvan",
               name: "Sylvan",
-              url: "/api/2014/languages/sylvan",
             },
           },
           {
@@ -5102,7 +4548,6 @@ const RACE_RAW = [
             item: {
               index: "undercommon",
               name: "Undercommon",
-              url: "/api/2014/languages/undercommon",
             },
           },
         ],
@@ -5112,7 +4557,6 @@ const RACE_RAW = [
       "You can speak, read, and write Common and one extra language of your choice. Humans typically learn the languages of other peoples they deal with, including obscure dialects. They are fond of sprinkling their speech with words borrowed from other tongues: Orc curses, Elvish musical expressions, Dwarvish military phrases, and so on.",
     traits: [],
     subraces: [],
-    url: "/api/2014/races/human",
   },
   {
     index: "dragonborn",
@@ -5123,7 +4567,6 @@ const RACE_RAW = [
         ability_score: {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         bonus: 2,
       },
@@ -5131,7 +4574,6 @@ const RACE_RAW = [
         ability_score: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         bonus: 1,
       },
@@ -5146,12 +4588,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "draconic",
         name: "Draconic",
-        url: "/api/2014/languages/draconic",
       },
     ],
     language_desc:
@@ -5160,21 +4600,17 @@ const RACE_RAW = [
       {
         index: "draconic-ancestry",
         name: "Draconic Ancestry",
-        url: "/api/2014/traits/draconic-ancestry",
       },
       {
         index: "breath-weapon",
         name: "Breath Weapon",
-        url: "/api/2014/traits/breath-weapon",
       },
       {
         index: "damage-resistance",
         name: "Damage Resistance",
-        url: "/api/2014/traits/damage-resistance",
       },
     ],
     subraces: [],
-    url: "/api/2014/races/dragonborn",
   },
   {
     index: "gnome",
@@ -5185,7 +4621,6 @@ const RACE_RAW = [
         ability_score: {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         bonus: 2,
       },
@@ -5200,12 +4635,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "gnomish",
         name: "Gnomish",
-        url: "/api/2014/languages/gnomish",
       },
     ],
     language_desc:
@@ -5214,22 +4647,18 @@ const RACE_RAW = [
       {
         index: "darkvision",
         name: "Darkvision",
-        url: "/api/2014/traits/darkvision",
       },
       {
         index: "gnome-cunning",
         name: "Gnome Cunning",
-        url: "/api/2014/traits/gnome-cunning",
       },
     ],
     subraces: [
       {
         index: "rock-gnome",
         name: "Rock Gnome",
-        url: "/api/2014/subraces/rock-gnome",
       },
     ],
-    url: "/api/2014/races/gnome",
   },
   {
     index: "half-elf",
@@ -5240,7 +4669,6 @@ const RACE_RAW = [
         ability_score: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         bonus: 2,
       },
@@ -5256,7 +4684,6 @@ const RACE_RAW = [
             ability_score: {
               index: "str",
               name: "STR",
-              url: "/api/2014/ability-scores/str",
             },
             bonus: 1,
           },
@@ -5265,7 +4692,6 @@ const RACE_RAW = [
             ability_score: {
               index: "dex",
               name: "DEX",
-              url: "/api/2014/ability-scores/dex",
             },
             bonus: 1,
           },
@@ -5274,7 +4700,6 @@ const RACE_RAW = [
             ability_score: {
               index: "con",
               name: "CON",
-              url: "/api/2014/ability-scores/con",
             },
             bonus: 1,
           },
@@ -5283,7 +4708,6 @@ const RACE_RAW = [
             ability_score: {
               index: "int",
               name: "INT",
-              url: "/api/2014/ability-scores/int",
             },
             bonus: 1,
           },
@@ -5292,7 +4716,6 @@ const RACE_RAW = [
             ability_score: {
               index: "wis",
               name: "WIS",
-              url: "/api/2014/ability-scores/wis",
             },
             bonus: 1,
           },
@@ -5309,12 +4732,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "elvish",
         name: "Elvish",
-        url: "/api/2014/languages/elvish",
       },
     ],
     language_options: {
@@ -5328,7 +4749,6 @@ const RACE_RAW = [
             item: {
               index: "dwarvish",
               name: "Dwarvish",
-              url: "/api/2014/languages/dwarvish",
             },
           },
           {
@@ -5336,7 +4756,6 @@ const RACE_RAW = [
             item: {
               index: "giant",
               name: "Giant",
-              url: "/api/2014/languages/giant",
             },
           },
           {
@@ -5344,7 +4763,6 @@ const RACE_RAW = [
             item: {
               index: "gnomish",
               name: "Gnomish",
-              url: "/api/2014/languages/gnomish",
             },
           },
           {
@@ -5352,7 +4770,6 @@ const RACE_RAW = [
             item: {
               index: "goblin",
               name: "Goblin",
-              url: "/api/2014/languages/goblin",
             },
           },
           {
@@ -5360,7 +4777,6 @@ const RACE_RAW = [
             item: {
               index: "halfling",
               name: "Halfling",
-              url: "/api/2014/languages/halfling",
             },
           },
           {
@@ -5368,7 +4784,6 @@ const RACE_RAW = [
             item: {
               index: "orc",
               name: "Orc",
-              url: "/api/2014/languages/orc",
             },
           },
           {
@@ -5376,7 +4791,6 @@ const RACE_RAW = [
             item: {
               index: "abyssal",
               name: "Abyssal",
-              url: "/api/2014/languages/abyssal",
             },
           },
           {
@@ -5384,7 +4798,6 @@ const RACE_RAW = [
             item: {
               index: "celestial",
               name: "Celestial",
-              url: "/api/2014/languages/celestial",
             },
           },
           {
@@ -5392,7 +4805,6 @@ const RACE_RAW = [
             item: {
               index: "draconic",
               name: "Draconic",
-              url: "/api/2014/languages/draconic",
             },
           },
           {
@@ -5400,7 +4812,6 @@ const RACE_RAW = [
             item: {
               index: "deep-speech",
               name: "Deep Speech",
-              url: "/api/2014/languages/deep-speech",
             },
           },
           {
@@ -5408,7 +4819,6 @@ const RACE_RAW = [
             item: {
               index: "infernal",
               name: "Infernal",
-              url: "/api/2014/languages/infernal",
             },
           },
           {
@@ -5416,7 +4826,6 @@ const RACE_RAW = [
             item: {
               index: "primordial",
               name: "Primordial",
-              url: "/api/2014/languages/primordial",
             },
           },
           {
@@ -5424,7 +4833,6 @@ const RACE_RAW = [
             item: {
               index: "sylvan",
               name: "Sylvan",
-              url: "/api/2014/languages/sylvan",
             },
           },
           {
@@ -5432,7 +4840,6 @@ const RACE_RAW = [
             item: {
               index: "undercommon",
               name: "Undercommon",
-              url: "/api/2014/languages/undercommon",
             },
           },
         ],
@@ -5444,21 +4851,17 @@ const RACE_RAW = [
       {
         index: "darkvision",
         name: "Darkvision",
-        url: "/api/2014/traits/darkvision",
       },
       {
         index: "fey-ancestry",
         name: "Fey Ancestry",
-        url: "/api/2014/traits/fey-ancestry",
       },
       {
         index: "skill-versatility",
         name: "Skill Versatility",
-        url: "/api/2014/traits/skill-versatility",
       },
     ],
     subraces: [],
-    url: "/api/2014/races/half-elf",
   },
   {
     index: "half-orc",
@@ -5469,7 +4872,6 @@ const RACE_RAW = [
         ability_score: {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         bonus: 2,
       },
@@ -5477,7 +4879,6 @@ const RACE_RAW = [
         ability_score: {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
         bonus: 1,
       },
@@ -5492,12 +4893,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "orc",
         name: "Orc",
-        url: "/api/2014/languages/orc",
       },
     ],
     language_desc:
@@ -5506,26 +4905,21 @@ const RACE_RAW = [
       {
         index: "darkvision",
         name: "Darkvision",
-        url: "/api/2014/traits/darkvision",
       },
       {
         index: "savage-attacks",
         name: "Savage Attacks",
-        url: "/api/2014/traits/savage-attacks",
       },
       {
         index: "relentless-endurance",
         name: "Relentless Endurance",
-        url: "/api/2014/traits/relentless-endurance",
       },
       {
         index: "menacing",
         name: "Menacing",
-        url: "/api/2014/traits/menacing",
       },
     ],
     subraces: [],
-    url: "/api/2014/races/half-orc",
   },
   {
     index: "tiefling",
@@ -5536,7 +4930,6 @@ const RACE_RAW = [
         ability_score: {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         bonus: 1,
       },
@@ -5544,7 +4937,6 @@ const RACE_RAW = [
         ability_score: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         bonus: 2,
       },
@@ -5558,12 +4950,10 @@ const RACE_RAW = [
       {
         index: "common",
         name: "Common",
-        url: "/api/2014/languages/common",
       },
       {
         index: "infernal",
         name: "Infernal",
-        url: "/api/2014/languages/infernal",
       },
     ],
     language_desc: "You can speak, read, and write Common and Infernal.",
@@ -5571,21 +4961,17 @@ const RACE_RAW = [
       {
         index: "darkvision",
         name: "Darkvision",
-        url: "/api/2014/traits/darkvision",
       },
       {
         index: "hellish-resistance",
         name: "Hellish Resistance",
-        url: "/api/2014/traits/hellish-resistance",
       },
       {
         index: "infernal-legacy",
         name: "Infernal Legacy",
-        url: "/api/2014/traits/infernal-legacy",
       },
     ],
     subraces: [],
-    url: "/api/2014/races/tiefling",
   },
 ] satisfies ReadonlyArray<Record<string, unknown>>;
 
@@ -5596,7 +4982,6 @@ const SUBRACE_RAW = [
     race: {
       index: "dwarf",
       name: "Dwarf",
-      url: "/api/2014/races/dwarf",
     },
     desc: "As a hill dwarf, you have keen senses, deep intuition, and remarkable resilience.",
     ability_bonuses: [
@@ -5604,7 +4989,6 @@ const SUBRACE_RAW = [
         ability_score: {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         bonus: 1,
       },
@@ -5613,10 +4997,8 @@ const SUBRACE_RAW = [
       {
         index: "dwarven-toughness",
         name: "Dwarven Toughness",
-        url: "/api/2014/traits/dwarven-toughness",
       },
     ],
-    url: "/api/2014/subraces/hill-dwarf",
   },
   {
     index: "high-elf",
@@ -5624,7 +5006,6 @@ const SUBRACE_RAW = [
     race: {
       index: "elf",
       name: "Elf",
-      url: "/api/2014/races/elf",
     },
     desc: "As a high elf, you have a keen mind and a mastery of at least the basics of magic. In many fantasy gaming worlds, there are two kinds of high elves. One type is haughty and reclusive, believing themselves to be superior to non-elves and even other elves. The other type is more common and more friendly, and often encountered among humans and other races.",
     ability_bonuses: [
@@ -5632,7 +5013,6 @@ const SUBRACE_RAW = [
         ability_score: {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         bonus: 1,
       },
@@ -5641,20 +5021,16 @@ const SUBRACE_RAW = [
       {
         index: "elf-weapon-training",
         name: "Elf Weapon Training",
-        url: "/api/2014/traits/elf-weapon-training",
       },
       {
         index: "high-elf-cantrip",
         name: "High Elf Cantrip",
-        url: "/api/2014/traits/high-elf-cantrip",
       },
       {
         index: "extra-language",
         name: "Extra Language",
-        url: "/api/2014/traits/extra-language",
       },
     ],
-    url: "/api/2014/subraces/high-elf",
   },
   {
     index: "lightfoot-halfling",
@@ -5662,7 +5038,6 @@ const SUBRACE_RAW = [
     race: {
       index: "halfling",
       name: "Halfling",
-      url: "/api/2014/races/halfling",
     },
     desc: "As a lightfoot halfling, you can easily hide from notice, even using other people as cover. You're inclined to be affable and get along well with others. Lightfoots are more prone to wanderlust than other halflings, and often dwell alongside other races or take up a nomadic life.",
     ability_bonuses: [
@@ -5670,7 +5045,6 @@ const SUBRACE_RAW = [
         ability_score: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         bonus: 1,
       },
@@ -5679,10 +5053,8 @@ const SUBRACE_RAW = [
       {
         index: "naturally-stealthy",
         name: "Naturally Stealthy",
-        url: "/api/2014/traits/naturally-stealthy",
       },
     ],
-    url: "/api/2014/subraces/lightfoot-halfling",
   },
   {
     index: "rock-gnome",
@@ -5690,7 +5062,6 @@ const SUBRACE_RAW = [
     race: {
       index: "gnome",
       name: "Gnome",
-      url: "/api/2014/races/gnome",
     },
     desc: "As a rock gnome, you have a natural inventiveness and hardiness beyond that of other gnomes.",
     ability_bonuses: [
@@ -5698,7 +5069,6 @@ const SUBRACE_RAW = [
         ability_score: {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
         bonus: 1,
       },
@@ -5707,15 +5077,12 @@ const SUBRACE_RAW = [
       {
         index: "artificers-lore",
         name: "Artificer's Lore",
-        url: "/api/2014/traits/artificers-lore",
       },
       {
         index: "tinker",
         name: "Tinker",
-        url: "/api/2014/traits/tinker",
       },
     ],
-    url: "/api/2014/subraces/rock-gnome",
   },
 ] satisfies ReadonlyArray<Record<string, unknown>>;
 
@@ -5727,12 +5094,10 @@ const BACKGROUND_RAW = [
       {
         index: "skill-insight",
         name: "Skill: Insight",
-        url: "/api/2014/proficiencies/skill-insight",
       },
       {
         index: "skill-religion",
         name: "Skill: Religion",
-        url: "/api/2014/proficiencies/skill-religion",
       },
     ],
     language_options: {
@@ -5740,7 +5105,6 @@ const BACKGROUND_RAW = [
       type: "languages",
       from: {
         option_set_type: "resource_list",
-        resource_list_url: "/api/2014/languages",
       },
     },
     starting_equipment: [
@@ -5748,7 +5112,6 @@ const BACKGROUND_RAW = [
         equipment: {
           index: "clothes-common",
           name: "Clothes, common",
-          url: "/api/2014/equipment/clothes-common",
         },
         quantity: 1,
       },
@@ -5756,7 +5119,6 @@ const BACKGROUND_RAW = [
         equipment: {
           index: "pouch",
           name: "Pouch",
-          url: "/api/2014/equipment/pouch",
         },
         quantity: 1,
       },
@@ -5774,7 +5136,6 @@ const BACKGROUND_RAW = [
           equipment_category: {
             index: "holy-symbols",
             name: "Holy Symbols",
-            url: "/api/2014/equipment-categories/holy-symbols",
           },
         },
       },
@@ -5846,17 +5207,14 @@ const BACKGROUND_RAW = [
               {
                 index: "lawful-good",
                 name: "Lawful Good",
-                url: "/api/2014/alignments/lawful-good",
               },
               {
                 index: "lawful-neutral",
                 name: "Lawful Neutral",
-                url: "/api/2014/alignments/lawful-neutral",
               },
               {
                 index: "lawful-evil",
                 name: "Lawful Evil",
-                url: "/api/2014/alignments/lawful-evil",
               },
             ],
           },
@@ -5867,17 +5225,14 @@ const BACKGROUND_RAW = [
               {
                 index: "lawful-good",
                 name: "Lawful Good",
-                url: "/api/2014/alignments/lawful-good",
               },
               {
                 index: "neutral-good",
                 name: "Neutral Good",
-                url: "/api/2014/alignments/neutral-good",
               },
               {
                 index: "chaotic-good",
                 name: "Chaotic Good",
-                url: "/api/2014/alignments/chaotic-good",
               },
             ],
           },
@@ -5888,17 +5243,14 @@ const BACKGROUND_RAW = [
               {
                 index: "chaotic-good",
                 name: "Chaotic Good",
-                url: "/api/2014/alignments/chaotic-good",
               },
               {
                 index: "chaotic-neutral",
                 name: "Chaotic Neutral",
-                url: "/api/2014/alignments/chaotic-neutral",
               },
               {
                 index: "chaotic-evil",
                 name: "Chaotic Evil",
-                url: "/api/2014/alignments/chaotic-evil",
               },
             ],
           },
@@ -5909,17 +5261,14 @@ const BACKGROUND_RAW = [
               {
                 index: "lawful-good",
                 name: "Lawful Good",
-                url: "/api/2014/alignments/lawful-good",
               },
               {
                 index: "lawful-neutral",
                 name: "Lawful Neutral",
-                url: "/api/2014/alignments/lawful-neutral",
               },
               {
                 index: "lawful-evil",
                 name: "Lawful Evil",
-                url: "/api/2014/alignments/lawful-evil",
               },
             ],
           },
@@ -5930,17 +5279,14 @@ const BACKGROUND_RAW = [
               {
                 index: "lawful-good",
                 name: "Lawful Good",
-                url: "/api/2014/alignments/lawful-good",
               },
               {
                 index: "lawful-neutral",
                 name: "Lawful Neutral",
-                url: "/api/2014/alignments/lawful-neutral",
               },
               {
                 index: "lawful-evil",
                 name: "Lawful Evil",
-                url: "/api/2014/alignments/lawful-evil",
               },
             ],
           },
@@ -5951,47 +5297,38 @@ const BACKGROUND_RAW = [
               {
                 index: "lawful-good",
                 name: "Lawful Good",
-                url: "/api/2014/alignments/lawful-good",
               },
               {
                 index: "neutral-good",
                 name: "Neutral Good",
-                url: "/api/2014/alignments/neutral-good",
               },
               {
                 index: "chaotic-good",
                 name: "Chaotic Good",
-                url: "/api/2014/alignments/chaotic-good",
               },
               {
                 index: "lawful-neutral",
                 name: "Lawful Neutral",
-                url: "/api/2014/alignments/lawful-neutral",
               },
               {
                 index: "neutral",
                 name: "Neutral",
-                url: "/api/2014/alignments/neutral",
               },
               {
                 index: "chaotic-neutral",
                 name: "Chaotic Neutral",
-                url: "/api/2014/alignments/chaotic-neutral",
               },
               {
                 index: "lawful-evil",
                 name: "Lawful Evil",
-                url: "/api/2014/alignments/lawful-evil",
               },
               {
                 index: "neutral-evil",
                 name: "Neutral Evil",
-                url: "/api/2014/alignments/neutral-evil",
               },
               {
                 index: "chaotic-evil",
                 name: "Chaotic Evil",
-                url: "/api/2014/alignments/chaotic-evil",
               },
             ],
           },
@@ -6068,7 +5405,6 @@ const BACKGROUND_RAW = [
         ],
       },
     },
-    url: "/api/2014/backgrounds/acolyte",
   },
 ] satisfies ReadonlyArray<Record<string, unknown>>;
 
@@ -6084,7 +5420,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "barbarian",
-    sourceUrl: "/api/2014/classes/barbarian",
     name: "Barbarian",
     body: {
       hitDie: 12,
@@ -6120,7 +5455,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -6128,7 +5462,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -6136,7 +5469,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -6144,7 +5476,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -6152,7 +5483,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -6160,7 +5490,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -6171,49 +5500,40 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
         {
           index: "saving-throw-str",
           name: "Saving Throw: STR",
-          url: "/api/2014/proficiencies/saving-throw-str",
         },
         {
           index: "saving-throw-con",
           name: "Saving Throw: CON",
-          url: "/api/2014/proficiencies/saving-throw-con",
         },
       ],
       saving_throws: [
         {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
       ],
       starting_equipment: [
@@ -6221,7 +5541,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "explorers-pack",
             name: "Explorer's Pack",
-            url: "/api/2014/equipment/explorers-pack",
           },
           quantity: 1,
         },
@@ -6229,7 +5548,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "javelin",
             name: "Javelin",
-            url: "/api/2014/equipment/javelin",
           },
           quantity: 4,
         },
@@ -6248,7 +5566,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "greataxe",
                   name: "Greataxe",
-                  url: "/api/2014/equipment/greataxe",
                 },
               },
               {
@@ -6262,7 +5579,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "martial-melee-weapons",
                       name: "Martial Melee Weapons",
-                      url: "/api/2014/equipment-categories/martial-melee-weapons",
                     },
                   },
                 },
@@ -6283,7 +5599,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "handaxe",
                   name: "Handaxe",
-                  url: "/api/2014/equipment/handaxe",
                 },
               },
               {
@@ -6297,7 +5612,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -6306,14 +5620,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         },
       ],
-      class_levels: "/api/2014/classes/barbarian/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "str",
               name: "STR",
-              url: "/api/2014/ability-scores/str",
             },
             minimum_score: 13,
           },
@@ -6322,17 +5634,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "shields",
             name: "Shields",
-            url: "/api/2014/proficiencies/shields",
           },
           {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/proficiencies/simple-weapons",
           },
           {
             index: "martial-weapons",
             name: "Martial Weapons",
-            url: "/api/2014/proficiencies/martial-weapons",
           },
         ],
       },
@@ -6340,17 +5649,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "berserker",
           name: "Berserker",
-          url: "/api/2014/subclasses/berserker",
         },
       ],
-      url: "/api/2014/classes/barbarian",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "bard",
-    sourceUrl: "/api/2014/classes/bard",
     name: "Bard",
     body: {
       hitDie: 8,
@@ -6388,7 +5694,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-acrobatics",
                   name: "Skill: Acrobatics",
-                  url: "/api/2014/proficiencies/skill-acrobatics",
                 },
               },
               {
@@ -6396,7 +5701,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -6404,7 +5708,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-arcana",
                   name: "Skill: Arcana",
-                  url: "/api/2014/proficiencies/skill-arcana",
                 },
               },
               {
@@ -6412,7 +5715,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -6420,7 +5722,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-deception",
                   name: "Skill: Deception",
-                  url: "/api/2014/proficiencies/skill-deception",
                 },
               },
               {
@@ -6428,7 +5729,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -6436,7 +5736,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -6444,7 +5743,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -6452,7 +5750,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -6460,7 +5757,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-medicine",
                   name: "Skill: Medicine",
-                  url: "/api/2014/proficiencies/skill-medicine",
                 },
               },
               {
@@ -6468,7 +5764,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -6476,7 +5771,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -6484,7 +5778,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-performance",
                   name: "Skill: Performance",
-                  url: "/api/2014/proficiencies/skill-performance",
                 },
               },
               {
@@ -6492,7 +5785,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -6500,7 +5792,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
               {
@@ -6508,7 +5799,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-sleight-of-hand",
                   name: "Skill: Sleight of Hand",
-                  url: "/api/2014/proficiencies/skill-sleight-of-hand",
                 },
               },
               {
@@ -6516,7 +5806,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
               {
@@ -6524,7 +5813,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -6542,7 +5830,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "bagpipes",
                   name: "Bagpipes",
-                  url: "/api/2014/proficiencies/bagpipes",
                 },
               },
               {
@@ -6550,7 +5837,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "drum",
                   name: "Drum",
-                  url: "/api/2014/proficiencies/drum",
                 },
               },
               {
@@ -6558,7 +5844,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "dulcimer",
                   name: "Dulcimer",
-                  url: "/api/2014/proficiencies/dulcimer",
                 },
               },
               {
@@ -6566,7 +5851,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "flute",
                   name: "Flute",
-                  url: "/api/2014/proficiencies/flute",
                 },
               },
               {
@@ -6574,7 +5858,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "lute",
                   name: "Lute",
-                  url: "/api/2014/proficiencies/lute",
                 },
               },
               {
@@ -6582,7 +5865,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "lyre",
                   name: "Lyre",
-                  url: "/api/2014/proficiencies/lyre",
                 },
               },
               {
@@ -6590,7 +5872,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "horn",
                   name: "Horn",
-                  url: "/api/2014/proficiencies/horn",
                 },
               },
               {
@@ -6598,7 +5879,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "pan-flute",
                   name: "Pan flute",
-                  url: "/api/2014/proficiencies/pan-flute",
                 },
               },
               {
@@ -6606,7 +5886,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "shawm",
                   name: "Shawm",
-                  url: "/api/2014/proficiencies/shawm",
                 },
               },
               {
@@ -6614,7 +5893,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "viol",
                   name: "Viol",
-                  url: "/api/2014/proficiencies/viol",
                 },
               },
             ],
@@ -6625,54 +5903,44 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "longswords",
           name: "Longswords",
-          url: "/api/2014/proficiencies/longswords",
         },
         {
           index: "rapiers",
           name: "Rapiers",
-          url: "/api/2014/proficiencies/rapiers",
         },
         {
           index: "shortswords",
           name: "Shortswords",
-          url: "/api/2014/proficiencies/shortswords",
         },
         {
           index: "hand-crossbows",
           name: "Hand crossbows",
-          url: "/api/2014/proficiencies/hand-crossbows",
         },
         {
           index: "saving-throw-dex",
           name: "Saving Throw: DEX",
-          url: "/api/2014/proficiencies/saving-throw-dex",
         },
         {
           index: "saving-throw-cha",
           name: "Saving Throw: CHA",
-          url: "/api/2014/proficiencies/saving-throw-cha",
         },
       ],
       saving_throws: [
         {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
         {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
       ],
       starting_equipment: [
@@ -6680,7 +5948,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "leather-armor",
             name: "Leather Armor",
-            url: "/api/2014/equipment/leather-armor",
           },
           quantity: 1,
         },
@@ -6688,7 +5955,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "dagger",
             name: "Dagger",
-            url: "/api/2014/equipment/dagger",
           },
           quantity: 1,
         },
@@ -6707,7 +5973,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "rapier",
                   name: "Rapier",
-                  url: "/api/2014/equipment/rapier",
                 },
               },
               {
@@ -6716,7 +5981,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "longsword",
                   name: "Longsword",
-                  url: "/api/2014/equipment/longsword",
                 },
               },
               {
@@ -6730,7 +5994,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -6751,7 +6014,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "diplomats-pack",
                   name: "Diplomat's Pack",
-                  url: "/api/2014/equipment/diplomats-pack",
                 },
               },
               {
@@ -6760,7 +6022,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "entertainers-pack",
                   name: "Entertainer's Pack",
-                  url: "/api/2014/equipment/entertainers-pack",
                 },
               },
             ],
@@ -6779,7 +6040,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "lute",
                   name: "Lute",
-                  url: "/api/2014/equipment/lute",
                 },
               },
               {
@@ -6793,7 +6053,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "musical-instruments",
                       name: "Musical Instruments",
-                      url: "/api/2014/equipment-categories/musical-instruments",
                     },
                   },
                 },
@@ -6802,14 +6061,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         },
       ],
-      class_levels: "/api/2014/classes/bard/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "cha",
               name: "CHA",
-              url: "/api/2014/ability-scores/cha",
             },
             minimum_score: 13,
           },
@@ -6818,7 +6075,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
         ],
         proficiency_choices: [
@@ -6834,7 +6090,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-acrobatics",
                     name: "Skill: Acrobatics",
-                    url: "/api/2014/proficiencies/skill-acrobatics",
                   },
                 },
                 {
@@ -6842,7 +6097,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-animal-handling",
                     name: "Skill: Animal Handling",
-                    url: "/api/2014/proficiencies/skill-animal-handling",
                   },
                 },
                 {
@@ -6850,7 +6104,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-arcana",
                     name: "Skill: Arcana",
-                    url: "/api/2014/proficiencies/skill-arcana",
                   },
                 },
                 {
@@ -6858,7 +6111,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-athletics",
                     name: "Skill: Athletics",
-                    url: "/api/2014/proficiencies/skill-athletics",
                   },
                 },
                 {
@@ -6866,7 +6118,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-deception",
                     name: "Skill: Deception",
-                    url: "/api/2014/proficiencies/skill-deception",
                   },
                 },
                 {
@@ -6874,7 +6125,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-history",
                     name: "Skill: History",
-                    url: "/api/2014/proficiencies/skill-history",
                   },
                 },
                 {
@@ -6882,7 +6132,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-insight",
                     name: "Skill: Insight",
-                    url: "/api/2014/proficiencies/skill-insight",
                   },
                 },
                 {
@@ -6890,7 +6139,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-intimidation",
                     name: "Skill: Intimidation",
-                    url: "/api/2014/proficiencies/skill-intimidation",
                   },
                 },
                 {
@@ -6898,7 +6146,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-investigation",
                     name: "Skill: Investigation",
-                    url: "/api/2014/proficiencies/skill-investigation",
                   },
                 },
                 {
@@ -6906,7 +6153,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-medicine",
                     name: "Skill: Medicine",
-                    url: "/api/2014/proficiencies/skill-medicine",
                   },
                 },
                 {
@@ -6914,7 +6160,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-nature",
                     name: "Skill: Nature",
-                    url: "/api/2014/proficiencies/skill-nature",
                   },
                 },
                 {
@@ -6922,7 +6167,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-perception",
                     name: "Skill: Perception",
-                    url: "/api/2014/proficiencies/skill-perception",
                   },
                 },
                 {
@@ -6930,7 +6174,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-performance",
                     name: "Skill: Performance",
-                    url: "/api/2014/proficiencies/skill-performance",
                   },
                 },
                 {
@@ -6938,7 +6181,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-persuasion",
                     name: "Skill: Persuasion",
-                    url: "/api/2014/proficiencies/skill-persuasion",
                   },
                 },
                 {
@@ -6946,7 +6188,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-religion",
                     name: "Skill: Religion",
-                    url: "/api/2014/proficiencies/skill-religion",
                   },
                 },
                 {
@@ -6954,7 +6195,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-sleight-of-hand",
                     name: "Skill: Sleight of Hand",
-                    url: "/api/2014/proficiencies/skill-sleight-of-hand",
                   },
                 },
                 {
@@ -6962,7 +6202,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-stealth",
                     name: "Skill: Stealth",
-                    url: "/api/2014/proficiencies/skill-stealth",
                   },
                 },
                 {
@@ -6970,7 +6209,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-survival",
                     name: "Skill: Survival",
-                    url: "/api/2014/proficiencies/skill-survival",
                   },
                 },
               ],
@@ -6988,7 +6226,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "bagpipes",
                     name: "Bagpipes",
-                    url: "/api/2014/proficiencies/bagpipes",
                   },
                 },
                 {
@@ -6996,7 +6233,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "drum",
                     name: "Drum",
-                    url: "/api/2014/proficiencies/drum",
                   },
                 },
                 {
@@ -7004,7 +6240,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "dulcimer",
                     name: "Dulcimer",
-                    url: "/api/2014/proficiencies/dulcimer",
                   },
                 },
                 {
@@ -7012,7 +6247,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "flute",
                     name: "Flute",
-                    url: "/api/2014/proficiencies/flute",
                   },
                 },
                 {
@@ -7020,7 +6254,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "lute",
                     name: "Lute",
-                    url: "/api/2014/proficiencies/lute",
                   },
                 },
                 {
@@ -7028,7 +6261,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "lyre",
                     name: "Lyre",
-                    url: "/api/2014/proficiencies/lyre",
                   },
                 },
                 {
@@ -7036,7 +6268,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "horn",
                     name: "Horn",
-                    url: "/api/2014/proficiencies/horn",
                   },
                 },
                 {
@@ -7044,7 +6275,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "pan-flute",
                     name: "Pan flute",
-                    url: "/api/2014/proficiencies/pan-flute",
                   },
                 },
                 {
@@ -7052,7 +6282,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "shawm",
                     name: "Shawm",
-                    url: "/api/2014/proficiencies/shawm",
                   },
                 },
                 {
@@ -7060,7 +6289,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "viol",
                     name: "Viol",
-                    url: "/api/2014/proficiencies/viol",
                   },
                 },
               ],
@@ -7072,7 +6300,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "lore",
           name: "Lore",
-          url: "/api/2014/subclasses/lore",
         },
       ],
       spellcasting: {
@@ -7080,7 +6307,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         info: [
           {
@@ -7127,15 +6353,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/bard/spells",
-      url: "/api/2014/classes/bard",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "cleric",
-    sourceUrl: "/api/2014/classes/cleric",
     name: "Cleric",
     body: {
       hitDie: 8,
@@ -7170,7 +6393,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -7178,7 +6400,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -7186,7 +6407,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-medicine",
                   name: "Skill: Medicine",
-                  url: "/api/2014/proficiencies/skill-medicine",
                 },
               },
               {
@@ -7194,7 +6414,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -7202,7 +6421,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
             ],
@@ -7213,44 +6431,36 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "saving-throw-wis",
           name: "Saving Throw: WIS",
-          url: "/api/2014/proficiencies/saving-throw-wis",
         },
         {
           index: "saving-throw-cha",
           name: "Saving Throw: CHA",
-          url: "/api/2014/proficiencies/saving-throw-cha",
         },
       ],
       saving_throws: [
         {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
       ],
       starting_equipment: [
@@ -7258,7 +6468,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "shield",
             name: "Shield",
-            url: "/api/2014/equipment/shield",
           },
           quantity: 1,
         },
@@ -7277,7 +6486,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "mace",
                   name: "Mace",
-                  url: "/api/2014/equipment/mace",
                 },
               },
               {
@@ -7286,7 +6494,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "warhammer",
                   name: "Warhammer",
-                  url: "/api/2014/equipment/warhammer",
                 },
                 prerequisites: [
                   {
@@ -7294,7 +6501,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     proficiency: {
                       index: "warhammers",
                       name: "Warhammers",
-                      url: "/api/2014/proficiencies/warhammers",
                     },
                   },
                 ],
@@ -7315,7 +6521,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "scale-mail",
                   name: "Scale Mail",
-                  url: "/api/2014/equipment/scale-mail",
                 },
               },
               {
@@ -7324,7 +6529,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "leather-armor",
                   name: "Leather Armor",
-                  url: "/api/2014/equipment/leather-armor",
                 },
               },
               {
@@ -7333,7 +6537,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "chain-mail",
                   name: "Chain Mail",
-                  url: "/api/2014/equipment/chain-mail",
                 },
                 prerequisites: [
                   {
@@ -7341,7 +6544,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     proficiency: {
                       index: "chain-mail",
                       name: "Chain Mail",
-                      url: "/api/2014/proficiencies/chain-mail",
                     },
                   },
                 ],
@@ -7365,7 +6567,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-light",
                       name: "Crossbow, light",
-                      url: "/api/2014/equipment/crossbow-light",
                     },
                   },
                   {
@@ -7374,7 +6575,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-bolt",
                       name: "Crossbow bolt",
-                      url: "/api/2014/equipment/crossbow-bolt",
                     },
                   },
                 ],
@@ -7390,7 +6590,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -7411,7 +6610,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "priests-pack",
                   name: "Priest's Pack",
-                  url: "/api/2014/equipment/priests-pack",
                 },
               },
               {
@@ -7420,7 +6618,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
@@ -7435,19 +6632,16 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             equipment_category: {
               index: "holy-symbols",
               name: "Holy Symbols",
-              url: "/api/2014/equipment-categories/holy-symbols",
             },
           },
         },
       ],
-      class_levels: "/api/2014/classes/cleric/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "wis",
               name: "WIS",
-              url: "/api/2014/ability-scores/wis",
             },
             minimum_score: 13,
           },
@@ -7456,17 +6650,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "medium-armor",
             name: "Medium Armor",
-            url: "/api/2014/proficiencies/medium-armor",
           },
           {
             index: "shields",
             name: "Shields",
-            url: "/api/2014/proficiencies/shields",
           },
         ],
       },
@@ -7474,7 +6665,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "life",
           name: "Life",
-          url: "/api/2014/subclasses/life",
         },
       ],
       spellcasting: {
@@ -7482,7 +6672,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         info: [
           {
@@ -7522,15 +6711,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/cleric/spells",
-      url: "/api/2014/classes/cleric",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "druid",
-    sourceUrl: "/api/2014/classes/druid",
     name: "Druid",
     body: {
       hitDie: 8,
@@ -7575,7 +6761,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-arcana",
                   name: "Skill: Arcana",
-                  url: "/api/2014/proficiencies/skill-arcana",
                 },
               },
               {
@@ -7583,7 +6768,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -7591,7 +6775,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -7599,7 +6782,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-medicine",
                   name: "Skill: Medicine",
-                  url: "/api/2014/proficiencies/skill-medicine",
                 },
               },
               {
@@ -7607,7 +6789,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -7615,7 +6796,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -7623,7 +6803,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
               {
@@ -7631,7 +6810,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -7642,94 +6820,76 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "clubs",
           name: "Clubs",
-          url: "/api/2014/proficiencies/clubs",
         },
         {
           index: "daggers",
           name: "Daggers",
-          url: "/api/2014/proficiencies/daggers",
         },
         {
           index: "javelins",
           name: "Javelins",
-          url: "/api/2014/proficiencies/javelins",
         },
         {
           index: "maces",
           name: "Maces",
-          url: "/api/2014/proficiencies/maces",
         },
         {
           index: "quarterstaffs",
           name: "Quarterstaffs",
-          url: "/api/2014/proficiencies/quarterstaffs",
         },
         {
           index: "sickles",
           name: "Sickles",
-          url: "/api/2014/proficiencies/sickles",
         },
         {
           index: "spears",
           name: "Spears",
-          url: "/api/2014/proficiencies/spears",
         },
         {
           index: "darts",
           name: "Darts",
-          url: "/api/2014/proficiencies/darts",
         },
         {
           index: "slings",
           name: "Slings",
-          url: "/api/2014/proficiencies/slings",
         },
         {
           index: "scimitars",
           name: "Scimitars",
-          url: "/api/2014/proficiencies/scimitars",
         },
         {
           index: "herbalism-kit",
           name: "Herbalism Kit",
-          url: "/api/2014/proficiencies/herbalism-kit",
         },
         {
           index: "saving-throw-int",
           name: "Saving Throw: INT",
-          url: "/api/2014/proficiencies/saving-throw-int",
         },
         {
           index: "saving-throw-wis",
           name: "Saving Throw: WIS",
-          url: "/api/2014/proficiencies/saving-throw-wis",
         },
       ],
       saving_throws: [
         {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
       ],
       starting_equipment: [
@@ -7737,7 +6897,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "leather-armor",
             name: "Leather Armor",
-            url: "/api/2014/equipment/leather-armor",
           },
           quantity: 1,
         },
@@ -7745,7 +6904,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "explorers-pack",
             name: "Explorer's Pack",
-            url: "/api/2014/equipment/explorers-pack",
           },
           quantity: 1,
         },
@@ -7764,7 +6922,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "shield",
                   name: "Shield",
-                  url: "/api/2014/equipment/shield",
                 },
               },
               {
@@ -7778,7 +6935,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -7799,7 +6955,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "scimitar",
                   name: "Scimitar",
-                  url: "/api/2014/equipment/scimitar",
                 },
               },
               {
@@ -7813,7 +6968,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-melee-weapons",
                       name: "Simple Melee Weapons",
-                      url: "/api/2014/equipment-categories/simple-melee-weapons",
                     },
                   },
                 },
@@ -7830,19 +6984,16 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             equipment_category: {
               index: "druidic-foci",
               name: "Druidic Foci",
-              url: "/api/2014/equipment-categories/druidic-foci",
             },
           },
         },
       ],
-      class_levels: "/api/2014/classes/druid/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "wis",
               name: "WIS",
-              url: "/api/2014/ability-scores/wis",
             },
             minimum_score: 13,
           },
@@ -7851,17 +7002,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "medium-armor",
             name: "Medium Armor",
-            url: "/api/2014/proficiencies/medium-armor",
           },
           {
             index: "shields",
             name: "Shields",
-            url: "/api/2014/proficiencies/shields",
           },
         ],
       },
@@ -7869,7 +7017,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "land",
           name: "Land",
-          url: "/api/2014/subclasses/land",
         },
       ],
       spellcasting: {
@@ -7877,7 +7024,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         info: [
           {
@@ -7917,15 +7063,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/druid/spells",
-      url: "/api/2014/classes/druid",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "fighter",
-    sourceUrl: "/api/2014/classes/fighter",
     name: "Fighter",
     body: {
       hitDie: 10,
@@ -7960,7 +7103,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-acrobatics",
                   name: "Skill: Acrobatics",
-                  url: "/api/2014/proficiencies/skill-acrobatics",
                 },
               },
               {
@@ -7968,7 +7110,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -7976,7 +7117,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -7984,7 +7124,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -7992,7 +7131,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -8000,7 +7138,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -8008,7 +7145,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -8016,7 +7152,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -8027,44 +7162,36 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "all-armor",
           name: "All armor",
-          url: "/api/2014/proficiencies/all-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
         {
           index: "saving-throw-str",
           name: "Saving Throw: STR",
-          url: "/api/2014/proficiencies/saving-throw-str",
         },
         {
           index: "saving-throw-con",
           name: "Saving Throw: CON",
-          url: "/api/2014/proficiencies/saving-throw-con",
         },
       ],
       saving_throws: [
         {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
       ],
       starting_equipment: [],
@@ -8082,7 +7209,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "chain-mail",
                   name: "Chain Mail",
-                  url: "/api/2014/equipment/chain-mail",
                 },
               },
               {
@@ -8094,7 +7220,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "leather-armor",
                       name: "Leather Armor",
-                      url: "/api/2014/equipment/leather-armor",
                     },
                   },
                   {
@@ -8103,7 +7228,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "longbow",
                       name: "Longbow",
-                      url: "/api/2014/equipment/longbow",
                     },
                   },
                   {
@@ -8112,7 +7236,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "arrow",
                       name: "Arrow",
-                      url: "/api/2014/equipment/arrow",
                     },
                   },
                 ],
@@ -8141,7 +7264,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         equipment_category: {
                           index: "martial-weapons",
                           name: "Martial Weapons",
-                          url: "/api/2014/equipment-categories/martial-weapons",
                         },
                       },
                     },
@@ -8152,7 +7274,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "shield",
                       name: "Shield",
-                      url: "/api/2014/equipment/shield",
                     },
                   },
                 ],
@@ -8168,7 +7289,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "martial-weapons",
                       name: "Martial Weapons",
-                      url: "/api/2014/equipment-categories/martial-weapons",
                     },
                   },
                 },
@@ -8192,7 +7312,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-light",
                       name: "Crossbow, light",
-                      url: "/api/2014/equipment/crossbow-light",
                     },
                   },
                   {
@@ -8201,7 +7320,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-bolt",
                       name: "Crossbow bolt",
-                      url: "/api/2014/equipment/crossbow-bolt",
                     },
                   },
                 ],
@@ -8212,7 +7330,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "handaxe",
                   name: "Handaxe",
-                  url: "/api/2014/equipment/handaxe",
                 },
               },
             ],
@@ -8231,7 +7348,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dungeoneers-pack",
                   name: "Dungeoneer's Pack",
-                  url: "/api/2014/equipment/dungeoneers-pack",
                 },
               },
               {
@@ -8240,14 +7356,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
           },
         },
       ],
-      class_levels: "/api/2014/classes/fighter/levels",
       multi_classing: {
         prerequisite_options: {
           type: "ability-scores",
@@ -8260,7 +7374,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 ability_score: {
                   index: "str",
                   name: "STR",
-                  url: "/api/2014/ability-scores/str",
                 },
                 minimum_score: 13,
               },
@@ -8269,7 +7382,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 ability_score: {
                   index: "dex",
                   name: "DEX",
-                  url: "/api/2014/ability-scores/dex",
                 },
                 minimum_score: 13,
               },
@@ -8280,27 +7392,22 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "medium-armor",
             name: "Medium Armor",
-            url: "/api/2014/proficiencies/medium-armor",
           },
           {
             index: "shields",
             name: "Shields",
-            url: "/api/2014/proficiencies/shields",
           },
           {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/proficiencies/simple-weapons",
           },
           {
             index: "martial-weapons",
             name: "Martial Weapons",
-            url: "/api/2014/proficiencies/martial-weapons",
           },
         ],
       },
@@ -8308,17 +7415,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "champion",
           name: "Champion",
-          url: "/api/2014/subclasses/champion",
         },
       ],
-      url: "/api/2014/classes/fighter",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "monk",
-    sourceUrl: "/api/2014/classes/monk",
     name: "Monk",
     body: {
       hitDie: 8,
@@ -8352,7 +7456,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-acrobatics",
                   name: "Skill: Acrobatics",
-                  url: "/api/2014/proficiencies/skill-acrobatics",
                 },
               },
               {
@@ -8360,7 +7463,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -8368,7 +7470,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -8376,7 +7477,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -8384,7 +7484,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
               {
@@ -8392,7 +7491,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
             ],
@@ -8419,7 +7517,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "alchemists-supplies",
                           name: "Alchemist's Supplies",
-                          url: "/api/2014/proficiencies/alchemists-supplies",
                         },
                       },
                       {
@@ -8427,7 +7524,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "brewers-supplies",
                           name: "Brewer's Supplies",
-                          url: "/api/2014/proficiencies/brewers-supplies",
                         },
                       },
                       {
@@ -8435,7 +7531,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "calligraphers-supplies",
                           name: "Calligrapher's Supplies",
-                          url: "/api/2014/proficiencies/calligraphers-supplies",
                         },
                       },
                       {
@@ -8443,7 +7538,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "carpenters-tools",
                           name: "Carpenter's Tools",
-                          url: "/api/2014/proficiencies/carpenters-tools",
                         },
                       },
                       {
@@ -8451,7 +7545,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "cartographers-tools",
                           name: "Cartographer's Tools",
-                          url: "/api/2014/proficiencies/cartographers-tools",
                         },
                       },
                       {
@@ -8459,7 +7552,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "cobblers-tools",
                           name: "Cobbler's Tools",
-                          url: "/api/2014/proficiencies/cobblers-tools",
                         },
                       },
                       {
@@ -8467,7 +7559,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "cooks-utensils",
                           name: "Cook's utensils",
-                          url: "/api/2014/proficiencies/cooks-utensils",
                         },
                       },
                       {
@@ -8475,7 +7566,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "glassblowers-tools",
                           name: "Glassblower's Tools",
-                          url: "/api/2014/proficiencies/glassblowers-tools",
                         },
                       },
                       {
@@ -8483,7 +7573,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "jewelers-tools",
                           name: "Jeweler's Tools",
-                          url: "/api/2014/proficiencies/jewelers-tools",
                         },
                       },
                       {
@@ -8491,7 +7580,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "leatherworkers-tools",
                           name: "Leatherworker's Tools",
-                          url: "/api/2014/proficiencies/leatherworkers-tools",
                         },
                       },
                       {
@@ -8499,7 +7587,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "masons-tools",
                           name: "Mason's Tools",
-                          url: "/api/2014/proficiencies/masons-tools",
                         },
                       },
                       {
@@ -8507,7 +7594,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "painters-supplies",
                           name: "Painter's Supplies",
-                          url: "/api/2014/proficiencies/painters-supplies",
                         },
                       },
                       {
@@ -8515,7 +7601,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "potters-tools",
                           name: "Potter's Tools",
-                          url: "/api/2014/proficiencies/potters-tools",
                         },
                       },
                       {
@@ -8523,7 +7608,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "smiths-tools",
                           name: "Smith's Tools",
-                          url: "/api/2014/proficiencies/smiths-tools",
                         },
                       },
                       {
@@ -8531,7 +7615,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "tinkers-tools",
                           name: "Tinker's Tools",
-                          url: "/api/2014/proficiencies/tinkers-tools",
                         },
                       },
                       {
@@ -8539,7 +7622,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "weavers-tools",
                           name: "Weaver's Tools",
-                          url: "/api/2014/proficiencies/weavers-tools",
                         },
                       },
                       {
@@ -8547,7 +7629,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "woodcarvers-tools",
                           name: "Woodcarver's Tools",
-                          url: "/api/2014/proficiencies/woodcarvers-tools",
                         },
                       },
                       {
@@ -8555,7 +7636,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "disguise-kit",
                           name: "Disguise Kit",
-                          url: "/api/2014/proficiencies/disguise-kit",
                         },
                       },
                       {
@@ -8563,7 +7643,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "forgery-kit",
                           name: "Forgery Kit",
-                          url: "/api/2014/proficiencies/forgery-kit",
                         },
                       },
                     ],
@@ -8584,7 +7663,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "bagpipes",
                           name: "Bagpipes",
-                          url: "/api/2014/proficiencies/bagpipes",
                         },
                       },
                       {
@@ -8592,7 +7670,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "drum",
                           name: "Drum",
-                          url: "/api/2014/proficiencies/drum",
                         },
                       },
                       {
@@ -8600,7 +7677,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "dulcimer",
                           name: "Dulcimer",
-                          url: "/api/2014/proficiencies/dulcimer",
                         },
                       },
                       {
@@ -8608,7 +7684,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "flute",
                           name: "Flute",
-                          url: "/api/2014/proficiencies/flute",
                         },
                       },
                       {
@@ -8616,7 +7691,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "lute",
                           name: "Lute",
-                          url: "/api/2014/proficiencies/lute",
                         },
                       },
                       {
@@ -8624,7 +7698,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "lyre",
                           name: "Lyre",
-                          url: "/api/2014/proficiencies/lyre",
                         },
                       },
                       {
@@ -8632,7 +7705,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "horn",
                           name: "Horn",
-                          url: "/api/2014/proficiencies/horn",
                         },
                       },
                       {
@@ -8640,7 +7712,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "pan-flute",
                           name: "Pan flute",
-                          url: "/api/2014/proficiencies/pan-flute",
                         },
                       },
                       {
@@ -8648,7 +7719,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "shawm",
                           name: "Shawm",
-                          url: "/api/2014/proficiencies/shawm",
                         },
                       },
                       {
@@ -8656,7 +7726,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         item: {
                           index: "viol",
                           name: "Viol",
-                          url: "/api/2014/proficiencies/viol",
                         },
                       },
                     ],
@@ -8671,34 +7740,28 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "shortswords",
           name: "Shortswords",
-          url: "/api/2014/proficiencies/shortswords",
         },
         {
           index: "saving-throw-dex",
           name: "Saving Throw: DEX",
-          url: "/api/2014/proficiencies/saving-throw-dex",
         },
         {
           index: "saving-throw-str",
           name: "Saving Throw: STR",
-          url: "/api/2014/proficiencies/saving-throw-str",
         },
       ],
       saving_throws: [
         {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
       ],
       starting_equipment: [
@@ -8706,7 +7769,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "dart",
             name: "Dart",
-            url: "/api/2014/equipment/dart",
           },
           quantity: 10,
         },
@@ -8725,7 +7787,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "shortsword",
                   name: "Shortsword",
-                  url: "/api/2014/equipment/shortsword",
                 },
               },
               {
@@ -8739,7 +7800,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -8760,7 +7820,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dungeoneers-pack",
                   name: "Dungeoneer's Pack",
-                  url: "/api/2014/equipment/dungeoneers-pack",
                 },
               },
               {
@@ -8769,21 +7828,18 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
           },
         },
       ],
-      class_levels: "/api/2014/classes/monk/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "dex",
               name: "DEX",
-              url: "/api/2014/ability-scores/dex",
             },
             minimum_score: 13,
           },
@@ -8791,7 +7847,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             ability_score: {
               index: "wis",
               name: "WIS",
-              url: "/api/2014/ability-scores/wis",
             },
             minimum_score: 13,
           },
@@ -8800,12 +7855,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/proficiencies/simple-weapons",
           },
           {
             index: "shortswords",
             name: "Shortswords",
-            url: "/api/2014/proficiencies/shortswords",
           },
         ],
       },
@@ -8813,17 +7866,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "open-hand",
           name: "Open Hand",
-          url: "/api/2014/subclasses/open-hand",
         },
       ],
-      url: "/api/2014/classes/monk",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "paladin",
-    sourceUrl: "/api/2014/classes/paladin",
     name: "Paladin",
     body: {
       hitDie: 10,
@@ -8858,7 +7908,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -8866,7 +7915,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -8874,7 +7922,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -8882,7 +7929,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-medicine",
                   name: "Skill: Medicine",
-                  url: "/api/2014/proficiencies/skill-medicine",
                 },
               },
               {
@@ -8890,7 +7936,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -8898,7 +7943,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
             ],
@@ -8909,44 +7953,36 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "all-armor",
           name: "All armor",
-          url: "/api/2014/proficiencies/all-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
         {
           index: "saving-throw-wis",
           name: "Saving Throw: WIS",
-          url: "/api/2014/proficiencies/saving-throw-wis",
         },
         {
           index: "saving-throw-cha",
           name: "Saving Throw: CHA",
-          url: "/api/2014/proficiencies/saving-throw-cha",
         },
       ],
       saving_throws: [
         {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
       ],
       starting_equipment: [
@@ -8954,7 +7990,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "chain-mail",
             name: "Chain Mail",
-            url: "/api/2014/equipment/chain-mail",
           },
           quantity: 1,
         },
@@ -8981,7 +8016,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                         equipment_category: {
                           name: "Martial Weapons",
                           index: "martial-weapons",
-                          url: "/api/2014/equipment-categories/martial-weapons",
                         },
                       },
                     },
@@ -8992,7 +8026,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "shield",
                       name: "Shield",
-                      url: "/api/2014/equipment/shield",
                     },
                   },
                 ],
@@ -9008,7 +8041,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "martial-weapons",
                       name: "Martial Weapons",
-                      url: "/api/2014/equipment-categories/martial-weapons",
                     },
                   },
                 },
@@ -9029,7 +8061,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "javelin",
                   name: "Javelin",
-                  url: "/api/2014/equipment/javelin",
                 },
               },
               {
@@ -9043,7 +8074,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -9064,7 +8094,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "priests-pack",
                   name: "Priest's Pack",
-                  url: "/api/2014/equipment/priests-pack",
                 },
               },
               {
@@ -9073,7 +8102,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
@@ -9088,19 +8116,16 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             equipment_category: {
               index: "holy-symbols",
               name: "Holy Symbols",
-              url: "/api/2014/equipment-categories/holy-symbols",
             },
           },
         },
       ],
-      class_levels: "/api/2014/classes/paladin/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "str",
               name: "STR",
-              url: "/api/2014/ability-scores/str",
             },
             minimum_score: 13,
           },
@@ -9108,7 +8133,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             ability_score: {
               index: "cha",
               name: "CHA",
-              url: "/api/2014/ability-scores/cha",
             },
             minimum_score: 13,
           },
@@ -9117,27 +8141,22 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "medium-armor",
             name: "Medium Armor",
-            url: "/api/2014/proficiencies/medium-armor",
           },
           {
             index: "shields",
             name: "Shields",
-            url: "/api/2014/proficiencies/shields",
           },
           {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/proficiencies/simple-weapons",
           },
           {
             index: "martial-weapons",
             name: "Martial Weapons",
-            url: "/api/2014/proficiencies/martial-weapons",
           },
         ],
       },
@@ -9145,7 +8164,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "devotion",
           name: "Devotion",
-          url: "/api/2014/subclasses/devotion",
         },
       ],
       spellcasting: {
@@ -9153,7 +8171,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         info: [
           {
@@ -9179,15 +8196,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/paladin/spells",
-      url: "/api/2014/classes/paladin",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "ranger",
-    sourceUrl: "/api/2014/classes/ranger",
     name: "Ranger",
     body: {
       hitDie: 10,
@@ -9223,7 +8237,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-animal-handling",
                   name: "Skill: Animal Handling",
-                  url: "/api/2014/proficiencies/skill-animal-handling",
                 },
               },
               {
@@ -9231,7 +8244,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -9239,7 +8251,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -9247,7 +8258,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -9255,7 +8265,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -9263,7 +8272,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -9271,7 +8279,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
               {
@@ -9279,7 +8286,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-survival",
                   name: "Skill: Survival",
-                  url: "/api/2014/proficiencies/skill-survival",
                 },
               },
             ],
@@ -9290,49 +8296,40 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "medium-armor",
           name: "Medium Armor",
-          url: "/api/2014/proficiencies/medium-armor",
         },
         {
           index: "shields",
           name: "Shields",
-          url: "/api/2014/proficiencies/shields",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "martial-weapons",
           name: "Martial Weapons",
-          url: "/api/2014/proficiencies/martial-weapons",
         },
         {
           index: "saving-throw-dex",
           name: "Saving Throw: DEX",
-          url: "/api/2014/proficiencies/saving-throw-dex",
         },
         {
           index: "saving-throw-str",
           name: "Saving Throw: STR",
-          url: "/api/2014/proficiencies/saving-throw-str",
         },
       ],
       saving_throws: [
         {
           index: "str",
           name: "STR",
-          url: "/api/2014/ability-scores/str",
         },
         {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
       ],
       starting_equipment: [
@@ -9340,7 +8337,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "longbow",
             name: "Longbow",
-            url: "/api/2014/equipment/longbow",
           },
           quantity: 1,
         },
@@ -9348,7 +8344,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "arrow",
             name: "Arrow",
-            url: "/api/2014/equipment/arrow",
           },
           quantity: 20,
         },
@@ -9367,7 +8362,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "scale-mail",
                   name: "Scale Mail",
-                  url: "/api/2014/equipment/scale-mail",
                 },
               },
               {
@@ -9376,7 +8370,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "leather-armor",
                   name: "Leather Armor",
-                  url: "/api/2014/equipment/leather-armor",
                 },
               },
             ],
@@ -9395,7 +8388,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "shortsword",
                   name: "Shortsword",
-                  url: "/api/2014/equipment/shortsword",
                 },
               },
               {
@@ -9409,7 +8401,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-melee-weapons",
                       name: "Simple Melee Weapons",
-                      url: "/api/2014/equipment-categories/simple-melee-weapons",
                     },
                   },
                 },
@@ -9430,7 +8421,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dungeoneers-pack",
                   name: "Dungeoneer's Pack",
-                  url: "/api/2014/equipment/dungeoneers-pack",
                 },
               },
               {
@@ -9439,21 +8429,18 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
           },
         },
       ],
-      class_levels: "/api/2014/classes/ranger/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "dex",
               name: "DEX",
-              url: "/api/2014/ability-scores/dex",
             },
             minimum_score: 13,
           },
@@ -9461,7 +8448,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             ability_score: {
               index: "wis",
               name: "WIS",
-              url: "/api/2014/ability-scores/wis",
             },
             minimum_score: 13,
           },
@@ -9470,27 +8456,22 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "medium-armor",
             name: "Medium Armor",
-            url: "/api/2014/proficiencies/medium-armor",
           },
           {
             index: "shields",
             name: "Shields",
-            url: "/api/2014/proficiencies/shields",
           },
           {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/proficiencies/simple-weapons",
           },
           {
             index: "martial-weapons",
             name: "Martial Weapons",
-            url: "/api/2014/proficiencies/martial-weapons",
           },
         ],
         proficiency_choices: [
@@ -9505,7 +8486,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-animal-handling",
                     name: "Skill: Animal Handling",
-                    url: "/api/2014/proficiencies/skill-animal-handling",
                   },
                 },
                 {
@@ -9513,7 +8493,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-athletics",
                     name: "Skill: Athletics",
-                    url: "/api/2014/proficiencies/skill-athletics",
                   },
                 },
                 {
@@ -9521,7 +8500,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-insight",
                     name: "Skill: Insight",
-                    url: "/api/2014/proficiencies/skill-insight",
                   },
                 },
                 {
@@ -9529,7 +8507,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-investigation",
                     name: "Skill: Investigation",
-                    url: "/api/2014/proficiencies/skill-investigation",
                   },
                 },
                 {
@@ -9537,7 +8514,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-nature",
                     name: "Skill: Nature",
-                    url: "/api/2014/proficiencies/skill-nature",
                   },
                 },
                 {
@@ -9545,7 +8521,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-perception",
                     name: "Skill: Perception",
-                    url: "/api/2014/proficiencies/skill-perception",
                   },
                 },
                 {
@@ -9553,7 +8528,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-stealth",
                     name: "Skill: Stealth",
-                    url: "/api/2014/proficiencies/skill-stealth",
                   },
                 },
                 {
@@ -9561,7 +8535,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-survival",
                     name: "Skill: Survival",
-                    url: "/api/2014/proficiencies/skill-survival",
                   },
                 },
               ],
@@ -9573,7 +8546,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "hunter",
           name: "Hunter",
-          url: "/api/2014/subclasses/hunter",
         },
       ],
       spellcasting: {
@@ -9581,7 +8553,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         info: [
           {
@@ -9609,15 +8580,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/ranger/spells",
-      url: "/api/2014/classes/ranger",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "rogue",
-    sourceUrl: "/api/2014/classes/rogue",
     name: "Rogue",
     body: {
       hitDie: 8,
@@ -9655,7 +8623,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-acrobatics",
                   name: "Skill: Acrobatics",
-                  url: "/api/2014/proficiencies/skill-acrobatics",
                 },
               },
               {
@@ -9663,7 +8630,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-athletics",
                   name: "Skill: Athletics",
-                  url: "/api/2014/proficiencies/skill-athletics",
                 },
               },
               {
@@ -9671,7 +8637,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-deception",
                   name: "Skill: Deception",
-                  url: "/api/2014/proficiencies/skill-deception",
                 },
               },
               {
@@ -9679,7 +8644,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -9687,7 +8651,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -9695,7 +8658,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -9703,7 +8665,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-perception",
                   name: "Skill: Perception",
-                  url: "/api/2014/proficiencies/skill-perception",
                 },
               },
               {
@@ -9711,7 +8672,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-performance",
                   name: "Skill: Performance",
-                  url: "/api/2014/proficiencies/skill-performance",
                 },
               },
               {
@@ -9719,7 +8679,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -9727,7 +8686,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-sleight-of-hand",
                   name: "Skill: Sleight of Hand",
-                  url: "/api/2014/proficiencies/skill-sleight-of-hand",
                 },
               },
               {
@@ -9735,7 +8693,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-stealth",
                   name: "Skill: Stealth",
-                  url: "/api/2014/proficiencies/skill-stealth",
                 },
               },
             ],
@@ -9746,59 +8703,48 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "longswords",
           name: "Longswords",
-          url: "/api/2014/proficiencies/longswords",
         },
         {
           index: "rapiers",
           name: "Rapiers",
-          url: "/api/2014/proficiencies/rapiers",
         },
         {
           index: "shortswords",
           name: "Shortswords",
-          url: "/api/2014/proficiencies/shortswords",
         },
         {
           index: "hand-crossbows",
           name: "Hand crossbows",
-          url: "/api/2014/proficiencies/hand-crossbows",
         },
         {
           index: "thieves-tools",
           name: "Thieves' Tools",
-          url: "/api/2014/proficiencies/thieves-tools",
         },
         {
           index: "saving-throw-dex",
           name: "Saving Throw: DEX",
-          url: "/api/2014/proficiencies/saving-throw-dex",
         },
         {
           index: "saving-throw-int",
           name: "Saving Throw: INT",
-          url: "/api/2014/proficiencies/saving-throw-int",
         },
       ],
       saving_throws: [
         {
           index: "dex",
           name: "DEX",
-          url: "/api/2014/ability-scores/dex",
         },
         {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
       ],
       starting_equipment: [
@@ -9806,7 +8752,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "leather-armor",
             name: "Leather Armor",
-            url: "/api/2014/equipment/leather-armor",
           },
           quantity: 1,
         },
@@ -9814,7 +8759,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "dagger",
             name: "Dagger",
-            url: "/api/2014/equipment/dagger",
           },
           quantity: 2,
         },
@@ -9822,7 +8766,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "thieves-tools",
             name: "Thieves' Tools",
-            url: "/api/2014/equipment/thieves-tools",
           },
           quantity: 1,
         },
@@ -9841,7 +8784,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "rapier",
                   name: "Rapier",
-                  url: "/api/2014/equipment/rapier",
                 },
               },
               {
@@ -9850,7 +8792,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "shortsword",
                   name: "Shortsword",
-                  url: "/api/2014/equipment/shortsword",
                 },
               },
             ],
@@ -9872,7 +8813,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "shortbow",
                       name: "Shortbow",
-                      url: "/api/2014/equipment/shortbow",
                     },
                   },
                   {
@@ -9881,7 +8821,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "arrow",
                       name: "Arrow",
-                      url: "/api/2014/equipment/arrow",
                     },
                   },
                 ],
@@ -9892,7 +8831,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "shortsword",
                   name: "Shortsword",
-                  url: "/api/2014/equipment/shortsword",
                 },
               },
             ],
@@ -9911,7 +8849,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "burglars-pack",
                   name: "Burglar's Pack",
-                  url: "/api/2014/equipment/burglars-pack",
                 },
               },
               {
@@ -9920,7 +8857,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dungeoneers-pack",
                   name: "Dungeoneer's Pack",
-                  url: "/api/2014/equipment/dungeoneers-pack",
                 },
               },
               {
@@ -9929,21 +8865,18 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
           },
         },
       ],
-      class_levels: "/api/2014/classes/rogue/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "dex",
               name: "DEX",
-              url: "/api/2014/ability-scores/dex",
             },
             minimum_score: 13,
           },
@@ -9952,12 +8885,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "thieves-tools",
             name: "Thieves' Tools",
-            url: "/api/2014/proficiencies/thieves-tools",
           },
         ],
         proficiency_choices: [
@@ -9972,7 +8903,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-acrobatics",
                     name: "Skill: Acrobatics",
-                    url: "/api/2014/proficiencies/skill-acrobatics",
                   },
                 },
                 {
@@ -9980,7 +8910,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-athletics",
                     name: "Skill: Athletics",
-                    url: "/api/2014/proficiencies/skill-athletics",
                   },
                 },
                 {
@@ -9988,7 +8917,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-deception",
                     name: "Skill: Deception",
-                    url: "/api/2014/proficiencies/skill-deception",
                   },
                 },
                 {
@@ -9996,7 +8924,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-insight",
                     name: "Skill: Insight",
-                    url: "/api/2014/proficiencies/skill-insight",
                   },
                 },
                 {
@@ -10004,7 +8931,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-intimidation",
                     name: "Skill: Intimidation",
-                    url: "/api/2014/proficiencies/skill-intimidation",
                   },
                 },
                 {
@@ -10012,7 +8938,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-investigation",
                     name: "Skill: Investigation",
-                    url: "/api/2014/proficiencies/skill-investigation",
                   },
                 },
                 {
@@ -10020,7 +8945,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-perception",
                     name: "Skill: Perception",
-                    url: "/api/2014/proficiencies/skill-perception",
                   },
                 },
                 {
@@ -10028,7 +8952,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-performance",
                     name: "Skill: Performance",
-                    url: "/api/2014/proficiencies/skill-performance",
                   },
                 },
                 {
@@ -10036,7 +8959,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-persuasion",
                     name: "Skill: Persuasion",
-                    url: "/api/2014/proficiencies/skill-persuasion",
                   },
                 },
                 {
@@ -10044,7 +8966,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-sleight-of-hand",
                     name: "Skill: Sleight of Hand",
-                    url: "/api/2014/proficiencies/skill-sleight-of-hand",
                   },
                 },
                 {
@@ -10052,7 +8973,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                   item: {
                     index: "skill-stealth",
                     name: "Skill: Stealth",
-                    url: "/api/2014/proficiencies/skill-stealth",
                   },
                 },
               ],
@@ -10064,17 +8984,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "thief",
           name: "Thief",
-          url: "/api/2014/subclasses/thief",
         },
       ],
-      url: "/api/2014/classes/rogue",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "sorcerer",
-    sourceUrl: "/api/2014/classes/sorcerer",
     name: "Sorcerer",
     body: {
       hitDie: 6,
@@ -10110,7 +9027,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-arcana",
                   name: "Skill: Arcana",
-                  url: "/api/2014/proficiencies/skill-arcana",
                 },
               },
               {
@@ -10118,7 +9034,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-deception",
                   name: "Skill: Deception",
-                  url: "/api/2014/proficiencies/skill-deception",
                 },
               },
               {
@@ -10126,7 +9041,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -10134,7 +9048,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -10142,7 +9055,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-persuasion",
                   name: "Skill: Persuasion",
-                  url: "/api/2014/proficiencies/skill-persuasion",
                 },
               },
               {
@@ -10150,7 +9062,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
             ],
@@ -10161,49 +9072,40 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "daggers",
           name: "Daggers",
-          url: "/api/2014/proficiencies/daggers",
         },
         {
           index: "darts",
           name: "Darts",
-          url: "/api/2014/proficiencies/darts",
         },
         {
           index: "slings",
           name: "Slings",
-          url: "/api/2014/proficiencies/slings",
         },
         {
           index: "quarterstaffs",
           name: "Quarterstaffs",
-          url: "/api/2014/proficiencies/quarterstaffs",
         },
         {
           index: "crossbows-light",
           name: "Crossbows, light",
-          url: "/api/2014/proficiencies/crossbows-light",
         },
         {
           index: "saving-throw-con",
           name: "Saving Throw: CON",
-          url: "/api/2014/proficiencies/saving-throw-con",
         },
         {
           index: "saving-throw-cha",
           name: "Saving Throw: CHA",
-          url: "/api/2014/proficiencies/saving-throw-cha",
         },
       ],
       saving_throws: [
         {
           index: "con",
           name: "CON",
-          url: "/api/2014/ability-scores/con",
         },
         {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
       ],
       starting_equipment: [
@@ -10211,7 +9113,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "dagger",
             name: "Dagger",
-            url: "/api/2014/equipment/dagger",
           },
           quantity: 2,
         },
@@ -10233,7 +9134,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-light",
                       name: "Crossbow, light",
-                      url: "/api/2014/equipment/crossbow-light",
                     },
                   },
                   {
@@ -10242,7 +9142,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-bolt",
                       name: "Crossbow bolt",
-                      url: "/api/2014/equipment/crossbow-bolt",
                     },
                   },
                 ],
@@ -10258,7 +9157,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -10279,7 +9177,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "component-pouch",
                   name: "Component pouch",
-                  url: "/api/2014/equipment/component-pouch",
                 },
               },
               {
@@ -10293,7 +9190,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "arcane-foci",
                       name: "Arcane Foci",
-                      url: "/api/2014/equipment-categories/arcane-foci",
                     },
                   },
                 },
@@ -10314,7 +9210,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dungeoneers-pack",
                   name: "Dungeoneer's Pack",
-                  url: "/api/2014/equipment/dungeoneers-pack",
                 },
               },
               {
@@ -10323,21 +9218,18 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
           },
         },
       ],
-      class_levels: "/api/2014/classes/sorcerer/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "cha",
               name: "CHA",
-              url: "/api/2014/ability-scores/cha",
             },
             minimum_score: 13,
           },
@@ -10348,7 +9240,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "draconic",
           name: "Draconic",
-          url: "/api/2014/subclasses/draconic",
         },
       ],
       spellcasting: {
@@ -10356,7 +9247,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         info: [
           {
@@ -10394,15 +9284,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/sorcerer/spells",
-      url: "/api/2014/classes/sorcerer",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "warlock",
-    sourceUrl: "/api/2014/classes/warlock",
     name: "Warlock",
     body: {
       hitDie: 8,
@@ -10435,7 +9322,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-arcana",
                   name: "Skill: Arcana",
-                  url: "/api/2014/proficiencies/skill-arcana",
                 },
               },
               {
@@ -10443,7 +9329,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-deception",
                   name: "Skill: Deception",
-                  url: "/api/2014/proficiencies/skill-deception",
                 },
               },
               {
@@ -10451,7 +9336,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -10459,7 +9343,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-intimidation",
                   name: "Skill: Intimidation",
-                  url: "/api/2014/proficiencies/skill-intimidation",
                 },
               },
               {
@@ -10467,7 +9350,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -10475,7 +9357,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-nature",
                   name: "Skill: Nature",
-                  url: "/api/2014/proficiencies/skill-nature",
                 },
               },
               {
@@ -10483,7 +9364,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
             ],
@@ -10494,34 +9374,28 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "light-armor",
           name: "Light Armor",
-          url: "/api/2014/proficiencies/light-armor",
         },
         {
           index: "simple-weapons",
           name: "Simple Weapons",
-          url: "/api/2014/proficiencies/simple-weapons",
         },
         {
           index: "saving-throw-wis",
           name: "Saving Throw: WIS",
-          url: "/api/2014/proficiencies/saving-throw-wis",
         },
         {
           index: "saving-throw-cha",
           name: "Saving Throw: CHA",
-          url: "/api/2014/proficiencies/saving-throw-cha",
         },
       ],
       saving_throws: [
         {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
         {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
       ],
       starting_equipment: [
@@ -10529,7 +9403,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "dagger",
             name: "Dagger",
-            url: "/api/2014/equipment/dagger",
           },
           quantity: 2,
         },
@@ -10537,7 +9410,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "leather-armor",
             name: "Leather Armor",
-            url: "/api/2014/equipment/leather-armor",
           },
           quantity: 1,
         },
@@ -10559,7 +9431,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-light",
                       name: "Crossbow, light",
-                      url: "/api/2014/equipment/crossbow-light",
                     },
                   },
                   {
@@ -10568,7 +9439,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     of: {
                       index: "crossbow-bolt",
                       name: "Crossbow bolt",
-                      url: "/api/2014/equipment/crossbow-bolt",
                     },
                   },
                 ],
@@ -10584,7 +9454,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "simple-weapons",
                       name: "Simple Weapons",
-                      url: "/api/2014/equipment-categories/simple-weapons",
                     },
                   },
                 },
@@ -10605,7 +9474,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "component-pouch",
                   name: "Component pouch",
-                  url: "/api/2014/equipment/component-pouch",
                 },
               },
               {
@@ -10619,7 +9487,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "arcane-foci",
                       name: "Arcane Foci",
-                      url: "/api/2014/equipment-categories/arcane-foci",
                     },
                   },
                 },
@@ -10640,7 +9507,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "scholars-pack",
                   name: "Scholar's Pack",
-                  url: "/api/2014/equipment/scholars-pack",
                 },
               },
               {
@@ -10649,7 +9515,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dungeoneers-pack",
                   name: "Dungeoneer's Pack",
-                  url: "/api/2014/equipment/dungeoneers-pack",
                 },
               },
             ],
@@ -10664,19 +9529,16 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             equipment_category: {
               index: "simple-weapons",
               name: "Simple Weapons",
-              url: "/api/2014/equipment-categories/simple-weapons",
             },
           },
         },
       ],
-      class_levels: "/api/2014/classes/warlock/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "cha",
               name: "CHA",
-              url: "/api/2014/ability-scores/cha",
             },
             minimum_score: 13,
           },
@@ -10685,12 +9547,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           {
             index: "light-armor",
             name: "Light Armor",
-            url: "/api/2014/proficiencies/light-armor",
           },
           {
             index: "simple-weapons",
             name: "Simple Weapons",
-            url: "/api/2014/proficiencies/simple-weapons",
           },
         ],
       },
@@ -10698,7 +9558,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "fiend",
           name: "Fiend",
-          url: "/api/2014/subclasses/fiend",
         },
       ],
       spellcasting: {
@@ -10706,7 +9565,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "cha",
           name: "CHA",
-          url: "/api/2014/ability-scores/cha",
         },
         info: [
           {
@@ -10745,15 +9603,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/warlock/spells",
-      url: "/api/2014/classes/warlock",
     },
   },
   {
     kind: "class",
     sourceFamily: "classes",
     sourceIndex: "wizard",
-    sourceUrl: "/api/2014/classes/wizard",
     name: "Wizard",
     body: {
       hitDie: 6,
@@ -10789,7 +9644,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-arcana",
                   name: "Skill: Arcana",
-                  url: "/api/2014/proficiencies/skill-arcana",
                 },
               },
               {
@@ -10797,7 +9651,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-history",
                   name: "Skill: History",
-                  url: "/api/2014/proficiencies/skill-history",
                 },
               },
               {
@@ -10805,7 +9658,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-insight",
                   name: "Skill: Insight",
-                  url: "/api/2014/proficiencies/skill-insight",
                 },
               },
               {
@@ -10813,7 +9665,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-investigation",
                   name: "Skill: Investigation",
-                  url: "/api/2014/proficiencies/skill-investigation",
                 },
               },
               {
@@ -10821,7 +9672,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-medicine",
                   name: "Skill: Medicine",
-                  url: "/api/2014/proficiencies/skill-medicine",
                 },
               },
               {
@@ -10829,7 +9679,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 item: {
                   index: "skill-religion",
                   name: "Skill: Religion",
-                  url: "/api/2014/proficiencies/skill-religion",
                 },
               },
             ],
@@ -10840,49 +9689,40 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "daggers",
           name: "Daggers",
-          url: "/api/2014/proficiencies/daggers",
         },
         {
           index: "darts",
           name: "Darts",
-          url: "/api/2014/proficiencies/darts",
         },
         {
           index: "slings",
           name: "Slings",
-          url: "/api/2014/proficiencies/slings",
         },
         {
           index: "quarterstaffs",
           name: "Quarterstaffs",
-          url: "/api/2014/proficiencies/quarterstaffs",
         },
         {
           index: "crossbows-light",
           name: "Crossbows, light",
-          url: "/api/2014/proficiencies/crossbows-light",
         },
         {
           index: "saving-throw-int",
           name: "Saving Throw: INT",
-          url: "/api/2014/proficiencies/saving-throw-int",
         },
         {
           index: "saving-throw-wis",
           name: "Saving Throw: WIS",
-          url: "/api/2014/proficiencies/saving-throw-wis",
         },
       ],
       saving_throws: [
         {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         {
           index: "wis",
           name: "WIS",
-          url: "/api/2014/ability-scores/wis",
         },
       ],
       starting_equipment: [
@@ -10890,7 +9730,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "spellbook",
             name: "Spellbook",
-            url: "/api/2014/equipment/spellbook",
           },
           quantity: 1,
         },
@@ -10909,7 +9748,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "quarterstaff",
                   name: "Quarterstaff",
-                  url: "/api/2014/equipment/quarterstaff",
                 },
               },
               {
@@ -10918,7 +9756,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "dagger",
                   name: "Dagger",
-                  url: "/api/2014/equipment/dagger",
                 },
               },
             ],
@@ -10937,7 +9774,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "component-pouch",
                   name: "Component pouch",
-                  url: "/api/2014/equipment/component-pouch",
                 },
               },
               {
@@ -10951,7 +9787,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                     equipment_category: {
                       index: "arcane-foci",
                       name: "Arcane Foci",
-                      url: "/api/2014/equipment-categories/arcane-foci",
                     },
                   },
                 },
@@ -10972,7 +9807,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "scholars-pack",
                   name: "Scholar's Pack",
-                  url: "/api/2014/equipment/scholars-pack",
                 },
               },
               {
@@ -10981,21 +9815,18 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 of: {
                   index: "explorers-pack",
                   name: "Explorer's Pack",
-                  url: "/api/2014/equipment/explorers-pack",
                 },
               },
             ],
           },
         },
       ],
-      class_levels: "/api/2014/classes/wizard/levels",
       multi_classing: {
         prerequisites: [
           {
             ability_score: {
               index: "int",
               name: "INT",
-              url: "/api/2014/ability-scores/int",
             },
             minimum_score: 13,
           },
@@ -11006,7 +9837,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "evocation",
           name: "Evocation",
-          url: "/api/2014/subclasses/evocation",
         },
       ],
       spellcasting: {
@@ -11014,7 +9844,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         spellcasting_ability: {
           index: "int",
           name: "INT",
-          url: "/api/2014/ability-scores/int",
         },
         info: [
           {
@@ -11058,15 +9887,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           },
         ],
       },
-      spells: "/api/2014/classes/wizard/spells",
-      url: "/api/2014/classes/wizard",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "dwarf",
-    sourceUrl: "/api/2014/races/dwarf",
     name: "Dwarf",
     body: {
       speed: 25,
@@ -11112,7 +9938,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "con",
             name: "CON",
-            url: "/api/2014/ability-scores/con",
           },
           bonus: 2,
         },
@@ -11127,12 +9952,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "dwarvish",
           name: "Dwarvish",
-          url: "/api/2014/languages/dwarvish",
         },
       ],
       language_desc:
@@ -11141,44 +9964,36 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "darkvision",
           name: "Darkvision",
-          url: "/api/2014/traits/darkvision",
         },
         {
           index: "dwarven-resilience",
           name: "Dwarven Resilience",
-          url: "/api/2014/traits/dwarven-resilience",
         },
         {
           index: "stonecunning",
           name: "Stonecunning",
-          url: "/api/2014/traits/stonecunning",
         },
         {
           index: "dwarven-combat-training",
           name: "Dwarven Combat Training",
-          url: "/api/2014/traits/dwarven-combat-training",
         },
         {
           index: "tool-proficiency",
           name: "Tool Proficiency",
-          url: "/api/2014/traits/tool-proficiency",
         },
       ],
       subraces: [
         {
           index: "hill-dwarf",
           name: "Hill Dwarf",
-          url: "/api/2014/subraces/hill-dwarf",
         },
       ],
-      url: "/api/2014/races/dwarf",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "elf",
-    sourceUrl: "/api/2014/races/elf",
     name: "Elf",
     body: {
       speed: 30,
@@ -11217,7 +10032,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "dex",
             name: "DEX",
-            url: "/api/2014/ability-scores/dex",
           },
           bonus: 2,
         },
@@ -11232,12 +10046,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "elvish",
           name: "Elvish",
-          url: "/api/2014/languages/elvish",
         },
       ],
       language_desc:
@@ -11246,39 +10058,32 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "darkvision",
           name: "Darkvision",
-          url: "/api/2014/traits/darkvision",
         },
         {
           index: "fey-ancestry",
           name: "Fey Ancestry",
-          url: "/api/2014/traits/fey-ancestry",
         },
         {
           index: "trance",
           name: "Trance",
-          url: "/api/2014/traits/trance",
         },
         {
           index: "keen-senses",
           name: "Keen Senses",
-          url: "/api/2014/traits/keen-senses",
         },
       ],
       subraces: [
         {
           index: "high-elf",
           name: "High Elf",
-          url: "/api/2014/subraces/high-elf",
         },
       ],
-      url: "/api/2014/races/elf",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "halfling",
-    sourceUrl: "/api/2014/races/halfling",
     name: "Halfling",
     body: {
       speed: 25,
@@ -11317,7 +10122,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "dex",
             name: "DEX",
-            url: "/api/2014/ability-scores/dex",
           },
           bonus: 2,
         },
@@ -11332,12 +10136,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "halfling",
           name: "Halfling",
-          url: "/api/2014/languages/halfling",
         },
       ],
       language_desc:
@@ -11346,34 +10148,28 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "brave",
           name: "Brave",
-          url: "/api/2014/traits/brave",
         },
         {
           index: "halfling-nimbleness",
           name: "Halfling Nimbleness",
-          url: "/api/2014/traits/halfling-nimbleness",
         },
         {
           index: "lucky",
           name: "Lucky",
-          url: "/api/2014/traits/lucky",
         },
       ],
       subraces: [
         {
           index: "lightfoot-halfling",
           name: "Lightfoot Halfling",
-          url: "/api/2014/subraces/lightfoot-halfling",
         },
       ],
-      url: "/api/2014/races/halfling",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "human",
-    sourceUrl: "/api/2014/races/human",
     name: "Human",
     body: {
       speed: 30,
@@ -11419,7 +10215,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "str",
             name: "STR",
-            url: "/api/2014/ability-scores/str",
           },
           bonus: 1,
         },
@@ -11427,7 +10222,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "dex",
             name: "DEX",
-            url: "/api/2014/ability-scores/dex",
           },
           bonus: 1,
         },
@@ -11435,7 +10229,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "con",
             name: "CON",
-            url: "/api/2014/ability-scores/con",
           },
           bonus: 1,
         },
@@ -11443,7 +10236,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "int",
             name: "INT",
-            url: "/api/2014/ability-scores/int",
           },
           bonus: 1,
         },
@@ -11451,7 +10243,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "wis",
             name: "WIS",
-            url: "/api/2014/ability-scores/wis",
           },
           bonus: 1,
         },
@@ -11459,7 +10250,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           bonus: 1,
         },
@@ -11474,7 +10264,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
       ],
       language_options: {
@@ -11488,7 +10277,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "dwarvish",
                 name: "Dwarvish",
-                url: "/api/2014/languages/dwarvish",
               },
             },
             {
@@ -11496,7 +10284,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "elvish",
                 name: "Elvish",
-                url: "/api/2014/languages/elvish",
               },
             },
             {
@@ -11504,7 +10291,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "giant",
                 name: "Giant",
-                url: "/api/2014/languages/giant",
               },
             },
             {
@@ -11512,7 +10298,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "gnomish",
                 name: "Gnomish",
-                url: "/api/2014/languages/gnomish",
               },
             },
             {
@@ -11520,7 +10305,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "goblin",
                 name: "Goblin",
-                url: "/api/2014/languages/goblin",
               },
             },
             {
@@ -11528,7 +10312,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "halfling",
                 name: "Halfling",
-                url: "/api/2014/languages/halfling",
               },
             },
             {
@@ -11536,7 +10319,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "orc",
                 name: "Orc",
-                url: "/api/2014/languages/orc",
               },
             },
             {
@@ -11544,7 +10326,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "abyssal",
                 name: "Abyssal",
-                url: "/api/2014/languages/abyssal",
               },
             },
             {
@@ -11552,7 +10333,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "celestial",
                 name: "Celestial",
-                url: "/api/2014/languages/celestial",
               },
             },
             {
@@ -11560,7 +10340,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "draconic",
                 name: "Draconic",
-                url: "/api/2014/languages/draconic",
               },
             },
             {
@@ -11568,7 +10347,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "deep-speech",
                 name: "Deep Speech",
-                url: "/api/2014/languages/deep-speech",
               },
             },
             {
@@ -11576,7 +10354,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "infernal",
                 name: "Infernal",
-                url: "/api/2014/languages/infernal",
               },
             },
             {
@@ -11584,7 +10361,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "primordial",
                 name: "Primordial",
-                url: "/api/2014/languages/primordial",
               },
             },
             {
@@ -11592,7 +10368,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "sylvan",
                 name: "Sylvan",
-                url: "/api/2014/languages/sylvan",
               },
             },
             {
@@ -11600,7 +10375,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "undercommon",
                 name: "Undercommon",
-                url: "/api/2014/languages/undercommon",
               },
             },
           ],
@@ -11610,14 +10384,12 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         "You can speak, read, and write Common and one extra language of your choice. Humans typically learn the languages of other peoples they deal with, including obscure dialects. They are fond of sprinkling their speech with words borrowed from other tongues: Orc curses, Elvish musical expressions, Dwarvish military phrases, and so on.",
       traits: [],
       subraces: [],
-      url: "/api/2014/races/human",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "dragonborn",
-    sourceUrl: "/api/2014/races/dragonborn",
     name: "Dragonborn",
     body: {
       speed: 30,
@@ -11647,7 +10419,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "str",
             name: "STR",
-            url: "/api/2014/ability-scores/str",
           },
           bonus: 2,
         },
@@ -11655,7 +10426,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           bonus: 1,
         },
@@ -11670,12 +10440,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "draconic",
           name: "Draconic",
-          url: "/api/2014/languages/draconic",
         },
       ],
       language_desc:
@@ -11684,28 +10452,23 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "draconic-ancestry",
           name: "Draconic Ancestry",
-          url: "/api/2014/traits/draconic-ancestry",
         },
         {
           index: "breath-weapon",
           name: "Breath Weapon",
-          url: "/api/2014/traits/breath-weapon",
         },
         {
           index: "damage-resistance",
           name: "Damage Resistance",
-          url: "/api/2014/traits/damage-resistance",
         },
       ],
       subraces: [],
-      url: "/api/2014/races/dragonborn",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "gnome",
-    sourceUrl: "/api/2014/races/gnome",
     name: "Gnome",
     body: {
       speed: 25,
@@ -11744,7 +10507,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "int",
             name: "INT",
-            url: "/api/2014/ability-scores/int",
           },
           bonus: 2,
         },
@@ -11759,12 +10521,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "gnomish",
           name: "Gnomish",
-          url: "/api/2014/languages/gnomish",
         },
       ],
       language_desc:
@@ -11773,29 +10533,24 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "darkvision",
           name: "Darkvision",
-          url: "/api/2014/traits/darkvision",
         },
         {
           index: "gnome-cunning",
           name: "Gnome Cunning",
-          url: "/api/2014/traits/gnome-cunning",
         },
       ],
       subraces: [
         {
           index: "rock-gnome",
           name: "Rock Gnome",
-          url: "/api/2014/subraces/rock-gnome",
         },
       ],
-      url: "/api/2014/races/gnome",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "half-elf",
-    sourceUrl: "/api/2014/races/half-elf",
     name: "Half-Elf",
     body: {
       speed: 30,
@@ -11846,7 +10601,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           bonus: 2,
         },
@@ -11862,7 +10616,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               ability_score: {
                 index: "str",
                 name: "STR",
-                url: "/api/2014/ability-scores/str",
               },
               bonus: 1,
             },
@@ -11871,7 +10624,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               ability_score: {
                 index: "dex",
                 name: "DEX",
-                url: "/api/2014/ability-scores/dex",
               },
               bonus: 1,
             },
@@ -11880,7 +10632,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               ability_score: {
                 index: "con",
                 name: "CON",
-                url: "/api/2014/ability-scores/con",
               },
               bonus: 1,
             },
@@ -11889,7 +10640,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               ability_score: {
                 index: "int",
                 name: "INT",
-                url: "/api/2014/ability-scores/int",
               },
               bonus: 1,
             },
@@ -11898,7 +10648,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               ability_score: {
                 index: "wis",
                 name: "WIS",
-                url: "/api/2014/ability-scores/wis",
               },
               bonus: 1,
             },
@@ -11915,12 +10664,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "elvish",
           name: "Elvish",
-          url: "/api/2014/languages/elvish",
         },
       ],
       language_options: {
@@ -11934,7 +10681,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "dwarvish",
                 name: "Dwarvish",
-                url: "/api/2014/languages/dwarvish",
               },
             },
             {
@@ -11942,7 +10688,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "giant",
                 name: "Giant",
-                url: "/api/2014/languages/giant",
               },
             },
             {
@@ -11950,7 +10695,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "gnomish",
                 name: "Gnomish",
-                url: "/api/2014/languages/gnomish",
               },
             },
             {
@@ -11958,7 +10702,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "goblin",
                 name: "Goblin",
-                url: "/api/2014/languages/goblin",
               },
             },
             {
@@ -11966,7 +10709,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "halfling",
                 name: "Halfling",
-                url: "/api/2014/languages/halfling",
               },
             },
             {
@@ -11974,7 +10716,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "orc",
                 name: "Orc",
-                url: "/api/2014/languages/orc",
               },
             },
             {
@@ -11982,7 +10723,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "abyssal",
                 name: "Abyssal",
-                url: "/api/2014/languages/abyssal",
               },
             },
             {
@@ -11990,7 +10730,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "celestial",
                 name: "Celestial",
-                url: "/api/2014/languages/celestial",
               },
             },
             {
@@ -11998,7 +10737,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "draconic",
                 name: "Draconic",
-                url: "/api/2014/languages/draconic",
               },
             },
             {
@@ -12006,7 +10744,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "deep-speech",
                 name: "Deep Speech",
-                url: "/api/2014/languages/deep-speech",
               },
             },
             {
@@ -12014,7 +10751,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "infernal",
                 name: "Infernal",
-                url: "/api/2014/languages/infernal",
               },
             },
             {
@@ -12022,7 +10758,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "primordial",
                 name: "Primordial",
-                url: "/api/2014/languages/primordial",
               },
             },
             {
@@ -12030,7 +10765,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "sylvan",
                 name: "Sylvan",
-                url: "/api/2014/languages/sylvan",
               },
             },
             {
@@ -12038,7 +10772,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
               item: {
                 index: "undercommon",
                 name: "Undercommon",
-                url: "/api/2014/languages/undercommon",
               },
             },
           ],
@@ -12050,28 +10783,23 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "darkvision",
           name: "Darkvision",
-          url: "/api/2014/traits/darkvision",
         },
         {
           index: "fey-ancestry",
           name: "Fey Ancestry",
-          url: "/api/2014/traits/fey-ancestry",
         },
         {
           index: "skill-versatility",
           name: "Skill Versatility",
-          url: "/api/2014/traits/skill-versatility",
         },
       ],
       subraces: [],
-      url: "/api/2014/races/half-elf",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "half-orc",
-    sourceUrl: "/api/2014/races/half-orc",
     name: "Half-Orc",
     body: {
       speed: 30,
@@ -12101,7 +10829,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "str",
             name: "STR",
-            url: "/api/2014/ability-scores/str",
           },
           bonus: 2,
         },
@@ -12109,7 +10836,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "con",
             name: "CON",
-            url: "/api/2014/ability-scores/con",
           },
           bonus: 1,
         },
@@ -12124,12 +10850,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "orc",
           name: "Orc",
-          url: "/api/2014/languages/orc",
         },
       ],
       language_desc:
@@ -12138,33 +10862,27 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "darkvision",
           name: "Darkvision",
-          url: "/api/2014/traits/darkvision",
         },
         {
           index: "savage-attacks",
           name: "Savage Attacks",
-          url: "/api/2014/traits/savage-attacks",
         },
         {
           index: "relentless-endurance",
           name: "Relentless Endurance",
-          url: "/api/2014/traits/relentless-endurance",
         },
         {
           index: "menacing",
           name: "Menacing",
-          url: "/api/2014/traits/menacing",
         },
       ],
       subraces: [],
-      url: "/api/2014/races/half-orc",
     },
   },
   {
     kind: "race",
     sourceFamily: "races",
     sourceIndex: "tiefling",
-    sourceUrl: "/api/2014/races/tiefling",
     name: "Tiefling",
     body: {
       speed: 30,
@@ -12194,7 +10912,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "int",
             name: "INT",
-            url: "/api/2014/ability-scores/int",
           },
           bonus: 1,
         },
@@ -12202,7 +10919,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ability_score: {
             index: "cha",
             name: "CHA",
-            url: "/api/2014/ability-scores/cha",
           },
           bonus: 2,
         },
@@ -12217,12 +10933,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "common",
           name: "Common",
-          url: "/api/2014/languages/common",
         },
         {
           index: "infernal",
           name: "Infernal",
-          url: "/api/2014/languages/infernal",
         },
       ],
       language_desc: "You can speak, read, and write Common and Infernal.",
@@ -12230,28 +10944,23 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "darkvision",
           name: "Darkvision",
-          url: "/api/2014/traits/darkvision",
         },
         {
           index: "hellish-resistance",
           name: "Hellish Resistance",
-          url: "/api/2014/traits/hellish-resistance",
         },
         {
           index: "infernal-legacy",
           name: "Infernal Legacy",
-          url: "/api/2014/traits/infernal-legacy",
         },
       ],
       subraces: [],
-      url: "/api/2014/races/tiefling",
     },
   },
   {
     kind: "background",
     sourceFamily: "backgrounds",
     sourceIndex: "acolyte",
-    sourceUrl: "/api/2014/backgrounds/acolyte",
     name: "Acolyte",
     body: {
       proficiencies: ["Insight", "Religion"],
@@ -12271,12 +10980,10 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         {
           index: "skill-insight",
           name: "Skill: Insight",
-          url: "/api/2014/proficiencies/skill-insight",
         },
         {
           index: "skill-religion",
           name: "Skill: Religion",
-          url: "/api/2014/proficiencies/skill-religion",
         },
       ],
       language_options: {
@@ -12284,7 +10991,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
         type: "languages",
         from: {
           option_set_type: "resource_list",
-          resource_list_url: "/api/2014/languages",
         },
       },
       starting_equipment: [
@@ -12292,7 +10998,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "clothes-common",
             name: "Clothes, common",
-            url: "/api/2014/equipment/clothes-common",
           },
           quantity: 1,
         },
@@ -12300,7 +11005,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           equipment: {
             index: "pouch",
             name: "Pouch",
-            url: "/api/2014/equipment/pouch",
           },
           quantity: 1,
         },
@@ -12318,7 +11022,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
             equipment_category: {
               index: "holy-symbols",
               name: "Holy Symbols",
-              url: "/api/2014/equipment-categories/holy-symbols",
             },
           },
         },
@@ -12390,17 +11093,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 {
                   index: "lawful-good",
                   name: "Lawful Good",
-                  url: "/api/2014/alignments/lawful-good",
                 },
                 {
                   index: "lawful-neutral",
                   name: "Lawful Neutral",
-                  url: "/api/2014/alignments/lawful-neutral",
                 },
                 {
                   index: "lawful-evil",
                   name: "Lawful Evil",
-                  url: "/api/2014/alignments/lawful-evil",
                 },
               ],
             },
@@ -12411,17 +11111,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 {
                   index: "lawful-good",
                   name: "Lawful Good",
-                  url: "/api/2014/alignments/lawful-good",
                 },
                 {
                   index: "neutral-good",
                   name: "Neutral Good",
-                  url: "/api/2014/alignments/neutral-good",
                 },
                 {
                   index: "chaotic-good",
                   name: "Chaotic Good",
-                  url: "/api/2014/alignments/chaotic-good",
                 },
               ],
             },
@@ -12432,17 +11129,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 {
                   index: "chaotic-good",
                   name: "Chaotic Good",
-                  url: "/api/2014/alignments/chaotic-good",
                 },
                 {
                   index: "chaotic-neutral",
                   name: "Chaotic Neutral",
-                  url: "/api/2014/alignments/chaotic-neutral",
                 },
                 {
                   index: "chaotic-evil",
                   name: "Chaotic Evil",
-                  url: "/api/2014/alignments/chaotic-evil",
                 },
               ],
             },
@@ -12453,17 +11147,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 {
                   index: "lawful-good",
                   name: "Lawful Good",
-                  url: "/api/2014/alignments/lawful-good",
                 },
                 {
                   index: "lawful-neutral",
                   name: "Lawful Neutral",
-                  url: "/api/2014/alignments/lawful-neutral",
                 },
                 {
                   index: "lawful-evil",
                   name: "Lawful Evil",
-                  url: "/api/2014/alignments/lawful-evil",
                 },
               ],
             },
@@ -12474,17 +11165,14 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 {
                   index: "lawful-good",
                   name: "Lawful Good",
-                  url: "/api/2014/alignments/lawful-good",
                 },
                 {
                   index: "lawful-neutral",
                   name: "Lawful Neutral",
-                  url: "/api/2014/alignments/lawful-neutral",
                 },
                 {
                   index: "lawful-evil",
                   name: "Lawful Evil",
-                  url: "/api/2014/alignments/lawful-evil",
                 },
               ],
             },
@@ -12495,47 +11183,38 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
                 {
                   index: "lawful-good",
                   name: "Lawful Good",
-                  url: "/api/2014/alignments/lawful-good",
                 },
                 {
                   index: "neutral-good",
                   name: "Neutral Good",
-                  url: "/api/2014/alignments/neutral-good",
                 },
                 {
                   index: "chaotic-good",
                   name: "Chaotic Good",
-                  url: "/api/2014/alignments/chaotic-good",
                 },
                 {
                   index: "lawful-neutral",
                   name: "Lawful Neutral",
-                  url: "/api/2014/alignments/lawful-neutral",
                 },
                 {
                   index: "neutral",
                   name: "Neutral",
-                  url: "/api/2014/alignments/neutral",
                 },
                 {
                   index: "chaotic-neutral",
                   name: "Chaotic Neutral",
-                  url: "/api/2014/alignments/chaotic-neutral",
                 },
                 {
                   index: "lawful-evil",
                   name: "Lawful Evil",
-                  url: "/api/2014/alignments/lawful-evil",
                 },
                 {
                   index: "neutral-evil",
                   name: "Neutral Evil",
-                  url: "/api/2014/alignments/neutral-evil",
                 },
                 {
                   index: "chaotic-evil",
                   name: "Chaotic Evil",
-                  url: "/api/2014/alignments/chaotic-evil",
                 },
               ],
             },
@@ -12612,57 +11291,6 @@ export const SYSTEM_OPTIONS: ReadonlyArray<SystemOption> = [
           ],
         },
       },
-      url: "/api/2014/backgrounds/acolyte",
     },
   },
 ];
-
-const ref = (value: unknown): SourceReference | undefined => {
-  if (value === null || typeof value !== "object") return undefined;
-  const row = value as {
-    readonly index?: unknown;
-    readonly name?: unknown;
-    readonly url?: unknown;
-  };
-  if (typeof row.index !== "string" || typeof row.name !== "string") return undefined;
-  return {
-    family: familyFromUrl(typeof row.url === "string" ? row.url : undefined),
-    index: row.index,
-    name: row.name,
-    ...(typeof row.url === "string" ? { url: row.url } : {}),
-    raw: value,
-  };
-};
-
-const familyFromUrl = (url: string | undefined): string => {
-  const match = url?.match(/^\/api\/2014\/([^/]+)\//);
-  return match?.[1] ?? "unknown";
-};
-
-const walk = (value: unknown, into: Map<string, SourceReference>): void => {
-  const found = ref(value);
-  if (found !== undefined && found.family !== "unknown") {
-    into.set(`${found.family}:${found.index}`, found);
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) walk(item, into);
-    return;
-  }
-  if (value !== null && typeof value === "object") {
-    for (const item of Object.values(value)) walk(item, into);
-  }
-};
-
-/** Referenced source entities needed to validate parentage and creation-facing grants. */
-export const SOURCE_REFERENCES = (() => {
-  const refs = new Map<string, SourceReference>();
-  for (const option of SYSTEM_OPTIONS) walk(option.raw, refs);
-  for (const subrace of SUBRACE_RAW) walk(subrace, refs);
-  return [...refs.values()].sort((left, right) =>
-    left.family === right.family
-      ? left.index.localeCompare(right.index)
-      : left.family.localeCompare(right.family),
-  );
-})();
-
-export const SOURCE_SUBRACES = SUBRACE_RAW;

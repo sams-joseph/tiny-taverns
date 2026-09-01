@@ -299,14 +299,12 @@ export const hempRope = {
     equipmentCategory: {
       index: "adventuring-gear",
       name: "Adventuring Gear",
-      url: "/api/2014/equipment-categories/adventuring-gear",
     },
     cost: { quantity: 1, unit: "gp" },
     weight: 10,
     gearCategory: {
       index: "standard-gear",
       name: "Standard Gear",
-      url: "/api/2014/equipment-categories/standard-gear",
     },
     desc: ["A rope has 2 hit points and can be burst with a DC 17 Strength check."],
   },
@@ -338,7 +336,7 @@ export const lanternRing = {
   image: null,
   magicItem: {
     item: { index: "ring-of-water-walking", name: "Ring of Water Walking" },
-    equipmentCategory: { index: "ring", name: "Ring", url: "/api/2014/equipment-categories/ring" },
+    equipmentCategory: { index: "ring", name: "Ring" },
     rarity: { index: "uncommon", name: "Uncommon" },
     desc: ["While wearing this ring, you can stand on and move across any liquid surface."],
     requiresAttunement: false,
@@ -379,7 +377,6 @@ export const fireball = {
       { index: "wizard", name: "Wizard" },
     ],
     subclasses: [],
-    sourceUrl: "https://www.5esrd.com/database/spells/fireball/",
   },
   visibility: "shared",
   origin: "system",

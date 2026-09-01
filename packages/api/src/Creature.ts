@@ -95,16 +95,14 @@ export type Trait = typeof Trait.Type;
 
 const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
 const sourceName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 180));
-const sourceUrl = Schema.String.check(Schema.isLengthBetween(1, 260));
 const longText = Schema.String.check(Schema.isLengthBetween(0, 30_000));
 const numberOrText = Schema.Union([Schema.Finite, Schema.String]);
 const sourcePayload = Schema.Record(Schema.String, Schema.Unknown);
 
-/** A 5e-bits source reference: a stable key, a display name and usually a URL. */
+/** A source reference as the product exposes it: a stable key and display label. */
 export const CreatureSourceReference = Schema.Struct({
   index: sourceKey,
   name: sourceName,
-  url: Schema.optional(sourceUrl),
 });
 export type CreatureSourceReference = typeof CreatureSourceReference.Type;
 
@@ -167,7 +165,6 @@ export type CreatureAttack = typeof CreatureAttack.Type;
 export const CreatureSpellcastingSpell = Schema.Struct({
   name: Schema.String,
   level: Schema.Int,
-  url: Schema.String,
   usage: Schema.optional(CreatureActionUsage),
   notes: Schema.optional(Schema.String),
 });
@@ -251,7 +248,6 @@ export const StatBlock = Schema.Struct({
   legendaryActions: Schema.optional(Schema.Array(CreatureFeature)),
   forms: Schema.optional(Schema.Array(CreatureSourceReference)),
   image: Schema.optional(Schema.String),
-  sourceUrl: Schema.optional(Schema.String),
 });
 export type StatBlock = typeof StatBlock.Type;
 

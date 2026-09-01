@@ -6,7 +6,9 @@ import { Accounts } from "../src/Accounts.js";
 import { servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Invites } from "../src/repo/Invites.js";
+import { importSystemEquipment } from "../src/equipment/import.js";
 import { Spells } from "../src/repo/Spells.js";
+import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells, type ImportSpellsResult } from "../src/spells/import.js";
 import { SPELL_RAW } from "../src/spells/systemSpells.js";
 import { aPlayerAt } from "./support/actors.js";
@@ -31,6 +33,8 @@ const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknow
 let firstImport: ImportSpellsResult;
 
 beforeAll(async () => {
+  await run(importSystemEquipment());
+  await run(importSystemOptions());
   firstImport = await run(importSystemSpells());
 }, 60_000);
 
@@ -63,18 +67,18 @@ const firstSpellNamed = (name: string) =>
 const customSpell = (name: string, classIndex = "wizard"): SpellCreate => ({
   name,
   level: 1,
-  school: { index: "evocation", name: "Evocation", url: "/api/2014/magic-schools/evocation" },
+  school: { index: "evocation", name: "Evocation" },
   ritual: false,
   concentration: false,
   castingTime: "1 action",
   range: "Self",
   duration: "Instantaneous",
-  classes: [{ index: classIndex, name: "Wizard", url: `/api/2014/classes/${classIndex}` }],
+  classes: [{ index: classIndex, name: "Wizard" }],
   spell: {
     desc: [`${name} flashes once.`],
     components: ["V", "S"],
-    school: { index: "evocation", name: "Evocation", url: "/api/2014/magic-schools/evocation" },
-    classes: [{ index: classIndex, name: "Wizard", url: `/api/2014/classes/${classIndex}` }],
+    school: { index: "evocation", name: "Evocation" },
+    classes: [{ index: classIndex, name: "Wizard" }],
     subclasses: [],
   },
 });
@@ -97,22 +101,35 @@ describe("2014 SRD spells", () => {
     });
   }, 60_000);
 
-  it("records source links to schools, classes, subclasses, damage types and DC abilities", async () => {
+  it("records concrete relationships to schools, classes, damage types and DC abilities", async () => {
     const links = await sql(
       (client) => client<{
         readonly relation: string;
         readonly target_family: string;
         readonly target_index: string;
       }>`
-        select rules_source_link.relation,
-               rules_source_link.target_family,
-               rules_source_link.target_index
-        from rules_source_link
-        join rules_source_entity_revision on rules_source_entity_revision.id = rules_source_link.from_revision_id
-        join rules_source_entity on rules_source_entity.id = rules_source_entity_revision.entity_id
-        where rules_source_entity.family = 'spells'
-          and rules_source_entity.source_index = 'fireball'
-        order by rules_source_link.relation, rules_source_link.ordinal, rules_source_link.target_index
+        select 'school' as relation, 'magic-schools' as target_family, magic_school.source_key as target_index
+        from spell
+        join magic_school on magic_school.id = spell.school_id
+        where spell.source_key = 'fireball'
+        union all
+        select 'dc-type' as relation, 'ability-scores' as target_family, ability_score.source_key as target_index
+        from spell
+        join ability_score on ability_score.id = spell.dc_ability_id
+        where spell.source_key = 'fireball'
+        union all
+        select 'class' as relation, character_option.source_family as target_family, character_option.source_key as target_index
+        from spell
+        join spell_class on spell_class.spell_id = spell.id
+        join character_option on character_option.id = spell_class.class_option_id
+        where spell.source_key = 'fireball'
+        union all
+        select 'damage-type' as relation, 'damage-types' as target_family, damage_type.source_key as target_index
+        from spell
+        join spell_damage_type on spell_damage_type.spell_id = spell.id
+        join damage_type on damage_type.id = spell_damage_type.damage_type_id
+        where spell.source_key = 'fireball'
+        order by relation, target_index
       `,
     );
 
@@ -121,7 +138,6 @@ describe("2014 SRD spells", () => {
         { relation: "school", target_family: "magic-schools", target_index: "evocation" },
         { relation: "class", target_family: "classes", target_index: "sorcerer" },
         { relation: "class", target_family: "classes", target_index: "wizard" },
-        { relation: "subclass", target_family: "subclasses", target_index: "lore" },
         { relation: "damage-type", target_family: "damage-types", target_index: "fire" },
         { relation: "dc-type", target_family: "ability-scores", target_index: "dex" },
       ]),

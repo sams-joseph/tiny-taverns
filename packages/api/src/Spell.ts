@@ -5,18 +5,13 @@ import { provenanceFields, Visibility } from "./Provenance.js";
 import { queryArray } from "./Query.js";
 
 /**
- * One source reference as 5e-bits spells carry it: a stable key, a display name
- * and the source URL that explains which family the key belongs to.
- *
- * The key is what filters and source relationships use; the name is display.
- * This is why a spell's class filter is over `classes`/`subclasses` indexes and
- * never over display names — a source rename updates the name without making a
- * second identity.
+ * A source reference as the product exposes it: a stable key and a display label.
+ * Relationships are stored by concrete foreign keys/join tables on the server;
+ * the URL-shaped 5e-bits transport fields are not part of the Taverns document.
  */
 export const SpellReference = Schema.Struct({
   index: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 80)),
   name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
-  url: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 240))),
 });
 export type SpellReference = typeof SpellReference.Type;
 
@@ -75,7 +70,6 @@ export const SpellBody = Schema.Struct({
   school: SpellReference,
   classes: Schema.Array(SpellReference),
   subclasses: Schema.Array(SpellReference),
-  sourceUrl: Schema.optional(Schema.String),
 });
 export type SpellBody = typeof SpellBody.Type;
 

@@ -1,18 +1,20 @@
 import { emptyStatBlock, StatBlock, type CreatureCreate } from "@taverns/api";
 import { Effect, Schema } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
-import { EQUIPMENT_RAW } from "../equipment/systemEquipment.js";
 import { SPELL_RAW } from "../spells/systemSpells.js";
 import { crSortFor } from "../repo/Creatures.js";
 import {
-  beginRulesImport,
+  conditionForRef,
+  damageTypeForRef,
   FIVE_E_BITS_2014_SOURCE,
-  sourceLinkFor,
-  sourceRevisionFor,
+  proficiencyForRef,
+  requireConditionForRef,
+  requireDamageTypeByKey,
+  requireDamageTypeForRef,
+  requireProficiencyForRef,
+  sourceKeyFor,
   TAVERNS_STARTER_SOURCE,
   type RulesSourceDefinition,
-  type RulesImportContext,
-  type SourceRevision,
 } from "../ruleset/source.js";
 import { SYSTEM_CREATURES, type SystemCreature } from "./systemCreatures.js";
 import {
@@ -42,8 +44,6 @@ export interface ImportBestiaryResult {
 interface SourceCreature extends Omit<CreatureCreate, "visibility"> {
   /** Stable source identity within the source document; not a display name. */
   readonly sourceIndex: string;
-  readonly sourceUrl?: string;
-  /** The exact source row to store as the source revision. */
   readonly raw?: unknown;
 }
 
@@ -55,8 +55,17 @@ interface SourceRef {
 
 const decodeStatBlock = Schema.decodeUnknownSync(StatBlock);
 
-const sourceUrlFor = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : `https://www.dnd5eapi.co${url}`;
+const stripSourceUrls = <A>(value: A): A => {
+  if (Array.isArray(value)) return value.map((item) => stripSourceUrls(item)) as A;
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => key !== "url" && key !== "sourceUrl")
+        .map(([key, item]) => [key, stripSourceUrls(item)]),
+    ) as A;
+  }
+  return value;
+};
 
 const rawString = (row: Record<string, unknown>, key: string): string => {
   const value = row[key];
@@ -146,14 +155,6 @@ const refOf = (value: unknown, key: string): SourceRef => {
 
 const refsOf = (row: Record<string, unknown>, key: string): ReadonlyArray<SourceRef> =>
   recordsOf(row, key).map((item) => refOf(item, key));
-
-const sourceFamilyOf = (url: string | undefined): string | undefined =>
-  url?.match(/^\/api\/2014\/([^/]+)\//)?.[1];
-
-const sourceIndexFromUrl = (url: string | undefined, family: string): string | undefined => {
-  const escaped = family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return url?.match(new RegExp(`^/api/2014/${escaped}/([^/]+)$`))?.[1];
-};
 
 const signed = (value: number): string => (value >= 0 ? `+${value}` : String(value));
 const modifierOf = (score: number): number => Math.floor((score - 10) / 2);
@@ -284,7 +285,6 @@ const spellcastingOf = (
   const spells = recordsOf(row, "spells").map((spell) => ({
     name: rawText(spell, "name"),
     level: rawNumber(spell, "level"),
-    url: rawText(spell, "url"),
     ...(usageOf(optionalRecord(spell, "usage")) === undefined
       ? {}
       : { usage: usageOf(optionalRecord(spell, "usage")) }),
@@ -379,51 +379,52 @@ const transformedMonster = (row: Record<string, unknown>): SourceCreature => {
   const damageResistances = rawTexts(row, "damage_resistances");
   const damageImmunities = rawTexts(row, "damage_immunities");
   const spellcaster = specialAbilities.some((ability) => ability.spellcasting !== undefined);
-  const sourceUrl = sourceUrlFor(rawText(row, "url"));
-  const statBlock = decodeStatBlock({
-    meta: `${size} ${type}${subtype === undefined ? "" : ` (${subtype})`}, ${alignment}`,
-    ac: armorClassLine(armor, rawNumber(armor[0] ?? { value: 0 }, "value")),
-    hp: `${String(hp)} (${hitPointsRoll === hitDice ? hitDice : hitPointsRoll})`,
-    speed: speedLine(speed),
-    cr: `${cr} (${String(rawNumber(row, "xp"))} XP)`,
-    abilities: abilitiesOf(row, proficiencies),
-    traits: [],
-    ...(descriptionOf(row) === undefined ? {} : { desc: descriptionOf(row) }),
-    armorClass: armor.map((entry) => ({
-      type: rawText(entry, "type"),
-      value: rawNumber(entry, "value"),
-      ...(refsOf(entry, "armor").length === 0 ? {} : { armor: refsOf(entry, "armor") }),
-      ...(entry.condition === undefined ? {} : { condition: refOf(entry.condition, "condition") }),
-      ...(entry.spell === undefined ? {} : { spell: refOf(entry.spell, "spell") }),
-      ...(typeof entry.desc === "string" ? { desc: entry.desc } : {}),
-    })),
-    hitDice,
-    hitPointsRoll,
-    speeds: speed,
-    proficiencies: proficiencies.map((entry) => ({
-      value: rawNumber(entry, "value"),
-      proficiency: refOf(entry.proficiency, "proficiency"),
-    })),
-    damageVulnerabilities,
-    damageResistances,
-    damageImmunities,
-    conditionImmunities,
-    senses: recordOf(row.senses, "senses"),
-    languages: rawString(row, "languages"),
-    proficiencyBonus: optionalNumber(row, "proficiency_bonus"),
-    xp: rawNumber(row, "xp"),
-    specialAbilities,
-    actions,
-    reactions,
-    legendaryActions,
-    forms: refsOf(row, "forms"),
-    image: optionalText(row, "image"),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
-  });
+  const statBlock = stripSourceUrls(
+    decodeStatBlock({
+      meta: `${size} ${type}${subtype === undefined ? "" : ` (${subtype})`}, ${alignment}`,
+      ac: armorClassLine(armor, rawNumber(armor[0] ?? { value: 0 }, "value")),
+      hp: `${String(hp)} (${hitPointsRoll === hitDice ? hitDice : hitPointsRoll})`,
+      speed: speedLine(speed),
+      cr: `${cr} (${String(rawNumber(row, "xp"))} XP)`,
+      abilities: abilitiesOf(row, proficiencies),
+      traits: [],
+      ...(descriptionOf(row) === undefined ? {} : { desc: descriptionOf(row) }),
+      armorClass: armor.map((entry) => ({
+        type: rawText(entry, "type"),
+        value: rawNumber(entry, "value"),
+        ...(refsOf(entry, "armor").length === 0 ? {} : { armor: refsOf(entry, "armor") }),
+        ...(entry.condition === undefined
+          ? {}
+          : { condition: refOf(entry.condition, "condition") }),
+        ...(entry.spell === undefined ? {} : { spell: refOf(entry.spell, "spell") }),
+        ...(typeof entry.desc === "string" ? { desc: entry.desc } : {}),
+      })),
+      hitDice,
+      hitPointsRoll,
+      speeds: speed,
+      proficiencies: proficiencies.map((entry) => ({
+        value: rawNumber(entry, "value"),
+        proficiency: refOf(entry.proficiency, "proficiency"),
+      })),
+      damageVulnerabilities,
+      damageResistances,
+      damageImmunities,
+      conditionImmunities,
+      senses: recordOf(row.senses, "senses"),
+      languages: rawString(row, "languages"),
+      proficiencyBonus: optionalNumber(row, "proficiency_bonus"),
+      xp: rawNumber(row, "xp"),
+      specialAbilities,
+      actions,
+      reactions,
+      legendaryActions,
+      forms: refsOf(row, "forms"),
+      image: optionalText(row, "image"),
+    }),
+  );
 
   return {
     sourceIndex: rawText(row, "index"),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
     raw: row,
     name,
     size,
@@ -446,28 +447,6 @@ const transformedMonster = (row: Record<string, unknown>): SourceCreature => {
   };
 };
 
-const projectedRaw = (creature: SourceCreature): unknown => ({
-  sourceIndex: creature.sourceIndex,
-  name: creature.name,
-  size: creature.size ?? null,
-  type: creature.type,
-  subtype: creature.subtype ?? null,
-  alignment: creature.alignment ?? null,
-  cr: creature.cr,
-  crSort: creature.crSort ?? crSortFor(creature.cr),
-  ac: creature.ac,
-  hp: creature.hp,
-  environments: creature.environments ?? [],
-  damageVulnerabilities: creature.damageVulnerabilities ?? [],
-  damageResistances: creature.damageResistances ?? [],
-  damageImmunities: creature.damageImmunities ?? [],
-  conditionImmunities: creature.conditionImmunities ?? [],
-  movementModes: creature.movementModes ?? [],
-  spellcaster: creature.spellcaster ?? false,
-  legendary: creature.legendary ?? false,
-  statBlock: creature.statBlock ?? emptyStatBlock,
-});
-
 const writeCreatureCorpus = (
   source: RulesSourceDefinition,
   corpus: ReadonlyArray<SourceCreature>,
@@ -480,24 +459,14 @@ const writeCreatureCorpus = (
         let inserted = 0;
         let updated = 0;
 
-        const context = yield* beginRulesImport(sql, source);
-
         for (const creature of corpus) {
           const statBlock = creature.statBlock ?? emptyStatBlock;
           const crSort = creature.crSort ?? crSortFor(creature.cr);
-          const sourceRevision = yield* sourceRevisionFor(sql, context, {
-            family: "monsters",
-            sourceIndex: creature.sourceIndex,
-            sourceUrl: creature.sourceUrl,
-            name: creature.name,
-            raw: creature.raw ?? projectedRaw(creature),
-          });
+          const key = sourceKeyFor(source, "monsters", creature.sourceIndex);
 
-          // `xmax = 0` is true only for a tuple this statement inserted, which
-          // is how an upsert reports which of the two things it did.
           const rows = yield* sql<{ readonly inserted: boolean }>`
             insert into creature (
-              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
               name, size, type, subtype, alignment, cr, cr_sort, ac, hp, environments,
               damage_vulnerabilities, damage_resistances, damage_immunities,
               condition_immunities, movement_modes, spellcaster, legendary, body
@@ -506,8 +475,9 @@ const writeCreatureCorpus = (
               null,
               null,
               'system',
-              ${sourceRevision.sourceEntityId},
-              ${sourceRevision.sourceRevisionId},
+              ${key.sourceCorpus},
+              ${key.sourceFamily},
+              ${key.sourceKey},
               ${creature.name},
               ${creature.size ?? null},
               ${creature.type},
@@ -525,12 +495,11 @@ const writeCreatureCorpus = (
               ${creature.movementModes ?? []},
               ${creature.spellcaster ?? false},
               ${creature.legendary ?? false},
-              ${JSON.stringify(statBlock)}
+              ${JSON.stringify(stripSourceUrls(statBlock))}
             )
-            on conflict (source_entity_id)
-              where campaign_id is null and account_id is null and source_entity_id is not null
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
             do update set
-              source_revision_id       = excluded.source_revision_id,
               name                     = excluded.name,
               size                     = excluded.size,
               type                     = excluded.type,
@@ -562,71 +531,29 @@ const writeCreatureCorpus = (
   });
 
 const damageTypeIndexes = new Set(MONSTER_DAMAGE_TYPE_RAW.map((row) => rawText(row, "index")));
+const spellIndexesByName = new Map(
+  SPELL_RAW.map((row) => [
+    rawText(row as Record<string, unknown>, "name"),
+    rawText(row as Record<string, unknown>, "index"),
+  ]),
+);
 
-const registerReferenceRows = (
-  sql: SqlClient.SqlClient,
-  context: RulesImportContext,
-): Effect.Effect<void, SqlError.SqlError> =>
+const registerReferenceRows = (sql: SqlClient.SqlClient): Effect.Effect<void, SqlError.SqlError> =>
   Effect.gen(function* () {
     const rows: ReadonlyArray<{ readonly family: string; readonly row: Record<string, unknown> }> =
       [
         ...MONSTER_PROFICIENCY_RAW.map((row) => ({ family: "proficiencies", row })),
         ...MONSTER_CONDITION_RAW.map((row) => ({ family: "conditions", row })),
         ...MONSTER_DAMAGE_TYPE_RAW.map((row) => ({ family: "damage-types", row })),
-        ...EQUIPMENT_RAW.map((row) => ({
-          family: "equipment",
-          row: row as Record<string, unknown>,
-        })),
-        ...SPELL_RAW.map((row) => ({ family: "spells", row: row as Record<string, unknown> })),
       ];
 
     for (const { family, row } of rows) {
-      yield* sourceRevisionFor(sql, context, {
-        family,
-        sourceIndex: rawText(row, "index"),
-        sourceUrl: sourceUrlFor(typeof row.url === "string" ? row.url : undefined),
-        name: rawText(row, "name"),
-        raw: row,
-      });
+      const reference = refOf(row, family);
+      if (family === "proficiencies") yield* proficiencyForRef(sql, reference);
+      if (family === "conditions") yield* conditionForRef(sql, reference);
+      if (family === "damage-types") yield* damageTypeForRef(sql, reference);
     }
   });
-
-const requiredLink = (
-  sql: SqlClient.SqlClient,
-  context: RulesImportContext,
-  from: SourceRevision,
-  relation: string,
-  targetFamily: string,
-  targetIndex: string,
-  ordinal: number,
-  payload: unknown,
-): Effect.Effect<void, SqlError.SqlError> =>
-  sourceLinkFor(sql, context, from, {
-    relation,
-    targetFamily,
-    targetIndex,
-    ordinal,
-    payload,
-    required: true,
-  });
-
-const linkReference = (
-  sql: SqlClient.SqlClient,
-  context: RulesImportContext,
-  from: SourceRevision,
-  relation: string,
-  reference: SourceRef,
-  ordinal: number,
-): Effect.Effect<void, SqlError.SqlError> => {
-  const family = sourceFamilyOf(reference.url);
-  if (family === undefined) {
-    throw new Error(`monster source reference ${reference.index} has no 2014 family`);
-  }
-  return requiredLink(sql, context, from, relation, family, reference.index, ordinal, {
-    name: reference.name,
-    url: reference.url,
-  });
-};
 
 const collectDamageTypeRefs = (value: unknown, into: Array<SourceRef>): void => {
   if (Array.isArray(value)) {
@@ -646,55 +573,107 @@ const collectSpellRefs = (value: unknown, into: Array<SourceRef>): void => {
   }
   if (value === null || typeof value !== "object") return;
   const row = value as Record<string, unknown>;
-  if (typeof row.url === "string") {
-    const index = sourceIndexFromUrl(row.url, "spells");
-    if (index !== undefined) {
-      into.push({ index, name: typeof row.name === "string" ? row.name : index, url: row.url });
-    }
+  if (typeof row.name === "string") {
+    const index = spellIndexesByName.get(row.name);
+    if (index !== undefined) into.push({ index, name: row.name });
   }
   for (const item of Object.values(row)) collectSpellRefs(item, into);
 };
 
-const linkMonster = (
+const equipmentIdBySource = (
   sql: SqlClient.SqlClient,
-  context: RulesImportContext,
-  revision: SourceRevision,
+  sourceKey: string,
+): Effect.Effect<string | undefined, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: string }>`
+      select id::text from equipment
+      where source_corpus = ${FIVE_E_BITS_2014_SOURCE.corpus}
+        and source_family = 'equipment'
+        and source_key = ${sourceKey}
+        and campaign_id is null
+        and account_id is null
+      limit 1
+    `;
+    return rows[0]?.id;
+  });
+
+const spellIdBySource = (
+  sql: SqlClient.SqlClient,
+  sourceKey: string,
+): Effect.Effect<string | undefined, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: string }>`
+      select id::text from spell
+      where source_corpus = ${FIVE_E_BITS_2014_SOURCE.corpus}
+        and source_family = 'spells'
+        and source_key = ${sourceKey}
+        and campaign_id is null
+        and account_id is null
+      limit 1
+    `;
+    return rows[0]?.id;
+  });
+
+const syncMonsterRelationships = (
+  sql: SqlClient.SqlClient,
+  creatureId: string,
+  creatureIdsBySource: ReadonlyMap<string, string>,
   raw: Record<string, unknown>,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.gen(function* () {
+    yield* sql`delete from creature_proficiency where creature_id = ${creatureId}`;
+    yield* sql`delete from creature_condition_immunity where creature_id = ${creatureId}`;
+    yield* sql`delete from creature_damage_type where creature_id = ${creatureId}`;
+    yield* sql`delete from creature_armor_equipment where creature_id = ${creatureId}`;
+    yield* sql`delete from creature_spell where creature_id = ${creatureId}`;
+    yield* sql`delete from creature_form where creature_id = ${creatureId}`;
+
     let ordinal = 0;
     for (const proficiency of recordsOf(raw, "proficiencies")) {
-      yield* linkReference(
+      const proficiencyId = yield* requireProficiencyForRef(
         sql,
-        context,
-        revision,
-        "proficiency",
         refOf(proficiency.proficiency, "proficiency"),
-        ordinal++,
+        "monster-proficiency",
       );
+      yield* sql`
+        insert into creature_proficiency (creature_id, proficiency_id, value, ordinal)
+        values (${creatureId}, ${proficiencyId}, ${rawNumber(proficiency, "value")}, ${ordinal++})
+        on conflict do nothing
+      `;
     }
 
     ordinal = 0;
     for (const condition of refsOf(raw, "condition_immunities")) {
-      yield* linkReference(sql, context, revision, "condition-immunity", condition, ordinal++);
+      const conditionId = yield* requireConditionForRef(
+        sql,
+        condition,
+        "monster-condition-immunity",
+      );
+      yield* sql`
+        insert into creature_condition_immunity (creature_id, condition_id, ordinal)
+        values (${creatureId}, ${conditionId}, ${ordinal++})
+        on conflict do nothing
+      `;
     }
 
     const damageStrings: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
-      ["damage-vulnerability", rawTexts(raw, "damage_vulnerabilities")],
-      ["damage-resistance", rawTexts(raw, "damage_resistances")],
-      ["damage-immunity", rawTexts(raw, "damage_immunities")],
+      ["vulnerability", rawTexts(raw, "damage_vulnerabilities")],
+      ["resistance", rawTexts(raw, "damage_resistances")],
+      ["immunity", rawTexts(raw, "damage_immunities")],
     ];
     for (const [relation, values] of damageStrings) {
       for (const [index, value] of values.entries()) {
-        // The top-level immunity/resistance/vulnerability arrays are source
-        // prose, not source references: some are exact damage keys (`fire`),
-        // and some are whole rules sentences (`bludgeoning, piercing, and
-        // slashing from nonmagical weapons`). Link the exact keys and keep the
-        // prose in the creature row; do not invent a target for the rest.
         if (damageTypeIndexes.has(value)) {
-          yield* requiredLink(sql, context, revision, relation, "damage-types", value, index, {
-            name: value,
-          });
+          const damageTypeId = yield* requireDamageTypeByKey(
+            sql,
+            value,
+            `monster-damage-${relation}`,
+          );
+          yield* sql`
+            insert into creature_damage_type (creature_id, damage_type_id, relation, ordinal)
+            values (${creatureId}, ${damageTypeId}, ${relation}, ${index})
+            on conflict do nothing
+          `;
         }
       }
     }
@@ -702,24 +681,55 @@ const linkMonster = (
     ordinal = 0;
     for (const armor of recordsOf(raw, "armor_class")) {
       for (const equipment of refsOf(armor, "armor")) {
-        yield* linkReference(sql, context, revision, "armor", equipment, ordinal++);
+        const equipmentId = yield* equipmentIdBySource(sql, equipment.index);
+        if (equipmentId !== undefined) {
+          yield* sql`
+            insert into creature_armor_equipment (creature_id, equipment_id, ordinal)
+            values (${creatureId}, ${equipmentId}, ${ordinal})
+            on conflict do nothing
+          `;
+        }
+        ordinal += 1;
       }
     }
 
     const damageRefs: Array<SourceRef> = [];
     collectDamageTypeRefs(raw, damageRefs);
     for (const [index, reference] of damageRefs.entries()) {
-      yield* linkReference(sql, context, revision, "damage-type", reference, index);
+      const damageTypeId = yield* requireDamageTypeForRef(
+        sql,
+        reference,
+        "monster-feature-damage-type",
+      );
+      yield* sql`
+        insert into creature_damage_type (creature_id, damage_type_id, relation, ordinal)
+        values (${creatureId}, ${damageTypeId}, 'feature', ${index})
+        on conflict do nothing
+      `;
     }
 
     const spellRefs: Array<SourceRef> = [];
     collectSpellRefs(raw, spellRefs);
     for (const [index, reference] of spellRefs.entries()) {
-      yield* linkReference(sql, context, revision, "spell", reference, index);
+      const spellId = yield* spellIdBySource(sql, reference.index);
+      if (spellId !== undefined) {
+        yield* sql`
+          insert into creature_spell (creature_id, spell_id, ordinal)
+          values (${creatureId}, ${spellId}, ${index})
+          on conflict do nothing
+        `;
+      }
     }
 
     for (const [index, form] of refsOf(raw, "forms").entries()) {
-      yield* linkReference(sql, context, revision, "form", form, index);
+      const formId = creatureIdsBySource.get(form.index);
+      if (formId !== undefined) {
+        yield* sql`
+          insert into creature_form (creature_id, form_id, ordinal)
+          values (${creatureId}, ${formId}, ${index})
+          on conflict do nothing
+        `;
+      }
     }
   });
 
@@ -751,37 +761,16 @@ export const importSystemMonsters = (
 
     return yield* sql.withTransaction(
       Effect.gen(function* () {
-        const context = yield* beginRulesImport(sql, FIVE_E_BITS_2014_SOURCE);
-        yield* registerReferenceRows(sql, context);
-
-        const revisions = new Map<string, SourceRevision>();
-        for (const monster of monsters) {
-          const revision = yield* sourceRevisionFor(sql, context, {
-            family: "monsters",
-            sourceIndex: monster.sourceIndex,
-            sourceUrl: monster.sourceUrl,
-            name: monster.name,
-            raw: monster.raw ?? projectedRaw(monster),
-          });
-          revisions.set(monster.sourceIndex, revision);
-        }
-
-        for (const row of raw) {
-          const revision = revisions.get(rawText(row, "index"));
-          if (revision === undefined)
-            throw new Error(`missing source revision for ${rawText(row, "index")}`);
-          yield* linkMonster(sql, context, revision, row);
-        }
+        yield* registerReferenceRows(sql);
 
         let inserted = 0;
         let updated = 0;
+        const idsBySource = new Map<string, string>();
         for (const monster of monsters) {
-          const revision = revisions.get(monster.sourceIndex);
-          if (revision === undefined)
-            throw new Error(`missing source revision for ${monster.sourceIndex}`);
-          const rows = yield* sql<{ readonly inserted: boolean }>`
+          const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "monsters", monster.sourceIndex);
+          const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into creature (
-              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
               name, size, type, subtype, alignment, cr, cr_sort, ac, hp, environments,
               damage_vulnerabilities, damage_resistances, damage_immunities,
               condition_immunities, movement_modes, spellcaster, legendary, body
@@ -790,8 +779,9 @@ export const importSystemMonsters = (
               null,
               null,
               'system',
-              ${revision.sourceEntityId},
-              ${revision.sourceRevisionId},
+              ${key.sourceCorpus},
+              ${key.sourceFamily},
+              ${key.sourceKey},
               ${monster.name},
               ${monster.size ?? null},
               ${monster.type},
@@ -809,12 +799,11 @@ export const importSystemMonsters = (
               ${monster.movementModes ?? []},
               ${monster.spellcaster ?? false},
               ${monster.legendary ?? false},
-              ${JSON.stringify(monster.statBlock ?? emptyStatBlock)}
+              ${JSON.stringify(stripSourceUrls(monster.statBlock ?? emptyStatBlock))}
             )
-            on conflict (source_entity_id)
-              where campaign_id is null and account_id is null and source_entity_id is not null
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
             do update set
-              source_revision_id       = excluded.source_revision_id,
               name                     = excluded.name,
               size                     = excluded.size,
               type                     = excluded.type,
@@ -834,10 +823,20 @@ export const importSystemMonsters = (
               legendary                = excluded.legendary,
               body                     = excluded.body,
               updated_at               = now()
-            returning (xmax = 0) as inserted
+            returning id::text, (xmax = 0) as inserted
           `;
-          if (rows[0]?.inserted === true) inserted += 1;
+          const row = rows[0];
+          if (row === undefined) throw new Error(`monster ${monster.sourceIndex} was not written`);
+          idsBySource.set(monster.sourceIndex, row.id);
+          if (row.inserted === true) inserted += 1;
           else updated += 1;
+        }
+
+        for (const row of raw) {
+          const creatureId = idsBySource.get(rawText(row, "index"));
+          if (creatureId === undefined)
+            throw new Error(`missing creature row ${rawText(row, "index")}`);
+          yield* syncMonsterRelationships(sql, creatureId, idsBySource, row);
         }
 
         return { seen: monsters.length, inserted, updated };

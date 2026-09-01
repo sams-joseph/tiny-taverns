@@ -23,17 +23,37 @@ afterAll(() => runtime.dispose());
  * provenance tail is how a row in this product can be the assistant's, and an
  * invitation must never be. Hob has no way to record itself as the author of a
  * credential because there is nowhere on the row to record it.
+ *
+ * The concrete lookup and relation tables are structural edges between
+ * imported corpus rows. The content and its visibility/provenance live on the
+ * domain rows they point at; adding a tail to a lookup or join row would make
+ * the same relationship answer two separate disclosure questions.
  */
 const NOT_CONTENT = [
+  "ability_score",
   "account",
   "campaign_invite",
   "campaign_member",
+  "character_option_equipment_reference",
+  "condition",
+  "creature_armor_equipment",
+  "creature_condition_immunity",
+  "creature_damage_type",
+  "creature_form",
+  "creature_proficiency",
+  "creature_spell",
+  "damage_type",
   "effect_sql_migrations",
-  "rules_import_run",
-  "rules_source_document",
-  "rules_source_entity",
-  "rules_source_entity_revision",
-  "rules_source_link",
+  "equipment_category",
+  "equipment_content",
+  "equipment_property",
+  "magic_item_rarity",
+  "magic_item_variant",
+  "magic_school",
+  "proficiency",
+  "spell_class",
+  "spell_damage_type",
+  "weapon_property",
 ];
 
 interface Column {

@@ -15,6 +15,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
+import { importSystemEquipment } from "../src/equipment/import.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { SYSTEM_OPTIONS, type SystemOption } from "../src/ruleset/systemOptions.js";
 import { migratedDatabase } from "./support/database.js";
@@ -136,7 +137,8 @@ const CON_HEAVY = [
 const makeFixture = Effect.gen(function* () {
   const accounts = yield* Accounts;
 
-  // Exactly as `pnpm -F server ruleset:import` leaves it.
+  // Exactly as the documented reset/reseed order leaves it.
+  yield* importSystemEquipment();
   yield* importSystemOptions();
 
   const jo = yield* accounts.issue("Jo");

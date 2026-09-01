@@ -21,6 +21,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { importSystemEquipment } from "../src/equipment/import.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { anAccount, aPlayerAt } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
@@ -154,6 +155,7 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Fen");
   const as = withActor(dm);
 
+  yield* importSystemEquipment();
   yield* importSystemOptions();
 
   const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));

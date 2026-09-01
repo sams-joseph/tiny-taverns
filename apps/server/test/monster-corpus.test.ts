@@ -6,8 +6,11 @@ import { Accounts } from "../src/Accounts.js";
 import { servicesOver } from "../src/app.js";
 import { importSystemMonsters, type ImportMonstersResult } from "../src/bestiary/import.js";
 import { MONSTER_RAW } from "../src/bestiary/systemMonsters.js";
+import { importSystemEquipment } from "../src/equipment/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { importSystemOptions } from "../src/ruleset/import.js";
+import { importSystemSpells } from "../src/spells/import.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_monster_corpus");
@@ -30,6 +33,9 @@ let firstImport: ImportMonstersResult;
 let actor: Actor;
 
 beforeAll(async () => {
+  await run(importSystemEquipment());
+  await run(importSystemOptions());
+  await run(importSystemSpells());
   firstImport = await run(importSystemMonsters());
   const issued = await run(Effect.flatMap(Accounts, (accounts) => accounts.issue("Monster DM")));
   actor = new Actor({ accountId: issued.accountId, campaignId: null });
@@ -52,14 +58,11 @@ describe("2014 SRD monsters", () => {
       (client) => client<{ readonly count: number }>`
         select count(*)::int as count
         from creature
-        join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-        join rules_source_document on rules_source_document.id = rules_source_entity.document_id
-        where creature.origin = 'system'
-          and creature.campaign_id is null
-          and creature.account_id is null
-          and rules_source_entity.family = 'monsters'
-          and rules_source_document.system = 'dnd-5e-srd'
-          and rules_source_document.document_version = '5e-database 5.10.0+5a7ee5a0489b26655d343e4a41e8f7942a887af2'
+        where origin = 'system'
+          and campaign_id is null
+          and account_id is null
+          and source_corpus = '5e-bits-2014'
+          and source_family = 'monsters'
       `,
     );
     expect(rows).toEqual([{ count: 334 }]);
@@ -100,7 +103,7 @@ describe("2014 SRD monsters", () => {
     expect(dragon?.statBlock.legendaryActions?.length).toBeGreaterThan(0);
   });
 
-  it("records source links to proficiencies, conditions, damage types, spells, equipment and forms", async () => {
+  it("records concrete relationships to proficiencies, conditions, damage types, spells, equipment and forms", async () => {
     const links = await sql(
       (client) => client<{
         readonly monster: string;
@@ -108,16 +111,61 @@ describe("2014 SRD monsters", () => {
         readonly target_family: string;
         readonly target_index: string;
       }>`
-        select monster.source_index as monster,
-               rules_source_link.relation,
-               rules_source_link.target_family,
-               rules_source_link.target_index
-        from rules_source_link
-        join rules_source_entity_revision on rules_source_entity_revision.id = rules_source_link.from_revision_id
-        join rules_source_entity monster on monster.id = rules_source_entity_revision.entity_id
-        where monster.family = 'monsters'
-          and monster.source_index = any(${["archmage", "animated-armor", "assassin", "vampire-vampire"]})
-        order by monster.source_index, rules_source_link.relation, rules_source_link.ordinal
+        select creature.source_key as monster,
+               'proficiency' as relation,
+               'proficiencies' as target_family,
+               proficiency.source_key as target_index
+        from creature
+        join creature_proficiency on creature_proficiency.creature_id = creature.id
+        join proficiency on proficiency.id = creature_proficiency.proficiency_id
+        where creature.source_key = 'archmage'
+        union all
+        select creature.source_key as monster,
+               'spell' as relation,
+               spell.source_family as target_family,
+               spell.source_key as target_index
+        from creature
+        join creature_spell on creature_spell.creature_id = creature.id
+        join spell on spell.id = creature_spell.spell_id
+        where creature.source_key = 'archmage'
+        union all
+        select creature.source_key as monster,
+               'condition-immunity' as relation,
+               'conditions' as target_family,
+               condition.source_key as target_index
+        from creature
+        join creature_condition_immunity on creature_condition_immunity.creature_id = creature.id
+        join condition on condition.id = creature_condition_immunity.condition_id
+        where creature.source_key = 'animated-armor'
+        union all
+        select creature.source_key as monster,
+               'damage-immunity' as relation,
+               'damage-types' as target_family,
+               damage_type.source_key as target_index
+        from creature
+        join creature_damage_type on creature_damage_type.creature_id = creature.id
+        join damage_type on damage_type.id = creature_damage_type.damage_type_id
+        where creature.source_key = 'animated-armor'
+          and creature_damage_type.relation = 'immunity'
+        union all
+        select creature.source_key as monster,
+               'armor' as relation,
+               equipment.source_family as target_family,
+               equipment.source_key as target_index
+        from creature
+        join creature_armor_equipment on creature_armor_equipment.creature_id = creature.id
+        join equipment on equipment.id = creature_armor_equipment.equipment_id
+        where creature.source_key = 'assassin'
+        union all
+        select creature.source_key as monster,
+               'form' as relation,
+               form.source_family as target_family,
+               form.source_key as target_index
+        from creature
+        join creature_form on creature_form.creature_id = creature.id
+        join creature form on form.id = creature_form.form_id
+        where creature.source_key = 'vampire-vampire'
+        order by monster, relation, target_index
       `,
     );
 
@@ -213,10 +261,11 @@ describe("2014 SRD monsters", () => {
     const lineage = await sql(
       (client) => client<{
         readonly id: string;
-        readonly source_entity_id: string;
-        readonly source_revision_id: string;
+        readonly source_corpus: string;
+        readonly source_family: string;
+        readonly source_key: string;
       }>`
-        select id::text, source_entity_id::text, source_revision_id::text
+        select id::text, source_corpus, source_family, source_key
         from creature
         where id = any(${[source.id, copy.id]})
       `,
@@ -252,8 +301,9 @@ describe("2014 SRD monsters", () => {
     expect(reread.name).toBe("Adult Red Dragon");
     expect(reread.hp).toBe(256);
     expect(reread.derivedFrom).toBe(source.id);
-    expect(copyLineage.source_entity_id).toBe(sourceLineage.source_entity_id);
-    expect(copyLineage.source_revision_id).toBe(sourceLineage.source_revision_id);
+    expect(copyLineage.source_corpus).toBe(sourceLineage.source_corpus);
+    expect(copyLineage.source_family).toBe(sourceLineage.source_family);
+    expect(copyLineage.source_key).toBe(sourceLineage.source_key);
     expect(
       originalPage.items.find((creature) => creature.name === "Adult Red Dragon, Revised")?.hp,
     ).toBe(333);
@@ -269,12 +319,12 @@ describe("2014 SRD monsters", () => {
 
     const rows = await sql(
       (client) => client<{ readonly count: number; readonly name: string }>`
-        select count(*)::int as count, max(creature.name) as name
+        select count(*)::int as count, max(name) as name
         from creature
-        join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-        where rules_source_entity.family = 'monsters'
-          and rules_source_entity.source_index = 'aboleth'
-        group by rules_source_entity.source_index
+        where source_corpus = '5e-bits-2014'
+          and source_family = 'monsters'
+          and source_key = 'aboleth'
+        group by source_key
       `,
     );
 
@@ -295,7 +345,7 @@ describe("2014 SRD monsters", () => {
     const broken = { ...rawNamed("ape"), proficiencies };
 
     await expect(runtime.runPromise(importSystemMonsters([broken]))).rejects.toThrow(
-      /missing required source link target proficiencies\/skill-never-imported/,
+      /missing required monster-proficiency skill-never-imported/,
     );
   });
 });

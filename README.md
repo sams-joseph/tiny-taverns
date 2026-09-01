@@ -111,16 +111,21 @@ pnpm --filter web dev   # http://localhost:5173
 pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
-pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (optional, idempotent)
-pnpm -F server ruleset:import   # loads the bundled 2014 classes, races and background (idempotent)
-pnpm -F server spell:import      # loads the bundled 2014 SRD spells (idempotent)
 pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
+pnpm -F server ruleset:import   # loads the bundled 2014 classes, races and background (idempotent)
+pnpm -F server spell:import      # loads the bundled 2014 SRD spells (optional, idempotent)
+pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (idempotent)
 pnpm -F server magic-item:import # loads the bundled 2014 SRD magic items (idempotent)
 pnpm dev                         # API on :3000, web on :5173
 ```
 
+The import order above is deliberate: equipment comes before the ruleset so background
+starting-equipment references resolve to rows, spells come after the class vocabulary they link to,
+and spells/equipment both come before the monster corpus so imported monster relationships can be
+populated.
+
 If an existing development database still carries the pre-2014 character-rules rows, use the
-clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server bestiary:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server equipment:import && pnpm -F server magic-item:import`.
+clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server equipment:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server bestiary:import && pnpm -F server magic-item:import`.
 
 That is the whole setup, and it needs no Clerk account. Paste the token into the Server
 panel's **Machine token** box to reach the authenticated endpoints.
@@ -228,8 +233,8 @@ creatures live under it; `system` creatures are global, immutable and shared by 
 and the only thing that writes them is `pnpm -F server bestiary:import` — a shell command rather
 than an endpoint, because global content has no campaign to scope it to. The importer loads the
 Taverns-authored starter bundle and the 334-row 2014 SRD monster corpus from the checked-in
-5e-bits snapshot, recording each under its own `rules_source_*` provenance instead of by display
-name. A DM who wants to change a system creature derives a copy instead:
+5e-bits snapshot, recording each under a stable source key instead of by display name. A DM who
+wants to change a system creature derives a copy instead:
 
 ```bash
 curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/derive" \
@@ -238,12 +243,13 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
 ```
 
 **A campaign can have its own classes, races, backgrounds, spells, mundane equipment and magic items**, and
-they follow exactly the same model. `pnpm -F server ruleset:import` writes the bundled 2014 SRD
-character vocabulary; `pnpm -F server spell:import` writes the 319 bundled 2014 SRD spells as
-global rows; `pnpm -F server equipment:import` writes the 237 bundled 2014 SRD mundane equipment
-rows as global rows; `pnpm -F server magic-item:import` writes the 362 bundled 2014 SRD magic items
-as global rows. All are keyed by stable `rules_source_*` identities from the pinned 5e-bits
-`5e-database` snapshot (`5.10.0`, commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races
+they follow exactly the same model. `pnpm -F server equipment:import` writes the 237 bundled 2014 SRD
+mundane equipment rows; `pnpm -F server ruleset:import` writes the bundled 2014 SRD character
+vocabulary and its concrete starting-equipment references; `pnpm -F server spell:import` writes the
+319 bundled 2014 SRD spells as global rows linked to that class vocabulary; `pnpm -F server
+magic-item:import` writes the 362 bundled 2014 SRD magic items as global rows. All are keyed by
+stable source keys from the pinned 5e-bits `5e-database`
+snapshot (`5.10.0`, commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races
 contain their 2014 subraces in the race body; there is no separate unparented subrace option kind.
 Character vocabulary is managed in the campaign's **Rules** screen; spells, equipment and magic items have their
 own API and Library shelves, with the same copy-as-snapshot rule. The copy is what a player reads
@@ -252,9 +258,9 @@ where the one thing these importers do differently is written down.
 
 The bundled 2014 monster, character-rules, spell, mundane-equipment and magic-item data are transformed
 from `5e-bits/5e-database` under the MIT License; the underlying Dungeons & Dragons 5th Edition SRD
-5.1 material is used under the Open Game License version 1.0a. The source and license metadata are
-stored in `rules_source_document` by the importers and shown in the web footer for attribution; see
-`THIRD_PARTY_NOTICES.md` for the bundled notice text.
+5.1 material is used under the Open Game License version 1.0a. The importers store stable source
+keys on rows; attribution is carried in the web footer and README rather than in per-row provenance
+tables. See `THIRD_PARTY_NOTICES.md` for the bundled notice text.
 
 ### Hosted sign-in (optional)
 

@@ -66,27 +66,23 @@ const customEquipment = (name: string): EquipmentCreate => ({
   equipmentCategory: {
     index: "adventuring-gear",
     name: "Adventuring Gear",
-    url: "/api/2014/equipment-categories/adventuring-gear",
   },
   cost: { quantity: 3, unit: "gp" },
   weight: 2,
   gearCategory: {
     index: "standard-gear",
     name: "Standard Gear",
-    url: "/api/2014/equipment-categories/standard-gear",
   },
   equipment: {
     equipmentCategory: {
       index: "adventuring-gear",
       name: "Adventuring Gear",
-      url: "/api/2014/equipment-categories/adventuring-gear",
     },
     cost: { quantity: 3, unit: "gp" },
     weight: 2,
     gearCategory: {
       index: "standard-gear",
       name: "Standard Gear",
-      url: "/api/2014/equipment-categories/standard-gear",
     },
     desc: [`${name} looks ordinary until it matters.`],
   },
@@ -110,7 +106,7 @@ describe("2014 SRD mundane equipment", () => {
     });
   }, 60_000);
 
-  it("records source links to categories, weapon properties, damage types and contained equipment", async () => {
+  it("records concrete relationships to categories, weapon properties, damage types and contained equipment", async () => {
     const links = await sql(
       (client) => client<{
         readonly relation: string;
@@ -118,16 +114,40 @@ describe("2014 SRD mundane equipment", () => {
         readonly target_index: string;
         readonly resolved: boolean;
       }>`
-        select rules_source_link.relation,
-               rules_source_link.target_family,
-               rules_source_link.target_index,
-               (rules_source_link.to_entity_id is not null) as resolved
-        from rules_source_link
-        join rules_source_entity_revision on rules_source_entity_revision.id = rules_source_link.from_revision_id
-        join rules_source_entity on rules_source_entity.id = rules_source_entity_revision.entity_id
-        where rules_source_entity.family = 'equipment'
-          and rules_source_entity.source_index in ('dagger', 'explorers-pack')
-        order by rules_source_entity.source_index, rules_source_link.relation, rules_source_link.ordinal
+        select 'equipment-category' as relation,
+               'equipment-categories' as target_family,
+               equipment_category.source_key as target_index,
+               true as resolved
+        from equipment
+        join equipment_category on equipment_category.id = equipment.category_id
+        where equipment.source_key = 'dagger'
+        union all
+        select 'damage-type' as relation,
+               'damage-types' as target_family,
+               damage_type.source_key as target_index,
+               true as resolved
+        from equipment
+        join damage_type on damage_type.id = equipment.damage_type_id
+        where equipment.source_key = 'dagger'
+        union all
+        select 'weapon-property' as relation,
+               'weapon-properties' as target_family,
+               weapon_property.source_key as target_index,
+               true as resolved
+        from equipment
+        join equipment_property on equipment_property.equipment_id = equipment.id
+        join weapon_property on weapon_property.id = equipment_property.weapon_property_id
+        where equipment.source_key = 'dagger'
+        union all
+        select 'contains-equipment' as relation,
+               contained.source_family as target_family,
+               contained.source_key as target_index,
+               true as resolved
+        from equipment
+        join equipment_content on equipment_content.equipment_id = equipment.id
+        join equipment contained on contained.id = equipment_content.contained_equipment_id
+        where equipment.source_key = 'explorers-pack'
+        order by relation, target_index
       `,
     );
 
@@ -418,15 +438,18 @@ describe("2014 SRD mundane equipment", () => {
       ),
     );
     const revisedSource = await run(withActor(actor, firstEquipmentNamed("Dagger, Revised")));
-    const provenance = await sql(
+    const sourceKeys = await sql(
       (client) => client<{
-        readonly copy_revision: string;
-        readonly source_revision: string;
+        readonly copy_key: string;
+        readonly source_key: string;
       }>`
-        select copy.source_revision_id::text as copy_revision,
-               system.source_revision_id::text as source_revision
+        select copy.source_key as copy_key,
+               system.source_key as source_key
         from equipment copy
-        join equipment system on system.source_entity_id = copy.source_entity_id
+        join equipment system
+          on system.source_corpus = copy.source_corpus
+         and system.source_family = copy.source_family
+         and system.source_key = copy.source_key
         where copy.id = ${copy.id}
           and system.campaign_id is null
           and system.account_id is null
@@ -436,7 +459,7 @@ describe("2014 SRD mundane equipment", () => {
     expect(copiedAgain.name).toBe("Salt Road Dagger");
     expect(copiedAgain.equipment.desc).toEqual(source.equipment.desc);
     expect(revisedSource.id).toBe(source.id);
-    expect(provenance[0]?.copy_revision).not.toBe(provenance[0]?.source_revision);
+    expect(sourceKeys).toEqual([{ copy_key: "dagger", source_key: "dagger" }]);
   }, 60_000);
 
   it("leaves a campaign copy standing when its Library original is deleted", async () => {
@@ -483,38 +506,27 @@ describe("2014 SRD mundane equipment", () => {
       (client) => client<{
         readonly target_family: string;
         readonly target_index: string;
-        readonly has_domain_row: boolean;
+        readonly quantity: number;
       }>`
-        select rules_source_link.target_family,
-               rules_source_link.target_index,
-               exists (
-                 select 1 from equipment
-                 where equipment.source_entity_id = rules_source_link.to_entity_id
-                   and equipment.origin = 'system'
-               ) as has_domain_row
-        from rules_source_link
-        join rules_source_entity_revision on rules_source_entity_revision.id = rules_source_link.from_revision_id
-        join rules_source_entity on rules_source_entity.id = rules_source_entity_revision.entity_id
-        where rules_source_entity.family = 'backgrounds'
-          and rules_source_entity.source_index = 'acolyte'
-          and rules_source_link.target_family in ('equipment', 'equipment-categories')
-        order by rules_source_link.target_family, rules_source_link.target_index
+        select equipment.source_family as target_family,
+               equipment.source_key as target_index,
+               character_option_equipment_reference.quantity
+        from character_option
+        join character_option_equipment_reference
+          on character_option_equipment_reference.option_id = character_option.id
+        join equipment on equipment.id = character_option_equipment_reference.equipment_id
+        where character_option.source_family = 'backgrounds'
+          and character_option.source_key = 'acolyte'
+        order by equipment.source_family, equipment.source_key
       `,
     );
 
     expect(links).toEqual(
       expect.arrayContaining([
-        { target_family: "equipment", target_index: "clothes-common", has_domain_row: true },
-        { target_family: "equipment", target_index: "pouch", has_domain_row: true },
-        {
-          target_family: "equipment-categories",
-          target_index: "holy-symbols",
-          has_domain_row: false,
-        },
+        { target_family: "equipment", target_index: "clothes-common", quantity: 1 },
+        { target_family: "equipment", target_index: "pouch", quantity: 1 },
       ]),
     );
-    expect(links.every((link) => link.target_family !== "equipment" || link.has_domain_row)).toBe(
-      true,
-    );
+    expect(links.every((link) => link.target_family === "equipment")).toBe(true);
   }, 60_000);
 });

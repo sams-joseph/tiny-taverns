@@ -22,6 +22,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
+import { importSystemEquipment } from "../src/equipment/import.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Options } from "../src/repo/Options.js";
 import { Proposals } from "../src/repo/Proposals.js";
@@ -112,6 +113,7 @@ const makeFixture = Effect.gen(function* () {
    * honest degrade and it is asserted in its own test below; it is not the state
    * a deployed table is in, so the fixture is seeded exactly as a deployment is.
    */
+  yield* importSystemEquipment();
   yield* importSystemOptions();
 
   const dm = yield* anAccount("Fen");

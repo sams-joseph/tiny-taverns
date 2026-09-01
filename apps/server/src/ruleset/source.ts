@@ -1,97 +1,41 @@
-import { createHash } from "node:crypto";
 import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 
-export type RulesSourceDocumentId = string;
-export type RulesImportRunId = string;
-export type RulesSourceEntityId = string;
-export type RulesSourceEntityRevisionId = string;
+export type ConcreteSourceId = string;
 
-export interface RulesSourceDocumentDefinition {
-  readonly system: string;
-  readonly edition: string;
-  readonly documentName: string;
-  readonly documentVersion: string;
-  readonly license: string;
-  readonly sourceUrl: string;
+export interface RulesSourceDefinition {
+  /** Stable corpus key stored on imported domain rows. */
+  readonly corpus: string;
+  /** Human label for code/docs only; source-document rows are no longer stored. */
+  readonly label: string;
+  /** Static attribution text; not a per-row provenance graph. */
   readonly attribution: string;
 }
 
-export interface RulesSourceDefinition {
-  readonly document: RulesSourceDocumentDefinition;
-  readonly provider: string;
-  readonly providerVersion?: string;
-  readonly providerCommit?: string;
+export interface SourceKey {
+  readonly sourceCorpus: string;
+  readonly sourceFamily: string;
+  readonly sourceKey: string;
 }
 
-export interface RulesImportContext {
-  readonly documentId: RulesSourceDocumentId;
-  readonly importRunId: RulesImportRunId;
-}
-
-export interface SourceEntityInput {
-  readonly family: string;
-  readonly sourceIndex: string;
-  readonly sourceUrl?: string;
+export interface SourceRefLike {
+  readonly index: string;
   readonly name: string;
-  readonly raw: unknown;
 }
 
-export interface SourceRevision {
-  readonly sourceEntityId: RulesSourceEntityId;
-  readonly sourceRevisionId: RulesSourceEntityRevisionId;
-  readonly contentHash: string;
-}
-
-export interface SourceLinkInput {
-  readonly relation: string;
-  readonly targetFamily: string;
-  readonly targetIndex: string;
-  readonly ordinal?: number;
-  readonly payload?: unknown;
-  /** Fail the import when the target is absent from the pinned source registry. */
-  readonly required?: boolean;
-}
-
-/**
- * The bestiary starter rows remain project-authored. They are source-keyed, but
- * they are not 5e-bits data and not SRD content; the character rules importer
- * below uses its own 2014 source document and attribution.
- */
+/** Project-authored starter creatures. They are source-keyed, but not SRD. */
 export const TAVERNS_STARTER_SOURCE: RulesSourceDefinition = {
-  document: {
-    system: "taverns",
-    edition: "project",
-    documentName: "Tiny Taverns starter bundle",
-    documentVersion: "1",
-    license: "project-authored",
-    sourceUrl: "internal:taverns/starter-bundle",
-    attribution: "Project-authored starter data bundled with Tiny Taverns.",
-  },
-  provider: "taverns-starter-importer",
-  providerVersion: "1",
+  corpus: "taverns-starter",
+  label: "Tiny Taverns starter bundle",
+  attribution: "Project-authored starter data bundled with Tiny Taverns.",
 };
 
-/**
- * Metadata for the pinned 2014 5e-bits/SRD source used by the ruleset, spell
- * and equipment importers. Each importer reads a checked-in local snapshot; none
- * fetches at runtime.
- */
+/** The pinned 2014 5e-bits/SRD snapshot used by the bundled rules corpora. */
 export const FIVE_E_BITS_2014_SOURCE: RulesSourceDefinition = {
-  document: {
-    system: "dnd-5e-srd",
-    edition: "2014",
-    documentName: "5e-bits 2014 SRD data",
-    documentVersion: "5e-database 5.10.0+5a7ee5a0489b26655d343e4a41e8f7942a887af2",
-    license: "5e-bits MIT project data; underlying SRD 5.1 content under OGL-1.0a",
-    sourceUrl:
-      "https://github.com/5e-bits/5e-database/tree/5a7ee5a0489b26655d343e4a41e8f7942a887af2/src/2014/en",
-    attribution:
-      "Rules data transformed from 5e-bits/5e-database commit 5a7ee5a0489b26655d343e4a41e8f7942a887af2 (MIT). Underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open Game License version 1.0a.",
-  },
-  provider: "5e-bits-transform",
-  providerVersion: "5e-database 5.10.0",
-  providerCommit: "5a7ee5a0489b26655d343e4a41e8f7942a887af2",
+  corpus: "5e-bits-2014",
+  label: "5e-bits 2014 SRD data",
+  attribution:
+    "Rules data transformed from 5e-bits/5e-database commit 5a7ee5a0489b26655d343e4a41e8f7942a887af2 (MIT). Underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open Game License version 1.0a.",
 };
 
 const SOURCE_INDEX = /^[a-z0-9][a-z0-9._/-]*$/;
@@ -101,176 +45,284 @@ const requireText = (value: string, name: string): void => {
 };
 
 const validateSource = (source: RulesSourceDefinition): void => {
-  requireText(source.document.system, "rules source system");
-  requireText(source.document.edition, "rules source edition");
-  requireText(source.document.documentName, "rules source documentName");
-  requireText(source.document.documentVersion, "rules source documentVersion");
-  requireText(source.document.license, "rules source license");
-  requireText(source.document.sourceUrl, "rules source sourceUrl");
-  requireText(source.document.attribution, "rules source attribution");
-  requireText(source.provider, "rules source provider");
+  requireText(source.corpus, "rules source corpus");
+  requireText(source.label, "rules source label");
+  requireText(source.attribution, "rules source attribution");
 };
 
-const validateEntity = (input: SourceEntityInput): void => {
-  requireText(input.family, "rules source family");
-  requireText(input.sourceIndex, "rules source sourceIndex");
-  requireText(input.name, "rules source name");
-  if (!SOURCE_INDEX.test(input.sourceIndex)) {
+const validateKey = (family: string, sourceKey: string): void => {
+  requireText(family, "rules source family");
+  requireText(sourceKey, "rules source key");
+  if (!SOURCE_INDEX.test(sourceKey)) {
     throw new Error(
-      `rules source sourceIndex must be a stable lowercase source key, got ${JSON.stringify(
-        input.sourceIndex,
-      )}`,
+      `rules source key must be a stable lowercase source key, got ${JSON.stringify(sourceKey)}`,
     );
   }
 };
 
-const stable = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, item]) => item !== undefined)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, stable(item)]),
-    );
-  }
-  return value;
-};
-
-/** Stable JSON for content hashes and raw source snapshots. */
-export const stableJson = (value: unknown): string => JSON.stringify(stable(value));
-
-/** A content-addressed hash; the prefix keeps the algorithm in the value. */
-export const sourceContentHash = (value: unknown): string =>
-  `sha256:${createHash("sha256").update(stableJson(value)).digest("hex")}`;
-
-/** Opens one source import run and upserts the document-level attribution. */
-export const beginRulesImport = (
-  sql: SqlClient.SqlClient,
+export const sourceKeyFor = (
   source: RulesSourceDefinition,
-): Effect.Effect<RulesImportContext, SqlError.SqlError> =>
+  family: string,
+  sourceKey: string,
+): SourceKey => {
+  validateSource(source);
+  validateKey(family, sourceKey);
+  return { sourceCorpus: source.corpus, sourceFamily: family, sourceKey };
+};
+
+const sourceRefKey = (reference: SourceRefLike, family: string): SourceKey =>
+  sourceKeyFor(FIVE_E_BITS_2014_SOURCE, family, reference.index);
+
+const ensureName = (reference: SourceRefLike, relation: string): void => {
+  requireText(reference.name, `${relation} name`);
+};
+
+export const magicSchoolForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
   Effect.gen(function* () {
-    validateSource(source);
-    const documents = yield* sql<{ readonly id: RulesSourceDocumentId }>`
-      insert into rules_source_document (
-        system, edition, document_name, document_version, license, source_url, attribution
-      )
-      values (
-        ${source.document.system},
-        ${source.document.edition},
-        ${source.document.documentName},
-        ${source.document.documentVersion},
-        ${source.document.license},
-        ${source.document.sourceUrl},
-        ${source.document.attribution}
-      )
-      on conflict (system, edition, document_version)
-      do update set
-        document_name = excluded.document_name,
-        license       = excluded.license,
-        source_url    = excluded.source_url,
-        attribution   = excluded.attribution,
-        updated_at    = now()
-      returning id
+    const key = sourceRefKey(reference, "magic-schools");
+    ensureName(reference, "magic school");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into magic_school (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
     `;
-    const documentId = documents[0]!.id;
-    const runs = yield* sql<{ readonly id: RulesImportRunId }>`
-      insert into rules_import_run (
-        document_id, provider, provider_version, provider_commit
-      )
-      values (
-        ${documentId},
-        ${source.provider},
-        ${source.providerVersion ?? null},
-        ${source.providerCommit ?? null}
-      )
-      returning id
-    `;
-    return { documentId, importRunId: runs[0]!.id };
+    return rows[0]!.id;
   });
 
-/**
- * Upserts one source entity and returns the exact revision that this import's
- * projected domain row reflects.
- */
-export const sourceRevisionFor = (
+export const abilityScoreForRef = (
   sql: SqlClient.SqlClient,
-  context: RulesImportContext,
-  input: SourceEntityInput,
-): Effect.Effect<SourceRevision, SqlError.SqlError> =>
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
   Effect.gen(function* () {
-    validateEntity(input);
-    const raw = JSON.parse(stableJson(input.raw)) as unknown;
-    const contentHash = sourceContentHash(raw);
-    const entities = yield* sql<{ readonly id: RulesSourceEntityId }>`
-      insert into rules_source_entity (document_id, family, source_index, source_url, name)
-      values (
-        ${context.documentId},
-        ${input.family},
-        ${input.sourceIndex},
-        ${input.sourceUrl ?? null},
-        ${input.name}
-      )
-      on conflict (document_id, family, source_index)
-      do update set
-        source_url = excluded.source_url,
-        name       = excluded.name,
-        updated_at = now()
-      returning id
+    const key = sourceRefKey(reference, "ability-scores");
+    ensureName(reference, "ability score");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into ability_score (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
     `;
-    const sourceEntityId = entities[0]!.id;
-    const revisions = yield* sql<{ readonly id: RulesSourceEntityRevisionId }>`
-      insert into rules_source_entity_revision (entity_id, import_run_id, content_hash, raw)
-      values (${sourceEntityId}, ${context.importRunId}, ${contentHash}, ${JSON.stringify(raw)})
-      on conflict (entity_id, content_hash)
-      do update set raw = excluded.raw
-      returning id
-    `;
-    return { sourceEntityId, sourceRevisionId: revisions[0]!.id, contentHash };
+    return rows[0]!.id;
   });
 
-/** Records one relationship observed in the imported source. */
-export const sourceLinkFor = (
+export const damageTypeForRef = (
   sql: SqlClient.SqlClient,
-  context: RulesImportContext,
-  from: SourceRevision,
-  input: SourceLinkInput,
-): Effect.Effect<void, SqlError.SqlError> =>
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
   Effect.gen(function* () {
-    validateEntity({
-      family: input.targetFamily,
-      sourceIndex: input.targetIndex,
-      name: input.targetIndex,
-      raw: {},
-    });
-    const targets = yield* sql<{ readonly id: RulesSourceEntityId }>`
-      select id from rules_source_entity
-      where document_id = ${context.documentId}
-        and family = ${input.targetFamily}
-        and source_index = ${input.targetIndex}
+    const key = sourceRefKey(reference, "damage-types");
+    ensureName(reference, "damage type");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into damage_type (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
+    `;
+    return rows[0]!.id;
+  });
+
+export const damageTypeIdByKey = (
+  sql: SqlClient.SqlClient,
+  sourceKey: string,
+): Effect.Effect<ConcreteSourceId | undefined, SqlError.SqlError> => {
+  const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "damage-types", sourceKey);
+  return Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      select id::text from damage_type
+      where source_corpus = ${key.sourceCorpus}
+        and source_key = ${key.sourceKey}
       limit 1
     `;
-    if (input.required === true && targets.length === 0) {
-      throw new Error(
-        `missing required source link target ${input.targetFamily}/${input.targetIndex} for ${input.relation}`,
-      );
-    }
-    yield* sql`
-      insert into rules_source_link (
-        from_revision_id, relation, to_entity_id, target_family, target_index, ordinal, payload
-      )
-      values (
-        ${from.sourceRevisionId},
-        ${input.relation},
-        ${targets[0]?.id ?? null},
-        ${input.targetFamily},
-        ${input.targetIndex},
-        ${input.ordinal ?? 0},
-        ${JSON.stringify(input.payload ?? {})}
-      )
-      on conflict (from_revision_id, relation, ordinal, target_family, target_index)
-      do update set
-        to_entity_id = excluded.to_entity_id,
-        payload      = excluded.payload
+    return rows[0]?.id;
+  });
+};
+
+export const requireDamageTypeForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+  relation: string,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const id = yield* damageTypeIdByKey(sql, reference.index);
+    if (id === undefined) throw new Error(`missing required ${relation} ${reference.index}`);
+    return id;
+  });
+
+export const requireDamageTypeByKey = (
+  sql: SqlClient.SqlClient,
+  sourceKey: string,
+  relation: string,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const id = yield* damageTypeIdByKey(sql, sourceKey);
+    if (id === undefined) throw new Error(`missing required ${relation} ${sourceKey}`);
+    return id;
+  });
+
+export const equipmentCategoryForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceRefKey(reference, "equipment-categories");
+    ensureName(reference, "equipment category");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into equipment_category (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
     `;
+    return rows[0]!.id;
+  });
+
+export const weaponPropertyForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceRefKey(reference, "weapon-properties");
+    ensureName(reference, "weapon property");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into weapon_property (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
+    `;
+    return rows[0]!.id;
+  });
+
+export const magicItemRarityFor = (
+  sql: SqlClient.SqlClient,
+  sourceKey: string,
+  name: string,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "magic-item-rarities", sourceKey);
+    requireText(name, "magic item rarity name");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into magic_item_rarity (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
+    `;
+    return rows[0]!.id;
+  });
+
+export const proficiencyForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceRefKey(reference, "proficiencies");
+    ensureName(reference, "proficiency");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into proficiency (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
+    `;
+    return rows[0]!.id;
+  });
+
+export const proficiencyIdByKey = (
+  sql: SqlClient.SqlClient,
+  sourceKey: string,
+): Effect.Effect<ConcreteSourceId | undefined, SqlError.SqlError> => {
+  const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "proficiencies", sourceKey);
+  return Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      select id::text from proficiency
+      where source_corpus = ${key.sourceCorpus}
+        and source_key = ${key.sourceKey}
+      limit 1
+    `;
+    return rows[0]?.id;
+  });
+};
+
+export const requireProficiencyForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+  relation: string,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const id = yield* proficiencyIdByKey(sql, reference.index);
+    if (id === undefined) throw new Error(`missing required ${relation} ${reference.index}`);
+    return id;
+  });
+
+export const conditionForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceRefKey(reference, "conditions");
+    ensureName(reference, "condition");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      insert into condition (source_corpus, source_key, name)
+      values (${key.sourceCorpus}, ${key.sourceKey}, ${reference.name})
+      on conflict (source_corpus, source_key)
+      do update set name = excluded.name, updated_at = now()
+      returning id::text
+    `;
+    return rows[0]!.id;
+  });
+
+export const conditionIdByKey = (
+  sql: SqlClient.SqlClient,
+  sourceKey: string,
+): Effect.Effect<ConcreteSourceId | undefined, SqlError.SqlError> => {
+  const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "conditions", sourceKey);
+  return Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      select id::text from condition
+      where source_corpus = ${key.sourceCorpus}
+        and source_key = ${key.sourceKey}
+      limit 1
+    `;
+    return rows[0]?.id;
+  });
+};
+
+export const requireConditionForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+  relation: string,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const id = yield* conditionIdByKey(sql, reference.index);
+    if (id === undefined) throw new Error(`missing required ${relation} ${reference.index}`);
+    return id;
+  });
+
+export const classOptionForRef = (
+  sql: SqlClient.SqlClient,
+  reference: SourceRefLike,
+): Effect.Effect<ConcreteSourceId, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const key = sourceRefKey(reference, "classes");
+    const rows = yield* sql<{ readonly id: ConcreteSourceId }>`
+      select id::text from character_option
+      where source_corpus = ${key.sourceCorpus}
+        and source_family = ${key.sourceFamily}
+        and source_key = ${key.sourceKey}
+        and kind = 'class'
+        and campaign_id is null
+        and account_id is null
+      limit 1
+    `;
+    const row = rows[0];
+    if (row === undefined) throw new Error(`missing required spell class ${reference.index}`);
+    return row.id;
   });

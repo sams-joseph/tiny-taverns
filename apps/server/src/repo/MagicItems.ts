@@ -49,8 +49,9 @@ interface MagicItemRow extends ProvenanceColumns {
   readonly campaign_id: CampaignId | null;
   readonly account_id: AccountId | null;
   readonly derived_from: MagicItemId | null;
-  readonly source_entity_id: string | null;
-  readonly source_revision_id: string | null;
+  readonly source_corpus: string | null;
+  readonly source_family: string | null;
+  readonly source_key: string | null;
   readonly name: string;
   readonly category_index: string;
   readonly category_name: string;
@@ -533,8 +534,9 @@ export class MagicItems extends Context.Service<
                     defined({
                       campaign_id: campaignId,
                       derived_from: source.id,
-                      source_entity_id: source.source_entity_id,
-                      source_revision_id: source.source_revision_id,
+                      source_corpus: source.source_corpus,
+                      source_family: source.source_family,
+                      source_key: source.source_key,
                       name,
                       category_index: category.index,
                       category_name: category.name,

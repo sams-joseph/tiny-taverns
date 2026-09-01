@@ -2,20 +2,15 @@ import { SpellBody } from "@taverns/api";
 import { Effect, Schema } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import {
-  beginRulesImport,
+  abilityScoreForRef,
+  classOptionForRef,
+  damageTypeForRef,
   FIVE_E_BITS_2014_SOURCE,
-  sourceLinkFor,
-  sourceRevisionFor,
-  type SourceRevision,
+  magicSchoolForRef,
+  requireDamageTypeForRef,
+  sourceKeyFor,
 } from "../ruleset/source.js";
-import {
-  ABILITY_SCORE_RAW,
-  CLASS_RAW,
-  DAMAGE_TYPE_RAW,
-  MAGIC_SCHOOL_RAW,
-  SPELL_RAW,
-  SUBCLASS_RAW,
-} from "./systemSpells.js";
+import { ABILITY_SCORE_RAW, DAMAGE_TYPE_RAW, MAGIC_SCHOOL_RAW, SPELL_RAW } from "./systemSpells.js";
 
 export interface ImportSpellsResult {
   readonly inserted: number;
@@ -31,7 +26,6 @@ interface SourceRef {
 
 interface SystemSpell {
   readonly sourceIndex: string;
-  readonly sourceUrl?: string;
   readonly name: string;
   readonly level: number;
   readonly school: SourceRef;
@@ -47,9 +41,6 @@ interface SystemSpell {
 }
 
 const decodeBody = Schema.decodeSync(SpellBody);
-
-const sourceUrlFor = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : `https://www.dnd5eapi.co${url}`;
 
 const rawText = (row: Record<string, unknown>, key: string): string => {
   const value = row[key];
@@ -182,12 +173,10 @@ const transformedSpell = (row: Record<string, unknown>): SystemSpell => {
     school,
     classes,
     subclasses,
-    sourceUrl: typeof row.url === "string" ? sourceUrlFor(row.url) : undefined,
   });
 
   return {
     sourceIndex: rawText(row, "index"),
-    sourceUrl: typeof row.url === "string" ? sourceUrlFor(row.url) : undefined,
     name: rawText(row, "name"),
     level: rawLevel(row),
     school,
@@ -203,56 +192,49 @@ const transformedSpell = (row: Record<string, unknown>): SystemSpell => {
   };
 };
 
-const sourceFamilyOf = (url: string | undefined): string | undefined =>
-  url?.match(/^\/api\/2014\/([^/]+)\//)?.[1];
-
 const referenceRows = (): ReadonlyArray<{
   readonly family: string;
   readonly row: Record<string, unknown>;
 }> => [
   ...MAGIC_SCHOOL_RAW.map((row) => ({ family: "magic-schools", row })),
-  ...CLASS_RAW.map((row) => ({ family: "classes", row })),
-  ...SUBCLASS_RAW.map((row) => ({ family: "subclasses", row })),
   ...DAMAGE_TYPE_RAW.map((row) => ({ family: "damage-types", row })),
   ...ABILITY_SCORE_RAW.map((row) => ({ family: "ability-scores", row })),
 ];
 
-const linkReference = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  from: SourceRevision,
-  relation: string,
-  reference: SourceRef | undefined,
-  ordinal = 0,
-): Effect.Effect<void, SqlError.SqlError> => {
-  if (reference === undefined) return Effect.void;
-  const family = sourceFamilyOf(reference.url);
-  if (family === undefined) return Effect.void;
-  return sourceLinkFor(sql, context, from, {
-    relation,
-    targetFamily: family,
-    targetIndex: reference.index,
-    ordinal,
-    payload: { name: reference.name, url: reference.url },
+const registerReferenceRows = (sql: SqlClient.SqlClient): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    for (const { family, row } of referenceRows()) {
+      const reference = refOf(row, family);
+      if (family === "magic-schools") yield* magicSchoolForRef(sql, reference);
+      if (family === "damage-types") yield* damageTypeForRef(sql, reference);
+      if (family === "ability-scores") yield* abilityScoreForRef(sql, reference);
+    }
   });
-};
 
-const linkSpell = (
+const syncSpellRelationships = (
   sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  revision: SourceRevision,
+  spellId: string,
   spell: SystemSpell,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.gen(function* () {
-    yield* linkReference(sql, context, revision, "school", spell.school);
+    yield* sql`delete from spell_class where spell_id = ${spellId}`;
+    yield* sql`delete from spell_damage_type where spell_id = ${spellId}`;
+
     for (const [ordinal, reference] of spell.classes.entries()) {
-      yield* linkReference(sql, context, revision, "class", reference, ordinal);
+      const classOptionId = yield* classOptionForRef(sql, reference);
+      yield* sql`
+        insert into spell_class (spell_id, class_option_id, ordinal)
+        values (${spellId}, ${classOptionId}, ${ordinal})
+      `;
     }
-    for (const [ordinal, reference] of spell.subclasses.entries()) {
-      yield* linkReference(sql, context, revision, "subclass", reference, ordinal);
+    const damageType = spell.body.damage?.damageType;
+    if (damageType !== undefined) {
+      const damageTypeId = yield* requireDamageTypeForRef(sql, damageType, "spell-damage-type");
+      yield* sql`
+        insert into spell_damage_type (spell_id, damage_type_id, relation, ordinal)
+        values (${spellId}, ${damageTypeId}, 'damage', 0)
+      `;
     }
-    yield* linkReference(sql, context, revision, "damage-type", spell.body.damage?.damageType);
-    yield* linkReference(sql, context, revision, "dc-type", spell.body.dc?.dcType);
   });
 
 /**
@@ -271,32 +253,22 @@ export const importSystemSpells = (
       Effect.gen(function* () {
         let inserted = 0;
         let updated = 0;
-        const context = yield* beginRulesImport(sql, FIVE_E_BITS_2014_SOURCE);
 
-        for (const { family, row } of referenceRows()) {
-          yield* sourceRevisionFor(sql, context, {
-            family,
-            sourceIndex: rawText(row, "index"),
-            sourceUrl: sourceUrlFor(typeof row.url === "string" ? row.url : undefined),
-            name: rawText(row, "name"),
-            raw: row,
-          });
-        }
+        yield* registerReferenceRows(sql);
 
         const spells = raw.map(transformedSpell);
         for (const spell of spells) {
-          const revision = yield* sourceRevisionFor(sql, context, {
-            family: "spells",
-            sourceIndex: spell.sourceIndex,
-            sourceUrl: spell.sourceUrl,
-            name: spell.name,
-            raw: spell.raw,
-          });
-          yield* linkSpell(sql, context, revision, spell);
+          const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "spells", spell.sourceIndex);
+          const schoolId = yield* magicSchoolForRef(sql, spell.school);
+          const dcAbilityId =
+            spell.body.dc === undefined
+              ? null
+              : yield* abilityScoreForRef(sql, spell.body.dc.dcType);
 
-          const rows = yield* sql<{ readonly inserted: boolean }>`
+          const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into spell (
-              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
+              school_id, dc_ability_id,
               name, level, school_index, school_name, ritual, concentration,
               casting_time, spell_range, duration, class_indexes, class_names,
               subclass_indexes, subclass_names, body, visibility
@@ -304,8 +276,11 @@ export const importSystemSpells = (
               null,
               null,
               'system',
-              ${revision.sourceEntityId},
-              ${revision.sourceRevisionId},
+              ${key.sourceCorpus},
+              ${key.sourceFamily},
+              ${key.sourceKey},
+              ${schoolId},
+              ${dcAbilityId},
               ${spell.name},
               ${spell.level},
               ${spell.school.index},
@@ -322,10 +297,11 @@ export const importSystemSpells = (
               ${JSON.stringify(spell.body)},
               'shared'
             )
-            on conflict (source_entity_id)
-              where campaign_id is null and account_id is null and source_entity_id is not null
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
             do update set
-              source_revision_id = excluded.source_revision_id,
+              school_id          = excluded.school_id,
+              dc_ability_id      = excluded.dc_ability_id,
               name               = excluded.name,
               level              = excluded.level,
               school_index       = excluded.school_index,
@@ -341,9 +317,12 @@ export const importSystemSpells = (
               subclass_names     = excluded.subclass_names,
               body               = excluded.body,
               updated_at         = now()
-            returning (xmax = 0) as inserted
+            returning id::text, (xmax = 0) as inserted
           `;
-          if (rows[0]?.inserted === true) inserted += 1;
+          const row = rows[0];
+          if (row === undefined) throw new Error(`spell ${spell.sourceIndex} was not written`);
+          yield* syncSpellRelationships(sql, row.id, spell);
+          if (row.inserted === true) inserted += 1;
           else updated += 1;
         }
 

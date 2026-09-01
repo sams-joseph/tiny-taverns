@@ -13,7 +13,8 @@
  *
  * 5e-bits project data is MIT licensed; underlying D&D 5th Edition SRD 5.1
  * material is used under the Open Game License version 1.0a. See
- * THIRD_PARTY_NOTICES.md and rules_source_document rows written by equipment:import.
+ * THIRD_PARTY_NOTICES.md; equipment:import stores stable source keys, not per-row
+ * source-document provenance.
  */
 
 export const FIVE_E_BITS_2014_COMMIT = "5a7ee5a0489b26655d343e4a41e8f7942a887af2";
@@ -27,8 +28,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "name": "Club",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -41,8 +41,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -52,24 +51,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
-    ],
-    "url": "/api/2014/equipment/club"
+    ]
   },
   {
     "index": "dagger",
     "name": "Dagger",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -82,8 +77,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -93,38 +87,32 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "finesse",
-        "name": "Finesse",
-        "url": "/api/2014/weapon-properties/finesse"
+        "name": "Finesse"
       },
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
     ],
     "throw_range": {
       "normal": 20,
       "long": 60
-    },
-    "url": "/api/2014/equipment/dagger"
+    }
   },
   {
     "index": "greatclub",
     "name": "Greatclub",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -137,8 +125,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -148,19 +135,16 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/greatclub"
+    ]
   },
   {
     "index": "handaxe",
     "name": "Handaxe",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -173,8 +157,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -184,33 +167,28 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
     ],
     "throw_range": {
       "normal": 20,
       "long": 60
-    },
-    "url": "/api/2014/equipment/handaxe"
+    }
   },
   {
     "index": "javelin",
     "name": "Javelin",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -223,8 +201,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -234,28 +211,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
     ],
     "throw_range": {
       "normal": 30,
       "long": 120
-    },
-    "url": "/api/2014/equipment/javelin"
+    }
   },
   {
     "index": "light-hammer",
     "name": "Light hammer",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -268,8 +241,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -279,33 +251,28 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
     ],
     "throw_range": {
       "normal": 20,
       "long": 60
-    },
-    "url": "/api/2014/equipment/light-hammer"
+    }
   },
   {
     "index": "mace",
     "name": "Mace",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -318,8 +285,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -329,19 +295,16 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
-    ],
-    "url": "/api/2014/equipment/mace"
+    ]
   },
   {
     "index": "quarterstaff",
     "name": "Quarterstaff",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -354,8 +317,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -365,32 +327,27 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "versatile",
-        "name": "Versatile",
-        "url": "/api/2014/weapon-properties/versatile"
+        "name": "Versatile"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
     ],
     "two_handed_damage": {
       "damage_dice": "1d8",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
-    },
-    "url": "/api/2014/equipment/quarterstaff"
+    }
   },
   {
     "index": "sickle",
     "name": "Sickle",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -403,8 +360,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -414,24 +370,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
-    ],
-    "url": "/api/2014/equipment/sickle"
+    ]
   },
   {
     "index": "spear",
     "name": "Spear",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Melee",
@@ -444,8 +396,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -455,18 +406,15 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "versatile",
-        "name": "Versatile",
-        "url": "/api/2014/weapon-properties/versatile"
+        "name": "Versatile"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
     ],
     "throw_range": {
@@ -477,19 +425,16 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
-    },
-    "url": "/api/2014/equipment/spear"
+    }
   },
   {
     "index": "crossbow-light",
     "name": "Crossbow, light",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Ranged",
@@ -502,8 +447,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -514,29 +458,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       },
       {
         "index": "loading",
-        "name": "Loading",
-        "url": "/api/2014/weapon-properties/loading"
+        "name": "Loading"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/crossbow-light"
+    ]
   },
   {
     "index": "dart",
     "name": "Dart",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Ranged",
@@ -549,8 +488,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -561,28 +499,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "finesse",
-        "name": "Finesse",
-        "url": "/api/2014/weapon-properties/finesse"
+        "name": "Finesse"
       },
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       }
     ],
     "throw_range": {
       "normal": 20,
       "long": 60
-    },
-    "url": "/api/2014/equipment/dart"
+    }
   },
   {
     "index": "shortbow",
     "name": "Shortbow",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Ranged",
@@ -595,8 +529,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -607,24 +540,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/shortbow"
+    ]
   },
   {
     "index": "sling",
     "name": "Sling",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Simple",
     "weapon_range": "Ranged",
@@ -637,8 +566,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -649,19 +577,16 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       }
-    ],
-    "url": "/api/2014/equipment/sling"
+    ]
   },
   {
     "index": "battleaxe",
     "name": "Battleaxe",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -674,8 +599,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -685,27 +609,23 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "versatile",
-        "name": "Versatile",
-        "url": "/api/2014/weapon-properties/versatile"
+        "name": "Versatile"
       }
     ],
     "two_handed_damage": {
       "damage_dice": "1d10",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
-    },
-    "url": "/api/2014/equipment/battleaxe"
+    }
   },
   {
     "index": "flail",
     "name": "Flail",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -718,24 +638,21 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
       "normal": 5
     },
     "weight": 2,
-    "properties": [],
-    "url": "/api/2014/equipment/flail"
+    "properties": []
   },
   {
     "index": "glaive",
     "name": "Glaive",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -748,8 +665,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d10",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -759,29 +675,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "reach",
-        "name": "Reach",
-        "url": "/api/2014/weapon-properties/reach"
+        "name": "Reach"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/glaive"
+    ]
   },
   {
     "index": "greataxe",
     "name": "Greataxe",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -794,8 +705,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d12",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -805,24 +715,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/greataxe"
+    ]
   },
   {
     "index": "greatsword",
     "name": "Greatsword",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -835,8 +741,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "2d6",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -846,24 +751,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/greatsword"
+    ]
   },
   {
     "index": "halberd",
     "name": "Halberd",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -876,8 +777,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d10",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -887,29 +787,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "reach",
-        "name": "Reach",
-        "url": "/api/2014/weapon-properties/reach"
+        "name": "Reach"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/halberd"
+    ]
   },
   {
     "index": "lance",
     "name": "Lance",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -922,8 +817,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d12",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -933,27 +827,23 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "reach",
-        "name": "Reach",
-        "url": "/api/2014/weapon-properties/reach"
+        "name": "Reach"
       },
       {
         "index": "special",
-        "name": "Special",
-        "url": "/api/2014/weapon-properties/special"
+        "name": "Special"
       }
     ],
     "special": [
       "You have disadvantage when you use a lance to attack a target within 5 feet of you. Also, a lance requires two hands to wield when you aren't mounted."
-    ],
-    "url": "/api/2014/equipment/lance"
+    ]
   },
   {
     "index": "longsword",
     "name": "Longsword",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -966,8 +856,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -977,27 +866,23 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "versatile",
-        "name": "Versatile",
-        "url": "/api/2014/weapon-properties/versatile"
+        "name": "Versatile"
       }
     ],
     "two_handed_damage": {
       "damage_dice": "1d10",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
-    },
-    "url": "/api/2014/equipment/longsword"
+    }
   },
   {
     "index": "maul",
     "name": "Maul",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1010,8 +895,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "2d6",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -1021,24 +905,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/maul"
+    ]
   },
   {
     "index": "morningstar",
     "name": "Morningstar",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1051,24 +931,21 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
       "normal": 5
     },
     "weight": 4,
-    "properties": [],
-    "url": "/api/2014/equipment/morningstar"
+    "properties": []
   },
   {
     "index": "pike",
     "name": "Pike",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1081,8 +958,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d10",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1092,29 +968,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "reach",
-        "name": "Reach",
-        "url": "/api/2014/weapon-properties/reach"
+        "name": "Reach"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/pike"
+    ]
   },
   {
     "index": "rapier",
     "name": "Rapier",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1127,8 +998,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1138,19 +1008,16 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "finesse",
-        "name": "Finesse",
-        "url": "/api/2014/weapon-properties/finesse"
+        "name": "Finesse"
       }
-    ],
-    "url": "/api/2014/equipment/rapier"
+    ]
   },
   {
     "index": "scimitar",
     "name": "Scimitar",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1163,8 +1030,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -1174,24 +1040,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "finesse",
-        "name": "Finesse",
-        "url": "/api/2014/weapon-properties/finesse"
+        "name": "Finesse"
       },
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       }
-    ],
-    "url": "/api/2014/equipment/scimitar"
+    ]
   },
   {
     "index": "shortsword",
     "name": "Shortsword",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1204,8 +1066,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1215,29 +1076,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "finesse",
-        "name": "Finesse",
-        "url": "/api/2014/weapon-properties/finesse"
+        "name": "Finesse"
       },
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "monk",
-        "name": "Monk",
-        "url": "/api/2014/weapon-properties/monk"
+        "name": "Monk"
       }
-    ],
-    "url": "/api/2014/equipment/shortsword"
+    ]
   },
   {
     "index": "trident",
     "name": "Trident",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1250,8 +1106,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1261,13 +1116,11 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "versatile",
-        "name": "Versatile",
-        "url": "/api/2014/weapon-properties/versatile"
+        "name": "Versatile"
       }
     ],
     "throw_range": {
@@ -1278,19 +1131,16 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
-    },
-    "url": "/api/2014/equipment/trident"
+    }
   },
   {
     "index": "war-pick",
     "name": "War pick",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1303,24 +1153,21 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
       "normal": 5
     },
     "weight": 2,
-    "properties": [],
-    "url": "/api/2014/equipment/war-pick"
+    "properties": []
   },
   {
     "index": "warhammer",
     "name": "Warhammer",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1333,8 +1180,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
     },
     "range": {
@@ -1344,27 +1190,23 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "versatile",
-        "name": "Versatile",
-        "url": "/api/2014/weapon-properties/versatile"
+        "name": "Versatile"
       }
     ],
     "two_handed_damage": {
       "damage_dice": "1d10",
       "damage_type": {
         "index": "bludgeoning",
-        "name": "Bludgeoning",
-        "url": "/api/2014/damage-types/bludgeoning"
+        "name": "Bludgeoning"
       }
-    },
-    "url": "/api/2014/equipment/warhammer"
+    }
   },
   {
     "index": "whip",
     "name": "Whip",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Melee",
@@ -1377,8 +1219,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d4",
       "damage_type": {
         "index": "slashing",
-        "name": "Slashing",
-        "url": "/api/2014/damage-types/slashing"
+        "name": "Slashing"
       }
     },
     "range": {
@@ -1388,24 +1229,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "finesse",
-        "name": "Finesse",
-        "url": "/api/2014/weapon-properties/finesse"
+        "name": "Finesse"
       },
       {
         "index": "reach",
-        "name": "Reach",
-        "url": "/api/2014/weapon-properties/reach"
+        "name": "Reach"
       }
-    ],
-    "url": "/api/2014/equipment/whip"
+    ]
   },
   {
     "index": "blowgun",
     "name": "Blowgun",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Ranged",
@@ -1418,8 +1255,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1430,24 +1266,20 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       },
       {
         "index": "loading",
-        "name": "Loading",
-        "url": "/api/2014/weapon-properties/loading"
+        "name": "Loading"
       }
-    ],
-    "url": "/api/2014/equipment/blowgun"
+    ]
   },
   {
     "index": "crossbow-hand",
     "name": "Crossbow, hand",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Ranged",
@@ -1460,8 +1292,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d6",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1472,29 +1303,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       },
       {
         "index": "light",
-        "name": "Light",
-        "url": "/api/2014/weapon-properties/light"
+        "name": "Light"
       },
       {
         "index": "loading",
-        "name": "Loading",
-        "url": "/api/2014/weapon-properties/loading"
+        "name": "Loading"
       }
-    ],
-    "url": "/api/2014/equipment/crossbow-hand"
+    ]
   },
   {
     "index": "crossbow-heavy",
     "name": "Crossbow, heavy",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Ranged",
@@ -1507,8 +1333,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d10",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1519,35 +1344,29 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       },
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "loading",
-        "name": "Loading",
-        "url": "/api/2014/weapon-properties/loading"
+        "name": "Loading"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
     ],
-    "image": "/api/images/equipment/crossbow-heavy.png",
-    "url": "/api/2014/equipment/crossbow-heavy"
+    "image": "/api/images/equipment/crossbow-heavy.png"
   },
   {
     "index": "longbow",
     "name": "Longbow",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Ranged",
@@ -1560,8 +1379,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "damage_dice": "1d8",
       "damage_type": {
         "index": "piercing",
-        "name": "Piercing",
-        "url": "/api/2014/damage-types/piercing"
+        "name": "Piercing"
       }
     },
     "range": {
@@ -1572,29 +1390,24 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "ammunition",
-        "name": "Ammunition",
-        "url": "/api/2014/weapon-properties/ammunition"
+        "name": "Ammunition"
       },
       {
         "index": "heavy",
-        "name": "Heavy",
-        "url": "/api/2014/weapon-properties/heavy"
+        "name": "Heavy"
       },
       {
         "index": "two-handed",
-        "name": "Two-Handed",
-        "url": "/api/2014/weapon-properties/two-handed"
+        "name": "Two-Handed"
       }
-    ],
-    "url": "/api/2014/equipment/longbow"
+    ]
   },
   {
     "index": "net",
     "name": "Net",
     "equipment_category": {
       "index": "weapon",
-      "name": "Weapon",
-      "url": "/api/2014/equipment-categories/weapon"
+      "name": "Weapon"
     },
     "weapon_category": "Martial",
     "weapon_range": "Ranged",
@@ -1611,13 +1424,11 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "properties": [
       {
         "index": "thrown",
-        "name": "Thrown",
-        "url": "/api/2014/weapon-properties/thrown"
+        "name": "Thrown"
       },
       {
         "index": "special",
-        "name": "Special",
-        "url": "/api/2014/weapon-properties/special"
+        "name": "Special"
       }
     ],
     "special": [
@@ -1626,16 +1437,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "throw_range": {
       "normal": 5,
       "long": 15
-    },
-    "url": "/api/2014/equipment/net"
+    }
   },
   {
     "index": "padded-armor",
     "name": "Padded Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Light",
     "armor_class": {
@@ -1648,16 +1457,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 5,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/padded-armor"
+    }
   },
   {
     "index": "leather-armor",
     "name": "Leather Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Light",
     "armor_class": {
@@ -1670,16 +1477,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 10,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/leather-armor"
+    }
   },
   {
     "index": "studded-leather-armor",
     "name": "Studded Leather Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Light",
     "armor_class": {
@@ -1692,16 +1497,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 45,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/studded-leather-armor"
+    }
   },
   {
     "index": "hide-armor",
     "name": "Hide Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Medium",
     "armor_class": {
@@ -1715,16 +1518,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 10,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/hide-armor"
+    }
   },
   {
     "index": "chain-shirt",
     "name": "Chain Shirt",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Medium",
     "armor_class": {
@@ -1738,16 +1539,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 50,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/chain-shirt"
+    }
   },
   {
     "index": "scale-mail",
     "name": "Scale Mail",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Medium",
     "armor_class": {
@@ -1761,16 +1560,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 50,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/scale-mail"
+    }
   },
   {
     "index": "breastplate",
     "name": "Breastplate",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Medium",
     "armor_class": {
@@ -1784,16 +1581,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 400,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/breastplate"
+    }
   },
   {
     "index": "half-plate-armor",
     "name": "Half Plate Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Medium",
     "armor_class": {
@@ -1807,16 +1602,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 750,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/half-plate-armor"
+    }
   },
   {
     "index": "ring-mail",
     "name": "Ring Mail",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Heavy",
     "armor_class": {
@@ -1829,16 +1622,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 30,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/ring-mail"
+    }
   },
   {
     "index": "chain-mail",
     "name": "Chain Mail",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Heavy",
     "armor_class": {
@@ -1851,16 +1642,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 75,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/chain-mail"
+    }
   },
   {
     "index": "splint-armor",
     "name": "Splint Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Heavy",
     "armor_class": {
@@ -1873,16 +1662,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 200,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/splint-armor"
+    }
   },
   {
     "index": "plate-armor",
     "name": "Plate Armor",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Heavy",
     "armor_class": {
@@ -1895,16 +1682,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 1500,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/plate-armor"
+    }
   },
   {
     "index": "shield",
     "name": "Shield",
     "equipment_category": {
       "index": "armor",
-      "name": "Armor",
-      "url": "/api/2014/equipment-categories/armor"
+      "name": "Armor"
     },
     "armor_category": "Shield",
     "armor_class": {
@@ -1917,41 +1702,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "cost": {
       "quantity": 10,
       "unit": "gp"
-    },
-    "url": "/api/2014/equipment/shield"
+    }
   },
   {
     "index": "abacus",
     "name": "Abacus",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 2,
-    "url": "/api/2014/equipment/abacus"
+    "weight": 2
   },
   {
     "index": "acid-vial",
     "name": "Acid (vial)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 25,
@@ -1961,21 +1740,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "As an action, you can splash the contents of this vial onto a creature within 5 feet of you or throw the vial up to 20 feet, shattering it on impact. In either case, make a ranged attack against a creature or object, treating the acid as an improvised weapon.",
       "On a hit, the target takes 2d6 acid damage."
-    ],
-    "url": "/api/2014/equipment/acid-vial"
+    ]
   },
   {
     "index": "alchemists-fire-flask",
     "name": "Alchemist's fire (flask)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 50,
@@ -1986,21 +1762,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "As an action, you can throw this flask up to 20 feet, shattering it on impact. Make a ranged attack against a creature or object, treating the alchemist's fire as an improvised weapon.",
       "On a hit, the target takes 1d4 fire damage at the start of each of its turns. A creature can end this damage by using its action to make a DC 10 Dexterity check to extinguish the flames."
     ],
-    "weight": 1,
-    "url": "/api/2014/equipment/alchemists-fire-flask"
+    "weight": 1
   },
   {
     "index": "alms-box",
     "name": "Alms box",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -2009,42 +1782,36 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A small box for alms, typically found in a priest's pack."
-    ],
-    "url": "/api/2014/equipment/alms-box"
+    ]
   },
   {
     "index": "arrow",
     "name": "Arrow",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "ammunition",
-      "name": "Ammunition",
-      "url": "/api/2014/equipment-categories/ammunition"
+      "name": "Ammunition"
     },
     "quantity": 20,
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 1,
-    "url": "/api/2014/equipment/arrow"
+    "weight": 1
   },
   {
     "index": "block-of-incense",
     "name": "Block of incense",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -2053,42 +1820,36 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A block of incense, typically found in a priest's pack."
-    ],
-    "url": "/api/2014/equipment/block-of-incense"
+    ]
   },
   {
     "index": "blowgun-needle",
     "name": "Blowgun needle",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "ammunition",
-      "name": "Ammunition",
-      "url": "/api/2014/equipment-categories/ammunition"
+      "name": "Ammunition"
     },
     "quantity": 50,
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 1,
-    "url": "/api/2014/equipment/blowgun-needle"
+    "weight": 1
   },
   {
     "index": "censer",
     "name": "Censer",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -2097,63 +1858,54 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A censer, typically found in a priest's pack."
-    ],
-    "url": "/api/2014/equipment/censer"
+    ]
   },
   {
     "index": "crossbow-bolt",
     "name": "Crossbow bolt",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "ammunition",
-      "name": "Ammunition",
-      "url": "/api/2014/equipment-categories/ammunition"
+      "name": "Ammunition"
     },
     "quantity": 20,
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 1.5,
-    "url": "/api/2014/equipment/crossbow-bolt"
+    "weight": 1.5
   },
   {
     "index": "sling-bullet",
     "name": "Sling bullet",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "ammunition",
-      "name": "Ammunition",
-      "url": "/api/2014/equipment-categories/ammunition"
+      "name": "Ammunition"
     },
     "quantity": 20,
     "cost": {
       "quantity": 4,
       "unit": "cp"
     },
-    "weight": 1.5,
-    "url": "/api/2014/equipment/sling-bullet"
+    "weight": 1.5
   },
   {
     "index": "amulet",
     "name": "Amulet",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "holy-symbols",
-      "name": "Holy Symbols",
-      "url": "/api/2014/equipment-categories/holy-symbols"
+      "name": "Holy Symbols"
     },
     "cost": {
       "quantity": 5,
@@ -2163,21 +1915,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "A holy symbol is a representation of a god or pantheon. It might be an amulet depicting a symbol representing a deity, the same symbol carefully engraved or inlaid as an emblem on a shield, or a tiny box holding a fragment of a sacred relic.",
       "Appendix B lists the symbols commonly associated with many gods in the multiverse. A cleric or paladin can use a holy symbol as a spellcasting focus. To use the symbol in this way, the caster must hold it in hand, wear it visibly, or bear it on a shield."
-    ],
-    "url": "/api/2014/equipment/amulet"
+    ]
   },
   {
     "index": "antitoxin-vial",
     "name": "Antitoxin (vial)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 50,
@@ -2186,21 +1935,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A creature that drinks this vial of liquid gains advantage on saving throws against poison for 1 hour. It confers no benefit to undead or constructs."
-    ],
-    "url": "/api/2014/equipment/antitoxin-vial"
+    ]
   },
   {
     "index": "crystal",
     "name": "Crystal",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "arcane-foci",
-      "name": "Arcane Foci",
-      "url": "/api/2014/equipment-categories/arcane-foci"
+      "name": "Arcane Foci"
     },
     "cost": {
       "quantity": 10,
@@ -2209,21 +1955,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "An arcane focus is a special item--an orb, a crystal, a rod, a specially constructed staff, a wand-like length of wood, or some similar item--designed to channel the power of arcane spells. A sorcerer, warlock, or wizard can use such an item as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/crystal"
+    ]
   },
   {
     "index": "orb",
     "name": "Orb",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "arcane-foci",
-      "name": "Arcane Foci",
-      "url": "/api/2014/equipment-categories/arcane-foci"
+      "name": "Arcane Foci"
     },
     "cost": {
       "quantity": 20,
@@ -2232,21 +1975,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "An arcane focus is a special item--an orb, a crystal, a rod, a specially constructed staff, a wand-like length of wood, or some similar item--designed to channel the power of arcane spells. A sorcerer, warlock, or wizard can use such an item as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/orb"
+    ]
   },
   {
     "index": "rod",
     "name": "Rod",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "arcane-foci",
-      "name": "Arcane Foci",
-      "url": "/api/2014/equipment-categories/arcane-foci"
+      "name": "Arcane Foci"
     },
     "cost": {
       "quantity": 10,
@@ -2255,21 +1995,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "An arcane focus is a special item--an orb, a crystal, a rod, a specially constructed staff, a wand-like length of wood, or some similar item--designed to channel the power of arcane spells. A sorcerer, warlock, or wizard can use such an item as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/rod"
+    ]
   },
   {
     "index": "staff",
     "name": "Staff",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "arcane-foci",
-      "name": "Arcane Foci",
-      "url": "/api/2014/equipment-categories/arcane-foci"
+      "name": "Arcane Foci"
     },
     "cost": {
       "quantity": 5,
@@ -2278,21 +2015,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 4,
     "desc": [
       "An arcane focus is a special item--an orb, a crystal, a rod, a specially constructed staff, a wand-like length of wood, or some similar item--designed to channel the power of arcane spells. A sorcerer, warlock, or wizard can use such an item as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/staff"
+    ]
   },
   {
     "index": "wand",
     "name": "Wand",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "arcane-foci",
-      "name": "Arcane Foci",
-      "url": "/api/2014/equipment-categories/arcane-foci"
+      "name": "Arcane Foci"
     },
     "cost": {
       "quantity": 10,
@@ -2301,41 +2035,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "An arcane focus is a special item--an orb, a crystal, a rod, a specially constructed staff, a wand-like length of wood, or some similar item--designed to channel the power of arcane spells. A sorcerer, warlock, or wizard can use such an item as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/wand"
+    ]
   },
   {
     "index": "backpack",
     "name": "Backpack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 5,
-    "url": "/api/2014/equipment/backpack"
+    "weight": 5
   },
   {
     "index": "ball-bearings-bag-of-1000",
     "name": "Ball bearings (bag of 1,000)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -2347,121 +2075,103 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "A creature moving across the covered area must succeed on a DC 10 Dexterity saving throw or fall prone.",
       "A creature moving through the area at half speed doesn't need to make the save."
     ],
-    "image": "/api/images/equipment/ball-bearings-bag-of-1000.png",
-    "url": "/api/2014/equipment/ball-bearings-bag-of-1000"
+    "image": "/api/images/equipment/ball-bearings-bag-of-1000.png"
   },
   {
     "index": "barrel",
     "name": "Barrel",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 70,
-    "url": "/api/2014/equipment/barrel"
+    "weight": 70
   },
   {
     "index": "basket",
     "name": "Basket",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 4,
       "unit": "sp"
     },
-    "weight": 2,
-    "url": "/api/2014/equipment/basket"
+    "weight": 2
   },
   {
     "index": "bedroll",
     "name": "Bedroll",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 7,
-    "url": "/api/2014/equipment/bedroll"
+    "weight": 7
   },
   {
     "index": "bell",
     "name": "Bell",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/bell"
+    "weight": 0
   },
   {
     "index": "blanket",
     "name": "Blanket",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "sp"
     },
-    "weight": 3,
-    "url": "/api/2014/equipment/blanket"
+    "weight": 3
   },
   {
     "index": "block-and-tackle",
     "name": "Block and tackle",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -2470,21 +2180,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "A set of pulleys with a cable threaded through them and a hook to attach to objects, a block and tackle allows you to hoist up to four times the weight you can normally lift."
-    ],
-    "url": "/api/2014/equipment/block-and-tackle"
+    ]
   },
   {
     "index": "book",
     "name": "Book",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 25,
@@ -2493,61 +2200,52 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "A book might contain poetry, historical accounts, information pertaining to a particular field of lore, diagrams and notes on gnomish contraptions, or just about anything else that can be represented using text or pictures. A book of spells is a spellbook (described later in this section)."
-    ],
-    "url": "/api/2014/equipment/book"
+    ]
   },
   {
     "index": "bottle-glass",
     "name": "Bottle, glass",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 2,
-    "url": "/api/2014/equipment/bottle-glass"
+    "weight": 2
   },
   {
     "index": "bucket",
     "name": "Bucket",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "cp"
     },
-    "weight": 2,
-    "url": "/api/2014/equipment/bucket"
+    "weight": 2
   },
   {
     "index": "caltrops",
     "name": "Caltrops",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -2559,21 +2257,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "Any creature that enters the area must succeed on a DC 15 Dexterity saving throw or stop moving this turn and take 1 piercing damage.",
       "Taking this damage reduces the creature's walking speed by 10 feet until the creature regains at least 1 hit point.",
       "A creature moving through the area at half speed doesn't need to make the save."
-    ],
-    "url": "/api/2014/equipment/caltrops"
+    ]
   },
   {
     "index": "candle",
     "name": "Candle",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -2582,21 +2277,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "For 1 hour, a candle sheds bright light in a 5-foot radius and dim light for an additional 5 feet."
-    ],
-    "url": "/api/2014/equipment/candle"
+    ]
   },
   {
     "index": "case-crossbow-bolt",
     "name": "Case, crossbow bolt",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -2605,21 +2297,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "This wooden case can hold up to twenty crossbow bolts."
-    ],
-    "url": "/api/2014/equipment/case-crossbow-bolt"
+    ]
   },
   {
     "index": "case-map-or-scroll",
     "name": "Case, map or scroll",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -2628,21 +2317,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "This cylindrical leather case can hold up to ten rolled-up sheets of paper or five rolled-up sheets of parchment."
-    ],
-    "url": "/api/2014/equipment/case-map-or-scroll"
+    ]
   },
   {
     "index": "chain-10-feet",
     "name": "Chain (10 feet)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -2651,141 +2337,120 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 10,
     "desc": [
       "A chain has 10 hit points. It can be burst with a successful DC 20 Strength check."
-    ],
-    "url": "/api/2014/equipment/chain-10-feet"
+    ]
   },
   {
     "index": "chalk-1-piece",
     "name": "Chalk (1 piece)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "cp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/chalk-1-piece"
+    "weight": 0
   },
   {
     "index": "chest",
     "name": "Chest",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "gp"
     },
-    "weight": 25,
-    "url": "/api/2014/equipment/chest"
+    "weight": 25
   },
   {
     "index": "clothes-common",
     "name": "Clothes, common",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "sp"
     },
-    "weight": 3,
-    "url": "/api/2014/equipment/clothes-common"
+    "weight": 3
   },
   {
     "index": "clothes-costume",
     "name": "Clothes, costume",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "gp"
     },
-    "weight": 4,
-    "url": "/api/2014/equipment/clothes-costume"
+    "weight": 4
   },
   {
     "index": "clothes-fine",
     "name": "Clothes, fine",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 15,
       "unit": "gp"
     },
-    "weight": 6,
-    "url": "/api/2014/equipment/clothes-fine"
+    "weight": 6
   },
   {
     "index": "clothes-travelers",
     "name": "Clothes, traveler's",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 4,
-    "url": "/api/2014/equipment/clothes-travelers"
+    "weight": 4
   },
   {
     "index": "component-pouch",
     "name": "Component pouch",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 25,
@@ -2794,21 +2459,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "A component pouch is a small, watertight leather belt pouch that has compartments to hold all the material components and other special items you need to cast your spells, except for those components that have a specific cost (as indicated in a spell's description)."
-    ],
-    "url": "/api/2014/equipment/component-pouch"
+    ]
   },
   {
     "index": "crowbar",
     "name": "Crowbar",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
@@ -2817,21 +2479,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "Using a crowbar grants advantage to Strength checks where the crowbar's leverage can be applied."
-    ],
-    "url": "/api/2014/equipment/crowbar"
+    ]
   },
   {
     "index": "sprig-of-mistletoe",
     "name": "Sprig of mistletoe",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "druidic-foci",
-      "name": "Druidic Foci",
-      "url": "/api/2014/equipment-categories/druidic-foci"
+      "name": "Druidic Foci"
     },
     "cost": {
       "quantity": 1,
@@ -2840,21 +2499,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A druidic focus might be a sprig of mistletoe or holly, a wand or scepter made of yew or another special wood, a staff drawn whole out of a living tree, or a totem object incorporating feathers, fur, bones, and teeth from sacred animals. A druid can use such an object as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/sprig-of-mistletoe"
+    ]
   },
   {
     "index": "totem",
     "name": "Totem",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "druidic-foci",
-      "name": "Druidic Foci",
-      "url": "/api/2014/equipment-categories/druidic-foci"
+      "name": "Druidic Foci"
     },
     "cost": {
       "quantity": 1,
@@ -2863,21 +2519,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A druidic focus might be a sprig of mistletoe or holly, a wand or scepter made of yew or another special wood, a staff drawn whole out of a living tree, or a totem object incorporating feathers, fur, bones, and teeth from sacred animals. A druid can use such an object as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/totem"
+    ]
   },
   {
     "index": "wooden-staff",
     "name": "Wooden staff",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "druidic-foci",
-      "name": "Druidic Foci",
-      "url": "/api/2014/equipment-categories/druidic-foci"
+      "name": "Druidic Foci"
     },
     "cost": {
       "quantity": 5,
@@ -2886,21 +2539,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 4,
     "desc": [
       "A druidic focus might be a sprig of mistletoe or holly, a wand or scepter made of yew or another special wood, a staff drawn whole out of a living tree, or a totem object incorporating feathers, fur, bones, and teeth from sacred animals. A druid can use such an object as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/wooden-staff"
+    ]
   },
   {
     "index": "yew-wand",
     "name": "Yew wand",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "druidic-foci",
-      "name": "Druidic Foci",
-      "url": "/api/2014/equipment-categories/druidic-foci"
+      "name": "Druidic Foci"
     },
     "cost": {
       "quantity": 10,
@@ -2909,21 +2559,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "A druidic focus might be a sprig of mistletoe or holly, a wand or scepter made of yew or another special wood, a staff drawn whole out of a living tree, or a totem object incorporating feathers, fur, bones, and teeth from sacred animals. A druid can use such an object as a spellcasting focus."
-    ],
-    "url": "/api/2014/equipment/yew-wand"
+    ]
   },
   {
     "index": "emblem",
     "name": "Emblem",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "holy-symbols",
-      "name": "Holy Symbols",
-      "url": "/api/2014/equipment-categories/holy-symbols"
+      "name": "Holy Symbols"
     },
     "cost": {
       "quantity": 5,
@@ -2933,21 +2580,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "A holy symbol is a representation of a god or pantheon. It might be an amulet depicting a symbol representing a deity, the same symbol carefully engraved or inlaid as an emblem on a shield, or a tiny box holding a fragment of a sacred relic.",
       "Appendix B lists the symbols commonly associated with many gods in the multiverse. A cleric or paladin can use a holy symbol as a spellcasting focus. To use the symbol in this way, the caster must hold it in hand, wear it visibly, or bear it on a shield."
-    ],
-    "url": "/api/2014/equipment/emblem"
+    ]
   },
   {
     "index": "fishing-tackle",
     "name": "Fishing tackle",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -2956,101 +2600,86 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 4,
     "desc": [
       "This kit includes a wooden rod, silken line, corkwood bobbers, steel hooks, lead sinkers, velvet lures, and narrow netting."
-    ],
-    "url": "/api/2014/equipment/fishing-tackle"
+    ]
   },
   {
     "index": "flask-or-tankard",
     "name": "Flask or tankard",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "cp"
     },
-    "weight": 1,
-    "url": "/api/2014/equipment/flask-or-tankard"
+    "weight": 1
   },
   {
     "index": "grappling-hook",
     "name": "Grappling hook",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 4,
-    "url": "/api/2014/equipment/grappling-hook"
+    "weight": 4
   },
   {
     "index": "hammer",
     "name": "Hammer",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 3,
-    "url": "/api/2014/equipment/hammer"
+    "weight": 3
   },
   {
     "index": "hammer-sledge",
     "name": "Hammer, sledge",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 10,
-    "url": "/api/2014/equipment/hammer-sledge"
+    "weight": 10
   },
   {
     "index": "holy-water-flask",
     "name": "Holy water (flask)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 25,
@@ -3062,41 +2691,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "If the target is a fiend or undead, it takes 2d6 radiant damage.",
       "A cleric or paladin may create holy water by performing a special ritual.",
       "The ritual takes 1 hour to perform, uses 25 gp worth of powdered silver, and requires the caster to expend a 1st-level spell slot."
-    ],
-    "url": "/api/2014/equipment/holy-water-flask"
+    ]
   },
   {
     "index": "hourglass",
     "name": "Hourglass",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 25,
       "unit": "gp"
     },
-    "weight": 1,
-    "url": "/api/2014/equipment/hourglass"
+    "weight": 1
   },
   {
     "index": "hunting-trap",
     "name": "Hunting trap",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -3107,81 +2730,69 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "A creature that steps on the plate must succeed on a DC 13 Dexterity saving throw or take 1d4 piercing damage and stop moving. Thereafter, until the creature breaks free of the trap, its movement is limited by the length of the chain (typically 3 feet long).",
       "A creature can use its action to make a DC 13 Strength check, freeing itself or another creature within its reach on a success. Each failed check deals 1 piercing damage to the trapped creature."
     ],
-    "weight": 25,
-    "url": "/api/2014/equipment/hunting-trap"
+    "weight": 25
   },
   {
     "index": "ink-1-ounce-bottle",
     "name": "Ink (1 ounce bottle)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 10,
       "unit": "gp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/ink-1-ounce-bottle"
+    "weight": 0
   },
   {
     "index": "ink-pen",
     "name": "Ink pen",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "cp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/ink-pen"
+    "weight": 0
   },
   {
     "index": "jug-or-pitcher",
     "name": "Jug or pitcher",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "cp"
     },
-    "weight": 4,
-    "url": "/api/2014/equipment/jug-or-pitcher"
+    "weight": 4
   },
   {
     "index": "climbers-kit",
     "name": "Climber's Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 25,
@@ -3190,21 +2801,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 12,
     "desc": [
       "A climber's kit includes special pitons, boot tips, gloves, and a harness. You can use the climber's kit as an action to anchor yourself; when you do, you can't fall more than 25 feet from the point where you anchored yourself, and you can't climb more than 25 feet away from that point without undoing the anchor."
-    ],
-    "url": "/api/2014/equipment/climbers-kit"
+    ]
   },
   {
     "index": "disguise-kit",
     "name": "Disguise Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 25,
@@ -3213,21 +2821,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "This pouch of cosmetics, hair dye, and small props lets you create disguises that change your physical appearance. Proficiency with this kit lets you add your proficiency bonus to any ability checks you make to create a visual disguise."
-    ],
-    "url": "/api/2014/equipment/disguise-kit"
+    ]
   },
   {
     "index": "forgery-kit",
     "name": "Forgery Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 15,
@@ -3236,21 +2841,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "This small box contains a variety of papers and parchments, pens and inks, seals and sealing wax, gold and silver leaf, and other supplies necessary to create convincing forgeries of physical documents. Proficiency with this kit lets you add your proficiency bonus to any ability checks you make to create a physical forgery of a document."
-    ],
-    "url": "/api/2014/equipment/forgery-kit"
+    ]
   },
   {
     "index": "herbalism-kit",
     "name": "Herbalism Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 5,
@@ -3259,21 +2861,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "This kit contains a variety of instruments such as clippers, mortar and pestle, and pouches and vials used by herbalists to create remedies and potions. Proficiency with this kit lets you add your proficiency bonus to any ability checks you make to identify or apply herbs. Also, proficiency with this kit is required to create antitoxin and potions of healing."
-    ],
-    "url": "/api/2014/equipment/herbalism-kit"
+    ]
   },
   {
     "index": "healers-kit",
     "name": "Healer's Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 5,
@@ -3282,21 +2881,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "This kit is a leather pouch containing bandages, salves, and splints. The kit has ten uses. As an action, you can expend one use of the kit to stabilize a creature that has 0 hit points, without needing to make a Wisdom (Medicine) check."
-    ],
-    "url": "/api/2014/equipment/healers-kit"
+    ]
   },
   {
     "index": "mess-kit",
     "name": "Mess Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 2,
@@ -3305,21 +2901,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "This tin box contains a cup and simple cutlery. The box clamps together, and one side can be used as a cooking pan and the other as a plate or shallow bowl."
-    ],
-    "url": "/api/2014/equipment/mess-kit"
+    ]
   },
   {
     "index": "poisoners-kit",
     "name": "Poisoner's Kit",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "kits",
-      "name": "Kits",
-      "url": "/api/2014/equipment-categories/kits"
+      "name": "Kits"
     },
     "cost": {
       "quantity": 50,
@@ -3328,41 +2921,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "A poisoner's kit includes the vials, chemicals, and other equipment necessary for the creation of poisons. Proficiency with this kit lets you add your proficiency bonus to any ability checks you make to craft or use poisons."
-    ],
-    "url": "/api/2014/equipment/poisoners-kit"
+    ]
   },
   {
     "index": "ladder-10-foot",
     "name": "Ladder (10-foot)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "sp"
     },
-    "weight": 25,
-    "url": "/api/2014/equipment/ladder-10-foot"
+    "weight": 25
   },
   {
     "index": "lamp",
     "name": "Lamp",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -3371,21 +2958,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "A lamp casts bright light in a 15-foot radius and dim light for an additional 30 feet. Once lit, it burns for 6 hours on a flask (1 pint) of oil."
-    ],
-    "url": "/api/2014/equipment/lamp"
+    ]
   },
   {
     "index": "lantern-bullseye",
     "name": "Lantern, bullseye",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 10,
@@ -3394,21 +2978,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "A bullseye lantern casts bright light in a 60-foot cone and dim light for an additional 60 feet. Once lit, it burns for 6 hours on a flask (1 pint) of oil."
-    ],
-    "url": "/api/2014/equipment/lantern-bullseye"
+    ]
   },
   {
     "index": "lantern-hooded",
     "name": "Lantern, hooded",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -3417,21 +2998,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "A hooded lantern casts bright light in a 30-foot radius and dim light for an additional 30 feet. Once lit, it burns for 6 hours on a flask (1 pint) of oil. As an action, you can lower the hood, reducing the light to dim light in a 5-foot radius."
-    ],
-    "url": "/api/2014/equipment/lantern-hooded"
+    ]
   },
   {
     "index": "little-bag-of-sand",
     "name": "Little bag of sand",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -3440,21 +3018,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A small bag of sand, typically found in a scholar's pack."
-    ],
-    "url": "/api/2014/equipment/little-bag-of-sand"
+    ]
   },
   {
     "index": "lock",
     "name": "Lock",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 10,
@@ -3463,21 +3038,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "A key is provided with the lock. Without the key, a creature proficient with thieves' tools can pick this lock with a successful DC 15 Dexterity check. Your GM may decide that better locks are available for higher prices."
-    ],
-    "url": "/api/2014/equipment/lock"
+    ]
   },
   {
     "index": "magnifying-glass",
     "name": "Magnifying glass",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 100,
@@ -3487,21 +3059,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "This lens allows a closer look at small objects. It is also useful as a substitute for flint and steel when starting fires. Lighting a fire with a magnifying glass requires light as bright as sunlight to focus, tinder to ignite, and about 5 minutes for the fire to ignite.",
       "A magnifying glass grants advantage on any ability check made to appraise or inspect an item that is small or highly detailed."
-    ],
-    "url": "/api/2014/equipment/magnifying-glass"
+    ]
   },
   {
     "index": "manacles",
     "name": "Manacles",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
@@ -3511,41 +3080,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "These metal restraints can bind a Small or Medium creature. Escaping the manacles requires a successful DC 20 Dexterity check. Breaking them requires a successful DC 20 Strength check.",
       "Each set of manacles comes with one key. Without the key, a creature proficient with thieves' tools can pick the manacles' lock with a successful DC 15 Dexterity check. Manacles have 15 hit points."
-    ],
-    "url": "/api/2014/equipment/manacles"
+    ]
   },
   {
     "index": "mirror-steel",
     "name": "Mirror, steel",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "gp"
     },
-    "weight": 0.5,
-    "url": "/api/2014/equipment/mirror-steel"
+    "weight": 0.5
   },
   {
     "index": "oil-flask",
     "name": "Oil (flask)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -3558,121 +3121,103 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "On a hit, the target is covered in oil. If the target takes any fire damage before the oil dries (after 1 minute), the target takes an additional 5 fire damage from the burning oil.",
       "You can also pour a flask of oil on the ground to cover a 5-foot-square area, provided that the surface is level.",
       "If lit, the oil burns for 2 rounds and deals 5 fire damage to any creature that enters the area or ends its turn in the area. A creature can take this damage only once per turn."
-    ],
-    "url": "/api/2014/equipment/oil-flask"
+    ]
   },
   {
     "index": "paper-one-sheet",
     "name": "Paper (one sheet)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "sp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/paper-one-sheet"
+    "weight": 0
   },
   {
     "index": "parchment-one-sheet",
     "name": "Parchment (one sheet)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "sp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/parchment-one-sheet"
+    "weight": 0
   },
   {
     "index": "perfume-vial",
     "name": "Perfume (vial)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "gp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/perfume-vial"
+    "weight": 0
   },
   {
     "index": "pick-miners",
     "name": "Pick, miner's",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 10,
-    "url": "/api/2014/equipment/pick-miners"
+    "weight": 10
   },
   {
     "index": "piton",
     "name": "Piton",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "cp"
     },
-    "weight": 0.25,
-    "url": "/api/2014/equipment/piton"
+    "weight": 0.25
   },
   {
     "index": "poison-basic-vial",
     "name": "Poison, basic (vial)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 100,
@@ -3681,61 +3226,52 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "You can use the poison in this vial to coat one slashing or piercing weapon or up to three pieces of ammunition. Applying the poison takes an action. A creature hit by the poisoned weapon or ammunition must make a DC 10 Constitution saving throw or take 1d4 poison damage. Once applied, the poison retains potency for 1 minute before drying."
-    ],
-    "url": "/api/2014/equipment/poison-basic-vial"
+    ]
   },
   {
     "index": "pole-10-foot",
     "name": "Pole (10-foot)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "cp"
     },
-    "weight": 7,
-    "url": "/api/2014/equipment/pole-10-foot"
+    "weight": 7
   },
   {
     "index": "pot-iron",
     "name": "Pot, iron",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 10,
-    "url": "/api/2014/equipment/pot-iron"
+    "weight": 10
   },
   {
     "index": "pouch",
     "name": "Pouch",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -3744,21 +3280,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "A cloth or leather pouch can hold up to 20 sling bullets or 50 blowgun needles, among other things. A compartmentalized pouch for holding spell components is called a component pouch (described earlier in this section)."
-    ],
-    "url": "/api/2014/equipment/pouch"
+    ]
   },
   {
     "index": "quiver",
     "name": "Quiver",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -3767,21 +3300,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "A quiver can hold up to 20 arrows."
-    ],
-    "url": "/api/2014/equipment/quiver"
+    ]
   },
   {
     "index": "ram-portable",
     "name": "Ram, portable",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 4,
@@ -3790,21 +3320,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 35,
     "desc": [
       "You can use a portable ram to break down doors. When doing so, you gain a +4 bonus on the Strength check. One other character can help you use the ram, giving you advantage on this check."
-    ],
-    "url": "/api/2014/equipment/ram-portable"
+    ]
   },
   {
     "index": "rations-1-day",
     "name": "Rations (1 day)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -3813,21 +3340,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "Rations consist of dry foods suitable for extended travel, including jerky, dried fruit, hardtack, and nuts."
-    ],
-    "url": "/api/2014/equipment/rations-1-day"
+    ]
   },
   {
     "index": "reliquary",
     "name": "Reliquary",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "holy-symbols",
-      "name": "Holy Symbols",
-      "url": "/api/2014/equipment-categories/holy-symbols"
+      "name": "Holy Symbols"
     },
     "cost": {
       "quantity": 5,
@@ -3837,41 +3361,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "A holy symbol is a representation of a god or pantheon. It might be an amulet depicting a symbol representing a deity, the same symbol carefully engraved or inlaid as an emblem on a shield, or a tiny box holding a fragment of a sacred relic.",
       "Appendix B lists the symbols commonly associated with many gods in the multiverse. A cleric or paladin can use a holy symbol as a spellcasting focus. To use the symbol in this way, the caster must hold it in hand, wear it visibly, or bear it on a shield."
-    ],
-    "url": "/api/2014/equipment/reliquary"
+    ]
   },
   {
     "index": "robes",
     "name": "Robes",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 4,
-    "url": "/api/2014/equipment/robes"
+    "weight": 4
   },
   {
     "index": "rope-hempen-50-feet",
     "name": "Rope, hempen (50 feet)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -3880,21 +3398,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 10,
     "desc": [
       "Rope, whether made of hemp or silk, has 2 hit points and can be burst with a DC 17 Strength check."
-    ],
-    "url": "/api/2014/equipment/rope-hempen-50-feet"
+    ]
   },
   {
     "index": "rope-silk-50-feet",
     "name": "Rope, silk (50 feet)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 10,
@@ -3903,41 +3418,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "Rope, whether made of hemp or silk, has 2 hit points and can be burst with a DC 17 Strength check."
-    ],
-    "url": "/api/2014/equipment/rope-silk-50-feet"
+    ]
   },
   {
     "index": "sack",
     "name": "Sack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "cp"
     },
-    "weight": 0.5,
-    "url": "/api/2014/equipment/sack"
+    "weight": 0.5
   },
   {
     "index": "scale-merchants",
     "name": "Scale, merchant's",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -3946,101 +3455,86 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "A scale includes a small balance, pans, and a suitable assortment of weights up to 2 pounds. With it, you can measure the exact weight of small objects, such as raw precious metals or trade goods, to help determine their worth."
-    ],
-    "url": "/api/2014/equipment/scale-merchants"
+    ]
   },
   {
     "index": "sealing-wax",
     "name": "Sealing wax",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "sp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/sealing-wax"
+    "weight": 0
   },
   {
     "index": "shovel",
     "name": "Shovel",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 5,
-    "url": "/api/2014/equipment/shovel"
+    "weight": 5
   },
   {
     "index": "signal-whistle",
     "name": "Signal whistle",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "cp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/signal-whistle"
+    "weight": 0
   },
   {
     "index": "signet-ring",
     "name": "Signet ring",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
       "unit": "gp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/signet-ring"
+    "weight": 0
   },
   {
     "index": "small-knife",
     "name": "Small knife",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -4049,41 +3543,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A small knife, typically found in a scholar's pack."
-    ],
-    "url": "/api/2014/equipment/small-knife"
+    ]
   },
   {
     "index": "soap",
     "name": "Soap",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "cp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/soap"
+    "weight": 0
   },
   {
     "index": "spellbook",
     "name": "Spellbook",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 50,
@@ -4092,41 +3580,35 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "Essential for wizards, a spellbook is a leather-bound tome with 100 blank vellum pages suitable for recording spells."
-    ],
-    "url": "/api/2014/equipment/spellbook"
+    ]
   },
   {
     "index": "spike-iron",
     "name": "Spike, iron",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "sp"
     },
-    "weight": 5,
-    "url": "/api/2014/equipment/spike-iron"
+    "weight": 5
   },
   {
     "index": "spyglass",
     "name": "Spyglass",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1000,
@@ -4135,21 +3617,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "Objects viewed through a spyglass are magnified to twice their size."
-    ],
-    "url": "/api/2014/equipment/spyglass"
+    ]
   },
   {
     "index": "string-10-feet",
     "name": "String (10 feet)",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -4158,21 +3637,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "A 10-foot length of string, typically found in a burglar's pack."
-    ],
-    "url": "/api/2014/equipment/string-10-feet"
+    ]
   },
   {
     "index": "tent-two-person",
     "name": "Tent, two-person",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
@@ -4181,21 +3657,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 20,
     "desc": [
       "A simple and portable canvas shelter, a tent sleeps two."
-    ],
-    "url": "/api/2014/equipment/tent-two-person"
+    ]
   },
   {
     "index": "tinderbox",
     "name": "Tinderbox",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 5,
@@ -4205,21 +3678,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "This small container holds flint, fire steel, and tinder (usually dry cloth soaked in light oil) used to kindle a fire. Using it to light a torch--or anything else with abundant, exposed fuel--takes an action.",
       "Lighting any other fire takes 1 minute."
-    ],
-    "url": "/api/2014/equipment/tinderbox"
+    ]
   },
   {
     "index": "torch",
     "name": "Torch",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
@@ -4228,21 +3698,18 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "A torch burns for 1 hour, providing bright light in a 20-foot radius and dim light for an additional 20 feet. If you make a melee attack with a burning torch and hit, it deals 1 fire damage."
-    ],
-    "url": "/api/2014/equipment/torch"
+    ]
   },
   {
     "index": "vestments",
     "name": "Vestments",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 0,
@@ -4251,81 +3718,69 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "Religious clothing, typically found in a priest's pack."
-    ],
-    "url": "/api/2014/equipment/vestments"
+    ]
   },
   {
     "index": "vial",
     "name": "Vial",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "gp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/vial"
+    "weight": 0
   },
   {
     "index": "waterskin",
     "name": "Waterskin",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 2,
       "unit": "sp"
     },
-    "weight": 5,
-    "url": "/api/2014/equipment/waterskin"
+    "weight": 5
   },
   {
     "index": "whetstone",
     "name": "Whetstone",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "standard-gear",
-      "name": "Standard Gear",
-      "url": "/api/2014/equipment-categories/standard-gear"
+      "name": "Standard Gear"
     },
     "cost": {
       "quantity": 1,
       "unit": "cp"
     },
-    "weight": 1,
-    "url": "/api/2014/equipment/whetstone"
+    "weight": 1
   },
   {
     "index": "burglars-pack",
     "name": "Burglar's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 16,
@@ -4335,130 +3790,113 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "backpack",
-          "name": "Backpack",
-          "url": "/api/2014/equipment/backpack"
+          "name": "Backpack"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "ball-bearings-bag-of-1000",
-          "name": "Ball bearings (bag of 1,000)",
-          "url": "/api/2014/equipment/ball-bearings-bag-of-1000"
+          "name": "Ball bearings (bag of 1,000)"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "string-10-feet",
-          "name": "String (10 feet)",
-          "url": "/api/2014/equipment/string-10-feet"
+          "name": "String (10 feet)"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "bell",
-          "name": "Bell",
-          "url": "/api/2014/equipment/bell"
+          "name": "Bell"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "candle",
-          "name": "Candle",
-          "url": "/api/2014/equipment/candle"
+          "name": "Candle"
         },
         "quantity": 5
       },
       {
         "item": {
           "index": "crowbar",
-          "name": "Crowbar",
-          "url": "/api/2014/equipment/crowbar"
+          "name": "Crowbar"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "hammer",
-          "name": "Hammer",
-          "url": "/api/2014/equipment/hammer"
+          "name": "Hammer"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "piton",
-          "name": "Piton",
-          "url": "/api/2014/equipment/piton"
+          "name": "Piton"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "lantern-hooded",
-          "name": "Lantern, hooded",
-          "url": "/api/2014/equipment/lantern-hooded"
+          "name": "Lantern, hooded"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "oil-flask",
-          "name": "Oil (flask)",
-          "url": "/api/2014/equipment/oil-flask"
+          "name": "Oil (flask)"
         },
         "quantity": 2
       },
       {
         "item": {
           "index": "rations-1-day",
-          "name": "Rations (1 day)",
-          "url": "/api/2014/equipment/rations-1-day"
+          "name": "Rations (1 day)"
         },
         "quantity": 5
       },
       {
         "item": {
           "index": "tinderbox",
-          "name": "Tinderbox",
-          "url": "/api/2014/equipment/tinderbox"
+          "name": "Tinderbox"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "waterskin",
-          "name": "Waterskin",
-          "url": "/api/2014/equipment/waterskin"
+          "name": "Waterskin"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "rope-hempen-50-feet",
-          "name": "Rope, hempen (50 feet)",
-          "url": "/api/2014/equipment/rope-hempen-50-feet"
+          "name": "Rope, hempen (50 feet)"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/burglars-pack"
+    ]
   },
   {
     "index": "diplomats-pack",
     "name": "Diplomat's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 39,
@@ -4468,106 +3906,92 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "chest",
-          "name": "Chest",
-          "url": "/api/2014/equipment/chest"
+          "name": "Chest"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "case-map-or-scroll",
-          "name": "Case, map or scroll",
-          "url": "/api/2014/equipment/case-map-or-scroll"
+          "name": "Case, map or scroll"
         },
         "quantity": 2
       },
       {
         "item": {
           "index": "clothes-fine",
-          "name": "Clothes, fine",
-          "url": "/api/2014/equipment/clothes-fine"
+          "name": "Clothes, fine"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "ink-1-ounce-bottle",
-          "name": "Ink (1 ounce bottle)",
-          "url": "/api/2014/equipment/ink-1-ounce-bottle"
+          "name": "Ink (1 ounce bottle)"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "ink-pen",
-          "name": "Ink pen",
-          "url": "/api/2014/equipment/ink-pen"
+          "name": "Ink pen"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "lamp",
-          "name": "Lamp",
-          "url": "/api/2014/equipment/lamp"
+          "name": "Lamp"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "oil-flask",
-          "name": "Oil (flask)",
-          "url": "/api/2014/equipment/oil-flask"
+          "name": "Oil (flask)"
         },
         "quantity": 2
       },
       {
         "item": {
           "index": "paper-one-sheet",
-          "name": "Paper (one sheet)",
-          "url": "/api/2014/equipment/paper-one-sheet"
+          "name": "Paper (one sheet)"
         },
         "quantity": 5
       },
       {
         "item": {
           "index": "perfume-vial",
-          "name": "Perfume (vial)",
-          "url": "/api/2014/equipment/perfume-vial"
+          "name": "Perfume (vial)"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "sealing-wax",
-          "name": "Sealing wax",
-          "url": "/api/2014/equipment/sealing-wax"
+          "name": "Sealing wax"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "soap",
-          "name": "Soap",
-          "url": "/api/2014/equipment/soap"
+          "name": "Soap"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/diplomats-pack"
+    ]
   },
   {
     "index": "dungeoneers-pack",
     "name": "Dungeoneer's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 12,
@@ -4577,90 +4001,78 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "backpack",
-          "name": "Backpack",
-          "url": "/api/2014/equipment/backpack"
+          "name": "Backpack"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "crowbar",
-          "name": "Crowbar",
-          "url": "/api/2014/equipment/crowbar"
+          "name": "Crowbar"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "hammer",
-          "name": "Hammer",
-          "url": "/api/2014/equipment/hammer"
+          "name": "Hammer"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "piton",
-          "name": "Piton",
-          "url": "/api/2014/equipment/piton"
+          "name": "Piton"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "torch",
-          "name": "Torch",
-          "url": "/api/2014/equipment/torch"
+          "name": "Torch"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "tinderbox",
-          "name": "Tinderbox",
-          "url": "/api/2014/equipment/tinderbox"
+          "name": "Tinderbox"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "rations-1-day",
-          "name": "Rations (1 day)",
-          "url": "/api/2014/equipment/rations-1-day"
+          "name": "Rations (1 day)"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "waterskin",
-          "name": "Waterskin",
-          "url": "/api/2014/equipment/waterskin"
+          "name": "Waterskin"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "rope-hempen-50-feet",
-          "name": "Rope, hempen (50 feet)",
-          "url": "/api/2014/equipment/rope-hempen-50-feet"
+          "name": "Rope, hempen (50 feet)"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/dungeoneers-pack"
+    ]
   },
   {
     "index": "entertainers-pack",
     "name": "Entertainer's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 40,
@@ -4670,74 +4082,64 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "backpack",
-          "name": "Backpack",
-          "url": "/api/2014/equipment/backpack"
+          "name": "Backpack"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "bedroll",
-          "name": "Bedroll",
-          "url": "/api/2014/equipment/bedroll"
+          "name": "Bedroll"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "clothes-costume",
-          "name": "Clothes, costume",
-          "url": "/api/2014/equipment/clothes-costume"
+          "name": "Clothes, costume"
         },
         "quantity": 2
       },
       {
         "item": {
           "index": "candle",
-          "name": "Candle",
-          "url": "/api/2014/equipment/candle"
+          "name": "Candle"
         },
         "quantity": 5
       },
       {
         "item": {
           "index": "rations-1-day",
-          "name": "Rations (1 day)",
-          "url": "/api/2014/equipment/rations-1-day"
+          "name": "Rations (1 day)"
         },
         "quantity": 5
       },
       {
         "item": {
           "index": "waterskin",
-          "name": "Waterskin",
-          "url": "/api/2014/equipment/waterskin"
+          "name": "Waterskin"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "disguise-kit",
-          "name": "Disguise Kit",
-          "url": "/api/2014/equipment/disguise-kit"
+          "name": "Disguise Kit"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/entertainers-pack"
+    ]
   },
   {
     "index": "explorers-pack",
     "name": "Explorer's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 10,
@@ -4747,82 +4149,71 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "backpack",
-          "name": "Backpack",
-          "url": "/api/2014/equipment/backpack"
+          "name": "Backpack"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "bedroll",
-          "name": "Bedroll",
-          "url": "/api/2014/equipment/bedroll"
+          "name": "Bedroll"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "mess-kit",
-          "name": "Mess Kit",
-          "url": "/api/2014/equipment/mess-kit"
+          "name": "Mess Kit"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "tinderbox",
-          "name": "Tinderbox",
-          "url": "/api/2014/equipment/tinderbox"
+          "name": "Tinderbox"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "torch",
-          "name": "Torch",
-          "url": "/api/2014/equipment/torch"
+          "name": "Torch"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "rations-1-day",
-          "name": "Rations (1 day)",
-          "url": "/api/2014/equipment/rations-1-day"
+          "name": "Rations (1 day)"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "waterskin",
-          "name": "Waterskin",
-          "url": "/api/2014/equipment/waterskin"
+          "name": "Waterskin"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "rope-hempen-50-feet",
-          "name": "Rope, hempen (50 feet)",
-          "url": "/api/2014/equipment/rope-hempen-50-feet"
+          "name": "Rope, hempen (50 feet)"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/explorers-pack"
+    ]
   },
   {
     "index": "priests-pack",
     "name": "Priest's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 19,
@@ -4832,98 +4223,85 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "backpack",
-          "name": "Backpack",
-          "url": "/api/2014/equipment/backpack"
+          "name": "Backpack"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "blanket",
-          "name": "Blanket",
-          "url": "/api/2014/equipment/blanket"
+          "name": "Blanket"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "candle",
-          "name": "Candle",
-          "url": "/api/2014/equipment/candle"
+          "name": "Candle"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "tinderbox",
-          "name": "Tinderbox",
-          "url": "/api/2014/equipment/tinderbox"
+          "name": "Tinderbox"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "rations-1-day",
-          "name": "Rations (1 day)",
-          "url": "/api/2014/equipment/rations-1-day"
+          "name": "Rations (1 day)"
         },
         "quantity": 2
       },
       {
         "item": {
           "index": "waterskin",
-          "name": "Waterskin",
-          "url": "/api/2014/equipment/waterskin"
+          "name": "Waterskin"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "alms-box",
-          "name": "Alms box",
-          "url": "/api/2014/equipment/alms-box"
+          "name": "Alms box"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "block-of-incense",
-          "name": "Block of incense",
-          "url": "/api/2014/equipment/block-of-incense"
+          "name": "Block of incense"
         },
         "quantity": 2
       },
       {
         "item": {
           "index": "censer",
-          "name": "Censer",
-          "url": "/api/2014/equipment/censer"
+          "name": "Censer"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "vestments",
-          "name": "Vestments",
-          "url": "/api/2014/equipment/vestments"
+          "name": "Vestments"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/priests-pack"
+    ]
   },
   {
     "index": "scholars-pack",
     "name": "Scholar's Pack",
     "equipment_category": {
       "index": "adventuring-gear",
-      "name": "Adventuring Gear",
-      "url": "/api/2014/equipment-categories/adventuring-gear"
+      "name": "Adventuring Gear"
     },
     "gear_category": {
       "index": "equipment-packs",
-      "name": "Equipment Packs",
-      "url": "/api/2014/equipment-categories/equipment-packs"
+      "name": "Equipment Packs"
     },
     "cost": {
       "quantity": 40,
@@ -4933,69 +4311,60 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       {
         "item": {
           "index": "backpack",
-          "name": "Backpack",
-          "url": "/api/2014/equipment/backpack"
+          "name": "Backpack"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "book",
-          "name": "Book",
-          "url": "/api/2014/equipment/book"
+          "name": "Book"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "ink-1-ounce-bottle",
-          "name": "Ink (1 ounce bottle)",
-          "url": "/api/2014/equipment/ink-1-ounce-bottle"
+          "name": "Ink (1 ounce bottle)"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "ink-pen",
-          "name": "Ink pen",
-          "url": "/api/2014/equipment/ink-pen"
+          "name": "Ink pen"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "parchment-one-sheet",
-          "name": "Parchment (one sheet)",
-          "url": "/api/2014/equipment/parchment-one-sheet"
+          "name": "Parchment (one sheet)"
         },
         "quantity": 10
       },
       {
         "item": {
           "index": "little-bag-of-sand",
-          "name": "Little bag of sand",
-          "url": "/api/2014/equipment/little-bag-of-sand"
+          "name": "Little bag of sand"
         },
         "quantity": 1
       },
       {
         "item": {
           "index": "small-knife",
-          "name": "Small knife",
-          "url": "/api/2014/equipment/small-knife"
+          "name": "Small knife"
         },
         "quantity": 1
       }
-    ],
-    "url": "/api/2014/equipment/scholars-pack"
+    ]
   },
   {
     "index": "alchemists-supplies",
     "name": "Alchemist's Supplies",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5005,16 +4374,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 8,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/alchemists-supplies"
+    ]
   },
   {
     "index": "brewers-supplies",
     "name": "Brewer's Supplies",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5024,16 +4391,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 9,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/brewers-supplies"
+    ]
   },
   {
     "index": "calligraphers-supplies",
     "name": "Calligrapher's Supplies",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5043,16 +4408,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/calligraphers-supplies"
+    ]
   },
   {
     "index": "carpenters-tools",
     "name": "Carpenter's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5062,16 +4425,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 6,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/carpenters-tools"
+    ]
   },
   {
     "index": "cartographers-tools",
     "name": "Cartographer's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5081,16 +4442,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 6,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/cartographers-tools"
+    ]
   },
   {
     "index": "cobblers-tools",
     "name": "Cobbler's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5100,16 +4459,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/cobblers-tools"
+    ]
   },
   {
     "index": "cooks-utensils",
     "name": "Cook's utensils",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5119,16 +4476,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 8,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/cooks-utensils"
+    ]
   },
   {
     "index": "glassblowers-tools",
     "name": "Glassblower's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5138,16 +4493,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/glassblowers-tools"
+    ]
   },
   {
     "index": "jewelers-tools",
     "name": "Jeweler's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5157,16 +4510,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/jewelers-tools"
+    ]
   },
   {
     "index": "leatherworkers-tools",
     "name": "Leatherworker's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5176,16 +4527,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/leatherworkers-tools"
+    ]
   },
   {
     "index": "masons-tools",
     "name": "Mason's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5195,16 +4544,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 8,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/masons-tools"
+    ]
   },
   {
     "index": "painters-supplies",
     "name": "Painter's Supplies",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5214,16 +4561,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/painters-supplies"
+    ]
   },
   {
     "index": "potters-tools",
     "name": "Potter's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5233,16 +4578,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/potters-tools"
+    ]
   },
   {
     "index": "smiths-tools",
     "name": "Smith's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5252,16 +4595,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 8,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/smiths-tools"
+    ]
   },
   {
     "index": "tinkers-tools",
     "name": "Tinker's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5271,16 +4612,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 10,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/tinkers-tools"
+    ]
   },
   {
     "index": "weavers-tools",
     "name": "Weaver's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5290,16 +4629,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/weavers-tools"
+    ]
   },
   {
     "index": "woodcarvers-tools",
     "name": "Woodcarver's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Artisan's Tools",
     "cost": {
@@ -5309,16 +4646,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 5,
     "desc": [
       "These special tools include the items needed to pursue a craft or trade. The table shows examples of the most common types of tools, each providing items related to a single craft. Proficiency with a set of artisan's tools lets you add your proficiency bonus to any ability checks you make using the tools in your craft. Each type of artisan's tools requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/woodcarvers-tools"
+    ]
   },
   {
     "index": "dice-set",
     "name": "Dice Set",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Gaming Sets",
     "cost": {
@@ -5328,16 +4663,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 0,
     "desc": [
       "This item encompasses a wide range of game pieces, including dice and decks of cards (for games such as Three-Dragon Ante). A few common examples appear on the Tools table, but other kinds of gaming sets exist. If you are proficient with a gaming set, you can add your proficiency bonus to ability checks you make to play a game with that set. Each type of gaming set requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/dice-set"
+    ]
   },
   {
     "index": "playing-card-set",
     "name": "Playing Card Set",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Gaming Sets",
     "cost": {
@@ -5348,16 +4681,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "This item encompasses a wide range of game pieces, including dice and decks of cards (for games such as Three-Dragon Ante). A few common examples appear on the Tools table, but other kinds of gaming sets exist. If you are proficient with a gaming set, you can add your proficiency bonus to ability checks you make to play a game with that set. Each type of gaming set requires a separate proficiency."
     ],
-    "image": "/api/images/equipment/playing-card-set.png",
-    "url": "/api/2014/equipment/playing-card-set"
+    "image": "/api/images/equipment/playing-card-set.png"
   },
   {
     "index": "bagpipes",
     "name": "Bagpipes",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5367,16 +4698,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 6,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/bagpipes"
+    ]
   },
   {
     "index": "drum",
     "name": "Drum",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5386,16 +4715,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 3,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/drum"
+    ]
   },
   {
     "index": "dulcimer",
     "name": "Dulcimer",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5406,16 +4733,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
     ],
-    "image": "/api/images/equipment/dulcimer.png",
-    "url": "/api/2014/equipment/dulcimer"
+    "image": "/api/images/equipment/dulcimer.png"
   },
   {
     "index": "flute",
     "name": "Flute",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5425,16 +4750,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/flute"
+    ]
   },
   {
     "index": "lute",
     "name": "Lute",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5444,16 +4767,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/lute"
+    ]
   },
   {
     "index": "lyre",
     "name": "Lyre",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5463,16 +4784,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/lyre"
+    ]
   },
   {
     "index": "horn",
     "name": "Horn",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5482,16 +4801,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/horn"
+    ]
   },
   {
     "index": "pan-flute",
     "name": "Pan flute",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5501,16 +4818,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/pan-flute"
+    ]
   },
   {
     "index": "shawm",
     "name": "Shawm",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5520,16 +4835,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/shawm"
+    ]
   },
   {
     "index": "viol",
     "name": "Viol",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Musical Instrument",
     "cost": {
@@ -5539,16 +4852,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "Several of the most common types of musical instruments are shown on the table as examples. If you have proficiency with a given musical instrument, you can add your proficiency bonus to any ability checks you make to play music with the instrument. A bard can use a musical instrument as a spellcasting focus. Each type of musical instrument requires a separate proficiency."
-    ],
-    "url": "/api/2014/equipment/viol"
+    ]
   },
   {
     "index": "navigators-tools",
     "name": "Navigator's Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Other Tools",
     "cost": {
@@ -5558,16 +4869,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 2,
     "desc": [
       "This set of instruments is used for navigation at sea. Proficiency with navigator's tools lets you chart a ship's course and follow navigation charts. In addition, these tools allow you to add your proficiency bonus to any ability check you make to avoid getting lost at sea."
-    ],
-    "url": "/api/2014/equipment/navigators-tools"
+    ]
   },
   {
     "index": "thieves-tools",
     "name": "Thieves' Tools",
     "equipment_category": {
       "index": "tools",
-      "name": "Tools",
-      "url": "/api/2014/equipment-categories/tools"
+      "name": "Tools"
     },
     "tool_category": "Other Tools",
     "cost": {
@@ -5577,16 +4886,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 1,
     "desc": [
       "This set of tools includes a small file, a set of lock picks, a small mirror mounted on a metal handle, a set of narrow-bladed scissors, and a pair of pliers. Proficiency with these tools lets you add your proficiency bonus to any ability checks you make to disarm traps or open locks."
-    ],
-    "url": "/api/2014/equipment/thieves-tools"
+    ]
   },
   {
     "index": "camel",
     "name": "Camel",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5597,16 +4904,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 50,
       "unit": "ft/round"
     },
-    "capacity": "480 lb.",
-    "url": "/api/2014/equipment/camel"
+    "capacity": "480 lb."
   },
   {
     "index": "donkey",
     "name": "Donkey",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5617,16 +4922,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 40,
       "unit": "ft/round"
     },
-    "capacity": "420 lb.",
-    "url": "/api/2014/equipment/donkey"
+    "capacity": "420 lb."
   },
   {
     "index": "mule",
     "name": "Mule",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5637,16 +4940,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 40,
       "unit": "ft/round"
     },
-    "capacity": "420 lb.",
-    "url": "/api/2014/equipment/mule"
+    "capacity": "420 lb."
   },
   {
     "index": "elephant",
     "name": "Elephant",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5657,16 +4958,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 40,
       "unit": "ft/round"
     },
-    "capacity": "1,320 lb.",
-    "url": "/api/2014/equipment/elephant"
+    "capacity": "1,320 lb."
   },
   {
     "index": "horse-draft",
     "name": "Horse, draft",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5677,16 +4976,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 40,
       "unit": "ft/round"
     },
-    "capacity": "540 lb.",
-    "url": "/api/2014/equipment/horse-draft"
+    "capacity": "540 lb."
   },
   {
     "index": "horse-riding",
     "name": "Horse, riding",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5697,16 +4994,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 60,
       "unit": "ft/round"
     },
-    "capacity": "480 lb.",
-    "url": "/api/2014/equipment/horse-riding"
+    "capacity": "480 lb."
   },
   {
     "index": "mastiff",
     "name": "Mastiff",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5717,16 +5012,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 40,
       "unit": "ft/round"
     },
-    "capacity": "195 lb.",
-    "url": "/api/2014/equipment/mastiff"
+    "capacity": "195 lb."
   },
   {
     "index": "pony",
     "name": "Pony",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5737,16 +5030,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 40,
       "unit": "ft/round"
     },
-    "capacity": "225 lb.",
-    "url": "/api/2014/equipment/pony"
+    "capacity": "225 lb."
   },
   {
     "index": "warhorse",
     "name": "Warhorse",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Mounts and Other Animals",
     "cost": {
@@ -5757,16 +5048,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
       "quantity": 60,
       "unit": "ft/round"
     },
-    "capacity": "540 lb.",
-    "url": "/api/2014/equipment/warhorse"
+    "capacity": "540 lb."
   },
   {
     "index": "barding-padded",
     "name": "Barding: Padded",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5776,16 +5065,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 16,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-padded"
+    ]
   },
   {
     "index": "barding-leather",
     "name": "Barding: Leather",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5795,16 +5082,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 20,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-leather"
+    ]
   },
   {
     "index": "barding-studded-leather",
     "name": "Barding: Studded Leather",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5814,16 +5099,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 26,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-studded-leather"
+    ]
   },
   {
     "index": "barding-hide",
     "name": "Barding: Hide",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5833,16 +5116,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 24,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-hide"
+    ]
   },
   {
     "index": "barding-chain-shirt",
     "name": "Barding: Chain shirt",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5852,16 +5133,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 40,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-chain-shirt"
+    ]
   },
   {
     "index": "barding-scale-mail",
     "name": "Barding: Scale mail",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5871,16 +5150,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 90,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-scale-mail"
+    ]
   },
   {
     "index": "barding-breastplate",
     "name": "Barding: Breastplate",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5890,16 +5167,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 40,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-breastplate"
+    ]
   },
   {
     "index": "barding-half-plate",
     "name": "Barding: Half plate",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5909,16 +5184,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 80,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-half-plate"
+    ]
   },
   {
     "index": "barding-ring-mail",
     "name": "Barding: Ring mail",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5928,16 +5201,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 80,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-ring-mail"
+    ]
   },
   {
     "index": "barding-chain-mail",
     "name": "Barding: Chain mail",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5947,16 +5218,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 110,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-chain-mail"
+    ]
   },
   {
     "index": "barding-splint",
     "name": "Barding: Splint",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5966,16 +5235,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 120,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-splint"
+    ]
   },
   {
     "index": "barding-plate",
     "name": "Barding: Plate",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -5985,96 +5252,84 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 130,
     "desc": [
       "Barding is armor designed to protect an animal's head, neck, chest, and body. Any type of armor shown on the Armor table can be purchased as barding. The cost is four times the equivalent armor made for humanoids, and it weighs twice as much."
-    ],
-    "url": "/api/2014/equipment/barding-plate"
+    ]
   },
   {
     "index": "bit-and-bridle",
     "name": "Bit and bridle",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 2,
       "unit": "gp"
     },
-    "weight": 1,
-    "url": "/api/2014/equipment/bit-and-bridle"
+    "weight": 1
   },
   {
     "index": "carriage",
     "name": "Carriage",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 100,
       "unit": "gp"
     },
-    "weight": 600,
-    "url": "/api/2014/equipment/carriage"
+    "weight": 600
   },
   {
     "index": "cart",
     "name": "Cart",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 15,
       "unit": "gp"
     },
-    "weight": 200,
-    "url": "/api/2014/equipment/cart"
+    "weight": 200
   },
   {
     "index": "chariot",
     "name": "Chariot",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 250,
       "unit": "gp"
     },
-    "weight": 100,
-    "url": "/api/2014/equipment/chariot"
+    "weight": 100
   },
   {
     "index": "animal-feed-1-day",
     "name": "Animal Feed (1 day)",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 5,
       "unit": "cp"
     },
-    "weight": 10,
-    "url": "/api/2014/equipment/animal-feed-1-day"
+    "weight": 10
   },
   {
     "index": "saddle-exotic",
     "name": "Saddle, Exotic",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -6084,16 +5339,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 50,
     "desc": [
       "An exotic saddle is required for riding any aquatic or flying mount."
-    ],
-    "url": "/api/2014/equipment/saddle-exotic"
+    ]
   },
   {
     "index": "saddle-military",
     "name": "Saddle, Military",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
@@ -6103,112 +5356,98 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "weight": 30,
     "desc": [
       "A military saddle braces the rider, helping you keep your seat on an active mount in battle. It gives you advantage on any check you make to remain mounted."
-    ],
-    "url": "/api/2014/equipment/saddle-military"
+    ]
   },
   {
     "index": "saddle-pack",
     "name": "Saddle, Pack",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 5,
       "unit": "gp"
     },
-    "weight": 15,
-    "url": "/api/2014/equipment/saddle-pack"
+    "weight": 15
   },
   {
     "index": "saddle-riding",
     "name": "Saddle, Riding",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 10,
       "unit": "gp"
     },
-    "weight": 25,
-    "url": "/api/2014/equipment/saddle-riding"
+    "weight": 25
   },
   {
     "index": "saddlebags",
     "name": "Saddlebags",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 4,
       "unit": "gp"
     },
-    "weight": 8,
-    "url": "/api/2014/equipment/saddlebags"
+    "weight": 8
   },
   {
     "index": "sled",
     "name": "Sled",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 20,
       "unit": "gp"
     },
-    "weight": 300,
-    "url": "/api/2014/equipment/sled"
+    "weight": 300
   },
   {
     "index": "stabling-1-day",
     "name": "Stabling (1 day)",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 5,
       "unit": "sp"
     },
-    "weight": 0,
-    "url": "/api/2014/equipment/stabling-1-day"
+    "weight": 0
   },
   {
     "index": "wagon",
     "name": "Wagon",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Tack, Harness, and Drawn Vehicles",
     "cost": {
       "quantity": 35,
       "unit": "gp"
     },
-    "weight": 400,
-    "url": "/api/2014/equipment/wagon"
+    "weight": 400
   },
   {
     "index": "galley",
     "name": "Galley",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Waterborne Vehicles",
     "cost": {
@@ -6218,16 +5457,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "speed": {
       "quantity": 4,
       "unit": "mph"
-    },
-    "url": "/api/2014/equipment/galley"
+    }
   },
   {
     "index": "keelboat",
     "name": "Keelboat",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Waterborne Vehicles",
     "cost": {
@@ -6240,16 +5477,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     },
     "desc": [
       "Keelboats and rowboats are used on lakes and rivers. If going downstream, add the speed of the current (typically 3 miles per hour) to the speed of the vehicle. These vehicles can't be rowed against any significant current, but they can be pulled upstream by draft animals on the shores. A rowboat weighs 100 pounds, in case adventurers carry it over land."
-    ],
-    "url": "/api/2014/equipment/keelboat"
+    ]
   },
   {
     "index": "longship",
     "name": "Longship",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Waterborne Vehicles",
     "cost": {
@@ -6259,16 +5494,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "speed": {
       "quantity": 3,
       "unit": "mph"
-    },
-    "url": "/api/2014/equipment/longship"
+    }
   },
   {
     "index": "rowboat",
     "name": "Rowboat",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Waterborne Vehicles",
     "cost": {
@@ -6281,16 +5514,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     },
     "desc": [
       "Keelboats and rowboats are used on lakes and rivers. If going downstream, add the speed of the current (typically 3 miles per hour) to the speed of the vehicle. These vehicles can't be rowed against any significant current, but they can be pulled upstream by draft animals on the shores. A rowboat weighs 100 pounds, in case adventurers carry it over land."
-    ],
-    "url": "/api/2014/equipment/rowboat"
+    ]
   },
   {
     "index": "sailing-ship",
     "name": "Sailing ship",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Waterborne Vehicles",
     "cost": {
@@ -6300,16 +5531,14 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "speed": {
       "quantity": 2,
       "unit": "mph"
-    },
-    "url": "/api/2014/equipment/sailing-ship"
+    }
   },
   {
     "index": "warship",
     "name": "Warship",
     "equipment_category": {
       "index": "mounts-and-vehicles",
-      "name": "Mounts and Vehicles",
-      "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+      "name": "Mounts and Vehicles"
     },
     "vehicle_category": "Waterborne Vehicles",
     "cost": {
@@ -6319,8 +5548,7 @@ export const EQUIPMENT_RAW = JSON.parse(String.raw`[
     "speed": {
       "quantity": 2.5,
       "unit": "mph"
-    },
-    "url": "/api/2014/equipment/warship"
+    }
   }
 ]`) as ReadonlyArray<SourceRow>;
 
@@ -6331,341 +5559,273 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "club",
-        "name": "Club",
-        "url": "/api/2014/equipment/club"
+        "name": "Club"
       },
       {
         "index": "dagger",
-        "name": "Dagger",
-        "url": "/api/2014/equipment/dagger"
+        "name": "Dagger"
       },
       {
         "index": "greatclub",
-        "name": "Greatclub",
-        "url": "/api/2014/equipment/greatclub"
+        "name": "Greatclub"
       },
       {
         "index": "handaxe",
-        "name": "Handaxe",
-        "url": "/api/2014/equipment/handaxe"
+        "name": "Handaxe"
       },
       {
         "index": "javelin",
-        "name": "Javelin",
-        "url": "/api/2014/equipment/javelin"
+        "name": "Javelin"
       },
       {
         "index": "light-hammer",
-        "name": "Light hammer",
-        "url": "/api/2014/equipment/light-hammer"
+        "name": "Light hammer"
       },
       {
         "index": "mace",
-        "name": "Mace",
-        "url": "/api/2014/equipment/mace"
+        "name": "Mace"
       },
       {
         "index": "quarterstaff",
-        "name": "Quarterstaff",
-        "url": "/api/2014/equipment/quarterstaff"
+        "name": "Quarterstaff"
       },
       {
         "index": "sickle",
-        "name": "Sickle",
-        "url": "/api/2014/equipment/sickle"
+        "name": "Sickle"
       },
       {
         "index": "spear",
-        "name": "Spear",
-        "url": "/api/2014/equipment/spear"
+        "name": "Spear"
       },
       {
         "index": "crossbow-light",
-        "name": "Crossbow, light",
-        "url": "/api/2014/equipment/crossbow-light"
+        "name": "Crossbow, light"
       },
       {
         "index": "dart",
-        "name": "Dart",
-        "url": "/api/2014/equipment/dart"
+        "name": "Dart"
       },
       {
         "index": "shortbow",
-        "name": "Shortbow",
-        "url": "/api/2014/equipment/shortbow"
+        "name": "Shortbow"
       },
       {
         "index": "sling",
-        "name": "Sling",
-        "url": "/api/2014/equipment/sling"
+        "name": "Sling"
       },
       {
         "index": "battleaxe",
-        "name": "Battleaxe",
-        "url": "/api/2014/equipment/battleaxe"
+        "name": "Battleaxe"
       },
       {
         "index": "flail",
-        "name": "Flail",
-        "url": "/api/2014/equipment/flail"
+        "name": "Flail"
       },
       {
         "index": "glaive",
-        "name": "Glaive",
-        "url": "/api/2014/equipment/glaive"
+        "name": "Glaive"
       },
       {
         "index": "greataxe",
-        "name": "Greataxe",
-        "url": "/api/2014/equipment/greataxe"
+        "name": "Greataxe"
       },
       {
         "index": "greatsword",
-        "name": "Greatsword",
-        "url": "/api/2014/equipment/greatsword"
+        "name": "Greatsword"
       },
       {
         "index": "halberd",
-        "name": "Halberd",
-        "url": "/api/2014/equipment/halberd"
+        "name": "Halberd"
       },
       {
         "index": "lance",
-        "name": "Lance",
-        "url": "/api/2014/equipment/lance"
+        "name": "Lance"
       },
       {
         "index": "longsword",
-        "name": "Longsword",
-        "url": "/api/2014/equipment/longsword"
+        "name": "Longsword"
       },
       {
         "index": "maul",
-        "name": "Maul",
-        "url": "/api/2014/equipment/maul"
+        "name": "Maul"
       },
       {
         "index": "morningstar",
-        "name": "Morningstar",
-        "url": "/api/2014/equipment/morningstar"
+        "name": "Morningstar"
       },
       {
         "index": "pike",
-        "name": "Pike",
-        "url": "/api/2014/equipment/pike"
+        "name": "Pike"
       },
       {
         "index": "rapier",
-        "name": "Rapier",
-        "url": "/api/2014/equipment/rapier"
+        "name": "Rapier"
       },
       {
         "index": "scimitar",
-        "name": "Scimitar",
-        "url": "/api/2014/equipment/scimitar"
+        "name": "Scimitar"
       },
       {
         "index": "shortsword",
-        "name": "Shortsword",
-        "url": "/api/2014/equipment/shortsword"
+        "name": "Shortsword"
       },
       {
         "index": "trident",
-        "name": "Trident",
-        "url": "/api/2014/equipment/trident"
+        "name": "Trident"
       },
       {
         "index": "war-pick",
-        "name": "War pick",
-        "url": "/api/2014/equipment/war-pick"
+        "name": "War pick"
       },
       {
         "index": "warhammer",
-        "name": "Warhammer",
-        "url": "/api/2014/equipment/warhammer"
+        "name": "Warhammer"
       },
       {
         "index": "whip",
-        "name": "Whip",
-        "url": "/api/2014/equipment/whip"
+        "name": "Whip"
       },
       {
         "index": "blowgun",
-        "name": "Blowgun",
-        "url": "/api/2014/equipment/blowgun"
+        "name": "Blowgun"
       },
       {
         "index": "crossbow-hand",
-        "name": "Crossbow, hand",
-        "url": "/api/2014/equipment/crossbow-hand"
+        "name": "Crossbow, hand"
       },
       {
         "index": "crossbow-heavy",
-        "name": "Crossbow, heavy",
-        "url": "/api/2014/equipment/crossbow-heavy"
+        "name": "Crossbow, heavy"
       },
       {
         "index": "longbow",
-        "name": "Longbow",
-        "url": "/api/2014/equipment/longbow"
+        "name": "Longbow"
       },
       {
         "index": "net",
-        "name": "Net",
-        "url": "/api/2014/equipment/net"
+        "name": "Net"
       },
       {
         "index": "berserker-axe",
-        "name": "Berserker Axe",
-        "url": "/api/2014/magic-items/berserker-axe"
+        "name": "Berserker Axe"
       },
       {
         "index": "dagger-of-venom",
-        "name": "Dagger of Venom",
-        "url": "/api/2014/magic-items/dagger-of-venom"
+        "name": "Dagger of Venom"
       },
       {
         "index": "dancing-sword",
-        "name": "Dancing Sword",
-        "url": "/api/2014/magic-items/dancing-sword"
+        "name": "Dancing Sword"
       },
       {
         "index": "defender",
-        "name": "Defender",
-        "url": "/api/2014/magic-items/defender"
+        "name": "Defender"
       },
       {
         "index": "dragon-slayer",
-        "name": "Dragon Slayer",
-        "url": "/api/2014/magic-items/dragon-slayer"
+        "name": "Dragon Slayer"
       },
       {
         "index": "dwarven-thrower",
-        "name": "Dwarven Thrower",
-        "url": "/api/2014/magic-items/dwarven-thrower"
+        "name": "Dwarven Thrower"
       },
       {
         "index": "flame-tongue",
-        "name": "Flame Tongue",
-        "url": "/api/2014/magic-items/flame-tongue"
+        "name": "Flame Tongue"
       },
       {
         "index": "frost-brand",
-        "name": "Frost Brand",
-        "url": "/api/2014/magic-items/frost-brand"
+        "name": "Frost Brand"
       },
       {
         "index": "giant-slayer",
-        "name": "Giant Slayer",
-        "url": "/api/2014/magic-items/giant-slayer"
+        "name": "Giant Slayer"
       },
       {
         "index": "hammer-of-thunderbolts",
-        "name": "Hammer of Thunderbolts",
-        "url": "/api/2014/magic-items/hammer-of-thunderbolts"
+        "name": "Hammer of Thunderbolts"
       },
       {
         "index": "holy-avenger",
-        "name": "Holy Avenger",
-        "url": "/api/2014/magic-items/holy-avenger"
+        "name": "Holy Avenger"
       },
       {
         "index": "javelin-of-lightning",
-        "name": "Javelin of Lightning",
-        "url": "/api/2014/magic-items/javelin-of-lightning"
+        "name": "Javelin of Lightning"
       },
       {
         "index": "luck-blade",
-        "name": "Luck Blade",
-        "url": "/api/2014/magic-items/luck-blade"
+        "name": "Luck Blade"
       },
       {
         "index": "mace-of-disruption",
-        "name": "Mace of Disruption",
-        "url": "/api/2014/magic-items/mace-of-disruption"
+        "name": "Mace of Disruption"
       },
       {
         "index": "mace-of-smiting",
-        "name": "Mace of Smiting",
-        "url": "/api/2014/magic-items/mace-of-smiting"
+        "name": "Mace of Smiting"
       },
       {
         "index": "mace-of-terror",
-        "name": "Mace of Terror",
-        "url": "/api/2014/magic-items/mace-of-terror"
+        "name": "Mace of Terror"
       },
       {
         "index": "nine-lives-stealer",
-        "name": "Nine Lives Stealer",
-        "url": "/api/2014/magic-items/nine-lives-stealer"
+        "name": "Nine Lives Stealer"
       },
       {
         "index": "oathbow",
-        "name": "Oathbow",
-        "url": "/api/2014/magic-items/oathbow"
+        "name": "Oathbow"
       },
       {
         "index": "scimitar-of-speed",
-        "name": "Scimitar of Speed",
-        "url": "/api/2014/magic-items/scimitar-of-speed"
+        "name": "Scimitar of Speed"
       },
       {
         "index": "sun-blade",
-        "name": "Sun Blade",
-        "url": "/api/2014/magic-items/sun-blade"
+        "name": "Sun Blade"
       },
       {
         "index": "sword-of-life-stealing",
-        "name": "Sword of Life Stealing",
-        "url": "/api/2014/magic-items/sword-of-life-stealing"
+        "name": "Sword of Life Stealing"
       },
       {
         "index": "sword-of-sharpness",
-        "name": "Sword of Sharpness",
-        "url": "/api/2014/magic-items/sword-of-sharpness"
+        "name": "Sword of Sharpness"
       },
       {
         "index": "sword-of-wounding",
-        "name": "Sword of Wounding",
-        "url": "/api/2014/magic-items/sword-of-wounding"
+        "name": "Sword of Wounding"
       },
       {
         "index": "trident-of-fish-command",
-        "name": "Trident of Fish Command",
-        "url": "/api/2014/magic-items/trident-of-fish-command"
+        "name": "Trident of Fish Command"
       },
       {
         "index": "vicious-weapon",
-        "name": "Vicious Weapon",
-        "url": "/api/2014/magic-items/vicious-weapon"
+        "name": "Vicious Weapon"
       },
       {
         "index": "vorpal-sword",
-        "name": "Vorpal Sword",
-        "url": "/api/2014/magic-items/vorpal-sword"
+        "name": "Vorpal Sword"
       },
       {
         "index": "weapon",
-        "name": "Weapon, +1, +2, or +3",
-        "url": "/api/2014/magic-items/weapon"
+        "name": "Weapon, +1, +2, or +3"
       },
       {
         "index": "weapon-1",
-        "name": "Weapon, +1",
-        "url": "/api/2014/magic-items/weapon-1"
+        "name": "Weapon, +1"
       },
       {
         "index": "weapon-2",
-        "name": "Weapon, +2",
-        "url": "/api/2014/magic-items/weapon-2"
+        "name": "Weapon, +2"
       },
       {
         "index": "weapon-3",
-        "name": "Weapon, +3",
-        "url": "/api/2014/magic-items/weapon-3"
+        "name": "Weapon, +3"
       }
-    ],
-    "url": "/api/2014/equipment-categories/weapon"
+    ]
   },
   {
     "index": "armor",
@@ -6673,216 +5833,173 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "padded-armor",
-        "name": "Padded Armor",
-        "url": "/api/2014/equipment/padded-armor"
+        "name": "Padded Armor"
       },
       {
         "index": "leather-armor",
-        "name": "Leather Armor",
-        "url": "/api/2014/equipment/leather-armor"
+        "name": "Leather Armor"
       },
       {
         "index": "studded-leather-armor",
-        "name": "Studded Leather Armor",
-        "url": "/api/2014/equipment/studded-leather-armor"
+        "name": "Studded Leather Armor"
       },
       {
         "index": "hide-armor",
-        "name": "Hide Armor",
-        "url": "/api/2014/equipment/hide-armor"
+        "name": "Hide Armor"
       },
       {
         "index": "chain-shirt",
-        "name": "Chain Shirt",
-        "url": "/api/2014/equipment/chain-shirt"
+        "name": "Chain Shirt"
       },
       {
         "index": "scale-mail",
-        "name": "Scale Mail",
-        "url": "/api/2014/equipment/scale-mail"
+        "name": "Scale Mail"
       },
       {
         "index": "breastplate",
-        "name": "Breastplate",
-        "url": "/api/2014/equipment/breastplate"
+        "name": "Breastplate"
       },
       {
         "index": "half-plate-armor",
-        "name": "Half Plate Armor",
-        "url": "/api/2014/equipment/half-plate-armor"
+        "name": "Half Plate Armor"
       },
       {
         "index": "ring-mail",
-        "name": "Ring Mail",
-        "url": "/api/2014/equipment/ring-mail"
+        "name": "Ring Mail"
       },
       {
         "index": "chain-mail",
-        "name": "Chain Mail",
-        "url": "/api/2014/equipment/chain-mail"
+        "name": "Chain Mail"
       },
       {
         "index": "splint-armor",
-        "name": "Splint Armor",
-        "url": "/api/2014/equipment/splint-armor"
+        "name": "Splint Armor"
       },
       {
         "index": "plate-armor",
-        "name": "Plate Armor",
-        "url": "/api/2014/equipment/plate-armor"
+        "name": "Plate Armor"
       },
       {
         "index": "shield",
-        "name": "Shield",
-        "url": "/api/2014/equipment/shield"
+        "name": "Shield"
       },
       {
         "index": "adamantine-armor",
-        "name": "Adamantine Armor",
-        "url": "/api/2014/magic-items/adamantine-armor"
+        "name": "Adamantine Armor"
       },
       {
         "index": "animated-shield",
-        "name": "Animated Shield",
-        "url": "/api/2014/magic-items/animated-shield"
+        "name": "Animated Shield"
       },
       {
         "index": "armor",
-        "name": "Armor, +1, +2, or +3",
-        "url": "/api/2014/magic-items/armor"
+        "name": "Armor, +1, +2, or +3"
       },
       {
         "index": "armor-of-invulnerability",
-        "name": "Armor of Invulnerability",
-        "url": "/api/2014/magic-items/armor-of-invulnerability"
+        "name": "Armor of Invulnerability"
       },
       {
         "index": "armor-of-resistance",
-        "name": "Armor of Resistance",
-        "url": "/api/2014/magic-items/armor-of-resistance"
+        "name": "Armor of Resistance"
       },
       {
         "index": "armor-of-vulnerability",
-        "name": "Armor of Vulnerability",
-        "url": "/api/2014/magic-items/armor-of-vulnerability"
+        "name": "Armor of Vulnerability"
       },
       {
         "index": "arrow-catching-shield",
-        "name": "Arrow-Catching Shield",
-        "url": "/api/2014/magic-items/arrow-catching-shield"
+        "name": "Arrow-Catching Shield"
       },
       {
         "index": "demon-armor",
-        "name": "Demon Armor",
-        "url": "/api/2014/magic-items/demon-armor"
+        "name": "Demon Armor"
       },
       {
         "index": "dragon-scale-mail",
-        "name": "Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail"
+        "name": "Dragon Scale Mail"
       },
       {
         "index": "dwarven-plate",
-        "name": "Dwarven Plate",
-        "url": "/api/2014/magic-items/dwarven-plate"
+        "name": "Dwarven Plate"
       },
       {
         "index": "elven-chain",
-        "name": "Elven Chain",
-        "url": "/api/2014/magic-items/elven-chain"
+        "name": "Elven Chain"
       },
       {
         "index": "glamoured-studded-leather-armor",
-        "name": "Glamoured Studded Leather Armor",
-        "url": "/api/2014/magic-items/glamoured-studded-leather-armor"
+        "name": "Glamoured Studded Leather Armor"
       },
       {
         "index": "mithral-armor",
-        "name": "Mithral Armor",
-        "url": "/api/2014/magic-items/mithral-armor"
+        "name": "Mithral Armor"
       },
       {
         "index": "plate-armor-of-etherealness",
-        "name": "Plate Armor of Etherealness",
-        "url": "/api/2014/magic-items/plate-armor-of-etherealness"
+        "name": "Plate Armor of Etherealness"
       },
       {
         "index": "shield-of-missile-attraction",
-        "name": "Shield of Missile Attraction",
-        "url": "/api/2014/magic-items/shield-of-missile-attraction"
+        "name": "Shield of Missile Attraction"
       },
       {
         "index": "spellguard-shield",
-        "name": "Spellguard Shield",
-        "url": "/api/2014/magic-items/spellguard-shield"
+        "name": "Spellguard Shield"
       },
       {
         "index": "armor-1",
-        "name": "Armor, +1",
-        "url": "/api/2014/magic-items/armor-1"
+        "name": "Armor, +1"
       },
       {
         "index": "armor-2",
-        "name": "Armor, +2",
-        "url": "/api/2014/magic-items/armor-2"
+        "name": "Armor, +2"
       },
       {
         "index": "armor-3",
-        "name": "Armor, +3",
-        "url": "/api/2014/magic-items/armor-3"
+        "name": "Armor, +3"
       },
       {
         "index": "dragon-scale-mail-black",
-        "name": "Black Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-black"
+        "name": "Black Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-blue",
-        "name": "Blue Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-blue"
+        "name": "Blue Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-brass",
-        "name": "Brass Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-brass"
+        "name": "Brass Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-bronze",
-        "name": "Bronze Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-bronze"
+        "name": "Bronze Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-copper",
-        "name": "Copper Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-copper"
+        "name": "Copper Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-gold",
-        "name": "Gold Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-gold"
+        "name": "Gold Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-green",
-        "name": "Green Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-green"
+        "name": "Green Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-red",
-        "name": "Red Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-red"
+        "name": "Red Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-silver",
-        "name": "Silver Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-silver"
+        "name": "Silver Dragon Scale Mail"
       },
       {
         "index": "dragon-scale-mail-white",
-        "name": "White Dragon Scale Mail",
-        "url": "/api/2014/magic-items/dragon-scale-mail-white"
+        "name": "White Dragon Scale Mail"
       }
-    ],
-    "url": "/api/2014/equipment-categories/armor"
+    ]
   },
   {
     "index": "adventuring-gear",
@@ -6890,586 +6007,469 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "abacus",
-        "name": "Abacus",
-        "url": "/api/2014/equipment/abacus"
+        "name": "Abacus"
       },
       {
         "index": "acid-vial",
-        "name": "Acid (vial)",
-        "url": "/api/2014/equipment/acid-vial"
+        "name": "Acid (vial)"
       },
       {
         "index": "alchemists-fire-flask",
-        "name": "Alchemist's fire (flask)",
-        "url": "/api/2014/equipment/alchemists-fire-flask"
+        "name": "Alchemist's fire (flask)"
       },
       {
         "index": "arrow",
-        "name": "Arrow",
-        "url": "/api/2014/equipment/arrow"
+        "name": "Arrow"
       },
       {
         "index": "blowgun-needle",
-        "name": "Blowgun needle",
-        "url": "/api/2014/equipment/blowgun-needle"
+        "name": "Blowgun needle"
       },
       {
         "index": "crossbow-bolt",
-        "name": "Crossbow bolt",
-        "url": "/api/2014/equipment/crossbow-bolt"
+        "name": "Crossbow bolt"
       },
       {
         "index": "sling-bullet",
-        "name": "Sling bullet",
-        "url": "/api/2014/equipment/sling-bullet"
+        "name": "Sling bullet"
       },
       {
         "index": "alms-box",
-        "name": "Alms box",
-        "url": "/api/2014/equipment/alms-box"
+        "name": "Alms box"
       },
       {
         "index": "amulet",
-        "name": "Amulet",
-        "url": "/api/2014/equipment/amulet"
+        "name": "Amulet"
       },
       {
         "index": "antitoxin-vial",
-        "name": "Antitoxin (vial)",
-        "url": "/api/2014/equipment/antitoxin-vial"
+        "name": "Antitoxin (vial)"
       },
       {
         "index": "backpack",
-        "name": "Backpack",
-        "url": "/api/2014/equipment/backpack"
+        "name": "Backpack"
       },
       {
         "index": "ball-bearings-bag-of-1000",
-        "name": "Ball bearings (bag of 1,000)",
-        "url": "/api/2014/equipment/ball-bearings-bag-of-1000"
+        "name": "Ball bearings (bag of 1,000)"
       },
       {
         "index": "barrel",
-        "name": "Barrel",
-        "url": "/api/2014/equipment/barrel"
+        "name": "Barrel"
       },
       {
         "index": "basket",
-        "name": "Basket",
-        "url": "/api/2014/equipment/basket"
+        "name": "Basket"
       },
       {
         "index": "bedroll",
-        "name": "Bedroll",
-        "url": "/api/2014/equipment/bedroll"
+        "name": "Bedroll"
       },
       {
         "index": "bell",
-        "name": "Bell",
-        "url": "/api/2014/equipment/bell"
+        "name": "Bell"
       },
       {
         "index": "blanket",
-        "name": "Blanket",
-        "url": "/api/2014/equipment/blanket"
+        "name": "Blanket"
       },
       {
         "index": "block-and-tackle",
-        "name": "Block and tackle",
-        "url": "/api/2014/equipment/block-and-tackle"
+        "name": "Block and tackle"
       },
       {
         "index": "block-of-incense",
-        "name": "Block of incense",
-        "url": "/api/2014/equipment/block-of-incense"
+        "name": "Block of incense"
       },
       {
         "index": "book",
-        "name": "Book",
-        "url": "/api/2014/equipment/book"
+        "name": "Book"
       },
       {
         "index": "bottle-glass",
-        "name": "Bottle, glass",
-        "url": "/api/2014/equipment/bottle-glass"
+        "name": "Bottle, glass"
       },
       {
         "index": "bucket",
-        "name": "Bucket",
-        "url": "/api/2014/equipment/bucket"
+        "name": "Bucket"
       },
       {
         "index": "caltrops",
-        "name": "Caltrops",
-        "url": "/api/2014/equipment/caltrops"
+        "name": "Caltrops"
       },
       {
         "index": "candle",
-        "name": "Candle",
-        "url": "/api/2014/equipment/candle"
+        "name": "Candle"
       },
       {
         "index": "case-crossbow-bolt",
-        "name": "Case, crossbow bolt",
-        "url": "/api/2014/equipment/case-crossbow-bolt"
+        "name": "Case, crossbow bolt"
       },
       {
         "index": "case-map-or-scroll",
-        "name": "Case, map or scroll",
-        "url": "/api/2014/equipment/case-map-or-scroll"
+        "name": "Case, map or scroll"
       },
       {
         "index": "censer",
-        "name": "Censer",
-        "url": "/api/2014/equipment/censer"
+        "name": "Censer"
       },
       {
         "index": "chain-10-feet",
-        "name": "Chain (10 feet)",
-        "url": "/api/2014/equipment/chain-10-feet"
+        "name": "Chain (10 feet)"
       },
       {
         "index": "chalk-1-piece",
-        "name": "Chalk (1 piece)",
-        "url": "/api/2014/equipment/chalk-1-piece"
+        "name": "Chalk (1 piece)"
       },
       {
         "index": "chest",
-        "name": "Chest",
-        "url": "/api/2014/equipment/chest"
+        "name": "Chest"
       },
       {
         "index": "clothes-common",
-        "name": "Clothes, common",
-        "url": "/api/2014/equipment/clothes-common"
+        "name": "Clothes, common"
       },
       {
         "index": "clothes-costume",
-        "name": "Clothes, costume",
-        "url": "/api/2014/equipment/clothes-costume"
+        "name": "Clothes, costume"
       },
       {
         "index": "clothes-fine",
-        "name": "Clothes, fine",
-        "url": "/api/2014/equipment/clothes-fine"
+        "name": "Clothes, fine"
       },
       {
         "index": "clothes-travelers",
-        "name": "Clothes, traveler's",
-        "url": "/api/2014/equipment/clothes-travelers"
+        "name": "Clothes, traveler's"
       },
       {
         "index": "component-pouch",
-        "name": "Component pouch",
-        "url": "/api/2014/equipment/component-pouch"
+        "name": "Component pouch"
       },
       {
         "index": "crowbar",
-        "name": "Crowbar",
-        "url": "/api/2014/equipment/crowbar"
+        "name": "Crowbar"
       },
       {
         "index": "emblem",
-        "name": "Emblem",
-        "url": "/api/2014/equipment/emblem"
+        "name": "Emblem"
       },
       {
         "index": "fishing-tackle",
-        "name": "Fishing tackle",
-        "url": "/api/2014/equipment/fishing-tackle"
+        "name": "Fishing tackle"
       },
       {
         "index": "flask-or-tankard",
-        "name": "Flask or tankard",
-        "url": "/api/2014/equipment/flask-or-tankard"
+        "name": "Flask or tankard"
       },
       {
         "index": "grappling-hook",
-        "name": "Grappling hook",
-        "url": "/api/2014/equipment/grappling-hook"
+        "name": "Grappling hook"
       },
       {
         "index": "hammer",
-        "name": "Hammer",
-        "url": "/api/2014/equipment/hammer"
+        "name": "Hammer"
       },
       {
         "index": "hammer-sledge",
-        "name": "Hammer, sledge",
-        "url": "/api/2014/equipment/hammer-sledge"
+        "name": "Hammer, sledge"
       },
       {
         "index": "holy-water-flask",
-        "name": "Holy water (flask)",
-        "url": "/api/2014/equipment/holy-water-flask"
+        "name": "Holy water (flask)"
       },
       {
         "index": "hourglass",
-        "name": "Hourglass",
-        "url": "/api/2014/equipment/hourglass"
+        "name": "Hourglass"
       },
       {
         "index": "hunting-trap",
-        "name": "Hunting trap",
-        "url": "/api/2014/equipment/hunting-trap"
+        "name": "Hunting trap"
       },
       {
         "index": "ink-1-ounce-bottle",
-        "name": "Ink (1 ounce bottle)",
-        "url": "/api/2014/equipment/ink-1-ounce-bottle"
+        "name": "Ink (1 ounce bottle)"
       },
       {
         "index": "ink-pen",
-        "name": "Ink pen",
-        "url": "/api/2014/equipment/ink-pen"
+        "name": "Ink pen"
       },
       {
         "index": "jug-or-pitcher",
-        "name": "Jug or pitcher",
-        "url": "/api/2014/equipment/jug-or-pitcher"
+        "name": "Jug or pitcher"
       },
       {
         "index": "climbers-kit",
-        "name": "Climber's Kit",
-        "url": "/api/2014/equipment/climbers-kit"
+        "name": "Climber's Kit"
       },
       {
         "index": "disguise-kit",
-        "name": "Disguise Kit",
-        "url": "/api/2014/equipment/disguise-kit"
+        "name": "Disguise Kit"
       },
       {
         "index": "forgery-kit",
-        "name": "Forgery Kit",
-        "url": "/api/2014/equipment/forgery-kit"
+        "name": "Forgery Kit"
       },
       {
         "index": "herbalism-kit",
-        "name": "Herbalism Kit",
-        "url": "/api/2014/equipment/herbalism-kit"
+        "name": "Herbalism Kit"
       },
       {
         "index": "healers-kit",
-        "name": "Healer's Kit",
-        "url": "/api/2014/equipment/healers-kit"
+        "name": "Healer's Kit"
       },
       {
         "index": "mess-kit",
-        "name": "Mess Kit",
-        "url": "/api/2014/equipment/mess-kit"
+        "name": "Mess Kit"
       },
       {
         "index": "poisoners-kit",
-        "name": "Poisoner's Kit",
-        "url": "/api/2014/equipment/poisoners-kit"
+        "name": "Poisoner's Kit"
       },
       {
         "index": "ladder-10-foot",
-        "name": "Ladder (10-foot)",
-        "url": "/api/2014/equipment/ladder-10-foot"
+        "name": "Ladder (10-foot)"
       },
       {
         "index": "lamp",
-        "name": "Lamp",
-        "url": "/api/2014/equipment/lamp"
+        "name": "Lamp"
       },
       {
         "index": "lantern-bullseye",
-        "name": "Lantern, bullseye",
-        "url": "/api/2014/equipment/lantern-bullseye"
+        "name": "Lantern, bullseye"
       },
       {
         "index": "lantern-hooded",
-        "name": "Lantern, hooded",
-        "url": "/api/2014/equipment/lantern-hooded"
+        "name": "Lantern, hooded"
       },
       {
         "index": "little-bag-of-sand",
-        "name": "Little bag of sand",
-        "url": "/api/2014/equipment/little-bag-of-sand"
+        "name": "Little bag of sand"
       },
       {
         "index": "lock",
-        "name": "Lock",
-        "url": "/api/2014/equipment/lock"
+        "name": "Lock"
       },
       {
         "index": "magnifying-glass",
-        "name": "Magnifying glass",
-        "url": "/api/2014/equipment/magnifying-glass"
+        "name": "Magnifying glass"
       },
       {
         "index": "manacles",
-        "name": "Manacles",
-        "url": "/api/2014/equipment/manacles"
+        "name": "Manacles"
       },
       {
         "index": "mirror-steel",
-        "name": "Mirror, steel",
-        "url": "/api/2014/equipment/mirror-steel"
+        "name": "Mirror, steel"
       },
       {
         "index": "oil-flask",
-        "name": "Oil (flask)",
-        "url": "/api/2014/equipment/oil-flask"
+        "name": "Oil (flask)"
       },
       {
         "index": "paper-one-sheet",
-        "name": "Paper (one sheet)",
-        "url": "/api/2014/equipment/paper-one-sheet"
+        "name": "Paper (one sheet)"
       },
       {
         "index": "parchment-one-sheet",
-        "name": "Parchment (one sheet)",
-        "url": "/api/2014/equipment/parchment-one-sheet"
+        "name": "Parchment (one sheet)"
       },
       {
         "index": "perfume-vial",
-        "name": "Perfume (vial)",
-        "url": "/api/2014/equipment/perfume-vial"
+        "name": "Perfume (vial)"
       },
       {
         "index": "pick-miners",
-        "name": "Pick, miner's",
-        "url": "/api/2014/equipment/pick-miners"
+        "name": "Pick, miner's"
       },
       {
         "index": "piton",
-        "name": "Piton",
-        "url": "/api/2014/equipment/piton"
+        "name": "Piton"
       },
       {
         "index": "poison-basic-vial",
-        "name": "Poison, basic (vial)",
-        "url": "/api/2014/equipment/poison-basic-vial"
+        "name": "Poison, basic (vial)"
       },
       {
         "index": "pole-10-foot",
-        "name": "Pole (10-foot)",
-        "url": "/api/2014/equipment/pole-10-foot"
+        "name": "Pole (10-foot)"
       },
       {
         "index": "pot-iron",
-        "name": "Pot, iron",
-        "url": "/api/2014/equipment/pot-iron"
+        "name": "Pot, iron"
       },
       {
         "index": "pouch",
-        "name": "Pouch",
-        "url": "/api/2014/equipment/pouch"
+        "name": "Pouch"
       },
       {
         "index": "quiver",
-        "name": "Quiver",
-        "url": "/api/2014/equipment/quiver"
+        "name": "Quiver"
       },
       {
         "index": "ram-portable",
-        "name": "Ram, portable",
-        "url": "/api/2014/equipment/ram-portable"
+        "name": "Ram, portable"
       },
       {
         "index": "rations-1-day",
-        "name": "Rations (1 day)",
-        "url": "/api/2014/equipment/rations-1-day"
+        "name": "Rations (1 day)"
       },
       {
         "index": "reliquary",
-        "name": "Reliquary",
-        "url": "/api/2014/equipment/reliquary"
+        "name": "Reliquary"
       },
       {
         "index": "robes",
-        "name": "Robes",
-        "url": "/api/2014/equipment/robes"
+        "name": "Robes"
       },
       {
         "index": "rope-hempen-50-feet",
-        "name": "Rope, hempen (50 feet)",
-        "url": "/api/2014/equipment/rope-hempen-50-feet"
+        "name": "Rope, hempen (50 feet)"
       },
       {
         "index": "rope-silk-50-feet",
-        "name": "Rope, silk (50 feet)",
-        "url": "/api/2014/equipment/rope-silk-50-feet"
+        "name": "Rope, silk (50 feet)"
       },
       {
         "index": "sack",
-        "name": "Sack",
-        "url": "/api/2014/equipment/sack"
+        "name": "Sack"
       },
       {
         "index": "scale-merchants",
-        "name": "Scale, merchant's",
-        "url": "/api/2014/equipment/scale-merchants"
+        "name": "Scale, merchant's"
       },
       {
         "index": "sealing-wax",
-        "name": "Sealing wax",
-        "url": "/api/2014/equipment/sealing-wax"
+        "name": "Sealing wax"
       },
       {
         "index": "shovel",
-        "name": "Shovel",
-        "url": "/api/2014/equipment/shovel"
+        "name": "Shovel"
       },
       {
         "index": "signal-whistle",
-        "name": "Signal whistle",
-        "url": "/api/2014/equipment/signal-whistle"
+        "name": "Signal whistle"
       },
       {
         "index": "signet-ring",
-        "name": "Signet ring",
-        "url": "/api/2014/equipment/signet-ring"
+        "name": "Signet ring"
       },
       {
         "index": "small-knife",
-        "name": "Small knife",
-        "url": "/api/2014/equipment/small-knife"
+        "name": "Small knife"
       },
       {
         "index": "soap",
-        "name": "Soap",
-        "url": "/api/2014/equipment/soap"
+        "name": "Soap"
       },
       {
         "index": "spellbook",
-        "name": "Spellbook",
-        "url": "/api/2014/equipment/spellbook"
+        "name": "Spellbook"
       },
       {
         "index": "spike-iron",
-        "name": "Spike, iron",
-        "url": "/api/2014/equipment/spike-iron"
+        "name": "Spike, iron"
       },
       {
         "index": "spyglass",
-        "name": "Spyglass",
-        "url": "/api/2014/equipment/spyglass"
+        "name": "Spyglass"
       },
       {
         "index": "string-10-feet",
-        "name": "String (10 feet)",
-        "url": "/api/2014/equipment/string-10-feet"
+        "name": "String (10 feet)"
       },
       {
         "index": "tent-two-person",
-        "name": "Tent, two-person",
-        "url": "/api/2014/equipment/tent-two-person"
+        "name": "Tent, two-person"
       },
       {
         "index": "tinderbox",
-        "name": "Tinderbox",
-        "url": "/api/2014/equipment/tinderbox"
+        "name": "Tinderbox"
       },
       {
         "index": "torch",
-        "name": "Torch",
-        "url": "/api/2014/equipment/torch"
+        "name": "Torch"
       },
       {
         "index": "vestments",
-        "name": "Vestments",
-        "url": "/api/2014/equipment/vestments"
+        "name": "Vestments"
       },
       {
         "index": "vial",
-        "name": "Vial",
-        "url": "/api/2014/equipment/vial"
+        "name": "Vial"
       },
       {
         "index": "waterskin",
-        "name": "Waterskin",
-        "url": "/api/2014/equipment/waterskin"
+        "name": "Waterskin"
       },
       {
         "index": "whetstone",
-        "name": "Whetstone",
-        "url": "/api/2014/equipment/whetstone"
+        "name": "Whetstone"
       },
       {
         "index": "burglars-pack",
-        "name": "Burglar's Pack",
-        "url": "/api/2014/equipment/burglars-pack"
+        "name": "Burglar's Pack"
       },
       {
         "index": "diplomats-pack",
-        "name": "Diplomat's Pack",
-        "url": "/api/2014/equipment/diplomats-pack"
+        "name": "Diplomat's Pack"
       },
       {
         "index": "dungeoneers-pack",
-        "name": "Dungeoneer's Pack",
-        "url": "/api/2014/equipment/dungeoneers-pack"
+        "name": "Dungeoneer's Pack"
       },
       {
         "index": "entertainers-pack",
-        "name": "Entertainer's Pack",
-        "url": "/api/2014/equipment/entertainers-pack"
+        "name": "Entertainer's Pack"
       },
       {
         "index": "explorers-pack",
-        "name": "Explorer's Pack",
-        "url": "/api/2014/equipment/explorers-pack"
+        "name": "Explorer's Pack"
       },
       {
         "index": "priests-pack",
-        "name": "Priest's Pack",
-        "url": "/api/2014/equipment/priests-pack"
+        "name": "Priest's Pack"
       },
       {
         "index": "scholars-pack",
-        "name": "Scholar's Pack",
-        "url": "/api/2014/equipment/scholars-pack"
+        "name": "Scholar's Pack"
       },
       {
         "index": "crystal",
-        "name": "Crystal",
-        "url": "/api/2014/equipment/crystal"
+        "name": "Crystal"
       },
       {
         "index": "orb",
-        "name": "Orb",
-        "url": "/api/2014/equipment/orb"
+        "name": "Orb"
       },
       {
         "index": "rod",
-        "name": "Rod",
-        "url": "/api/2014/equipment/rod"
+        "name": "Rod"
       },
       {
         "index": "staff",
-        "name": "Staff",
-        "url": "/api/2014/equipment/staff"
+        "name": "Staff"
       },
       {
         "index": "wand",
-        "name": "Wand",
-        "url": "/api/2014/equipment/wand"
+        "name": "Wand"
       },
       {
         "index": "sprig-of-mistletoe",
-        "name": "Sprig of mistletoe",
-        "url": "/api/2014/equipment/sprig-of-mistletoe"
+        "name": "Sprig of mistletoe"
       },
       {
         "index": "totem",
-        "name": "Totem",
-        "url": "/api/2014/equipment/totem"
+        "name": "Totem"
       },
       {
         "index": "wooden-staff",
-        "name": "Wooden staff",
-        "url": "/api/2014/equipment/wooden-staff"
+        "name": "Wooden staff"
       },
       {
         "index": "yew-wand",
-        "name": "Yew wand",
-        "url": "/api/2014/equipment/yew-wand"
+        "name": "Yew wand"
       }
-    ],
-    "url": "/api/2014/equipment-categories/adventuring-gear"
+    ]
   },
   {
     "index": "ammunition",
@@ -7477,51 +6477,41 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "arrow",
-        "name": "Arrow",
-        "url": "/api/2014/equipment/arrow"
+        "name": "Arrow"
       },
       {
         "index": "blowgun-needle",
-        "name": "Blowgun needle",
-        "url": "/api/2014/equipment/blowgun-needle"
+        "name": "Blowgun needle"
       },
       {
         "index": "crossbow-bolt",
-        "name": "Crossbow bolt",
-        "url": "/api/2014/equipment/crossbow-bolt"
+        "name": "Crossbow bolt"
       },
       {
         "index": "sling-bullet",
-        "url": "/api/2014/equipment/sling-bullet",
         "name": "Sling bullet"
       },
       {
         "index": "ammunition",
-        "name": "Ammunition, +1, +2, or +3",
-        "url": "/api/2014/magic-items/ammunition"
+        "name": "Ammunition, +1, +2, or +3"
       },
       {
         "index": "arrow-of-slaying",
-        "name": "Arrow of Slaying",
-        "url": "/api/2014/magic-items/arrow-of-slaying"
+        "name": "Arrow of Slaying"
       },
       {
         "index": "ammunition-1",
-        "name": "Ammunition, +1",
-        "url": "/api/2014/magic-items/ammunition-1"
+        "name": "Ammunition, +1"
       },
       {
         "index": "ammunition-2",
-        "name": "Ammunition, +2",
-        "url": "/api/2014/magic-items/ammunition-2"
+        "name": "Ammunition, +2"
       },
       {
         "index": "ammunition-3",
-        "name": "Ammunition, +3",
-        "url": "/api/2014/magic-items/ammunition-3"
+        "name": "Ammunition, +3"
       }
-    ],
-    "url": "/api/2014/equipment-categories/ammunition"
+    ]
   },
   {
     "index": "tools",
@@ -7529,161 +6519,129 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "alchemists-supplies",
-        "name": "Alchemist's Supplies",
-        "url": "/api/2014/equipment/alchemists-supplies"
+        "name": "Alchemist's Supplies"
       },
       {
         "index": "brewers-supplies",
-        "name": "Brewer's Supplies",
-        "url": "/api/2014/equipment/brewers-supplies"
+        "name": "Brewer's Supplies"
       },
       {
         "index": "calligraphers-supplies",
-        "name": "Calligrapher's Supplies",
-        "url": "/api/2014/equipment/calligraphers-supplies"
+        "name": "Calligrapher's Supplies"
       },
       {
         "index": "carpenters-tools",
-        "name": "Carpenter's Tools",
-        "url": "/api/2014/equipment/carpenters-tools"
+        "name": "Carpenter's Tools"
       },
       {
         "index": "cartographers-tools",
-        "name": "Cartographer's Tools",
-        "url": "/api/2014/equipment/cartographers-tools"
+        "name": "Cartographer's Tools"
       },
       {
         "index": "cobblers-tools",
-        "name": "Cobbler's Tools",
-        "url": "/api/2014/equipment/cobblers-tools"
+        "name": "Cobbler's Tools"
       },
       {
         "index": "cooks-utensils",
-        "name": "Cook's utensils",
-        "url": "/api/2014/equipment/cooks-utensils"
+        "name": "Cook's utensils"
       },
       {
         "index": "glassblowers-tools",
-        "name": "Glassblower's Tools",
-        "url": "/api/2014/equipment/glassblowers-tools"
+        "name": "Glassblower's Tools"
       },
       {
         "index": "jewelers-tools",
-        "name": "Jeweler's Tools",
-        "url": "/api/2014/equipment/jewelers-tools"
+        "name": "Jeweler's Tools"
       },
       {
         "index": "leatherworkers-tools",
-        "name": "Leatherworker's Tools",
-        "url": "/api/2014/equipment/leatherworkers-tools"
+        "name": "Leatherworker's Tools"
       },
       {
         "index": "masons-tools",
-        "name": "Mason's Tools",
-        "url": "/api/2014/equipment/masons-tools"
+        "name": "Mason's Tools"
       },
       {
         "index": "painters-supplies",
-        "name": "Painter's Supplies",
-        "url": "/api/2014/equipment/painters-supplies"
+        "name": "Painter's Supplies"
       },
       {
         "index": "potters-tools",
-        "name": "Potter's Tools",
-        "url": "/api/2014/equipment/potters-tools"
+        "name": "Potter's Tools"
       },
       {
         "index": "smiths-tools",
-        "name": "Smith's Tools",
-        "url": "/api/2014/equipment/smiths-tools"
+        "name": "Smith's Tools"
       },
       {
         "index": "tinkers-tools",
-        "name": "Tinker's Tools",
-        "url": "/api/2014/equipment/tinkers-tools"
+        "name": "Tinker's Tools"
       },
       {
         "index": "weavers-tools",
-        "name": "Weaver's Tools",
-        "url": "/api/2014/equipment/weavers-tools"
+        "name": "Weaver's Tools"
       },
       {
         "index": "woodcarvers-tools",
-        "name": "Woodcarver's Tools",
-        "url": "/api/2014/equipment/woodcarvers-tools"
+        "name": "Woodcarver's Tools"
       },
       {
         "index": "dice-set",
-        "name": "Dice Set",
-        "url": "/api/2014/equipment/dice-set"
+        "name": "Dice Set"
       },
       {
         "index": "playing-card-set",
-        "name": "Playing Card Set",
-        "url": "/api/2014/equipment/playing-card-set"
+        "name": "Playing Card Set"
       },
       {
         "index": "bagpipes",
-        "name": "Bagpipes",
-        "url": "/api/2014/equipment/bagpipes"
+        "name": "Bagpipes"
       },
       {
         "index": "drum",
-        "name": "Drum",
-        "url": "/api/2014/equipment/drum"
+        "name": "Drum"
       },
       {
         "index": "dulcimer",
-        "name": "Dulcimer",
-        "url": "/api/2014/equipment/dulcimer"
+        "name": "Dulcimer"
       },
       {
         "index": "flute",
-        "name": "Flute",
-        "url": "/api/2014/equipment/flute"
+        "name": "Flute"
       },
       {
         "index": "lute",
-        "name": "Lute",
-        "url": "/api/2014/equipment/lute"
+        "name": "Lute"
       },
       {
         "index": "lyre",
-        "name": "Lyre",
-        "url": "/api/2014/equipment/lyre"
+        "name": "Lyre"
       },
       {
         "index": "horn",
-        "name": "Horn",
-        "url": "/api/2014/equipment/horn"
+        "name": "Horn"
       },
       {
         "index": "pan-flute",
-        "name": "Pan flute",
-        "url": "/api/2014/equipment/pan-flute"
+        "name": "Pan flute"
       },
       {
         "index": "shawm",
-        "name": "Shawm",
-        "url": "/api/2014/equipment/shawm"
+        "name": "Shawm"
       },
       {
         "index": "viol",
-        "name": "Viol",
-        "url": "/api/2014/equipment/viol"
+        "name": "Viol"
       },
       {
         "index": "navigators-tools",
-        "name": "Navigator's Tools",
-        "url": "/api/2014/equipment/navigators-tools"
+        "name": "Navigator's Tools"
       },
       {
         "index": "thieves-tools",
-        "name": "Thieves' Tools",
-        "url": "/api/2014/equipment/thieves-tools"
+        "name": "Thieves' Tools"
       }
-    ],
-    "url": "/api/2014/equipment-categories/tools"
+    ]
   },
   {
     "index": "mounts-and-vehicles",
@@ -7691,321 +6649,257 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "mule",
-        "name": "Mule",
-        "url": "/api/2014/equipment/mule"
+        "name": "Mule"
       },
       {
         "index": "elephant",
-        "name": "Elephant",
-        "url": "/api/2014/equipment/elephant"
+        "name": "Elephant"
       },
       {
         "index": "horse-draft",
-        "name": "Horse, draft",
-        "url": "/api/2014/equipment/horse-draft"
+        "name": "Horse, draft"
       },
       {
         "index": "horse-riding",
-        "name": "Horse, riding",
-        "url": "/api/2014/equipment/horse-riding"
+        "name": "Horse, riding"
       },
       {
         "index": "mastiff",
-        "name": "Mastiff",
-        "url": "/api/2014/equipment/mastiff"
+        "name": "Mastiff"
       },
       {
         "index": "pony",
-        "name": "Pony",
-        "url": "/api/2014/equipment/pony"
+        "name": "Pony"
       },
       {
         "index": "warhorse",
-        "name": "Warhorse",
-        "url": "/api/2014/equipment/warhorse"
+        "name": "Warhorse"
       },
       {
         "index": "barding-padded",
-        "name": "Barding: Padded",
-        "url": "/api/2014/equipment/barding-padded"
+        "name": "Barding: Padded"
       },
       {
         "index": "barding-leather",
-        "name": "Barding: Leather",
-        "url": "/api/2014/equipment/barding-leather"
+        "name": "Barding: Leather"
       },
       {
         "index": "barding-studded-leather",
-        "name": "Barding: Studded Leather",
-        "url": "/api/2014/equipment/barding-studded-leather"
+        "name": "Barding: Studded Leather"
       },
       {
         "index": "barding-hide",
-        "name": "Barding: Hide",
-        "url": "/api/2014/equipment/barding-hide"
+        "name": "Barding: Hide"
       },
       {
         "index": "barding-chain-shirt",
-        "name": "Barding: Chain shirt",
-        "url": "/api/2014/equipment/barding-chain-shirt"
+        "name": "Barding: Chain shirt"
       },
       {
         "index": "barding-scale-mail",
-        "name": "Barding: Scale mail",
-        "url": "/api/2014/equipment/barding-scale-mail"
+        "name": "Barding: Scale mail"
       },
       {
         "index": "barding-breastplate",
-        "name": "Barding: Breastplate",
-        "url": "/api/2014/equipment/barding-breastplate"
+        "name": "Barding: Breastplate"
       },
       {
         "index": "barding-half-plate",
-        "name": "Barding: Half plate",
-        "url": "/api/2014/equipment/barding-half-plate"
+        "name": "Barding: Half plate"
       },
       {
         "index": "barding-ring-mail",
-        "name": "Barding: Ring mail",
-        "url": "/api/2014/equipment/barding-ring-mail"
+        "name": "Barding: Ring mail"
       },
       {
         "index": "barding-chain-mail",
-        "name": "Barding: Chain mail",
-        "url": "/api/2014/equipment/barding-chain-mail"
+        "name": "Barding: Chain mail"
       },
       {
         "index": "barding-splint",
-        "name": "Barding: Splint",
-        "url": "/api/2014/equipment/barding-splint"
+        "name": "Barding: Splint"
       },
       {
         "index": "barding-plate",
-        "name": "Barding: Plate",
-        "url": "/api/2014/equipment/barding-plate"
+        "name": "Barding: Plate"
       },
       {
         "index": "bit-and-bridle",
-        "name": "Bit and bridle",
-        "url": "/api/2014/equipment/bit-and-bridle"
+        "name": "Bit and bridle"
       },
       {
         "index": "carriage",
-        "name": "Carriage",
-        "url": "/api/2014/equipment/carriage"
+        "name": "Carriage"
       },
       {
         "index": "cart",
-        "name": "Cart",
-        "url": "/api/2014/equipment/cart"
+        "name": "Cart"
       },
       {
         "index": "chariot",
-        "name": "Chariot",
-        "url": "/api/2014/equipment/chariot"
+        "name": "Chariot"
       },
       {
         "index": "animal-feed-1-day",
-        "name": "Animal Feed (1 day)",
-        "url": "/api/2014/equipment/animal-feed-1-day"
+        "name": "Animal Feed (1 day)"
       },
       {
         "index": "saddle-exotic",
-        "name": "Saddle, Exotic",
-        "url": "/api/2014/equipment/saddle-exotic"
+        "name": "Saddle, Exotic"
       },
       {
         "index": "saddle-military",
-        "name": "Saddle, Military",
-        "url": "/api/2014/equipment/saddle-military"
+        "name": "Saddle, Military"
       },
       {
         "index": "saddle-pack",
-        "name": "Saddle, Pack",
-        "url": "/api/2014/equipment/saddle-pack"
+        "name": "Saddle, Pack"
       },
       {
         "index": "saddle-riding",
-        "name": "Saddle, Riding",
-        "url": "/api/2014/equipment/saddle-riding"
+        "name": "Saddle, Riding"
       },
       {
         "index": "saddlebags",
-        "name": "Saddlebags",
-        "url": "/api/2014/equipment/saddlebags"
+        "name": "Saddlebags"
       },
       {
         "index": "sled",
-        "name": "Sled",
-        "url": "/api/2014/equipment/sled"
+        "name": "Sled"
       },
       {
         "index": "stabling-1-day",
-        "name": "Stabling (1 day)",
-        "url": "/api/2014/equipment/stabling-1-day"
+        "name": "Stabling (1 day)"
       },
       {
         "index": "wagon",
-        "name": "Wagon",
-        "url": "/api/2014/equipment/wagon"
+        "name": "Wagon"
       },
       {
         "index": "barding-padded",
-        "name": "Barding: Padded",
-        "url": "/api/2014/equipment/barding-padded"
+        "name": "Barding: Padded"
       },
       {
         "index": "barding-leather",
-        "name": "Barding: Leather",
-        "url": "/api/2014/equipment/barding-leather"
+        "name": "Barding: Leather"
       },
       {
         "index": "barding-studded-leather",
-        "name": "Barding: Studded Leather",
-        "url": "/api/2014/equipment/barding-studded-leather"
+        "name": "Barding: Studded Leather"
       },
       {
         "index": "barding-hide",
-        "name": "Barding: Hide",
-        "url": "/api/2014/equipment/barding-hide"
+        "name": "Barding: Hide"
       },
       {
         "index": "barding-chain-shirt",
-        "name": "Barding: Chain shirt",
-        "url": "/api/2014/equipment/barding-chain-shirt"
+        "name": "Barding: Chain shirt"
       },
       {
         "index": "barding-scale-mail",
-        "name": "Barding: Scale mail",
-        "url": "/api/2014/equipment/barding-scale-mail"
+        "name": "Barding: Scale mail"
       },
       {
         "index": "barding-breastplate",
-        "name": "Barding: Breastplate",
-        "url": "/api/2014/equipment/barding-breastplate"
+        "name": "Barding: Breastplate"
       },
       {
         "index": "barding-half-plate",
-        "name": "Barding: Half plate",
-        "url": "/api/2014/equipment/barding-half-plate"
+        "name": "Barding: Half plate"
       },
       {
         "index": "barding-ring-mail",
-        "name": "Barding: Ring mail",
-        "url": "/api/2014/equipment/barding-ring-mail"
+        "name": "Barding: Ring mail"
       },
       {
         "index": "barding-chain-mail",
-        "name": "Barding: Chain mail",
-        "url": "/api/2014/equipment/barding-chain-mail"
+        "name": "Barding: Chain mail"
       },
       {
         "index": "barding-splint",
-        "name": "Barding: Splint",
-        "url": "/api/2014/equipment/barding-splint"
+        "name": "Barding: Splint"
       },
       {
         "index": "barding-plate",
-        "name": "Barding: Plate",
-        "url": "/api/2014/equipment/barding-plate"
+        "name": "Barding: Plate"
       },
       {
         "index": "bit-and-bridle",
-        "name": "Bit and bridle",
-        "url": "/api/2014/equipment/bit-and-bridle"
+        "name": "Bit and bridle"
       },
       {
         "index": "carriage",
-        "name": "Carriage",
-        "url": "/api/2014/equipment/carriage"
+        "name": "Carriage"
       },
       {
         "index": "cart",
-        "name": "Cart",
-        "url": "/api/2014/equipment/cart"
+        "name": "Cart"
       },
       {
         "index": "chariot",
-        "name": "Chariot",
-        "url": "/api/2014/equipment/chariot"
+        "name": "Chariot"
       },
       {
         "index": "animal-feed-1-day",
-        "name": "Animal Feed (1 day)",
-        "url": "/api/2014/equipment/animal-feed-1-day"
+        "name": "Animal Feed (1 day)"
       },
       {
         "index": "saddle-exotic",
-        "name": "Saddle, Exotic",
-        "url": "/api/2014/equipment/saddle-exotic"
+        "name": "Saddle, Exotic"
       },
       {
         "index": "saddle-military",
-        "name": "Saddle, Military",
-        "url": "/api/2014/equipment/saddle-military"
+        "name": "Saddle, Military"
       },
       {
         "index": "saddle-pack",
-        "name": "Saddle, Pack",
-        "url": "/api/2014/equipment/saddle-pack"
+        "name": "Saddle, Pack"
       },
       {
         "index": "saddle-riding",
-        "name": "Saddle, Riding",
-        "url": "/api/2014/equipment/saddle-riding"
+        "name": "Saddle, Riding"
       },
       {
         "index": "saddlebags",
-        "name": "Saddlebags",
-        "url": "/api/2014/equipment/saddlebags"
+        "name": "Saddlebags"
       },
       {
         "index": "sled",
-        "name": "Sled",
-        "url": "/api/2014/equipment/sled"
+        "name": "Sled"
       },
       {
         "index": "stabling-1-day",
-        "name": "Stabling (1 day)",
-        "url": "/api/2014/equipment/stabling-1-day"
+        "name": "Stabling (1 day)"
       },
       {
         "index": "wagon",
-        "name": "Wagon",
-        "url": "/api/2014/equipment/wagon"
+        "name": "Wagon"
       },
       {
         "index": "galley",
-        "name": "Galley",
-        "url": "/api/2014/equipment/galley"
+        "name": "Galley"
       },
       {
         "index": "keelboat",
-        "name": "Keelboat",
-        "url": "/api/2014/equipment/keelboat"
+        "name": "Keelboat"
       },
       {
         "index": "longship",
-        "name": "Longship",
-        "url": "/api/2014/equipment/longship"
+        "name": "Longship"
       },
       {
         "index": "rowboat",
-        "name": "Rowboat",
-        "url": "/api/2014/equipment/rowboat"
+        "name": "Rowboat"
       },
       {
         "index": "sailing-ship",
-        "name": "Sailing ship",
-        "url": "/api/2014/equipment/sailing-ship"
+        "name": "Sailing ship"
       },
       {
         "index": "warship",
-        "name": "Warship",
-        "url": "/api/2014/equipment/warship"
+        "name": "Warship"
       }
-    ],
-    "url": "/api/2014/equipment-categories/mounts-and-vehicles"
+    ]
   },
   {
     "index": "simple-weapons",
@@ -8013,76 +6907,61 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "club",
-        "name": "Club",
-        "url": "/api/2014/equipment/club"
+        "name": "Club"
       },
       {
         "index": "dagger",
-        "name": "Dagger",
-        "url": "/api/2014/equipment/dagger"
+        "name": "Dagger"
       },
       {
         "index": "greatclub",
-        "name": "Greatclub",
-        "url": "/api/2014/equipment/greatclub"
+        "name": "Greatclub"
       },
       {
         "index": "handaxe",
-        "name": "Handaxe",
-        "url": "/api/2014/equipment/handaxe"
+        "name": "Handaxe"
       },
       {
         "index": "javelin",
-        "name": "Javelin",
-        "url": "/api/2014/equipment/javelin"
+        "name": "Javelin"
       },
       {
         "index": "light-hammer",
-        "name": "Light hammer",
-        "url": "/api/2014/equipment/light-hammer"
+        "name": "Light hammer"
       },
       {
         "index": "mace",
-        "name": "Mace",
-        "url": "/api/2014/equipment/mace"
+        "name": "Mace"
       },
       {
         "index": "quarterstaff",
-        "name": "Quarterstaff",
-        "url": "/api/2014/equipment/quarterstaff"
+        "name": "Quarterstaff"
       },
       {
         "index": "sickle",
-        "name": "Sickle",
-        "url": "/api/2014/equipment/sickle"
+        "name": "Sickle"
       },
       {
         "index": "spear",
-        "name": "Spear",
-        "url": "/api/2014/equipment/spear"
+        "name": "Spear"
       },
       {
         "index": "crossbow-light",
-        "name": "Crossbow, light",
-        "url": "/api/2014/equipment/crossbow-light"
+        "name": "Crossbow, light"
       },
       {
         "index": "dart",
-        "name": "Dart",
-        "url": "/api/2014/equipment/dart"
+        "name": "Dart"
       },
       {
         "index": "shortbow",
-        "name": "Shortbow",
-        "url": "/api/2014/equipment/shortbow"
+        "name": "Shortbow"
       },
       {
         "index": "sling",
-        "name": "Sling",
-        "url": "/api/2014/equipment/sling"
+        "name": "Sling"
       }
-    ],
-    "url": "/api/2014/equipment-categories/simple-weapons"
+    ]
   },
   {
     "index": "martial-weapons",
@@ -8090,121 +6969,97 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "battleaxe",
-        "name": "Battleaxe",
-        "url": "/api/2014/equipment/battleaxe"
+        "name": "Battleaxe"
       },
       {
         "index": "flail",
-        "name": "Flail",
-        "url": "/api/2014/equipment/flail"
+        "name": "Flail"
       },
       {
         "index": "glaive",
-        "name": "Glaive",
-        "url": "/api/2014/equipment/glaive"
+        "name": "Glaive"
       },
       {
         "index": "greataxe",
-        "name": "Greataxe",
-        "url": "/api/2014/equipment/greataxe"
+        "name": "Greataxe"
       },
       {
         "index": "greatsword",
-        "name": "Greatsword",
-        "url": "/api/2014/equipment/greatsword"
+        "name": "Greatsword"
       },
       {
         "index": "halberd",
-        "name": "Halberd",
-        "url": "/api/2014/equipment/halberd"
+        "name": "Halberd"
       },
       {
         "index": "lance",
-        "name": "Lance",
-        "url": "/api/2014/equipment/lance"
+        "name": "Lance"
       },
       {
         "index": "longsword",
-        "name": "Longsword",
-        "url": "/api/2014/equipment/longsword"
+        "name": "Longsword"
       },
       {
         "index": "maul",
-        "name": "Maul",
-        "url": "/api/2014/equipment/maul"
+        "name": "Maul"
       },
       {
         "index": "morningstar",
-        "name": "Morningstar",
-        "url": "/api/2014/equipment/morningstar"
+        "name": "Morningstar"
       },
       {
         "index": "pike",
-        "name": "Pike",
-        "url": "/api/2014/equipment/pike"
+        "name": "Pike"
       },
       {
         "index": "rapier",
-        "name": "Rapier",
-        "url": "/api/2014/equipment/rapier"
+        "name": "Rapier"
       },
       {
         "index": "scimitar",
-        "name": "Scimitar",
-        "url": "/api/2014/equipment/scimitar"
+        "name": "Scimitar"
       },
       {
         "index": "shortsword",
-        "name": "Shortsword",
-        "url": "/api/2014/equipment/shortsword"
+        "name": "Shortsword"
       },
       {
         "index": "trident",
-        "name": "Trident",
-        "url": "/api/2014/equipment/trident"
+        "name": "Trident"
       },
       {
         "index": "war-pick",
-        "name": "War pick",
-        "url": "/api/2014/equipment/war-pick"
+        "name": "War pick"
       },
       {
         "index": "warhammer",
-        "name": "Warhammer",
-        "url": "/api/2014/equipment/warhammer"
+        "name": "Warhammer"
       },
       {
         "index": "whip",
-        "name": "Whip",
-        "url": "/api/2014/equipment/whip"
+        "name": "Whip"
       },
       {
         "index": "blowgun",
-        "name": "Blowgun",
-        "url": "/api/2014/equipment/blowgun"
+        "name": "Blowgun"
       },
       {
         "index": "crossbow-hand",
-        "name": "Crossbow, hand",
-        "url": "/api/2014/equipment/crossbow-hand"
+        "name": "Crossbow, hand"
       },
       {
         "index": "crossbow-heavy",
-        "name": "Crossbow, heavy",
-        "url": "/api/2014/equipment/crossbow-heavy"
+        "name": "Crossbow, heavy"
       },
       {
         "index": "longbow",
-        "name": "Longbow",
-        "url": "/api/2014/equipment/longbow"
+        "name": "Longbow"
       },
       {
         "index": "net",
-        "name": "Net",
-        "url": "/api/2014/equipment/net"
+        "name": "Net"
       }
-    ],
-    "url": "/api/2014/equipment-categories/martial-weapons"
+    ]
   },
   {
     "index": "melee-weapons",
@@ -8212,146 +7067,117 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "battleaxe",
-        "name": "Battleaxe",
-        "url": "/api/2014/equipment/battleaxe"
+        "name": "Battleaxe"
       },
       {
         "index": "club",
-        "name": "Club",
-        "url": "/api/2014/equipment/club"
+        "name": "Club"
       },
       {
         "index": "dagger",
-        "name": "Dagger",
-        "url": "/api/2014/equipment/dagger"
+        "name": "Dagger"
       },
       {
         "index": "flail",
-        "name": "Flail",
-        "url": "/api/2014/equipment/flail"
+        "name": "Flail"
       },
       {
         "index": "glaive",
-        "name": "Glaive",
-        "url": "/api/2014/equipment/glaive"
+        "name": "Glaive"
       },
       {
         "index": "greataxe",
-        "name": "Greataxe",
-        "url": "/api/2014/equipment/greataxe"
+        "name": "Greataxe"
       },
       {
         "index": "greatclub",
-        "name": "Greatclub",
-        "url": "/api/2014/equipment/greatclub"
+        "name": "Greatclub"
       },
       {
         "index": "greatsword",
-        "name": "Greatsword",
-        "url": "/api/2014/equipment/greatsword"
+        "name": "Greatsword"
       },
       {
         "index": "halberd",
-        "name": "Halberd",
-        "url": "/api/2014/equipment/halberd"
+        "name": "Halberd"
       },
       {
         "index": "handaxe",
-        "name": "Handaxe",
-        "url": "/api/2014/equipment/handaxe"
+        "name": "Handaxe"
       },
       {
         "index": "javelin",
-        "name": "Javelin",
-        "url": "/api/2014/equipment/javelin"
+        "name": "Javelin"
       },
       {
         "index": "lance",
-        "name": "Lance",
-        "url": "/api/2014/equipment/lance"
+        "name": "Lance"
       },
       {
         "index": "light-hammer",
-        "name": "Light hammer",
-        "url": "/api/2014/equipment/light-hammer"
+        "name": "Light hammer"
       },
       {
         "index": "longsword",
-        "name": "Longsword",
-        "url": "/api/2014/equipment/longsword"
+        "name": "Longsword"
       },
       {
         "index": "mace",
-        "name": "Mace",
-        "url": "/api/2014/equipment/mace"
+        "name": "Mace"
       },
       {
         "index": "maul",
-        "name": "Maul",
-        "url": "/api/2014/equipment/maul"
+        "name": "Maul"
       },
       {
         "index": "morningstar",
-        "name": "Morningstar",
-        "url": "/api/2014/equipment/morningstar"
+        "name": "Morningstar"
       },
       {
         "index": "pike",
-        "name": "Pike",
-        "url": "/api/2014/equipment/pike"
+        "name": "Pike"
       },
       {
         "index": "quarterstaff",
-        "name": "Quarterstaff",
-        "url": "/api/2014/equipment/quarterstaff"
+        "name": "Quarterstaff"
       },
       {
         "index": "rapier",
-        "name": "Rapier",
-        "url": "/api/2014/equipment/rapier"
+        "name": "Rapier"
       },
       {
         "index": "scimitar",
-        "name": "Scimitar",
-        "url": "/api/2014/equipment/scimitar"
+        "name": "Scimitar"
       },
       {
         "index": "shortsword",
-        "name": "Shortsword",
-        "url": "/api/2014/equipment/shortsword"
+        "name": "Shortsword"
       },
       {
         "index": "sickle",
-        "name": "Sickle",
-        "url": "/api/2014/equipment/sickle"
+        "name": "Sickle"
       },
       {
         "index": "spear",
-        "name": "Spear",
-        "url": "/api/2014/equipment/spear"
+        "name": "Spear"
       },
       {
         "index": "trident",
-        "name": "Trident",
-        "url": "/api/2014/equipment/trident"
+        "name": "Trident"
       },
       {
         "index": "war-pick",
-        "name": "War pick",
-        "url": "/api/2014/equipment/war-pick"
+        "name": "War pick"
       },
       {
         "index": "warhammer",
-        "name": "Warhammer",
-        "url": "/api/2014/equipment/warhammer"
+        "name": "Warhammer"
       },
       {
         "index": "whip",
-        "name": "Whip",
-        "url": "/api/2014/equipment/whip"
+        "name": "Whip"
       }
-    ],
-    "url": "/api/2014/equipment-categories/melee-weapons"
+    ]
   },
   {
     "index": "ranged-weapons",
@@ -8359,51 +7185,41 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "blowgun",
-        "name": "Blowgun",
-        "url": "/api/2014/equipment/blowgun"
+        "name": "Blowgun"
       },
       {
         "index": "crossbow-hand",
-        "name": "Crossbow, hand",
-        "url": "/api/2014/equipment/crossbow-hand"
+        "name": "Crossbow, hand"
       },
       {
         "index": "crossbow-heavy",
-        "name": "Crossbow, heavy",
-        "url": "/api/2014/equipment/crossbow-heavy"
+        "name": "Crossbow, heavy"
       },
       {
         "index": "crossbow-light",
-        "name": "Crossbow, light",
-        "url": "/api/2014/equipment/crossbow-light"
+        "name": "Crossbow, light"
       },
       {
         "index": "dart",
-        "name": "Dart",
-        "url": "/api/2014/equipment/dart"
+        "name": "Dart"
       },
       {
         "index": "longbow",
-        "name": "Longbow",
-        "url": "/api/2014/equipment/longbow"
+        "name": "Longbow"
       },
       {
         "index": "net",
-        "name": "Net",
-        "url": "/api/2014/equipment/net"
+        "name": "Net"
       },
       {
         "index": "shortbow",
-        "name": "Shortbow",
-        "url": "/api/2014/equipment/shortbow"
+        "name": "Shortbow"
       },
       {
         "index": "sling",
-        "name": "Sling",
-        "url": "/api/2014/equipment/sling"
+        "name": "Sling"
       }
-    ],
-    "url": "/api/2014/equipment-categories/ranged-weapons"
+    ]
   },
   {
     "index": "simple-melee-weapons",
@@ -8411,56 +7227,45 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "club",
-        "name": "Club",
-        "url": "/api/2014/equipment/club"
+        "name": "Club"
       },
       {
         "index": "dagger",
-        "name": "Dagger",
-        "url": "/api/2014/equipment/dagger"
+        "name": "Dagger"
       },
       {
         "index": "greatclub",
-        "name": "Greatclub",
-        "url": "/api/2014/equipment/greatclub"
+        "name": "Greatclub"
       },
       {
         "index": "handaxe",
-        "name": "Handaxe",
-        "url": "/api/2014/equipment/handaxe"
+        "name": "Handaxe"
       },
       {
         "index": "javelin",
-        "name": "Javelin",
-        "url": "/api/2014/equipment/javelin"
+        "name": "Javelin"
       },
       {
         "index": "light-hammer",
-        "name": "Light hammer",
-        "url": "/api/2014/equipment/light-hammer"
+        "name": "Light hammer"
       },
       {
         "index": "mace",
-        "name": "Mace",
-        "url": "/api/2014/equipment/mace"
+        "name": "Mace"
       },
       {
         "index": "quarterstaff",
-        "name": "Quarterstaff",
-        "url": "/api/2014/equipment/quarterstaff"
+        "name": "Quarterstaff"
       },
       {
         "index": "sickle",
-        "name": "Sickle",
-        "url": "/api/2014/equipment/sickle"
+        "name": "Sickle"
       },
       {
         "index": "spear",
-        "name": "Spear",
-        "url": "/api/2014/equipment/spear"
+        "name": "Spear"
       }
-    ],
-    "url": "/api/2014/equipment-categories/simple-melee-weapons"
+    ]
   },
   {
     "index": "simple-ranged-weapons",
@@ -8468,26 +7273,21 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "crossbow-light",
-        "name": "Crossbow, light",
-        "url": "/api/2014/equipment/crossbow-light"
+        "name": "Crossbow, light"
       },
       {
         "index": "dart",
-        "name": "Dart",
-        "url": "/api/2014/equipment/dart"
+        "name": "Dart"
       },
       {
         "index": "shortbow",
-        "name": "Shortbow",
-        "url": "/api/2014/equipment/shortbow"
+        "name": "Shortbow"
       },
       {
         "index": "sling",
-        "name": "Sling",
-        "url": "/api/2014/equipment/sling"
+        "name": "Sling"
       }
-    ],
-    "url": "/api/2014/equipment-categories/simple-ranged-weapons"
+    ]
   },
   {
     "index": "martial-melee-weapons",
@@ -8495,96 +7295,77 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "battleaxe",
-        "name": "Battleaxe",
-        "url": "/api/2014/equipment/battleaxe"
+        "name": "Battleaxe"
       },
       {
         "index": "flail",
-        "name": "Flail",
-        "url": "/api/2014/equipment/flail"
+        "name": "Flail"
       },
       {
         "index": "glaive",
-        "name": "Glaive",
-        "url": "/api/2014/equipment/glaive"
+        "name": "Glaive"
       },
       {
         "index": "greataxe",
-        "name": "Greataxe",
-        "url": "/api/2014/equipment/greataxe"
+        "name": "Greataxe"
       },
       {
         "index": "greatsword",
-        "name": "Greatsword",
-        "url": "/api/2014/equipment/greatsword"
+        "name": "Greatsword"
       },
       {
         "index": "halberd",
-        "name": "Halberd",
-        "url": "/api/2014/equipment/halberd"
+        "name": "Halberd"
       },
       {
         "index": "lance",
-        "name": "Lance",
-        "url": "/api/2014/equipment/lance"
+        "name": "Lance"
       },
       {
         "index": "longsword",
-        "name": "Longsword",
-        "url": "/api/2014/equipment/longsword"
+        "name": "Longsword"
       },
       {
         "index": "maul",
-        "name": "Maul",
-        "url": "/api/2014/equipment/maul"
+        "name": "Maul"
       },
       {
         "index": "morningstar",
-        "name": "Morningstar",
-        "url": "/api/2014/equipment/morningstar"
+        "name": "Morningstar"
       },
       {
         "index": "pike",
-        "name": "Pike",
-        "url": "/api/2014/equipment/pike"
+        "name": "Pike"
       },
       {
         "index": "rapier",
-        "name": "Rapier",
-        "url": "/api/2014/equipment/rapier"
+        "name": "Rapier"
       },
       {
         "index": "scimitar",
-        "name": "Scimitar",
-        "url": "/api/2014/equipment/scimitar"
+        "name": "Scimitar"
       },
       {
         "index": "shortsword",
-        "name": "Shortsword",
-        "url": "/api/2014/equipment/shortsword"
+        "name": "Shortsword"
       },
       {
         "index": "trident",
-        "name": "Trident",
-        "url": "/api/2014/equipment/trident"
+        "name": "Trident"
       },
       {
         "index": "war-pick",
-        "name": "War pick",
-        "url": "/api/2014/equipment/war-pick"
+        "name": "War pick"
       },
       {
         "index": "warhammer",
-        "name": "Warhammer",
-        "url": "/api/2014/equipment/warhammer"
+        "name": "Warhammer"
       },
       {
         "index": "whip",
-        "name": "Whip",
-        "url": "/api/2014/equipment/whip"
+        "name": "Whip"
       }
-    ],
-    "url": "/api/2014/equipment-categories/martial-melee-weapons"
+    ]
   },
   {
     "index": "martial-ranged-weapons",
@@ -8592,31 +7373,25 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "blowgun",
-        "name": "Blowgun",
-        "url": "/api/2014/equipment/blowgun"
+        "name": "Blowgun"
       },
       {
         "index": "crossbow-hand",
-        "name": "Crossbow, hand",
-        "url": "/api/2014/equipment/crossbow-hand"
+        "name": "Crossbow, hand"
       },
       {
         "index": "crossbow-heavy",
-        "name": "Crossbow, heavy",
-        "url": "/api/2014/equipment/crossbow-heavy"
+        "name": "Crossbow, heavy"
       },
       {
         "index": "longbow",
-        "name": "Longbow",
-        "url": "/api/2014/equipment/longbow"
+        "name": "Longbow"
       },
       {
         "index": "net",
-        "name": "Net",
-        "url": "/api/2014/equipment/net"
+        "name": "Net"
       }
-    ],
-    "url": "/api/2014/equipment-categories/martial-ranged-weapons"
+    ]
   },
   {
     "index": "light-armor",
@@ -8624,21 +7399,17 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "padded-armor",
-        "name": "Padded Armor",
-        "url": "/api/2014/equipment/padded-armor"
+        "name": "Padded Armor"
       },
       {
         "index": "leather-armor",
-        "name": "Leather Armor",
-        "url": "/api/2014/equipment/leather-armor"
+        "name": "Leather Armor"
       },
       {
         "index": "studded-leather-armor",
-        "name": "Studded Leather Armor",
-        "url": "/api/2014/equipment/studded-leather-armor"
+        "name": "Studded Leather Armor"
       }
-    ],
-    "url": "/api/2014/equipment-categories/light-armor"
+    ]
   },
   {
     "index": "medium-armor",
@@ -8646,31 +7417,25 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "hide-armor",
-        "name": "Hide Armor",
-        "url": "/api/2014/equipment/hide-armor"
+        "name": "Hide Armor"
       },
       {
         "index": "chain-shirt",
-        "name": "Chain Shirt",
-        "url": "/api/2014/equipment/chain-shirt"
+        "name": "Chain Shirt"
       },
       {
         "index": "scale-mail",
-        "name": "Scale Mail",
-        "url": "/api/2014/equipment/scale-mail"
+        "name": "Scale Mail"
       },
       {
         "index": "breastplate",
-        "name": "Breastplate",
-        "url": "/api/2014/equipment/breastplate"
+        "name": "Breastplate"
       },
       {
         "index": "half-plate-armor",
-        "name": "Half Plate Armor",
-        "url": "/api/2014/equipment/half-plate-armor"
+        "name": "Half Plate Armor"
       }
-    ],
-    "url": "/api/2014/equipment-categories/medium-armor"
+    ]
   },
   {
     "index": "heavy-armor",
@@ -8678,26 +7443,21 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "ring-mail",
-        "name": "Ring Mail",
-        "url": "/api/2014/equipment/ring-mail"
+        "name": "Ring Mail"
       },
       {
         "index": "chain-mail",
-        "name": "Chain Mail",
-        "url": "/api/2014/equipment/chain-mail"
+        "name": "Chain Mail"
       },
       {
         "index": "splint-armor",
-        "name": "Splint Armor",
-        "url": "/api/2014/equipment/splint-armor"
+        "name": "Splint Armor"
       },
       {
         "index": "plate-armor",
-        "name": "Plate Armor",
-        "url": "/api/2014/equipment/plate-armor"
+        "name": "Plate Armor"
       }
-    ],
-    "url": "/api/2014/equipment-categories/heavy-armor"
+    ]
   },
   {
     "index": "shields",
@@ -8705,11 +7465,9 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "shield",
-        "name": "Shield",
-        "url": "/api/2014/equipment/shield"
+        "name": "Shield"
       }
-    ],
-    "url": "/api/2014/equipment-categories/shields"
+    ]
   },
   {
     "index": "standard-gear",
@@ -8717,476 +7475,381 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "abacus",
-        "name": "Abacus",
-        "url": "/api/2014/equipment/abacus"
+        "name": "Abacus"
       },
       {
         "index": "acid-vial",
-        "name": "Acid (vial)",
-        "url": "/api/2014/equipment/acid-vial"
+        "name": "Acid (vial)"
       },
       {
         "index": "alchemists-fire-flask",
-        "name": "Alchemist's fire (flask)",
-        "url": "/api/2014/equipment/alchemists-fire-flask"
+        "name": "Alchemist's fire (flask)"
       },
       {
         "index": "arrow",
-        "name": "Arrow",
-        "url": "/api/2014/equipment/arrow"
+        "name": "Arrow"
       },
       {
         "index": "blowgun-needle",
-        "name": "Blowgun needle",
-        "url": "/api/2014/equipment/blowgun-needle"
+        "name": "Blowgun needle"
       },
       {
         "index": "crossbow-bolt",
-        "name": "Crossbow bolt",
-        "url": "/api/2014/equipment/crossbow-bolt"
+        "name": "Crossbow bolt"
       },
       {
         "index": "sling-bullet",
-        "name": "Sling bullet",
-        "url": "/api/2014/equipment/sling-bullet"
+        "name": "Sling bullet"
       },
       {
         "index": "alms-box",
-        "name": "Alms box",
-        "url": "/api/2014/equipment/alms-box"
+        "name": "Alms box"
       },
       {
         "index": "antitoxin-vial",
-        "name": "Antitoxin (vial)",
-        "url": "/api/2014/equipment/antitoxin-vial"
+        "name": "Antitoxin (vial)"
       },
       {
         "index": "backpack",
-        "name": "Backpack",
-        "url": "/api/2014/equipment/backpack"
+        "name": "Backpack"
       },
       {
         "index": "ball-bearings-bag-of-1000",
-        "name": "Ball bearings (bag of 1,000)",
-        "url": "/api/2014/equipment/ball-bearings-bag-of-1000"
+        "name": "Ball bearings (bag of 1,000)"
       },
       {
         "index": "barrel",
-        "name": "Barrel",
-        "url": "/api/2014/equipment/barrel"
+        "name": "Barrel"
       },
       {
         "index": "basket",
-        "name": "Basket",
-        "url": "/api/2014/equipment/basket"
+        "name": "Basket"
       },
       {
         "index": "bedroll",
-        "name": "Bedroll",
-        "url": "/api/2014/equipment/bedroll"
+        "name": "Bedroll"
       },
       {
         "index": "bell",
-        "name": "Bell",
-        "url": "/api/2014/equipment/bell"
+        "name": "Bell"
       },
       {
         "index": "blanket",
-        "name": "Blanket",
-        "url": "/api/2014/equipment/blanket"
+        "name": "Blanket"
       },
       {
         "index": "block-and-tackle",
-        "name": "Block and tackle",
-        "url": "/api/2014/equipment/block-and-tackle"
+        "name": "Block and tackle"
       },
       {
         "index": "block-of-incense",
-        "name": "Block of incense",
-        "url": "/api/2014/equipment/block-of-incense"
+        "name": "Block of incense"
       },
       {
         "index": "book",
-        "name": "Book",
-        "url": "/api/2014/equipment/book"
+        "name": "Book"
       },
       {
         "index": "bottle-glass",
-        "name": "Bottle, glass",
-        "url": "/api/2014/equipment/bottle-glass"
+        "name": "Bottle, glass"
       },
       {
         "index": "bucket",
-        "name": "Bucket",
-        "url": "/api/2014/equipment/bucket"
+        "name": "Bucket"
       },
       {
         "index": "caltrops",
-        "name": "Caltrops",
-        "url": "/api/2014/equipment/caltrops"
+        "name": "Caltrops"
       },
       {
         "index": "candle",
-        "name": "Candle",
-        "url": "/api/2014/equipment/candle"
+        "name": "Candle"
       },
       {
         "index": "case-crossbow-bolt",
-        "name": "Case, crossbow bolt",
-        "url": "/api/2014/equipment/case-crossbow-bolt"
+        "name": "Case, crossbow bolt"
       },
       {
         "index": "case-map-or-scroll",
-        "name": "Case, map or scroll",
-        "url": "/api/2014/equipment/case-map-or-scroll"
+        "name": "Case, map or scroll"
       },
       {
         "index": "censer",
-        "name": "Censer",
-        "url": "/api/2014/equipment/censer"
+        "name": "Censer"
       },
       {
         "index": "chain-10-feet",
-        "name": "Chain (10 feet)",
-        "url": "/api/2014/equipment/chain-10-feet"
+        "name": "Chain (10 feet)"
       },
       {
         "index": "chalk-1-piece",
-        "name": "Chalk (1 piece)",
-        "url": "/api/2014/equipment/chalk-1-piece"
+        "name": "Chalk (1 piece)"
       },
       {
         "index": "chest",
-        "name": "Chest",
-        "url": "/api/2014/equipment/chest"
+        "name": "Chest"
       },
       {
         "index": "clothes-common",
-        "name": "Clothes, common",
-        "url": "/api/2014/equipment/clothes-common"
+        "name": "Clothes, common"
       },
       {
         "index": "clothes-costume",
-        "name": "Clothes, costume",
-        "url": "/api/2014/equipment/clothes-costume"
+        "name": "Clothes, costume"
       },
       {
         "index": "clothes-fine",
-        "name": "Clothes, fine",
-        "url": "/api/2014/equipment/clothes-fine"
+        "name": "Clothes, fine"
       },
       {
         "index": "clothes-travelers",
-        "name": "Clothes, traveler's",
-        "url": "/api/2014/equipment/clothes-travelers"
+        "name": "Clothes, traveler's"
       },
       {
         "index": "component-pouch",
-        "name": "Component pouch",
-        "url": "/api/2014/equipment/component-pouch"
+        "name": "Component pouch"
       },
       {
         "index": "crowbar",
-        "name": "Crowbar",
-        "url": "/api/2014/equipment/crowbar"
+        "name": "Crowbar"
       },
       {
         "index": "fishing-tackle",
-        "name": "Fishing tackle",
-        "url": "/api/2014/equipment/fishing-tackle"
+        "name": "Fishing tackle"
       },
       {
         "index": "flask-or-tankard",
-        "name": "Flask or tankard",
-        "url": "/api/2014/equipment/flask-or-tankard"
+        "name": "Flask or tankard"
       },
       {
         "index": "grappling-hook",
-        "name": "Grappling hook",
-        "url": "/api/2014/equipment/grappling-hook"
+        "name": "Grappling hook"
       },
       {
         "index": "hammer",
-        "name": "Hammer",
-        "url": "/api/2014/equipment/hammer"
+        "name": "Hammer"
       },
       {
         "index": "hammer-sledge",
-        "name": "Hammer, sledge",
-        "url": "/api/2014/equipment/hammer-sledge"
+        "name": "Hammer, sledge"
       },
       {
         "index": "holy-water-flask",
-        "name": "Holy water (flask)",
-        "url": "/api/2014/equipment/holy-water-flask"
+        "name": "Holy water (flask)"
       },
       {
         "index": "hourglass",
-        "name": "Hourglass",
-        "url": "/api/2014/equipment/hourglass"
+        "name": "Hourglass"
       },
       {
         "index": "hunting-trap",
-        "name": "Hunting trap",
-        "url": "/api/2014/equipment/hunting-trap"
+        "name": "Hunting trap"
       },
       {
         "index": "ink-1-ounce-bottle",
-        "name": "Ink (1 ounce bottle)",
-        "url": "/api/2014/equipment/ink-1-ounce-bottle"
+        "name": "Ink (1 ounce bottle)"
       },
       {
         "index": "ink-pen",
-        "name": "Ink pen",
-        "url": "/api/2014/equipment/ink-pen"
+        "name": "Ink pen"
       },
       {
         "index": "hourglass",
-        "name": "Hourglass",
-        "url": "/api/2014/equipment/hourglass"
+        "name": "Hourglass"
       },
       {
         "index": "hunting-trap",
-        "name": "Hunting trap",
-        "url": "/api/2014/equipment/hunting-trap"
+        "name": "Hunting trap"
       },
       {
         "index": "ink-1-ounce-bottle",
-        "name": "Ink (1 ounce bottle)",
-        "url": "/api/2014/equipment/ink-1-ounce-bottle"
+        "name": "Ink (1 ounce bottle)"
       },
       {
         "index": "ink-pen",
-        "name": "Ink pen",
-        "url": "/api/2014/equipment/ink-pen"
+        "name": "Ink pen"
       },
       {
         "index": "jug-or-pitcher",
-        "name": "Jug or pitcher",
-        "url": "/api/2014/equipment/jug-or-pitcher"
+        "name": "Jug or pitcher"
       },
       {
         "index": "ladder-10-foot",
-        "name": "Ladder (10-foot)",
-        "url": "/api/2014/equipment/ladder-10-foot"
+        "name": "Ladder (10-foot)"
       },
       {
         "index": "lamp",
-        "name": "Lamp",
-        "url": "/api/2014/equipment/lamp"
+        "name": "Lamp"
       },
       {
         "index": "lantern-bullseye",
-        "name": "Lantern, bullseye",
-        "url": "/api/2014/equipment/lantern-bullseye"
+        "name": "Lantern, bullseye"
       },
       {
         "index": "lantern-hooded",
-        "name": "Lantern, hooded",
-        "url": "/api/2014/equipment/lantern-hooded"
+        "name": "Lantern, hooded"
       },
       {
         "index": "little-bag-of-sand",
-        "name": "Little bag of sand",
-        "url": "/api/2014/equipment/little-bag-of-sand"
+        "name": "Little bag of sand"
       },
       {
         "index": "lock",
-        "name": "Lock",
-        "url": "/api/2014/equipment/lock"
+        "name": "Lock"
       },
       {
         "index": "magnifying-glass",
-        "name": "Magnifying glass",
-        "url": "/api/2014/equipment/magnifying-glass"
+        "name": "Magnifying glass"
       },
       {
         "index": "manacles",
-        "name": "Manacles",
-        "url": "/api/2014/equipment/manacles"
+        "name": "Manacles"
       },
       {
         "index": "mirror-steel",
-        "name": "Mirror, steel",
-        "url": "/api/2014/equipment/mirror-steel"
+        "name": "Mirror, steel"
       },
       {
         "index": "oil-flask",
-        "name": "Oil (flask)",
-        "url": "/api/2014/equipment/oil-flask"
+        "name": "Oil (flask)"
       },
       {
         "index": "paper-one-sheet",
-        "name": "Paper (one sheet)",
-        "url": "/api/2014/equipment/paper-one-sheet"
+        "name": "Paper (one sheet)"
       },
       {
         "index": "parchment-one-sheet",
-        "name": "Parchment (one sheet)",
-        "url": "/api/2014/equipment/parchment-one-sheet"
+        "name": "Parchment (one sheet)"
       },
       {
         "index": "perfume-vial",
-        "name": "Perfume (vial)",
-        "url": "/api/2014/equipment/perfume-vial"
+        "name": "Perfume (vial)"
       },
       {
         "index": "pick-miners",
-        "name": "Pick, miner's",
-        "url": "/api/2014/equipment/pick-miners"
+        "name": "Pick, miner's"
       },
       {
         "index": "piton",
-        "name": "Piton",
-        "url": "/api/2014/equipment/piton"
+        "name": "Piton"
       },
       {
         "index": "poison-basic-vial",
-        "name": "Poison, basic (vial)",
-        "url": "/api/2014/equipment/poison-basic-vial"
+        "name": "Poison, basic (vial)"
       },
       {
         "index": "pole-10-foot",
-        "name": "Pole (10-foot)",
-        "url": "/api/2014/equipment/pole-10-foot"
+        "name": "Pole (10-foot)"
       },
       {
         "index": "pot-iron",
-        "name": "Pot, iron",
-        "url": "/api/2014/equipment/pot-iron"
+        "name": "Pot, iron"
       },
       {
         "index": "pouch",
-        "name": "Pouch",
-        "url": "/api/2014/equipment/pouch"
+        "name": "Pouch"
       },
       {
         "index": "quiver",
-        "name": "Quiver",
-        "url": "/api/2014/equipment/quiver"
+        "name": "Quiver"
       },
       {
         "index": "ram-portable",
-        "name": "Ram, portable",
-        "url": "/api/2014/equipment/ram-portable"
+        "name": "Ram, portable"
       },
       {
         "index": "rations-1-day",
-        "name": "Rations (1 day)",
-        "url": "/api/2014/equipment/rations-1-day"
+        "name": "Rations (1 day)"
       },
       {
         "index": "robes",
-        "name": "Robes",
-        "url": "/api/2014/equipment/robes"
+        "name": "Robes"
       },
       {
         "index": "rope-hempen-50-feet",
-        "name": "Rope, hempen (50 feet)",
-        "url": "/api/2014/equipment/rope-hempen-50-feet"
+        "name": "Rope, hempen (50 feet)"
       },
       {
         "index": "rope-silk-50-feet",
-        "name": "Rope, silk (50 feet)",
-        "url": "/api/2014/equipment/rope-silk-50-feet"
+        "name": "Rope, silk (50 feet)"
       },
       {
         "index": "sack",
-        "name": "Sack",
-        "url": "/api/2014/equipment/sack"
+        "name": "Sack"
       },
       {
         "index": "scale-merchants",
-        "name": "Scale, merchant's",
-        "url": "/api/2014/equipment/scale-merchants"
+        "name": "Scale, merchant's"
       },
       {
         "index": "sealing-wax",
-        "name": "Sealing wax",
-        "url": "/api/2014/equipment/sealing-wax"
+        "name": "Sealing wax"
       },
       {
         "index": "shovel",
-        "name": "Shovel",
-        "url": "/api/2014/equipment/shovel"
+        "name": "Shovel"
       },
       {
         "index": "signal-whistle",
-        "name": "Signal whistle",
-        "url": "/api/2014/equipment/signal-whistle"
+        "name": "Signal whistle"
       },
       {
         "index": "signet-ring",
-        "name": "Signet ring",
-        "url": "/api/2014/equipment/signet-ring"
+        "name": "Signet ring"
       },
       {
         "index": "small-knife",
-        "name": "Small knife",
-        "url": "/api/2014/equipment/small-knife"
+        "name": "Small knife"
       },
       {
         "index": "soap",
-        "name": "Soap",
-        "url": "/api/2014/equipment/soap"
+        "name": "Soap"
       },
       {
         "index": "spellbook",
-        "name": "Spellbook",
-        "url": "/api/2014/equipment/spellbook"
+        "name": "Spellbook"
       },
       {
         "index": "spike-iron",
-        "name": "Spike, iron",
-        "url": "/api/2014/equipment/spike-iron"
+        "name": "Spike, iron"
       },
       {
         "index": "spyglass",
-        "name": "Spyglass",
-        "url": "/api/2014/equipment/spyglass"
+        "name": "Spyglass"
       },
       {
         "index": "string-10-feet",
-        "name": "String (10 feet)",
-        "url": "/api/2014/equipment/string-10-feet"
+        "name": "String (10 feet)"
       },
       {
         "index": "tent-two-person",
-        "name": "Tent, two-person",
-        "url": "/api/2014/equipment/tent-two-person"
+        "name": "Tent, two-person"
       },
       {
         "index": "tinderbox",
-        "name": "Tinderbox",
-        "url": "/api/2014/equipment/tinderbox"
+        "name": "Tinderbox"
       },
       {
         "index": "vestments",
-        "name": "Vestments",
-        "url": "/api/2014/equipment/vestments"
+        "name": "Vestments"
       },
       {
         "index": "torch",
-        "name": "Torch",
-        "url": "/api/2014/equipment/torch"
+        "name": "Torch"
       },
       {
         "index": "vial",
-        "name": "Vial",
-        "url": "/api/2014/equipment/vial"
+        "name": "Vial"
       },
       {
         "index": "waterskin",
-        "name": "Waterskin",
-        "url": "/api/2014/equipment/waterskin"
+        "name": "Waterskin"
       },
       {
         "index": "whetstone",
-        "name": "Whetstone",
-        "url": "/api/2014/equipment/whetstone"
+        "name": "Whetstone"
       }
-    ],
-    "url": "/api/2014/equipment-categories/standard-gear"
+    ]
   },
   {
     "index": "kits",
@@ -9194,41 +7857,33 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "climbers-kit",
-        "name": "Climber's Kit",
-        "url": "/api/2014/equipment/climbers-kit"
+        "name": "Climber's Kit"
       },
       {
         "index": "disguise-kit",
-        "name": "Disguise Kit",
-        "url": "/api/2014/equipment/disguise-kit"
+        "name": "Disguise Kit"
       },
       {
         "index": "forgery-kit",
-        "name": "Forgery Kit",
-        "url": "/api/2014/equipment/forgery-kit"
+        "name": "Forgery Kit"
       },
       {
         "index": "herbalism-kit",
-        "name": "Herbalism Kit",
-        "url": "/api/2014/equipment/herbalism-kit"
+        "name": "Herbalism Kit"
       },
       {
         "index": "healers-kit",
-        "name": "Healer's Kit",
-        "url": "/api/2014/equipment/healers-kit"
+        "name": "Healer's Kit"
       },
       {
         "index": "mess-kit",
-        "name": "Mess Kit",
-        "url": "/api/2014/equipment/mess-kit"
+        "name": "Mess Kit"
       },
       {
         "index": "poisoners-kit",
-        "name": "Poisoner's Kit",
-        "url": "/api/2014/equipment/poisoners-kit"
+        "name": "Poisoner's Kit"
       }
-    ],
-    "url": "/api/2014/equipment-categories/kits"
+    ]
   },
   {
     "index": "equipment-packs",
@@ -9236,41 +7891,33 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "burglars-pack",
-        "name": "Burglar's Pack",
-        "url": "/api/2014/equipment/burglars-pack"
+        "name": "Burglar's Pack"
       },
       {
         "index": "diplomats-pack",
-        "name": "Diplomat's Pack",
-        "url": "/api/2014/equipment/diplomats-pack"
+        "name": "Diplomat's Pack"
       },
       {
         "index": "dungeoneers-pack",
-        "name": "Dungeoneer's Pack",
-        "url": "/api/2014/equipment/dungeoneers-pack"
+        "name": "Dungeoneer's Pack"
       },
       {
         "index": "entertainers-pack",
-        "name": "Entertainer's Pack",
-        "url": "/api/2014/equipment/entertainers-pack"
+        "name": "Entertainer's Pack"
       },
       {
         "index": "explorers-pack",
-        "name": "Explorer's Pack",
-        "url": "/api/2014/equipment/explorers-pack"
+        "name": "Explorer's Pack"
       },
       {
         "index": "priests-pack",
-        "name": "Priest's Pack",
-        "url": "/api/2014/equipment/priests-pack"
+        "name": "Priest's Pack"
       },
       {
         "index": "scholars-pack",
-        "name": "Scholar's Pack",
-        "url": "/api/2014/equipment/scholars-pack"
+        "name": "Scholar's Pack"
       }
-    ],
-    "url": "/api/2014/equipment-categories/equipment-packs"
+    ]
   },
   {
     "index": "artisans-tools",
@@ -9278,91 +7925,73 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "alchemists-supplies",
-        "name": "Alchemist's Supplies",
-        "url": "/api/2014/equipment/alchemists-supplies"
+        "name": "Alchemist's Supplies"
       },
       {
         "index": "brewers-supplies",
-        "name": "Brewer's Supplies",
-        "url": "/api/2014/equipment/brewers-supplies"
+        "name": "Brewer's Supplies"
       },
       {
         "index": "calligraphers-supplies",
-        "name": "Calligrapher's Supplies",
-        "url": "/api/2014/equipment/calligraphers-supplies"
+        "name": "Calligrapher's Supplies"
       },
       {
         "index": "carpenters-tools",
-        "name": "Carpenter's Tools",
-        "url": "/api/2014/equipment/carpenters-tools"
+        "name": "Carpenter's Tools"
       },
       {
         "index": "cartographers-tools",
-        "name": "Cartographer's Tools",
-        "url": "/api/2014/equipment/cartographers-tools"
+        "name": "Cartographer's Tools"
       },
       {
         "index": "cobblers-tools",
-        "name": "Cobbler's Tools",
-        "url": "/api/2014/equipment/cobblers-tools"
+        "name": "Cobbler's Tools"
       },
       {
         "index": "cooks-utensils",
-        "name": "Cook's utensils",
-        "url": "/api/2014/equipment/cooks-utensils"
+        "name": "Cook's utensils"
       },
       {
         "index": "glassblowers-tools",
-        "name": "Glassblower's Tools",
-        "url": "/api/2014/equipment/glassblowers-tools"
+        "name": "Glassblower's Tools"
       },
       {
         "index": "jewelers-tools",
-        "name": "Jeweler's Tools",
-        "url": "/api/2014/equipment/jewelers-tools"
+        "name": "Jeweler's Tools"
       },
       {
         "index": "leatherworkers-tools",
-        "name": "Leatherworker's Tools",
-        "url": "/api/2014/equipment/leatherworkers-tools"
+        "name": "Leatherworker's Tools"
       },
       {
         "index": "masons-tools",
-        "name": "Mason's Tools",
-        "url": "/api/2014/equipment/masons-tools"
+        "name": "Mason's Tools"
       },
       {
         "index": "painters-supplies",
-        "name": "Painter's Supplies",
-        "url": "/api/2014/equipment/painters-supplies"
+        "name": "Painter's Supplies"
       },
       {
         "index": "potters-tools",
-        "name": "Potter's Tools",
-        "url": "/api/2014/equipment/potters-tools"
+        "name": "Potter's Tools"
       },
       {
         "index": "smiths-tools",
-        "name": "Smith's Tools",
-        "url": "/api/2014/equipment/smiths-tools"
+        "name": "Smith's Tools"
       },
       {
         "index": "tinkers-tools",
-        "name": "Tinker's Tools",
-        "url": "/api/2014/equipment/tinkers-tools"
+        "name": "Tinker's Tools"
       },
       {
         "index": "weavers-tools",
-        "name": "Weaver's Tools",
-        "url": "/api/2014/equipment/weavers-tools"
+        "name": "Weaver's Tools"
       },
       {
         "index": "woodcarvers-tools",
-        "name": "Woodcarver's Tools",
-        "url": "/api/2014/equipment/woodcarvers-tools"
+        "name": "Woodcarver's Tools"
       }
-    ],
-    "url": "/api/2014/equipment-categories/artisans-tools"
+    ]
   },
   {
     "index": "gaming-sets",
@@ -9370,16 +7999,13 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "dice-set",
-        "name": "Dice Set",
-        "url": "/api/2014/equipment/dice-set"
+        "name": "Dice Set"
       },
       {
         "index": "playing-card-set",
-        "name": "Playing Card Set",
-        "url": "/api/2014/equipment/playing-card-set"
+        "name": "Playing Card Set"
       }
-    ],
-    "url": "/api/2014/equipment-categories/gaming-sets"
+    ]
   },
   {
     "index": "musical-instruments",
@@ -9387,56 +8013,45 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "bagpipes",
-        "name": "Bagpipes",
-        "url": "/api/2014/equipment/bagpipes"
+        "name": "Bagpipes"
       },
       {
         "index": "drum",
-        "name": "Drum",
-        "url": "/api/2014/equipment/drum"
+        "name": "Drum"
       },
       {
         "index": "dulcimer",
-        "name": "Dulcimer",
-        "url": "/api/2014/equipment/dulcimer"
+        "name": "Dulcimer"
       },
       {
         "index": "flute",
-        "name": "Flute",
-        "url": "/api/2014/equipment/flute"
+        "name": "Flute"
       },
       {
         "index": "lute",
-        "name": "Lute",
-        "url": "/api/2014/equipment/lute"
+        "name": "Lute"
       },
       {
         "index": "lyre",
-        "name": "Lyre",
-        "url": "/api/2014/equipment/lyre"
+        "name": "Lyre"
       },
       {
         "index": "horn",
-        "name": "Horn",
-        "url": "/api/2014/equipment/horn"
+        "name": "Horn"
       },
       {
         "index": "pan-flute",
-        "name": "Pan flute",
-        "url": "/api/2014/equipment/pan-flute"
+        "name": "Pan flute"
       },
       {
         "index": "shawm",
-        "name": "Shawm",
-        "url": "/api/2014/equipment/shawm"
+        "name": "Shawm"
       },
       {
         "index": "viol",
-        "name": "Viol",
-        "url": "/api/2014/equipment/viol"
+        "name": "Viol"
       }
-    ],
-    "url": "/api/2014/equipment-categories/musical-instruments"
+    ]
   },
   {
     "index": "other-tools",
@@ -9444,16 +8059,13 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "navigators-tools",
-        "name": "Navigator's Tools",
-        "url": "/api/2014/equipment/navigators-tools"
+        "name": "Navigator's Tools"
       },
       {
         "index": "thieves-tools",
-        "name": "Thieves' Tools",
-        "url": "/api/2014/equipment/thieves-tools"
+        "name": "Thieves' Tools"
       }
-    ],
-    "url": "/api/2014/equipment-categories/other-tools"
+    ]
   },
   {
     "index": "mounts-and-other-animals",
@@ -9461,41 +8073,33 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "mule",
-        "name": "Mule",
-        "url": "/api/2014/equipment/mule"
+        "name": "Mule"
       },
       {
         "index": "elephant",
-        "name": "Elephant",
-        "url": "/api/2014/equipment/elephant"
+        "name": "Elephant"
       },
       {
         "index": "horse-draft",
-        "name": "Horse, draft",
-        "url": "/api/2014/equipment/horse-draft"
+        "name": "Horse, draft"
       },
       {
         "index": "horse-riding",
-        "name": "Horse, riding",
-        "url": "/api/2014/equipment/horse-riding"
+        "name": "Horse, riding"
       },
       {
         "index": "mastiff",
-        "name": "Mastiff",
-        "url": "/api/2014/equipment/mastiff"
+        "name": "Mastiff"
       },
       {
         "index": "pony",
-        "name": "Pony",
-        "url": "/api/2014/equipment/pony"
+        "name": "Pony"
       },
       {
         "index": "warhorse",
-        "name": "Warhorse",
-        "url": "/api/2014/equipment/warhorse"
+        "name": "Warhorse"
       }
-    ],
-    "url": "/api/2014/equipment-categories/mounts-and-other-animals"
+    ]
   },
   {
     "index": "tack-harness-and-drawn-vehicles",
@@ -9503,131 +8107,105 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "barding-padded",
-        "name": "Barding: Padded",
-        "url": "/api/2014/equipment/barding-padded"
+        "name": "Barding: Padded"
       },
       {
         "index": "barding-leather",
-        "name": "Barding: Leather",
-        "url": "/api/2014/equipment/barding-leather"
+        "name": "Barding: Leather"
       },
       {
         "index": "barding-studded-leather",
-        "name": "Barding: Studded Leather",
-        "url": "/api/2014/equipment/barding-studded-leather"
+        "name": "Barding: Studded Leather"
       },
       {
         "index": "barding-hide",
-        "name": "Barding: Hide",
-        "url": "/api/2014/equipment/barding-hide"
+        "name": "Barding: Hide"
       },
       {
         "index": "barding-chain-shirt",
-        "name": "Barding: Chain shirt",
-        "url": "/api/2014/equipment/barding-chain-shirt"
+        "name": "Barding: Chain shirt"
       },
       {
         "index": "barding-scale-mail",
-        "name": "Barding: Scale mail",
-        "url": "/api/2014/equipment/barding-scale-mail"
+        "name": "Barding: Scale mail"
       },
       {
         "index": "barding-breastplate",
-        "name": "Barding: Breastplate",
-        "url": "/api/2014/equipment/barding-breastplate"
+        "name": "Barding: Breastplate"
       },
       {
         "index": "barding-half-plate",
-        "name": "Barding: Half plate",
-        "url": "/api/2014/equipment/barding-half-plate"
+        "name": "Barding: Half plate"
       },
       {
         "index": "barding-ring-mail",
-        "name": "Barding: Ring mail",
-        "url": "/api/2014/equipment/barding-ring-mail"
+        "name": "Barding: Ring mail"
       },
       {
         "index": "barding-chain-mail",
-        "name": "Barding: Chain mail",
-        "url": "/api/2014/equipment/barding-chain-mail"
+        "name": "Barding: Chain mail"
       },
       {
         "index": "barding-splint",
-        "name": "Barding: Splint",
-        "url": "/api/2014/equipment/barding-splint"
+        "name": "Barding: Splint"
       },
       {
         "index": "barding-plate",
-        "name": "Barding: Plate",
-        "url": "/api/2014/equipment/barding-plate"
+        "name": "Barding: Plate"
       },
       {
         "index": "bit-and-bridle",
-        "name": "Bit and bridle",
-        "url": "/api/2014/equipment/bit-and-bridle"
+        "name": "Bit and bridle"
       },
       {
         "index": "carriage",
-        "name": "Carriage",
-        "url": "/api/2014/equipment/carriage"
+        "name": "Carriage"
       },
       {
         "index": "cart",
-        "name": "Cart",
-        "url": "/api/2014/equipment/cart"
+        "name": "Cart"
       },
       {
         "index": "chariot",
-        "name": "Chariot",
-        "url": "/api/2014/equipment/chariot"
+        "name": "Chariot"
       },
       {
         "index": "animal-feed-1-day",
-        "name": "Animal Feed (1 day)",
-        "url": "/api/2014/equipment/animal-feed-1-day"
+        "name": "Animal Feed (1 day)"
       },
       {
         "index": "saddle-exotic",
-        "name": "Saddle, Exotic",
-        "url": "/api/2014/equipment/saddle-exotic"
+        "name": "Saddle, Exotic"
       },
       {
         "index": "saddle-military",
-        "name": "Saddle, Military",
-        "url": "/api/2014/equipment/saddle-military"
+        "name": "Saddle, Military"
       },
       {
         "index": "saddle-pack",
-        "name": "Saddle, Pack",
-        "url": "/api/2014/equipment/saddle-pack"
+        "name": "Saddle, Pack"
       },
       {
         "index": "saddle-riding",
-        "name": "Saddle, Riding",
-        "url": "/api/2014/equipment/saddle-riding"
+        "name": "Saddle, Riding"
       },
       {
         "index": "saddlebags",
-        "name": "Saddlebags",
-        "url": "/api/2014/equipment/saddlebags"
+        "name": "Saddlebags"
       },
       {
         "index": "sled",
-        "name": "Sled",
-        "url": "/api/2014/equipment/sled"
+        "name": "Sled"
       },
       {
         "index": "stabling-1-day",
-        "name": "Stabling (1 day)",
-        "url": "/api/2014/equipment/stabling-1-day"
+        "name": "Stabling (1 day)"
       },
       {
         "index": "wagon",
-        "name": "Wagon",
-        "url": "/api/2014/equipment/wagon"
+        "name": "Wagon"
       }
-    ],
-    "url": "/api/2014/equipment-categories/tack-harness-and-drawn-vehicles"
+    ]
   },
   {
     "index": "land-vehicles",
@@ -9635,31 +8213,25 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "carriage",
-        "name": "Carriage",
-        "url": "/api/2014/equipment/carriage"
+        "name": "Carriage"
       },
       {
         "index": "cart",
-        "name": "Cart",
-        "url": "/api/2014/equipment/cart"
+        "name": "Cart"
       },
       {
         "index": "chariot",
-        "name": "Chariot",
-        "url": "/api/2014/equipment/chariot"
+        "name": "Chariot"
       },
       {
         "index": "sled",
-        "name": "Sled",
-        "url": "/api/2014/equipment/sled"
+        "name": "Sled"
       },
       {
         "index": "wagon",
-        "name": "Wagon",
-        "url": "/api/2014/equipment/wagon"
+        "name": "Wagon"
       }
-    ],
-    "url": "/api/2014/equipment-categories/land-vehicles"
+    ]
   },
   {
     "index": "waterborne-vehicles",
@@ -9667,36 +8239,29 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "galley",
-        "name": "Galley",
-        "url": "/api/2014/equipment/galley"
+        "name": "Galley"
       },
       {
         "index": "keelboat",
-        "name": "Keelboat",
-        "url": "/api/2014/equipment/keelboat"
+        "name": "Keelboat"
       },
       {
         "index": "longship",
-        "name": "Longship",
-        "url": "/api/2014/equipment/longship"
+        "name": "Longship"
       },
       {
         "index": "rowboat",
-        "name": "Rowboat",
-        "url": "/api/2014/equipment/rowboat"
+        "name": "Rowboat"
       },
       {
         "index": "sailing-ship",
-        "name": "Sailing ship",
-        "url": "/api/2014/equipment/sailing-ship"
+        "name": "Sailing ship"
       },
       {
         "index": "warship",
-        "name": "Warship",
-        "url": "/api/2014/equipment/warship"
+        "name": "Warship"
       }
-    ],
-    "url": "/api/2014/equipment-categories/waterborne-vehicles"
+    ]
   },
   {
     "index": "arcane-foci",
@@ -9704,31 +8269,25 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "crystal",
-        "name": "Crystal",
-        "url": "/api/2014/equipment/crystal"
+        "name": "Crystal"
       },
       {
         "index": "orb",
-        "name": "Orb",
-        "url": "/api/2014/equipment/orb"
+        "name": "Orb"
       },
       {
         "index": "rod",
-        "name": "Rod",
-        "url": "/api/2014/equipment/rod"
+        "name": "Rod"
       },
       {
         "index": "staff",
-        "name": "Staff",
-        "url": "/api/2014/equipment/staff"
+        "name": "Staff"
       },
       {
         "index": "wand",
-        "name": "Wand",
-        "url": "/api/2014/equipment/wand"
+        "name": "Wand"
       }
-    ],
-    "url": "/api/2014/equipment-categories/arcane-foci"
+    ]
   },
   {
     "index": "druidic-foci",
@@ -9736,26 +8295,21 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "sprig-of-mistletoe",
-        "name": "Sprig of mistletoe",
-        "url": "/api/2014/equipment/sprig-of-mistletoe"
+        "name": "Sprig of mistletoe"
       },
       {
         "index": "totem",
-        "name": "Totem",
-        "url": "/api/2014/equipment/totem"
+        "name": "Totem"
       },
       {
         "index": "wooden-staff",
-        "name": "Wooden staff",
-        "url": "/api/2014/equipment/wooden-staff"
+        "name": "Wooden staff"
       },
       {
         "index": "yew-wand",
-        "name": "Yew wand",
-        "url": "/api/2014/equipment/yew-wand"
+        "name": "Yew wand"
       }
-    ],
-    "url": "/api/2014/equipment-categories/druidic-foci"
+    ]
   },
   {
     "index": "holy-symbols",
@@ -9763,21 +8317,17 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "amulet",
-        "name": "Amulet",
-        "url": "/api/2014/equipment/amulet"
+        "name": "Amulet"
       },
       {
         "index": "emblem",
-        "name": "Emblem",
-        "url": "/api/2014/equipment/emblem"
+        "name": "Emblem"
       },
       {
         "index": "reliquary",
-        "name": "Reliquary",
-        "url": "/api/2014/equipment/reliquary"
+        "name": "Reliquary"
       }
-    ],
-    "url": "/api/2014/equipment-categories/holy-symbols"
+    ]
   },
   {
     "index": "wondrous-items",
@@ -9785,891 +8335,713 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "amulet-of-health",
-        "name": "Amulet of Health",
-        "url": "/api/2014/magic-items/amulet-of-health"
+        "name": "Amulet of Health"
       },
       {
         "index": "amulet-of-proof-against-detection-and-location",
-        "name": "Amulet of Proof against Detection and Location",
-        "url": "/api/2014/magic-items/amulet-of-proof-against-detection-and-location"
+        "name": "Amulet of Proof against Detection and Location"
       },
       {
         "index": "amulet-of-the-planes",
-        "name": "Amulet of the Planes",
-        "url": "/api/2014/magic-items/amulet-of-the-planes"
+        "name": "Amulet of the Planes"
       },
       {
         "index": "apparatus-of-the-crab",
-        "name": "Apparatus of the Crab",
-        "url": "/api/2014/magic-items/apparatus-of-the-crab"
+        "name": "Apparatus of the Crab"
       },
       {
         "index": "bag-of-beans",
-        "name": "Bag of Beans",
-        "url": "/api/2014/magic-items/bag-of-beans"
+        "name": "Bag of Beans"
       },
       {
         "index": "bag-of-devouring",
-        "name": "Bag of Devouring",
-        "url": "/api/2014/magic-items/bag-of-devouring"
+        "name": "Bag of Devouring"
       },
       {
         "index": "bag-of-holding",
-        "name": "Bag of Holding",
-        "url": "/api/2014/magic-items/bag-of-holding"
+        "name": "Bag of Holding"
       },
       {
         "index": "bag-of-tricks",
-        "name": "Bag of Tricks",
-        "url": "/api/2014/magic-items/bag-of-tricks"
+        "name": "Bag of Tricks"
       },
       {
         "index": "bead-of-force",
-        "name": "Bead of Force",
-        "url": "/api/2014/magic-items/bead-of-force"
+        "name": "Bead of Force"
       },
       {
         "index": "belt-of-dwarvenkind",
-        "name": "Belt of Dwarvenkind",
-        "url": "/api/2014/magic-items/belt-of-dwarvenkind"
+        "name": "Belt of Dwarvenkind"
       },
       {
         "index": "belt-of-giant-strength",
-        "name": "Belt of Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength"
+        "name": "Belt of Giant Strength"
       },
       {
         "index": "boots-of-elvenkind",
-        "name": "Boots of Elvenkind",
-        "url": "/api/2014/magic-items/boots-of-elvenkind"
+        "name": "Boots of Elvenkind"
       },
       {
         "index": "boots-of-levitation",
-        "name": "Boots of Levitation",
-        "url": "/api/2014/magic-items/boots-of-levitation"
+        "name": "Boots of Levitation"
       },
       {
         "index": "boots-of-speed",
-        "name": "Boots of Speed",
-        "url": "/api/2014/magic-items/boots-of-speed"
+        "name": "Boots of Speed"
       },
       {
         "index": "boots-of-striding-and-springing",
-        "name": "Boots of Striding and Springing",
-        "url": "/api/2014/magic-items/boots-of-striding-and-springing"
+        "name": "Boots of Striding and Springing"
       },
       {
         "index": "boots-of-the-winterlands",
-        "name": "Boots of the Winterlands",
-        "url": "/api/2014/magic-items/boots-of-the-winterlands"
+        "name": "Boots of the Winterlands"
       },
       {
         "index": "bowl-of-commanding-water-elementals",
-        "name": "Bowl of Commanding Water Elementals",
-        "url": "/api/2014/magic-items/bowl-of-commanding-water-elementals"
+        "name": "Bowl of Commanding Water Elementals"
       },
       {
         "index": "bracers-of-archery",
-        "name": "Bracers of Archery",
-        "url": "/api/2014/magic-items/bracers-of-archery"
+        "name": "Bracers of Archery"
       },
       {
         "index": "bracers-of-defense",
-        "name": "Bracers of Defense",
-        "url": "/api/2014/magic-items/bracers-of-defense"
+        "name": "Bracers of Defense"
       },
       {
         "index": "brazier-of-commanding-fire-elementals",
-        "name": "Brazier of Commanding Fire Elementals",
-        "url": "/api/2014/magic-items/brazier-of-commanding-fire-elementals"
+        "name": "Brazier of Commanding Fire Elementals"
       },
       {
         "index": "brooch-of-shielding",
-        "name": "Brooch of Shielding",
-        "url": "/api/2014/magic-items/brooch-of-shielding"
+        "name": "Brooch of Shielding"
       },
       {
         "index": "broom-of-flying",
-        "name": "Broom of Flying",
-        "url": "/api/2014/magic-items/broom-of-flying"
+        "name": "Broom of Flying"
       },
       {
         "index": "candle-of-invocation",
-        "name": "Candle of Invocation",
-        "url": "/api/2014/magic-items/candle-of-invocation"
+        "name": "Candle of Invocation"
       },
       {
         "index": "cape-of-the-mountebank",
-        "name": "Cape of the Mountebank",
-        "url": "/api/2014/magic-items/cape-of-the-mountebank"
+        "name": "Cape of the Mountebank"
       },
       {
         "index": "carpet-of-flying",
-        "name": "Carpet of Flying",
-        "url": "/api/2014/magic-items/carpet-of-flying"
+        "name": "Carpet of Flying"
       },
       {
         "index": "censer-of-controlling-air-elementals",
-        "name": "Censer of Controlling Air Elementals",
-        "url": "/api/2014/magic-items/censer-of-controlling-air-elementals"
+        "name": "Censer of Controlling Air Elementals"
       },
       {
         "index": "chime-of-opening",
-        "name": "Chime of Opening",
-        "url": "/api/2014/magic-items/chime-of-opening"
+        "name": "Chime of Opening"
       },
       {
         "index": "circlet-of-blasting",
-        "name": "Circlet of Blasting",
-        "url": "/api/2014/magic-items/circlet-of-blasting"
+        "name": "Circlet of Blasting"
       },
       {
         "index": "cloak-of-arachnida",
-        "name": "Cloak of Arachnida",
-        "url": "/api/2014/magic-items/cloak-of-arachnida"
+        "name": "Cloak of Arachnida"
       },
       {
         "index": "cloak-of-displacement",
-        "name": "Cloak of Displacement",
-        "url": "/api/2014/magic-items/cloak-of-displacement"
+        "name": "Cloak of Displacement"
       },
       {
         "index": "cloak-of-elvenkind",
-        "name": "Cloak of Elvenkind",
-        "url": "/api/2014/magic-items/cloak-of-elvenkind"
+        "name": "Cloak of Elvenkind"
       },
       {
         "index": "cloak-of-protection",
-        "name": "Cloak of Protection",
-        "url": "/api/2014/magic-items/cloak-of-protection"
+        "name": "Cloak of Protection"
       },
       {
         "index": "cloak-of-the-bat",
-        "name": "Cloak of the Bat",
-        "url": "/api/2014/magic-items/cloak-of-the-bat"
+        "name": "Cloak of the Bat"
       },
       {
         "index": "cloak-of-the-manta-ray",
-        "name": "Cloak of the Manta Ray",
-        "url": "/api/2014/magic-items/cloak-of-the-manta-ray"
+        "name": "Cloak of the Manta Ray"
       },
       {
         "index": "crystal-ball",
-        "name": "Crystal Ball",
-        "url": "/api/2014/magic-items/crystal-ball"
+        "name": "Crystal Ball"
       },
       {
         "index": "cube-of-force",
-        "name": "Cube of Force",
-        "url": "/api/2014/magic-items/cube-of-force"
+        "name": "Cube of Force"
       },
       {
         "index": "cubic-gate",
-        "name": "Cubic Gate",
-        "url": "/api/2014/magic-items/cubic-gate"
+        "name": "Cubic Gate"
       },
       {
         "index": "decanter-of-endless-water",
-        "name": "Decanter of Endless Water",
-        "url": "/api/2014/magic-items/decanter-of-endless-water"
+        "name": "Decanter of Endless Water"
       },
       {
         "index": "deck-of-illusions",
-        "name": "Deck of Illusions",
-        "url": "/api/2014/magic-items/deck-of-illusions"
+        "name": "Deck of Illusions"
       },
       {
         "index": "deck-of-many-things",
-        "name": "Deck of Many Things",
-        "url": "/api/2014/magic-items/deck-of-many-things"
+        "name": "Deck of Many Things"
       },
       {
         "index": "dimensional-shackles",
-        "name": "Dimensional Shackles",
-        "url": "/api/2014/magic-items/dimensional-shackles"
+        "name": "Dimensional Shackles"
       },
       {
         "index": "dust-of-disappearance",
-        "name": "Dust of Disappearance",
-        "url": "/api/2014/magic-items/dust-of-disappearance"
+        "name": "Dust of Disappearance"
       },
       {
         "index": "dust-of-dryness",
-        "name": "Dust of Dryness",
-        "url": "/api/2014/magic-items/dust-of-dryness"
+        "name": "Dust of Dryness"
       },
       {
         "index": "dust-of-sneezing-and-choking",
-        "name": "Dust of Sneezing and Choking",
-        "url": "/api/2014/magic-items/dust-of-sneezing-and-choking"
+        "name": "Dust of Sneezing and Choking"
       },
       {
         "index": "efficient-quiver",
-        "name": "Efficient Quiver",
-        "url": "/api/2014/magic-items/efficient-quiver"
+        "name": "Efficient Quiver"
       },
       {
         "index": "efreeti-bottle",
-        "name": "Efreeti Bottle",
-        "url": "/api/2014/magic-items/efreeti-bottle"
+        "name": "Efreeti Bottle"
       },
       {
         "index": "elemental-gem",
-        "name": "Elemental Gem",
-        "url": "/api/2014/magic-items/elemental-gem"
+        "name": "Elemental Gem"
       },
       {
         "index": "eversmoking-bottle",
-        "name": "Eversmoking Bottle",
-        "url": "/api/2014/magic-items/eversmoking-bottle"
+        "name": "Eversmoking Bottle"
       },
       {
         "index": "eyes-of-charming",
-        "name": "Eyes of Charming",
-        "url": "/api/2014/magic-items/eyes-of-charming"
+        "name": "Eyes of Charming"
       },
       {
         "index": "eyes-of-minute-seeing",
-        "name": "Eyes of Minute Seeing",
-        "url": "/api/2014/magic-items/eyes-of-minute-seeing"
+        "name": "Eyes of Minute Seeing"
       },
       {
         "index": "eyes-of-the-eagle",
-        "name": "Eyes of the Eagle",
-        "url": "/api/2014/magic-items/eyes-of-the-eagle"
+        "name": "Eyes of the Eagle"
       },
       {
         "index": "feather-token",
-        "name": "Feather Token",
-        "url": "/api/2014/magic-items/feather-token"
+        "name": "Feather Token"
       },
       {
         "index": "figurine-of-wondrous-power",
-        "name": "Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power"
+        "name": "Figurine of Wondrous Power"
       },
       {
         "index": "folding-boat",
-        "name": "Folding Boat",
-        "url": "/api/2014/magic-items/folding-boat"
+        "name": "Folding Boat"
       },
       {
         "index": "gauntlets-of-ogre-power",
-        "name": "Gauntlets of Ogre Power",
-        "url": "/api/2014/magic-items/gauntlets-of-ogre-power"
+        "name": "Gauntlets of Ogre Power"
       },
       {
         "index": "gem-of-brightness",
-        "name": "Gem of Brightness",
-        "url": "/api/2014/magic-items/gem-of-brightness"
+        "name": "Gem of Brightness"
       },
       {
         "index": "gem-of-seeing",
-        "name": "Gem of Seeing",
-        "url": "/api/2014/magic-items/gem-of-seeing"
+        "name": "Gem of Seeing"
       },
       {
         "index": "gloves-of-missile-snaring",
-        "name": "Gloves of Missile Snaring",
-        "url": "/api/2014/magic-items/gloves-of-missile-snaring"
+        "name": "Gloves of Missile Snaring"
       },
       {
         "index": "gloves-of-swimming-and-climbing",
-        "name": "Gloves of Swimming and Climbing",
-        "url": "/api/2014/magic-items/gloves-of-swimming-and-climbing"
+        "name": "Gloves of Swimming and Climbing"
       },
       {
         "index": "goggles-of-night",
-        "name": "Goggles of Night",
-        "url": "/api/2014/magic-items/goggles-of-night"
+        "name": "Goggles of Night"
       },
       {
         "index": "handy-haversack",
-        "name": "Handy Haversack",
-        "url": "/api/2014/magic-items/handy-haversack"
+        "name": "Handy Haversack"
       },
       {
         "index": "hat-of-disguise",
-        "name": "Hat of Disguise",
-        "url": "/api/2014/magic-items/hat-of-disguise"
+        "name": "Hat of Disguise"
       },
       {
         "index": "headband-of-intellect",
-        "name": "Headband of Intellect",
-        "url": "/api/2014/magic-items/headband-of-intellect"
+        "name": "Headband of Intellect"
       },
       {
         "index": "helm-of-brilliance",
-        "name": "Helm of Brilliance",
-        "url": "/api/2014/magic-items/helm-of-brilliance"
+        "name": "Helm of Brilliance"
       },
       {
         "index": "helm-of-comprehending-languages",
-        "name": "Helm of Comprehending Languages",
-        "url": "/api/2014/magic-items/helm-of-comprehending-languages"
+        "name": "Helm of Comprehending Languages"
       },
       {
         "index": "helm-of-telepathy",
-        "name": "Helm of Telepathy",
-        "url": "/api/2014/magic-items/helm-of-telepathy"
+        "name": "Helm of Telepathy"
       },
       {
         "index": "helm-of-teleportation",
-        "name": "Helm of Teleportation",
-        "url": "/api/2014/magic-items/helm-of-teleportation"
+        "name": "Helm of Teleportation"
       },
       {
         "index": "horn-of-blasting",
-        "name": "Horn of Blasting",
-        "url": "/api/2014/magic-items/horn-of-blasting"
+        "name": "Horn of Blasting"
       },
       {
         "index": "horn-of-valhalla",
-        "name": "Horn of Valhalla",
-        "url": "/api/2014/magic-items/horn-of-valhalla"
+        "name": "Horn of Valhalla"
       },
       {
         "index": "horseshoes-of-a-zephyr",
-        "name": "Horseshoes of a Zephyr",
-        "url": "/api/2014/magic-items/horseshoes-of-a-zephyr"
+        "name": "Horseshoes of a Zephyr"
       },
       {
         "index": "horseshoes-of-speed",
-        "name": "Horseshoes of Speed",
-        "url": "/api/2014/magic-items/horseshoes-of-speed"
+        "name": "Horseshoes of Speed"
       },
       {
         "index": "instant-fortress",
-        "name": "Instant Fortress",
-        "url": "/api/2014/magic-items/instant-fortress"
+        "name": "Instant Fortress"
       },
       {
         "index": "ioun-stone",
-        "name": "Ioun Stone",
-        "url": "/api/2014/magic-items/ioun-stone"
+        "name": "Ioun Stone"
       },
       {
         "index": "iron-bands-of-binding",
-        "name": "Iron Bands of Binding",
-        "url": "/api/2014/magic-items/iron-bands-of-binding"
+        "name": "Iron Bands of Binding"
       },
       {
         "index": "iron-flask",
-        "name": "Iron Flask",
-        "url": "/api/2014/magic-items/iron-flask"
+        "name": "Iron Flask"
       },
       {
         "index": "lantern-of-revealing",
-        "name": "Lantern of Revealing",
-        "url": "/api/2014/magic-items/lantern-of-revealing"
+        "name": "Lantern of Revealing"
       },
       {
         "index": "mantle-of-spell-resistance",
-        "name": "Mantle of Spell Resistance",
-        "url": "/api/2014/magic-items/mantle-of-spell-resistance"
+        "name": "Mantle of Spell Resistance"
       },
       {
         "index": "manual-of-bodily-health",
-        "name": "Manual of Bodily Health",
-        "url": "/api/2014/magic-items/manual-of-bodily-health"
+        "name": "Manual of Bodily Health"
       },
       {
         "index": "manual-of-gainful-exercise",
-        "name": "Manual of Gainful Exercise",
-        "url": "/api/2014/magic-items/manual-of-gainful-exercise"
+        "name": "Manual of Gainful Exercise"
       },
       {
         "index": "manual-of-golems",
-        "name": "Manual of Golems",
-        "url": "/api/2014/magic-items/manual-of-golems"
+        "name": "Manual of Golems"
       },
       {
         "index": "manual-of-quickness-of-action",
-        "name": "Manual of Quickness of Action",
-        "url": "/api/2014/magic-items/manual-of-quickness-of-action"
+        "name": "Manual of Quickness of Action"
       },
       {
         "index": "marvelous-pigments",
-        "name": "Marvelous Pigments",
-        "url": "/api/2014/magic-items/marvelous-pigments"
+        "name": "Marvelous Pigments"
       },
       {
         "index": "medallion-of-thoughts",
-        "name": "Medallion of Thoughts",
-        "url": "/api/2014/magic-items/medallion-of-thoughts"
+        "name": "Medallion of Thoughts"
       },
       {
         "index": "mirror-of-life-trapping",
-        "name": "Mirror of Life Trapping",
-        "url": "/api/2014/magic-items/mirror-of-life-trapping"
+        "name": "Mirror of Life Trapping"
       },
       {
         "index": "necklace-of-adaptation",
-        "name": "Necklace of Adaptation",
-        "url": "/api/2014/magic-items/necklace-of-adaptation"
+        "name": "Necklace of Adaptation"
       },
       {
         "index": "necklace-of-fireballs",
-        "name": "Necklace of Fireballs",
-        "url": "/api/2014/magic-items/necklace-of-fireballs"
+        "name": "Necklace of Fireballs"
       },
       {
         "index": "necklace-of-prayer-beads",
-        "name": "Necklace of Prayer Beads",
-        "url": "/api/2014/magic-items/necklace-of-prayer-beads"
+        "name": "Necklace of Prayer Beads"
       },
       {
         "index": "pearl-of-power",
-        "name": "Pearl of Power",
-        "url": "/api/2014/magic-items/pearl-of-power"
+        "name": "Pearl of Power"
       },
       {
         "index": "periapt-of-health",
-        "name": "Periapt of Health",
-        "url": "/api/2014/magic-items/periapt-of-health"
+        "name": "Periapt of Health"
       },
       {
         "index": "periapt-of-proof-against-poison",
-        "name": "Periapt of Proof against Poison",
-        "url": "/api/2014/magic-items/periapt-of-proof-against-poison"
+        "name": "Periapt of Proof against Poison"
       },
       {
         "index": "periapt-of-wound-closure",
-        "name": "Periapt of Wound Closure",
-        "url": "/api/2014/magic-items/periapt-of-wound-closure"
+        "name": "Periapt of Wound Closure"
       },
       {
         "index": "pipes-of-haunting",
-        "name": "Pipes of Haunting",
-        "url": "/api/2014/magic-items/pipes-of-haunting"
+        "name": "Pipes of Haunting"
       },
       {
         "index": "pipes-of-the-sewers",
-        "name": "Pipes of the Sewers",
-        "url": "/api/2014/magic-items/pipes-of-the-sewers"
+        "name": "Pipes of the Sewers"
       },
       {
         "index": "portable-hole",
-        "name": "Portable Hole",
-        "url": "/api/2014/magic-items/portable-hole"
+        "name": "Portable Hole"
       },
       {
         "index": "restorative-ointment",
-        "name": "Restorative Ointment",
-        "url": "/api/2014/magic-items/restorative-ointment"
+        "name": "Restorative Ointment"
       },
       {
         "index": "robe-of-eyes",
-        "name": "Robe of Eyes",
-        "url": "/api/2014/magic-items/robe-of-eyes"
+        "name": "Robe of Eyes"
       },
       {
         "index": "robe-of-scintillating-colors",
-        "name": "Robe of Scintillating Colors",
-        "url": "/api/2014/magic-items/robe-of-scintillating-colors"
+        "name": "Robe of Scintillating Colors"
       },
       {
         "index": "robe-of-stars",
-        "name": "Robe of Stars",
-        "url": "/api/2014/magic-items/robe-of-stars"
+        "name": "Robe of Stars"
       },
       {
         "index": "robe-of-the-archmagi",
-        "name": "Robe of the Archmagi",
-        "url": "/api/2014/magic-items/robe-of-the-archmagi"
+        "name": "Robe of the Archmagi"
       },
       {
         "index": "robe-of-useful-items",
-        "name": "Robe of Useful Items",
-        "url": "/api/2014/magic-items/robe-of-useful-items"
+        "name": "Robe of Useful Items"
       },
       {
         "index": "rope-of-climbing",
-        "name": "Rope of Climbing",
-        "url": "/api/2014/magic-items/rope-of-climbing"
+        "name": "Rope of Climbing"
       },
       {
         "index": "rope-of-entanglement",
-        "name": "Rope of Entanglement",
-        "url": "/api/2014/magic-items/rope-of-entanglement"
+        "name": "Rope of Entanglement"
       },
       {
         "index": "scarab-of-protection",
-        "name": "Scarab of Protection",
-        "url": "/api/2014/magic-items/scarab-of-protection"
+        "name": "Scarab of Protection"
       },
       {
         "index": "slippers-of-spider-climbing",
-        "name": "Slippers of Spider Climbing",
-        "url": "/api/2014/magic-items/slippers-of-spider-climbing"
+        "name": "Slippers of Spider Climbing"
       },
       {
         "index": "sovereign-glue",
-        "name": "Sovereign Glue",
-        "url": "/api/2014/magic-items/sovereign-glue"
+        "name": "Sovereign Glue"
       },
       {
         "index": "sphere-of-annihilation",
-        "name": "Sphere of Annihilation",
-        "url": "/api/2014/magic-items/sphere-of-annihilation"
+        "name": "Sphere of Annihilation"
       },
       {
         "index": "stone-of-controlling-earth-elementals",
-        "name": "Stone of Controlling Earth Elementals",
-        "url": "/api/2014/magic-items/stone-of-controlling-earth-elementals"
+        "name": "Stone of Controlling Earth Elementals"
       },
       {
         "index": "stone-of-good-luck-luckstone",
-        "name": "Stone of Good Luck (Luckstone)",
-        "url": "/api/2014/magic-items/stone-of-good-luck-luckstone"
+        "name": "Stone of Good Luck (Luckstone)"
       },
       {
         "index": "talisman-of-pure-good",
-        "name": "Talisman of Pure Good",
-        "url": "/api/2014/magic-items/talisman-of-pure-good"
+        "name": "Talisman of Pure Good"
       },
       {
         "index": "talisman-of-the-sphere",
-        "name": "Talisman of the Sphere",
-        "url": "/api/2014/magic-items/talisman-of-the-sphere"
+        "name": "Talisman of the Sphere"
       },
       {
         "index": "talisman-of-ultimate-evil",
-        "name": "Talisman of Ultimate Evil",
-        "url": "/api/2014/magic-items/talisman-of-ultimate-evil"
+        "name": "Talisman of Ultimate Evil"
       },
       {
         "index": "tome-of-clear-thought",
-        "name": "Tome of Clear Thought",
-        "url": "/api/2014/magic-items/tome-of-clear-thought"
+        "name": "Tome of Clear Thought"
       },
       {
         "index": "tome-of-leadership-and-influence",
-        "name": "Tome of Leadership and Influence",
-        "url": "/api/2014/magic-items/tome-of-leadership-and-influence"
+        "name": "Tome of Leadership and Influence"
       },
       {
         "index": "tome-of-understanding",
-        "name": "Tome of Understanding",
-        "url": "/api/2014/magic-items/tome-of-understanding"
+        "name": "Tome of Understanding"
       },
       {
         "index": "universal-solvent",
-        "name": "Universal Solvent",
-        "url": "/api/2014/magic-items/universal-solvent"
+        "name": "Universal Solvent"
       },
       {
         "index": "well-of-many-worlds",
-        "name": "Well of Many Worlds",
-        "url": "/api/2014/magic-items/well-of-many-worlds"
+        "name": "Well of Many Worlds"
       },
       {
         "index": "wind-fan",
-        "name": "Wind Fan",
-        "url": "/api/2014/magic-items/wind-fan"
+        "name": "Wind Fan"
       },
       {
         "index": "winged-boots",
-        "name": "Winged Boots",
-        "url": "/api/2014/magic-items/winged-boots"
+        "name": "Winged Boots"
       },
       {
         "index": "wings-of-flying",
-        "name": "Wings of Flying",
-        "url": "/api/2014/magic-items/wings-of-flying"
+        "name": "Wings of Flying"
       },
       {
         "index": "orb-of-dragonkind",
-        "name": "Orb of Dragonkind",
-        "url": "/api/2014/magic-items/orb-of-dragonkind"
+        "name": "Orb of Dragonkind"
       },
       {
         "index": "bag-of-tricks-gray",
-        "name": "Gray Bag of Tricks",
-        "url": "/api/2014/magic-items/bag-of-tricks-gray"
+        "name": "Gray Bag of Tricks"
       },
       {
         "index": "bag-of-tricks-rust",
-        "name": "Rust Bag of Tricks",
-        "url": "/api/2014/magic-items/bag-of-tricks-rust"
+        "name": "Rust Bag of Tricks"
       },
       {
         "index": "bag-of-tricks-tan",
-        "name": "Tan Bag of Tricks",
-        "url": "/api/2014/magic-items/bag-of-tricks-tan"
+        "name": "Tan Bag of Tricks"
       },
       {
         "index": "belt-of-giant-strength-hill",
-        "name": "Belt of Hill Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength-hill"
+        "name": "Belt of Hill Giant Strength"
       },
       {
         "index": "belt-of-giant-strength-stone",
-        "name": "Belt of Stone Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength-stone"
+        "name": "Belt of Stone Giant Strength"
       },
       {
         "index": "belt-of-giant-strength-frost",
-        "name": "Belt of Frost Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength-frost"
+        "name": "Belt of Frost Giant Strength"
       },
       {
         "index": "belt-of-giant-strength-fire",
-        "name": "Belt of Fire Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength-fire"
+        "name": "Belt of Fire Giant Strength"
       },
       {
         "index": "belt-of-giant-strength-cloud",
-        "name": "Belt of Cloud Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength-cloud"
+        "name": "Belt of Cloud Giant Strength"
       },
       {
         "index": "belt-of-giant-strength-storm",
-        "name": "Belt of Storm Giant Strength",
-        "url": "/api/2014/magic-items/belt-of-giant-strength-storm"
+        "name": "Belt of Storm Giant Strength"
       },
       {
         "index": "carpet-of-flying-3x5",
-        "name": "Carpet of Flying (3 ft. × 5 ft.)",
-        "url": "/api/2014/magic-items/carpet-of-flying-3x5"
+        "name": "Carpet of Flying (3 ft. × 5 ft.)"
       },
       {
         "index": "carpet-of-flying-4x6",
-        "name": "Carpet of Flying (4 ft. × 6 ft.)",
-        "url": "/api/2014/magic-items/carpet-of-flying-4x6"
+        "name": "Carpet of Flying (4 ft. × 6 ft.)"
       },
       {
         "index": "carpet-of-flying-5x7",
-        "name": "Carpet of Flying (5 ft. × 7 ft.)",
-        "url": "/api/2014/magic-items/carpet-of-flying-5x7"
+        "name": "Carpet of Flying (5 ft. × 7 ft.)"
       },
       {
         "index": "carpet-of-flying-6x9",
-        "name": "Carpet of Flying (6 ft. × 9 ft.)",
-        "url": "/api/2014/magic-items/carpet-of-flying-6x9"
+        "name": "Carpet of Flying (6 ft. × 9 ft.)"
       },
       {
         "index": "crystal-ball-of-mind-reading",
-        "name": "Crystal Ball of Mind Reading",
-        "url": "/api/2014/magic-items/crystal-ball-of-mind-reading"
+        "name": "Crystal Ball of Mind Reading"
       },
       {
         "index": "crystal-ball-of-telepathy",
-        "name": "Crystal Ball of Telepathy",
-        "url": "/api/2014/magic-items/crystal-ball-of-telepathy"
+        "name": "Crystal Ball of Telepathy"
       },
       {
         "index": "crystal-ball-of-true-seeing",
-        "name": "Crystal Ball of True Seeing",
-        "url": "/api/2014/magic-items/crystal-ball-of-true-seeing"
+        "name": "Crystal Ball of True Seeing"
       },
       {
         "index": "elemental-gem-air",
-        "name": "Air Elemental Gem",
-        "url": "/api/2014/magic-items/elemental-gem-air"
+        "name": "Air Elemental Gem"
       },
       {
         "index": "elemental-gem-earth",
-        "name": "Earth Elemental Gem",
-        "url": "/api/2014/magic-items/elemental-gem-earth"
+        "name": "Earth Elemental Gem"
       },
       {
         "index": "elemental-gem-fire",
-        "name": "Fire Elemental Gem",
-        "url": "/api/2014/magic-items/elemental-gem-fire"
+        "name": "Fire Elemental Gem"
       },
       {
         "index": "elemental-gem-water",
-        "name": "Water Elemental Gem",
-        "url": "/api/2014/magic-items/elemental-gem-water"
+        "name": "Water Elemental Gem"
       },
       {
         "index": "feather-token-anchor",
-        "name": "Anchor Feather Token",
-        "url": "/api/2014/magic-items/feather-token-anchor"
+        "name": "Anchor Feather Token"
       },
       {
         "index": "feather-token-bird",
-        "name": "Bird Feather Token",
-        "url": "/api/2014/magic-items/feather-token-bird"
+        "name": "Bird Feather Token"
       },
       {
         "index": "feather-token-fan",
-        "name": "Fan Feather Token",
-        "url": "/api/2014/magic-items/feather-token-fan"
+        "name": "Fan Feather Token"
       },
       {
         "index": "feather-token-swan-boat",
-        "name": "Swan Boat Feather Token",
-        "url": "/api/2014/magic-items/feather-token-swan-boat"
+        "name": "Swan Boat Feather Token"
       },
       {
         "index": "feather-token-tree",
-        "name": "Tree Feather Token",
-        "url": "/api/2014/magic-items/feather-token-tree"
+        "name": "Tree Feather Token"
       },
       {
         "index": "feather-token-whip",
-        "name": "Whip Feather Token",
-        "url": "/api/2014/magic-items/feather-token-whip"
+        "name": "Whip Feather Token"
       },
       {
         "index": "figurine-of-wondrous-power-bronze-griffon",
-        "name": "Bronze Griffon Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-bronze-griffon"
+        "name": "Bronze Griffon Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-ebony-fly",
-        "name": "Ebony Fly Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-ebony-fly"
+        "name": "Ebony Fly Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-golden-lions",
-        "name": "Golden Lions Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-golden-lions"
+        "name": "Golden Lions Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-ivory-goats",
-        "name": "Ivory Goats Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-ivory-goats"
+        "name": "Ivory Goats Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-marble-elephant",
-        "name": "Marble Elephant Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-marble-elephant"
+        "name": "Marble Elephant Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-obsidian-steed",
-        "name": "Obsidian Steed Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-obsidian-steed"
+        "name": "Obsidian Steed Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-onyx-dog",
-        "name": "Onyx Dog Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-onyx-dog"
+        "name": "Onyx Dog Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-serpentine-owl",
-        "name": "Serpentine Owl Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-serpentine-owl"
+        "name": "Serpentine Owl Figurine of Wondrous Power"
       },
       {
         "index": "figurine-of-wondrous-power-silver-raven",
-        "name": "Silver Raven Figurine of Wondrous Power",
-        "url": "/api/2014/magic-items/figurine-of-wondrous-power-silver-raven"
+        "name": "Silver Raven Figurine of Wondrous Power"
       },
       {
         "index": "horn-of-valhalla-silver",
-        "name": "Silver Horn of Valhalla",
-        "url": "/api/2014/magic-items/horn-of-valhalla-silver"
+        "name": "Silver Horn of Valhalla"
       },
       {
         "index": "horn-of-valhalla-brass",
-        "name": "Brass Horn of Valhalla",
-        "url": "/api/2014/magic-items/horn-of-valhalla-brass"
+        "name": "Brass Horn of Valhalla"
       },
       {
         "index": "horn-of-valhalla-bronze",
-        "name": "Bronze Horn of Valhalla",
-        "url": "/api/2014/magic-items/horn-of-valhalla-bronze"
+        "name": "Bronze Horn of Valhalla"
       },
       {
         "index": "horn-of-valhalla-iron",
-        "name": "Iron Horn of Valhalla",
-        "url": "/api/2014/magic-items/horn-of-valhalla-iron"
+        "name": "Iron Horn of Valhalla"
       },
       {
         "index": "ioun-stone-of-absorption",
-        "name": "Ioun Stone of Absorption",
-        "url": "/api/2014/magic-items/ioun-stone-of-absorption"
+        "name": "Ioun Stone of Absorption"
       },
       {
         "index": "ioun-stone-of-agility",
-        "name": "Ioun Stone of Agility",
-        "url": "/api/2014/magic-items/ioun-stone-of-agility"
+        "name": "Ioun Stone of Agility"
       },
       {
         "index": "ioun-stone-of-awareness",
-        "name": "Ioun Stone of Awareness",
-        "url": "/api/2014/magic-items/ioun-stone-of-awareness"
+        "name": "Ioun Stone of Awareness"
       },
       {
         "index": "ioun-stone-of-fortitude",
-        "name": "Ioun Stone of Fortitude",
-        "url": "/api/2014/magic-items/ioun-stone-of-fortitude"
+        "name": "Ioun Stone of Fortitude"
       },
       {
         "index": "ioun-stone-of-greater-absorption",
-        "name": "Ioun Stone of Greater Absorption",
-        "url": "/api/2014/magic-items/ioun-stone-of-greater-absorption"
+        "name": "Ioun Stone of Greater Absorption"
       },
       {
         "index": "ioun-stone-of-insight",
-        "name": "Ioun Stone of Insight",
-        "url": "/api/2014/magic-items/ioun-stone-of-insight"
+        "name": "Ioun Stone of Insight"
       },
       {
         "index": "ioun-stone-of-intellect",
-        "name": "Ioun Stone of Intellect",
-        "url": "/api/2014/magic-items/ioun-stone-of-intellect"
+        "name": "Ioun Stone of Intellect"
       },
       {
         "index": "ioun-stone-of-leadership",
-        "name": "Ioun Stone of Leadership",
-        "url": "/api/2014/magic-items/ioun-stone-of-leadership"
+        "name": "Ioun Stone of Leadership"
       },
       {
         "index": "ioun-stone-of-mastery",
-        "name": "Ioun Stone of Mastery",
-        "url": "/api/2014/magic-items/ioun-stone-of-mastery"
+        "name": "Ioun Stone of Mastery"
       },
       {
         "index": "ioun-stone-of-protection",
-        "name": "Ioun Stone of Protection",
-        "url": "/api/2014/magic-items/ioun-stone-of-protection"
+        "name": "Ioun Stone of Protection"
       },
       {
         "index": "ioun-stone-of-regeneration",
-        "name": "Ioun Stone of Regeneration",
-        "url": "/api/2014/magic-items/ioun-stone-of-regeneration"
+        "name": "Ioun Stone of Regeneration"
       },
       {
         "index": "ioun-stone-of-reserve",
-        "name": "Ioun Stone of Reserve",
-        "url": "/api/2014/magic-items/ioun-stone-of-reserve"
+        "name": "Ioun Stone of Reserve"
       },
       {
         "index": "ioun-stone-of-strength",
-        "name": "Ioun Stone of Strength",
-        "url": "/api/2014/magic-items/ioun-stone-of-strength"
+        "name": "Ioun Stone of Strength"
       },
       {
         "index": "ioun-stone-of-sustenance",
-        "name": "Ioun Stone of Sustenance",
-        "url": "/api/2014/magic-items/ioun-stone-of-sustenance"
+        "name": "Ioun Stone of Sustenance"
       },
       {
         "index": "manual-of-golems-clay",
-        "name": "Manual of Clay Golems",
-        "url": "/api/2014/magic-items/manual-of-golems-clay"
+        "name": "Manual of Clay Golems"
       },
       {
         "index": "manual-of-golems-flesh",
-        "name": "Manual of Flesh Golems",
-        "url": "/api/2014/magic-items/manual-of-golems-flesh"
+        "name": "Manual of Flesh Golems"
       },
       {
         "index": "manual-of-golems-iron",
-        "name": "Manual of Iron Golems",
-        "url": "/api/2014/magic-items/manual-of-golems-iron"
+        "name": "Manual of Iron Golems"
       },
       {
         "index": "manual-of-golems-stone",
-        "name": "Manual of Stone Golems",
-        "url": "/api/2014/magic-items/manual-of-golems-stone"
+        "name": "Manual of Stone Golems"
       }
-    ],
-    "url": "/api/2014/equipment-categories/wondrous-items"
+    ]
   },
   {
     "index": "rod",
@@ -10677,36 +9049,29 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "immovable-rod",
-        "name": "Immovable Rod",
-        "url": "/api/2014/magic-items/immovable-rod"
+        "name": "Immovable Rod"
       },
       {
         "index": "rod-of-absorption",
-        "name": "Rod of Absorption",
-        "url": "/api/2014/magic-items/rod-of-absorption"
+        "name": "Rod of Absorption"
       },
       {
         "index": "rod-of-alertness",
-        "name": "Rod of Alertness",
-        "url": "/api/2014/magic-items/rod-of-alertness"
+        "name": "Rod of Alertness"
       },
       {
         "index": "rod-of-lordly-might",
-        "name": "Rod of Lordly Might",
-        "url": "/api/2014/magic-items/rod-of-lordly-might"
+        "name": "Rod of Lordly Might"
       },
       {
         "index": "rod-of-rulership",
-        "name": "Rod of Rulership",
-        "url": "/api/2014/magic-items/rod-of-rulership"
+        "name": "Rod of Rulership"
       },
       {
         "index": "rod-of-security",
-        "name": "Rod of Security",
-        "url": "/api/2014/magic-items/rod-of-security"
+        "name": "Rod of Security"
       }
-    ],
-    "url": "/api/2014/equipment-categories/rod"
+    ]
   },
   {
     "index": "potion",
@@ -10714,206 +9079,165 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "oil-of-etherealness",
-        "name": "Oil of Etherealness",
-        "url": "/api/2014/magic-items/oil-of-etherealness"
+        "name": "Oil of Etherealness"
       },
       {
         "index": "oil-of-sharpness",
-        "name": "Oil of Sharpness",
-        "url": "/api/2014/magic-items/oil-of-sharpness"
+        "name": "Oil of Sharpness"
       },
       {
         "index": "oil-of-slipperiness",
-        "name": "Oil of Slipperiness",
-        "url": "/api/2014/magic-items/oil-of-slipperiness"
+        "name": "Oil of Slipperiness"
       },
       {
         "index": "philter-of-love",
-        "name": "Philter of Love",
-        "url": "/api/2014/magic-items/philter-of-love"
+        "name": "Philter of Love"
       },
       {
         "index": "potion-of-animal-friendship",
-        "name": "Potion of Animal Friendship",
-        "url": "/api/2014/magic-items/potion-of-animal-friendship"
+        "name": "Potion of Animal Friendship"
       },
       {
         "index": "potion-of-clairvoyance",
-        "name": "Potion of Clairvoyance",
-        "url": "/api/2014/magic-items/potion-of-clairvoyance"
+        "name": "Potion of Clairvoyance"
       },
       {
         "index": "potion-of-climbing",
-        "name": "Potion of Climbing",
-        "url": "/api/2014/magic-items/potion-of-climbing"
+        "name": "Potion of Climbing"
       },
       {
         "index": "potion-of-diminution",
-        "name": "Potion of Diminution",
-        "url": "/api/2014/magic-items/potion-of-diminution"
+        "name": "Potion of Diminution"
       },
       {
         "index": "potion-of-flying",
-        "name": "Potion of Flying",
-        "url": "/api/2014/magic-items/potion-of-flying"
+        "name": "Potion of Flying"
       },
       {
         "index": "potion-of-gaseous-form",
-        "name": "Potion of Gaseous Form",
-        "url": "/api/2014/magic-items/potion-of-gaseous-form"
+        "name": "Potion of Gaseous Form"
       },
       {
         "index": "potion-of-giant-strength",
-        "name": "Potion of Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength"
+        "name": "Potion of Giant Strength"
       },
       {
         "index": "potion-of-growth",
-        "name": "Potion of Growth",
-        "url": "/api/2014/magic-items/potion-of-growth"
+        "name": "Potion of Growth"
       },
       {
         "index": "potion-of-healing",
-        "name": "Potion of Healing",
-        "url": "/api/2014/magic-items/potion-of-healing"
+        "name": "Potion of Healing"
       },
       {
         "index": "potion-of-heroism",
-        "name": "Potion of Heroism",
-        "url": "/api/2014/magic-items/potion-of-heroism"
+        "name": "Potion of Heroism"
       },
       {
         "index": "potion-of-invisibility",
-        "name": "Potion of Invisibility",
-        "url": "/api/2014/magic-items/potion-of-invisibility"
+        "name": "Potion of Invisibility"
       },
       {
         "index": "potion-of-mind-reading",
-        "name": "Potion of Mind Reading",
-        "url": "/api/2014/magic-items/potion-of-mind-reading"
+        "name": "Potion of Mind Reading"
       },
       {
         "index": "potion-of-poison",
-        "name": "Potion of Poison",
-        "url": "/api/2014/magic-items/potion-of-poison"
+        "name": "Potion of Poison"
       },
       {
         "index": "potion-of-resistance",
-        "name": "Potion of Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance"
+        "name": "Potion of Resistance"
       },
       {
         "index": "potion-of-speed",
-        "name": "Potion of Speed",
-        "url": "/api/2014/magic-items/potion-of-speed"
+        "name": "Potion of Speed"
       },
       {
         "index": "potion-of-water-breathing",
-        "name": "Potion of Water Breathing",
-        "url": "/api/2014/magic-items/potion-of-water-breathing"
+        "name": "Potion of Water Breathing"
       },
       {
         "index": "potion-of-giant-strength-hill",
-        "name": "Potion of Hill Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength-hill"
+        "name": "Potion of Hill Giant Strength"
       },
       {
         "index": "potion-of-giant-strength-frost",
-        "name": "Potion of Frost Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength-frost"
+        "name": "Potion of Frost Giant Strength"
       },
       {
         "index": "potion-of-giant-strength-stone",
-        "name": "Potion of Stone Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength-stone"
+        "name": "Potion of Stone Giant Strength"
       },
       {
         "index": "potion-of-giant-strength-fire",
-        "name": "Potion of Fire Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength-fire"
+        "name": "Potion of Fire Giant Strength"
       },
       {
         "index": "potion-of-giant-strength-cloud",
-        "name": "Potion of Cloud Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength-cloud"
+        "name": "Potion of Cloud Giant Strength"
       },
       {
         "index": "potion-of-giant-strength-storm",
-        "name": "Potion of Storm Giant Strength",
-        "url": "/api/2014/magic-items/potion-of-giant-strength-storm"
+        "name": "Potion of Storm Giant Strength"
       },
       {
         "index": "potion-of-healing-common",
-        "name": "Potion of Healing",
-        "url": "/api/2014/magic-items/potion-of-healing-common"
+        "name": "Potion of Healing"
       },
       {
         "index": "potion-of-healing-greater",
-        "name": "Potion of Greater Healing",
-        "url": "/api/2014/magic-items/potion-of-healing-greater"
+        "name": "Potion of Greater Healing"
       },
       {
         "index": "potion-of-healing-superior",
-        "name": "Potion of Superior Healing",
-        "url": "/api/2014/magic-items/potion-of-healing-superior"
+        "name": "Potion of Superior Healing"
       },
       {
         "index": "potion-of-healing-supreme",
-        "name": "Potion of Supreme Healing",
-        "url": "/api/2014/magic-items/potion-of-healing-supreme"
+        "name": "Potion of Supreme Healing"
       },
       {
         "index": "potion-of-resistance-acid",
-        "name": "Potion of Acid Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-acid"
+        "name": "Potion of Acid Resistance"
       },
       {
         "index": "potion-of-resistance-cold",
-        "name": "Potion of Cold Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-cold"
+        "name": "Potion of Cold Resistance"
       },
       {
         "index": "potion-of-resistance-fire",
-        "name": "Potion of Fire Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-fire"
+        "name": "Potion of Fire Resistance"
       },
       {
         "index": "potion-of-resistance-force",
-        "name": "Potion of Force Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-force"
+        "name": "Potion of Force Resistance"
       },
       {
         "index": "potion-of-resistance-lightning",
-        "name": "Potion of Lightning Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-lightning"
+        "name": "Potion of Lightning Resistance"
       },
       {
         "index": "potion-of-resistance-necrotic",
-        "name": "Potion of Necrotic Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-necrotic"
+        "name": "Potion of Necrotic Resistance"
       },
       {
         "index": "potion-of-resistance-poison",
-        "name": "Potion of Poison Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-poison"
+        "name": "Potion of Poison Resistance"
       },
       {
         "index": "potion-of-resistance-psychic",
-        "name": "Potion of Psychic Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-psychic"
+        "name": "Potion of Psychic Resistance"
       },
       {
         "index": "potion-of-resistance-radiant",
-        "name": "Potion of Radiant Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-radiant"
+        "name": "Potion of Radiant Resistance"
       },
       {
         "index": "potion-of-resistance-thunder",
-        "name": "Potion of Thunder Resistance",
-        "url": "/api/2014/magic-items/potion-of-resistance-thunder"
+        "name": "Potion of Thunder Resistance"
       }
-    ],
-    "url": "/api/2014/equipment-categories/potion"
+    ]
   },
   {
     "index": "ring",
@@ -10921,186 +9245,149 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "ring-of-animal-influence",
-        "name": "Ring of Animal Influence",
-        "url": "/api/2014/magic-items/ring-of-animal-influence"
+        "name": "Ring of Animal Influence"
       },
       {
         "index": "ring-of-djinni-summoning",
-        "name": "Ring of Djinni Summoning",
-        "url": "/api/2014/magic-items/ring-of-djinni-summoning"
+        "name": "Ring of Djinni Summoning"
       },
       {
         "index": "ring-of-elemental-command",
-        "name": "Ring of Elemental Command",
-        "url": "/api/2014/magic-items/ring-of-elemental-command"
+        "name": "Ring of Elemental Command"
       },
       {
         "index": "ring-of-evasion",
-        "name": "Ring of Evasion",
-        "url": "/api/2014/magic-items/ring-of-evasion"
+        "name": "Ring of Evasion"
       },
       {
         "index": "ring-of-feather-falling",
-        "name": "Ring of Feather Falling",
-        "url": "/api/2014/magic-items/ring-of-feather-falling"
+        "name": "Ring of Feather Falling"
       },
       {
         "index": "ring-of-free-action",
-        "name": "Ring of Free Action",
-        "url": "/api/2014/magic-items/ring-of-free-action"
+        "name": "Ring of Free Action"
       },
       {
         "index": "ring-of-invisibility",
-        "name": "Ring of Invisibility",
-        "url": "/api/2014/magic-items/ring-of-invisibility"
+        "name": "Ring of Invisibility"
       },
       {
         "index": "ring-of-jumping",
-        "name": "Ring of Jumping",
-        "url": "/api/2014/magic-items/ring-of-jumping"
+        "name": "Ring of Jumping"
       },
       {
         "index": "ring-of-mind-shielding",
-        "name": "Ring of Mind Shielding",
-        "url": "/api/2014/magic-items/ring-of-mind-shielding"
+        "name": "Ring of Mind Shielding"
       },
       {
         "index": "ring-of-protection",
-        "name": "Ring of Protection",
-        "url": "/api/2014/magic-items/ring-of-protection"
+        "name": "Ring of Protection"
       },
       {
         "index": "ring-of-regeneration",
-        "name": "Ring of Regeneration",
-        "url": "/api/2014/magic-items/ring-of-regeneration"
+        "name": "Ring of Regeneration"
       },
       {
         "index": "ring-of-resistance",
-        "name": "Ring of Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance"
+        "name": "Ring of Resistance"
       },
       {
         "index": "ring-of-shooting-stars",
-        "name": "Ring of Shooting Stars",
-        "url": "/api/2014/magic-items/ring-of-shooting-stars"
+        "name": "Ring of Shooting Stars"
       },
       {
         "index": "ring-of-spell-storing",
-        "name": "Ring of Spell Storing",
-        "url": "/api/2014/magic-items/ring-of-spell-storing"
+        "name": "Ring of Spell Storing"
       },
       {
         "index": "ring-of-spell-turning",
-        "name": "Ring of Spell Turning",
-        "url": "/api/2014/magic-items/ring-of-spell-turning"
+        "name": "Ring of Spell Turning"
       },
       {
         "index": "ring-of-swimming",
-        "name": "Ring of Swimming",
-        "url": "/api/2014/magic-items/ring-of-swimming"
+        "name": "Ring of Swimming"
       },
       {
         "index": "ring-of-telekinesis",
-        "name": "Ring of Telekinesis",
-        "url": "/api/2014/magic-items/ring-of-telekinesis"
+        "name": "Ring of Telekinesis"
       },
       {
         "index": "ring-of-the-ram",
-        "name": "Ring of the Ram",
-        "url": "/api/2014/magic-items/ring-of-the-ram"
+        "name": "Ring of the Ram"
       },
       {
         "index": "ring-of-three-wishes",
-        "name": "Ring of Three Wishes",
-        "url": "/api/2014/magic-items/ring-of-three-wishes"
+        "name": "Ring of Three Wishes"
       },
       {
         "index": "ring-of-warmth",
-        "name": "Ring of Warmth",
-        "url": "/api/2014/magic-items/ring-of-warmth"
+        "name": "Ring of Warmth"
       },
       {
         "index": "ring-of-water-walking",
-        "name": "Ring of Water Walking",
-        "url": "/api/2014/magic-items/ring-of-water-walking"
+        "name": "Ring of Water Walking"
       },
       {
         "index": "ring-of-x-ray-vision",
-        "name": "Ring of X-ray Vision",
-        "url": "/api/2014/magic-items/ring-of-x-ray-vision"
+        "name": "Ring of X-ray Vision"
       },
       {
         "index": "ring-of-elemental-command-air",
-        "name": "Ring of Air Elemental Command",
-        "url": "/api/2014/magic-items/ring-of-elemental-command-air"
+        "name": "Ring of Air Elemental Command"
       },
       {
         "index": "ring-of-elemental-command-earth",
-        "name": "Ring of Earth Elemental Command",
-        "url": "/api/2014/magic-items/ring-of-elemental-command-earth"
+        "name": "Ring of Earth Elemental Command"
       },
       {
         "index": "ring-of-elemental-command-fire",
-        "name": "Ring of Fire Elemental Command",
-        "url": "/api/2014/magic-items/ring-of-elemental-command-fire"
+        "name": "Ring of Fire Elemental Command"
       },
       {
         "index": "ring-of-elemental-command-water",
-        "name": "Ring of Water Elemental Command",
-        "url": "/api/2014/magic-items/ring-of-elemental-command-water"
+        "name": "Ring of Water Elemental Command"
       },
       {
         "index": "ring-of-resistance-acid",
-        "name": "Ring of Acid Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-acid"
+        "name": "Ring of Acid Resistance"
       },
       {
         "index": "ring-of-resistance-cold",
-        "name": "Ring of Cold Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-cold"
+        "name": "Ring of Cold Resistance"
       },
       {
         "index": "ring-of-resistance-fire",
-        "name": "Ring of Fire Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-fire"
+        "name": "Ring of Fire Resistance"
       },
       {
         "index": "ring-of-resistance-force",
-        "name": "Ring of Force Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-force"
+        "name": "Ring of Force Resistance"
       },
       {
         "index": "ring-of-resistance-lightning",
-        "name": "Ring of Lightning Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-lightning"
+        "name": "Ring of Lightning Resistance"
       },
       {
         "index": "ring-of-resistance-necrotic",
-        "name": "Ring of Necrotic Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-necrotic"
+        "name": "Ring of Necrotic Resistance"
       },
       {
         "index": "ring-of-resistance-poison",
-        "name": "Ring of Poison Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-poison"
+        "name": "Ring of Poison Resistance"
       },
       {
         "index": "ring-of-resistance-psychic",
-        "name": "Ring of Psychic Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-psychic"
+        "name": "Ring of Psychic Resistance"
       },
       {
         "index": "ring-of-resistance-radiant",
-        "name": "Ring of Radiant Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-radiant"
+        "name": "Ring of Radiant Resistance"
       },
       {
         "index": "ring-of-resistance-thunder",
-        "name": "Ring of Thunder Resistance",
-        "url": "/api/2014/magic-items/ring-of-resistance-thunder"
+        "name": "Ring of Thunder Resistance"
       }
-    ],
-    "url": "/api/2014/equipment-categories/ring"
+    ]
   },
   {
     "index": "scroll",
@@ -11108,61 +9395,49 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "spell-scroll",
-        "name": "Spell Scroll",
-        "url": "/api/2014/magic-items/spell-scroll"
+        "name": "Spell Scroll"
       },
       {
         "index": "spell-scroll-cantrip",
-        "name": "Spell Scroll (Cantrip)",
-        "url": "/api/2014/magic-items/spell-scroll-cantrip"
+        "name": "Spell Scroll (Cantrip)"
       },
       {
         "index": "spell-scroll-1st",
-        "name": "Spell Scroll (1st)",
-        "url": "/api/2014/magic-items/spell-scroll-1st"
+        "name": "Spell Scroll (1st)"
       },
       {
         "index": "spell-scroll-2nd",
-        "name": "Spell Scroll (2nd)",
-        "url": "/api/2014/magic-items/spell-scroll-2nd"
+        "name": "Spell Scroll (2nd)"
       },
       {
         "index": "spell-scroll-3rd",
-        "name": "Spell Scroll (3rd)",
-        "url": "/api/2014/magic-items/spell-scroll-3rd"
+        "name": "Spell Scroll (3rd)"
       },
       {
         "index": "spell-scroll-4th",
-        "name": "Spell Scroll (4th)",
-        "url": "/api/2014/magic-items/spell-scroll-4th"
+        "name": "Spell Scroll (4th)"
       },
       {
         "index": "spell-scroll-5th",
-        "name": "Spell Scroll (5th)",
-        "url": "/api/2014/magic-items/spell-scroll-5th"
+        "name": "Spell Scroll (5th)"
       },
       {
         "index": "spell-scroll-6th",
-        "name": "Spell Scroll (6th)",
-        "url": "/api/2014/magic-items/spell-scroll-6th"
+        "name": "Spell Scroll (6th)"
       },
       {
         "index": "spell-scroll-7th",
-        "name": "Spell Scroll (7th)",
-        "url": "/api/2014/magic-items/spell-scroll-7th"
+        "name": "Spell Scroll (7th)"
       },
       {
         "index": "spell-scroll-8th",
-        "name": "Spell Scroll (8th)",
-        "url": "/api/2014/magic-items/spell-scroll-8th"
+        "name": "Spell Scroll (8th)"
       },
       {
         "index": "spell-scroll-9th",
-        "name": "Spell Scroll (9th)",
-        "url": "/api/2014/magic-items/spell-scroll-9th"
+        "name": "Spell Scroll (9th)"
       }
-    ],
-    "url": "/api/2014/equipment-categories/scroll"
+    ]
   },
   {
     "index": "staff",
@@ -11170,66 +9445,53 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "staff-of-charming",
-        "name": "Staff of Charming",
-        "url": "/api/2014/magic-items/staff-of-charming"
+        "name": "Staff of Charming"
       },
       {
         "index": "staff-of-fire",
-        "name": "Staff of Fire",
-        "url": "/api/2014/magic-items/staff-of-fire"
+        "name": "Staff of Fire"
       },
       {
         "index": "staff-of-frost",
-        "name": "Staff of Frost",
-        "url": "/api/2014/magic-items/staff-of-frost"
+        "name": "Staff of Frost"
       },
       {
         "index": "staff-of-healing",
-        "name": "Staff of Healing",
-        "url": "/api/2014/magic-items/staff-of-healing"
+        "name": "Staff of Healing"
       },
       {
         "index": "staff-of-power",
-        "name": "Staff of Power",
-        "url": "/api/2014/magic-items/staff-of-power"
+        "name": "Staff of Power"
       },
       {
         "index": "staff-of-striking",
-        "name": "Staff of Striking",
-        "url": "/api/2014/magic-items/staff-of-striking"
+        "name": "Staff of Striking"
       },
       {
         "index": "staff-of-swarming-insects",
-        "name": "Staff of Swarming Insects",
-        "url": "/api/2014/magic-items/staff-of-swarming-insects"
+        "name": "Staff of Swarming Insects"
       },
       {
         "index": "staff-of-the-magi",
-        "name": "Staff of the Magi",
-        "url": "/api/2014/magic-items/staff-of-the-magi"
+        "name": "Staff of the Magi"
       },
       {
         "index": "staff-of-the-python",
-        "name": "Staff of the Python",
-        "url": "/api/2014/magic-items/staff-of-the-python"
+        "name": "Staff of the Python"
       },
       {
         "index": "staff-of-the-woodlands",
-        "name": "Staff of the Woodlands",
-        "url": "/api/2014/magic-items/staff-of-the-woodlands"
+        "name": "Staff of the Woodlands"
       },
       {
         "index": "staff-of-thunder-and-lightning",
-        "name": "Staff of Thunder and Lightning",
-        "url": "/api/2014/magic-items/staff-of-thunder-and-lightning"
+        "name": "Staff of Thunder and Lightning"
       },
       {
         "index": "staff-of-withering",
-        "name": "Staff of Withering",
-        "url": "/api/2014/magic-items/staff-of-withering"
+        "name": "Staff of Withering"
       }
-    ],
-    "url": "/api/2014/equipment-categories/staff"
+    ]
   },
   {
     "index": "wand",
@@ -11237,86 +9499,69 @@ export const EQUIPMENT_CATEGORY_RAW = JSON.parse(String.raw`[
     "equipment": [
       {
         "index": "wand-of-binding",
-        "name": "Wand of Binding",
-        "url": "/api/2014/magic-items/wand-of-binding"
+        "name": "Wand of Binding"
       },
       {
         "index": "wand-of-enemy-detection",
-        "name": "Wand of Enemy Detection",
-        "url": "/api/2014/magic-items/wand-of-enemy-detection"
+        "name": "Wand of Enemy Detection"
       },
       {
         "index": "wand-of-fear",
-        "name": "Wand of Fear",
-        "url": "/api/2014/magic-items/wand-of-fear"
+        "name": "Wand of Fear"
       },
       {
         "index": "wand-of-fireballs",
-        "name": "Wand of Fireballs",
-        "url": "/api/2014/magic-items/wand-of-fireballs"
+        "name": "Wand of Fireballs"
       },
       {
         "index": "wand-of-lightning-bolts",
-        "name": "Wand of Lightning Bolts",
-        "url": "/api/2014/magic-items/wand-of-lightning-bolts"
+        "name": "Wand of Lightning Bolts"
       },
       {
         "index": "wand-of-magic-detection",
-        "name": "Wand of Magic Detection",
-        "url": "/api/2014/magic-items/wand-of-magic-detection"
+        "name": "Wand of Magic Detection"
       },
       {
         "index": "wand-of-magic-missiles",
-        "name": "Wand of Magic Missiles",
-        "url": "/api/2014/magic-items/wand-of-magic-missiles"
+        "name": "Wand of Magic Missiles"
       },
       {
         "index": "wand-of-paralysis",
-        "name": "Wand of Paralysis",
-        "url": "/api/2014/magic-items/wand-of-paralysis"
+        "name": "Wand of Paralysis"
       },
       {
         "index": "wand-of-polymorph",
-        "name": "Wand of Polymorph",
-        "url": "/api/2014/magic-items/wand-of-polymorph"
+        "name": "Wand of Polymorph"
       },
       {
         "index": "wand-of-secrets",
-        "name": "Wand of Secrets",
-        "url": "/api/2014/magic-items/wand-of-secrets"
+        "name": "Wand of Secrets"
       },
       {
         "index": "wand-of-the-war-mage",
-        "name": "Wand of the War Mage, +1, +2, or +3",
-        "url": "/api/2014/magic-items/wand-of-the-war-mage"
+        "name": "Wand of the War Mage, +1, +2, or +3"
       },
       {
         "index": "wand-of-web",
-        "name": "Wand of Web",
-        "url": "/api/2014/magic-items/wand-of-web"
+        "name": "Wand of Web"
       },
       {
         "index": "wand-of-wonder",
-        "name": "Wand of Wonder",
-        "url": "/api/2014/magic-items/wand-of-wonder"
+        "name": "Wand of Wonder"
       },
       {
         "index": "wand-of-the-war-mage-1",
-        "name": "Wand of the War Mage, +1",
-        "url": "/api/2014/magic-items/wand-of-the-war-mage-1"
+        "name": "Wand of the War Mage, +1"
       },
       {
         "index": "wand-of-the-war-mage-2",
-        "name": "Wand of the War Mage, +2",
-        "url": "/api/2014/magic-items/wand-of-the-war-mage-2"
+        "name": "Wand of the War Mage, +2"
       },
       {
         "index": "wand-of-the-war-mage-3",
-        "name": "Wand of the War Mage, +3",
-        "url": "/api/2014/magic-items/wand-of-the-war-mage-3"
+        "name": "Wand of the War Mage, +3"
       }
-    ],
-    "url": "/api/2014/equipment-categories/wand"
+    ]
   }
 ]`) as ReadonlyArray<SourceRow>;
 
@@ -11327,88 +9572,77 @@ export const WEAPON_PROPERTY_RAW = JSON.parse(String.raw`[
     "desc": [
       "You can use a weapon that has the ammunition property to make a ranged attack only if you have ammunition to fire from the weapon. Each time you attack with the weapon, you expend one piece of ammunition. Drawing the ammunition from a quiver, case, or other container is part of the attack (you need a free hand to load a one-handed weapon).",
       "At the end of the battle, you can recover half your expended ammunition by taking a minute to search the battlefield. If you use a weapon that has the ammunition property to make a melee attack, you treat the weapon as an improvised weapon (see \"Improvised Weapons\" later in the section). A sling must be loaded to deal any damage when used in this way."
-    ],
-    "url": "/api/2014/weapon-properties/ammunition"
+    ]
   },
   {
     "index": "finesse",
     "name": "Finesse",
     "desc": [
       "When making an attack with a finesse weapon, you use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls."
-    ],
-    "url": "/api/2014/weapon-properties/finesse"
+    ]
   },
   {
     "index": "heavy",
     "name": "Heavy",
     "desc": [
       "Small creatures have disadvantage on attack rolls with heavy weapons. A heavy weapon's size and bulk make it too large for a Small creature to use effectively."
-    ],
-    "url": "/api/2014/weapon-properties/heavy"
+    ]
   },
   {
     "index": "light",
     "name": "Light",
     "desc": [
       "A light weapon is small and easy to handle, making it ideal for use when fighting with two weapons."
-    ],
-    "url": "/api/2014/weapon-properties/light"
+    ]
   },
   {
     "index": "loading",
     "name": "Loading",
     "desc": [
       "Because of the time required to load this weapon, you can fire only one piece of ammunition from it when you use an action, bonus action, or reaction to fire it, regardless of the number of attacks you can normally make."
-    ],
-    "url": "/api/2014/weapon-properties/loading"
+    ]
   },
   {
     "index": "reach",
     "name": "Reach",
     "desc": [
       "This weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for opportunity attacks with it."
-    ],
-    "url": "/api/2014/weapon-properties/reach"
+    ]
   },
   {
     "index": "special",
     "name": "Special",
     "desc": [
       "A weapon with the special property has unusual rules governing its use, explained in the weapon's description (see \"Special Weapons\" later in this section)."
-    ],
-    "url": "/api/2014/weapon-properties/special"
+    ]
   },
   {
     "index": "thrown",
     "name": "Thrown",
     "desc": [
       "If a weapon has the thrown property, you can throw the weapon to make a ranged attack. If the weapon is a melee weapon, you use the same ability modifier for that attack roll and damage roll that you would use for a melee attack with the weapon. For example, if you throw a handaxe, you use your Strength, but if you throw a dagger, you can use either your Strength or your Dexterity, since the dagger has the finesse property."
-    ],
-    "url": "/api/2014/weapon-properties/thrown"
+    ]
   },
   {
     "index": "two-handed",
     "name": "Two-Handed",
     "desc": [
       "This weapon requires two hands when you attack with it."
-    ],
-    "url": "/api/2014/weapon-properties/two-handed"
+    ]
   },
   {
     "index": "versatile",
     "name": "Versatile",
     "desc": [
       "This weapon can be used with one or two hands. A damage value in parentheses appears with the property--the damage when the weapon is used with two hands to make a melee attack."
-    ],
-    "url": "/api/2014/weapon-properties/versatile"
+    ]
   },
   {
     "index": "monk",
     "name": "Monk",
     "desc": [
       "Monks gain several benefits while unarmed or wielding only monk weapons while they aren't wearing armor or wielding shields."
-    ],
-    "url": "/api/2014/weapon-properties/monk"
+    ]
   }
 ]`) as ReadonlyArray<SourceRow>;
 
@@ -11418,103 +9652,90 @@ export const DAMAGE_TYPE_RAW = JSON.parse(String.raw`[
     "name": "Acid",
     "desc": [
       "The corrosive spray of a black dragon's breath and the dissolving enzymes secreted by a black pudding deal acid damage."
-    ],
-    "url": "/api/2014/damage-types/acid"
+    ]
   },
   {
     "index": "bludgeoning",
     "name": "Bludgeoning",
     "desc": [
       "Blunt force attacks, falling, constriction, and the like deal bludgeoning damage."
-    ],
-    "url": "/api/2014/damage-types/bludgeoning"
+    ]
   },
   {
     "index": "cold",
     "name": "Cold",
     "desc": [
       "The infernal chill radiating from an ice devil's spear and the frigid blast of a white dragon's breath deal cold damage."
-    ],
-    "url": "/api/2014/damage-types/cold"
+    ]
   },
   {
     "index": "fire",
     "name": "Fire",
     "desc": [
       "Red dragons breathe fire, and many spells conjure flames to deal fire damage."
-    ],
-    "url": "/api/2014/damage-types/fire"
+    ]
   },
   {
     "index": "force",
     "name": "Force",
     "desc": [
       "Force is pure magical energy focused into a damaging form. Most effects that deal force damage are spells, including magic missile and spiritual weapon."
-    ],
-    "url": "/api/2014/damage-types/force"
+    ]
   },
   {
     "index": "lightning",
     "name": "Lightning",
     "desc": [
       "A lightning bolt spell and a blue dragon's breath deal lightning damage."
-    ],
-    "url": "/api/2014/damage-types/lightning"
+    ]
   },
   {
     "index": "necrotic",
     "name": "Necrotic",
     "desc": [
       "Necrotic damage, dealt by certain undead and a spell such as chill touch, withers matter and even the soul."
-    ],
-    "url": "/api/2014/damage-types/necrotic"
+    ]
   },
   {
     "index": "piercing",
     "name": "Piercing",
     "desc": [
       "Puncturing and impaling attacks, including spears and monsters' bites, deal piercing damage."
-    ],
-    "url": "/api/2014/damage-types/piercing"
+    ]
   },
   {
     "index": "poison",
     "name": "Poison",
     "desc": [
       "Venomous stings and the toxic gas of a green dragon's breath deal poison damage."
-    ],
-    "url": "/api/2014/damage-types/poison"
+    ]
   },
   {
     "index": "psychic",
     "name": "Psychic",
     "desc": [
       "Mental abilities such as a psionic blast deal psychic damage."
-    ],
-    "url": "/api/2014/damage-types/psychic"
+    ]
   },
   {
     "index": "radiant",
     "name": "Radiant",
     "desc": [
       "Radiant damage, dealt by a cleric's flame strike spell or an angel's smiting weapon, sears the flesh like fire and overloads the spirit with power."
-    ],
-    "url": "/api/2014/damage-types/radiant"
+    ]
   },
   {
     "index": "slashing",
     "name": "Slashing",
     "desc": [
       "Swords, axes, and monsters' claws deal slashing damage."
-    ],
-    "url": "/api/2014/damage-types/slashing"
+    ]
   },
   {
     "index": "thunder",
     "name": "Thunder",
     "desc": [
       "A concussive burst of sound, such as the effect of the thunderwave spell, deals thunder damage."
-    ],
-    "url": "/api/2014/damage-types/thunder"
+    ]
   }
 ]`) as ReadonlyArray<SourceRow>;

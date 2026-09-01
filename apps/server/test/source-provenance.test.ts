@@ -45,84 +45,57 @@ const option = (sourceIndex: string, name: string, hitDie = 8): SystemOption => 
   kind: "class",
   sourceFamily: "classes",
   sourceIndex,
-  sourceUrl: `/api/2014/classes/${sourceIndex}`,
   name,
   body: { hitDie, unarmouredAc: ["DEX"] },
   raw: { index: sourceIndex, name, hit_die: hitDie },
 });
 
-describe("rules source provenance", () => {
-  it("records the current starter bundle as Taverns-authored, not as 5e-bits or SRD", async () => {
+describe("rules source identity", () => {
+  it("stores the starter bundle as a Taverns source key, not as 5e-bits/SRD provenance", async () => {
     await run(importSystemCreatures([creature("source-test-attribution", "Attribution Goblin")]));
 
     const rows = await sql(
       (client) => client<{
-        readonly system: string;
-        readonly edition: string;
-        readonly document_name: string;
-        readonly license: string;
-        readonly attribution: string;
+        readonly source_corpus: string;
+        readonly source_family: string;
+        readonly source_key: string;
       }>`
-      select system, edition, document_name, license, attribution
-      from rules_source_document
-      where system = 'taverns' and edition = 'project'
+      select source_corpus, source_family, source_key
+      from creature
+      where source_key = 'source-test-attribution'
     `,
     );
 
     expect(rows).toEqual([
       {
-        system: "taverns",
-        edition: "project",
-        document_name: "Tiny Taverns starter bundle",
-        license: "project-authored",
-        attribution: "Project-authored starter data bundled with Tiny Taverns.",
+        source_corpus: "taverns-starter",
+        source_family: "monsters",
+        source_key: "source-test-attribution",
       },
     ]);
     expect(JSON.stringify(rows)).not.toMatch(/5e-bits|SRD|Wizards|OGL/i);
   });
 
-  it("records character rules as pinned 2014 5e-bits/SRD data", async () => {
+  it("stores character rules as stable 2014 source keys rather than source documents", async () => {
     await run(importSystemOptions([option("source-test-rules-attribution", "Attribution Class")]));
 
     const rows = await sql(
       (client) => client<{
-        readonly system: string;
-        readonly edition: string;
-        readonly document_name: string;
-        readonly document_version: string;
-        readonly license: string;
-        readonly attribution: string;
-        readonly provider: string;
-        readonly provider_commit: string | null;
+        readonly source_corpus: string;
+        readonly source_family: string;
+        readonly source_key: string;
       }>`
-      select rules_source_document.system,
-             rules_source_document.edition,
-             rules_source_document.document_name,
-             rules_source_document.document_version,
-             rules_source_document.license,
-             rules_source_document.attribution,
-             rules_import_run.provider,
-             rules_import_run.provider_commit
-      from rules_source_document
-      join rules_import_run on rules_import_run.document_id = rules_source_document.id
-      where rules_source_document.system = 'dnd-5e-srd'
-        and rules_source_document.edition = '2014'
-      order by rules_import_run.imported_at desc
-      limit 1
+      select source_corpus, source_family, source_key
+      from character_option
+      where source_key = 'source-test-rules-attribution'
     `,
     );
 
     expect(rows).toEqual([
       {
-        system: "dnd-5e-srd",
-        edition: "2014",
-        document_name: "5e-bits 2014 SRD data",
-        document_version: "5e-database 5.10.0+5a7ee5a0489b26655d343e4a41e8f7942a887af2",
-        license: "5e-bits MIT project data; underlying SRD 5.1 content under OGL-1.0a",
-        attribution:
-          "Rules data transformed from 5e-bits/5e-database commit 5a7ee5a0489b26655d343e4a41e8f7942a887af2 (MIT). Underlying Dungeons & Dragons 5th Edition SRD 5.1 material is used under the Open Game License version 1.0a.",
-        provider: "5e-bits-transform",
-        provider_commit: "5a7ee5a0489b26655d343e4a41e8f7942a887af2",
+        source_corpus: "5e-bits-2014",
+        source_family: "classes",
+        source_key: "source-test-rules-attribution",
       },
     ]);
   });
@@ -147,34 +120,17 @@ describe("rules source provenance", () => {
       (client) => client<{
         readonly name: string;
         readonly hp: number;
-        readonly entity_name: string;
         readonly revisions: number;
-        readonly has_source: boolean;
       }>`
-      select creature.name,
-             creature.hp,
-             rules_source_entity.name as entity_name,
-             count(rules_source_entity_revision.id)::int as revisions,
-             (creature.source_entity_id is not null and creature.source_revision_id is not null) as has_source
+      select name, hp, count(*) over ()::int as revisions
       from creature
-      join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-      join rules_source_entity_revision on rules_source_entity_revision.entity_id = rules_source_entity.id
-      where rules_source_entity.family = 'monsters'
-        and rules_source_entity.source_index = ${sourceIndex}
-      group by creature.name, creature.hp, rules_source_entity.name,
-               creature.source_entity_id, creature.source_revision_id
+      where source_corpus = 'taverns-starter'
+        and source_family = 'monsters'
+        and source_key = ${sourceIndex}
     `,
     );
 
-    expect(rows).toEqual([
-      {
-        name: "Renamed Marsh Thing",
-        hp: 13,
-        entity_name: "Renamed Marsh Thing",
-        revisions: 2,
-        has_source: true,
-      },
-    ]);
+    expect(rows).toEqual([{ name: "Renamed Marsh Thing", hp: 13, revisions: 1 }]);
   });
 
   it("allows two system creatures with the same display name when their source keys differ", async () => {
@@ -187,22 +143,21 @@ describe("rules source provenance", () => {
 
     const rows = await sql(
       (client) => client<{
-        readonly source_index: string;
+        readonly source_key: string;
         readonly name: string;
         readonly hp: number;
       }>`
-      select rules_source_entity.source_index, creature.name, creature.hp
+      select source_key, name, hp
       from creature
-      join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-      where rules_source_entity.source_index in ('source-test-twin-a', 'source-test-twin-b')
-      order by rules_source_entity.source_index
+      where source_key in ('source-test-twin-a', 'source-test-twin-b')
+      order by source_key
     `,
     );
 
     expect(result).toEqual({ inserted: 2, updated: 0 });
     expect(rows).toEqual([
-      { source_index: "source-test-twin-a", name: "Twin Name", hp: 5 },
-      { source_index: "source-test-twin-b", name: "Twin Name", hp: 9 },
+      { source_key: "source-test-twin-a", name: "Twin Name", hp: 5 },
+      { source_key: "source-test-twin-b", name: "Twin Name", hp: 9 },
     ]);
   });
 
@@ -215,9 +170,9 @@ describe("rules source provenance", () => {
     await sql(
       (client) => client`
       update character_option set visibility = 'dm'
-      where source_entity_id in (
-        select id from rules_source_entity where source_index = ${sourceIndex}
-      )
+      where source_corpus = '5e-bits-2014'
+        and source_family = 'classes'
+        and source_key = ${sourceIndex}
     `,
     );
     expect(await run(importSystemOptions([renamed]))).toEqual({ inserted: 0, updated: 1 });
@@ -227,27 +182,19 @@ describe("rules source provenance", () => {
         readonly name: string;
         readonly visibility: string;
         readonly body: ClassBody;
-        readonly revisions: number;
       }>`
-      select character_option.name,
-             character_option.visibility,
-             character_option.body,
-             count(rules_source_entity_revision.id)::int as revisions
+      select name, visibility, body
       from character_option
-      join rules_source_entity on rules_source_entity.id = character_option.source_entity_id
-      join rules_source_entity_revision on rules_source_entity_revision.entity_id = rules_source_entity.id
-      where rules_source_entity.family = 'classes'
-        and rules_source_entity.source_index = ${sourceIndex}
-      group by character_option.name, character_option.visibility, character_option.body
+      where source_corpus = '5e-bits-2014'
+        and source_family = 'classes'
+        and source_key = ${sourceIndex}
     `,
     );
 
-    expect(rows).toEqual([
-      { name: "Renamed Class", visibility: "dm", body: renamed.body, revisions: 2 },
-    ]);
+    expect(rows).toEqual([{ name: "Renamed Class", visibility: "dm", body: renamed.body }]);
   });
 
-  it("copies source provenance onto campaign snapshots and leaves them there after source updates", async () => {
+  it("copies source identity onto campaign snapshots and leaves the snapshot content alone after source updates", async () => {
     const accounts = await run(
       Accounts.pipe(Effect.flatMap((service) => service.issue("Source DM"))),
     );
@@ -266,31 +213,21 @@ describe("rules source provenance", () => {
 
     const sourceRows = await sql(
       (client) => client<{
-        readonly source_index: string;
+        readonly source_key: string;
         readonly domain_id: CreatureId | CharacterOptionId;
-        readonly source_entity_id: string;
-        readonly source_revision_id: string;
       }>`
-      select rules_source_entity.source_index,
-             creature.id::text as domain_id,
-             creature.source_entity_id::text,
-             creature.source_revision_id::text
+      select source_key, id::text as domain_id
       from creature
-      join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-      where rules_source_entity.source_index = ${monsterSource}
+      where source_key = ${monsterSource}
       union all
-      select rules_source_entity.source_index,
-             character_option.id::text as domain_id,
-             character_option.source_entity_id::text,
-             character_option.source_revision_id::text
+      select source_key, id::text as domain_id
       from character_option
-      join rules_source_entity on rules_source_entity.id = character_option.source_entity_id
-      where rules_source_entity.source_index = ${classSource}
-      order by source_index
+      where source_key = ${classSource}
+      order by source_key
     `,
     );
-    const classRow = sourceRows.find((row) => row.source_index === classSource);
-    const monsterRow = sourceRows.find((row) => row.source_index === monsterSource);
+    const classRow = sourceRows.find((row) => row.source_key === classSource);
+    const monsterRow = sourceRows.find((row) => row.source_key === monsterSource);
     if (classRow === undefined || monsterRow === undefined) throw new Error("expected source rows");
 
     await run(
@@ -315,39 +252,17 @@ describe("rules source provenance", () => {
       (client) => client<{
         readonly table_name: string;
         readonly name: string;
-        readonly source_entity_id: string;
-        readonly source_revision_id: string;
-        readonly current_source_revision_id: string;
+        readonly source_corpus: string;
+        readonly source_family: string;
+        readonly source_key: string;
       }>`
-      select 'creature' as table_name,
-             creature.name,
-             creature.source_entity_id::text,
-             creature.source_revision_id::text,
-             latest.id::text as current_source_revision_id
+      select 'creature' as table_name, name, source_corpus, source_family, source_key
       from creature
-      join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-      join lateral (
-        select id from rules_source_entity_revision
-        where entity_id = rules_source_entity.id
-        order by imported_at desc, id desc
-        limit 1
-      ) latest on true
-      where creature.campaign_id = ${campaign.id}
+      where campaign_id = ${campaign.id}
       union all
-      select 'character_option' as table_name,
-             character_option.name,
-             character_option.source_entity_id::text,
-             character_option.source_revision_id::text,
-             latest.id::text as current_source_revision_id
+      select 'character_option' as table_name, name, source_corpus, source_family, source_key
       from character_option
-      join rules_source_entity on rules_source_entity.id = character_option.source_entity_id
-      join lateral (
-        select id from rules_source_entity_revision
-        where entity_id = rules_source_entity.id
-        order by imported_at desc, id desc
-        limit 1
-      ) latest on true
-      where character_option.campaign_id = ${campaign.id}
+      where campaign_id = ${campaign.id}
       order by table_name
     `,
     );
@@ -356,54 +271,48 @@ describe("rules source provenance", () => {
       {
         table_name: "character_option",
         name: "Snapshot Class",
-        source_entity_id: classRow.source_entity_id,
-        source_revision_id: classRow.source_revision_id,
-        current_source_revision_id: expect.not.stringMatching(classRow.source_revision_id),
+        source_corpus: "5e-bits-2014",
+        source_family: "classes",
+        source_key: classSource,
       },
       {
         table_name: "creature",
         name: "Snapshot Beast",
-        source_entity_id: monsterRow.source_entity_id,
-        source_revision_id: monsterRow.source_revision_id,
-        current_source_revision_id: expect.not.stringMatching(monsterRow.source_revision_id),
+        source_corpus: "taverns-starter",
+        source_family: "monsters",
+        source_key: monsterSource,
       },
     ]);
   });
 
-  it("constrains source entity/revision pairs", async () => {
-    await run(importSystemCreatures([creature("source-test-pair-a", "Pair A", 3)]));
-    await run(importSystemCreatures([creature("source-test-pair-b", "Pair B", 4)]));
-
-    const rows = await sql(
-      (client) => client<{
-        readonly source_index: string;
-        readonly source_entity_id: string;
-        readonly source_revision_id: string;
-      }>`
-      select rules_source_entity.source_index,
-             creature.source_entity_id::text,
-             creature.source_revision_id::text
-      from creature
-      join rules_source_entity on rules_source_entity.id = creature.source_entity_id
-      where rules_source_entity.source_index in ('source-test-pair-a', 'source-test-pair-b')
-      order by rules_source_entity.source_index
+  it("keeps source keys as all-or-nothing metadata and removes the old raw source graph", async () => {
+    const tables = await sql(
+      (client) => client<{ readonly table_name: string }>`
+      select table_name
+      from information_schema.tables
+      where table_schema = 'public'
+        and (table_name like 'rules_source_%' or table_name = 'rules_term')
+      order by table_name
     `,
     );
+    expect(tables).toEqual([]);
 
     const mismatched = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* SqlClient.SqlClient;
         yield* client`
           insert into creature (
-            campaign_id, origin, source_entity_id, source_revision_id,
+            campaign_id, account_id, origin, source_corpus, source_family, source_key,
             name, type, cr, cr_sort, ac, hp, environments, legendary, body
           )
           values (
             null,
+            null,
             'system',
-            ${rows[0]!.source_entity_id},
-            ${rows[1]!.source_revision_id},
-            'Impossible Pair',
+            '5e-bits-2014',
+            'monsters',
+            null,
+            'Impossible Key',
             'Humanoid',
             '1',
             1,

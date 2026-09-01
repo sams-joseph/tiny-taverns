@@ -30,10 +30,9 @@ import { routes, router } from "../routes";
 import { SaveFailure } from "../ui/form";
 import type { MagicItemQuery } from "./load";
 
-const sourceRef = (index: string, name: string, family: string) => ({
+const sourceRef = (index: string, name: string, _family: string) => ({
   index,
   name,
-  url: `/api/2014/${family}/${index}`,
 });
 
 const categories = [

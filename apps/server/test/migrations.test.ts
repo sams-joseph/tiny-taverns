@@ -88,6 +88,7 @@ describe("migrations", () => {
     await runtime.runPromise(migrate);
 
     expect(await runtime.runPromise(tableNames)).toEqual([
+      "ability_score",
       "account",
       "assistant_thread",
       "assistant_turn",
@@ -97,24 +98,38 @@ describe("migrations", () => {
       "campaign_member",
       "character",
       "character_option",
+      "character_option_equipment_reference",
       "combatant",
+      "condition",
       "creature",
+      "creature_armor_equipment",
+      "creature_condition_immunity",
+      "creature_damage_type",
+      "creature_form",
+      "creature_proficiency",
+      "creature_spell",
+      "damage_type",
       "effect_sql_migrations",
       "encounter",
       "encounter_creature",
       "encounter_run",
       "equipment",
+      "equipment_category",
+      "equipment_content",
+      "equipment_property",
       "magic_item",
+      "magic_item_rarity",
+      "magic_item_variant",
+      "magic_school",
       "note",
       "prep_item",
-      "rules_import_run",
-      "rules_source_document",
-      "rules_source_entity",
-      "rules_source_entity_revision",
-      "rules_source_link",
+      "proficiency",
       "session",
       "session_event",
       "spell",
+      "spell_class",
+      "spell_damage_type",
+      "weapon_property",
     ]);
     // Numbering is load-bearing and the failure is silent: `Migrator.run` keeps
     // only `currentId > latestMigrationId`, so a file numbered below one that
@@ -146,6 +161,7 @@ describe("migrations", () => {
       { migration_id: 22, name: "equipment" },
       { migration_id: 23, name: "magic_items" },
       { migration_id: 24, name: "creature_monster_corpus" },
+      { migration_id: 25, name: "concrete_source_relationships" },
     ]);
   }, 60_000);
 
@@ -180,6 +196,7 @@ describe("migrations", () => {
       { migration_id: 22, name: "equipment" },
       { migration_id: 23, name: "magic_items" },
       { migration_id: 24, name: "creature_monster_corpus" },
+      { migration_id: 25, name: "concrete_source_relationships" },
     ]);
   }, 60_000);
 });

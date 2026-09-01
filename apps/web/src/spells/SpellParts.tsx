@@ -331,23 +331,21 @@ export function SpellCreateDialog({ onClose }: { readonly onClose: () => void })
     const payload: SpellCreate = {
       name,
       level: Number(level),
-      school: { index: school, name: schoolName, url: `/api/2014/magic-schools/${school}` },
+      school: { index: school, name: schoolName },
       castingTime: "1 action",
       range: "Self",
       duration: "Instantaneous",
       classes: classNames.map((item) => ({
         index: item.toLowerCase(),
         name: item,
-        url: `/api/2014/classes/${item.toLowerCase()}`,
       })),
       spell: {
         desc: description.trim() === "" ? [] : [description.trim()],
         components: ["V", "S"],
-        school: { index: school, name: schoolName, url: `/api/2014/magic-schools/${school}` },
+        school: { index: school, name: schoolName },
         classes: classNames.map((item) => ({
           index: item.toLowerCase(),
           name: item,
-          url: `/api/2014/classes/${item.toLowerCase()}`,
         })),
         subclasses: [],
       },

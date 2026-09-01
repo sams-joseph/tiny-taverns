@@ -4,11 +4,10 @@ import { pageFilter } from "./Page.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { queryArray } from "./Query.js";
 
-/** A source reference in the 2014 magic item corpus. */
+/** A source reference as the product exposes it: a stable key and display label. */
 export const MagicItemReference = Schema.Struct({
   index: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
   name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240)),
-  url: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 260))),
 });
 export type MagicItemReference = typeof MagicItemReference.Type;
 
@@ -31,7 +30,6 @@ export const MagicItemBody = Schema.Struct({
   variant: Schema.optional(Schema.Boolean),
   variants: Schema.optional(Schema.Array(MagicItemReference).check(Schema.isLengthBetween(0, 80))),
   baseItem: Schema.optional(MagicItemReference),
-  sourceUrl: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 260))),
 });
 export type MagicItemBody = typeof MagicItemBody.Type;
 

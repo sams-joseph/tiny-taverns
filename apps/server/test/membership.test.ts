@@ -185,6 +185,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Spells.ts",
       "repo/visibility.ts",
       "ruleset/import.ts",
+      "ruleset/source.ts",
       "spells/import.ts",
     ]);
   });
@@ -605,15 +606,30 @@ describe("a stranger reads nothing", () => {
           select table_name from information_schema.tables
           where table_schema = 'public'
             and table_name not in (
+              'ability_score',
               'account',
               'campaign_member',
               'campaign_invite',
+              'character_option_equipment_reference',
+              'condition',
+              'creature_armor_equipment',
+              'creature_condition_immunity',
+              'creature_damage_type',
+              'creature_form',
+              'creature_proficiency',
+              'creature_spell',
+              'damage_type',
               'effect_sql_migrations',
-              'rules_import_run',
-              'rules_source_document',
-              'rules_source_entity',
-              'rules_source_entity_revision',
-              'rules_source_link'
+              'equipment_category',
+              'equipment_content',
+              'equipment_property',
+              'magic_item_rarity',
+              'magic_item_variant',
+              'magic_school',
+              'proficiency',
+              'spell_class',
+              'spell_damage_type',
+              'weapon_property'
             )
           order by table_name
         `;

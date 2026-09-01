@@ -3,11 +3,10 @@ import { Effect, Schema } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { EQUIPMENT_CATEGORY_RAW } from "../equipment/systemEquipment.js";
 import {
-  beginRulesImport,
+  equipmentCategoryForRef,
   FIVE_E_BITS_2014_SOURCE,
-  sourceLinkFor,
-  sourceRevisionFor,
-  type SourceRevision,
+  magicItemRarityFor,
+  sourceKeyFor,
 } from "../ruleset/source.js";
 import { MAGIC_ITEM_RAW } from "./systemMagicItems.js";
 
@@ -25,7 +24,6 @@ interface SourceRef {
 
 export interface SystemMagicItem {
   readonly sourceIndex: string;
-  readonly sourceUrl?: string;
   readonly name: string;
   readonly equipmentCategory: SourceRef;
   readonly rarity: SourceRef;
@@ -58,9 +56,6 @@ const slug = (value: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-
-const sourceUrlFor = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : `https://www.dnd5eapi.co${url}`;
 
 const rawText = (row: Record<string, unknown>, key: string): string => {
   const value = row[key];
@@ -124,14 +119,10 @@ const rarityOf = (row: Record<string, unknown>): SourceRef => {
   }
   const record = value as Record<string, unknown>;
   const name = record.name;
-  const url = record.url;
   if (typeof name !== "string" || name.trim() === "") {
     throw new Error("magic item rarity.name is required");
   }
-  if (url !== undefined && typeof url !== "string") {
-    throw new Error("magic item rarity.url must be text");
-  }
-  return { index: slug(name), name, url };
+  return { index: slug(name), name };
 };
 
 const attunementOf = (
@@ -158,7 +149,6 @@ const transformedMagicItems = (
     const base = {
       index: rawText(row, "index"),
       name: rawText(row, "name"),
-      url: optionalText(row, "url"),
     };
     for (const variant of refsOf(row, "variants")) {
       if (!rowsByIndex.has(variant.index)) {
@@ -192,10 +182,9 @@ const transformedMagicItems = (
         throw new Error(`magic item variant ${sourceIndex} cannot also list variants`);
       }
       const attunement = attunementOf(desc);
-      const sourceUrl = optionalText(row, "url");
       const image = optionalText(row, "image");
       const body = decodeBody({
-        item: { index: sourceIndex, name, url: sourceUrl },
+        item: { index: sourceIndex, name },
         equipmentCategory,
         rarity,
         desc,
@@ -205,11 +194,9 @@ const transformedMagicItems = (
         variant: isVariant,
         variants,
         baseItem,
-        sourceUrl: sourceUrlFor(sourceUrl),
       });
       return {
         sourceIndex,
-        sourceUrl: sourceUrlFor(sourceUrl),
         name,
         equipmentCategory,
         rarity,
@@ -227,59 +214,39 @@ const transformedMagicItems = (
     .sort((left, right) => Number(left.isVariant) - Number(right.isVariant));
 };
 
-const sourceFamilyOf = (url: string | undefined): string | undefined =>
-  url?.match(/^\/api\/2014\/([^/]+)\//)?.[1];
-
 const referenceRows = (): ReadonlyArray<{
   readonly family: string;
   readonly row: Record<string, unknown>;
 }> => [...EQUIPMENT_CATEGORY_RAW.map((row) => ({ family: "equipment-categories", row }))];
 
-const linkReference = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  from: SourceRevision,
-  relation: string,
-  reference: SourceRef | undefined,
-  ordinal = 0,
-): Effect.Effect<void, SqlError.SqlError> => {
-  if (reference === undefined) return Effect.void;
-  const family = sourceFamilyOf(reference.url);
-  if (family === undefined) return Effect.void;
-  return sourceLinkFor(sql, context, from, {
-    relation,
-    targetFamily: family,
-    targetIndex: reference.index,
-    ordinal,
-    payload: { name: reference.name, url: reference.url },
+const registerReferenceRows = (sql: SqlClient.SqlClient): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    for (const { family, row } of referenceRows()) {
+      if (family === "equipment-categories")
+        yield* equipmentCategoryForRef(sql, refOf(row, family));
+    }
   });
-};
 
-const linkMagicItem = (
+const syncMagicItemVariants = (
   sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  revision: SourceRevision,
+  ids: ReadonlyMap<string, string>,
   item: SystemMagicItem,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.gen(function* () {
-    yield* linkReference(sql, context, revision, "equipment-category", item.equipmentCategory);
-    for (const [ordinal, reference] of item.variants.entries()) {
-      yield* sourceLinkFor(sql, context, revision, {
-        relation: "magic-item-variant",
-        targetFamily: "magic-items",
-        targetIndex: reference.index,
-        ordinal,
-        payload: { name: reference.name, url: reference.url },
-      });
-    }
-    if (item.baseItem !== undefined) {
-      yield* sourceLinkFor(sql, context, revision, {
-        relation: "magic-item-base",
-        targetFamily: "magic-items",
-        targetIndex: item.baseItem.index,
-        ordinal: 0,
-        payload: { name: item.baseItem.name, url: item.baseItem.url },
-      });
+    const baseId = ids.get(item.sourceIndex);
+    if (baseId === undefined) throw new Error(`missing magic item ${item.sourceIndex}`);
+    yield* sql`delete from magic_item_variant where base_item_id = ${baseId}`;
+    for (const [ordinal, variant] of item.variants.entries()) {
+      const variantId = ids.get(variant.index);
+      if (variantId === undefined) {
+        throw new Error(
+          `magic item ${item.sourceIndex} references missing variant ${variant.index}`,
+        );
+      }
+      yield* sql`
+        insert into magic_item_variant (base_item_id, variant_item_id, ordinal)
+        values (${baseId}, ${variantId}, ${ordinal})
+      `;
     }
   });
 
@@ -300,52 +267,25 @@ export const importSystemMagicItems = (
       Effect.gen(function* () {
         let inserted = 0;
         let updated = 0;
-        const context = yield* beginRulesImport(sql, FIVE_E_BITS_2014_SOURCE);
 
-        for (const { family, row } of referenceRows()) {
-          yield* sourceRevisionFor(sql, context, {
-            family,
-            sourceIndex: rawText(row, "index"),
-            sourceUrl: sourceUrlFor(typeof row.url === "string" ? row.url : undefined),
-            name: rawText(row, "name"),
-            raw: row,
-          });
-        }
-
-        const revisions = new Map<string, SourceRevision>();
-        for (const item of items) {
-          const revision = yield* sourceRevisionFor(sql, context, {
-            family: "magic-items",
-            sourceIndex: item.sourceIndex,
-            sourceUrl: item.sourceUrl,
-            name: item.name,
-            raw: item.raw,
-          });
-          revisions.set(item.sourceIndex, revision);
-        }
-
-        for (const item of items) {
-          const revision = revisions.get(item.sourceIndex);
-          if (revision === undefined)
-            throw new Error(`missing source revision for ${item.sourceIndex}`);
-          yield* linkMagicItem(sql, context, revision, item);
-        }
+        yield* registerReferenceRows(sql);
 
         const ids = new Map<string, string>();
         for (const item of items) {
-          const revision = revisions.get(item.sourceIndex);
-          if (revision === undefined)
-            throw new Error(`missing source revision for ${item.sourceIndex}`);
+          const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "magic-items", item.sourceIndex);
           const baseId = item.baseItem === undefined ? null : ids.get(item.baseItem.index);
           if (item.baseItem !== undefined && baseId === undefined) {
             throw new Error(
               `magic item ${item.sourceIndex} could not find base ${item.baseItem.index}`,
             );
           }
+          const categoryId = yield* equipmentCategoryForRef(sql, item.equipmentCategory);
+          const rarityId = yield* magicItemRarityFor(sql, item.rarity.index, item.rarity.name);
 
           const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into magic_item (
-              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
+              category_id, rarity_id,
               name, category_index, category_name, rarity_index, rarity_name, rarity_sort,
               requires_attunement, attunement_requirement, is_variant, base_item_id,
               variant_count, image, body, visibility
@@ -353,8 +293,11 @@ export const importSystemMagicItems = (
               null,
               null,
               'system',
-              ${revision.sourceEntityId},
-              ${revision.sourceRevisionId},
+              ${key.sourceCorpus},
+              ${key.sourceFamily},
+              ${key.sourceKey},
+              ${categoryId},
+              ${rarityId},
               ${item.name},
               ${item.equipmentCategory.index},
               ${item.equipmentCategory.name},
@@ -370,24 +313,25 @@ export const importSystemMagicItems = (
               ${JSON.stringify(item.body)},
               'shared'
             )
-            on conflict (source_entity_id)
-              where campaign_id is null and account_id is null and source_entity_id is not null
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
             do update set
-              source_revision_id       = excluded.source_revision_id,
-              name                     = excluded.name,
-              category_index           = excluded.category_index,
-              category_name            = excluded.category_name,
-              rarity_index             = excluded.rarity_index,
-              rarity_name              = excluded.rarity_name,
-              rarity_sort              = excluded.rarity_sort,
-              requires_attunement      = excluded.requires_attunement,
-              attunement_requirement   = excluded.attunement_requirement,
-              is_variant               = excluded.is_variant,
-              base_item_id             = excluded.base_item_id,
-              variant_count            = excluded.variant_count,
-              image                    = excluded.image,
-              body                     = excluded.body,
-              updated_at               = now()
+              category_id           = excluded.category_id,
+              rarity_id             = excluded.rarity_id,
+              name                  = excluded.name,
+              category_index        = excluded.category_index,
+              category_name         = excluded.category_name,
+              rarity_index          = excluded.rarity_index,
+              rarity_name           = excluded.rarity_name,
+              rarity_sort           = excluded.rarity_sort,
+              requires_attunement   = excluded.requires_attunement,
+              attunement_requirement = excluded.attunement_requirement,
+              is_variant            = excluded.is_variant,
+              base_item_id          = excluded.base_item_id,
+              variant_count         = excluded.variant_count,
+              image                 = excluded.image,
+              body                  = excluded.body,
+              updated_at            = now()
             returning id::text, (xmax = 0) as inserted
           `;
           const row = rows[0];
@@ -395,6 +339,10 @@ export const importSystemMagicItems = (
           ids.set(item.sourceIndex, row.id);
           if (row.inserted) inserted += 1;
           else updated += 1;
+        }
+
+        for (const item of items) {
+          yield* syncMagicItemVariants(sql, ids, item);
         }
 
         return { inserted, updated, seen: items.length };

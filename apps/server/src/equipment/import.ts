@@ -2,13 +2,13 @@ import { EquipmentBody } from "@taverns/api";
 import { Effect, Schema } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import {
-  beginRulesImport,
+  damageTypeForRef,
+  equipmentCategoryForRef,
   FIVE_E_BITS_2014_SOURCE,
-  sourceLinkFor,
-  sourceRevisionFor,
-  type SourceRevision,
+  sourceKeyFor,
+  weaponPropertyForRef,
 } from "../ruleset/source.js";
-import { SOURCE_REFERENCES } from "../ruleset/systemOptions.js";
+import { SYSTEM_OPTIONS } from "../ruleset/systemOptions.js";
 import {
   DAMAGE_TYPE_RAW,
   EQUIPMENT_CATEGORY_RAW,
@@ -30,7 +30,6 @@ interface SourceRef {
 
 export interface SystemEquipment {
   readonly sourceIndex: string;
-  readonly sourceUrl?: string;
   readonly name: string;
   readonly category: SourceRef;
   readonly cost: { readonly quantity: number; readonly unit: string };
@@ -56,9 +55,6 @@ export interface SystemEquipment {
 }
 
 const decodeBody = Schema.decodeSync(EquipmentBody);
-
-const sourceUrlFor = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : `https://www.dnd5eapi.co${url}`;
 
 const rawText = (row: Record<string, unknown>, key: string): string => {
   const value = row[key];
@@ -263,12 +259,10 @@ const transformedEquipment = (row: Record<string, unknown>): SystemEquipment => 
     vehicleCategory: optionalText(row, "vehicle_category"),
     weaponCategory: optionalText(row, "weapon_category"),
     weaponRange: optionalText(row, "weapon_range"),
-    sourceUrl: typeof row.url === "string" ? sourceUrlFor(row.url) : undefined,
   });
 
   return {
     sourceIndex: rawText(row, "index"),
-    sourceUrl: typeof row.url === "string" ? sourceUrlFor(row.url) : undefined,
     name: rawText(row, "name"),
     category,
     cost,
@@ -294,9 +288,6 @@ const transformedEquipment = (row: Record<string, unknown>): SystemEquipment => 
   };
 };
 
-const sourceFamilyOf = (url: string | undefined): string | undefined =>
-  url?.match(/^\/api\/2014\/([^/]+)\//)?.[1];
-
 const referenceRows = (): ReadonlyArray<{
   readonly family: string;
   readonly row: Record<string, unknown>;
@@ -306,104 +297,71 @@ const referenceRows = (): ReadonlyArray<{
   ...DAMAGE_TYPE_RAW.map((row) => ({ family: "damage-types", row })),
 ];
 
-const importReferencedEntity = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  family: string,
-  row: Record<string, unknown>,
-) =>
-  sourceRevisionFor(sql, context, {
-    family,
-    sourceIndex: rawText(row, "index"),
-    sourceUrl: sourceUrlFor(typeof row.url === "string" ? row.url : undefined),
-    name: rawText(row, "name"),
-    raw: row,
+const registerReferenceRows = (sql: SqlClient.SqlClient): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    for (const { family, row } of referenceRows()) {
+      const reference = refOf(row, family);
+      if (family === "equipment-categories") yield* equipmentCategoryForRef(sql, reference);
+      if (family === "weapon-properties") yield* weaponPropertyForRef(sql, reference);
+      if (family === "damage-types") yield* damageTypeForRef(sql, reference);
+    }
   });
 
-const linkReference = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  from: SourceRevision,
-  relation: string,
-  reference: SourceRef | undefined,
-  ordinal = 0,
-): Effect.Effect<void, SqlError.SqlError> => {
-  if (reference === undefined) return Effect.void;
-  const family = sourceFamilyOf(reference.url);
-  if (family === undefined) {
-    return Effect.die(
-      new Error(`equipment ${relation} reference ${reference.index} has no family`),
-    );
-  }
-  return sourceLinkFor(sql, context, from, {
-    relation,
-    targetFamily: family,
-    targetIndex: reference.index,
-    ordinal,
-    payload: { name: reference.name, url: reference.url },
-  });
+const referenceIndex = (value: unknown): string | undefined => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const index = (value as Record<string, unknown>).index;
+  return typeof index === "string" && index.trim() !== "" ? index : undefined;
 };
 
-const linkEquipment = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-  revision: SourceRevision,
-  equipment: SystemEquipment,
-): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.gen(function* () {
-    yield* linkReference(sql, context, revision, "equipment-category", equipment.category);
-    yield* linkReference(sql, context, revision, "gear-category", equipment.gearCategory);
-    yield* linkReference(sql, context, revision, "damage-type", equipment.damage?.damageType);
-    yield* linkReference(
-      sql,
-      context,
-      revision,
-      "two-handed-damage-type",
-      equipment.twoHandedDamage?.damageType,
-    );
-    for (const [ordinal, property] of equipment.properties.entries()) {
-      yield* linkReference(sql, context, revision, "weapon-property", property, ordinal);
-    }
-    for (const [ordinal, content] of (equipment.body.contents ?? []).entries()) {
-      yield* linkReference(sql, context, revision, "contains-equipment", content.item, ordinal);
-    }
-  });
+const collectRulesetEquipmentReferences = (
+  value: unknown,
+  found: Map<string, { readonly family: string; readonly index: string }>,
+): void => {
+  if (Array.isArray(value)) {
+    for (const item of value) collectRulesetEquipmentReferences(item, found);
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
 
-const requireResolvedLinks = (
-  sql: SqlClient.SqlClient,
-  context: Parameters<typeof sourceRevisionFor>[1],
-): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.gen(function* () {
-    const unresolved = yield* sql<{
-      readonly relation: string;
-      readonly target_family: string;
-      readonly target_index: string;
-    }>`
-      select rules_source_link.relation,
-             rules_source_link.target_family,
-             rules_source_link.target_index
-      from rules_source_link
-      join rules_source_entity_revision
-        on rules_source_entity_revision.id = rules_source_link.from_revision_id
-      where rules_source_entity_revision.import_run_id = ${context.importRunId}
-        and rules_source_link.to_entity_id is null
-      order by rules_source_link.relation, rules_source_link.target_family, rules_source_link.target_index
-    `;
-    if (unresolved.length > 0) {
-      throw new Error(
-        `equipment source links did not resolve: ${unresolved
-          .map((row) => `${row.relation}:${row.target_family}/${row.target_index}`)
-          .join(", ")}`,
-      );
+  const row = value as Record<string, unknown>;
+  const equipmentIndex = referenceIndex(row.equipment);
+  if (equipmentIndex !== undefined) {
+    found.set(`equipment/${equipmentIndex}`, { family: "equipment", index: equipmentIndex });
+  }
+  if (row.option_type === "counted_reference") {
+    const counted = referenceIndex(row.of);
+    if (counted !== undefined) {
+      found.set(`equipment/${counted}`, { family: "equipment", index: counted });
     }
-  });
+  }
+  if (row.option_set_type === "equipment_category") {
+    const category = referenceIndex(row.equipment_category);
+    if (category !== undefined) {
+      found.set(`equipment-categories/${category}`, {
+        family: "equipment-categories",
+        index: category,
+      });
+    }
+  }
+
+  for (const child of Object.values(row)) collectRulesetEquipmentReferences(child, found);
+};
+
+const rulesetEquipmentReferences = (): ReadonlyArray<{
+  readonly family: string;
+  readonly index: string;
+}> => {
+  const found = new Map<string, { readonly family: string; readonly index: string }>();
+  for (const option of SYSTEM_OPTIONS) collectRulesetEquipmentReferences(option.raw, found);
+  return [...found.values()];
+};
 
 const validateRulesetEquipmentReferences = (equipment: ReadonlyArray<SystemEquipment>): void => {
   const equipmentIndexes = new Set(equipment.map((item) => item.sourceIndex));
   const categoryIndexes = new Set(
     EQUIPMENT_CATEGORY_RAW.map((row) => (typeof row.index === "string" ? row.index : "")),
   );
-  const missing = SOURCE_REFERENCES.filter((reference) => {
+  const missing = rulesetEquipmentReferences().filter((reference) => {
     if (reference.family === "equipment") return !equipmentIndexes.has(reference.index);
     if (reference.family === "equipment-categories") return !categoryIndexes.has(reference.index);
     return false;
@@ -420,11 +378,42 @@ const validateRulesetEquipmentReferences = (equipment: ReadonlyArray<SystemEquip
 const rowsFor = (corpus: ReadonlyArray<Record<string, unknown>>): ReadonlyArray<SystemEquipment> =>
   corpus.map(transformedEquipment);
 
+const syncEquipmentRelationships = (
+  sql: SqlClient.SqlClient,
+  equipmentId: string,
+  idsBySource: ReadonlyMap<string, string>,
+  item: SystemEquipment,
+): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    yield* sql`delete from equipment_property where equipment_id = ${equipmentId}`;
+    yield* sql`delete from equipment_content where equipment_id = ${equipmentId}`;
+
+    for (const [ordinal, property] of item.properties.entries()) {
+      const weaponPropertyId = yield* weaponPropertyForRef(sql, property);
+      yield* sql`
+        insert into equipment_property (equipment_id, weapon_property_id, ordinal)
+        values (${equipmentId}, ${weaponPropertyId}, ${ordinal})
+      `;
+    }
+
+    for (const [ordinal, content] of (item.body.contents ?? []).entries()) {
+      const containedId = idsBySource.get(content.item.index);
+      if (containedId === undefined) {
+        throw new Error(
+          `equipment ${item.sourceIndex} references missing content ${content.item.index}`,
+        );
+      }
+      yield* sql`
+        insert into equipment_content (equipment_id, contained_equipment_id, quantity, ordinal)
+        values (${equipmentId}, ${containedId}, ${content.quantity}, ${ordinal})
+      `;
+    }
+  });
+
 /**
  * Writes the pinned 2014 5e-bits mundane equipment corpus into `equipment` as
- * global `system` rows. The import is entirely offline: this file reads the
- * checked-in generated snapshot in `systemEquipment.ts` and records source
- * entity/revision/link rows for every relationship the equipment source names.
+ * global `system` rows. The import is entirely offline and records source
+ * relationships in concrete equipment join tables.
  */
 export const importSystemEquipment = (
   corpus: ReadonlyArray<Record<string, unknown>> = EQUIPMENT_RAW,
@@ -438,31 +427,28 @@ export const importSystemEquipment = (
       Effect.gen(function* () {
         let inserted = 0;
         let updated = 0;
-        const context = yield* beginRulesImport(sql, FIVE_E_BITS_2014_SOURCE);
 
-        for (const { family, row } of referenceRows()) {
-          yield* importReferencedEntity(sql, context, family, row);
-        }
+        yield* registerReferenceRows(sql);
 
-        const domainSources = new Map<string, SourceRevision>();
+        const idsBySource = new Map<string, string>();
         for (const item of equipment) {
-          const source = yield* sourceRevisionFor(sql, context, {
-            family: "equipment",
-            sourceIndex: item.sourceIndex,
-            sourceUrl: item.sourceUrl,
-            name: item.name,
-            raw: item.raw,
-          });
-          domainSources.set(item.sourceIndex, source);
-        }
+          const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "equipment", item.sourceIndex);
+          const categoryId = yield* equipmentCategoryForRef(sql, item.category);
+          const gearCategoryId =
+            item.gearCategory === undefined
+              ? null
+              : yield* equipmentCategoryForRef(sql, item.gearCategory);
+          const damageTypeId =
+            item.damage === undefined ? null : yield* damageTypeForRef(sql, item.damage.damageType);
+          const twoHandedDamageTypeId =
+            item.twoHandedDamage === undefined
+              ? null
+              : yield* damageTypeForRef(sql, item.twoHandedDamage.damageType);
 
-        for (const item of equipment) {
-          const source = domainSources.get(item.sourceIndex)!;
-          yield* linkEquipment(sql, context, source, item);
-
-          const rows = yield* sql<{ readonly inserted: boolean }>`
+          const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into equipment (
-              campaign_id, account_id, origin, source_entity_id, source_revision_id,
+              campaign_id, account_id, origin, source_corpus, source_family, source_key,
+              category_id, gear_category_id, damage_type_id, two_handed_damage_type_id,
               name, category_index, category_name, cost_quantity, cost_unit, cost_gp,
               weight, weight_sort, gear_category_index, gear_category_name,
               armor_category, weapon_category, weapon_range, category_range,
@@ -477,8 +463,13 @@ export const importSystemEquipment = (
               null,
               null,
               'system',
-              ${source.sourceEntityId},
-              ${source.sourceRevisionId},
+              ${key.sourceCorpus},
+              ${key.sourceFamily},
+              ${key.sourceKey},
+              ${categoryId},
+              ${gearCategoryId},
+              ${damageTypeId},
+              ${twoHandedDamageTypeId},
               ${item.name},
               ${item.category.index},
               ${item.category.name},
@@ -515,10 +506,13 @@ export const importSystemEquipment = (
               ${JSON.stringify(item.body)},
               'shared'
             )
-            on conflict (source_entity_id)
-              where campaign_id is null and account_id is null and source_entity_id is not null
+            on conflict (source_corpus, source_family, source_key)
+              where campaign_id is null and account_id is null and source_key is not null
             do update set
-              source_revision_id            = excluded.source_revision_id,
+              category_id                    = excluded.category_id,
+              gear_category_id               = excluded.gear_category_id,
+              damage_type_id                 = excluded.damage_type_id,
+              two_handed_damage_type_id      = excluded.two_handed_damage_type_id,
               name                          = excluded.name,
               category_index                = excluded.category_index,
               category_name                 = excluded.category_name,
@@ -554,13 +548,21 @@ export const importSystemEquipment = (
               property_names                = excluded.property_names,
               body                          = excluded.body,
               updated_at                    = now()
-            returning (xmax = 0) as inserted
+            returning id::text, (xmax = 0) as inserted
           `;
-          if (rows[0]?.inserted === true) inserted += 1;
+          const row = rows[0];
+          if (row === undefined) throw new Error(`equipment ${item.sourceIndex} was not written`);
+          idsBySource.set(item.sourceIndex, row.id);
+          if (row.inserted === true) inserted += 1;
           else updated += 1;
         }
 
-        yield* requireResolvedLinks(sql, context);
+        for (const item of equipment) {
+          const equipmentId = idsBySource.get(item.sourceIndex);
+          if (equipmentId === undefined)
+            throw new Error(`missing equipment row ${item.sourceIndex}`);
+          yield* syncEquipmentRelationships(sql, equipmentId, idsBySource, item);
+        }
         return { seen: equipment.length, inserted, updated };
       }),
     );

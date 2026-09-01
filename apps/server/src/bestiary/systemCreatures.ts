@@ -10,7 +10,6 @@ import type { CreatureCreate } from "@taverns/api";
 export interface SystemCreature extends Omit<CreatureCreate, "visibility"> {
   /** Stable source identity within the Taverns starter bundle; not a display name. */
   readonly sourceIndex: string;
-  readonly sourceUrl?: string;
 }
 
 /**

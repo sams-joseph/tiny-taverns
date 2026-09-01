@@ -4,11 +4,10 @@ import { pageFilter } from "./Page.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { queryArray } from "./Query.js";
 
-/** A source reference in the 2014 equipment corpus. */
+/** A source reference as the product exposes it: a stable key and display label. */
 export const EquipmentReference = Schema.Struct({
   index: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100)),
   name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 160)),
-  url: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 240))),
 });
 export type EquipmentReference = typeof EquipmentReference.Type;
 
@@ -97,7 +96,6 @@ export const EquipmentBody = Schema.Struct({
   vehicleCategory: Schema.optional(label),
   weaponCategory: Schema.optional(label),
   weaponRange: Schema.optional(label),
-  sourceUrl: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 240))),
 });
 export type EquipmentBody = typeof EquipmentBody.Type;
 

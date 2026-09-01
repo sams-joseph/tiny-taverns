@@ -65,11 +65,11 @@ const itemWithSourceIndex = (sourceIndex: string) =>
     const rows = yield* Effect.flatMap(
       SqlClient.SqlClient,
       (client) => client<{ readonly id: string }>`
-        select magic_item.id::text as id
+        select id::text
         from magic_item
-        join rules_source_entity on rules_source_entity.id = magic_item.source_entity_id
-        where rules_source_entity.family = 'magic-items'
-          and rules_source_entity.source_index = ${sourceIndex}
+        where source_corpus = '5e-bits-2014'
+          and source_family = 'magic-items'
+          and source_key = ${sourceIndex}
       `,
     );
     const id = rows[0]?.id;
@@ -84,7 +84,6 @@ const customItem = (name: string): MagicItemCreate => ({
   equipmentCategory: {
     index: "wondrous-items",
     name: "Wondrous Items",
-    url: "/api/2014/equipment-categories/wondrous-items",
   },
   rarity: { index: "uncommon", name: "Uncommon" },
   requiresAttunement: true,
@@ -95,7 +94,6 @@ const customItem = (name: string): MagicItemCreate => ({
     equipmentCategory: {
       index: "wondrous-items",
       name: "Wondrous Items",
-      url: "/api/2014/equipment-categories/wondrous-items",
     },
     rarity: { index: "uncommon", name: "Uncommon" },
     desc: [`${name} hums when moonlight touches it.`],
@@ -124,7 +122,7 @@ describe("2014 SRD magic items", () => {
     });
   }, 60_000);
 
-  it("records equipment-category, variant and base links in the source graph", async () => {
+  it("records concrete equipment-category, variant and base relationships", async () => {
     const links = await sql(
       (client) => client<{
         readonly item: string;
@@ -132,16 +130,31 @@ describe("2014 SRD magic items", () => {
         readonly target_family: string;
         readonly target_index: string;
       }>`
-        select rules_source_entity.source_index as item,
-               rules_source_link.relation,
-               rules_source_link.target_family,
-               rules_source_link.target_index
-        from rules_source_link
-        join rules_source_entity_revision on rules_source_entity_revision.id = rules_source_link.from_revision_id
-        join rules_source_entity on rules_source_entity.id = rules_source_entity_revision.entity_id
-        where rules_source_entity.family = 'magic-items'
-          and rules_source_entity.source_index in ('ammunition', 'ammunition-1')
-        order by item, rules_source_link.relation, rules_source_link.ordinal, rules_source_link.target_index
+        select magic_item.source_key as item,
+               'equipment-category' as relation,
+               'equipment-categories' as target_family,
+               equipment_category.source_key as target_index
+        from magic_item
+        join equipment_category on equipment_category.id = magic_item.category_id
+        where magic_item.source_key in ('ammunition', 'ammunition-1')
+        union all
+        select base.source_key as item,
+               'magic-item-variant' as relation,
+               variant.source_family as target_family,
+               variant.source_key as target_index
+        from magic_item_variant
+        join magic_item base on base.id = magic_item_variant.base_item_id
+        join magic_item variant on variant.id = magic_item_variant.variant_item_id
+        where base.source_key = 'ammunition'
+        union all
+        select variant.source_key as item,
+               'magic-item-base' as relation,
+               base.source_family as target_family,
+               base.source_key as target_index
+        from magic_item variant
+        join magic_item base on base.id = variant.base_item_id
+        where variant.source_key = 'ammunition-1'
+        order by item, relation, target_index
       `,
     );
 
