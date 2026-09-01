@@ -4,15 +4,16 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Feats } from "../src/repo/Feats.js";
 import { importSystemFeats } from "../src/ruleset/import.js";
 import { SYSTEM_FEATS } from "../src/ruleset/systemFeats.js";
-import { anAccount } from "./support/actors.js";
+import { anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Feats.layer).pipe(
+  Layer.mergeAll(Accounts.layer, Campaigns.layer, Groups.layer, Feats.layer).pipe(
     Layer.provideMerge(migratedDatabase("taverns_test_feats")),
   ),
 );
@@ -38,9 +39,7 @@ describe("2014 feats", () => {
       Effect.gen(function* () {
         const imported = yield* importSystemFeats();
         const account = yield* anAccount("Feat DM");
-        const campaign = yield* withActor(account)(
-          Effect.flatMap(Campaigns, (campaigns) => campaigns.create({ name: "The Feat Table" })),
-        );
+        const campaign = yield* withActor(account)(createCampaign({ name: "The Feat Table" }));
         const feats = yield* withActor(account)(
           items(Effect.flatMap(Feats, (repo) => repo.list(campaign.id, {}))),
         );
@@ -71,9 +70,8 @@ describe("2014 feats", () => {
         yield* importSystemFeats();
         const account = yield* anAccount("Copy DM");
         const as = withActor(account);
-        const campaigns = yield* Campaigns;
         const feats = yield* Feats;
-        const campaign = yield* as(campaigns.create({ name: "Snapshot Table" }));
+        const campaign = yield* as(createCampaign({ name: "Snapshot Table" }));
         const str = yield* strengthId;
 
         const custom = yield* as(

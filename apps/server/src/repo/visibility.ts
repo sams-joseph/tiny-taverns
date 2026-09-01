@@ -1,4 +1,4 @@
-import { type AccountId, type Actor, type CampaignId, NotFound } from "@taverns/api";
+import { type AccountId, type Actor, type CampaignId, type GroupId, NotFound } from "@taverns/api";
 import { Effect } from "effect";
 import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
 
@@ -27,16 +27,20 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * `Hide from players` override. Sharing one note must not open the campaign,
  * and closing the campaign must close everything under it.
  *
- * **The role is not on the actor, and cannot be.** A person is the DM of one
- * table and a player at another *on the same credential*, so "may this actor
- * see `dm` rows" is a question about a pair — this account, this campaign — and
- * a pair is a row. `isDm` is that question, and it is the only thing in this
- * file that changed shape when membership arrived: the four branches that used
- * to read `actor.seesDmContent` read it instead.
+ * **The role is not on the actor, and is not on any row either.** A person is
+ * the creator of one campaign and a player at another *on the same
+ * credential*, so "may this actor see `dm` rows" is a question about a pair —
+ * this account, this campaign. Since the group architecture the answer is
+ * `isCreator`: `campaign.creator_account_id` names the campaign's sole DM,
+ * immutably, and every other live participant is a player. The old
+ * `campaign_member.role` column is gone and `schema.test.ts` fails if it
+ * reappears.
  *
- * Players are real now — `Invites.redeem` mints the membership — so those
- * branches are exercised rather than merely present, which is what the file
- * was built for.
+ * **Groups sit above campaigns, and group membership is eligibility rather
+ * than reach.** `groupInScope` is the base case of the group-level predicates
+ * exactly as `campaignInScope` is of the campaign-level ones, and the two are
+ * deliberately not connected: being in the group does not put you at any of
+ * its tables, and being at a table (structurally) requires being in its group.
  *
  * **One reach has been added since, and one only**: `ownedRowReadable`, which
  * lets an account read the row that names it whatever that row's own
@@ -48,8 +52,7 @@ import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
  * worth keeping: it is that same predicate conjoined with ownership, so it can
  * only ever return fewer rows. A narrowing is free to be added; a reach is not.
  *
- * **The write half is no longer all `isDm`, and that is the newest thing in this
- * file.** `ownRowWritable` is the first predicate here that lets somebody who is
+ * **The write half is no longer all `isCreator`, and that is worth knowing.** `ownRowWritable` is the first predicate here that lets somebody who is
  * not a DM change a row — a player editing their own character, settled by the
  * captain. It is one hole, in one table, over the columns a payload schema
  * allows, and it is strictly narrower than the read beside it; the argument is
@@ -119,13 +122,13 @@ export const rowCampaign = (sql: SqlClient.SqlClient, table: string): Statement.
   sql(`${table}.campaign_id`);
 
 /**
- * Whether this actor's account holds a live membership of the campaign.
+ * Whether this actor's account holds a live participation of the campaign.
  *
- * This replaced `campaign.account_id = <the actor's account>`, and the
- * replacement is the whole of the change. `campaign.account_id` still exists —
- * it is the cascade parent and the answer to "whose account is this" — but it
- * is no longer a reach path, and `apps/server/test/membership.test.ts` greps
- * `src` to keep a future predicate from quietly making it one again.
+ * Participation is the explicit subset of the group at this table — the
+ * captain's decision: group membership alone reaches no campaign content.
+ * `campaign.creator_account_id` is deliberately *not* consulted here; the
+ * creator holds an ordinary participation row too, structurally
+ * (`campaign_creator_is_campaign_member`).
  */
 const isMember = (
   sql: SqlClient.SqlClient,
@@ -159,51 +162,70 @@ export const memberOfCampaign = (
                 and campaign_member.revoked_at is null)`;
 
 /**
- * Whether this actor is a DM of the campaign — the thing `actor.seesDmContent`
- * used to answer for free, and the one part of this file that a row now decides.
+ * Whether this actor is the campaign's creator — its sole DM, by the captain's
+ * decision of 2026-09-01, and the one authority question in the campaign half
+ * of this file.
  *
- * That is the real cost of membership and it is worth stating plainly: a
- * player's write refusal used to compile to the literal `false` and never reach
- * a row. What buys it back is `campaign_owner_is_dm_member`
- * (`0011_membership.ts`), which makes "a campaign whose owner is not its DM"
- * unrepresentable rather than merely unwritten — so there is no state in which
- * this returns false for the person who created the campaign.
+ * This replaced `isDm`, which read `campaign_member.role = 'dm'`. The role
+ * column is gone: creator-ness is `campaign.creator_account_id`, immutable and
+ * written once by `Campaigns.create`, so "a campaign whose DM went missing" is
+ * not representable and neither is a second DM. The creator is structurally a
+ * live participant too (`campaign_creator_is_campaign_member`, `0001`), so
+ * every predicate that conjoins this with membership still holds for them.
+ *
+ * The inner alias keeps the correlated `CampaignRef` forms honest: a ref like
+ * `campaign.id` or `character.campaign_id` correlates against the enclosing
+ * query, never against the row this subquery introduces.
  */
-const isDm = (sql: SqlClient.SqlClient, campaign: CampaignRef, actor: Actor): Statement.Fragment =>
-  sql`exists (select 1 from campaign_member
-              where campaign_member.campaign_id = ${campaign}
-                and campaign_member.account_id = ${actor.accountId}
-                and campaign_member.role = 'dm'
-                and campaign_member.revoked_at is null)`;
+const isCreator = (
+  sql: SqlClient.SqlClient,
+  campaign: CampaignRef,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from campaign as campaign_authority
+              where campaign_authority.id = ${campaign}
+                and campaign_authority.creator_account_id = ${actor.accountId})`;
+
+/**
+ * The scope half of every campaign predicate — whether this credential reaches
+ * the correlated `campaign` row at all, whatever memberships say.
+ *
+ * Written against the correlated `campaign.id`/`campaign.group_id` rather than
+ * the ref, because it is a statement about the row being returned and is right
+ * however a caller composes it. Account scope is one redundant `true` in the
+ * plan; a campaign-scoped credential reaches its one table; a group-scoped one
+ * reaches that group's tables and no other group's.
+ */
+const scopeAllowsCampaign = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment => {
+  switch (actor.scope._tag) {
+    case "account":
+      return sql`true`;
+    case "campaign":
+      return sql`campaign.id = ${actor.scope.campaignId}`;
+    case "group":
+      return sql`campaign.group_id = ${actor.scope.groupId}`;
+  }
+};
 
 /**
  * The campaigns this actor's credential reaches at all, before any question of
  * what it may then do with them.
  *
- * Membership is not scope, and the two narrow independently. A DM token is
- * minted for an account and carries `campaignId: null`, so it reaches every
- * campaign that account is a member of and the second clause is one redundant
- * `true` in the plan. A credential minted for a single table carries that
- * table's id — and without that clause it would reach every campaign the same
- * account belongs to, so a DM running two tables would leak table A's shared
- * rows to table B's players.
+ * Membership is not scope, and the two narrow independently. An account token
+ * reaches every campaign that account participates in. A credential minted for
+ * a single table carries that table's id — and without that clause it would
+ * reach every campaign the same account belongs to, so a person running two
+ * tables would leak table A's shared rows to table B's players. Group scope is
+ * the same narrowing one level up.
  *
- * Deliberately not keyed on the role: a scoped credential minted later for
- * something other than a player must not reach past its campaign either.
- *
- * The scope clause stays on the correlated `campaign.id` rather than on the
- * ref, because it is a statement about the row being returned and is right
- * however a future caller composes it.
+ * Deliberately not keyed on any authority: a scoped credential minted later
+ * for something other than a player must not reach past its scope either.
  */
 const campaignInScope = (
   sql: SqlClient.SqlClient,
   actor: Actor,
   campaign: CampaignRef,
-): Statement.Fragment =>
-  sql.and([
-    isMember(sql, campaign, actor),
-    actor.campaignId === null ? sql`true` : sql`campaign.id = ${actor.campaignId}`,
-  ]);
+): Statement.Fragment => sql.and([isMember(sql, campaign, actor), scopeAllowsCampaign(sql, actor)]);
 
 /** Rows of `campaign` this actor may read. */
 export const campaignReadable = (
@@ -213,7 +235,7 @@ export const campaignReadable = (
 ): Statement.Fragment =>
   sql.and([
     campaignInScope(sql, actor, campaign),
-    sql.or([isDm(sql, campaign, actor), sql`campaign.visibility = 'shared'`]),
+    sql.or([isCreator(sql, campaign, actor), sql`campaign.visibility = 'shared'`]),
   ]);
 
 /**
@@ -223,16 +245,140 @@ export const campaignReadable = (
  * telling a reader that a campaign exists but is not theirs to edit is itself
  * a disclosure, and the caller turns "no rows" into a plain 404.
  *
- * `isDm` implies membership, so the first clause looks redundant and is not:
- * it carries the credential-scope narrowing, which is a different question and
- * applies to a DM too.
+ * `isCreator` implies membership (`campaign_creator_is_campaign_member`), so
+ * the first clause looks redundant and is not: it carries the credential-scope
+ * narrowing, which is a different question and applies to a creator too.
  */
 export const campaignWritable = (
   sql: SqlClient.SqlClient,
   actor: Actor,
   campaign: CampaignRef = correlatedCampaign(sql),
 ): Statement.Fragment =>
-  sql.and([campaignInScope(sql, actor, campaign), isDm(sql, campaign, actor)]);
+  sql.and([campaignInScope(sql, actor, campaign), isCreator(sql, campaign, actor)]);
+
+/**
+ * The group a membership question is asked about — a bound `GroupId` almost
+ * always, or the correlated `play_group.id` for the group list.
+ */
+type GroupRef = GroupId | Statement.Identifier;
+
+/** The `play_group` row of the query this fragment lands in. */
+const correlatedGroup = (sql: SqlClient.SqlClient): Statement.Identifier => sql("play_group.id");
+
+/**
+ * Whether a *named* account holds a live membership of the group.
+ *
+ * The group-level `memberOfCampaign`: asked about the actor by `groupInScope`
+ * below, and about a named account by exactly one other caller —
+ * `Memberships.admit`, where a creator names a group member to seat at their
+ * table, and what keeps that from being "name any account in the product" is
+ * that the account has to be a live member here.
+ */
+export const memberOfGroup = (
+  sql: SqlClient.SqlClient,
+  group: GroupRef,
+  accountId: AccountId,
+): Statement.Fragment =>
+  sql`exists (select 1 from group_member
+              where group_member.group_id = ${group}
+                and group_member.account_id = ${accountId}
+                and group_member.revoked_at is null)`;
+
+/**
+ * The scope half of every group predicate. A campaign-scoped credential
+ * reaches the group its one campaign is in — the campaign's own group context
+ * travels with the campaign — and no other.
+ */
+const scopeAllowsGroup = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  group: GroupRef,
+): Statement.Fragment => {
+  switch (actor.scope._tag) {
+    case "account":
+      return sql`true`;
+    case "group":
+      return sql`${group} = ${actor.scope.groupId}`;
+    case "campaign":
+      return sql`exists (select 1 from campaign as scope_campaign
+                         where scope_campaign.id = ${actor.scope.campaignId}
+                           and scope_campaign.group_id = ${group})`;
+  }
+};
+
+/**
+ * The groups this actor's credential reaches at all: a live membership, inside
+ * scope. **This is the base case of every group-level predicate**, exactly as
+ * `campaignInScope` is of every campaign-level one — and group membership is
+ * deliberately *not* campaign reach: a group member who participates in no
+ * campaign passes this and still fails every campaign predicate, which is the
+ * participation decision in one sentence.
+ */
+export const groupInScope = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  group: GroupRef,
+): Statement.Fragment =>
+  sql.and([memberOfGroup(sql, group, actor.accountId), scopeAllowsGroup(sql, actor, group)]);
+
+/**
+ * Rows of `play_group` this actor may read — every live member reads the
+ * group. There is no visibility column and no master toggle at this level: a
+ * group *is* its members' shared context, and what stays private is decided
+ * one level down, per campaign.
+ */
+export const groupReadable = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  group: GroupRef = correlatedGroup(sql),
+): Statement.Fragment => groupInScope(sql, actor, group);
+
+/**
+ * Rows of `play_group` this actor may write — the owner, and nobody else.
+ * The governance decision of 2026-09-01: the owner manages the group,
+ * membership and invitations; members create campaigns and run their own.
+ *
+ * A member who is not the owner matches nothing rather than being told so —
+ * the caller turns "no rows" into the ordinary `NotFound`, because a group you
+ * cannot administer answers exactly like one you cannot see.
+ */
+export const groupWritable = (
+  sql: SqlClient.SqlClient,
+  actor: Actor,
+  group: GroupRef = correlatedGroup(sql),
+): Statement.Fragment =>
+  sql.and([
+    groupInScope(sql, actor, group),
+    sql`exists (select 1 from play_group as group_authority
+                where group_authority.id = ${group}
+                  and group_authority.owner_account_id = ${actor.accountId})`,
+  ]);
+
+/** Whether the named group is readable — for list endpoints' 404s. */
+export const ensureGroupReadable = (
+  sql: SqlClient.SqlClient,
+  groupId: GroupId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    "group",
+    groupId,
+    sql`exists (select 1 from play_group where play_group.id = ${groupId} and ${groupReadable(sql, actor, groupId)})`,
+  );
+
+/** Whether the named group accepts writes from this actor — the owner's gate. */
+export const ensureGroupWritable = (
+  sql: SqlClient.SqlClient,
+  groupId: GroupId,
+  actor: Actor,
+): Effect.Effect<void, SqlError.SqlError | NotFound> =>
+  ensure(
+    sql,
+    "group",
+    groupId,
+    sql`exists (select 1 from play_group where play_group.id = ${groupId} and ${groupWritable(sql, actor, groupId)})`,
+  );
 
 /**
  * The half of a row read that is about the *campaign*: this row is in the
@@ -264,7 +410,7 @@ export const rowReadable = (
 ): Statement.Fragment =>
   sql.and([
     ...withinReadableCampaign(sql, table, campaignId, actor),
-    sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
+    sql.or([isCreator(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
   ]);
 
 /**
@@ -313,7 +459,7 @@ export const ownedRowReadable = (
   sql.and([
     ...withinReadableCampaign(sql, table, campaignId, actor),
     sql.or([
-      isDm(sql, campaignId, actor),
+      isCreator(sql, campaignId, actor),
       sql`${sql(table)}.visibility = 'shared'`,
       sql`${sql(table)}.account_id = ${actor.accountId}`,
     ]),
@@ -416,7 +562,7 @@ export const ownRowWritable = (
  * the one the DM's panel resumes. `"own"` is this actor's, which is what a
  * player drafting a character has. **It is not a role**: a DM asking Hob is
  * `"dm"` because their conversation belongs to the campaign rather than to
- * them, and the discrimination is made once per request from the `DmActor`
+ * them, and the discrimination is made once per request from the `CampaignCreatorActor`
  * proof rather than read off a row.
  */
 export type ConversationReach = "dm" | "own";
@@ -564,7 +710,7 @@ export const corpusRowReadable = (
   sql.and([
     sql.or([sql`${sql(table)}.campaign_id = ${campaignId}`, unowned(sql, table)]),
     sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
-    sql.or([isDm(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
+    sql.or([isCreator(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
   ]);
 
 /**
@@ -810,7 +956,7 @@ export const containedRowReadable = (
   const { table, foreignKey, parent } = containment;
   return sql.and([
     sql`exists (select 1 from ${sql(parent.table)} where ${sql(`${parent.table}.id`)} = ${sql(`${table}.${foreignKey}`)} and ${containedRowReadable(sql, parent, campaignId, actor)})`,
-    sql.or([isDm(sql, campaignId, actor), sql`${sql(`${table}.visibility`)} = 'shared'`]),
+    sql.or([isCreator(sql, campaignId, actor), sql`${sql(`${table}.visibility`)} = 'shared'`]),
   ]);
 };
 
@@ -888,7 +1034,10 @@ export const nestedRowReadableWithin = (
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${sql(`${nested.parent}.id`)}`,
-    sql.or([isDm(sql, campaignId, actor), sql`${sql(`${nested.table}.visibility`)} = 'shared'`]),
+    sql.or([
+      isCreator(sql, campaignId, actor),
+      sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
+    ]),
   ]);
 
 /** Rows of a nested table this actor may write. Not `nestedRowReadable`. */

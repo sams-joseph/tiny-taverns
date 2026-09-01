@@ -13,10 +13,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Search } from "../src/repo/Search.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -48,6 +49,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
     Search.layer,
@@ -68,12 +70,11 @@ const withActor =
  * half of the defect and keeping it is half of the fix.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
 
   const jo = yield* anAccount("Jo");
   const asJo = withActor(jo);
-  const table = yield* asJo(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const table = yield* asJo(createCampaign({ name: "The Salt Road", visibility: "shared" }));
 
   const pim = yield* aPlayerAt(table.id, "Pim");
   const marta = yield* aPlayerAt(table.id, "Marta");
@@ -92,7 +93,7 @@ const makeFixture = Effect.gen(function* () {
 
   const fen = yield* anAccount("Fen");
   const elsewhere = yield* withActor(fen)(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+    createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
   const sixpence = yield* withActor(fen)(
     characters.create(elsewhere.id, { name: "Sixpence", visibility: "dm" }),
@@ -179,19 +180,18 @@ describe("the assignment: the DM's act, and whom it may name", () => {
   it("refuses a member whose membership has been revoked", async () => {
     const revoked = await runtime.runPromise(
       Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
         const characters = yield* Characters;
         const invites = yield* Invites;
 
         const asJo = withActor(fixture.jo);
-        const scratch = yield* asJo(campaigns.create({ name: "The Ferry", visibility: "shared" }));
+        const scratch = yield* asJo(createCampaign({ name: "The Ferry", visibility: "shared" }));
         const guest = yield* aPlayerAt(scratch.id, "Wren");
         const character = yield* asJo(characters.create(scratch.id, { name: "Wren's own" }));
 
         // Withdraw the invitation they took, which revokes the membership it
         // granted — the shipped path, not a hand-written update.
-        const issued = yield* asJo(invites.list(scratch.id));
-        yield* asJo(invites.revoke(scratch.id, issued[0]!.id));
+        const issued = yield* asJo(invites.list(scratch.groupId));
+        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
 
         return yield* asJo(
           characters.assign(scratch.id, character.id, { accountId: guest.accountId }),
@@ -307,12 +307,11 @@ describe("what ownership does not grant", () => {
   it("does not survive the membership being revoked", async () => {
     const after = await runtime.runPromise(
       Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
         const characters = yield* Characters;
         const invites = yield* Invites;
         const asJo = withActor(fixture.jo);
 
-        const scratch = yield* asJo(campaigns.create({ name: "The Weir", visibility: "shared" }));
+        const scratch = yield* asJo(createCampaign({ name: "The Weir", visibility: "shared" }));
         const guest = yield* aPlayerAt(scratch.id, "Kofi");
         const character = yield* asJo(characters.create(scratch.id, { name: "Kofi's own" }));
         yield* asJo(characters.assign(scratch.id, character.id, { accountId: guest.accountId }));
@@ -321,8 +320,8 @@ describe("what ownership does not grant", () => {
           Effect.result,
         );
 
-        const issued = yield* asJo(invites.list(scratch.id));
-        yield* asJo(invites.revoke(scratch.id, issued[0]!.id));
+        const issued = yield* asJo(invites.list(scratch.groupId));
+        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
 
         const afterRevoke = yield* withActor(guest)(
           characters.findById(scratch.id, character.id),
@@ -356,7 +355,7 @@ describe("what ownership does not grant", () => {
         const characters = yield* Characters;
         const asJo = withActor(fixture.jo);
 
-        const quiet = yield* asJo(campaigns.create({ name: "Not yet", visibility: "dm" }));
+        const quiet = yield* asJo(createCampaign({ name: "Not yet", visibility: "dm" }));
         const guest = yield* aPlayerAt(quiet.id, "Ilse");
         const character = yield* asJo(
           characters.create(quiet.id, { name: "Ilse's own", visibility: "shared" }),

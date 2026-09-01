@@ -15,11 +15,12 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { ClassProgression } from "../src/repo/ClassProgression.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { type DmActor, DmActors } from "../src/repo/DmActor.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
@@ -34,7 +35,7 @@ import { RuleArticles } from "../src/repo/RuleArticles.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
-import { anAccount } from "./support/actors.js";
+import { anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -100,18 +101,34 @@ const mentioning = (pattern: RegExp): ReadonlyArray<string> =>
     .sort();
 
 describe("the reach seam, enforced rather than asserted", () => {
-  it("leaves campaign.account_id as ownership, reached by no predicate", () => {
-    // The whole cost of this change would be undone by one future predicate
-    // written the obvious old way, and nothing about a passing test suite would
-    // notice: ownership and membership agree for every row the product can
-    // currently produce, and stop agreeing the moment step 4 mints the first
-    // player. So the rule is a grep, and it fails on the edit that would break
-    // it.
-    //
-    // `campaign.account_id` is the *spelling* a reach path would have —
-    // `repo/visibility.ts` had exactly this and does not any more. Nothing in
-    // `src` may qualify the column that way again.
+  it("has no role column and no role literal anywhere in src", () => {
+    // The captain's decision of 2026-09-01: the campaign creator is its sole
+    // DM, derived from `campaign.creator_account_id`, and every other live
+    // participant is a player. A mutable role was the thing that made co-DM
+    // semantics one UPDATE away; it is gone, and this grep is what keeps a
+    // future predicate or writer from quietly reintroducing it.
+    expect(mentioning(/\bcampaign_member\.role\b/)).toEqual([]);
+    expect(mentioning(/\brole\s*=\s*'(dm|player)'/)).toEqual([]);
+  });
+
+  it("leaves campaign.account_id gone, and creator_account_id where authority is written", () => {
+    // `campaign.account_id` is gone from the schema entirely; nothing in
+    // `src` may spell it again.
     expect(mentioning(/\bcampaign\.account_id\b/)).toEqual([]);
+
+    // `creator_account_id` *is* an authority path now, by design — the
+    // captain's decision — so the honest guard is an inventory of who reads
+    // it, kept short: the predicate (`isCreator` in `repo/visibility.ts`),
+    // the row mapper and create (`repo/Campaigns.ts`), the derived relation
+    // and creator guard (`repo/Memberships.ts`), and the group directory and
+    // removal guard (`repo/Groups.ts`). A new file on this list is a new
+    // place DM-ness is decided, and should be looked at hard.
+    expect(mentioning(/\bcreator_account_id\b/)).toEqual([
+      "repo/Campaigns.ts",
+      "repo/Groups.ts",
+      "repo/Memberships.ts",
+      "repo/visibility.ts",
+    ]);
 
     // The column name itself is legal on other tables, and the list is how a
     // new one gets looked at. `repo/Memberships.ts` and `repo/visibility.ts`
@@ -177,12 +194,12 @@ describe("the reach seam, enforced rather than asserted", () => {
       "bestiary/import.ts",
       "equipment/import.ts",
       "magic-items/import.ts",
-      "repo/Campaigns.ts",
       "repo/Characters.ts",
       "repo/ClassProgression.ts",
       "repo/Creatures.ts",
       "repo/Equipment.ts",
       "repo/Feats.ts",
+      "repo/Groups.ts",
       "repo/HobThreads.ts",
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
@@ -209,32 +226,23 @@ describe("the reach seam, enforced rather than asserted", () => {
     ]);
   });
 
-  it("mints exactly two memberships, and neither takes a role", () => {
-    // The old rule here was that **nothing** in `src` writes a `player`
-    // membership, which was the honest state of the product until the invite
-    // landed: `addOwner` took no role, so a player membership was not something
-    // a caller might forget to refuse — it was not expressible. That is spent,
-    // and what replaces it has to be at least as structural, because the thing
-    // it now keeps out is worse than a player: a DM.
+  it("confines group_member the same way", () => {
+    // The group-level twin of the rule above: `repo/Groups.ts` writes it,
+    // `repo/visibility.ts` reads it, and a third module naming it would be a
+    // second answer to "who is in this group".
+    expect(mentioning(/\bgroup_member\b/)).toEqual(["repo/Groups.ts", "repo/visibility.ts"]);
+  });
+
+  it("writes participation in one module, and no writer can express a role", () => {
+    // There is nothing for a writer to smuggle: `campaign_member` has no role
+    // column, so "an invitation cannot become a DM membership" stopped being a
+    // property of which statements exist and became a property of the schema.
+    // What is left to guard is the number of writers.
     expect(mentioning(/insert into campaign_member/)).toEqual(["repo/Memberships.ts"]);
+    expect(mentioning(/insert into group_member/)).toEqual(["repo/Groups.ts"]);
 
-    // Two writers, and each spells its role as a **SQL literal** rather than
-    // taking one. So "an invitation cannot become a DM membership" is a fact
-    // about which statements exist rather than a check somebody performs — and
-    // a third role literal, or one interpolated from a variable, fails here.
-    const memberships = code("repo/Memberships.ts");
-    expect(memberships.match(/, '(dm|player)'\)/g)).toEqual([", 'dm')", ", 'player')"]);
-
-    // …and no membership writer accepts a role. `MemberRole` still names both
-    // values — the column carries both from the first migration so that co-DMs
-    // stay additive — and it appears in this file as the *column type of a row a
-    // read maps*, which is `readonly role: MemberRole;`. A parameter is the same
-    // words followed by a comma or a closing bracket, and there is none.
-    expect(memberships).not.toMatch(/\brole: MemberRole[,)]/);
-
-    // The invite repository, which is what mints the first player the product
-    // has ever had, does not mention a role at all: it calls `admitPlayer`,
-    // which has only one.
+    // The invite repository, which mints memberships for whoever redeems,
+    // mentions no role because there is none to mention.
     expect(code("repo/Invites.ts")).not.toMatch(/\brole\b/);
   });
 });
@@ -244,11 +252,12 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     ClassProgression.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
-    DmActors.layer,
+    CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -273,8 +282,10 @@ const withActor =
     Effect.provideService(effect, CurrentActor, actor);
 
 /** The DM proof, for whichever actor the enclosing `withActor` provided. */
-const dmOf = (campaignId: CampaignId): Effect.Effect<DmActor, NotFound, CurrentActor | DmActors> =>
-  Effect.flatMap(DmActors, (dmActors) => dmActors.of(campaignId));
+const dmOf = (
+  campaignId: CampaignId,
+): Effect.Effect<CampaignCreatorActor, NotFound, CurrentActor | CampaignCreatorActors> =>
+  Effect.flatMap(CampaignCreatorActors, (dmActors) => dmActors.of(campaignId));
 
 /**
  * One campaign with a row in every content table, and one stranger who is a DM
@@ -307,7 +318,7 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Ada");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road" }));
+  const campaign = yield* as(createCampaign({ name: "The Salt Road" }));
   const session = yield* as(sessions.create(campaign.id, { number: 12 }));
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
 
@@ -475,7 +486,7 @@ const READS: Record<
     | Combatants
     | Creatures
     | CurrentActor
-    | DmActors
+    | CampaignCreatorActors
     | EncounterCreatures
     | EncounterRuns
     | Encounters
@@ -582,11 +593,15 @@ describe("a campaign cannot exist without a DM", () => {
   const sqlOf = <A>(f: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown, never>) =>
     Effect.flatMap(SqlClient.SqlClient, f);
 
-  it("refuses a campaign written with no member row", async () => {
+  it("refuses a campaign written with no participation row", async () => {
     const refused = await attempt(
       sqlOf(
         (sql) =>
-          sql`insert into campaign ${sql.insert({ account_id: fixture.dm.accountId, name: "No DM" })}`,
+          sql`insert into campaign ${sql.insert({
+            group_id: fixture.campaign.groupId,
+            creator_account_id: fixture.dm.accountId,
+            name: "No DM",
+          })}`,
       ),
     );
 
@@ -603,7 +618,8 @@ describe("a campaign cannot exist without a DM", () => {
           Effect.gen(function* () {
             const rows = yield* sql<{ readonly id: string }>`
               insert into campaign ${sql.insert({
-                account_id: fixture.dm.accountId,
+                group_id: fixture.campaign.groupId,
+                creator_account_id: fixture.dm.accountId,
                 name: "With a DM",
               })}
               returning id
@@ -611,8 +627,8 @@ describe("a campaign cannot exist without a DM", () => {
             yield* sql`
               insert into campaign_member ${sql.insert({
                 campaign_id: rows[0]!.id,
+                group_id: fixture.campaign.groupId,
                 account_id: fixture.dm.accountId,
-                role: "dm",
               })}
             `;
           }),
@@ -623,16 +639,12 @@ describe("a campaign cannot exist without a DM", () => {
     expect(accepted._tag).toBe("Success");
   });
 
-  it("refuses demoting, revoking or deleting the owner's own membership", async () => {
-    // All three on the *referenced* side of the key, so all three are refused
-    // on the spot rather than at some later commit — which is the behaviour you
-    // want from a statement typed into `psql` at two in the morning.
-    const demoted = await attempt(
-      sqlOf(
-        (sql) =>
-          sql`update campaign_member set role = 'player' where campaign_id = ${fixture.campaign.id}`,
-      ),
-    );
+  it("refuses revoking or deleting the creator's own participation", async () => {
+    // Both on the *referenced* side of the key, so both are refused on the
+    // spot rather than at some later commit — which is the behaviour you want
+    // from a statement typed into `psql` at two in the morning. There is no
+    // demotion to refuse: there is no role column left to demote through, and
+    // `schema.test.ts` fails if one reappears.
     const revoked = await attempt(
       sqlOf(
         (sql) =>
@@ -646,7 +658,6 @@ describe("a campaign cannot exist without a DM", () => {
       ),
     );
 
-    expect(demoted._tag).toBe("Failure");
     expect(revoked._tag).toBe("Failure");
     expect(deleted._tag).toBe("Failure");
 
@@ -665,15 +676,19 @@ describe("a campaign cannot exist without a DM", () => {
     const gone = await runtime.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        const campaign = yield* withActor(fixture.dm)(
-          Effect.flatMap(Campaigns, (r) => r.create({ name: "A table to leave" })),
-        );
+        const campaign = yield* withActor(fixture.dm)(createCampaign({ name: "A table to leave" }));
         const guest = yield* anAccount("Pim");
+        yield* sql`
+          insert into group_member ${sql.insert({
+            group_id: campaign.groupId,
+            account_id: guest.accountId,
+          })}
+        `;
         yield* sql`
           insert into campaign_member ${sql.insert({
             campaign_id: campaign.id,
+            group_id: campaign.groupId,
             account_id: guest.accountId,
-            role: "player",
           })}
         `;
         const left = yield* sql`
@@ -708,7 +723,9 @@ describe("a stranger reads nothing", () => {
               'ability_score',
               'account',
               'campaign_member',
-              'campaign_invite',
+              'group_invite',
+              'group_member',
+              'play_group',
               'character_option_ability_bonus',
               'character_option_equipment_reference',
               'character_option_language',
@@ -806,29 +823,32 @@ describe("what an account is before anybody invites it", () => {
     expect(actor._tag).toBe("Some");
     expect(actor._tag === "Some" ? Object.keys(actor.value).sort() : []).toEqual([
       "accountId",
-      "campaignId",
+      "scope",
     ]);
+    expect(actor._tag === "Some" ? actor.value.scope : null).toEqual({ _tag: "account" });
   });
 
-  it("makes every campaign an uninvited account reaches one it is the DM of", async () => {
-    // The other membership writer now exists — `Invites.redeem` — but it is the
-    // *only* other one, and it runs when a person accepts an invitation. So an
-    // account nobody has invited is still a DM of everything it reaches, which
-    // is what keeps a campaign's own creation from quietly acquiring players.
-    // `invites.test.ts` is where the redeemed half is pinned.
+  it("makes every campaign an uninvited account reaches one it created", async () => {
+    // The other participation writer now exists — `Invites.redeem` and the
+    // creator's `Memberships.add` — but both run when somebody is deliberately
+    // admitted. So an account nobody has invited participates only in
+    // campaigns it created, which is what keeps a campaign's own creation from
+    // quietly acquiring players. `invites.test.ts` pins the redeemed half.
     const rows = await runtime.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        return yield* sql<{ readonly role: string; readonly count: number }>`
-          select campaign_member.role, count(*)::int as count
+        return yield* sql<{ readonly is_creator: boolean; readonly count: number }>`
+          select (campaign.creator_account_id = campaign_member.account_id) as is_creator,
+                 count(*)::int as count
           from campaign_member
+          join campaign on campaign.id = campaign_member.campaign_id
           join account on account.id = campaign_member.account_id
           where account.name in ('Ada', 'Bo', 'Jo')
-          group by campaign_member.role
+          group by 1
         `;
       }).pipe(Effect.orDie),
     );
 
-    expect(rows.map((row) => row.role)).toEqual(["dm"]);
+    expect(rows.map((row) => row.is_creator)).toEqual([true]);
   });
 });

@@ -7,6 +7,7 @@ import { HttpApiClient } from "effect/unstable/httpapi";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
+import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -113,9 +114,7 @@ beforeAll(async () => {
     const issued = yield* accounts.issue("Jo");
     const api = yield* clientFor(issued.token);
 
-    const campaign = yield* api.campaigns.create({
-      payload: { name: "The Salt Road", visibility: "dm" },
-    });
+    const campaign = yield* campaignVia(api, { name: "The Salt Road", visibility: "dm" });
     yield* api.characters.create({
       params: { campaignId: campaign.id },
       payload: {

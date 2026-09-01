@@ -5,9 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -30,6 +31,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_characters"))),
@@ -42,16 +44,13 @@ const withActor =
     Effect.provideService(effect, CurrentActor, actor);
 
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
 
   const brannoc = yield* as(
     characters.create(campaign.id, {

@@ -19,10 +19,12 @@ afterAll(() => runtime.dispose());
  * question. Adding it was a deliberate act, which is exactly what this list is
  * for.
  *
- * `campaign_invite` is here for the same reason and one sharper one: the
+ * `group_invite` is here for the same reason and one sharper one: the
  * provenance tail is how a row in this product can be the assistant's, and an
  * invitation must never be. Hob has no way to record itself as the author of a
- * credential because there is nowhere on the row to record it.
+ * credential because there is nowhere on the row to record it. `play_group`
+ * and `group_member` are the group container and its roster — the things that
+ * decide reach, not campaign content.
  *
  * The concrete lookup and relation tables are structural edges between
  * imported corpus rows. The content and its visibility/provenance live on the
@@ -32,7 +34,6 @@ afterAll(() => runtime.dispose());
 const NOT_CONTENT = [
   "ability_score",
   "account",
-  "campaign_invite",
   "campaign_member",
   "character_option_ability_bonus",
   "character_option_equipment_reference",
@@ -55,10 +56,13 @@ const NOT_CONTENT = [
   "feat_description",
   "feat_prerequisite_ability_score",
   "feat_prerequisite_group",
+  "group_invite",
+  "group_member",
   "language",
   "magic_item_rarity",
   "magic_item_variant",
   "magic_school",
+  "play_group",
   "proficiency",
   "racial_trait_damage_type",
   "racial_trait_proficiency",
@@ -208,6 +212,21 @@ describe("every content-bearing table", () => {
   });
 });
 
+describe("the group architecture's removed columns stay removed", () => {
+  it("gives campaign_member no role column, ever again", () => {
+    // The captain's decision of 2026-09-01: the campaign creator is its sole
+    // DM (`campaign.creator_account_id`), and every other live participant is
+    // a player. A role column here was the thing that made co-DM semantics one
+    // UPDATE away; this is the edit that would quietly reintroduce it failing.
+    expect(columnFor("campaign_member", "role")).toBeUndefined();
+    expect(columnFor("group_member", "role")).toBeUndefined();
+    // The campaign's replaced ownership column stays replaced, too.
+    expect(columnFor("campaign", "account_id")).toBeUndefined();
+    expect(columnFor("campaign", "creator_account_id")).toBeDefined();
+    expect(columnFor("campaign", "group_id")?.is_nullable).toBe("NO");
+  });
+});
+
 describe("an account must be reachable by something", () => {
   it("accepts either credential alone and refuses a row with neither", async () => {
     const insert = (values: Record<string, string | null>) =>
@@ -273,17 +292,34 @@ describe("an account must be reachable by something", () => {
 const aCampaign = (accountId: string, name: string, extra: Record<string, unknown> = {}) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const group = yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const rows = yield* sql<{ readonly id: string }>`
+          insert into play_group ${sql.insert({ owner_account_id: accountId, name: `${name} group` })}
+          returning id
+        `;
+        yield* sql`
+          insert into group_member ${sql.insert({ group_id: rows[0]!.id, account_id: accountId })}
+        `;
+        return rows[0]!.id;
+      }),
+    );
     return yield* sql.withTransaction(
       Effect.gen(function* () {
         const rows = yield* sql<{ readonly id: string }>`
-          insert into campaign ${sql.insert({ account_id: accountId, name, ...extra })}
+          insert into campaign ${sql.insert({
+            group_id: group,
+            creator_account_id: accountId,
+            name,
+            ...extra,
+          })}
           returning id
         `;
         yield* sql`
           insert into campaign_member ${sql.insert({
             campaign_id: rows[0]!.id,
+            group_id: group,
             account_id: accountId,
-            role: "dm",
           })}
         `;
         return rows;

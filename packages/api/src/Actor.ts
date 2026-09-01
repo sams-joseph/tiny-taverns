@@ -1,16 +1,51 @@
 import { Context, Schema } from "effect";
 import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi";
-import { AccountId, CampaignId } from "./Ids.js";
+import { AccountId, CampaignId, GroupId } from "./Ids.js";
+
+/**
+ * How far a credential reaches — the whole account, one group, or one campaign.
+ *
+ * A tagged union rather than a pair of nullable ids, because a nullable
+ * `groupId` beside a nullable `campaignId` admits combinations that mean
+ * nothing (both set, disagreeing) and every predicate would have to refuse
+ * them. Scope is one decision, made when the credential is minted, and the
+ * union makes it exactly one.
+ *
+ * This is *scope*, not reach: membership decides which groups and campaigns
+ * the account touches at all, and scope narrows that set further. Without it a
+ * credential minted for one table would reach every campaign the same account
+ * belongs to, so a person running two tables would leak table A's shared rows
+ * to table B's players.
+ */
+export const ActorScope = Schema.Union([
+  Schema.Struct({ _tag: Schema.tag("account") }),
+  Schema.Struct({ _tag: Schema.tag("group"), groupId: GroupId }),
+  Schema.Struct({ _tag: Schema.tag("campaign"), campaignId: CampaignId }),
+]);
+export type ActorScope = typeof ActorScope.Type;
+
+/** The whole-account scope — what `token:issue` and hosted sign-in mint. */
+export const accountScope: ActorScope = { _tag: "account" };
+
+/** A credential narrowed to one group. */
+export const groupScope = (groupId: GroupId): ActorScope => ({ _tag: "group", groupId });
+
+/** A credential narrowed to one campaign. */
+export const campaignScope = (campaignId: CampaignId): ActorScope => ({
+  _tag: "campaign",
+  campaignId,
+});
 
 /**
  * Who is making the current request. Resolved once, at the edge.
  *
- * **It carries no role, and cannot.** A person is the DM of one table and a
- * player at another *at the same time, on the same credential*, so "may this
- * actor see `dm` rows" is not a property of the credential — it is a property
- * of the pair (account, campaign), which is a `campaign_member` row. The
- * question is asked in SQL, by `isDm` in `apps/server/src/repo/visibility.ts`,
- * and there is nowhere on this class it could honestly live.
+ * **It carries no role, and cannot.** A person is the creator of one campaign
+ * and a player at another *at the same time, on the same credential*, so "may
+ * this actor see creator-only rows" is not a property of the credential — it
+ * is a property of the pair (account, campaign), which since the group model
+ * is `campaign.creator_account_id`. The question is asked in SQL, by
+ * `isCreator` in `apps/server/src/repo/visibility.ts`, and there is nowhere on
+ * this class it could honestly live.
  *
  * What remains is two independent narrowings, and both apply to every read:
  * *which account is asking*, and *how far its credential reaches*.
@@ -18,21 +53,11 @@ import { AccountId, CampaignId } from "./Ids.js";
 export class Actor extends Schema.Class<Actor>("Actor")({
   accountId: AccountId,
   /**
-   * The one campaign this credential reaches, or `null` for the whole account.
-   *
-   * A DM's token is minted for an account and reads every campaign that account
-   * is a member of, so it carries `null`. A credential minted for a single
-   * table carries that table's id, and `campaignInScope` narrows every read to
-   * it.
-   *
-   * This is *scope*, not reach: membership decides which campaigns the account
-   * touches at all, and this narrows that set further. Without it a credential
-   * minted for one table would reach every campaign the same account belongs
-   * to, so a DM running two tables would leak table A's shared rows to table
-   * B's players. The field is not optional for exactly that reason — minting an
-   * actor is a decision about reach, and the compiler makes you take it.
+   * How far this credential reaches. Not optional, for the reason the old
+   * nullable `campaignId` was not: minting an actor is a decision about reach,
+   * and the compiler makes you take it.
    */
-  campaignId: Schema.NullOr(CampaignId),
+  scope: ActorScope,
 }) {}
 
 /**

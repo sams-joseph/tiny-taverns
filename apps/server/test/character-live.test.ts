@@ -13,17 +13,18 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -44,10 +45,11 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
-    DmActors.layer,
+    CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -70,7 +72,6 @@ const withActor =
     Effect.provideService(effect, CurrentActor, actor);
 
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
   const roster = yield* EncounterCreatures;
@@ -82,7 +83,7 @@ const makeFixture = Effect.gen(function* () {
     // Shared, so the player below can *read* the party — which is what makes
     // "refuses the write on a character they can read" a claim about the write
     // rather than about the campaign being closed.
-    campaigns.create({
+    createCampaign({
       name: "The Salt Road",
       partyName: "The Gilded Spoon",
       visibility: "shared",
@@ -102,7 +103,7 @@ const makeFixture = Effect.gen(function* () {
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: archer.id, count: 2 }));
 
   /** Somewhere for a cross-campaign write-through to fail to reach. */
-  const otherTable = yield* as(campaigns.create({ name: "Salt and Sixpence" }));
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence" }));
 
   return {
     dm,

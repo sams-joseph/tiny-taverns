@@ -4,8 +4,9 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, describe, expect, it } from "vitest";
 import { Accounts, DEFAULT_ACCOUNT_NAME } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
-import { anAccount, aPlayerAt, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -23,7 +24,7 @@ import { migratedDatabase } from "./support/database.js";
  */
 
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Invites.layer).pipe(
+  Layer.mergeAll(Accounts.layer, Campaigns.layer, Groups.layer, Invites.layer).pipe(
     Layer.provideMerge(migratedDatabase("taverns_test_whoami")),
   ),
 );
@@ -35,7 +36,7 @@ const asActor =
     Effect.provideService(effect, CurrentActor, actor);
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Invites | SqlClient.SqlClient>,
+  effect: Effect.Effect<A, E, Accounts | Campaigns | Groups | Invites | SqlClient.SqlClient>,
 ) => runtime.runPromise(effect as Effect.Effect<A, E, never>);
 
 describe("who am I", () => {
@@ -92,9 +93,8 @@ describe("who am I", () => {
     const answers = await run(
       Effect.gen(function* () {
         const accounts = yield* Accounts;
-        const campaigns = yield* Campaigns;
         const dm = yield* anAccount("Ilse Vantar");
-        const campaign = yield* asActor(dm)(campaigns.create({ name: "The Salt Road" }));
+        const campaign = yield* asActor(dm)(createCampaign({ name: "The Salt Road" }));
 
         const player = yield* aPlayerAt(campaign.id, "Bram Colley");
         return {

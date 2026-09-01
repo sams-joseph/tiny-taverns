@@ -78,7 +78,7 @@ import {
  * reads is the usual answer. It cannot be composed here: two of the three reads
  * this needs — the session a campaign is currently on, and the live run under
  * it — have **no player-reachable endpoint**. `sessions.list` would hand a
- * player every shared night to find one, `runs.list` is behind the `DmActor`
+ * player every shared night to find one, `runs.list` is behind the `CampaignCreatorActor`
  * gate and answers them nothing, and `campaign.currentSessionId` is on
  * `Campaign`, which `campaigns.findById` answers whole. So the choice was a
  * repository read or three new endpoints, and three would each have had to

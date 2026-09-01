@@ -5,9 +5,11 @@ import { afterAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { RuleArticles } from "../src/repo/RuleArticles.js";
 import { importSystemRuleArticles } from "../src/ruleset/rules.js";
 import type { SystemRuleArticle } from "../src/ruleset/systemRules.js";
+import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_rule_articles");
@@ -16,7 +18,7 @@ const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)))
 afterAll(() => runtime.dispose());
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | RuleArticles | SqlClient.SqlClient>,
+  effect: Effect.Effect<A, E, Accounts | Campaigns | Groups | RuleArticles | SqlClient.SqlClient>,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
@@ -153,10 +155,9 @@ describe("2014 rules compendium import", () => {
     const dm = await run(
       Accounts.pipe(Effect.flatMap((accounts) => accounts.issue("Compendium DM"))),
     );
-    const actor = new Actor({ accountId: dm.accountId, campaignId: null });
+    const actor = new Actor({ accountId: dm.accountId, scope: { _tag: "account" } });
     const campaign = await run(
-      Campaigns.pipe(
-        Effect.flatMap((campaigns) => campaigns.create({ name: "The Reference Road" })),
+      createCampaign({ name: "The Reference Road" }).pipe(
         Effect.provideService(CurrentActor, actor),
       ),
     );
@@ -206,10 +207,9 @@ describe("2014 rules compendium import", () => {
     const dm = await run(
       Accounts.pipe(Effect.flatMap((accounts) => accounts.issue("Snapshot DM"))),
     );
-    const actor = new Actor({ accountId: dm.accountId, campaignId: null });
+    const actor = new Actor({ accountId: dm.accountId, scope: { _tag: "account" } });
     const campaign = await run(
-      Campaigns.pipe(
-        Effect.flatMap((campaigns) => campaigns.create({ name: "The Snapshot Road" })),
+      createCampaign({ name: "The Snapshot Road" }).pipe(
         Effect.provideService(CurrentActor, actor),
       ),
     );

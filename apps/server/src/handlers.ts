@@ -16,12 +16,13 @@ import { Health } from "./Health.js";
 import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
+import { Groups } from "./repo/Groups.js";
 import { Characters } from "./repo/Characters.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
 import { Options } from "./repo/Options.js";
-import { type DmActor, DmActors } from "./repo/DmActor.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "./repo/CreatorActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
@@ -59,21 +60,21 @@ import { Sessions } from "./repo/Sessions.js";
  * The DM gate for the three live groups, resolved once per group build.
  *
  * `runs`, `combatants` and `live` are the endpoints whose rows differ for a
- * player, and their repositories take a `DmActor` rather than a campaign id —
+ * player, and their repositories take a `CampaignCreatorActor` rather than a campaign id —
  * so this is the only expression in `handlers.ts` that turns a path segment
  * into one, and a handler that tried to skip it would have no campaign to pass.
- * See `repo/DmActor.ts`.
+ * See `repo/CampaignCreatorActor.ts`.
  *
  * The campaign id is named once per handler, which is what keeps the proof and
  * the read talking about the same table: there is no second id for it to
  * disagree with.
  */
 const asDmOf = Effect.map(
-  DmActors,
+  CampaignCreatorActors,
   (dmActors) =>
     <A, E, R>(
       campaignId: CampaignId,
-      read: (dm: DmActor) => Effect.Effect<A, E, R>,
+      read: (dm: CampaignCreatorActor) => Effect.Effect<A, E, R>,
     ): Effect.Effect<A, E | NotFound, R | CurrentActor> =>
       Effect.flatMap(dmActors.of(campaignId), read),
 );
@@ -94,7 +95,6 @@ const CampaignsLive = HttpApiBuilder.group(
     const campaigns = yield* Campaigns;
     return handlers
       .handle("list", () => campaigns.list)
-      .handle("create", ({ payload }) => campaigns.create(payload))
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
       .handle("archive", ({ params }) => campaigns.archive(params.campaignId))
@@ -161,7 +161,7 @@ const MeLive = HttpApiBuilder.group(
  * groups and the recap.
  *
  * `Memberships` answers the same table from both ends — `mine` above with an
- * ordinary actor, `list` here with a `DmActor` — so this is the whole of the
+ * ordinary actor, `list` here with a `CampaignCreatorActor` — so this is the whole of the
  * fifth gate: a path segment becomes a proof, and there is no campaign id left
  * for the read to be given.
  */
@@ -171,9 +171,51 @@ const MembersLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const memberships = yield* Memberships;
     const asDm = yield* asDmOf;
-    return handlers.handle("list", ({ params }) =>
-      asDm(params.campaignId, (dm) => memberships.list(dm)),
-    );
+    return handlers
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => memberships.list(creator)),
+      )
+      .handle("add", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => memberships.add(creator, payload.accountId)),
+      )
+      .handle("remove", ({ params }) =>
+        asDm(params.campaignId, (creator) => memberships.remove(creator, params.accountId)),
+      );
+  }),
+);
+
+/**
+ * Groups — the top-level container. As thin as everything else: who may found,
+ * read, administer or populate a group is decided in `repo/Groups.ts` and
+ * `repo/visibility.ts`, and campaign creation inside one is `Campaigns.create`
+ * with the group from the path as its claim.
+ */
+const GroupsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "groups",
+  Effect.fnUntraced(function* (handlers) {
+    const groups = yield* Groups;
+    const campaigns = yield* Campaigns;
+    return handlers
+      .handle("list", () => groups.mine)
+      .handle("create", ({ payload }) => groups.create(payload))
+      .handle("findById", ({ params }) => groups.findById(params.groupId))
+      .handle("update", ({ params, payload }) => groups.update(params.groupId, payload))
+      .handle("archive", ({ params }) => groups.archive(params.groupId))
+      .handle("restore", ({ params }) => groups.restore(params.groupId))
+      .handle("campaigns", ({ params }) => groups.campaigns(params.groupId))
+      .handle("createCampaign", ({ params, payload }) => campaigns.create(params.groupId, payload));
+  }),
+);
+
+const GroupMembersLive = HttpApiBuilder.group(
+  TavernsApi,
+  "groupMembers",
+  Effect.fnUntraced(function* (handlers) {
+    const groups = yield* Groups;
+    return handlers
+      .handle("list", ({ params }) => groups.members(params.groupId))
+      .handle("remove", ({ params }) => groups.removeMember(params.groupId, params.accountId));
   }),
 );
 
@@ -183,9 +225,9 @@ const InvitesLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const invites = yield* Invites;
     return handlers
-      .handle("list", ({ params }) => invites.list(params.campaignId))
-      .handle("create", ({ params, payload }) => invites.create(params.campaignId, payload))
-      .handle("revoke", ({ params }) => invites.revoke(params.campaignId, params.inviteId));
+      .handle("list", ({ params }) => invites.list(params.groupId))
+      .handle("create", ({ params, payload }) => invites.create(params.groupId, payload))
+      .handle("revoke", ({ params }) => invites.revoke(params.groupId, params.inviteId));
   }),
 );
 
@@ -687,7 +729,7 @@ const HobLive = HttpApiBuilder.group(
     const hob = yield* Hob;
     const threads = yield* HobThreads;
     const proposals = yield* Proposals;
-    const dmActors = yield* DmActors;
+    const dmActors = yield* CampaignCreatorActors;
 
     /**
      * Whose conversations this request reaches — **one read, and the same
@@ -696,7 +738,7 @@ const HobLive = HttpApiBuilder.group(
      * A DM reaches the campaign's own thread and a player their own, and the
      * two sets are disjoint by predicate (`repo/visibility.ts`), so the reach
      * is not a filter over one set — it is which set exists for this caller.
-     * It is derived from the `DmActor` proof rather than from a role on the
+     * It is derived from the `CampaignCreatorActor` proof rather than from a role on the
      * actor, because `Actor` carries no role and cannot: a person is the DM of
      * one table and a player at another on one credential.
      *
@@ -814,7 +856,7 @@ const LiveLive = HttpApiBuilder.group(
     // Directly, not through `asDmOf`: the streaming handler needs the proof as
     // a value it can hold for the life of the connection, not as a wrapper
     // around one call.
-    const dmActors = yield* DmActors;
+    const dmActors = yield* CampaignCreatorActors;
     // Read once, when the group is built, not per request. `orDie` because a
     // `LIVE_HEARTBEAT_SECONDS` that is not a number is a misconfigured
     // deployment and should stop the boot loudly — and because letting a
@@ -940,6 +982,8 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
   Layer.provide([
     HealthLive,
     MeLive,
+    GroupsLive,
+    GroupMembersLive,
     InvitePreviewLive,
     JoinLive,
     CampaignsLive,

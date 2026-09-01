@@ -5,17 +5,18 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -29,10 +30,11 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
-    DmActors.layer,
+    CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -60,7 +62,6 @@ const withActor =
  * somewhere to fail to reach.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
@@ -71,7 +72,7 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(
-    campaigns.create({
+    createCampaign({
       name: "The Salt Road",
       partyName: "The Gilded Spoon",
       visibility: "shared",
@@ -145,9 +146,7 @@ const makeFixture = Effect.gen(function* () {
 
   const session = yield* as(sessions.create(campaign.id, { number: 12, title: "The ford" }));
 
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
   const encounterElsewhere = yield* as(
     encounters.create(otherTable.id, { name: "Whatever is in the crate", visibility: "shared" }),
   );
@@ -706,7 +705,7 @@ describe("the new tables fail closed", () => {
     // able to call these methods and receive the `shared` rows the predicate
     // allowed — which meant the wide `Combatant`, with exact hit points on a
     // creature the DM had merely chosen to show them. There is no read to
-    // filter now: the methods take a `DmActor` and a player cannot obtain one,
+    // filter now: the methods take a `CampaignCreatorActor` and a player cannot obtain one,
     // so the refusal is one step earlier than the `WHERE` clause and applies
     // to every method on all three live repositories at once.
     const session = await freshSession(143);

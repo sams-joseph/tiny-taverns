@@ -1,4 +1,5 @@
 import {
+  type AccountId,
   type Actor,
   Campaign,
   type CampaignCreate,
@@ -6,14 +7,20 @@ import {
   type CampaignUpdate,
   Conflict,
   CurrentActor,
+  type GroupId,
   NotFound,
   type SessionId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { addOwner } from "./Memberships.js";
+import { addCreator } from "./Memberships.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
-import { campaignReadable, campaignWritable, rowWritable } from "./visibility.js";
+import {
+  campaignReadable,
+  campaignWritable,
+  ensureGroupReadable,
+  rowWritable,
+} from "./visibility.js";
 
 /**
  * Exported for `repo/Memberships.ts`, which selects `campaign.*` beside the
@@ -24,6 +31,8 @@ import { campaignReadable, campaignWritable, rowWritable } from "./visibility.js
  */
 export interface CampaignRow extends ProvenanceColumns {
   readonly id: CampaignId;
+  readonly group_id: GroupId;
+  readonly creator_account_id: AccountId;
   readonly name: string;
   readonly party_name: string | null;
   readonly player_count: number;
@@ -34,6 +43,8 @@ export interface CampaignRow extends ProvenanceColumns {
 export const toCampaign = (row: CampaignRow): Campaign =>
   new Campaign({
     id: row.id,
+    groupId: row.group_id,
+    creatorAccountId: row.creator_account_id,
     name: row.name,
     partyName: row.party_name,
     playerCount: row.player_count,
@@ -54,7 +65,10 @@ export class Campaigns extends Context.Service<
   {
     readonly list: Effect.Effect<ReadonlyArray<Campaign>, never, CurrentActor>;
     readonly findById: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
-    readonly create: (payload: CampaignCreate) => Effect.Effect<Campaign, never, CurrentActor>;
+    readonly create: (
+      groupId: GroupId,
+      payload: CampaignCreate,
+    ) => Effect.Effect<Campaign, NotFound, CurrentActor>;
     readonly update: (
       id: CampaignId,
       patch: CampaignUpdate,
@@ -138,30 +152,29 @@ export class Campaigns extends Context.Service<
           ),
 
         /**
-         * `account_id` and the owner's membership are two answers to two
-         * different questions and both are written here.
+         * Any live member of the group may create a campaign in it — the
+         * governance decision — and becomes its creator and sole DM.
          *
-         * `campaign.account_id` is whose account this is — the cascade parent,
-         * and the only place in `src` outside `repo/visibility.ts` that names
-         * it. The `campaign_member` row is who *reaches* it, which since
-         * `0011_membership.ts` is a different thing entirely: no predicate
-         * consults the column any more.
-         *
-         * One transaction, because it has to be. `campaign_owner_is_dm_member`
-         * is deferred to COMMIT exactly so these can be two statements, and a
-         * campaign inserted without its owner's row is refused at the end of
-         * its own transaction rather than left as a campaign nobody can write
-         * to.
+         * Three facts written in one transaction, each pinned by a deferred
+         * key: the campaign names its group and creator
+         * (`campaign_creator_in_group` proves the creator is a live group
+         * member), and the creator's own participation row goes in beside it
+         * (`campaign_creator_is_campaign_member` refuses a campaign without
+         * one). `ensureGroupReadable` fronts the typed refusal — a group this
+         * credential does not reach is a 404 naming the group, not a defect
+         * at COMMIT.
          */
-        create: (payload) =>
+        create: (groupId, payload) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
+                yield* ensureGroupReadable(sql, groupId, actor);
                 const rows = yield* sql<CampaignRow>`
                   insert into campaign ${sql.insert(
                     defined({
-                      account_id: actor.accountId,
+                      group_id: groupId,
+                      creator_account_id: actor.accountId,
                       name: payload.name,
                       party_name: payload.partyName,
                       player_count: payload.playerCount,
@@ -170,7 +183,7 @@ export class Campaigns extends Context.Service<
                   )}
                   returning *
                 `;
-                yield* addOwner(sql, rows[0]!.id, actor.accountId);
+                yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
                 return toCampaign(rows[0]!);
               }),
             ),

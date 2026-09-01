@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts, DEFAULT_ACCOUNT_NAME } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { ClerkIdentityProvider } from "../src/ClerkIdentityProvider.js";
+import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testIdentityInstance, TEST_ORIGIN } from "./support/identity.js";
 
@@ -88,7 +89,7 @@ describe("a session token from the configured provider", () => {
     // First request from someone the server has never seen.
     await runtime.runPromise(
       Effect.flatMap(clientFor(token), (client) =>
-        client.campaigns.create({ payload: { name: "The Salt Road" } }),
+        campaignVia(client, { name: "The Salt Road" }),
       ).pipe(Effect.orDie),
     );
 
@@ -101,7 +102,7 @@ describe("a session token from the configured provider", () => {
     const second = instance.sessionToken({ subject: "user_first", name: "Robin Vale" });
     await runtime.runPromise(
       Effect.flatMap(clientFor(second), (client) =>
-        client.campaigns.create({ payload: { name: "The Wintermere" } }),
+        campaignVia(client, { name: "The Wintermere" }),
       ).pipe(Effect.orDie),
     );
 
@@ -136,7 +137,7 @@ describe("a session token from the configured provider", () => {
     const token = instance.sessionToken({ subject: "user_scoped" });
     await runtime.runPromise(
       Effect.flatMap(clientFor(token), (client) =>
-        client.campaigns.create({ payload: { name: "Hosted table" } }),
+        campaignVia(client, { name: "Hosted table" }),
       ).pipe(Effect.orDie),
     );
 

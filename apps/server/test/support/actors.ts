@@ -1,38 +1,42 @@
-import { Actor, type AccountId, type CampaignId, CurrentActor, type NotFound } from "@taverns/api";
+import {
+  Actor,
+  type AccountId,
+  type Campaign,
+  type CampaignCreate,
+  type CampaignId,
+  CurrentActor,
+  type GroupId,
+  type NotFound,
+} from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "../../src/Accounts.js";
-import { type DmActor, DmActors } from "../../src/repo/DmActor.js";
+import { Campaigns } from "../../src/repo/Campaigns.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "../../src/repo/CreatorActor.js";
+import { Groups } from "../../src/repo/Groups.js";
 import { Invites } from "../../src/repo/Invites.js";
 
 /**
- * The actors every repository test needs, and what each of them is now that
- * reach is a `campaign_member` row rather than `campaign.account_id`.
+ * The actors every repository test needs, under the group architecture.
  *
- * The shape these replaced was `new Actor({ accountId, role, campaignId })`,
- * built by hand in ten files. It does not exist any more, and the compiler
- * removed every one of them in a single pass — which is the property worth
- * having: there is no version of this change that typechecks while half done.
- *
- * A test that kept constructing a player by naming a role would be asserting
- * against a thing the product cannot produce, which is worse than a failing
- * test. So a player here is what a player will be: **their own account**, a
- * `player` membership at somebody else's table, and a credential scoped to it.
+ * A campaign lives in a group and its creator is its sole DM, so "a campaign
+ * of the actor's own" is two acts now — found a group, create a campaign in it
+ * — and `aCampaignBy` is that pair, the way most fixtures want it. A player is
+ * what a player really is: **their own account**, admitted to the group and
+ * seated at the campaign through a real invitation, with a credential scoped
+ * to that campaign.
  */
 
 /**
  * An account with an account-wide credential — what `token:issue` mints, and
- * what every request in the product carries today.
- *
- * It reaches every campaign this account is a member of, which for a DM means
- * every campaign it created (`Campaigns.create` writes the owner's `dm` row in
- * the same transaction) and nothing else.
+ * what every request in the product carries today. It reaches every group and
+ * campaign this account is a member of and nothing else.
  */
 export const anAccount = (name: string): Effect.Effect<Actor, never, Accounts> =>
   Effect.gen(function* () {
     const accounts = yield* Accounts;
     const issued = yield* accounts.issue(name);
-    return new Actor({ accountId: issued.accountId, campaignId: null });
+    return new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
   }).pipe(Effect.orDie);
 
 /**
@@ -44,35 +48,58 @@ export const anAccount = (name: string): Effect.Effect<Actor, never, Accounts> =
  * whatever mints one first inherits it rather than needing an audit.
  */
 export const scopedTo = (actor: Actor, campaignId: CampaignId): Actor =>
-  new Actor({ accountId: actor.accountId, campaignId });
+  new Actor({ accountId: actor.accountId, scope: { _tag: "campaign", campaignId } });
+
+/** The same account's credential, narrowed to one group. */
+export const scopedToGroup = (actor: Actor, groupId: GroupId): Actor =>
+  new Actor({ accountId: actor.accountId, scope: { _tag: "group", groupId } });
+
+/**
+ * A fresh group founded by this actor — who becomes its owner and first
+ * member, through the shipped `Groups.create` path.
+ */
+export const aGroupBy = (actor: Actor, name: string): Effect.Effect<GroupId, never, Groups> =>
+  Effect.gen(function* () {
+    const groups = yield* Groups;
+    const group = yield* Effect.provideService(groups.create({ name }), CurrentActor, actor);
+    return group.id;
+  }).pipe(Effect.orDie);
+
+/**
+ * A campaign of the actor's own, in a fresh group of their own — the shape
+ * almost every fixture wants, and the group-model spelling of what
+ * `campaigns.create(payload)` used to be. The actor founds the group, so they
+ * are its owner as well as the campaign's creator, which is what a lone DM
+ * running their own table is.
+ */
+export const aCampaignBy = (
+  actor: Actor,
+  payload: CampaignCreate,
+): Effect.Effect<Campaign, never, Groups | Campaigns> =>
+  Effect.gen(function* () {
+    const campaigns = yield* Campaigns;
+    const groupId = yield* aGroupBy(actor, `${payload.name} group`);
+    return yield* Effect.provideService(campaigns.create(groupId, payload), CurrentActor, actor);
+  }).pipe(Effect.orDie);
 
 /**
  * A player at somebody else's table — **minted by the product, through a real
  * invitation.**
  *
- * This function used to insert a `campaign_member` row with raw SQL, and said so
- * at length: `apps/server/src` had exactly one membership writer, `addOwner`,
- * which cannot express a player, so the honest state of the product was that no
- * player membership could be minted at all and a test that needed one had to
- * reach past it. Its own note predicted that step 4 would replace it with a
- * redeemed invite and that the diff doing so would be exactly this function. It
- * is.
+ * The group owner mints an invitation naming the campaign (`Invites.create`),
+ * a fresh account redeems it (`Invites.redeem`), and the group membership and
+ * campaign participation that result are the same rows a person following a
+ * link gets. So every player in this suite exercises the shipped path rather
+ * than a hand-built approximation of it, and a refusal that stops being true
+ * of a *real* player fails somewhere instead of staying green against a state
+ * nobody can reach.
  *
- * Nothing here is a fixture shortcut any more: the DM mints an invitation
- * through `Invites.create`, a fresh account redeems it through `Invites.redeem`,
- * and the membership that results is the same row a person following a link
- * gets. So every player in this suite — ten files, including the one that pins
- * the DM gate — now exercises the shipped path rather than a hand-built
- * approximation of it, and a refusal that stops being true of a *real* player
- * fails somewhere instead of staying green against a state nobody can reach.
- *
- * The DM is looked up rather than passed, so the ten call sites did not have to
- * change: a campaign's DM is its live `dm` member, which is exactly what
- * `Invites.create` checks for one line later.
+ * The owner is looked up rather than passed, so call sites did not have to
+ * change when invitations moved to the group: a campaign's group has exactly
+ * one owner, which is who may mint.
  *
  * The credential is scoped to the campaign, because that is what a player's
- * credential should be: a player has no business reaching the rest of the
- * account it belongs to, and the tests assert both narrowings separately.
+ * credential should be, and the tests assert both narrowings separately.
  */
 export const aPlayerAt = (
   campaignId: CampaignId,
@@ -80,11 +107,11 @@ export const aPlayerAt = (
 ): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const invites = yield* Invites;
-    const dm = yield* dmOf(campaignId);
+    const { owner, groupId } = yield* ownerOf(campaignId);
     const issued = yield* Effect.provideService(
-      invites.create(campaignId, { label: name }),
+      invites.create(groupId, { label: name, campaignId }),
       CurrentActor,
-      dm,
+      owner,
     );
     const account = yield* anAccount(name);
     yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
@@ -92,40 +119,107 @@ export const aPlayerAt = (
   }).pipe(Effect.orDie);
 
 /**
- * The campaign's DM, as an actor — who a test has to be in order to invite
- * somebody.
- *
- * Asked of `campaign_member` rather than of `campaign.account_id`: since `0011`
- * the DM of a campaign *is* its live `dm` member, and this is the same question
- * `Invites.create` asks through `campaignWritable` one line later. Naming the
- * table here is a test reaching for a fact rather than a reach path — the grep
- * in `membership.test.ts` governs `src`, which is where the rule matters.
+ * A live group member who does **not** participate in the campaign — the
+ * boundary the participation decision draws, minted through a group-only
+ * invitation so the path is the shipped one here too.
  */
-const dmOf = (campaignId: CampaignId): Effect.Effect<Actor, never, SqlClient.SqlClient> =>
+export const aGroupMemberAt = (
+  campaignId: CampaignId,
+  name: string,
+): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
   Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const rows = yield* sql<{ readonly account_id: AccountId }>`
-      select account_id from campaign_member
-      where campaign_id = ${campaignId} and role = 'dm' and revoked_at is null
-      order by created_at asc limit 1
-    `;
-    return new Actor({ accountId: rows[0]!.account_id, campaignId: null });
+    const invites = yield* Invites;
+    const { owner, groupId } = yield* ownerOf(campaignId);
+    const issued = yield* Effect.provideService(
+      invites.create(groupId, { label: name }),
+      CurrentActor,
+      owner,
+    );
+    const account = yield* anAccount(name);
+    yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
+    return account;
   }).pipe(Effect.orDie);
 
 /**
- * The proof `Combatants`, `EncounterRuns` and `SessionEvents` require.
+ * The campaign's group and that group's owner, as an actor — who a test has to
+ * be in order to invite somebody. A fact lookup, not a reach path; the grep in
+ * `membership.test.ts` governs `src`, which is where the rule matters.
+ */
+const ownerOf = (
+  campaignId: CampaignId,
+): Effect.Effect<
+  { readonly owner: Actor; readonly groupId: GroupId },
+  never,
+  SqlClient.SqlClient
+> =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{
+      readonly owner_account_id: AccountId;
+      readonly group_id: GroupId;
+    }>`
+      select play_group.owner_account_id, campaign.group_id
+      from campaign
+      join play_group on play_group.id = campaign.group_id
+      where campaign.id = ${campaignId}
+    `;
+    return {
+      owner: new Actor({ accountId: rows[0]!.owner_account_id, scope: { _tag: "account" } }),
+      groupId: rows[0]!.group_id,
+    };
+  }).pipe(Effect.orDie);
+
+/**
+ * The proof the creator-gated repositories require.
  *
- * There is deliberately no way to build one here by hand, unlike the
- * `campaign_member` row above: `aPlayerAt` reaches past the product because the
- * product cannot yet mint a player, whereas this is a check the product *does*
- * perform and a test that forged it would be testing nothing. So it goes
- * through `DmActors.of` like every caller in `src`, and a test that expects a
- * refusal asserts on this failing rather than on the read that follows it.
+ * There is deliberately no way to build one here by hand: this is a check the
+ * product performs, and a test that forged it would be testing nothing. It
+ * goes through `CampaignCreatorActors.of` like every caller in `src`, and a
+ * test that expects a refusal asserts on this failing rather than on the read
+ * that follows it.
  */
 export const asDm = (
   actor: Actor,
   campaignId: CampaignId,
-): Effect.Effect<DmActor, NotFound, DmActors> =>
-  Effect.flatMap(DmActors, (dmActors) =>
-    Effect.provideService(dmActors.of(campaignId), CurrentActor, actor),
+): Effect.Effect<CampaignCreatorActor, NotFound, CampaignCreatorActors> =>
+  Effect.flatMap(CampaignCreatorActors, (creatorActors) =>
+    Effect.provideService(creatorActors.of(campaignId), CurrentActor, actor),
+  );
+
+/**
+ * `aCampaignBy` with the actor taken from the ambient `CurrentActor` — the
+ * drop-in spelling for fixtures that already wrap their calls in a
+ * `withActor(dm)(…)` provider, which is most of the suite.
+ */
+export const createCampaign = (
+  payload: CampaignCreate,
+): Effect.Effect<Campaign, never, Groups | Campaigns | CurrentActor> =>
+  Effect.gen(function* () {
+    const actor = yield* CurrentActor;
+    return yield* aCampaignBy(actor, payload);
+  });
+
+/**
+ * The HTTP spelling of `aCampaignBy`: found a group over the wire, then create
+ * the campaign in it — for the endpoint-level suites, whose actor is a derived
+ * client rather than an `Actor`. Structural on purpose: the derived client's
+ * full type does not cross module boundaries well (TS7056), and these two
+ * methods are all this needs.
+ */
+export const campaignVia = <EG, EC, RG, RC>(
+  client: {
+    readonly groups: {
+      readonly create: (options: {
+        readonly payload: { readonly name: string };
+      }) => Effect.Effect<{ readonly id: GroupId }, EG, RG>;
+      readonly createCampaign: (options: {
+        readonly params: { readonly groupId: GroupId };
+        readonly payload: CampaignCreate;
+      }) => Effect.Effect<Campaign, EC, RC>;
+    };
+  },
+  payload: CampaignCreate,
+): Effect.Effect<Campaign, EG | EC, RG | RC> =>
+  Effect.flatMap(client.groups.create({ payload: { name: `${payload.name} group` } }), (group) =>
+    client.groups.createCampaign({ params: { groupId: group.id }, payload }),
   );

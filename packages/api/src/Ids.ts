@@ -12,6 +12,14 @@ const id = <const Name extends string>(name: Name) =>
 export const AccountId = id("AccountId");
 export type AccountId = typeof AccountId.Type;
 
+/**
+ * The top-level social container for connected play — the table's group of
+ * people, holding campaigns and the history they share. `play_group` in SQL,
+ * because `group` is a keyword; a group everywhere else.
+ */
+export const GroupId = id("GroupId");
+export type GroupId = typeof GroupId.Type;
+
 export const CampaignId = id("CampaignId");
 export type CampaignId = typeof CampaignId.Type;
 
@@ -149,13 +157,32 @@ export const BeatId = id("BeatId");
 export type BeatId = typeof BeatId.Type;
 
 /**
- * One invitation to join a campaign.
+ * One invitation to join a group — optionally admitting to one of its campaigns
+ * in the same act.
  *
  * Names the *row*, never the token — the token is a secret the server only ever
- * stores as a digest, and it is what a person holds. This is what a DM revokes.
+ * stores as a digest, and it is what a person holds. This is what the group
+ * owner revokes.
  */
-export const InviteId = id("InviteId");
-export type InviteId = typeof InviteId.Type;
+export const GroupInviteId = id("GroupInviteId");
+export type GroupInviteId = typeof GroupInviteId.Type;
+
+/**
+ * One character's place in one campaign's party — the join row, not the
+ * character. The character is account-owned and carries the playable state;
+ * this names the participation, its lifecycle, and the display snapshots the
+ * campaign keeps.
+ */
+export const CampaignCharacterId = id("CampaignCharacterId");
+export type CampaignCharacterId = typeof CampaignCharacterId.Type;
+
+/** One canonical fact admitted to a group's shared history. */
+export const GroupHistoryEntryId = id("GroupHistoryEntryId");
+export type GroupHistoryEntryId = typeof GroupHistoryEntryId.Type;
+
+/** One derived summary over a group's history entries. */
+export const GroupHistorySummaryId = id("GroupHistorySummaryId");
+export type GroupHistorySummaryId = typeof GroupHistorySummaryId.Type;
 
 /** One conversation with Hob — a thread of turns, scoped to one campaign. */
 export const AssistantThreadId = id("AssistantThreadId");

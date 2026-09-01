@@ -28,13 +28,14 @@ import { Characters } from "./repo/Characters.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
-import { DmActors } from "./repo/DmActor.js";
+import { CampaignCreatorActors } from "./repo/CreatorActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
 import { HobThreads } from "./repo/HobThreads.js";
+import { Groups } from "./repo/Groups.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
@@ -120,7 +121,7 @@ export const assistantFromConfig: Layer.Layer<
   Config.ConfigError,
   | Campaigns
   | Creatures
-  | DmActors
+  | CampaignCreatorActors
   | HobThreads
   | Options
   | Recap
@@ -188,7 +189,7 @@ export const servicesOver = <E>(
     E | Config.ConfigError,
     | Campaigns
     | Creatures
-    | DmActors
+    | CampaignCreatorActors
     | HobThreads
     | Options
     | Recap
@@ -201,11 +202,12 @@ export const servicesOver = <E>(
   | Authorization
   | Beats
   | Campaigns
+  | Groups
   | Characters
   | ClassProgression
   | Combatants
   | Creatures
-  | DmActors
+  | CampaignCreatorActors
   | EncounterCreatures
   | EncounterRuns
   | Encounters
@@ -241,6 +243,7 @@ export const servicesOver = <E>(
     // like every other live write.
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
+    Groups.layer,
     // A character is live state since `0014` — damage taken in a fight writes
     // the character in the same transaction, and a character written during a
     // session rings the doorbell. So this is a live repository too.
@@ -259,7 +262,7 @@ export const servicesOver = <E>(
     // other — one read of `campaign_member` through the shipped predicate —
     // and it is here rather than inside them because a repository that could
     // mint its own proof would be proving nothing.
-    DmActors.layer,
+    CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -341,7 +344,7 @@ export const servicesOver = <E>(
       Layer.provide([
         Campaigns.layer,
         Creatures.layer,
-        DmActors.layer,
+        CampaignCreatorActors.layer,
         HobThreads.layer,
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of
@@ -380,11 +383,12 @@ export const applicationOver = <E>(
     | Authorization
     | Beats
     | Campaigns
+    | Groups
     | Characters
     | ClassProgression
     | Combatants
     | Creatures
-    | DmActors
+    | CampaignCreatorActors
     | EncounterCreatures
     | EncounterRuns
     | Encounters

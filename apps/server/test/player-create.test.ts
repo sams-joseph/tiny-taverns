@@ -12,9 +12,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
-import { anAccount, aPlayerAt, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -49,6 +50,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_player_create"))),
@@ -69,11 +71,9 @@ const withActor =
  * about.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
-
   const jo = yield* anAccount("Jo");
   const table = yield* withActor(jo)(
-    campaigns.create({ name: "The Salt Road", visibility: "shared" }),
+    createCampaign({ name: "The Salt Road", visibility: "shared" }),
   );
 
   const pim = yield* aPlayerAt(table.id, "Pim");
@@ -81,7 +81,7 @@ const makeFixture = Effect.gen(function* () {
 
   const fen = yield* anAccount("Fen");
   const elsewhere = yield* withActor(fen)(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+    createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
 
   return { jo, pim, marta, fen, table, elsewhere };
@@ -216,7 +216,7 @@ describe("a player creating their own character", () => {
         const campaigns = yield* Campaigns;
         const asJo = withActor(fixture.jo);
 
-        const quiet = yield* asJo(campaigns.create({ name: "Not yet", visibility: "dm" }));
+        const quiet = yield* asJo(createCampaign({ name: "Not yet", visibility: "dm" }));
         const ilse = yield* aPlayerAt(quiet.id, "Ilse");
 
         const closed = yield* withActor(ilse)(
@@ -238,11 +238,10 @@ describe("a player creating their own character", () => {
   it("stops the moment the membership that carried it is revoked", async () => {
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
         const invites = yield* Invites;
         const asJo = withActor(fixture.jo);
 
-        const scratch = yield* asJo(campaigns.create({ name: "The Weir", visibility: "shared" }));
+        const scratch = yield* asJo(createCampaign({ name: "The Weir", visibility: "shared" }));
         const kofi = yield* aPlayerAt(scratch.id, "Kofi");
 
         const before = yield* withActor(kofi)(
@@ -251,8 +250,8 @@ describe("a player creating their own character", () => {
 
         // The shipped path: withdrawing the invitation revokes the membership it
         // granted, in one transaction.
-        const issued = yield* asJo(invites.list(scratch.id));
-        yield* asJo(invites.revoke(scratch.id, issued[0]!.id));
+        const issued = yield* asJo(invites.list(scratch.groupId));
+        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
 
         const after = yield* withActor(kofi)(
           characters.createOwn(scratch.id, { name: "Kofi's second" }),
@@ -293,14 +292,15 @@ describe("a player creating their own character", () => {
     // one table must not reach the other.
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
         const second = yield* withActor(fixture.fen)(
-          campaigns.create({ name: "The Hag's Bargain", visibility: "shared" }),
+          createCampaign({ name: "The Hag's Bargain", visibility: "shared" }),
         );
         // Pim's account, at a second table, on an account-wide credential.
         const invites = yield* Invites;
-        const issued = yield* withActor(fixture.fen)(invites.create(second.id, { label: "Pim" }));
-        const account = new Actor({ accountId: fixture.pim.accountId, campaignId: null });
+        const issued = yield* withActor(fixture.fen)(
+          invites.create(second.groupId, { label: "Pim", campaignId: second.id }),
+        );
+        const account = new Actor({ accountId: fixture.pim.accountId, scope: { _tag: "account" } });
         yield* withActor(account)(invites.redeem(issued.token));
 
         const made = yield* withActor(account)(
@@ -475,7 +475,7 @@ describe("a player throwing their own character away", () => {
         const campaigns = yield* Campaigns;
         const asJo = withActor(fixture.jo);
 
-        const scratch = yield* asJo(campaigns.create({ name: "The Ford", visibility: "shared" }));
+        const scratch = yield* asJo(createCampaign({ name: "The Ford", visibility: "shared" }));
         const nan = yield* aPlayerAt(scratch.id, "Nan");
         const made = yield* withActor(nan)(characters.createOwn(scratch.id, { name: "Nan's own" }));
 

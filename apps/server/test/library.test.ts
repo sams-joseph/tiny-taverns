@@ -9,6 +9,7 @@ import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -135,12 +136,8 @@ const makeFixture = Effect.gen(function* () {
   const asBo = yield* clientFor(bo.token);
   const asUninvited = yield* clientFor(uninvited.token);
 
-  const saltRoad = yield* asJo.campaigns.create({
-    payload: { name: "The Salt Road", visibility: "shared" },
-  });
-  const theirTable = yield* asBo.campaigns.create({
-    payload: { name: "A different table", visibility: "shared" },
-  });
+  const saltRoad = yield* campaignVia(asJo, { name: "The Salt Road", visibility: "shared" });
+  const theirTable = yield* campaignVia(asBo, { name: "A different table", visibility: "shared" });
 
   const hers = yield* asJo.library.create({ payload: aCreature(CREATURES.hers) });
   const herOther = yield* asJo.library.create({ payload: aCreature(CREATURES.herOther) });
@@ -159,8 +156,8 @@ const makeFixture = Effect.gen(function* () {
 
   /** A real player at Jo's table, minted the way a person is. */
   const issued = yield* asJo.invites.create({
-    params: { campaignId: saltRoad.id },
-    payload: { label: "Pim" },
+    params: { groupId: saltRoad.groupId },
+    payload: { label: "Pim", campaignId: saltRoad.id },
   });
   const pim = yield* accounts.issue("Pim");
   yield* Effect.flatMap(clientFor(pim.token), (asThem) =>
@@ -309,7 +306,10 @@ describe("the Library shows originals only", () => {
     // Pinned rather than left implicit so that whatever mints the first scoped
     // credential meets this decision instead of inheriting it silently. It is on
     // `AGENTS.md`'s list of what the captain has not been asked.
-    const scoped = new Actor({ accountId: fixture.jo.accountId, campaignId: fixture.saltRoad.id });
+    const scoped = new Actor({
+      accountId: fixture.jo.accountId,
+      scope: { _tag: "campaign", campaignId: fixture.saltRoad.id },
+    });
     const seen = await runtime.runPromise(
       Effect.flatMap(Creatures, (creatures) => items(creatures.library({}))).pipe(
         Effect.provideService(CurrentActor, scoped),

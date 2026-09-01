@@ -7,9 +7,10 @@ import { servicesOver } from "../src/app.js";
 import { importSystemMagicItems, type ImportMagicItemsResult } from "../src/magic-items/import.js";
 import { MAGIC_ITEM_RAW } from "../src/magic-items/systemMagicItems.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { MagicItems } from "../src/repo/MagicItems.js";
-import { aPlayerAt } from "./support/actors.js";
+import { aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_magic_items");
@@ -18,11 +19,19 @@ const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)))
 afterAll(() => runtime.dispose());
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Invites | MagicItems | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | Invites | MagicItems | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
 
 const attempt = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Invites | MagicItems | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | Invites | MagicItems | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(Effect.result(effect));
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
@@ -37,11 +46,10 @@ beforeAll(async () => {
 const dmCampaign = (name: string) =>
   Effect.gen(function* () {
     const accounts = yield* Accounts;
-    const campaigns = yield* Campaigns;
     const issued = yield* accounts.issue(`${name} DM`);
-    const actor = new Actor({ accountId: issued.accountId, campaignId: null });
+    const actor = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
     const campaign = yield* Effect.provideService(
-      campaigns.create({ name, visibility: "shared" }),
+      createCampaign({ name, visibility: "shared" }),
       CurrentActor,
       actor,
     );
@@ -231,7 +239,7 @@ describe("2014 SRD magic items", () => {
     const issued = await run(
       Effect.flatMap(Accounts, (accounts) => accounts.issue("Item Stranger")),
     );
-    const stranger = new Actor({ accountId: issued.accountId, campaignId: null });
+    const stranger = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
 
     const result = await attempt(
       withActor(

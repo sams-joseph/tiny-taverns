@@ -1,9 +1,19 @@
 import { Schema } from "effect";
-import { CampaignId, SessionId } from "./Ids.js";
+import { AccountId, CampaignId, GroupId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 export class Campaign extends Schema.Class<Campaign>("Campaign")({
   id: CampaignId,
+  /** The group this campaign belongs to. Every campaign is in exactly one. */
+  groupId: GroupId,
+  /**
+   * Who created the campaign — its sole DM, by the captain's decision of
+   * 2026-09-01. Not a mutable role: creator-ness is this column, and every
+   * other live participant is a player. On the wire because relation-derived
+   * chrome branches on it — the same campaign URL renders creator actions or
+   * participant projections with no global mode toggle.
+   */
+  creatorAccountId: AccountId,
   name: Schema.String,
   partyName: Schema.NullOr(Schema.String),
   playerCount: Schema.Int,

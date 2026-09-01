@@ -23,7 +23,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import type { DmActor } from "./DmActor.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -181,48 +181,48 @@ const npcSubtitle = (size: string | null, type: string): string =>
  * is order 10³ writes, which is a rounding error for Postgres. What actually
  * differs about the live surface is the *read* pattern, and that is the stream.
  *
- * **Every method here takes a `DmActor` in place of a campaign id.** A run is
+ * **Every method here takes a `CampaignCreatorActor` in place of a campaign id.** A run is
  * the whole fight — the round, the turn marker, whether it is shared at all —
  * and what a player is eventually shown of one is a narrower thing than this.
- * See `repo/DmActor.ts` for why the proof carries the campaign rather than
+ * See `repo/CampaignCreatorActor.ts` for why the proof carries the campaign rather than
  * sitting beside it.
  */
 export class EncounterRuns extends Context.Service<
   EncounterRuns,
   {
     readonly list: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
     ) => Effect.Effect<ReadonlyArray<EncounterRun>, NotFound>;
     readonly findById: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       id: EncounterRunId,
     ) => Effect.Effect<EncounterRun, NotFound>;
     readonly start: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       payload: EncounterRunStart,
     ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly resume: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       payload: EncounterRunResume,
     ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly update: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       id: EncounterRunId,
       patch: EncounterRunUpdate,
     ) => Effect.Effect<EncounterRun, NotFound>;
     readonly nextTurn: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       id: EncounterRunId,
       payload: NextTurn,
     ) => Effect.Effect<EncounterRun, NotFound>;
     readonly end: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       id: EncounterRunId,
     ) => Effect.Effect<EncounterRun, NotFound>;

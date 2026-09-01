@@ -19,6 +19,7 @@ import { importSystemEquipment } from "../src/equipment/import.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importClassProgression } from "../src/ruleset/progression.js";
 import { SYSTEM_OPTIONS, type SystemOption } from "../src/ruleset/systemOptions.js";
+import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -150,14 +151,10 @@ const makeFixture = Effect.gen(function* () {
   const asBo = yield* clientFor(bo.token);
   const asUninvited = yield* clientFor(uninvited.token);
 
-  const saltRoad = yield* asJo.campaigns.create({
-    payload: { name: "The Salt Road", visibility: "shared" },
-  });
-  const theirTable = yield* asBo.campaigns.create({
-    payload: { name: "A different table", visibility: "shared" },
-  });
+  const saltRoad = yield* campaignVia(asJo, { name: "The Salt Road", visibility: "shared" });
+  const theirTable = yield* campaignVia(asBo, { name: "A different table", visibility: "shared" });
   // Never shared, so a member of it reads nothing in it — the master toggle.
-  const unshared = yield* asJo.campaigns.create({ payload: { name: "The quiet table" } });
+  const unshared = yield* campaignVia(asJo, { name: "The quiet table" });
 
   const bloodsworn = yield* asJo.library.createOption({
     payload: { kind: "class", name: OPTIONS.bloodsworn, body: BLOODSWORN },
@@ -174,8 +171,8 @@ const makeFixture = Effect.gen(function* () {
 
   /** A real player at Jo's table, minted the way a person is. */
   const issued = yield* asJo.invites.create({
-    params: { campaignId: saltRoad.id },
-    payload: { label: "Pim" },
+    params: { groupId: saltRoad.groupId },
+    payload: { label: "Pim", campaignId: saltRoad.id },
   });
   const pim = yield* accounts.issue("Pim");
   const asPim = yield* clientFor(pim.token);

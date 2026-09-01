@@ -5,11 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Memberships } from "../src/repo/Memberships.js";
-import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -36,8 +37,9 @@ import { migratedDatabase } from "./support/database.js";
 const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
+  Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   Invites.layer,
   Memberships.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_members")));
@@ -60,14 +62,13 @@ const as =
  * than about a table nobody has opened.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const invites = yield* Invites;
   const sql = yield* SqlClient.SqlClient;
 
   const dm = yield* anAccount("Ada");
-  const campaign = yield* as(dm)(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
-  const otherTable = yield* as(dm)(campaigns.create({ name: "Salt and Sixpence" }));
+  const campaign = yield* as(dm)(createCampaign({ name: "The Salt Road", visibility: "shared" }));
+  const otherTable = yield* as(dm)(createCampaign({ name: "Salt and Sixpence" }));
 
   // Both through a real invitation, which is the only way the product mints a
   // player membership at all.
@@ -88,7 +89,9 @@ const makeFixture = Effect.gen(function* () {
 
   // Outstanding: minted, never redeemed. It is what *"invited, hasn't opened
   // it"* is, and it is on `campaign_invite` rather than anywhere near this list.
-  const outstanding = yield* as(dm)(invites.create(campaign.id, { label: "Pell" }));
+  const outstanding = yield* as(dm)(
+    invites.create(campaign.groupId, { label: "Pell", campaignId: campaign.id }),
+  );
 
   return {
     dm,
@@ -177,9 +180,9 @@ describe("what a member row carries", () => {
 
     // Four fields. A wider row here would be the place a leak lands, since
     // this is the one read in the product that is about *other people*.
-    expect(Object.keys(members[0]!).sort()).toEqual(["accountId", "joinedAt", "name", "role"]);
+    expect(Object.keys(members[0]!).sort()).toEqual(["accountId", "joinedAt", "name", "relation"]);
 
-    expect(members.map((member) => member.role)).toEqual(["dm", "player", "player"]);
+    expect(members.map((member) => member.relation)).toEqual(["creator", "player", "player"]);
     // `accountId` is the join key the whole party screen hangs off — it is what
     // `Character.accountId` is matched against, and what a write that assigns
     // one will name.
@@ -201,7 +204,7 @@ describe("what a member row carries", () => {
     const listed = await roster(fixture.dm, fixture.campaign.id);
     const members = listed._tag === "Success" ? listed.success : [];
 
-    expect(members.map((member) => member.role)[0]).toBe("dm");
+    expect(members.map((member) => member.relation)[0]).toBe("creator");
     const joined = members.slice(1).map((member) => DateTime.toEpochMillis(member.joinedAt));
     expect([...joined].sort((a, b) => a - b)).toEqual(joined);
   }, 60_000);
@@ -216,16 +219,15 @@ describe("what the list leaves out", () => {
     // be a second and worse answer to the same question.
     const gone = await runtime.runPromise(
       Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
         const invites = yield* Invites;
-        const campaign = yield* as(fixture.dm)(campaigns.create({ name: "A table to leave" }));
+        const campaign = yield* as(fixture.dm)(createCampaign({ name: "A table to leave" }));
         const guest = yield* aPlayerAt(campaign.id, "Pim");
 
         const before = yield* Effect.flatMap(asDm(fixture.dm, campaign.id), (dm) =>
           Effect.flatMap(Memberships, (memberships) => memberships.list(dm)),
         );
-        const issued = yield* as(fixture.dm)(invites.list(campaign.id));
-        yield* as(fixture.dm)(invites.revoke(campaign.id, issued[0]!.id));
+        const issued = yield* as(fixture.dm)(invites.list(campaign.groupId));
+        yield* as(fixture.dm)(invites.revoke(campaign.groupId, issued[0]!.id));
         const after = yield* Effect.flatMap(asDm(fixture.dm, campaign.id), (dm) =>
           Effect.flatMap(Memberships, (memberships) => memberships.list(dm)),
         );
@@ -235,7 +237,7 @@ describe("what the list leaves out", () => {
           after: after.map((member) => member.name),
           guest: guest.accountId,
           // The invitation is still there and still says what happened.
-          status: (yield* as(fixture.dm)(invites.list(campaign.id)))[0]!.status,
+          status: (yield* as(fixture.dm)(invites.list(campaign.groupId)))[0]!.status,
         };
       }).pipe(Effect.orDie),
     );
@@ -272,7 +274,7 @@ describe("the seat vocabulary, derived", () => {
           Effect.flatMap(Characters, (c) => c.list(fixture.campaign.id)),
         );
         const invites = yield* as(fixture.dm)(
-          Effect.flatMap(Invites, (i) => i.list(fixture.campaign.id)),
+          Effect.flatMap(Invites, (i) => i.list(fixture.campaign.groupId)),
         );
 
         const owned = new Set(
@@ -280,7 +282,7 @@ describe("the seat vocabulary, derived", () => {
             character.accountId === null ? [] : [character.accountId],
           ),
         );
-        const players = members.filter((member) => member.role === "player");
+        const players = members.filter((member) => member.relation === "player");
 
         return {
           playing: players

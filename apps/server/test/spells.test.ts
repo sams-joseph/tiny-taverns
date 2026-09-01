@@ -5,13 +5,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Spells } from "../src/repo/Spells.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells, type ImportSpellsResult } from "../src/spells/import.js";
 import { SPELL_RAW } from "../src/spells/systemSpells.js";
-import { aPlayerAt } from "./support/actors.js";
+import { aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_spells");
@@ -20,11 +21,19 @@ const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)))
 afterAll(() => runtime.dispose());
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Invites | Spells | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | Invites | Spells | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
 
 const attempt = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Invites | Spells | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | Invites | Spells | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(Effect.result(effect));
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
@@ -41,11 +50,10 @@ beforeAll(async () => {
 const dmCampaign = (name: string) =>
   Effect.gen(function* () {
     const accounts = yield* Accounts;
-    const campaigns = yield* Campaigns;
     const issued = yield* accounts.issue(`${name} DM`);
-    const actor = new Actor({ accountId: issued.accountId, campaignId: null });
+    const actor = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
     const campaign = yield* Effect.provideService(
-      campaigns.create({ name, visibility: "shared" }),
+      createCampaign({ name, visibility: "shared" }),
       CurrentActor,
       actor,
     );
@@ -184,7 +192,7 @@ describe("2014 SRD spells", () => {
     const issued = await run(
       Effect.flatMap(Accounts, (accounts) => accounts.issue("Spell Stranger")),
     );
-    const stranger = new Actor({ accountId: issued.accountId, campaignId: null });
+    const stranger = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
 
     const result = await attempt(
       withActor(

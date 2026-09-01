@@ -8,9 +8,11 @@ import { importSystemMonsters, type ImportMonstersResult } from "../src/bestiary
 import { MONSTER_RAW } from "../src/bestiary/systemMonsters.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
+import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_monster_corpus");
@@ -18,7 +20,7 @@ const services = servicesOver(database);
 const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)));
 afterAll(() => runtime.dispose());
 
-type Requirements = Accounts | Campaigns | Creatures | SqlClient.SqlClient;
+type Requirements = Accounts | Campaigns | Groups | Creatures | SqlClient.SqlClient;
 
 const run = <A, E>(effect: Effect.Effect<A, E, Requirements>) =>
   runtime.runPromise(effect.pipe(Effect.orDie));
@@ -38,7 +40,7 @@ beforeAll(async () => {
   await run(importSystemSpells());
   firstImport = await run(importSystemMonsters());
   const issued = await run(Effect.flatMap(Accounts, (accounts) => accounts.issue("Monster DM")));
-  actor = new Actor({ accountId: issued.accountId, campaignId: null });
+  actor = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
 }, 60_000);
 
 const asActor = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -213,14 +215,10 @@ describe("2014 SRD monsters", () => {
 
   it("does not let a stranger read bundled monsters through a campaign they cannot reach", async () => {
     const campaign = await run(
-      asActor(
-        Effect.flatMap(Campaigns, (campaigns) =>
-          campaigns.create({ name: "The Monster Gate", visibility: "shared" }),
-        ),
-      ),
+      asActor(createCampaign({ name: "The Monster Gate", visibility: "shared" })),
     );
     const issued = await run(Effect.flatMap(Accounts, (accounts) => accounts.issue("Stranger")));
-    const stranger = new Actor({ accountId: issued.accountId, campaignId: null });
+    const stranger = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
     const result = await attempt(
       Effect.provideService(
         Effect.flatMap(Creatures, (creatures) =>
@@ -237,11 +235,7 @@ describe("2014 SRD monsters", () => {
 
   it("copies an SRD monster as a campaign snapshot that does not follow source updates", async () => {
     const campaign = await run(
-      asActor(
-        Effect.flatMap(Campaigns, (campaigns) =>
-          campaigns.create({ name: "The Snapshot Gate", visibility: "shared" }),
-        ),
-      ),
+      asActor(createCampaign({ name: "The Snapshot Gate", visibility: "shared" })),
     );
     const sourcePage = await run(
       asActor(

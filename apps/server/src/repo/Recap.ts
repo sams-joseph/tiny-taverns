@@ -16,7 +16,7 @@ import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { BEATS, type BeatRow, toBeat } from "./Beats.js";
 import { type CombatantRow, toCombatant } from "./Combatants.js";
-import type { DmActor } from "./DmActor.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { type EncounterRunRow, toEncounterRun } from "./EncounterRuns.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { type NoteRow, toNote } from "./Notes.js";
@@ -93,17 +93,17 @@ interface Night {
  *
  * ### Two projections, two methods, two schemas
  *
- * `read` is the DM's and takes a `DmActor`; `readAsPlayer` is everybody else's
+ * `read` is the DM's and takes a `CampaignCreatorActor`; `readAsPlayer` is everybody else's
  * and answers `PlayerSessionRecap`, in which a monster carries a band and no
  * armour class. That split is the captain's decision of 2026-08-12 and it is
  * enforced by the *shape* rather than by a check: there is no field on a
  * `PlayerMonsterCombatant` for an exact hit-point total, `repo/playerCombatant.ts`
  * never selects one, and `read` cannot be called at all without a proof that
- * `repo/DmActor.ts` mints from one membership read.
+ * `repo/CampaignCreatorActor.ts` mints from one membership read.
  *
  * Before that split this file was the last live-surface read outside the gate,
  * and it handed a player of a `shared` campaign a monster's exact `hpCurrent`,
- * `hpMax` and `ac` — measured, in shipped code. `repo/DmActor.ts` predicted it
+ * `hpMax` and `ac` — measured, in shipped code. `repo/CampaignCreatorActor.ts` predicted it
  * would be the next candidate and left it alone; this is that change.
  *
  * **What is deliberately not narrowed**: `run`, and the four non-combat
@@ -148,7 +148,10 @@ export class Recap extends Context.Service<
      *
      * Gated, so it is the proof and not the path that decides who has it.
      */
-    readonly read: (dm: DmActor, sessionId: SessionId) => Effect.Effect<SessionRecap, NotFound>;
+    readonly read: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+    ) => Effect.Effect<SessionRecap, NotFound>;
     /**
      * The same night, told to somebody who played in it.
      *

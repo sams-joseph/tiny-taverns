@@ -13,10 +13,12 @@ import { servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import type { SystemCreature } from "../src/bestiary/systemCreatures.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { Options } from "../src/repo/Options.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import type { SystemOption } from "../src/ruleset/systemOptions.js";
+import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_source_provenance");
@@ -25,7 +27,11 @@ const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)))
 afterAll(() => runtime.dispose());
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Creatures | Options | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | Creatures | Options | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
@@ -198,12 +204,9 @@ describe("rules source identity", () => {
     const accounts = await run(
       Accounts.pipe(Effect.flatMap((service) => service.issue("Source DM"))),
     );
-    const actor = new Actor({ accountId: accounts.accountId, campaignId: null });
+    const actor = new Actor({ accountId: accounts.accountId, scope: { _tag: "account" } });
     const campaign = await run(
-      Campaigns.pipe(
-        Effect.flatMap((campaigns) => campaigns.create({ name: "The Source Road" })),
-        Effect.provideService(CurrentActor, actor),
-      ),
+      createCampaign({ name: "The Source Road" }).pipe(Effect.provideService(CurrentActor, actor)),
     );
 
     const monsterSource = "source-test-snapshot-creature";

@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import net from "node:net";
 import { once } from "node:events";
@@ -53,9 +54,17 @@ const ATTEMPT_TIMEOUT_MS = 2_000;
  */
 let compiled: Promise<unknown> | undefined;
 const buildOnce = () =>
-  (compiled ??= execFileAsync("node_modules/typescript/bin/tsc", ["-p", "tsconfig.build.json"], {
-    cwd: appDir,
-  }));
+  // `dist/` is removed first, exactly as the build script removes it: `tsc`
+  // never deletes an output whose source is gone, and the migration loader
+  // scans `dist/migrations` by directory — so a stale compiled migration is
+  // not dead weight, it is a duplicate id that stops the boot. Measured when
+  // the group architecture renamed one: the ledger held both spellings and
+  // `Migrator` refused to run at all.
+  (compiled ??= rm(path.join(appDir, "dist"), { recursive: true, force: true }).then(() =>
+    execFileAsync("node_modules/typescript/bin/tsc", ["-p", "tsconfig.build.json"], {
+      cwd: appDir,
+    }),
+  ));
 
 /**
  * Ask the OS for a free port so parallel runs (and a locally running `dev`

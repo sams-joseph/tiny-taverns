@@ -125,7 +125,7 @@ export class Accounts extends Context.Service<
             const row = rows[0];
             return row === undefined
               ? Option.none()
-              : // `campaignId: null` — an account token reaches every campaign
+              : // account scope — an account token reaches every campaign
                 // the account is a member of. A credential scoped to one table
                 // sets it, and none is minted here yet.
                 Option.some(accountActor(row.id));
@@ -193,12 +193,13 @@ export class Accounts extends Context.Service<
 /**
  * An actor for a whole account.
  *
- * Both credential kinds land here, and both get `campaignId: null` — the
- * credential is minted for an account, so it reaches every campaign that
- * account is a member of. A credential scoped to one table would set it; none
- * exists yet.
+ * Both credential kinds land here, and both get account scope — the credential
+ * is minted for an account, so it reaches every group and campaign that
+ * account is a member of. A credential scoped to one group or one campaign
+ * would carry the narrower `ActorScope`; none is minted over HTTP yet.
  */
-const accountActor = (accountId: AccountId): Actor => new Actor({ accountId, campaignId: null });
+const accountActor = (accountId: AccountId): Actor =>
+  new Actor({ accountId, scope: { _tag: "account" } });
 
 /**
  * The one place an external identity is looked up.

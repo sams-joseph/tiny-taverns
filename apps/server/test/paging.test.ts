@@ -19,13 +19,14 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -49,6 +50,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Groups.layer,
   Creatures.layer,
   Encounters.layer,
   Invites.layer,
@@ -92,7 +94,6 @@ const NAMES = [
 const RATINGS = ["1/4", "2", "1/4", "5", "1", "2", "1/8", "5", "1", "1/4", "2"];
 
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
   const notes = yield* Notes;
@@ -102,7 +103,7 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
   const night = yield* as(sessions.create(campaign.id, { number: 12, visibility: "shared" }));
 
   for (let index = 0; index < COUNT; index++) {

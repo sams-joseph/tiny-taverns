@@ -15,9 +15,10 @@ import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
@@ -31,7 +32,7 @@ import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
-import { anAccount, aPlayerAt } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 
@@ -64,9 +65,10 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   EncounterCreatures.layer,
   Encounters.layer,
   HobThreads.layer,
@@ -101,7 +103,6 @@ const MAX_TOKENS = 512;
 
 /** One shared table, its DM, two players, and something in the record to find. */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const notes = yield* Notes;
 
   /**
@@ -118,7 +119,7 @@ const makeFixture = Effect.gen(function* () {
 
   const dm = yield* anAccount("Fen");
   const as = withActor(dm);
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
 
   yield* as(
     notes.create(campaign.id, {

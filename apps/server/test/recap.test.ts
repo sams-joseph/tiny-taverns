@@ -5,10 +5,11 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
@@ -17,7 +18,7 @@ import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -43,10 +44,11 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -77,7 +79,6 @@ const withActor =
  */
 const makeFixture = Effect.gen(function* () {
   const beats = yield* Beats;
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
@@ -90,7 +91,7 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
   yield* as(
     characters.create(campaign.id, {
       name: "Brannoc",
@@ -191,9 +192,7 @@ const makeFixture = Effect.gen(function* () {
     beats.create(campaign.id, session.id, { body: "Hettie is lying about the tide." }),
   );
 
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
   const nightElsewhere = yield* as(
     sessions.create(otherTable.id, { number: 1, visibility: "shared" }),
   );
@@ -416,7 +415,7 @@ describe("scoping", () => {
     // no test minted a scoped actor.
     //
     // The refusal now happens one step earlier than it used to and names the
-    // **campaign** rather than the session: the wide recap takes a `DmActor`,
+    // **campaign** rather than the session: the wide recap takes a `CampaignCreatorActor`,
     // and a credential scoped elsewhere cannot obtain one. Same 404 either way
     // — the denial got stricter, not different.
     const denied = await runtime.runPromise(
@@ -493,7 +492,7 @@ describe("scoping", () => {
  * **The disclosure this file was reopened for, pinned from both ends.**
  *
  * Before the player projection, `Recap.read` was the one live-surface read
- * outside the `DmActor` gate and it handed a player of a `shared` campaign a
+ * outside the `CampaignCreatorActor` gate and it handed a player of a `shared` campaign a
  * monster's exact `hpCurrent`, `hpMax` and `ac`. Measured, in shipped code, on
  * a real Postgres — not reasoned about. Both directions matter and each fails
  * against the unfixed code for a different reason: the first because the wide
@@ -512,7 +511,7 @@ describe("what a player is told about a fight", () => {
 
   it("cannot obtain a wide combatant from the DM's recap at all", async () => {
     // Not "gets a filtered one" — gets nothing. The wide recap takes a proof
-    // that only `DmActors.of` mints, and a player of the campaign cannot have
+    // that only `CampaignCreatorActors.of` mints, and a player of the campaign cannot have
     // one. The denial is the ordinary 404: "it exists but is not yours" is
     // itself a disclosure.
     const refused = await runtime.runPromise(

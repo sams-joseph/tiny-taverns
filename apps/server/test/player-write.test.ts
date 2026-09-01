@@ -15,16 +15,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -59,10 +60,11 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
-    DmActors.layer,
+    CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
@@ -86,7 +88,6 @@ const withActor =
  * screen actually has to work in.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
@@ -94,7 +95,7 @@ const makeFixture = Effect.gen(function* () {
 
   const jo = yield* anAccount("Jo");
   const asJo = withActor(jo);
-  const table = yield* asJo(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const table = yield* asJo(createCampaign({ name: "The Salt Road", visibility: "shared" }));
 
   const pim = yield* aPlayerAt(table.id, "Pim");
   const marta = yield* aPlayerAt(table.id, "Marta");
@@ -145,7 +146,7 @@ const makeFixture = Effect.gen(function* () {
 
   const fen = yield* anAccount("Fen");
   const elsewhere = yield* withActor(fen)(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+    createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
   const sixpence = yield* withActor(fen)(
     characters.create(elsewhere.id, { name: "Sixpence", visibility: "shared" }),
@@ -461,11 +462,10 @@ describe("the rows: every refusal, and the answer it gives", () => {
   it("stops the moment the membership that carried it is revoked", async () => {
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
         const invites = yield* Invites;
         const asJo = withActor(fixture.jo);
 
-        const scratch = yield* asJo(campaigns.create({ name: "The Weir", visibility: "shared" }));
+        const scratch = yield* asJo(createCampaign({ name: "The Weir", visibility: "shared" }));
         const kofi = yield* aPlayerAt(scratch.id, "Kofi");
         const character = yield* asJo(characters.create(scratch.id, { name: "Kofi's own" }));
         yield* asJo(characters.assign(scratch.id, character.id, { accountId: kofi.accountId }));
@@ -476,8 +476,8 @@ describe("the rows: every refusal, and the answer it gives", () => {
 
         // The shipped path: withdrawing the invitation revokes the membership
         // it granted, in one transaction.
-        const issued = yield* asJo(invites.list(scratch.id));
-        yield* asJo(invites.revoke(scratch.id, issued[0]!.id));
+        const issued = yield* asJo(invites.list(scratch.groupId));
+        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
 
         const after = yield* withActor(kofi)(characters.updateOwn(character.id, { level: 3 })).pipe(
           Effect.result,
@@ -514,7 +514,7 @@ describe("the rows: every refusal, and the answer it gives", () => {
         const campaigns = yield* Campaigns;
         const asJo = withActor(fixture.jo);
 
-        const quiet = yield* asJo(campaigns.create({ name: "Not yet", visibility: "dm" }));
+        const quiet = yield* asJo(createCampaign({ name: "Not yet", visibility: "dm" }));
         const ilse = yield* aPlayerAt(quiet.id, "Ilse");
         const character = yield* asJo(
           characters.create(quiet.id, { name: "Ilse's own", visibility: "shared" }),

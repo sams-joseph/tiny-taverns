@@ -5,11 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { crSortFor, Creatures } from "../src/repo/Creatures.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -27,6 +28,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Creatures.layer,
     EncounterCreatures.layer,
     Encounters.layer,
@@ -45,7 +47,6 @@ const withActor =
  * exactly as `pnpm -F server bestiary:import` loads it.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
 
@@ -54,10 +55,8 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
 
   // No visibility named: what this comes out as is the column default's doing.
   const authored = yield* as(
@@ -106,7 +105,7 @@ const makeFixture = Effect.gen(function* () {
 
   const outsider = yield* anAccount("Someone else");
   const outsiderCampaign = yield* withActor(outsider)(
-    campaigns.create({ name: "A different table", visibility: "shared" }),
+    createCampaign({ name: "A different table", visibility: "shared" }),
   );
 
   const player = yield* aPlayerAt(campaign.id, "Pim");

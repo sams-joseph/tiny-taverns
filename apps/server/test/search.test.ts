@@ -14,13 +14,14 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Search } from "../src/repo/Search.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -44,6 +45,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   Invites.layer,
@@ -72,7 +74,6 @@ const CRATE = "They left the crate unopened and buried it under the reeds.";
  * test minted a scoped actor.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const notes = yield* Notes;
   const beats = yield* Beats;
   const sessions = yield* Sessions;
@@ -82,10 +83,8 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
 
   // The DM's prep prose. One shared with the table, one not.
   const ferrymanNote = yield* as(
@@ -205,7 +204,7 @@ const makeFixture = Effect.gen(function* () {
 
   const outsider = yield* anAccount("Someone else");
   const outsiderCampaign = yield* withActor(outsider)(
-    campaigns.create({ name: "A different table", visibility: "shared" }),
+    createCampaign({ name: "A different table", visibility: "shared" }),
   );
 
   /** A credential minted for one table: `campaignId` set, not null. */

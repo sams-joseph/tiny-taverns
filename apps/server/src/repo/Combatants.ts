@@ -16,7 +16,7 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import type { DmActor } from "./DmActor.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -74,10 +74,10 @@ export const toCombatant = (row: CombatantRow): Combatant =>
  * credential minted for one table reach another table's fight by naming its run
  * id, which is the same hole `PrepItems` closes for the checklist.
  *
- * **The campaign arrives as a `DmActor` rather than as an id**, because this is
+ * **The campaign arrives as a `CampaignCreatorActor` rather than as an id**, because this is
  * one of the three tables whose player projection differs from its DM one: a
  * `Combatant` carries exact hit points, and a `shared` combatant would hand
- * them to a player through the ordinary predicate. See `repo/DmActor.ts` —
+ * them to a player through the ordinary predicate. See `repo/CampaignCreatorActor.ts` —
  * there is nothing to remember here, a method that read `CurrentActor` instead
  * would have no campaign to run its predicates against.
  */
@@ -85,32 +85,32 @@ export class Combatants extends Context.Service<
   Combatants,
   {
     readonly list: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
     ) => Effect.Effect<ReadonlyArray<Combatant>, NotFound>;
     readonly create: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       payload: CombatantCreate,
     ) => Effect.Effect<Combatant, NotFound>;
     readonly update: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       id: CombatantId,
       patch: CombatantUpdate,
     ) => Effect.Effect<Combatant, NotFound>;
     readonly damage: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       id: CombatantId,
       payload: CombatantDamage,
     ) => Effect.Effect<Combatant, NotFound>;
     readonly remove: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       id: CombatantId,

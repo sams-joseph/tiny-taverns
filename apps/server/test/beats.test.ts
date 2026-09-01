@@ -6,15 +6,16 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -35,8 +36,9 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Groups.layer,
   Creatures.layer,
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -61,7 +63,6 @@ const withActor =
  * long as it was precisely because no test minted a scoped actor.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const encounters = yield* Encounters;
   const sessions = yield* Sessions;
   const beats = yield* Beats;
@@ -69,7 +70,7 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
   const encounter = yield* as(
     encounters.create(campaign.id, { name: "Ambush in the reeds", difficulty: "Medium" }),
   );
@@ -77,9 +78,7 @@ const makeFixture = Effect.gen(function* () {
     sessions.create(campaign.id, { number: 12, title: "The ford", visibility: "shared" }),
   );
 
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
   const sessionElsewhere = yield* as(
     sessions.create(otherTable.id, { number: 1, visibility: "shared" }),
   );

@@ -4,14 +4,15 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
-import { aPlayerAt, anAccount, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Invites.layer, Notes.layer).pipe(
+  Layer.mergeAll(Accounts.layer, Campaigns.layer, Groups.layer, Invites.layer, Notes.layer).pipe(
     Layer.provideMerge(migratedDatabase("taverns_test_visibility")),
   ),
 );
@@ -33,13 +34,12 @@ const withActor =
  *                  `campaign` may reach it, and vice versa.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const notes = yield* Notes;
 
   const dm = yield* anAccount("Jo");
 
   const campaign = yield* withActor(dm)(
-    campaigns.create({ name: "The Reed Marches", visibility: "shared" }),
+    createCampaign({ name: "The Reed Marches", visibility: "shared" }),
   );
   // Neither note payload mentions `visibility`… except the one that does. What
   // the first row ends up with is decided by the column default alone, which is
@@ -49,13 +49,13 @@ const makeFixture = Effect.gen(function* () {
     notes.create(campaign.id, { title: "The reeds", visibility: "shared" }),
   );
 
-  const closed = yield* withActor(dm)(campaigns.create({ name: "The Hag's Bargain" }));
+  const closed = yield* withActor(dm)(createCampaign({ name: "The Hag's Bargain" }));
   const sharedInClosed = yield* withActor(dm)(
     notes.create(closed.id, { title: "Overheard at the ford", visibility: "shared" }),
   );
 
   const otherTable = yield* withActor(dm)(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+    createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
   const sharedElsewhere = yield* withActor(dm)(
     notes.create(otherTable.id, { title: "The harbourmaster's ledger", visibility: "shared" }),

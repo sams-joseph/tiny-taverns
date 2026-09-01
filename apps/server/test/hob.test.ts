@@ -22,8 +22,9 @@ import {
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
@@ -32,7 +33,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import {
   type ChatRequest,
@@ -66,8 +67,9 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  Groups.layer,
   Creatures.layer,
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
@@ -95,7 +97,6 @@ const withActor =
  * closed and the one an assistant is most likely to reopen.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const notes = yield* Notes;
   const beats = yield* Beats;
@@ -104,10 +105,8 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
 
   yield* as(
     notes.create(campaign.id, {
@@ -187,14 +186,14 @@ const makeFixture = Effect.gen(function* () {
 
   const stranger = yield* anAccount("Someone else");
   const strangerCampaign = yield* withActor(stranger)(
-    campaigns.create({ name: "A different table", visibility: "shared" }),
+    createCampaign({ name: "A different table", visibility: "shared" }),
   );
 
   // A table with a real player membership and the master toggle off, which is
   // the ordinary state of a campaign nobody has shared yet. It is what makes
   // "a player's conversation is reachable exactly while the table is" a
   // measurement rather than a reading of the predicate.
-  const unsharedCampaign = yield* as(campaigns.create({ name: "The quiet table" }));
+  const unsharedCampaign = yield* as(createCampaign({ name: "The quiet table" }));
 
   return {
     dm,
@@ -945,7 +944,7 @@ describe("the boundary — proven, not argued", () => {
     // **The captain reversed *players do not talk to Hob* on 2026-08-26, and
     // this test is what that reversal moved rather than removed.** It used to
     // read "cannot be built for a player at all": there was one `handlersFor`,
-    // it took the `DmActor`, and a player's tool surface was not something to
+    // it took the `CampaignCreatorActor`, and a player's tool surface was not something to
     // refuse but something that could not be constructed.
     //
     // What is still true is the half that was doing the work. `dmHandlersFor`
@@ -1156,7 +1155,7 @@ describe("with no model configured", () => {
             Layer.provide([
               Campaigns.layer,
               Creatures.layer,
-              DmActors.layer,
+              CampaignCreatorActors.layer,
               HobThreads.layer,
               Recap.layer,
               Search.layer,

@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, identityFromConfig, servicesOver } from "../src/app.js";
 import { IdentityProvider } from "../src/IdentityProvider.js";
+import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testIdentityInstance } from "./support/identity.js";
 
@@ -68,7 +69,7 @@ describe("with no identity provider configured", () => {
   it("a machine token still authenticates", async () => {
     const campaigns = await runtime.runPromise(
       Effect.flatMap(clientFor(machineToken), (client) =>
-        client.campaigns.create({ payload: { name: "Machine only" } }),
+        campaignVia(client, { name: "Machine only" }),
       ).pipe(Effect.orDie),
     );
 

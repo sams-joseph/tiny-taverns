@@ -7,10 +7,11 @@ import { servicesOver } from "../src/app.js";
 import { importSystemEquipment, type ImportEquipmentResult } from "../src/equipment/import.js";
 import { EQUIPMENT_RAW } from "../src/equipment/systemEquipment.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { Invites } from "../src/repo/Invites.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
-import { aPlayerAt } from "./support/actors.js";
+import { aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_equipment");
@@ -19,11 +20,19 @@ const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)))
 afterAll(() => runtime.dispose());
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | EquipmentRepo | Invites | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | EquipmentRepo | Invites | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
 
 const attempt = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | EquipmentRepo | Invites | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | Groups | EquipmentRepo | Invites | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(Effect.result(effect));
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
@@ -38,11 +47,10 @@ beforeAll(async () => {
 const dmCampaign = (name: string) =>
   Effect.gen(function* () {
     const accounts = yield* Accounts;
-    const campaigns = yield* Campaigns;
     const issued = yield* accounts.issue(`${name} DM`);
-    const actor = new Actor({ accountId: issued.accountId, campaignId: null });
+    const actor = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
     const campaign = yield* Effect.provideService(
-      campaigns.create({ name, visibility: "shared" }),
+      createCampaign({ name, visibility: "shared" }),
       CurrentActor,
       actor,
     );
@@ -354,9 +362,9 @@ describe("2014 SRD mundane equipment", () => {
   it("rejects using a campaign copy as the source for another campaign", async () => {
     const { actor, campaign: first } = await run(dmCampaign("The First Equipment Table"));
     const campaigns = await run(
-      Effect.flatMap(Campaigns, (service) =>
-        service.create({ name: "The Second Equipment Table", visibility: "shared" }),
-      ).pipe(Effect.provideService(CurrentActor, actor)),
+      createCampaign({ name: "The Second Equipment Table", visibility: "shared" }).pipe(
+        Effect.provideService(CurrentActor, actor),
+      ),
     );
     const source = await run(withActor(actor, firstEquipmentNamed("Rope, hempen (50 feet)")));
     const firstCopy = await run(

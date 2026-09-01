@@ -13,17 +13,18 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { DmActors } from "../src/repo/DmActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -54,10 +55,11 @@ import { migratedDatabase } from "./support/database.js";
 const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
+  Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -88,7 +90,7 @@ const makeFixture = Effect.gen(function* () {
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road" }));
+  const campaign = yield* as(createCampaign({ name: "The Salt Road" }));
   yield* as(
     characters.create(campaign.id, {
       name: "Brannoc",
@@ -478,7 +480,7 @@ describe("resuming a carried fight", () => {
 
     // The refusal moved one step earlier and got stronger with it. It used to
     // be `ensureNestedParentWritable` inside `resume`; a player now cannot
-    // obtain the `DmActor` the method takes, so there is no call to refuse —
+    // obtain the `CampaignCreatorActor` the method takes, so there is no call to refuse —
     // and this assertion is on the gate rather than on the read behind it.
     const player = await runtime.runPromise(aPlayerAt(fixture.campaign.id, "Pim"));
     const failure = await runtime.runPromise(

@@ -131,6 +131,10 @@ describe("the API declaration", () => {
       "encounters",
       "equipment",
       "feats",
+      // Groups: the top-level container for connected play, and where a
+      // campaign is created — a campaign belongs to exactly one group.
+      "groupMembers",
+      "groups",
       "health",
       "hob",
       "invitePreview",

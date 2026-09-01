@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
+import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -97,8 +98,10 @@ describe("campaign, session, character and note CRUD", () => {
       Effect.gen(function* () {
         const client = yield* clientFor(token);
 
-        const campaign = yield* client.campaigns.create({
-          payload: { name: "The Reed Marches", partyName: "The Ferrymen", playerCount: 4 },
+        const campaign = yield* campaignVia(client, {
+          name: "The Reed Marches",
+          partyName: "The Ferrymen",
+          playerCount: 4,
         });
         const campaignId = campaign.id;
 
@@ -153,7 +156,7 @@ describe("campaign, session, character and note CRUD", () => {
       Effect.gen(function* () {
         const client = yield* clientFor(token);
 
-        const campaign = yield* client.campaigns.create({ payload: { name: "The Hag's Bargain" } });
+        const campaign = yield* campaignVia(client, { name: "The Hag's Bargain" });
         const campaignId = campaign.id;
 
         const renamed = yield* client.campaigns.update({
@@ -187,7 +190,7 @@ describe("campaign, session, character and note CRUD", () => {
       Effect.gen(function* () {
         const client = yield* clientFor(token);
 
-        const campaign = yield* client.campaigns.create({ payload: { name: "The Long Winter" } });
+        const campaign = yield* campaignVia(client, { name: "The Long Winter" });
         const campaignId = campaign.id;
         // A night in progress, so the restore has something to be exact about.
         const session = yield* client.sessions.create({
@@ -256,7 +259,7 @@ describe("campaign, session, character and note CRUD", () => {
     expect(ids(seen.liveAfter)).not.toContain(seen.campaignId);
     expect(ids(seen.shelfAfter)).toContain(seen.campaignId);
     // The role travels with it — it is the same membership read.
-    expect(seen.shelfAfter.map((row) => row.role)).toContain("dm");
+    expect(seen.shelfAfter.map((row) => row.relation)).toContain("creator");
     // Nothing else moved. Archiving did not end the night.
     expect(seen.whileShelved.currentSessionId).toBe(seen.sessionId);
     expect(seen.whileShelved.name).toBe("The Long Winter");
@@ -286,17 +289,15 @@ describe("campaign, session, character and note CRUD", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const dm = yield* clientFor(token);
-        const campaign = yield* dm.campaigns.create({
-          payload: { name: "Not Yours", visibility: "shared" },
-        });
+        const campaign = yield* campaignVia(dm, { name: "Not Yours", visibility: "shared" });
         const campaignId = campaign.id;
 
         // A real player, through a real invitation — the only way this product
         // mints one, so the refusal is about a person who can exist.
         const accounts = yield* Accounts;
         const issued = yield* dm.invites.create({
-          params: { campaignId },
-          payload: { label: "Pim" },
+          params: { groupId: campaign.groupId },
+          payload: { label: "Pim", campaignId },
         });
         const player = yield* clientFor((yield* accounts.issue("Pim")).token);
         yield* player.join.redeem({ payload: { token: issued.token } });
@@ -350,7 +351,7 @@ describe("campaign, session, character and note CRUD", () => {
     }) => (result._tag === "Failure" ? result.failure?._tag : "Success");
 
     // The player really is at the table.
-    expect(seen.playersLive.map((row) => [row.campaign.id, row.role])).toEqual([
+    expect(seen.playersLive.map((row) => [row.campaign.id, row.relation])).toEqual([
       [seen.campaignId, "player"],
     ]);
 
@@ -371,7 +372,7 @@ describe("campaign, session, character and note CRUD", () => {
     const result = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Deletions" } });
+        const campaign = yield* campaignVia(client, { name: "Deletions" });
         const campaignId = campaign.id;
         const note = yield* client.notes.create({
           params: { campaignId },
@@ -395,7 +396,7 @@ describe("the prep surface", () => {
       Effect.gen(function* () {
         const client = yield* clientFor(token);
 
-        const campaign = yield* client.campaigns.create({ payload: { name: "The Salt Road" } });
+        const campaign = yield* campaignVia(client, { name: "The Salt Road" });
         const campaignId = campaign.id;
 
         const encounter = yield* client.encounters.create({
@@ -465,7 +466,7 @@ describe("the prep surface", () => {
     const encounter = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Unrated" } });
+        const campaign = yield* campaignVia(client, { name: "Unrated" });
         return yield* client.encounters.create({
           params: { campaignId: campaign.id },
           payload: { name: "Whatever is in the crate" },
@@ -484,8 +485,8 @@ describe("the prep surface", () => {
     const error = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const mine = yield* client.campaigns.create({ payload: { name: "Mine" } });
-        const theirs = yield* client.campaigns.create({ payload: { name: "Theirs" } });
+        const mine = yield* campaignVia(client, { name: "Mine" });
+        const theirs = yield* campaignVia(client, { name: "Theirs" });
         const elsewhere = yield* client.sessions.create({
           params: { campaignId: theirs.id },
           payload: { number: 1 },
@@ -507,7 +508,7 @@ describe("the prep surface", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Deletions" } });
+        const campaign = yield* campaignVia(client, { name: "Deletions" });
         const campaignId = campaign.id;
         const encounter = yield* client.encounters.create({
           params: { campaignId },
@@ -542,7 +543,7 @@ describe("the bestiary", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "The Marsh" } });
+        const campaign = yield* campaignVia(client, { name: "The Marsh" });
         const campaignId = campaign.id;
 
         const creature = yield* client.creatures.create({
@@ -599,7 +600,7 @@ describe("the bestiary", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Pages" } });
+        const campaign = yield* campaignVia(client, { name: "Pages" });
         const campaignId = campaign.id;
 
         const first = yield* client.creatures.list({
@@ -650,7 +651,7 @@ describe("the bestiary", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Filters" } });
+        const campaign = yield* campaignVia(client, { name: "Filters" });
         const campaignId = campaign.id;
 
         const byName = (yield* client.creatures.list({
@@ -710,7 +711,7 @@ describe("the bestiary", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Reskins" } });
+        const campaign = yield* campaignVia(client, { name: "Reskins" });
         const campaignId = campaign.id;
 
         const corpus = (yield* client.creatures.list({
@@ -755,7 +756,7 @@ describe("the bestiary", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "The Salt Road" } });
+        const campaign = yield* campaignVia(client, { name: "The Salt Road" });
         const campaignId = campaign.id;
 
         const encounter = yield* client.encounters.create({
@@ -827,14 +828,15 @@ describe("inviting a player, over the wire", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const dm = yield* clientFor(token);
-        const campaign = yield* dm.campaigns.create({
-          payload: { name: "The Ferry at Dusk", visibility: "shared" },
+        const campaign = yield* campaignVia(dm, {
+          name: "The Ferry at Dusk",
+          visibility: "shared",
         });
         const campaignId = campaign.id;
 
         const issued = yield* dm.invites.create({
-          params: { campaignId },
-          payload: { label: "Ilse" },
+          params: { groupId: campaign.groupId },
+          payload: { label: "Ilse", campaignId },
         });
         const preview = yield* Effect.flatMap(anonymous, (client) =>
           client.invitePreview.read({ payload: { token: issued.token } }),
@@ -850,16 +852,18 @@ describe("inviting a player, over the wire", () => {
         const redeemed = yield* player.join.redeem({ payload: { token: issued.token } });
         const after = yield* player.me.campaigns();
 
-        const listed = yield* dm.invites.list({ params: { campaignId } });
+        const listed = yield* dm.invites.list({ params: { groupId: campaign.groupId } });
         // The player may read the campaign's shared half and may not write it.
         const refusedWrite = yield* Effect.result(
           player.notes.create({ params: { campaignId }, payload: { title: "mine now" } }),
         );
         // …and the invitation list is a DM's own resource.
-        const refusedList = yield* Effect.result(player.invites.list({ params: { campaignId } }));
+        const refusedList = yield* Effect.result(
+          player.invites.list({ params: { groupId: campaign.groupId } }),
+        );
 
         const revoked = yield* dm.invites.revoke({
-          params: { campaignId, inviteId: issued.invite.id },
+          params: { groupId: campaign.groupId, inviteId: issued.invite.id },
           payload: {},
         });
         const afterRevoke = yield* player.me.campaigns();
@@ -887,13 +891,13 @@ describe("inviting a player, over the wire", () => {
 
     // Previewed with no `Authorization` header at all.
     expect(seen.preview.campaignName).toBe("The Ferry at Dusk");
-    expect(seen.preview.dmName).toBe("Jo");
+    expect(seen.preview.ownerName).toBe("Jo");
 
     // Joined. The account went from no tables to exactly this one, as a player.
     expect(seen.before).toEqual([]);
     expect(seen.redeemed.campaignName).toBe("The Ferry at Dusk");
     expect(seen.redeemed.shared).toBe(true);
-    expect(seen.after.map((row) => [row.campaign.name, row.role])).toEqual([
+    expect(seen.after.map((row) => [row.campaign.name, row.relation])).toEqual([
       ["The Ferry at Dusk", "player"],
     ]);
 
@@ -934,7 +938,7 @@ describe("declared errors reach the client as declared errors", () => {
     const error = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
-        const campaign = yield* client.campaigns.create({ payload: { name: "Numbering" } });
+        const campaign = yield* campaignVia(client, { name: "Numbering" });
         const campaignId = campaign.id;
         yield* client.sessions.create({ params: { campaignId }, payload: { number: 3 } });
         return yield* Effect.flip(

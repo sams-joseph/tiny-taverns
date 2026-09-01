@@ -13,7 +13,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
-import type { DmActor } from "./DmActor.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
 import {
@@ -178,7 +178,7 @@ export const sessionRequestAlreadyApplied = (
  * replay path that only executes when something has already gone wrong and
  * therefore only rots when nobody is looking.
  *
- * **All three reads take a `DmActor`.** The log is the DM's own record of a
+ * **All three reads take a `CampaignCreatorActor`.** The log is the DM's own record of a
  * fight — `session_event.visibility` defaults to `dm` and nothing sets it, so
  * "what a player is told about a fight" is an undecided product question rather
  * than a narrower version of this. Note that `pollForRun` is gated too: it is
@@ -189,12 +189,12 @@ export class SessionEvents extends Context.Service<
   SessionEvents,
   {
     readonly list: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       filter: SessionLogFilterValues,
     ) => Effect.Effect<ReadonlyArray<SessionEvent>, NotFound>;
     readonly listForRun: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       since: number,
@@ -207,12 +207,12 @@ export class SessionEvents extends Context.Service<
      * because the live stream pulls repeatedly after the handler effect has
      * returned: the actor was decided when the request was authorised, and a
      * stream whose permissions could change under it mid-fight is a stream
-     * nobody can reason about. That is also why the `DmActor` gate has to reach
+     * nobody can reason about. That is also why the `CampaignCreatorActor` gate has to reach
      * this method by hand — a grep for `CurrentActor>` does not see it, and a
      * stream is exactly where a wide projection would go unnoticed.
      */
     readonly pollForRun: (
-      dm: DmActor,
+      dm: CampaignCreatorActor,
       sessionId: SessionId,
       runId: EncounterRunId,
       since: number,

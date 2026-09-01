@@ -2,7 +2,6 @@ import {
   type AccountId,
   Actor,
   type Campaign,
-  type CampaignId,
   type Character,
   type CharacterSheet,
   CurrentActor,
@@ -13,9 +12,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
-import { anAccount, scopedTo } from "./support/actors.js";
+import { anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -42,6 +42,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Groups.layer,
     Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_my_characters"))),
@@ -64,12 +65,14 @@ const withActor =
  */
 const admit = (
   dm: Actor,
-  campaignId: CampaignId,
+  campaign: Campaign,
   account: Actor,
 ): Effect.Effect<void, never, Invites> =>
   Effect.gen(function* () {
     const invites = yield* Invites;
-    const issued = yield* withActor(dm)(invites.create(campaignId, { label: "a player" }));
+    const issued = yield* withActor(dm)(
+      invites.create(campaign.groupId, { label: "a player", campaignId: campaign.id }),
+    );
     yield* withActor(account)(invites.redeem(issued.token));
   }).pipe(Effect.orDie);
 
@@ -82,7 +85,6 @@ const admit = (
  * really exists and really belongs to a real member.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const characters = yield* Characters;
 
   const jo = yield* anAccount("Jo");
@@ -93,20 +95,20 @@ const makeFixture = Effect.gen(function* () {
   const asJo = withActor(jo);
   const asFen = withActor(fen);
 
-  const saltRoad = yield* asJo(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
+  const saltRoad = yield* asJo(createCampaign({ name: "The Salt Road", visibility: "shared" }));
   const sixpence = yield* asFen(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
+    createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
   // Jo runs this one too and Ilse was never invited to it.
-  const ferry = yield* asJo(campaigns.create({ name: "The Ferry", visibility: "shared" }));
+  const ferry = yield* asJo(createCampaign({ name: "The Ferry", visibility: "shared" }));
   // Ilse *is* a member here, and Jo has not shared it. The master toggle is the
   // whole of this campaign's job.
-  const marsh = yield* asJo(campaigns.create({ name: "The Marsh" }));
+  const marsh = yield* asJo(createCampaign({ name: "The Marsh" }));
 
-  yield* admit(jo, saltRoad.id, ilse);
-  yield* admit(jo, saltRoad.id, kofi);
-  yield* admit(fen, sixpence.id, ilse);
-  yield* admit(jo, marsh.id, ilse);
+  yield* admit(jo, saltRoad, ilse);
+  yield* admit(jo, saltRoad, kofi);
+  yield* admit(fen, sixpence, ilse);
+  yield* admit(jo, marsh, ilse);
 
   // Every character starts `dm`, which is `CharacterDialog`'s fail-closed
   // default and therefore the state a player's own screen has to work in.
@@ -249,8 +251,8 @@ describe("the four narrowings a missing campaign in the path could have lost", (
       Effect.gen(function* () {
         const invites = yield* Invites;
         const asFen = withActor(fixture.fen);
-        const issued = yield* asFen(invites.list(fixture.sixpence.id));
-        yield* asFen(invites.revoke(fixture.sixpence.id, issued[0]!.id));
+        const issued = yield* asFen(invites.list(fixture.sixpence.groupId));
+        yield* asFen(invites.revoke(fixture.sixpence.groupId, issued[0]!.id));
       }).pipe(Effect.orDie),
     );
 
@@ -268,7 +270,7 @@ describe("the four narrowings a missing campaign in the path could have lost", (
     expect(stillAssigned).toBe(fixture.ilse.accountId);
 
     // Put her back, so the sections after this one read the fixture as written.
-    await runtime.runPromise(admit(fixture.fen, fixture.sixpence.id, fixture.ilse));
+    await runtime.runPromise(admit(fixture.fen, fixture.sixpence, fixture.ilse));
     expect(names(await mine(fixture.ilse))).toEqual(["Brannoc", "Sorrel Ash"]);
   });
 

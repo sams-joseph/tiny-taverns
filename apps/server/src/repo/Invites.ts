@@ -1,10 +1,12 @@
 import {
   type AccountId,
-  CampaignInvite,
   type CampaignId,
+  Conflict,
   CurrentActor,
+  type GroupId,
+  GroupInvite,
+  type GroupInviteId,
   type InviteCreate,
-  type InviteId,
   InvitePreview,
   InviteRedeemed,
   type InviteStatus,
@@ -15,73 +17,63 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { randomBytes } from "node:crypto";
 import { hashToken } from "../Accounts.js";
-import { admitPlayer, dmNameOf, revokePlayerAt } from "./Memberships.js";
+import { admitToGroup, removeFromGroup } from "./Groups.js";
+import { admitTo } from "./Memberships.js";
 import { dieOnSqlError } from "./rows.js";
-import { ensureCampaignWritable } from "./visibility.js";
+import { ensureGroupWritable } from "./visibility.js";
 
 /**
- * Invitations: how an account that owns no campaign comes to reach one.
+ * Invitations: how an account that belongs to no group comes to join one — and
+ * optionally to a seat at one of its tables in the same act.
  *
  * **A link is an invitation to join, not a way in.** Redeeming grants an
- * ordinary `campaign_member` row to the account that is signed in, and from that
- * moment the member is indistinguishable from one invited any other way — no new
- * predicate, no new base case, no change to `Authorization`.
- * `packages/api/src/Invite.ts` states the four lifetime rules and why each is the
- * choice that fails safe; `migrations/0013_invites.ts` states what the table
- * deliberately does not have.
+ * ordinary `group_member` row (and, when the invitation names a campaign, an
+ * ordinary `campaign_member` row) to the account that is signed in, and from
+ * that moment the member is indistinguishable from one admitted any other way
+ * — no new predicate, no new base case, no change to `Authorization`.
+ * `packages/api/src/Invite.ts` states the four lifetime rules;
+ * `migrations/0013_group_invites.ts` states what the table deliberately does
+ * not have.
  *
  * ### Three things about this file that are not obvious from reading it
  *
- * **It writes no `campaign_member` SQL.** `repo/Memberships.ts` and
- * `repo/visibility.ts` are still the only two modules in `src` that name that
- * table, which `apps/server/test/membership.test.ts` enforces — so the grant
- * this file exists to make goes through `admitPlayer`, which takes no role and
- * spells `'player'` as a literal. "An invitation cannot become a DM membership"
- * is therefore a property of what exists rather than a check here.
+ * **It writes no `group_member` or `campaign_member` SQL.** `repo/Groups.ts`
+ * and `repo/Memberships.ts` own those tables; the grants this file exists to
+ * make go through `admitToGroup` and `admitTo`, and the revocation through
+ * `removeFromGroup` — all inside this file's transactions.
  *
- * **The DM side is gated by `campaignWritable` and nothing new.** Listing,
- * minting and revoking are DM acts on an ordinary campaign-scoped resource, so
- * they compose `ensureCampaignWritable` exactly as `Notes.create` does. A player
- * at the table gets the ordinary `NotFound`.
+ * **The owner side is gated by `groupWritable` and nothing new.** Listing,
+ * minting and revoking are owner acts (the governance decision); a member who
+ * is not the owner gets the ordinary `NotFound`.
  *
- * **`preview` and `redeem` read the campaign's name outside the visibility
- * seam, and the token is what scopes them.** They have to: the whole point of an
- * invitation page is that it works before the reader has an account, and the
- * ordinary outcome of joining is a campaign the DM has not shared yet — which
- * `campaignReadable` refuses, correctly. So both read two scalar columns of *the
- * campaign the invitation names*, never one a caller named, having first proved
- * the caller holds a live token for it. That is a bounded disclosure to the
- * holder of a capability, which is the same trade the invitation itself is, and
- * it is confined to this file for the reason `bestiary/import.ts` is confined to
- * its own.
+ * **`preview` and `redeem` read names outside the visibility seam, and the
+ * token is what scopes them.** They have to: the whole point of an invitation
+ * page is that it works before the reader has an account. Both read scalar
+ * columns of *the group (and campaign) the invitation names*, never one a
+ * caller named, having first proved the caller holds a live token. That is a
+ * bounded disclosure to the holder of a capability — the same trade the
+ * invitation itself is — and it is confined to this file.
  */
 
 /**
- * How long an invitation lives.
- *
- * Server-set and not client-supplied, so an eternal invitation is not something
- * a caller may ask for. Two weeks is chosen against the way tables actually
- * work: a DM sends links after one Thursday and expects everyone in before the
- * next one or two, and a link found in a group chat months later should be dead
- * rather than dormant. Shortening it is the safe direction if it ever moves.
+ * How long an invitation lives. Server-set and not client-supplied, so an
+ * eternal invitation is not expressible.
  */
 export const INVITE_TTL_DAYS = 14;
 
 const TOKEN_BYTES = 32;
 
 interface InviteRow {
-  readonly id: InviteId;
-  readonly campaign_id: CampaignId;
+  readonly id: GroupInviteId;
+  readonly group_id: GroupId;
+  readonly campaign_id: CampaignId | null;
   readonly label: string;
   readonly created_at: Date;
   readonly expires_at: Date;
   readonly revoked_at: Date | null;
   readonly redeemed_by: AccountId | null;
   readonly redeemed_at: Date | null;
-  /**
-   * Computed by the database rather than by comparing `expires_at` here, so one
-   * clock decides — the same one the redemption's own liveness test uses.
-   */
+  /** Computed by the database, so one clock decides. */
   readonly expired: boolean;
 }
 
@@ -90,12 +82,9 @@ interface ListedInviteRow extends InviteRow {
 }
 
 /**
- * Where an invitation is in its life.
- *
- * Precedence is `revoked` → `redeemed` → `expired` → `live`: a withdrawal is an
- * act somebody took, and it is what the DM must see on a line they revoked
- * *after* it was accepted — which is the case where the membership was taken
- * away too, and so the one where "redeemed" would read as a lie.
+ * Where an invitation is in its life. Precedence is `revoked` → `redeemed` →
+ * `expired` → `live`: a withdrawal is an act somebody took, and it is what the
+ * owner must see on a line they revoked *after* it was accepted.
  */
 const statusOf = (row: InviteRow): InviteStatus =>
   row.revoked_at !== null
@@ -106,9 +95,10 @@ const statusOf = (row: InviteRow): InviteStatus =>
         ? "expired"
         : "live";
 
-const toInvite = (row: ListedInviteRow): CampaignInvite =>
-  new CampaignInvite({
+const toInvite = (row: ListedInviteRow): GroupInvite =>
+  new GroupInvite({
     id: row.id,
+    groupId: row.group_id,
     campaignId: row.campaign_id,
     label: row.label,
     status: statusOf(row),
@@ -120,35 +110,35 @@ const toInvite = (row: ListedInviteRow): CampaignInvite =>
   });
 
 /**
- * The columns every read of this table selects.
- *
- * Written once because `expired` is not a column and a read that forgot it would
- * silently report an expired invitation as live — the shape of bug that is
- * invisible for exactly as long as the fixtures are fresh.
+ * The columns every read of this table selects. Written once because
+ * `expired` is not a column and a read that forgot it would silently report an
+ * expired invitation as live.
  */
 const INVITE_COLUMNS = (sql: SqlClient.SqlClient) =>
-  sql`campaign_invite.*, now() >= campaign_invite.expires_at as expired`;
+  sql`group_invite.*, now() >= group_invite.expires_at as expired`;
 
 export class Invites extends Context.Service<
   Invites,
   {
-    /** The DM's list, newest first. Never carries a token — there is none to carry. */
+    /** The owner's list, newest first. Never carries a token — there is none to carry. */
     readonly list: (
-      campaignId: CampaignId,
-    ) => Effect.Effect<ReadonlyArray<CampaignInvite>, NotFound, CurrentActor>;
+      groupId: GroupId,
+    ) => Effect.Effect<ReadonlyArray<GroupInvite>, NotFound, CurrentActor>;
     /** Mints one. The only response in the product that contains a secret. */
     readonly create: (
-      campaignId: CampaignId,
+      groupId: GroupId,
       payload: InviteCreate,
     ) => Effect.Effect<IssuedInvite, NotFound, CurrentActor>;
     /**
-     * Withdraws one — and, if it has already been accepted, revokes the
-     * membership it granted, in the same transaction.
+     * Withdraws one — and, if it has already been accepted, ends the
+     * membership it granted (campaign participations included), in the same
+     * transaction. `Conflict` when the redeemer cannot be removed — they
+     * created a campaign in the group since, which pins their membership.
      */
     readonly revoke: (
-      campaignId: CampaignId,
-      inviteId: InviteId,
-    ) => Effect.Effect<CampaignInvite, NotFound, CurrentActor>;
+      groupId: GroupId,
+      inviteId: GroupInviteId,
+    ) => Effect.Effect<GroupInvite, NotFound | Conflict, CurrentActor>;
     /** What the holder of a live invitation is told before signing in. */
     readonly preview: (token: string) => Effect.Effect<InvitePreview, NotFound>;
     /** Accepts one, for the account that is signed in and no other. */
@@ -160,87 +150,102 @@ export class Invites extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
 
       /**
-       * The campaign an invitation names, read by the invitation rather than by
-       * the actor.
-       *
-       * Two scalar columns, and the id is never a caller's — it comes off the
-       * invite row, so this cannot be pointed at a campaign the token does not
-       * belong to. See the note at the top of this file.
+       * The names an invitation may disclose, read by the invitation rather
+       * than by the actor — the ids come off the invite row, so this cannot
+       * be pointed at a group or campaign the token does not belong to.
        */
-      const campaignNamedByInvite = (campaignId: CampaignId) =>
+      const namedByInvite = (groupId: GroupId, campaignId: CampaignId | null) =>
         Effect.map(
-          sql<{ readonly name: string; readonly visibility: string }>`
-            select campaign.name, campaign.visibility from campaign
-            where campaign.id = ${campaignId}
+          sql<{
+            readonly group_name: string;
+            readonly owner_name: string;
+            readonly campaign_name: string | null;
+            readonly campaign_shared: boolean | null;
+          }>`
+            select play_group.name as group_name,
+                   account.name as owner_name,
+                   campaign.name as campaign_name,
+                   (campaign.visibility = 'shared') as campaign_shared
+            from play_group
+            join account on account.id = play_group.owner_account_id
+            left join campaign on campaign.id = ${campaignId}
+            where play_group.id = ${groupId}
           `,
           (rows) => rows[0],
         );
 
       /**
        * The invitation a token names, locked for the write that follows it.
-       *
-       * `for update` is the whole of the single-use story: two clients racing on
-       * one link serialise here, the second sees `redeemed_at` already set, and
-       * exactly one membership is written. Same shape as
-       * `HobThreads.lockTurnForAccept`.
+       * `for update` is the whole of the single-use story: two clients racing
+       * on one link serialise here.
        */
       const lockByToken = (token: string) =>
         Effect.map(
           sql<InviteRow>`
-            select ${INVITE_COLUMNS(sql)} from campaign_invite
-            where campaign_invite.token_hash = ${hashToken(token)}
+            select ${INVITE_COLUMNS(sql)} from group_invite
+            where group_invite.token_hash = ${hashToken(token)}
             for update
           `,
           (rows) => rows[0],
         );
 
       /**
-       * Every refusal on the redeeming side, and there is only one of them.
-       *
-       * Unknown, expired, withdrawn, already spent by somebody else: the same
+       * Every refusal on the redeeming side, and there is only one of them:
+       * unknown, expired, withdrawn, already spent by somebody else — the same
        * `NotFound`, because telling the holder of a dead token which kind of
-       * dead it is discloses that it was ever alive. The resource is named for
-       * the invitation rather than the campaign, so nothing about which
-       * campaigns exist leaks either. There is no id to give — the only
-       * identifier the caller has is the secret.
+       * dead it is discloses that it was ever alive.
        */
       const noSuchInvitation = () => new NotFound({ resource: "invite", id: "" });
 
       return {
-        list: (campaignId) =>
+        list: (groupId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              // An invitation is a credential, so reading the list is a DM act
-              // and not merely a read of the campaign.
-              yield* ensureCampaignWritable(sql, campaignId, actor);
+              // An invitation is a credential, so reading the list is the
+              // owner's act and not merely a read of the group.
+              yield* ensureGroupWritable(sql, groupId, actor);
               const rows = yield* sql<ListedInviteRow>`
                 select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
-                from campaign_invite
-                left join account on account.id = campaign_invite.redeemed_by
-                where campaign_invite.campaign_id = ${campaignId}
-                order by campaign_invite.created_at desc
+                from group_invite
+                left join account on account.id = group_invite.redeemed_by
+                where group_invite.group_id = ${groupId}
+                order by group_invite.created_at desc
               `;
               return rows.map(toInvite);
             }),
           ),
 
-        create: (campaignId, payload) =>
+        create: (groupId, payload) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              yield* ensureCampaignWritable(sql, campaignId, actor);
+              yield* ensureGroupWritable(sql, groupId, actor);
+
+              // A named campaign is a claim, bound to this group before it is
+              // written: the composite foreign key would refuse it anyway,
+              // but a typed 404 naming the campaign beats a defect.
+              if (payload.campaignId !== undefined) {
+                const inGroup = yield* sql<{ readonly ok: boolean }>`
+                  select exists (select 1 from campaign
+                                 where campaign.id = ${payload.campaignId}
+                                   and campaign.group_id = ${groupId}) as ok
+                `;
+                if (inGroup[0]?.ok !== true) {
+                  return yield* new NotFound({ resource: "campaign", id: payload.campaignId });
+                }
+              }
 
               // The same 32 bytes of `randomBytes` a machine token is, stored
-              // the same way: the column is a lookup key, not a recoverable
-              // secret. The plaintext exists in this function and in the one
-              // response, and nowhere else ever again.
+              // the same way. The plaintext exists in this function and in the
+              // one response, and nowhere else ever again.
               const token = randomBytes(TOKEN_BYTES).toString("base64url");
               const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
               const rows = yield* sql<InviteRow>`
-                insert into campaign_invite (campaign_id, token_hash, label, expires_at)
-                values (${campaignId}, ${hashToken(token)}, ${payload.label ?? ""}, ${expiresAt})
+                insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
+                values (${groupId}, ${payload.campaignId ?? null}, ${hashToken(token)},
+                        ${payload.label ?? ""}, ${expiresAt})
                 returning ${INVITE_COLUMNS(sql)}
               `;
               return new IssuedInvite({
@@ -250,21 +255,20 @@ export class Invites extends Context.Service<
             }),
           ),
 
-        revoke: (campaignId, inviteId) =>
+        revoke: (groupId, inviteId) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
+                yield* ensureGroupWritable(sql, groupId, actor);
 
                 // Idempotent: revoking a withdrawn invitation keeps the first
-                // `revoked_at`, so the DM's list does not quietly restate when
-                // it happened every time the button is pressed.
+                // `revoked_at`.
                 const rows = yield* sql<InviteRow>`
-                  update campaign_invite
-                  set revoked_at = coalesce(campaign_invite.revoked_at, now())
-                  where campaign_invite.id = ${inviteId}
-                    and campaign_invite.campaign_id = ${campaignId}
+                  update group_invite
+                  set revoked_at = coalesce(group_invite.revoked_at, now())
+                  where group_invite.id = ${inviteId}
+                    and group_invite.group_id = ${groupId}
                   returning ${INVITE_COLUMNS(sql)}
                 `;
                 const row = rows[0];
@@ -272,14 +276,14 @@ export class Invites extends Context.Service<
                   return yield* new NotFound({ resource: "invite", id: inviteId });
                 }
 
-                // **Revoking an accepted invitation takes the membership back.**
-                // A button that withdrew a spent invitation and left the person
-                // at the table would do nothing at all, which is worse than no
-                // button — and it is the only remedy the DM has for a link that
-                // reached somebody they did not mean. It can touch a `player`
-                // row and nothing else; see `revokePlayerAt`.
+                // **Revoking an accepted invitation takes the membership
+                // back** — group membership and every campaign participation
+                // under it, in this same transaction. It is the owner's only
+                // remedy for a link that reached the wrong person. It cannot
+                // touch the owner's own row, and it refuses (Conflict) when
+                // the redeemer created a campaign in the group since.
                 if (row.redeemed_by !== null) {
-                  yield* revokePlayerAt(sql, campaignId, row.redeemed_by);
+                  yield* removeFromGroup(sql, groupId, row.redeemed_by);
                 }
 
                 const named = yield* sql<{ readonly name: string }>`
@@ -294,29 +298,25 @@ export class Invites extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const rows = yield* sql<InviteRow>`
-                select ${INVITE_COLUMNS(sql)} from campaign_invite
-                where campaign_invite.token_hash = ${hashToken(token)}
+                select ${INVITE_COLUMNS(sql)} from group_invite
+                where group_invite.token_hash = ${hashToken(token)}
               `;
               const invite = rows[0];
-              // Live only. An expired, withdrawn or already-accepted invitation
-              // is the same nothing an invented token is.
+              // Live only. An expired, withdrawn or already-accepted
+              // invitation is the same nothing an invented token is.
               if (invite === undefined || statusOf(invite) !== "live") {
                 return yield* noSuchInvitation();
               }
 
-              const campaign = yield* campaignNamedByInvite(invite.campaign_id);
-              const dm = yield* dmNameOf(sql, invite.campaign_id);
-              // Unreachable while `campaign_owner_is_dm_member` holds — a
-              // campaign always has a live DM member — but the invitation page
-              // has no honest thing to say without a name, so it refuses rather
-              // than inventing one.
-              if (campaign === undefined || dm === undefined) {
+              const named = yield* namedByInvite(invite.group_id, invite.campaign_id);
+              if (named === undefined) {
                 return yield* noSuchInvitation();
               }
 
               return new InvitePreview({
-                campaignName: campaign.name,
-                dmName: dm,
+                groupName: named.group_name,
+                ownerName: named.owner_name,
+                campaignName: named.campaign_name,
                 expiresAt: DateTime.fromDateUnsafe(invite.expires_at),
               });
             }),
@@ -333,35 +333,41 @@ export class Invites extends Context.Service<
                 }
 
                 if (invite.redeemed_at !== null) {
-                  // Already spent. By this account it is the same success —
-                  // a double-tapped *Join* is one person joining once, and a
-                  // second tap that answered "no such invitation" would read as
-                  // somebody having stolen it. By anybody else it is gone.
+                  // Already spent. By this account it is the same success — a
+                  // double-tapped *Join* is one person joining once. By
+                  // anybody else it is gone.
                   if (invite.redeemed_by !== actor.accountId) return yield* noSuchInvitation();
                 } else {
                   if (invite.expired) return yield* noSuchInvitation();
 
-                  // The grant, and the whole of it: a `player` row for the
-                  // account `Authorization` resolved. No account id from a
-                  // payload, no campaign id from a path, no role from anywhere.
-                  yield* admitPlayer(sql, invite.campaign_id, actor.accountId);
+                  // The grant, and the whole of it: a group membership for
+                  // the account `Authorization` resolved, and a participation
+                  // at the named table when the invitation names one. No
+                  // account id from a payload, no ids from a path, no role
+                  // from anywhere.
+                  yield* admitToGroup(sql, invite.group_id, actor.accountId);
+                  if (invite.campaign_id !== null) {
+                    yield* admitTo(sql, invite.campaign_id, invite.group_id, actor.accountId);
+                  }
                   yield* sql`
-                    update campaign_invite
+                    update group_invite
                     set redeemed_by = ${actor.accountId}, redeemed_at = now()
-                    where campaign_invite.id = ${invite.id}
+                    where group_invite.id = ${invite.id}
                   `;
                 }
 
-                const campaign = yield* campaignNamedByInvite(invite.campaign_id);
-                if (campaign === undefined) return yield* noSuchInvitation();
+                const named = yield* namedByInvite(invite.group_id, invite.campaign_id);
+                if (named === undefined) return yield* noSuchInvitation();
 
                 return new InviteRedeemed({
+                  groupId: invite.group_id,
+                  groupName: named.group_name,
                   campaignId: invite.campaign_id,
-                  campaignName: campaign.name,
+                  campaignName: named.campaign_name,
                   // The ordinary answer is `false`, and saying so here is what
-                  // keeps "the DM has not shared this table yet" from reading as
-                  // "this product is broken". See `Memberships.mine`.
-                  shared: campaign.visibility === "shared",
+                  // keeps "the creator has not shared this table yet" from
+                  // reading as "this product is broken".
+                  shared: named.campaign_shared === true,
                 });
               }),
             ),

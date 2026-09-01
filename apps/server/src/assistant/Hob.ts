@@ -29,7 +29,7 @@ import {
 } from "effect/unstable/ai";
 import { Campaigns } from "../repo/Campaigns.js";
 import { Creatures } from "../repo/Creatures.js";
-import { DmActors } from "../repo/DmActor.js";
+import { CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { HobThreads } from "../repo/HobThreads.js";
 import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
@@ -163,7 +163,7 @@ export class Hob extends Context.Service<
     never,
     | Campaigns
     | Creatures
-    | DmActors
+    | CampaignCreatorActors
     | HobThreads
     | LanguageModel.LanguageModel
     | Options
@@ -176,7 +176,7 @@ export class Hob extends Context.Service<
       Effect.gen(function* () {
         const languageModel = yield* LanguageModel.LanguageModel;
         const campaigns = yield* Campaigns;
-        const dmActors = yield* DmActors;
+        const dmActors = yield* CampaignCreatorActors;
         const threads = yield* HobThreads;
         const repositories = {
           search: yield* Search,
@@ -214,7 +214,7 @@ export class Hob extends Context.Service<
               /**
                * Which of the two Hobs is answering, resolved once.
                *
-               * The `DmActor` proof is what the DM's toolkit needs; its absence
+               * The `CampaignCreatorActor` proof is what the DM's toolkit needs; its absence
                * is what says this is a player, and the two are told apart by
                * exactly one read. It is sound *because the campaign has already
                * been resolved above*: `campaigns.findById` composes

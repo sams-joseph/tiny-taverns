@@ -6,9 +6,8 @@ import * as Database from "../src/Database.js";
 import init from "../src/migrations/0001_init.js";
 import clerkIdentity from "../src/migrations/0002_clerk_identity.js";
 import sessionFinished from "../src/migrations/0006_session_finished.js";
-import membership from "../src/migrations/0011_membership.js";
 import characterSheet from "../src/migrations/0012_character_sheet.js";
-import invites from "../src/migrations/0013_invites.js";
+import invites from "../src/migrations/0013_group_invites.js";
 import characterLive from "../src/migrations/0014_character_live.js";
 import libraryCreatures from "../src/migrations/0015_library_creatures.js";
 import playerThreads from "../src/migrations/0016_player_threads.js";
@@ -36,10 +35,6 @@ afterAll(() => upgradeRuntime.dispose());
 const stuckRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_stuck"));
 afterAll(() => stuckRuntime.dispose());
 
-/** A fourth, for campaigns written before membership existed. */
-const ownedRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_owned"));
-afterAll(() => ownedRuntime.dispose());
-
 /** A fifth, for characters written before they had a sheet. */
 const sheetRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_sheet"));
 afterAll(() => sheetRuntime.dispose());
@@ -59,6 +54,53 @@ afterAll(() => threadRuntime.dispose());
 /** A ninth, for source provenance added after the starter bundle existed. */
 const sourceRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_sources"));
 afterAll(() => sourceRuntime.dispose());
+
+/**
+ * A campaign as the clean baseline requires one: its group, the owner's
+ * membership, the campaign and the creator's participation — written the way
+ * `Groups.create` and `Campaigns.create` write them, in raw SQL because these
+ * tests run at points in the ledger where the repositories may not exist yet.
+ * Two transactions, because each deferred owner/creator key wants its pair of
+ * statements committed together.
+ */
+const rawCampaign = (sql: SqlClient.SqlClient, accountId: string, name: string) =>
+  Effect.gen(function* () {
+    const group = yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const rows = yield* sql<{ readonly id: string }>`
+          insert into play_group ${sql.insert({
+            owner_account_id: accountId,
+            name: `${name} group`,
+          })}
+          returning id
+        `;
+        yield* sql`
+          insert into group_member ${sql.insert({ group_id: rows[0]!.id, account_id: accountId })}
+        `;
+        return rows[0]!.id;
+      }),
+    );
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const rows = yield* sql<{ readonly id: string }>`
+          insert into campaign ${sql.insert({
+            group_id: group,
+            creator_account_id: accountId,
+            name,
+          })}
+          returning id
+        `;
+        yield* sql`
+          insert into campaign_member ${sql.insert({
+            campaign_id: rows[0]!.id,
+            group_id: group,
+            account_id: accountId,
+          })}
+        `;
+        return rows[0]!.id;
+      }),
+    );
+  });
 
 const migrate = Effect.scoped(
   Layer.build(Layer.provide(Database.layerMigrator, NodeServices.layer)),
@@ -94,7 +136,6 @@ describe("migrations", () => {
       "assistant_turn",
       "beat",
       "campaign",
-      "campaign_invite",
       "campaign_member",
       "character",
       "character_option",
@@ -128,12 +169,15 @@ describe("migrations", () => {
       "feat_prerequisite_ability_score",
       "feat_prerequisite_group",
       "feature",
+      "group_invite",
+      "group_member",
       "language",
       "magic_item",
       "magic_item_rarity",
       "magic_item_variant",
       "magic_school",
       "note",
+      "play_group",
       "prep_item",
       "proficiency",
       "racial_trait",
@@ -172,9 +216,8 @@ describe("migrations", () => {
       { migration_id: 8, name: "beats" },
       { migration_id: 9, name: "search_index" },
       { migration_id: 10, name: "assistant_conversation" },
-      { migration_id: 11, name: "membership" },
       { migration_id: 12, name: "character_sheet" },
-      { migration_id: 13, name: "invites" },
+      { migration_id: 13, name: "group_invites" },
       { migration_id: 14, name: "character_live" },
       { migration_id: 15, name: "library_creatures" },
       { migration_id: 16, name: "player_threads" },
@@ -211,9 +254,8 @@ describe("migrations", () => {
       { migration_id: 8, name: "beats" },
       { migration_id: 9, name: "search_index" },
       { migration_id: 10, name: "assistant_conversation" },
-      { migration_id: 11, name: "membership" },
       { migration_id: 12, name: "character_sheet" },
-      { migration_id: 13, name: "invites" },
+      { migration_id: 13, name: "group_invites" },
       { migration_id: 14, name: "character_live" },
       { migration_id: 15, name: "library_creatures" },
       { migration_id: 16, name: "player_threads" },
@@ -280,10 +322,7 @@ describe("upgrading a database left in the dead end", () => {
         const accounts = yield* sql<{
           readonly id: string;
         }>`insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id`;
-        const campaigns = yield* sql<{ readonly id: string }>`
-          insert into campaign ${sql.insert({ account_id: accounts[0]!.id, name: "The Salt Road" })}
-          returning id
-        `;
+        const campaigns = [{ id: yield* rawCampaign(sql, accounts[0]!.id, "The Salt Road") }];
         const sessions = yield* sql<{ readonly id: string }>`
           insert into session ${sql.insert({ campaign_id: campaigns[0]!.id, number: 12 })}
           returning id
@@ -308,88 +347,6 @@ describe("upgrading a database left in the dead end", () => {
   }, 60_000);
 });
 
-describe("upgrading a database whose campaigns predate membership", () => {
-  it("gives every existing campaign its owner as a DM member, and leaves none without one", async () => {
-    // The risky half of `0011`. Reach used to be `campaign.account_id`, so
-    // every campaign that exists is reached by its owner and by nobody else —
-    // the backfill has to say exactly that, for every row, before the composite
-    // key is added. A campaign it missed would not merely lose its DM: the
-    // constraint could not be created at all, and the migration would fail on
-    // the DM's database rather than here.
-    //
-    // Stepped by hand for the reason the two tests above are: the property is
-    // about rows written under the old schema, and an empty database cannot
-    // show it. Two DMs, three campaigns — one of them running two tables, which
-    // is the case a naive `select distinct account_id` would get wrong.
-    const { members, orphans, refused } = await ownedRuntime.runPromise(
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-
-        yield* init;
-        const account = (name: string, hash: string) =>
-          sql<{ readonly id: string }>`
-            insert into account ${sql.insert({ name, token_hash: hash })} returning id
-          `;
-        const campaign = (accountId: string, name: string) =>
-          sql<{ readonly id: string }>`
-            insert into campaign ${sql.insert({ account_id: accountId, name })} returning id
-          `;
-
-        const ada = (yield* account("Ada", "ada-hash"))[0]!.id;
-        const bo = (yield* account("Bo", "bo-hash"))[0]!.id;
-        yield* campaign(ada, "The Salt Road");
-        yield* campaign(ada, "Salt and Sixpence");
-        yield* campaign(bo, "The Hag's Bargain");
-
-        yield* membership;
-
-        const members = yield* sql<{
-          readonly name: string;
-          readonly owner: string;
-          readonly role: string;
-          readonly is_dm: boolean;
-          readonly revoked_at: Date | null;
-        }>`
-          select campaign.name, account.name as owner,
-                 campaign_member.role, campaign_member.is_dm, campaign_member.revoked_at
-          from campaign_member
-          join campaign on campaign.id = campaign_member.campaign_id
-          join account on account.id = campaign_member.account_id
-          order by campaign.name
-        `;
-
-        // Asked of the schema rather than of the three rows above, so it stays
-        // true of a database with three hundred.
-        const orphans = yield* sql<{ readonly count: number }>`
-          select count(*)::int as count from campaign
-          where not exists (
-            select 1 from campaign_member
-            where campaign_member.campaign_id = campaign.id
-              and campaign_member.account_id = campaign.account_id
-              and campaign_member.role = 'dm'
-              and campaign_member.revoked_at is null
-          )
-        `;
-
-        // And the constraint is really in place afterwards, not merely declared.
-        const refused = yield* sql`
-          insert into campaign ${sql.insert({ account_id: ada, name: "No DM" })}
-        `.pipe(Effect.result);
-
-        return { members, orphans: orphans[0]!.count, refused: refused._tag };
-      }).pipe(Effect.orDie),
-    );
-
-    expect(members).toEqual([
-      { name: "Salt and Sixpence", owner: "Ada", role: "dm", is_dm: true, revoked_at: null },
-      { name: "The Hag's Bargain", owner: "Bo", role: "dm", is_dm: true, revoked_at: null },
-      { name: "The Salt Road", owner: "Ada", role: "dm", is_dm: true, revoked_at: null },
-    ]);
-    expect(orphans).toBe(0);
-    expect(refused).toBe("Failure");
-  }, 60_000);
-});
-
 describe("upgrading a database whose characters predate the sheet", () => {
   it("keeps every column's data, derives the descriptor, and takes the old one at its word", async () => {
     // The risky half of `0012`. `descriptor` was a column the DM typed and is
@@ -408,10 +365,7 @@ describe("upgrading a database whose characters predate the sheet", () => {
         const account = (yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
         `)[0]!.id;
-        const campaign = (yield* sql<{ readonly id: string }>`
-          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
-          returning id
-        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
         const character = (values: Record<string, unknown>) =>
           sql`insert into character ${sql.insert({ campaign_id: campaign, ...values })}`;
 
@@ -426,7 +380,6 @@ describe("upgrading a database whose characters predate the sheet", () => {
         yield* character({ name: "Wren", player_name: "Kofi", descriptor: "Tiefling bard" });
         yield* character({ name: "Sister Pell", ac: 16 });
 
-        yield* membership;
         yield* characterSheet;
 
         const rows = yield* sql<{
@@ -533,10 +486,7 @@ describe("upgrading a database whose characters predate the live columns", () =>
         const account = (yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
         `)[0]!.id;
-        const campaign = (yield* sql<{ readonly id: string }>`
-          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
-          returning id
-        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
         yield* sql`
           insert into character ${sql.insert({
             campaign_id: campaign,
@@ -562,7 +512,6 @@ describe("upgrading a database whose characters predate the live columns", () =>
         yield* beats;
         yield* searchIndex;
         yield* assistantConversation;
-        yield* membership;
         yield* characterSheet;
         yield* invites;
         yield* characterLive;
@@ -655,10 +604,7 @@ describe("upgrading a database whose creatures predate the Library", () => {
         const account = (yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
         `)[0]!.id;
-        const campaign = (yield* sql<{ readonly id: string }>`
-          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
-          returning id
-        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
         const authored = (yield* sql<{ readonly id: string }>`
           insert into creature ${sql.insert({
             campaign_id: campaign,
@@ -692,7 +638,6 @@ describe("upgrading a database whose creatures predate the Library", () => {
         yield* beats;
         yield* searchIndex;
         yield* assistantConversation;
-        yield* membership;
         yield* characterSheet;
         yield* invites;
         yield* characterLive;
@@ -820,10 +765,7 @@ describe("upgrading a database whose conversations predate the player surface", 
         const account = (yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
         `)[0]!.id;
-        const campaign = (yield* sql<{ readonly id: string }>`
-          insert into campaign ${sql.insert({ account_id: account, name: "The Salt Road" })}
-          returning id
-        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
         yield* sql`
           insert into assistant_thread ${sql.insert({
             campaign_id: campaign,
@@ -831,7 +773,6 @@ describe("upgrading a database whose conversations predate the player surface", 
           })}
         `;
 
-        yield* membership;
         yield* characterSheet;
         yield* invites;
         yield* characterLive;
@@ -894,7 +835,6 @@ describe("adding source provenance after the starter bundle existed", () => {
         yield* beats;
         yield* searchIndex;
         yield* assistantConversation;
-        yield* membership;
         yield* characterSheet;
         yield* invites;
         yield* characterLive;

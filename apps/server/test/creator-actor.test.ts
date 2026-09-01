@@ -6,9 +6,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { type DmActor, DmActors } from "../src/repo/DmActor.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
@@ -17,7 +18,7 @@ import { Memberships } from "../src/repo/Memberships.js";
 import { Recap } from "../src/repo/Recap.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, aPlayerAt, asDm, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -28,7 +29,7 @@ import { migratedDatabase } from "./support/database.js";
  * them when the player projection landed, and `Memberships.list` arrived gated
  * on the day the endpoint did — which is the standing rule working — *when a
  * table's player projection diverges from its DM projection, its DM repository
- * takes a `DmActor` in the same change.*
+ * takes a `CampaignCreatorActor` in the same change.*
  *
  * The fifth is the one where the player projection is *nothing*: a member list
  * is other people's account names and the shape of somebody's table. So unlike
@@ -55,9 +56,10 @@ import { migratedDatabase } from "./support/database.js";
 const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
+  Groups.layer,
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
-  DmActors.layer,
+  CampaignCreatorActors.layer,
   EncounterCreatures.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
@@ -75,7 +77,6 @@ afterAll(() => runtime.dispose());
  * below is about the projection rather than about a row that was never there.
  */
 const makeFixture = Effect.gen(function* () {
-  const campaigns = yield* Campaigns;
   const encounters = yield* Encounters;
   const sessions = yield* Sessions;
 
@@ -83,10 +84,8 @@ const makeFixture = Effect.gen(function* () {
   const as = <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, dm);
 
-  const campaign = yield* as(campaigns.create({ name: "The Salt Road", visibility: "shared" }));
-  const otherTable = yield* as(
-    campaigns.create({ name: "Salt and Sixpence", visibility: "shared" }),
-  );
+  const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
   const encounter = yield* as(
     encounters.create(campaign.id, { name: "Ambush in the reeds", visibility: "shared" }),
   );
@@ -125,7 +124,7 @@ describe("the compiler carries it", () => {
     campaignId: CampaignId,
     sessionId: SessionId,
     actor: (typeof CurrentActor)["Service"],
-    proof: DmActor,
+    proof: CampaignCreatorActor,
   ) => {
     // The campaign id in the path is a claim. It is what these methods used to
     // take, and it proves nothing about who is asking.
@@ -152,8 +151,8 @@ describe("the compiler carries it", () => {
     // that would paper over it is not legal either.
     // @ts-expect-error the brand is missing, and it is not writable from here
     runs.list({ actor, campaign: campaignId }, sessionId);
-    // @ts-expect-error `Actor` and `DmActor` do not overlap, so this is not a cast
-    runs.list(actor as DmActor, sessionId);
+    // @ts-expect-error `Actor` and `CampaignCreatorActor` do not overlap, so this is not a cast
+    runs.list(actor as CampaignCreatorActor, sessionId);
 
     // The one shape that does compile.
     return runs.list(proof, sessionId);
@@ -201,8 +200,8 @@ describe("the compiler carries it", () => {
     // it cannot be a `GatedOn<…>` — a partial gate is exactly the shape that
     // needs saying out loud rather than deriving.
     const recap: {
-      readonly read: ExactlyDmActor<Parameters<(typeof Recap)["Service"]["read"]>[0]>;
-      readonly readAsPlayer: ExactlyDmActor<
+      readonly read: ExactlyCampaignCreatorActor<Parameters<(typeof Recap)["Service"]["read"]>[0]>;
+      readonly readAsPlayer: ExactlyCampaignCreatorActor<
         Parameters<(typeof Recap)["Service"]["readAsPlayer"]>[0]
       >;
     } = { read: true, readAsPlayer: false };
@@ -215,7 +214,9 @@ describe("the compiler carries it", () => {
     // them. Named rather than derived, so that an ungated third method here
     // would be a visible edit.
     const memberships: {
-      readonly list: ExactlyDmActor<Parameters<(typeof Memberships)["Service"]["list"]>[0]>;
+      readonly list: ExactlyCampaignCreatorActor<
+        Parameters<(typeof Memberships)["Service"]["list"]>[0]
+      >;
       readonly mine: false;
     } = { list: true, mine: false };
 
@@ -229,12 +230,16 @@ describe("the compiler carries it", () => {
   });
 });
 
-/** `true` only where this method's first parameter is exactly a `DmActor`. */
-type ExactlyDmActor<A> = [A] extends [DmActor] ? ([DmActor] extends [A] ? true : false) : false;
+/** `true` only where this method's first parameter is exactly a `CampaignCreatorActor`. */
+type ExactlyCampaignCreatorActor<A> = [A] extends [CampaignCreatorActor]
+  ? [CampaignCreatorActor] extends [A]
+    ? true
+    : false
+  : false;
 
 type GatedOn<S> = {
   [K in keyof S]-?: S[K] extends (...args: never) => unknown
-    ? ExactlyDmActor<Parameters<S[K]>[0]>
+    ? ExactlyCampaignCreatorActor<Parameters<S[K]>[0]>
     : false;
 };
 
@@ -270,11 +275,11 @@ describe("the proof has one construction site", () => {
       .sort();
 
   it("is minted in exactly one file, and nowhere near a `campaign_member`", () => {
-    // A second `as DmActor` anywhere would be a second answer to "is this
+    // A second `as CampaignCreatorActor` anywhere would be a second answer to "is this
     // actor a DM here", and the day the two disagree is the day the one that
     // is wrong is the one nobody is looking at. `as unknown as` is named too,
     // because that is the spelling a private brand pushes someone towards.
-    expect(mentioning(/as DmActor\b/)).toEqual(["repo/DmActor.ts"]);
+    expect(mentioning(/as CampaignCreatorActor\b/)).toEqual(["repo/CreatorActor.ts"]);
     expect(mentioning(/as unknown as/)).toEqual([]);
 
     // And the check composes the shipped predicate rather than writing its
@@ -307,12 +312,13 @@ describe("what the check refuses", () => {
     // The reason the gated methods take the proof *in place of* a campaign id
     // rather than beside one: a proof obtained for the first table cannot be
     // spent on a read of the second, because there is nowhere to name the
-    // second. A `DmActor` is a fact about a pair, exactly as `isDm` is.
+    // second. A `CampaignCreatorActor` is a fact about a pair, exactly as `isDm` is.
     const proof = await runtime.runPromise(
       asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie),
     );
 
-    expect(Object.keys(proof).sort()).toEqual(["actor", "campaign"]);
+    expect(Object.keys(proof).sort()).toEqual(["actor", "campaign", "group"]);
+    expect(proof.group).toBe(fixture.campaign.groupId);
     expect(proof.campaign).toBe(fixture.campaign.id);
     expect(proof.actor).toEqual(fixture.dm);
   }, 60_000);
@@ -395,7 +401,7 @@ describe("the scope, counted", () => {
     //   cannot see, because it takes its actor as an argument. It is the live
     //   stream, so it is gated too — hence fifteen, not fourteen.
     //
-    // The sixteenth is `Recap.read`, which the doc comment on `DmActor.ts` used
+    // The sixteenth is `Recap.read`, which the doc comment on `CampaignCreatorActor.ts` used
     // to name as "the next candidate" and leave alone. It was not a candidate,
     // it was a live disclosure: it assembles whole `Combatant` values, and a
     // player of a `shared` campaign could read a monster's exact hit points and
@@ -406,7 +412,8 @@ describe("the scope, counted", () => {
     // `shared` row a player is entitled to see in full, so a player calling
     // `GET …/notes` and receiving the ordinary `Note` discloses nothing.
     const gated = files().reduce(
-      (total, name) => total + (code(name).match(/\bdm: DmActor\b/g) ?? []).length,
+      (total, name) =>
+        total + (code(name).match(/\b(dm|creator): CampaignCreatorActor\b/g) ?? []).length,
       0,
     );
     const ungated = files().reduce(
@@ -414,15 +421,15 @@ describe("the scope, counted", () => {
       0,
     );
 
-    // The seventeenth is `Memberships.list`, and it is the one that cost
-    // nothing to get right: it was gated in the change that declared the
-    // endpoint, so there is no release in which `GET /campaigns/:c/members`
-    // answered a player. That is the "gate first, project later" lesson
-    // `Recap.read` paid for, applied on the day rather than afterwards — and
-    // here there is no later projection to defer, because the narrow version of
-    // a member list is no member list.
-    expect(gated).toBe(17);
-    // Every ungated service method, plus `DmActors.of` itself — which requires
+    // Seventeen through nineteen are `Memberships.list`, `add` and `remove` —
+    // the roster and the participation writes the group architecture gave the
+    // creator. `list` was gated in the change that declared the endpoint, so
+    // there is no release in which `GET /campaigns/:c/members` answered a
+    // player; `add` and `remove` arrived gated for the same reason on the day
+    // participation management became an endpoint, and the gate also carries
+    // the group the eligibility check is asked about.
+    expect(gated).toBe(19);
+    // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
     // method's signature. That duplicate is one of the two the plan's 69
@@ -460,7 +467,7 @@ describe("the scope, counted", () => {
     // is. Ungated for the reason the rest of `Characters` is, and one more: it
     // is a **write**, and `rowWritable` already requires `isDm` — a proof on
     // top would be a second answer to a question the predicate underneath
-    // answers first, which is the shape `DmActor.ts` warns against. The gate is
+    // answers first, which is the shape `CampaignCreatorActor.ts` warns against. The gate is
     // for reads whose *player projection diverges*, and assignment has no
     // player projection at all.
     //
@@ -476,7 +483,7 @@ describe("the scope, counted", () => {
     // The sixty-fourth is `Characters.updateOwn` — `PATCH /me/characters/:id`,
     // and the first write in the product a non-DM may make. It is the one entry
     // here that is ungated because the gate would answer the *wrong question*
-    // rather than a redundant one: a `DmActor` is a proof that this account is
+    // rather than a redundant one: a `CampaignCreatorActor` is a proof that this account is
     // the campaign's DM, and the whole point of this method is that its caller
     // is not. What bounds it is `ownRowWritable` — ownership conjoined with the
     // same campaign gate the reads use, so it can never reach a row
@@ -486,7 +493,7 @@ describe("the scope, counted", () => {
     //
     // The last five are the **Library** — `Creatures.library`, `libraryFindById`,
     // `libraryCreate`, `libraryUpdate` and `libraryRemove`, the whole of
-    // `/library/creatures`. A `DmActor` could not be spent on any of them and
+    // `/library/creatures`. A `CampaignCreatorActor` could not be spent on any of them and
     // should not be: the proof carries a campaign, and the whole shape of this
     // group is that it names none. These rows are in no campaign at all —
     // originals, which a campaign takes copies of — so there is no membership to
@@ -576,7 +583,13 @@ describe("the scope, counted", () => {
     // campaign half either returns the same schema to a player who can read the
     // row or writes through `rowWritable` / `ensureCampaignWritable`, where
     // DM-ness is already the predicate underneath.
-    expect(ungated).toBe(144);
+    // The nine newest are `Groups` — mine, findById, create, update, archive,
+    // restore, members, removeMember and the campaign directory. None takes
+    // the proof and none should: a `CampaignCreatorActor` proves a fact about
+    // one campaign, and every one of these is about the group above it. What
+    // bounds them is `groupReadable`/`groupWritable`, whose authority half is
+    // `play_group.owner_account_id` — the governance decision in a predicate.
+    expect(ungated).toBe(153);
   });
 });
 

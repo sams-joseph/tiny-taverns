@@ -39,7 +39,7 @@ import {
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
-import type { DmActor } from "../repo/DmActor.js";
+import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
 import type { Options } from "../repo/Options.js";
 import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
@@ -79,7 +79,7 @@ import type { Sessions } from "../repo/Sessions.js";
  * So {@link HobToolkit} is the DM's nine and {@link PlayerToolkit} is two —
  * `searchCampaign`, which composes `rowReadable` and therefore reaches the
  * `shared` notes and beats a player is entitled to and nothing else, and
- * `proposeCharacter`. `dmHandlersFor` takes a `DmActor`; `playerHandlersFor`
+ * `proposeCharacter`. `dmHandlersFor` takes a `CampaignCreatorActor`; `playerHandlersFor`
  * takes a plain `Actor` and the campaign, because there is no DM-ness to prove
  * and the two tools it binds need none. **The campaign is closed over in both**,
  * so the grounding property is untouched: it is still not a parameter of any
@@ -935,7 +935,7 @@ export const HobToolkit = Toolkit.make(
  *
  * The other seven are out, each for its own reason rather than by omission.
  * `getCreature` is a stat block, which is precisely what the product says a
- * player must not have. `sessionRecap` and `sessionLog` need a `DmActor` and
+ * player must not have. `sessionRecap` and `sessionLog` need a `CampaignCreatorActor` and
  * are two of the three DM-only projections. `listSessions`, `listCreatures`,
  * `proposeNote`, `proposeBeat` and `proposeEncounter` are all the DM's campaign
  * to shape — a player cannot write a note or an encounter through the API
@@ -1005,7 +1005,7 @@ const alreadyProposed = new Conflict({
 /**
  * Bind the toolkit to one campaign and one actor — as one proof of the pair.
  *
- * **The `DmActor` is the whole security story, and no part of it comes from the
+ * **The `CampaignCreatorActor` is the whole security story, and no part of it comes from the
  * model.** It is a pair the server proved: the campaign is the path segment the
  * request was routed on, and the actor is what `Authorization` resolved from
  * the bearer token. Re-providing that actor here rather than letting it be
@@ -1025,7 +1025,7 @@ const alreadyProposed = new Conflict({
  * something that could not be constructed, because there was only this
  * function. That is no longer the boundary; {@link playerHandlersFor} is, and
  * what keeps it honest is that it binds a strictly smaller toolkit rather than
- * this one with a weaker proof. The `DmActor` is still what gates the two log
+ * this one with a weaker proof. The `CampaignCreatorActor` is still what gates the two log
  * reads, and it is still the only thing that can.
  */
 const bind = (actor: Actor, proposal: ProposalSlot) => ({
@@ -1094,7 +1094,7 @@ const searchWith =
 
 export const dmHandlersFor = (
   repositories: HobRepositories,
-  dm: DmActor,
+  dm: CampaignCreatorActor,
   proposal: ProposalSlot,
 ) => {
   const { actor, campaign: campaignId } = dm;
@@ -1307,7 +1307,7 @@ const notASubrace = (race: string, subrace: string) =>
  * The same idea for a player: one campaign, one plain `Actor`, two tools — and
  * the campaign's own vocabulary, which is what one of the two is built from.
  *
- * **There is no proof to take, and none is missing.** A `DmActor` answers *is
+ * **There is no proof to take, and none is missing.** A `CampaignCreatorActor` answers *is
  * this account the DM of this campaign*, and the whole point of this surface is
  * that its caller is not — the same reason `Characters.updateOwn` is the one
  * ungated method where the gate would answer the wrong question. What bounds a
