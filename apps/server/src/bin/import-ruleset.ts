@@ -2,9 +2,10 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, Layer } from "effect";
 import * as Database from "../Database.js";
 import { importSystemOptions } from "../ruleset/import.js";
+import { importSystemRuleArticles } from "../ruleset/rules.js";
 
 /**
- * Loads the bundled classes, races and backgrounds into the shared `system`
+ * Loads the bundled classes, races, backgrounds and rules reference into the shared `system`
  * vocabulary and exits.
  *
  *   pnpm -F server ruleset:import
@@ -19,10 +20,13 @@ import { importSystemOptions } from "../ruleset/import.js";
  * `unowned` half means.
  */
 NodeRuntime.runMain(
-  importSystemOptions().pipe(
-    Effect.flatMap((result) =>
-      Console.log(`ruleset: ${result.inserted} inserted, ${result.updated} updated`),
-    ),
-    Effect.provide(Layer.provide(Database.layer, NodeServices.layer)),
-  ),
+  Effect.gen(function* () {
+    const options = yield* importSystemOptions();
+    const articles = yield* importSystemRuleArticles();
+    yield* Console.log(
+      `ruleset: ${options.inserted} options inserted, ${options.updated} options updated; ` +
+        `${articles.articlesInserted} articles inserted, ${articles.articlesUpdated} articles updated, ` +
+        `${articles.sections} sections synced`,
+    );
+  }).pipe(Effect.provide(Layer.provide(Database.layer, NodeServices.layer))),
 );

@@ -60,6 +60,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns": "/campaigns",
   "/library": "/library",
   "/library/rules": "/library/rules",
+  "/library/compendium": "/library/compendium",
   "/library/spells": "/library/spells",
   "/library/equipment": "/library/equipment",
   "/library/magic-items": "/library/magic-items",
@@ -71,6 +72,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
   "/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
   "/campaigns/$campaignId/rules": `/campaigns/${campaignId}/rules`,
+  "/campaigns/$campaignId/compendium": `/campaigns/${campaignId}/compendium`,
   "/campaigns/$campaignId/spells": `/campaigns/${campaignId}/spells`,
   "/campaigns/$campaignId/equipment": `/campaigns/${campaignId}/equipment`,
   "/campaigns/$campaignId/magic-items": `/campaigns/${campaignId}/magic-items`,
@@ -334,14 +336,15 @@ describe("the shell's top bar", () => {
           .getAllByRole("link")
           .map((link) => link.textContent),
         // Bestiary left this row when Library arrived on the one above; the
-        // three gear shelves are campaign corpora and the Library shelves are
-        // the originals.
+        // three gear shelves and the compendium are campaign corpora and the
+        // Library shelves are the originals.
       ).toEqual([
         "Overview",
         "Encounters",
         "Party",
         "Notes",
         "Chronicle",
+        "Compendium",
         "Spells",
         "Equipment",
         "Magic items",

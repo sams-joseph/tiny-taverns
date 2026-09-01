@@ -64,6 +64,10 @@ const NOT_CONTENT = [
   "rule_choice_language",
   "rule_choice_proficiency",
   "rule_choice_trait",
+  // Ordered rule-section content is scoped by its owning rule_article. Giving
+  // each section its own visibility would be a second answer to whether a
+  // copied article is shared.
+  "rule_section",
   "skill",
   "spell_class",
   "spell_damage_type",
@@ -132,6 +136,7 @@ describe("every content-bearing table", () => {
       "note",
       "prep_item",
       "racial_trait",
+      "rule_article",
       "session",
       "session_event",
       "spell",

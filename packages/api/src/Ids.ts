@@ -45,6 +45,14 @@ export type EquipmentId = typeof EquipmentId.Type;
 export const MagicItemId = id("MagicItemId");
 export type MagicItemId = typeof MagicItemId.Type;
 
+/** One top-level 2014 rules compendium article, copyable into a campaign. */
+export const RuleArticleId = id("RuleArticleId");
+export type RuleArticleId = typeof RuleArticleId.Type;
+
+/** One ordered section inside a rules compendium article. */
+export const RuleSectionId = id("RuleSectionId");
+export type RuleSectionId = typeof RuleSectionId.Type;
+
 /**
  * One piece a character is **built from** — a class, a race, or a background.
  * Not the character: two characters made from one class are two

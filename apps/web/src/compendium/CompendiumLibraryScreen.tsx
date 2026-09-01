@@ -1,0 +1,112 @@
+import type { RuleArticle, RuleArticleDetail } from "@taverns/api";
+import { Button, Icon } from "@taverns/ui";
+import { useState } from "react";
+import { useApiAtom } from "../api/atoms";
+import { Hob, useHobPanel } from "../hob";
+import { LibraryNav } from "../library/LibraryNav";
+import { AppShell, TopBar } from "../shell/AppShell";
+import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { libraryRuleArticlesAtom, NO_RULE_ARTICLE_QUERY, type RuleArticleQuery } from "./load";
+import { isLibraryArticle } from "./ownership";
+import {
+  RemoveRuleArticleDialog,
+  RuleArticleForm,
+  RuleArticleGrid,
+  RuleArticleReader,
+  RuleArticleSearch,
+} from "./RuleArticleParts";
+
+const summaryOf = (articles: ReadonlyArray<RuleArticle>): string => {
+  const mine = articles.filter(isLibraryArticle).length;
+  const count = `${articles.length} ${articles.length === 1 ? "article" : "articles"}`;
+  return mine === 0 ? `${count} — the pinned 2014 compendium` : `${count} · ${mine} yours`;
+};
+
+export function CompendiumLibraryScreen() {
+  const [query, setQuery] = useState<RuleArticleQuery>(NO_RULE_ARTICLE_QUERY);
+  const [resource, reload] = useApiAtom(libraryRuleArticlesAtom(query));
+  const [reading, setReading] = useState<RuleArticle>();
+  const [editing, setEditing] = useState<RuleArticleDetail | undefined>();
+  const [removing, setRemoving] = useState<RuleArticle>();
+  const [writing, setWriting] = useState(false);
+  const hob = useHobPanel({ initialOpen: false });
+
+  const value = resource.state === "ready" ? resource.value : undefined;
+
+  return (
+    <AppShell
+      onAskHob={hob.toggle}
+      panel={<Hob hob={hob} />}
+      topBar={
+        <TopBar
+          title="Library"
+          subtitle={value === undefined ? undefined : summaryOf(value.articles)}
+        >
+          <LibraryNav />
+          <RuleArticleSearch query={query} onQuery={setQuery} />
+          <Button size="sm" onClick={() => setWriting(true)}>
+            <Icon name="plus" size={13} />
+            Write an article
+          </Button>
+        </TopBar>
+      }
+    >
+      {resource.state === "loading" && value === undefined && (
+        <Loading label="Reading the compendium…" />
+      )}
+      {resource.state === "failed" && (
+        <div className="max-w-3xl">
+          <FailureNotice failure={resource.failure} onRetry={reload} />
+        </div>
+      )}
+      {value !== undefined &&
+        resource.state !== "failed" &&
+        (value.articles.length === 0 ? (
+          <EmptyState icon="book-open" title="No compendium articles">
+            Clear the search, write an article, or load the pinned 2014 rules with{" "}
+            <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+              pnpm -F server ruleset:import
+            </code>
+            .
+          </EmptyState>
+        ) : (
+          <RuleArticleGrid
+            articles={value.articles}
+            onOpen={setReading}
+            onRemove={(article) =>
+              isLibraryArticle(article) ? () => setRemoving(article) : undefined
+            }
+          />
+        ))}
+
+      {reading !== undefined && (
+        <RuleArticleReader
+          articleId={reading.id}
+          campaigns={value?.campaigns ?? []}
+          onClose={() => setReading(undefined)}
+          onEdit={(detail) => {
+            setReading(undefined);
+            setEditing(detail);
+          }}
+        />
+      )}
+      {writing && (
+        <RuleArticleForm onClose={() => setWriting(false)} onSaved={() => setWriting(false)} />
+      )}
+      {removing !== undefined && (
+        <RemoveRuleArticleDialog
+          article={removing}
+          onClose={() => setRemoving(undefined)}
+          onRemoved={() => setRemoving(undefined)}
+        />
+      )}
+      {editing !== undefined && (
+        <RuleArticleForm
+          detail={editing}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => setEditing(undefined)}
+        />
+      )}
+    </AppShell>
+  );
+}

@@ -135,11 +135,13 @@ describe("migrations", () => {
       "racial_trait",
       "racial_trait_damage_type",
       "racial_trait_proficiency",
+      "rule_article",
       "rule_choice_ability",
       "rule_choice_group",
       "rule_choice_language",
       "rule_choice_proficiency",
       "rule_choice_trait",
+      "rule_section",
       "session",
       "session_event",
       "skill",
@@ -183,6 +185,7 @@ describe("migrations", () => {
       { migration_id: 25, name: "concrete_source_relationships" },
       { migration_id: 26, name: "class_progression" },
       { migration_id: 27, name: "character_vocabulary_traits" },
+      { migration_id: 28, name: "rules_compendium" },
     ]);
   }, 60_000);
 
@@ -220,6 +223,7 @@ describe("migrations", () => {
       { migration_id: 25, name: "concrete_source_relationships" },
       { migration_id: 26, name: "class_progression" },
       { migration_id: 27, name: "character_vocabulary_traits" },
+      { migration_id: 28, name: "rules_compendium" },
     ]);
   }, 60_000);
 });

@@ -91,6 +91,7 @@ import {
   EquipmentId,
   InviteId,
   MagicItemId,
+  RuleArticleId,
   SpellId,
   NoteId,
   PrepItemId,
@@ -111,6 +112,16 @@ import { PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
+import {
+  RuleArticle,
+  RuleArticleDerive,
+  RuleArticleDetail,
+  RuleArticleFilter,
+  RuleArticleLibraryCreate,
+  RuleArticleLibraryUpdate,
+  RuleArticleSort,
+  RuleArticleUpdate,
+} from "./RuleArticle.js";
 import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import {
@@ -1160,6 +1171,41 @@ class MagicItemsGroup extends HttpApiGroup.make("magicItems")
   )
   .prefix("/campaigns/:campaignId/magic-items")
   .middleware(Authorization) {}
+/** A campaign's copied rules compendium articles plus the bundled 2014 rules reference. */
+class RuleArticlesGroup extends HttpApiGroup.make("ruleArticles")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: RuleArticleFilter,
+      success: pageOf(RuleArticle, RuleArticleSort),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:ruleArticleId", {
+      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
+      success: RuleArticleDetail,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:ruleArticleId", {
+      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
+      payload: RuleArticleUpdate,
+      success: RuleArticleDetail,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:ruleArticleId", {
+      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("derive", "/:ruleArticleId/derive", {
+      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
+      payload: RuleArticleDerive,
+      success: RuleArticleDetail,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/compendium")
+  .middleware(Authorization) {}
+
 class LibraryGroup extends HttpApiGroup.make("library")
   .add(
     /**
@@ -1284,6 +1330,30 @@ class LibraryGroup extends HttpApiGroup.make("library")
      */
     HttpApiEndpoint.delete("removeOption", "/options/:optionId", {
       params: { optionId: CharacterOptionId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("ruleArticles", "/compendium", {
+      query: RuleArticleFilter,
+      success: pageOf(RuleArticle, RuleArticleSort),
+    }),
+    HttpApiEndpoint.post("createRuleArticle", "/compendium", {
+      payload: RuleArticleLibraryCreate,
+      success: RuleArticleDetail,
+    }),
+    HttpApiEndpoint.get("findRuleArticle", "/compendium/:ruleArticleId", {
+      params: { ruleArticleId: RuleArticleId },
+      success: RuleArticleDetail,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("updateRuleArticle", "/compendium/:ruleArticleId", {
+      params: { ruleArticleId: RuleArticleId },
+      payload: RuleArticleLibraryUpdate,
+      success: RuleArticleDetail,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeRuleArticle", "/compendium/:ruleArticleId", {
+      params: { ruleArticleId: RuleArticleId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
@@ -1910,6 +1980,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SpellsGroup)
   .add(EquipmentGroup)
   .add(MagicItemsGroup)
+  .add(RuleArticlesGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)

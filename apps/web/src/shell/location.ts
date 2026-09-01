@@ -99,6 +99,7 @@ export type Section =
   | "notes"
   | "party"
   | "rules"
+  | "compendium"
   | "spells"
   | "equipment"
   | "magicItems"
@@ -131,6 +132,7 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
   if (matchRoute({ to: "/campaigns/$campaignId/rules" })) return "rules";
+  if (matchRoute({ to: "/campaigns/$campaignId/compendium" })) return "compendium";
   if (matchRoute({ to: "/campaigns/$campaignId/spells" })) return "spells";
   if (matchRoute({ to: "/campaigns/$campaignId/equipment" })) return "equipment";
   if (matchRoute({ to: "/campaigns/$campaignId/magic-items" })) return "magicItems";

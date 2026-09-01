@@ -17,7 +17,11 @@ import { classifyFailure, type ApiFailure } from "./failure";
 /** Where the API lives. Vite inlines this at build time; defaults to dev. */
 const baseUrl: string = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3000";
 
-export const makeClient = (token?: string) =>
+export type TavernsClient = HttpApiClient.ForApi<typeof TavernsApi>;
+
+export const makeClient = (
+  token?: string,
+): Effect.Effect<TavernsClient, never, HttpClient.HttpClient> =>
   HttpApiClient.make(TavernsApi, {
     baseUrl,
     transformClient:
@@ -25,11 +29,6 @@ export const makeClient = (token?: string) =>
         ? undefined
         : HttpClient.mapRequest(HttpClientRequest.bearerToken(token)),
   });
-
-type Success<T> = T extends Effect.Effect<infer A, unknown, unknown> ? A : never;
-
-/** Every endpoint, typed, as `client.notes.create({ params, payload })`. */
-export type TavernsClient = Success<ReturnType<typeof makeClient>>;
 
 /** Runs a client call in the browser, on `fetch`. */
 export const runApi = <A, E>(

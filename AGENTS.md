@@ -1540,6 +1540,25 @@ entries to the same `seedFor`, and write the same background sheet facts when th
 resolves. A free-text or later-deleted background label still lands only in
 `sheet.identity.background`; no proficiencies, feature, equipment or gold are invented.
 
+## Rule compendium: the 2014 SRD reference, separate from character Rules
+
+`rule_article` is the copyable Library table for the pinned 5e-bits 2014 Rules and Rule Sections
+corpus: **6 top-level rules and 33 ordered sections**, imported by `pnpm -F server ruleset:import`
+from `apps/server/src/ruleset/systemRules.ts` (same pinned 5e-database 5.10.0 commit as the other
+2014 corpora). It stores only the stable source triplet (`5e-bits-2014`, families `rules` and
+`rule-sections`) plus structured `RuleBlock`s; no source URLs, raw payloads, hashes or source graph
+come back.
+
+It uses the same three-owner model as creatures/options/spells/equipment/magic items for the
+**article**. `rule_section` deliberately has **no visibility/provenance tail**: sections inherit
+reach from their owning article and are copied with it. A campaign `derive` copies the article and
+all ordered sections as a snapshot, so a later source import or Library edit never rewrites a
+campaign's copy.
+
+The web label is **Compendium** (`#/library/compendium`, `#/campaigns/:c/compendium`) because
+character-building classes/races/backgrounds remain **Rules**. Do not merge the two screens or make
+the reference rules another `character_option` kind.
+
 ## Spells: the 2014 SRD corpus is its own Library-owned table
 
 `spell` is a dedicated table, not `character_option.kind = "spell"`: spells need their own paged

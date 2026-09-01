@@ -56,6 +56,8 @@ export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
 export const spellId = "2b1f2a1e-0000-4000-8000-000000000f01";
 export const equipmentId = "2b1f2a1e-0000-4000-8000-000000001001";
 export const magicItemId = "2b1f2a1e-0000-4000-8000-000000001101";
+export const ruleArticleId = "2b1f2a1e-0000-4000-8000-000000001201";
+export const ruleSectionId = "2b1f2a1e-0000-4000-8000-000000001202";
 
 /**
  * A list endpoint's body: one page, and no more.
@@ -842,6 +844,39 @@ export const dmMember = {
   joinedAt: "2026-06-01T10:00:00.000Z",
 };
 
+export const combatRuleArticle = {
+  id: ruleArticleId,
+  campaignId: null,
+  accountId: null,
+  derivedFrom: null,
+  sourceIndex: "combat",
+  name: "Combat",
+  intro: [{ kind: "paragraph", text: "The clatter of steel and snap of spellwork." }],
+  sectionCount: 1,
+  visibility: "shared",
+  origin: "system",
+  assistantTurnId: null,
+  ...stamps,
+};
+
+export const combatRuleDetail = {
+  article: combatRuleArticle,
+  sections: [
+    {
+      id: ruleSectionId,
+      articleId: ruleArticleId,
+      parentSectionId: null,
+      sourceIndex: "the-order-of-combat",
+      title: "The Order of Combat",
+      ordinal: 1,
+      blocks: [
+        { kind: "heading", depth: 2, text: "The Order of Combat" },
+        { kind: "list", ordered: true, items: ["Determine surprise", "Roll initiative"] },
+      ],
+    },
+  ],
+};
+
 /** Everything a fully populated campaign answers, before a test re-aims it. */
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -874,9 +909,16 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/spells`, { status: 200, body: page([fireball]) }],
     [`GET /campaigns/${campaignId}/equipment`, { status: 200, body: page([hempRope]) }],
     [`GET /campaigns/${campaignId}/magic-items`, { status: 200, body: page([lanternRing]) }],
+    [`GET /campaigns/${campaignId}/compendium`, { status: 200, body: page([combatRuleArticle]) }],
+    [
+      `GET /campaigns/${campaignId}/compendium/${ruleArticleId}`,
+      { status: 200, body: combatRuleDetail },
+    ],
     ["GET /library/spells", { status: 200, body: page([fireball]) }],
     ["GET /library/equipment", { status: 200, body: page([hempRope]) }],
     ["GET /library/magic-items", { status: 200, body: page([lanternRing]) }],
+    ["GET /library/compendium", { status: 200, body: page([combatRuleArticle]) }],
+    [`GET /library/compendium/${ruleArticleId}`, { status: 200, body: combatRuleDetail }],
     // The rules vocabulary this table builds characters from — the Rules
     // screen's list, and the create form's two pickers. A bundled class, a
     // bundled race, and one of each this table has copied in, so a test can

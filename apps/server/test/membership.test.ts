@@ -29,6 +29,7 @@ import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
+import { RuleArticles } from "../src/repo/RuleArticles.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
@@ -184,10 +185,12 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
       "repo/Options.ts",
+      "repo/RuleArticles.ts",
       "repo/Spells.ts",
       "repo/visibility.ts",
       "ruleset/import.ts",
       "ruleset/progression.ts",
+      "ruleset/rules.ts",
       "ruleset/source.ts",
       "ruleset/vocabularies.ts",
       "spells/import.ts",
@@ -253,6 +256,7 @@ const runtime = ManagedRuntime.make(
     Notes.layer,
     Options.layer,
     PrepItems.layer,
+    RuleArticles.layer,
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     Spells.layer,
@@ -290,6 +294,7 @@ const makeFixture = Effect.gen(function* () {
   const notes = yield* Notes;
   const options = yield* Options;
   const prep = yield* PrepItems;
+  const ruleArticles = yield* RuleArticles;
   const roster = yield* EncounterCreatures;
   const runs = yield* EncounterRuns;
   const sessions = yield* Sessions;
@@ -360,6 +365,13 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const classCopy = yield* as(options.derive(campaign.id, homebrew.id, { visibility: "shared" }));
+  const houseRules = yield* as(
+    ruleArticles.libraryCreate({
+      name: "House Weather",
+      sections: [{ title: "Storm Glass", content: "## Storm Glass\n\nFog answers the bell." }],
+    }),
+  );
+  const ruleCopy = yield* as(ruleArticles.derive(campaign.id, houseRules.article.id, {}));
 
   const sql = yield* SqlClient.SqlClient;
   yield* sql`
@@ -423,6 +435,7 @@ const makeFixture = Effect.gen(function* () {
     run,
     thread,
     classCopy,
+    ruleCopy,
   };
 }).pipe(Effect.orDie);
 
@@ -461,6 +474,7 @@ const READS: Record<
     | Notes
     | Options
     | PrepItems
+    | RuleArticles
     | SessionEvents
     | Sessions
     | Spells
@@ -481,6 +495,12 @@ const READS: Record<
   // leak somebody would have found by using the product rather than by testing
   // it.
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
+  rule_article: (f) => items(Effect.flatMap(RuleArticles, (r) => r.list(f.campaign.id, {}))),
+  rule_section: (f) =>
+    Effect.map(
+      Effect.flatMap(RuleArticles, (r) => r.findById(f.campaign.id, f.ruleCopy.article.id)),
+      (detail) => detail.sections,
+    ),
   racial_trait: (f) =>
     Effect.map(
       Effect.flatMap(Options, (r) => r.vocabulary(f.campaign.id)),

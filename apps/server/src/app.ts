@@ -43,6 +43,7 @@ import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
+import { RuleArticles } from "./repo/RuleArticles.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
@@ -220,6 +221,7 @@ export const servicesOver = <E>(
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
   | Options
+  | RuleArticles
   | PlayerTable
   | PrepItems
   | Proposals
@@ -277,6 +279,10 @@ export const servicesOver = <E>(
     // a class changes what the *next* character is made from, which is not
     // something a screen watching tonight's fight is waiting for.
     Options.layer,
+    // Rules reference articles follow the same Library/campaign-copy ownership
+    // as creatures, but their ordered sections are copied with them so a
+    // campaign snapshot remains coherent after a system re-import.
+    RuleArticles.layer,
     // Spells follow the same Library/campaign-copy ownership as creatures, but
     // write no live state and ring no doorbell.
     Spells.layer,
@@ -387,6 +393,7 @@ export const applicationOver = <E>(
     | Memberships
     | Notes
     | Options
+    | RuleArticles
     | PlayerTable
     | PrepItems
     | Proposals

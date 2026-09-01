@@ -25,6 +25,7 @@ export * from "./PrepItem.js";
 export * from "./Provenance.js";
 export * from "./Query.js";
 export * from "./Recap.js";
+export * from "./RuleArticle.js";
 export * from "./Ruleset.js";
 export * from "./Search.js";
 export * from "./Session.js";

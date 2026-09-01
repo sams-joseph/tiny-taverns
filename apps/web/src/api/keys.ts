@@ -1,4 +1,4 @@
-import type { CampaignId, CharacterOptionId, SessionId } from "@taverns/api";
+import type { CampaignId, CharacterOptionId, RuleArticleId, SessionId } from "@taverns/api";
 
 /**
  * What a read is *about*, so a write can name it.
@@ -131,6 +131,13 @@ export const reads = {
   /** This campaign's magic items: copied rows, plus the 2014 SRD bundle. */
   magicItems: (campaignId: CampaignId): ReadKey => key`magic-items:${campaignId}`,
 
+  /** This campaign's reference compendium: copied rules plus the pinned 2014 rules. */
+  ruleArticles: (campaignId: CampaignId): ReadKey => key`rule-articles:${campaignId}`,
+
+  /** One campaign compendium article and its ordered sections. */
+  ruleArticle: (campaignId: CampaignId, articleId: RuleArticleId): ReadKey =>
+    key`rule-articles:${campaignId}:${articleId}`,
+
   /**
    * This campaign's rules vocabulary: the classes, races and backgrounds copied
    * into it, plus the bundle.
@@ -195,6 +202,13 @@ export const reads = {
 
   /** The account's magic item Library: originals, plus the 2014 SRD bundle. */
   libraryMagicItems: "library:magic-items" as ReadKey,
+
+  /** The account's Library of reference rules: originals, plus the pinned 2014 compendium. */
+  libraryRuleArticles: "library:rule-articles" as ReadKey,
+
+  /** One Library compendium article and its ordered sections. */
+  libraryRuleArticle: (articleId: RuleArticleId): ReadKey =>
+    key`library:rule-articles:${articleId}`,
 
   /**
    * The account's Library of **character options** — the classes, races and

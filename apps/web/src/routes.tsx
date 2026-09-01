@@ -17,6 +17,8 @@ import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleScreen } from "./chronicle/ChronicleScreen";
 import { PlayerChronicleScreen } from "./chronicle/PlayerChronicleScreen";
+import { CompendiumLibraryScreen } from "./compendium/CompendiumLibraryScreen";
+import { CompendiumScreen } from "./compendium/CompendiumScreen";
 import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { EquipmentScreen } from "./equipment/EquipmentScreen";
 import { Gallery } from "./gallery/Gallery";
@@ -294,6 +296,13 @@ const libraryRulesRoute = createRoute({
   component: OptionLibraryScreen,
 });
 
+/** The 2014 reference rules and authored rule-section articles. */
+const libraryCompendiumRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library/compendium",
+  component: CompendiumLibraryScreen,
+});
+
 /** The spell shelf under the global Library destination. */
 const librarySpellsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -363,6 +372,14 @@ const rulesRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "rules",
   component: RulesScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/** The campaign's copied reference compendium, plus the pinned 2014 rules. */
+const compendiumRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "compendium",
+  component: CompendiumScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -634,6 +651,7 @@ export const routeTree = rootRoute.addChildren([
   campaignsRoute,
   libraryRoute,
   libraryRulesRoute,
+  libraryCompendiumRoute,
   librarySpellsRoute,
   libraryEquipmentRoute,
   libraryMagicItemsRoute,
@@ -643,6 +661,7 @@ export const routeTree = rootRoute.addChildren([
     notesRoute,
     bestiaryRoute,
     rulesRoute,
+    compendiumRoute,
     spellsRoute,
     equipmentRoute,
     magicItemsRoute,

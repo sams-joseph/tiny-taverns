@@ -35,6 +35,7 @@ import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
+import { RuleArticles } from "./repo/RuleArticles.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Spells } from "./repo/Spells.js";
@@ -392,6 +393,26 @@ const MagicItemsLive = HttpApiBuilder.group(
   }),
 );
 
+const RuleArticlesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "ruleArticles",
+  Effect.fnUntraced(function* (handlers) {
+    const articles = yield* RuleArticles;
+    return handlers
+      .handle("list", ({ params, query }) => articles.list(params.campaignId, query))
+      .handle("findById", ({ params }) =>
+        articles.findById(params.campaignId, params.ruleArticleId),
+      )
+      .handle("update", ({ params, payload }) =>
+        articles.update(params.campaignId, params.ruleArticleId, payload),
+      )
+      .handle("remove", ({ params }) => articles.remove(params.campaignId, params.ruleArticleId))
+      .handle("derive", ({ params, payload }) =>
+        articles.derive(params.campaignId, params.ruleArticleId, payload),
+      );
+  }),
+);
+
 const CharacterOptionsLive = HttpApiBuilder.group(
   TavernsApi,
   "options",
@@ -440,6 +461,7 @@ const LibraryLive = HttpApiBuilder.group(
     const spells = yield* Spells;
     const equipment = yield* EquipmentRepo;
     const magicItems = yield* MagicItems;
+    const ruleArticles = yield* RuleArticles;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -459,6 +481,13 @@ const LibraryLive = HttpApiBuilder.group(
         options.libraryUpdate(params.optionId, payload),
       )
       .handle("removeOption", ({ params }) => options.libraryRemove(params.optionId))
+      .handle("ruleArticles", ({ query }) => ruleArticles.library(query))
+      .handle("createRuleArticle", ({ payload }) => ruleArticles.libraryCreate(payload))
+      .handle("findRuleArticle", ({ params }) => ruleArticles.libraryFindById(params.ruleArticleId))
+      .handle("updateRuleArticle", ({ params, payload }) =>
+        ruleArticles.libraryUpdate(params.ruleArticleId, payload),
+      )
+      .handle("removeRuleArticle", ({ params }) => ruleArticles.libraryRemove(params.ruleArticleId))
       .handle("spells", ({ query }) => spells.library(query))
       .handle("createSpell", ({ payload }) => spells.libraryCreate(payload))
       .handle("findSpell", ({ params }) => spells.libraryFindById(params.spellId))
@@ -899,6 +928,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SpellsLive,
     EquipmentLive,
     MagicItemsLive,
+    RuleArticlesLive,
     CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,

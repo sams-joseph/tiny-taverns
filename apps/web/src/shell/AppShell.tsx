@@ -235,6 +235,14 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       section: "chronicle",
     },
     {
+      // The reference compendium is separate from character-building *Rules*:
+      // these are 2014 rule articles and their ordered sections, copied into a
+      // campaign as snapshots exactly like the other corpora.
+      label: "Compendium",
+      link: { to: "/campaigns/$campaignId/compendium", params: { campaignId } },
+      section: "compendium",
+    },
+    {
       // The spellbook is this campaign's copied spell corpus plus the bundled
       // SRD rows, while `/library/spells` is the account's originals. The two
       // routes mirror Rules' two shelves rather than replacing one another.

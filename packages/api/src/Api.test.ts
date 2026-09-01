@@ -15,6 +15,7 @@ import { MagicItem, MagicItemCreate } from "./MagicItem.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
+import { RuleArticle, RuleArticleLibraryCreate } from "./RuleArticle.js";
 import { Session, SessionCreate } from "./Session.js";
 import { SessionEvent } from "./SessionEvent.js";
 import { Spell, SpellCreate } from "./Spell.js";
@@ -151,6 +152,7 @@ describe("the API declaration", () => {
       "options",
       "prep",
       "recap",
+      "ruleArticles",
       "runs",
       "search",
       "sessions",
@@ -176,6 +178,7 @@ describe("every content schema", () => {
     Spell,
     Equipment,
     MagicItem,
+    RuleArticle,
     EncounterCreature,
     EncounterRun,
     Combatant,
@@ -210,6 +213,7 @@ describe("every content schema", () => {
       SpellCreate,
       EquipmentCreate,
       MagicItemCreate,
+      RuleArticleLibraryCreate,
       EncounterCreatureCreate,
       EncounterRunStart,
       CombatantCreate,
@@ -244,6 +248,7 @@ describe("every content schema", () => {
         equipmentCategory: { index: "wondrous-items", name: "Wondrous Items" },
         rarity: { index: "common", name: "Common" },
       },
+      RuleArticleLibraryCreate: { name: "x" },
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       CombatantCreate: { displayName: "x" },
