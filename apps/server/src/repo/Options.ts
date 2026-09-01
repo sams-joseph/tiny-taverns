@@ -9,17 +9,26 @@ import {
   CurrentActor,
   NotFound,
   type OptionDerive,
+  type OptionDetails,
   type OptionFilterValues,
   type OptionKind,
   OPTION_LIMIT,
   type OptionLibraryCreate,
   type OptionLibraryUpdate,
   type OptionUpdate,
+  type OptionVocabulary,
   type RaceBody,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import { copyClassProgression } from "./ClassProgression.js";
+import {
+  campaignVocabulary,
+  copyOptionRelationships,
+  libraryVocabulary,
+  optionDetailsFor,
+  syncOptionRelationsInput,
+} from "../ruleset/vocabularies.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
   copyableIntoCampaign,
@@ -59,13 +68,14 @@ interface OptionRow extends ProvenanceColumns {
  * as `Creatures.ts` trusts `body` to be a `StatBlock` because only a
  * `StatBlock` was ever put there.
  */
-const toOption = (row: OptionRow): CharacterOption => {
+const toOption = (row: OptionRow, details?: OptionDetails): CharacterOption => {
   const shared = {
     id: row.id,
     campaignId: row.campaign_id,
     accountId: row.account_id,
     derivedFrom: row.derived_from,
     name: row.name,
+    ...(details === undefined ? {} : { details }),
     ...provenanceOf(row),
   };
   switch (row.kind) {
@@ -181,6 +191,10 @@ const readOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
 export class Options extends Context.Service<
   Options,
   {
+    /** Concrete abilities, languages, skills, proficiencies and traits a campaign author can attach. */
+    readonly vocabulary: (
+      campaignId: CampaignId,
+    ) => Effect.Effect<OptionVocabulary, NotFound, CurrentActor>;
     /**
      * This campaign's vocabulary: what it has copied in, plus the bundle.
      *
@@ -234,6 +248,7 @@ export class Options extends Context.Service<
      * a member of nothing still has a Library. Authoring is not an act inside a
      * campaign, so it cannot require one.
      */
+    readonly libraryVocabulary: () => Effect.Effect<OptionVocabulary, never, CurrentActor>;
     readonly library: (
       filter: OptionFilterValues,
     ) => Effect.Effect<ReadonlyArray<CharacterOption>, never, CurrentActor>;
@@ -315,6 +330,16 @@ export class Options extends Context.Service<
           return rows[0]!;
         });
 
+      const hydrate = (row: OptionRow): Effect.Effect<CharacterOption, never> =>
+        Effect.map(Effect.orDie(optionDetailsFor(sql, row.id)), (details) =>
+          toOption(row, details),
+        );
+
+      const hydrateAll = (
+        rows: ReadonlyArray<OptionRow>,
+      ): Effect.Effect<ReadonlyArray<CharacterOption>, never> =>
+        Effect.all(rows.map((row) => hydrate(row)));
+
       /**
        * A patch's columns, with the body refused when it contradicts the row.
        *
@@ -338,6 +363,15 @@ export class Options extends Context.Service<
             );
 
       return {
+        vocabulary: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignWritable(sql, campaignId, actor);
+              return yield* campaignVocabulary(sql, campaignId);
+            }),
+          ),
+
         list: (campaignId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
@@ -354,11 +388,12 @@ export class Options extends Context.Service<
                 order by ${readOrder(sql)}
                 limit ${OPTION_LIMIT}
               `;
-              return rows.map(toOption);
+              return yield* hydrateAll(rows);
             }),
           ),
 
-        findById: (campaignId, id) => dieOnSqlError(Effect.map(readable(campaignId, id), toOption)),
+        findById: (campaignId, id) =>
+          dieOnSqlError(Effect.flatMap(readable(campaignId, id), hydrate)),
 
         update: (campaignId, id, patch) =>
           dieOnSqlError(
@@ -380,7 +415,9 @@ export class Options extends Context.Service<
                 // not writable, and the refusal says the same thing as "no such
                 // option" on purpose.
                 if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-                return toOption(rows[0]!);
+                const updated = rows[0]!;
+                yield* syncOptionRelationsInput(sql, updated.id, patch.relations);
+                return yield* hydrate(updated);
               }),
             ),
           ),
@@ -448,9 +485,21 @@ export class Options extends Context.Service<
                     patch.visibility,
                   );
                 }
-                return toOption(copy);
+                yield* copyOptionRelationships(sql, source.id, copy.id, {
+                  campaign_id: campaignId,
+                });
+                yield* syncOptionRelationsInput(sql, copy.id, patch.relations);
+                return yield* hydrate(copy);
               }),
             ),
+          ),
+
+        libraryVocabulary: () =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              return yield* libraryVocabulary(sql, actor.accountId);
+            }),
           ),
 
         library: (filter) =>
@@ -466,27 +515,31 @@ export class Options extends Context.Service<
                 order by ${readOrder(sql)}
                 limit ${OPTION_LIMIT}
               `;
-              return rows.map(toOption);
+              return yield* hydrateAll(rows);
             }),
           ),
 
-        libraryFindById: (id) => dieOnSqlError(Effect.map(inLibrary(id), toOption)),
+        libraryFindById: (id) => dieOnSqlError(Effect.flatMap(inLibrary(id), hydrate)),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<OptionRow>`
-                insert into character_option ${sql.insert({
-                  account_id: actor.accountId,
-                  kind: payload.kind,
-                  name: payload.name,
-                  body: encodeBody(payload.body),
-                })}
-                returning *
-              `;
-              return toOption(rows[0]!);
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const rows = yield* sql<OptionRow>`
+                  insert into character_option ${sql.insert({
+                    account_id: actor.accountId,
+                    kind: payload.kind,
+                    name: payload.name,
+                    body: encodeBody(payload.body),
+                  })}
+                  returning *
+                `;
+                const created = rows[0]!;
+                yield* syncOptionRelationsInput(sql, created.id, payload.relations);
+                return yield* hydrate(created);
+              }),
+            ),
           ),
 
         libraryUpdate: (id, patch) =>
@@ -506,7 +559,9 @@ export class Options extends Context.Service<
                 // owned by nobody — and so does another account's original.
                 // Both get the same refusal as "no such option", on purpose.
                 if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-                return toOption(rows[0]!);
+                const updated = rows[0]!;
+                yield* syncOptionRelationsInput(sql, updated.id, patch.relations);
+                return yield* hydrate(updated);
               }),
             ),
           ),

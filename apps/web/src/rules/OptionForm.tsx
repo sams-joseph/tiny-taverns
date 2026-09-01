@@ -1,4 +1,4 @@
-import type { CharacterOption, OptionKind } from "@taverns/api";
+import type { CharacterOption, OptionKind, OptionVocabulary } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -15,7 +15,15 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
 import { OptionFields } from "./OptionFields";
-import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } from "./optionDraft";
+import {
+  documentOf,
+  draftFrom,
+  NOUN,
+  problemsIn,
+  relationsOf,
+  refuses,
+  type OptionDraft,
+} from "./optionDraft";
 
 /**
  * Writing a class, a race or a background **into your library** — in no
@@ -61,6 +69,7 @@ export function OptionForm({
   option,
   onClose,
   onSaved,
+  vocabulary,
 }: {
   /** Which kind is being written. Ignored when `option` is present — the row says. */
   readonly kind: OptionKind;
@@ -69,6 +78,7 @@ export function OptionForm({
   readonly onClose: () => void;
   /** Re-reads the list: a new, edited or deleted row changes its shape. */
   readonly onSaved: () => void;
+  readonly vocabulary: OptionVocabulary;
 }) {
   const writing = option?.kind ?? kind;
   const [draft, setDraft] = useState<OptionDraft>(() => draftFrom(option));
@@ -85,6 +95,7 @@ export function OptionForm({
 
     const name = draft.name.trim();
     const written = documentOf(writing, draft);
+    const relations = relationsOf(draft);
 
     // Branched rather than handed a computed payload, for the reason
     // `OptionDialog` gives: the payload is a union discriminated on `kind`, and
@@ -97,21 +108,36 @@ export function OptionForm({
           params: { optionId: option.id },
           // The whole document, not a patch of one key — `OptionLibraryUpdate.body`
           // is whole for the reason `CreatureUpdate.statBlock` is.
-          payload: { name, body: written.body },
+          payload: { name, body: written.body, ...(relations === undefined ? {} : { relations }) },
         });
       }
       switch (written.kind) {
         case "class":
           return client.library.createOption({
-            payload: { kind: "class", name, body: written.body },
+            payload: {
+              kind: "class",
+              name,
+              body: written.body,
+              ...(relations === undefined ? {} : { relations }),
+            },
           });
         case "race":
           return client.library.createOption({
-            payload: { kind: "race", name, body: written.body },
+            payload: {
+              kind: "race",
+              name,
+              body: written.body,
+              ...(relations === undefined ? {} : { relations }),
+            },
           });
         case "background":
           return client.library.createOption({
-            payload: { kind: "background", name, body: written.body },
+            payload: {
+              kind: "background",
+              name,
+              body: written.body,
+              ...(relations === undefined ? {} : { relations }),
+            },
           });
       }
     };
@@ -160,6 +186,7 @@ export function OptionForm({
             problems={problems}
             showProblems={showProblems}
             onChange={setDraft}
+            vocabulary={vocabulary}
           />
 
           {/* The snapshot, in the same words `CopyOptionIn` uses. Said here

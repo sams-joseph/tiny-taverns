@@ -21,6 +21,7 @@ import {
   OptionLibraryCreate,
   OptionLibraryUpdate,
   OptionUpdate,
+  OptionVocabulary,
 } from "./CharacterOption.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import {
@@ -952,6 +953,11 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
  */
 class CharacterOptionsGroup extends HttpApiGroup.make("options")
   .add(
+    HttpApiEndpoint.get("vocabulary", "/vocabulary", {
+      params: { campaignId: CampaignId },
+      success: OptionVocabulary,
+      error: NotFound,
+    }),
     /**
      * Every option this campaign offers — all three kinds unless `kind` narrows it.
      *
@@ -1227,6 +1233,9 @@ class LibraryGroup extends HttpApiGroup.make("library")
      * table name. What differs is downstream: an option here is invisible to
      * every player in the product until its owner copies it into a campaign.
      */
+    HttpApiEndpoint.get("optionVocabulary", "/options/vocabulary", {
+      success: OptionVocabulary,
+    }),
     HttpApiEndpoint.get("options", "/options", {
       query: OptionFilter,
       success: Schema.Array(CharacterOption),

@@ -399,6 +399,7 @@ const CharacterOptionsLive = HttpApiBuilder.group(
     const options = yield* Options;
     const progression = yield* ClassProgression;
     return handlers
+      .handle("vocabulary", ({ params }) => options.vocabulary(params.campaignId))
       .handle("list", ({ params, query }) => options.list(params.campaignId, query))
       .handle("findById", ({ params }) => options.findById(params.campaignId, params.optionId))
       .handle("progression", ({ params }) => progression.read(params.campaignId, params.optionId))
@@ -449,6 +450,7 @@ const LibraryLive = HttpApiBuilder.group(
         creatures.libraryUpdate(params.creatureId, payload),
       )
       .handle("remove", ({ params }) => creatures.libraryRemove(params.creatureId))
+      .handle("optionVocabulary", () => options.libraryVocabulary())
       .handle("options", ({ query }) => options.library(query))
       .handle("createOption", ({ payload }) => options.libraryCreate(payload))
       .handle("findOption", ({ params }) => options.libraryFindById(params.optionId))

@@ -69,6 +69,34 @@ export type ClassLevelId = typeof ClassLevelId.Type;
 export const FeatureId = id("FeatureId");
 export type FeatureId = typeof FeatureId.Type;
 
+/** A concrete 2014 ability-score identity (STR, DEX, …). */
+export const AbilityScoreId = id("AbilityScoreId");
+export type AbilityScoreId = typeof AbilityScoreId.Type;
+
+/** A concrete 2014 language identity. */
+export const LanguageId = id("LanguageId");
+export type LanguageId = typeof LanguageId.Type;
+
+/** A concrete 2014 skill identity, tied to an ability score. */
+export const SkillId = id("SkillId");
+export type SkillId = typeof SkillId.Type;
+
+/** A concrete 2014 proficiency identity. */
+export const ProficiencyId = id("ProficiencyId");
+export type ProficiencyId = typeof ProficiencyId.Type;
+
+/** A racial trait row, either bundled or a snapshot owned by an account/campaign. */
+export const RacialTraitId = id("RacialTraitId");
+export type RacialTraitId = typeof RacialTraitId.Type;
+
+/** A contained subrace row under one race option. */
+export const CharacterOptionSubraceId = id("CharacterOptionSubraceId");
+export type CharacterOptionSubraceId = typeof CharacterOptionSubraceId.Type;
+
+/** One concrete choice group hanging off a rules option, subrace or trait. */
+export const RuleChoiceGroupId = id("RuleChoiceGroupId");
+export type RuleChoiceGroupId = typeof RuleChoiceGroupId.Type;
+
 /**
  * A creature's place on one encounter's roster — the join row, not the creature.
  * It has an id of its own because the roster line is what a client edits: the

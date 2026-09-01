@@ -112,7 +112,7 @@ pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
 pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
-pnpm -F server ruleset:import   # loads 2014 classes, subclasses, progression, races and backgrounds (idempotent)
+pnpm -F server ruleset:import   # loads 2014 classes, races, backgrounds, traits and vocabularies (idempotent)
 pnpm -F server spell:import      # loads bundled 2014 SRD spells and class/subclass links (optional, idempotent)
 pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (idempotent)
 pnpm -F server magic-item:import # loads the bundled 2014 SRD magic items (idempotent)
@@ -245,7 +245,8 @@ curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/deri
 **A campaign can have its own classes, races, backgrounds, spells, mundane equipment and magic items**, and
 they follow exactly the same model. `pnpm -F server equipment:import` writes the 237 bundled 2014 SRD
 mundane equipment rows; `pnpm -F server ruleset:import` writes the bundled 2014 SRD character
-vocabulary, its concrete subclass/class-level/feature progression and its concrete
+options, their concrete ability/language/skill/proficiency/trait vocabularies, their concrete
+subrace grants and choices, their subclass/class-level/feature progression and their concrete
 starting-equipment references; `pnpm -F server spell:import` writes the 319 bundled 2014 SRD spells
 as global rows linked to the class and subclass vocabulary; `pnpm -F server magic-item:import`
 writes the 362 bundled 2014 SRD magic items as global rows. All are keyed by

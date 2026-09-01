@@ -2,7 +2,8 @@ import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { syncSystemClassProgression } from "./progression.js";
 import { FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
-import { SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
+import { SOURCE_RAW, SYSTEM_OPTIONS, type SystemOption } from "./systemOptions.js";
+import { syncImportedOptionRelationships, syncSystemVocabularies } from "./vocabularies.js";
 
 /** What one run of the import did. Counts the domain `character_option` upserts. */
 export interface ImportResult {
@@ -122,6 +123,8 @@ export const importSystemOptions = (
         let inserted = 0;
         let updated = 0;
 
+        yield* syncSystemVocabularies(sql);
+
         for (const option of corpus) {
           const key = sourceKeyFor(
             FIVE_E_BITS_2014_SOURCE,
@@ -158,6 +161,13 @@ export const importSystemOptions = (
           const row = rows[0];
           if (row === undefined) throw new Error(`option ${option.sourceIndex} was not written`);
           yield* syncOptionEquipmentReferences(sql, row.id, option.raw);
+          yield* syncImportedOptionRelationships(
+            sql,
+            row.id as never,
+            option.kind,
+            option.raw as Record<string, unknown>,
+            SOURCE_RAW.subraces,
+          );
           if (row.inserted === true) inserted += 1;
           else updated += 1;
         }

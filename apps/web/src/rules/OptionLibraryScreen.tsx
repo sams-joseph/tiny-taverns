@@ -7,7 +7,7 @@ import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
 import { ClassProgressionDialog } from "./ClassProgressionDialog";
-import { libraryOptionsAtom } from "./load";
+import { libraryRulesAtom } from "./load";
 import { isLibraryOriginal } from "./option";
 import { OptionForm } from "./OptionForm";
 import { OptionSection } from "./OptionSection";
@@ -97,14 +97,15 @@ export function OptionLibraryScreen() {
   }>();
   const [progression, setProgression] = useState<CharacterOption>();
 
-  const [resource, reload] = useApiAtom(libraryOptionsAtom);
+  const [resource, reload] = useApiAtom(libraryRulesAtom);
 
   // No campaign in view, so no campaign for Hob's tools to hang off — the panel
   // says so rather than offering a composer with nowhere to send. Same as the
   // campaign list and the monster Library, and for the same reason.
   const hob = useHobPanel({ initialOpen: false });
 
-  const options = resource.state === "ready" ? resource.value : undefined;
+  const options = resource.state === "ready" ? resource.value.options : undefined;
+  const vocabulary = resource.state === "ready" ? resource.value.vocabulary : undefined;
   const of = (kind: OptionKind) => (options ?? []).filter((option) => option.kind === kind);
 
   return (
@@ -195,7 +196,7 @@ export function OptionLibraryScreen() {
         </div>
       )}
 
-      {editing !== undefined && (
+      {editing !== undefined && vocabulary !== undefined && (
         <OptionForm
           key={editing.option?.id ?? `new-${editing.kind}`}
           kind={editing.kind}
@@ -207,6 +208,7 @@ export function OptionLibraryScreen() {
           // reads the same atom. Calling both would be two requests for one
           // answer, the second interrupting the first.
           onSaved={() => setEditing(undefined)}
+          vocabulary={vocabulary}
         />
       )}
 

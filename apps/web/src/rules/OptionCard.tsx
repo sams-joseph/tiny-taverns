@@ -1,4 +1,4 @@
-import type { CharacterOption } from "@taverns/api";
+import type { CharacterOption, OptionDetails } from "@taverns/api";
 import { Badge, Button, Card, CardContent, Icon } from "@taverns/ui";
 import { numbersOf, ownerOf } from "./option";
 
@@ -76,6 +76,7 @@ export function OptionCard({
               {option.body.summary}
             </p>
           )}
+          {option.details !== undefined && <DetailsSummary details={option.details} />}
           {unshared && (
             <p className="mt-1.5 text-caption leading-body text-muted-foreground">
               Nobody at this table can pick it until you share it.
@@ -116,5 +117,39 @@ export function OptionCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function DetailsSummary({ details }: { readonly details: OptionDetails }) {
+  const abilities = details.abilityBonuses
+    .map(
+      (grant) =>
+        `${grant.subraceName === null ? "" : `${grant.subraceName} `}+${grant.amount} ${grant.ability.name}`,
+    )
+    .join(", ");
+  const languages = details.languages.map((grant) => grant.language.name).join(", ");
+  const proficiencies = details.proficiencies.map((grant) => grant.proficiency.name).join(", ");
+  const traits = details.traits.map((grant) => grant.trait.name).join(", ");
+  const choices = details.choices
+    .map((choice) => `choose ${choice.choose} ${choice.kind}`)
+    .join(", ");
+  const lines = [
+    abilities === "" ? undefined : `Abilities: ${abilities}`,
+    languages === "" ? undefined : `Languages: ${languages}`,
+    proficiencies === "" ? undefined : `Proficiencies: ${proficiencies}`,
+    traits === "" ? undefined : `Traits: ${traits}`,
+    choices === "" ? undefined : `Choices: ${choices}`,
+  ].filter((line): line is string => line !== undefined);
+
+  if (lines.length === 0) return null;
+  return (
+    <dl className="mt-2 grid gap-1 text-caption leading-body text-muted-foreground">
+      {lines.slice(0, 3).map((line) => (
+        <div key={line} className="truncate">
+          {line}
+        </div>
+      ))}
+      {lines.length > 3 && <div>{String(lines.length - 3)} more rule details</div>}
+    </dl>
   );
 }

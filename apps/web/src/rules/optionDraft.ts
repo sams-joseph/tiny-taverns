@@ -4,6 +4,7 @@ import type {
   CharacterOption,
   ClassBody,
   OptionKind,
+  OptionRelationsInput,
   RaceBody,
   SubraceBody,
 } from "@taverns/api";
@@ -41,6 +42,9 @@ export interface OptionDraft {
   readonly featureName: string;
   readonly featureText: string;
   readonly choices: string;
+  readonly relationLanguageIds: ReadonlyArray<string>;
+  readonly relationProficiencyIds: ReadonlyArray<string>;
+  readonly relationTraitIds: ReadonlyArray<string>;
 }
 
 const NO_BONUSES: Record<AbilityKey, string> = {
@@ -88,6 +92,18 @@ export const draftFrom = (option: CharacterOption | undefined): OptionDraft => {
     featureName: option?.kind === "background" ? (option.body.feature?.name ?? "") : "",
     featureText: option?.kind === "background" ? (option.body.feature?.text ?? "") : "",
     choices: option?.kind === "background" ? lines(option.body.choices) : "",
+    relationLanguageIds:
+      option?.details?.languages
+        .filter((grant) => grant.subraceId === null)
+        .map((grant) => grant.language.id) ?? [],
+    relationProficiencyIds:
+      option?.details?.proficiencies
+        .filter((grant) => grant.subraceId === null && grant.sourceTrait === null)
+        .map((grant) => grant.proficiency.id) ?? [],
+    relationTraitIds:
+      option?.details?.traits
+        .filter((grant) => grant.subraceId === null)
+        .map((grant) => grant.trait.id) ?? [],
   };
 };
 
@@ -153,6 +169,22 @@ export type WrittenOption =
   | { readonly kind: "class"; readonly body: ClassBody }
   | { readonly kind: "race"; readonly body: RaceBody }
   | { readonly kind: "background"; readonly body: BackgroundBody };
+
+const cleanIds = (ids: ReadonlyArray<string>): ReadonlyArray<string> => [...new Set(ids)];
+
+export const relationsOf = (draft: OptionDraft): OptionRelationsInput | undefined => {
+  const languageIds = cleanIds(draft.relationLanguageIds);
+  const proficiencyIds = cleanIds(draft.relationProficiencyIds);
+  const traitIds = cleanIds(draft.relationTraitIds);
+  if (languageIds.length === 0 && proficiencyIds.length === 0 && traitIds.length === 0) {
+    return undefined;
+  }
+  return {
+    ...(languageIds.length === 0 ? {} : { languageIds: languageIds as never }),
+    ...(proficiencyIds.length === 0 ? {} : { proficiencyIds: proficiencyIds as never }),
+    ...(traitIds.length === 0 ? {} : { traitIds: traitIds as never }),
+  };
+};
 
 export const documentOf = (kind: OptionKind, draft: OptionDraft): WrittenOption => {
   const summary = draft.summary.trim();

@@ -1,4 +1,9 @@
-import type { CampaignId, CharacterOption, CharacterOptionId } from "@taverns/api";
+import type {
+  CampaignId,
+  CharacterOption,
+  CharacterOptionId,
+  OptionVocabulary,
+} from "@taverns/api";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -52,6 +57,18 @@ export const libraryOptionsAtom = apiAtom(
   [reads.libraryOptions],
 );
 
+export const campaignOptionVocabularyAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.options.vocabulary({ params: { campaignId } }),
+    [reads.optionVocabulary(campaignId)],
+  ),
+);
+
+export const libraryOptionVocabularyAtom = apiAtom(
+  (client) => client.library.optionVocabulary(),
+  [reads.libraryOptionVocabulary],
+);
+
 export const campaignOptionProgressionAtom = Atom.family(
   ({
     campaignId,
@@ -73,12 +90,36 @@ export const libraryOptionProgressionAtom = Atom.family((optionId: CharacterOpti
   ),
 );
 
+export interface LibraryRulesView {
+  readonly options: ReadonlyArray<CharacterOption>;
+  readonly vocabulary: OptionVocabulary;
+}
+
+export const libraryRulesAtom = Atom.readable(
+  (get): AsyncResult.AsyncResult<LibraryRulesView, unknown> =>
+    combine(
+      get,
+      AsyncResult.all({
+        options: get(libraryOptionsAtom),
+        vocabulary: get(libraryOptionVocabularyAtom),
+      }),
+    ),
+  (refresh) => {
+    refresh(libraryOptionsAtom);
+    refresh(libraryOptionVocabularyAtom);
+  },
+);
+
 /** What the Rules screen reads beyond the campaign view. */
 export interface RulesView {
   /** What this table offers: the bundle, plus what has been copied in. */
   readonly offered: ReadonlyArray<CharacterOption>;
   /** What this account has written, in no campaign — the copy control's source. */
   readonly originals: ReadonlyArray<CharacterOption>;
+  /** Concrete ids a campaign copy may attach to its rows. */
+  readonly vocabulary: OptionVocabulary;
+  /** Concrete ids a Library original may attach before it is copied. */
+  readonly libraryVocabulary: OptionVocabulary;
 }
 
 /**
@@ -107,11 +148,15 @@ export const rulesAtom = Atom.family((campaignId: CampaignId) =>
         AsyncResult.all({
           offered: get(campaignOptionsAtom(campaignId)),
           originals: get(libraryOptionsAtom),
+          vocabulary: get(campaignOptionVocabularyAtom(campaignId)),
+          libraryVocabulary: get(libraryOptionVocabularyAtom),
         }),
       ),
     (refresh) => {
       refresh(campaignOptionsAtom(campaignId));
       refresh(libraryOptionsAtom);
+      refresh(campaignOptionVocabularyAtom(campaignId));
+      refresh(libraryOptionVocabularyAtom);
     },
   ),
 );
@@ -126,5 +171,7 @@ export const rulesAtom = Atom.family((campaignId: CampaignId) =>
  */
 export const optionWritesAt = (campaignId: CampaignId) => [
   reads.options(campaignId),
+  reads.optionVocabulary(campaignId),
   reads.libraryOptions,
+  reads.libraryOptionVocabulary,
 ];

@@ -1,10 +1,17 @@
 import { Schema } from "effect";
 import {
+  AbilityScoreId,
   AccountId,
   CampaignId,
   CharacterOptionId,
+  CharacterOptionSubraceId,
   ClassLevelId,
   FeatureId,
+  LanguageId,
+  ProficiencyId,
+  RacialTraitId,
+  RuleChoiceGroupId,
+  SkillId,
   SubclassId,
 } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
@@ -27,6 +34,177 @@ const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
 const sourceName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 180));
 const sourceReference = Schema.Struct({ index: sourceKey, name: sourceName });
 const jsonObject = Schema.Record(Schema.String, Schema.Unknown);
+const choiceCount = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }));
+const ordinal = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
+
+/** Concrete 2014 ability-score vocabulary row. */
+export const RuleAbilityScore = Schema.Struct({
+  id: AbilityScoreId,
+  index: sourceKey,
+  name: sourceName,
+  fullName: sourceName,
+  desc: longTextList,
+});
+export type RuleAbilityScore = typeof RuleAbilityScore.Type;
+
+/** Concrete 2014 language vocabulary row. */
+export const RuleLanguage = Schema.Struct({
+  id: LanguageId,
+  index: sourceKey,
+  name: sourceName,
+  type: sourceName,
+  script: Schema.NullOr(Schema.String.check(Schema.isLengthBetween(0, 120))),
+  typicalSpeakers: textList,
+});
+export type RuleLanguage = typeof RuleLanguage.Type;
+
+/** Concrete 2014 skill vocabulary row, keyed to its ability score. */
+export const RuleSkill = Schema.Struct({
+  id: SkillId,
+  index: sourceKey,
+  name: sourceName,
+  abilityScoreId: AbilityScoreId,
+  ability: RuleAbilityScore,
+  desc: longTextList,
+});
+export type RuleSkill = typeof RuleSkill.Type;
+
+/** Concrete 2014 proficiency vocabulary row. */
+export const RuleProficiency = Schema.Struct({
+  id: ProficiencyId,
+  index: sourceKey,
+  name: sourceName,
+  type: sourceName,
+  referenceFamily: Schema.NullOr(sourceKey),
+  referenceKey: Schema.NullOr(sourceKey),
+  skillId: Schema.NullOr(SkillId),
+  abilityScoreId: Schema.NullOr(AbilityScoreId),
+});
+export type RuleProficiency = typeof RuleProficiency.Type;
+
+/** A racial trait row, with parentage and prose kept on the trait itself. */
+export const RuleTrait = Schema.Struct({
+  id: RacialTraitId,
+  index: Schema.NullOr(sourceKey),
+  name: sourceName,
+  parentTraitId: Schema.NullOr(RacialTraitId),
+  desc: longTextList,
+});
+export type RuleTrait = typeof RuleTrait.Type;
+
+export const OptionSubraceDetail = Schema.Struct({
+  id: CharacterOptionSubraceId,
+  name: sourceName,
+  index: Schema.NullOr(sourceKey),
+  ordinal,
+});
+export type OptionSubraceDetail = typeof OptionSubraceDetail.Type;
+
+export const OptionAbilityGrant = Schema.Struct({
+  ability: RuleAbilityScore,
+  amount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 30 })),
+  ordinal,
+  subraceId: Schema.NullOr(CharacterOptionSubraceId),
+  subraceName: Schema.NullOr(sourceName),
+});
+export type OptionAbilityGrant = typeof OptionAbilityGrant.Type;
+
+export const OptionLanguageGrant = Schema.Struct({
+  language: RuleLanguage,
+  ordinal,
+  subraceId: Schema.NullOr(CharacterOptionSubraceId),
+  subraceName: Schema.NullOr(sourceName),
+});
+export type OptionLanguageGrant = typeof OptionLanguageGrant.Type;
+
+export const OptionProficiencyGrant = Schema.Struct({
+  proficiency: RuleProficiency,
+  /** Present when the proficiency arrived through an attached racial trait. */
+  sourceTrait: Schema.NullOr(RuleTrait),
+  ordinal,
+  subraceId: Schema.NullOr(CharacterOptionSubraceId),
+  subraceName: Schema.NullOr(sourceName),
+});
+export type OptionProficiencyGrant = typeof OptionProficiencyGrant.Type;
+
+export const OptionTraitGrant = Schema.Struct({
+  trait: RuleTrait,
+  ordinal,
+  subraceId: Schema.NullOr(CharacterOptionSubraceId),
+  subraceName: Schema.NullOr(sourceName),
+});
+export type OptionTraitGrant = typeof OptionTraitGrant.Type;
+
+export const RuleChoiceKind = Schema.Literals([
+  "ability-score",
+  "language",
+  "proficiency",
+  "trait",
+]);
+export type RuleChoiceKind = typeof RuleChoiceKind.Type;
+
+export const OptionChoiceGroup = Schema.Struct({
+  id: RuleChoiceGroupId,
+  owner: Schema.Literals(["option", "subrace", "trait"]),
+  ownerName: Schema.NullOr(sourceName),
+  kind: RuleChoiceKind,
+  choose: choiceCount,
+  desc: Schema.NullOr(Schema.String.check(Schema.isLengthBetween(0, 1000))),
+  ordinal,
+  abilities: Schema.Array(OptionAbilityGrant).check(Schema.isLengthBetween(0, 30)),
+  languages: Schema.Array(RuleLanguage).check(Schema.isLengthBetween(0, 60)),
+  proficiencies: Schema.Array(RuleProficiency).check(Schema.isLengthBetween(0, 140)),
+  traits: Schema.Array(RuleTrait).check(Schema.isLengthBetween(0, 60)),
+});
+export type OptionChoiceGroup = typeof OptionChoiceGroup.Type;
+
+export const OptionDetails = Schema.Struct({
+  subraces: Schema.Array(OptionSubraceDetail).check(Schema.isLengthBetween(0, 50)),
+  abilityBonuses: Schema.Array(OptionAbilityGrant).check(Schema.isLengthBetween(0, 80)),
+  languages: Schema.Array(OptionLanguageGrant).check(Schema.isLengthBetween(0, 80)),
+  proficiencies: Schema.Array(OptionProficiencyGrant).check(Schema.isLengthBetween(0, 160)),
+  traits: Schema.Array(OptionTraitGrant).check(Schema.isLengthBetween(0, 80)),
+  choices: Schema.Array(OptionChoiceGroup).check(Schema.isLengthBetween(0, 80)),
+});
+export type OptionDetails = typeof OptionDetails.Type;
+
+export const OptionVocabulary = Schema.Struct({
+  abilities: Schema.Array(RuleAbilityScore),
+  languages: Schema.Array(RuleLanguage),
+  skills: Schema.Array(RuleSkill),
+  proficiencies: Schema.Array(RuleProficiency),
+  traits: Schema.Array(RuleTrait),
+});
+export type OptionVocabulary = typeof OptionVocabulary.Type;
+
+const relationChoiceInput = Schema.Struct({
+  kind: RuleChoiceKind,
+  choose: choiceCount,
+  desc: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 1000))),
+  abilityBonuses: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        abilityScoreId: AbilityScoreId,
+        amount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 30 })),
+      }),
+    ).check(Schema.isLengthBetween(0, 30)),
+  ),
+  languageIds: Schema.optional(Schema.Array(LanguageId).check(Schema.isLengthBetween(0, 60))),
+  proficiencyIds: Schema.optional(
+    Schema.Array(ProficiencyId).check(Schema.isLengthBetween(0, 140)),
+  ),
+  traitIds: Schema.optional(Schema.Array(RacialTraitId).check(Schema.isLengthBetween(0, 60))),
+});
+
+export const OptionRelationsInput = Schema.Struct({
+  languageIds: Schema.optional(Schema.Array(LanguageId).check(Schema.isLengthBetween(0, 60))),
+  proficiencyIds: Schema.optional(
+    Schema.Array(ProficiencyId).check(Schema.isLengthBetween(0, 140)),
+  ),
+  traitIds: Schema.optional(Schema.Array(RacialTraitId).check(Schema.isLengthBetween(0, 60))),
+  choices: Schema.optional(Schema.Array(relationChoiceInput).check(Schema.isLengthBetween(0, 80))),
+});
+export type OptionRelationsInput = typeof OptionRelationsInput.Type;
 
 export const ClassBody = Schema.Struct({
   hitDie,
@@ -88,6 +266,7 @@ const optionFields = {
   derivedFrom: Schema.NullOr(CharacterOptionId),
   name: Schema.String,
   visibility: Visibility,
+  details: Schema.optional(OptionDetails),
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
@@ -225,15 +404,31 @@ export const subraceNamed = (
 const optionName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 60));
 
 export const OptionLibraryCreate = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal("class"), name: optionName, body: ClassBody }),
-  Schema.Struct({ kind: Schema.Literal("race"), name: optionName, body: RaceBody }),
-  Schema.Struct({ kind: Schema.Literal("background"), name: optionName, body: BackgroundBody }),
+  Schema.Struct({
+    kind: Schema.Literal("class"),
+    name: optionName,
+    body: ClassBody,
+    relations: Schema.optional(OptionRelationsInput),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("race"),
+    name: optionName,
+    body: RaceBody,
+    relations: Schema.optional(OptionRelationsInput),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("background"),
+    name: optionName,
+    body: BackgroundBody,
+    relations: Schema.optional(OptionRelationsInput),
+  }),
 ]);
 export type OptionLibraryCreate = typeof OptionLibraryCreate.Type;
 
 const optionUpdateFields = {
   name: Schema.optional(optionName),
   body: Schema.optional(Schema.Union([ClassBody, RaceBody, BackgroundBody])),
+  relations: Schema.optional(OptionRelationsInput),
 } as const;
 
 export const OptionLibraryUpdate = Schema.Struct(optionUpdateFields);

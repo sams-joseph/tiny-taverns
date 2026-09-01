@@ -283,6 +283,153 @@ describe("the bundle", () => {
     expect(rows.success.every((row) => row.body.summary === undefined)).toBe(true);
   });
 
+  it("imports the concrete 2014 vocabularies and the FK-backed race facts", async () => {
+    const counts = await sql(
+      (client) => client<{ readonly table_name: string; readonly count: number }>`
+        select 'ability_score' as table_name, count(*)::int as count from ability_score
+        union all
+        select 'language' as table_name, count(*)::int as count from language
+        union all
+        select 'skill' as table_name, count(*)::int as count from skill
+        union all
+        select 'proficiency' as table_name, count(*)::int as count from proficiency
+        union all
+        select 'racial_trait' as table_name, count(*)::int as count from racial_trait where origin = 'system'
+        order by table_name
+      `,
+    );
+
+    expect(counts._tag).toBe("Success");
+    if (counts._tag !== "Success") return;
+    expect(counts.success).toEqual([
+      { table_name: "ability_score", count: 6 },
+      { table_name: "language", count: 16 },
+      { table_name: "proficiency", count: 117 },
+      { table_name: "racial_trait", count: 38 },
+      { table_name: "skill", count: 18 },
+    ]);
+
+    const vocabulary = await as(fixture.jo.token, (client) => client.library.optionVocabulary());
+    expect(vocabulary.abilities.map((ability) => ability.index)).toEqual([
+      "cha",
+      "con",
+      "dex",
+      "int",
+      "str",
+      "wis",
+    ]);
+    expect(vocabulary.languages.map((language) => language.name)).toContain("Dwarvish");
+    expect(vocabulary.skills.find((skill) => skill.name === "Athletics")?.ability.name).toBe("STR");
+    expect(vocabulary.proficiencies.map((proficiency) => proficiency.name)).toContain("Battleaxes");
+    expect(vocabulary.traits.map((trait) => trait.name)).toContain("Darkvision");
+
+    const dwarf = (await optionsAt(fixture.jo.token, fixture.saltRoad.id, "race")).find(
+      (option) => option.name === "Dwarf",
+    );
+    expect(dwarf?.details?.abilityBonuses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: 2,
+          subraceName: null,
+          ability: expect.objectContaining({ name: "CON" }),
+        }),
+        expect.objectContaining({
+          amount: 1,
+          subraceName: "Hill Dwarf",
+          ability: expect.objectContaining({ name: "WIS" }),
+        }),
+      ]),
+    );
+    expect(dwarf?.details?.languages.map((grant) => grant.language.name)).toEqual([
+      "Common",
+      "Dwarvish",
+    ]);
+    expect(dwarf?.details?.subraces.map((subrace) => subrace.name)).toEqual(["Hill Dwarf"]);
+    expect(dwarf?.details?.traits.map((grant) => grant.trait.name)).toEqual([
+      "Darkvision",
+      "Dwarven Resilience",
+      "Stonecunning",
+      "Dwarven Combat Training",
+      "Tool Proficiency",
+      "Dwarven Toughness",
+    ]);
+    expect(dwarf?.details?.proficiencies.map((grant) => grant.proficiency.name)).toEqual([
+      "Battleaxes",
+      "Handaxes",
+      "Light hammers",
+      "Warhammers",
+    ]);
+    expect(
+      dwarf?.details?.choices.find((choice) => choice.ownerName === "Tool Proficiency"),
+    ).toEqual(
+      expect.objectContaining({
+        kind: "proficiency",
+        choose: 1,
+        proficiencies: expect.arrayContaining([
+          expect.objectContaining({ name: "Smith's Tools" }),
+          expect.objectContaining({ name: "Brewer's Supplies" }),
+          expect.objectContaining({ name: "Mason's Tools" }),
+        ]),
+      }),
+    );
+
+    const dragonborn = (await optionsAt(fixture.jo.token, fixture.saltRoad.id, "race")).find(
+      (option) => option.name === "Dragonborn",
+    );
+    const ancestry = dragonborn?.details?.traits.find(
+      (grant) => grant.trait.name === "Draconic Ancestry",
+    );
+    const ancestryChoice = dragonborn?.details?.choices.find(
+      (choice) => choice.ownerName === "Draconic Ancestry",
+    );
+    expect(ancestryChoice).toEqual(
+      expect.objectContaining({
+        kind: "trait",
+        choose: 1,
+        traits: expect.arrayContaining([
+          expect.objectContaining({ name: "Draconic Ancestry (Black)" }),
+        ]),
+      }),
+    );
+    expect(
+      ancestryChoice?.traits.every((trait) => trait.parentTraitId === ancestry?.trait.id),
+    ).toBe(true);
+  });
+
+  it("copies race relationships as a campaign snapshot, not a view of the bundle", async () => {
+    const dwarf = (
+      await as(fixture.jo.token, (client) => client.library.options({ query: { kind: "race" } }))
+    ).find((option) => option.name === "Dwarf");
+    if (dwarf === undefined) throw new Error("expected bundled Dwarf");
+
+    const copy = await as(fixture.jo.token, (client) =>
+      client.options.derive({
+        params: { campaignId: fixture.saltRoad.id, optionId: dwarf.id },
+        payload: { visibility: "shared" },
+      }),
+    );
+    expect(copy.details?.traits.map((grant) => grant.trait.name)).toContain("Darkvision");
+    expect(
+      copy.details?.traits.every((grant) => grant.trait.id !== dwarf.details?.traits[0]?.trait.id),
+    ).toBe(true);
+
+    await sql(
+      (client) => client`
+        update racial_trait set name = 'Darkvision (changed upstream)'
+        where origin = 'system' and campaign_id is null and account_id is null and name = 'Darkvision'
+      `,
+    );
+    const reread = await as(fixture.jo.token, (client) =>
+      client.options.findById({ params: { campaignId: fixture.saltRoad.id, optionId: copy.id } }),
+    );
+    expect(reread.details?.traits.map((grant) => grant.trait.name)).toContain("Darkvision");
+    expect(reread.details?.traits.map((grant) => grant.trait.name)).not.toContain(
+      "Darkvision (changed upstream)",
+    );
+
+    await runtime.runPromise(importSystemOptions().pipe(Effect.orDie));
+  });
+
   it("lands shared, which is what makes a player's picker work at all", async () => {
     // **The one place this importer differs from `bestiary:import`, and the
     // reason is the whole shape of the feature.** A stat block is the thing the

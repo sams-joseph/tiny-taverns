@@ -43,6 +43,13 @@ export const bloodswornOriginalId = "2b1f2a1e-0000-4000-8000-000000000e05";
 export const marshfolkOriginalId = "2b1f2a1e-0000-4000-8000-000000000e06";
 export const saltRunnerOptionId = "2b1f2a1e-0000-4000-8000-000000000e07";
 export const saltRunnerOriginalId = "2b1f2a1e-0000-4000-8000-000000000e08";
+export const abilityStrengthId = "2b1f2a1e-0000-4000-8000-000000000f21";
+export const abilityConstitutionId = "2b1f2a1e-0000-4000-8000-000000000f22";
+export const commonLanguageId = "2b1f2a1e-0000-4000-8000-000000000f31";
+export const dwarvishLanguageId = "2b1f2a1e-0000-4000-8000-000000000f32";
+export const athleticsSkillId = "2b1f2a1e-0000-4000-8000-000000000f41";
+export const athleticsProficiencyId = "2b1f2a1e-0000-4000-8000-000000000f51";
+export const darkvisionTraitId = "2b1f2a1e-0000-4000-8000-000000000f61";
 export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
@@ -654,6 +661,70 @@ export const libraryOptions = [
   ...bundledRace,
 ];
 
+const ruleAbility = (id: string, index: string, name: string, fullName: string) => ({
+  id,
+  index,
+  name,
+  fullName,
+  desc: [],
+});
+
+export const optionVocabulary = {
+  abilities: [
+    ruleAbility(abilityConstitutionId, "con", "CON", "Constitution"),
+    ruleAbility(abilityStrengthId, "str", "STR", "Strength"),
+  ],
+  languages: [
+    {
+      id: commonLanguageId,
+      index: "common",
+      name: "Common",
+      type: "Standard",
+      script: "Common",
+      typicalSpeakers: ["Humans"],
+    },
+    {
+      id: dwarvishLanguageId,
+      index: "dwarvish",
+      name: "Dwarvish",
+      type: "Standard",
+      script: "Dwarvish",
+      typicalSpeakers: ["Dwarves"],
+    },
+  ],
+  skills: [
+    {
+      id: athleticsSkillId,
+      index: "athletics",
+      name: "Athletics",
+      abilityScoreId: abilityStrengthId,
+      ability: ruleAbility(abilityStrengthId, "str", "STR", "Strength"),
+      desc: [],
+    },
+  ],
+  proficiencies: [
+    {
+      id: athleticsProficiencyId,
+      index: "skill-athletics",
+      name: "Athletics",
+      type: "Skills",
+      referenceFamily: "skills",
+      referenceKey: "athletics",
+      skillId: athleticsSkillId,
+      abilityScoreId: null,
+    },
+  ],
+  traits: [
+    {
+      id: darkvisionTraitId,
+      index: "darkvision",
+      name: "Darkvision",
+      parentTraitId: null,
+      desc: ["Accustomed to twilight and caverns."],
+    },
+  ],
+};
+
 /**
  * A fight on the table: the run, and the two combatants it seeded.
  *
@@ -814,7 +885,9 @@ export const fullCampaign = (): Map<string, Answer> =>
     // the same original the campaign copy came from is still there, which is
     // the model — a copy is a separate row.
     [`GET /campaigns/${campaignId}/options`, { status: 200, body: campaignOptions }],
+    [`GET /campaigns/${campaignId}/options/vocabulary`, { status: 200, body: optionVocabulary }],
     ["GET /library/options", { status: 200, body: libraryOptions }],
+    ["GET /library/options/vocabulary", { status: 200, body: optionVocabulary }],
     [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/creatures`,
       { status: 200, body: [rosterRow] },

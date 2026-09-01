@@ -1,4 +1,10 @@
-import type { CampaignId, CharacterOption, OptionKind, Visibility } from "@taverns/api";
+import type {
+  CampaignId,
+  CharacterOption,
+  OptionKind,
+  OptionVocabulary,
+  Visibility,
+} from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -14,7 +20,15 @@ import { useMutation } from "../api/mutation";
 import { SaveFailure, VisibilityField } from "../ui/form";
 import { optionWritesAt } from "./load";
 import { OptionFields } from "./OptionFields";
-import { documentOf, draftFrom, NOUN, problemsIn, refuses, type OptionDraft } from "./optionDraft";
+import {
+  documentOf,
+  draftFrom,
+  NOUN,
+  problemsIn,
+  relationsOf,
+  refuses,
+  type OptionDraft,
+} from "./optionDraft";
 
 /**
  * Writing a class, a race or a background **for a campaign**, and editing
@@ -84,6 +98,7 @@ export function OptionDialog({
   option,
   onClose,
   onSaved,
+  vocabulary,
 }: {
   readonly campaignId: CampaignId;
   /** Which kind is being written. Not editable — see `OptionUpdate`. */
@@ -92,6 +107,7 @@ export function OptionDialog({
   readonly option: CharacterOption | undefined;
   readonly onClose: () => void;
   readonly onSaved: () => void;
+  readonly vocabulary: OptionVocabulary;
 }) {
   const [draft, setDraft] = useState<OptionDraft>(() => draftFrom(option));
   // **On for a new one, and this is the decision** — see the block above.
@@ -110,6 +126,7 @@ export function OptionDialog({
 
     const name = draft.name.trim();
     const written = documentOf(kind, draft);
+    const relations = relationsOf(draft);
 
     const saved = await submit(
       (client) =>
@@ -117,7 +134,12 @@ export function OptionDialog({
           if (option !== undefined) {
             return yield* client.options.update({
               params: { campaignId, optionId: option.id },
-              payload: { name, body: written.body, visibility },
+              payload: {
+                name,
+                body: written.body,
+                visibility,
+                ...(relations === undefined ? {} : { relations }),
+              },
             });
           }
 
@@ -140,14 +162,29 @@ export function OptionDialog({
           const original =
             written.kind === "class"
               ? yield* client.library.createOption({
-                  payload: { kind: "class", name, body: written.body },
+                  payload: {
+                    kind: "class",
+                    name,
+                    body: written.body,
+                    ...(relations === undefined ? {} : { relations }),
+                  },
                 })
               : written.kind === "race"
                 ? yield* client.library.createOption({
-                    payload: { kind: "race", name, body: written.body },
+                    payload: {
+                      kind: "race",
+                      name,
+                      body: written.body,
+                      ...(relations === undefined ? {} : { relations }),
+                    },
                   })
                 : yield* client.library.createOption({
-                    payload: { kind: "background", name, body: written.body },
+                    payload: {
+                      kind: "background",
+                      name,
+                      body: written.body,
+                      ...(relations === undefined ? {} : { relations }),
+                    },
                   });
           return yield* client.options.derive({
             params: { campaignId, optionId: original.id },
@@ -181,6 +218,7 @@ export function OptionDialog({
             problems={problems}
             showProblems={showProblems}
             onChange={setDraft}
+            vocabulary={vocabulary}
           />
 
           <VisibilityField

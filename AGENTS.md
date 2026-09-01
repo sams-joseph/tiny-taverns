@@ -1366,12 +1366,21 @@ must say **race**.
 
 The bundled rules vocabulary is pinned 2014 5e-bits data (`5e-database` 5.10.0, commit
 `5a7ee5a0489b26655d343e4a41e8f7942a887af2`) and is imported by
-`apps/server/src/ruleset/import.ts` from the generated local snapshot in `systemOptions.ts` — no
-runtime fetch. Since `0025` there is no source-document table; rows carry only stable source keys,
-and the web footer/README carry the 5e-bits MIT plus SRD 5.1 / OGL 1.0a attribution. The bestiary
-starter bundle remains Taverns-authored. Do not collapse those two source families. Existing
-development databases from the pre-2014 vocabulary should use the clean reset/reseed path in
-`README.md`, not a compatibility backfill.
+`apps/server/src/ruleset/import.ts` from generated local snapshots in `systemOptions.ts` and
+`systemVocabularies.ts` — no runtime fetch. Since `0025` there is no source-document table; rows
+carry only stable source keys, and the web footer/README carry the 5e-bits MIT plus SRD 5.1 / OGL
+1.0a attribution. The bestiary starter bundle remains Taverns-authored. Do not collapse those two
+source families. Existing development databases from the pre-2014 vocabulary should use the clean
+reset/reseed path in `README.md`, not a compatibility backfill.
+
+`0027_character_vocabulary_traits.ts` made abilities, skills, languages, proficiencies, racial
+traits, subraces and rule choices concrete tables beside `character_option`. `ruleset:import` now
+runs `syncSystemVocabularies` before option import and then `syncImportedOptionRelationships`, which
+clears and reinserts FK-backed grants/choices deterministically. Option reads are hydrated with
+`details`, and authoring payloads may carry `relations`; the Library vocabulary read is account-owned
+plus system traits, while the campaign vocabulary read is DM-only (`ensureCampaignWritable`) so a
+picker vocabulary never exposes a DM-authored trait to a player. Campaign copies copy relationship
+rows and trait snapshots — still snapshots, never views.
 
 ### Races contain subraces; there is no fourth option kind
 
@@ -1422,7 +1431,7 @@ snapshot: no pointer is stored on `character`, and there must be no recompute-al
 one explicit cost is accepted: the product cannot later answer which exact source row a character
 was originally seeded from.
 
-### Seven smaller things that are decisions
+### Eight smaller things that are decisions
 
 - **`kind` is a query parameter, not a path segment.** The design sketched `/options/:kind`;
   `/options/class` and `/options/:optionId` are the same shape, so one would have to win. It is
@@ -1440,6 +1449,10 @@ was originally seeded from.
 - **The bundle's unique index is its stable source key**, not `(kind, lower(name))` any more. `kind`
   still belongs in the source identity — class `Warden` and race `Warden` are different entities —
   but display names are no longer an upsert key.
+- **Concrete grants live beside the display document, not instead of it.** `ClassBody.proficiencies`,
+  `RaceBody.traits` and `BackgroundBody.languages` remain the readable source summary; the FK-backed
+  `details` are the machine-readable answer for pickers and provenance. A relation edit that omitted
+  the prose box would author half an option.
 - **A character's background is `sheet.identity.background` and earns no column**, where the
   class, race and subrace are columns. Nothing filters or sorts on it and it is not one of the
   identity columns the generated `descriptor` is built from — adding it would be a migration for a
@@ -1475,14 +1488,15 @@ disagreement**, the rule `characters/AbilityFields.tsx` already states:
 
 - `optionDraft.ts` — what a draft is and what it becomes. Two implementations of _is an
   untouched summary an absent key_ would differ first at the thing nobody looks at.
-- `OptionFields.tsx` — the boxes. The **editor**, under two shells.
+- `OptionFields.tsx` — the boxes. The **editor**, under two shells, including the concrete
+  relation controls fed by the matching campaign or Library vocabulary.
 - `OptionSection.tsx` — one labelled region and the `@container` grid it draws. Both screens
   draw three of them (classes, races, backgrounds), which is what made the background's arrival one
   call site each rather than a second component.
 - `OptionCard.tsx` — a row. The verbs come in as `(option) => (() => void) | undefined`, the
   `CreatureGrid` shape, so each list renders the shipped write predicate at the one place that
   knows which list it is: `isCampaignCopy` on the campaign's, `isLibraryOriginal` on the
-  Library's.
+  Library's. It also renders hydrated `details`; do not derive those from the prose body.
 
 What differs between the two shells is real and is not a flag: the campaign's authors **and**
 derives in one `submit` and carries the visibility switch; the Library's writes the original and

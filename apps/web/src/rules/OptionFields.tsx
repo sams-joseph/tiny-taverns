@@ -1,4 +1,4 @@
-import type { OptionKind } from "@taverns/api";
+import type { OptionKind, OptionVocabulary } from "@taverns/api";
 import { ABILITY_KEYS, bonusesLine, type AbilityKey } from "@taverns/api";
 import { Checkbox, Input, Label } from "@taverns/ui";
 import { Field, Textarea } from "../ui/form";
@@ -19,12 +19,14 @@ export function OptionFields({
   problems,
   showProblems,
   onChange,
+  vocabulary,
 }: {
   readonly kind: OptionKind;
   readonly draft: OptionDraft;
   readonly problems: DraftProblems;
   readonly showProblems: boolean;
   readonly onChange: (draft: OptionDraft) => void;
+  readonly vocabulary?: OptionVocabulary;
 }) {
   const set = <K extends keyof OptionDraft>(key: K, value: OptionDraft[K]) =>
     onChange({ ...draft, [key]: value });
@@ -36,6 +38,20 @@ export function OptionFields({
         ? ABILITY_KEYS.filter((ability) => ability === key || draft.unarmouredAc.includes(ability))
         : draft.unarmouredAc.filter((ability) => ability !== key),
     );
+
+  const toggleId = (
+    key: "relationLanguageIds" | "relationProficiencyIds" | "relationTraitIds",
+    id: string,
+    on: boolean,
+  ) =>
+    set(
+      key,
+      on
+        ? [...draft[key], id].filter((value, index, all) => all.indexOf(value) === index)
+        : draft[key].filter((value) => value !== id),
+    );
+
+  const topLevelTraits = vocabulary?.traits.filter((trait) => trait.parentTraitId === null) ?? [];
 
   return (
     <>
@@ -111,6 +127,16 @@ export function OptionFields({
               onChange={(event) => set("savingThrows", event.target.value)}
             />
           </Field>
+          {vocabulary !== undefined && (
+            <ConcreteChoices
+              title="Concrete proficiencies"
+              hint="These are FK-backed 2014 proficiencies; the prose box above stays as the readable summary."
+              items={vocabulary.proficiencies}
+              selected={draft.relationProficiencyIds}
+              prefix="option-class-proficiency"
+              onToggle={(id, on) => toggleId("relationProficiencyIds", id, on)}
+            />
+          )}
         </>
       ) : kind === "race" ? (
         <>
@@ -214,6 +240,26 @@ export function OptionFields({
               onChange={(event) => set("traits", event.target.value)}
             />
           </Field>
+          {vocabulary !== undefined && (
+            <>
+              <ConcreteChoices
+                title="Concrete traits"
+                hint="These are the rows character creation and detail views can follow."
+                items={topLevelTraits}
+                selected={draft.relationTraitIds}
+                prefix="option-race-trait"
+                onToggle={(id, on) => toggleId("relationTraitIds", id, on)}
+              />
+              <ConcreteChoices
+                title="Concrete languages"
+                hint="Fixed languages granted by this race. Choices stay as prose until a choice UI is drawn."
+                items={vocabulary.languages}
+                selected={draft.relationLanguageIds}
+                prefix="option-race-language"
+                onToggle={(id, on) => toggleId("relationLanguageIds", id, on)}
+              />
+            </>
+          )}
           {draft.subraces.length > 0 && (
             <div className="rounded-control border border-hairline bg-surface-sunken px-3 py-2.5">
               <p className="text-label leading-snug font-semibold text-heading">Subraces</p>
@@ -249,6 +295,26 @@ export function OptionFields({
               onChange={(event) => set("languages", event.target.value)}
             />
           </Field>
+          {vocabulary !== undefined && (
+            <>
+              <ConcreteChoices
+                title="Concrete proficiencies"
+                hint="FK-backed 2014 proficiencies granted by this background."
+                items={vocabulary.proficiencies}
+                selected={draft.relationProficiencyIds}
+                prefix="option-background-proficiency"
+                onToggle={(id, on) => toggleId("relationProficiencyIds", id, on)}
+              />
+              <ConcreteChoices
+                title="Concrete languages"
+                hint="Fixed language grants; source choice text stays in the prose box above."
+                items={vocabulary.languages}
+                selected={draft.relationLanguageIds}
+                prefix="option-background-language"
+                onToggle={(id, on) => toggleId("relationLanguageIds", id, on)}
+              />
+            </>
+          )}
           <Field
             label="Equipment"
             htmlFor="option-background-equipment"
@@ -309,5 +375,51 @@ export function OptionFields({
         />
       </Field>
     </>
+  );
+}
+
+function ConcreteChoices({
+  title,
+  hint,
+  items,
+  selected,
+  prefix,
+  onToggle,
+}: {
+  readonly title: string;
+  readonly hint: string;
+  readonly items: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly type?: string;
+  }>;
+  readonly selected: ReadonlyArray<string>;
+  readonly prefix: string;
+  readonly onToggle: (id: string, on: boolean) => void;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <fieldset className="rounded-control border border-hairline bg-surface-sunken px-3 py-2.5">
+      <legend className="text-label leading-snug font-semibold text-heading">{title}</legend>
+      <p className="mt-1 text-caption leading-body text-muted-foreground">{hint}</p>
+      <div className="mt-3 grid max-h-40 grid-cols-1 gap-2 overflow-y-auto pr-1 @2xl:grid-cols-2">
+        {items.map((item) => (
+          <div key={item.id} className="flex min-w-0 items-center gap-2">
+            <Checkbox
+              id={`${prefix}-${item.id}`}
+              checked={selected.includes(item.id)}
+              onCheckedChange={(next) => onToggle(item.id, next === true)}
+            />
+            <Label htmlFor={`${prefix}-${item.id}`} className="min-w-0 truncate">
+              {item.name}
+              {item.type !== undefined && item.type !== "" ? (
+                <span className="text-muted-foreground"> · {item.type}</span>
+              ) : null}
+            </Label>
+          </div>
+        ))}
+      </div>
+    </fieldset>
   );
 }

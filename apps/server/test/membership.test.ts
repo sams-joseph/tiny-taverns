@@ -189,6 +189,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "ruleset/import.ts",
       "ruleset/progression.ts",
       "ruleset/source.ts",
+      "ruleset/vocabularies.ts",
       "spells/import.ts",
     ]);
   });
@@ -361,6 +362,13 @@ const makeFixture = Effect.gen(function* () {
   const classCopy = yield* as(options.derive(campaign.id, homebrew.id, { visibility: "shared" }));
 
   const sql = yield* SqlClient.SqlClient;
+  yield* sql`
+    insert into racial_trait ${sql.insert({
+      campaign_id: campaign.id,
+      name: "Saltborn",
+      body: JSON.stringify({ desc: ["Knows the old road by lantern light."] }),
+    })}
+  `;
   const subclass = yield* sql<{ readonly id: string }>`
     insert into subclass ${sql.insert({
       campaign_id: campaign.id,
@@ -473,6 +481,11 @@ const READS: Record<
   // leak somebody would have found by using the product rather than by testing
   // it.
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
+  racial_trait: (f) =>
+    Effect.map(
+      Effect.flatMap(Options, (r) => r.vocabulary(f.campaign.id)),
+      (vocabulary) => vocabulary.traits,
+    ),
   subclass: (f) =>
     Effect.map(
       Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
@@ -663,7 +676,12 @@ describe("a stranger reads nothing", () => {
               'account',
               'campaign_member',
               'campaign_invite',
+              'character_option_ability_bonus',
               'character_option_equipment_reference',
+              'character_option_language',
+              'character_option_proficiency',
+              'character_option_subrace',
+              'character_option_trait',
               'condition',
               'creature_armor_equipment',
               'creature_condition_immunity',
@@ -676,10 +694,19 @@ describe("a stranger reads nothing", () => {
               'equipment_category',
               'equipment_content',
               'equipment_property',
+              'language',
               'magic_item_rarity',
               'magic_item_variant',
               'magic_school',
               'proficiency',
+              'racial_trait_damage_type',
+              'racial_trait_proficiency',
+              'rule_choice_ability',
+              'rule_choice_group',
+              'rule_choice_language',
+              'rule_choice_proficiency',
+              'rule_choice_trait',
+              'skill',
               'spell_class',
               'spell_damage_type',
               'spell_subclass',

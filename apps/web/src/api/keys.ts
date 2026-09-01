@@ -144,6 +144,9 @@ export const reads = {
    */
   options: (campaignId: CampaignId): ReadKey => key`options:${campaignId}`,
 
+  /** Concrete abilities, languages, skills, proficiencies and traits attachable at this campaign. */
+  optionVocabulary: (campaignId: CampaignId): ReadKey => key`options:${campaignId}:vocabulary`,
+
   /** One campaign class's concrete subclass, level and feature rows. */
   optionProgression: (campaignId: CampaignId, optionId: CharacterOptionId): ReadKey =>
     key`options:${campaignId}:progression:${optionId}`,
@@ -202,6 +205,9 @@ export const reads = {
    * one on a write to the other would be a request nobody is waiting for.
    */
   libraryOptions: "library:options" as ReadKey,
+
+  /** Concrete abilities, languages, skills, proficiencies and traits attachable in the Library. */
+  libraryOptionVocabulary: "library:options:vocabulary" as ReadKey,
 
   /** One Library class's concrete subclass, level and feature rows. */
   libraryOptionProgression: (optionId: CharacterOptionId): ReadKey =>

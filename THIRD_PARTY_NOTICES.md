@@ -1,6 +1,6 @@
 # Third-party notices
 
-Tiny Taverns bundles a 334-row 2014 SRD monster corpus, a 2014 D&D 5e rules vocabulary for character creation, the 319-spell 2014 SRD spell corpus, the 237-row 2014 SRD mundane-equipment corpus, and the 362-row 2014 SRD magic-item corpus. The rows are imported by `pnpm -F server bestiary:import`, `pnpm -F server ruleset:import`, `pnpm -F server spell:import`, `pnpm -F server equipment:import`, and `pnpm -F server magic-item:import`; each imported row records source-document, entity and revision metadata in the `rules_source_*` tables.
+Tiny Taverns bundles a 334-row 2014 SRD monster corpus, a 2014 D&D 5e rules vocabulary for character creation, the 319-spell 2014 SRD spell corpus, the 237-row 2014 SRD mundane-equipment corpus, and the 362-row 2014 SRD magic-item corpus. The rows are imported by `pnpm -F server bestiary:import`, `pnpm -F server ruleset:import`, `pnpm -F server spell:import`, `pnpm -F server equipment:import`, and `pnpm -F server magic-item:import`; imported domain rows record stable source corpus/family/key columns, and the web footer/README carry the attribution.
 
 ## 5e-bits / 5e-database
 
@@ -33,4 +33,4 @@ MIT notice from `5e-bits/5e-database`:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
-The upstream README states: "The underlying material is released using the Open Gaming License Version 1.0a" and links to Wizards' OGL FAQ. Tiny Taverns stores that OGL notice with the imported source document and displays the attribution in the web footer.
+The upstream README states: "The underlying material is released using the Open Gaming License Version 1.0a" and links to Wizards' OGL FAQ. Tiny Taverns displays the attribution in the web footer and keeps this notice with the repository.

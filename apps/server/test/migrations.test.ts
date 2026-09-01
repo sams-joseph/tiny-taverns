@@ -98,7 +98,12 @@ describe("migrations", () => {
       "campaign_member",
       "character",
       "character_option",
+      "character_option_ability_bonus",
       "character_option_equipment_reference",
+      "character_option_language",
+      "character_option_proficiency",
+      "character_option_subrace",
+      "character_option_trait",
       "class_level",
       "combatant",
       "condition",
@@ -119,6 +124,7 @@ describe("migrations", () => {
       "equipment_content",
       "equipment_property",
       "feature",
+      "language",
       "magic_item",
       "magic_item_rarity",
       "magic_item_variant",
@@ -126,8 +132,17 @@ describe("migrations", () => {
       "note",
       "prep_item",
       "proficiency",
+      "racial_trait",
+      "racial_trait_damage_type",
+      "racial_trait_proficiency",
+      "rule_choice_ability",
+      "rule_choice_group",
+      "rule_choice_language",
+      "rule_choice_proficiency",
+      "rule_choice_trait",
       "session",
       "session_event",
+      "skill",
       "spell",
       "spell_class",
       "spell_damage_type",
@@ -167,6 +182,7 @@ describe("migrations", () => {
       { migration_id: 24, name: "creature_monster_corpus" },
       { migration_id: 25, name: "concrete_source_relationships" },
       { migration_id: 26, name: "class_progression" },
+      { migration_id: 27, name: "character_vocabulary_traits" },
     ]);
   }, 60_000);
 
@@ -203,6 +219,7 @@ describe("migrations", () => {
       { migration_id: 24, name: "creature_monster_corpus" },
       { migration_id: 25, name: "concrete_source_relationships" },
       { migration_id: 26, name: "class_progression" },
+      { migration_id: 27, name: "character_vocabulary_traits" },
     ]);
   }, 60_000);
 });

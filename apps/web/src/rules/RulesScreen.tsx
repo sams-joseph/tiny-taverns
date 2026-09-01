@@ -217,6 +217,7 @@ function Rules({
           option={editing.option}
           onClose={() => onEdit(undefined)}
           onSaved={() => onEdit(undefined)}
+          vocabulary={editing.option === undefined ? extra.libraryVocabulary : extra.vocabulary}
         />
       )}
 
