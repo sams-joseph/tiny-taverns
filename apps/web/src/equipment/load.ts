@@ -75,7 +75,7 @@ export const loadEquipmentLibrary = (query: EquipmentQuery) => (client: TavernsC
       equipment: page.items,
       nextCursor: page.nextCursor,
       campaigns: memberships
-        .filter((membership) => membership.role === "dm")
+        .filter((membership) => membership.relation === "creator")
         .map((membership) => membership.campaign),
     } satisfies EquipmentLibraryView;
   });

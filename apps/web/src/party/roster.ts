@@ -1,4 +1,4 @@
-import type { CampaignInvite, CampaignMember, Character } from "@taverns/api";
+import type { GroupInvite, CampaignMember, Character } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 import { DateTime } from "effect";
 import { dayOf } from "../chronicle/format";
@@ -21,7 +21,7 @@ import { dayOf } from "../chronicle/format";
  * | -------------- | ------------------------------------------------------------- |
  * | `playing`      | a `player` member with a `Character` whose `accountId` is theirs |
  * | `no-character` | the same member with none                                     |
- * | `invited`      | a `CampaignInvite` whose `status` is `live`                    |
+ * | `invited`      | a `GroupInvite` whose `status` is `live`                    |
  * | `open`         | nothing                                                       |
  *
  * **Each line is a person**, which is what the single-use invitation contract
@@ -65,7 +65,7 @@ export type RosterRow =
       readonly characters: ReadonlyArray<Character>;
     }
   | { readonly kind: "no-character"; readonly member: CampaignMember }
-  | { readonly kind: "invited"; readonly invite: CampaignInvite };
+  | { readonly kind: "invited"; readonly invite: GroupInvite };
 
 /** The key a row is rendered under, and the id it is really about. */
 export const keyOf = (row: RosterRow): string =>
@@ -110,10 +110,10 @@ export const initialsOf = (name: string): string => {
 export const rosterOf = (
   members: ReadonlyArray<CampaignMember>,
   characters: ReadonlyArray<Character>,
-  invites: ReadonlyArray<CampaignInvite>,
+  invites: ReadonlyArray<GroupInvite>,
 ): ReadonlyArray<RosterRow> => {
-  const dms = members.filter((member) => member.role === "dm");
-  const players = members.filter((member) => member.role === "player");
+  const dms = members.filter((member) => member.relation === "creator");
+  const players = members.filter((member) => member.relation === "player");
 
   const playerRows = players.map((member): RosterRow => {
     const theirs = characters.filter((character) => character.accountId === member.accountId);

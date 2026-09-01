@@ -3,14 +3,15 @@ import type {
   CampaignId,
   Character,
   CreatedOrder,
+  CampaignRelation,
   Encounter,
   EncounterRun,
-  MemberRole,
   Note,
   PrepItem,
   Session,
   SessionId,
   PageCursor,
+  GroupId,
 } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
@@ -21,18 +22,12 @@ import { collectPages, WHOLE_LIST } from "../api/page";
 export interface CampaignView {
   readonly campaign: Campaign;
   /**
-   * What this account is at *this* table — the one thing the campaign row
-   * cannot carry, because a role is a fact about a pair.
-   *
-   * **It is here to close the last way a player reaches a DM screen.** The
-   * campaign list and the invitation page both route by role now, so nothing
-   * in the product links here for a player; a bookmark or a link a DM pasted
-   * still can. Landing there does not even fail loudly — every read this screen
-   * makes in its first round succeeds for a player, narrowed — so it draws a
-   * DM's chrome over a player's data and only breaks when something is pressed.
-   * Knowing the role is what lets the screen hand them the one that works.
+   * What this account is at *this* table — derived per pair, never global.
+   * The route wrapper (`CampaignRoute.tsx`) is what chooses the projection;
+   * this copy is the frame's own, read in the same round as everything else,
+   * so the chrome and the body cannot disagree about whose screen this is.
    */
-  readonly role: MemberRole;
+  readonly relation: CampaignRelation;
   /** The session the DM is preparing, or `undefined` when there is not one yet. */
   readonly session: Session | undefined;
   readonly encounters: ReadonlyArray<Encounter>;
@@ -164,8 +159,13 @@ const runsAtom = Atom.family((night: Night) =>
  * roster. Two atoms for one list would be two requests and, worse, two things a
  * mint would have to remember to refresh.
  */
-export const invitesAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom((client) => client.invites.list({ params: { campaignId } }), [reads.invites(campaignId)]),
+/**
+ * The group's invitations — group-scoped since invitations moved to the group,
+ * and keyed on the group so the campaign dialog and the group screen share one
+ * list. A campaign surface filters to the rows that name its campaign.
+ */
+export const invitesAtom = Atom.family((groupId: GroupId) =>
+  apiAtom((client) => client.invites.list({ params: { groupId } }), [reads.invites(groupId)]),
 );
 
 export const membersAtom = Atom.family((campaignId: CampaignId) =>
@@ -212,11 +212,12 @@ const assemble = (
     // `campaignInScope` is membership — so the row is there; defaulting to `dm`
     // if it somehow is not keeps the screen it is on rather than bouncing
     // somebody out of their own table.
-    const role =
-      round.memberships.find((row) => row.campaign.id === campaignId)?.role ?? ("dm" as MemberRole);
+    const relation =
+      round.memberships.find((row) => row.campaign.id === campaignId)?.relation ??
+      ("creator" as CampaignRelation);
     const settled = {
       campaign: round.campaign,
-      role,
+      relation,
       encounters: round.encounters,
       notes: round.notes,
       party: round.party,

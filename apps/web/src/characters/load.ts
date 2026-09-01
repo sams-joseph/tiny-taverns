@@ -254,7 +254,7 @@ export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
        * is still not drawn, because the pill is a mode.
        */
       const membership = roster.value.memberships.find((row) => row.campaign.id === campaignId);
-      if (membership?.role !== "player") {
+      if (membership?.relation !== "player") {
         return AsyncResult.success({ ...roster.value, options: [] });
       }
 

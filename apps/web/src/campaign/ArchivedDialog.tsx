@@ -101,7 +101,9 @@ export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
   // The list is the DM's own, for the reason in this file's doc block: the one
   // verb on a row is a write, and a write is `campaignWritable`'s question.
   const mine =
-    resource.state === "ready" ? resource.value.filter((row) => row.role === "dm") : undefined;
+    resource.state === "ready"
+      ? resource.value.filter((row) => row.relation === "creator")
+      : undefined;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>

@@ -250,7 +250,7 @@ export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
       // clause once. The filter that used to be here answered a question the
       // server had already answered, which is how a second answer starts.
       campaigns: memberships
-        .filter((membership) => membership.role === "dm")
+        .filter((membership) => membership.relation === "creator")
         .map((membership) => membership.campaign),
     } satisfies LibraryView;
   });

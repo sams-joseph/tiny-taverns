@@ -5,43 +5,66 @@ import {
   archivedCampaign,
   campaign,
   campaignId,
+  groupId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
   renderCampaigns,
+  renderGroup,
 } from "./campaign.fixtures";
 
 /**
- * Taking a campaign off the list, and bringing it back.
+ * Taking a campaign off the list, and bringing it back — from the group's
+ * directory, where a campaign's card lives now.
  *
  * The captain asked to *delete* a campaign and this product archives one — so
  * what is under test is as much the **words** as the wire: a confirmation that
  * names the campaign, copy that says it is kept, and a way back that is one
- * press. A test that only checked the `DELETE` would pass against a screen that
- * had lost every one of those.
+ * press. A test that only checked the `DELETE` would pass against a screen
+ * that had lost every one of those.
  *
  * Three properties are the ones that would rot silently, and each has a test:
  *
  * - **the shelf is a second URL, not a filter** — `GET /me/campaigns` is asked
  *   for the live list and nothing about archiving changes it;
- * - **archiving is the DM's** — a player at a table sees neither control, which
- *   is read off the membership's `role` rather than off the mode;
- * - **an open night is named, not ended** — the client sends one request, and
- *   `campaign.currentSessionId` is what it says the sentence about.
+ * - **archiving is the creator's** — a card for a table this account merely
+ *   plays at, or merely shares a group with, carries no control, read off the
+ *   card's own `relation`;
+ * - **an open night is named, not ended** — the dialog reads the campaign row
+ *   for the pointer, and the client sends one request.
  */
 
 const server = installStubServer();
 installMemoryStorage();
 
 const shelf = "/me/campaigns/archived";
-const membership = (role: "dm" | "player", row: unknown = campaign) => ({
-  campaign: row,
-  role,
-  joinedAt: "2026-06-01T10:00:00.000Z",
-});
 
 /** What `GET /me/campaigns` answers once the campaign has been shelved. */
 const nothingLive = () => server.routes.set("GET /me/campaigns", { status: 200, body: [] });
+
+const membership = (relation: "creator" | "player", row: unknown = campaign) => ({
+  campaign: row,
+  relation,
+  joinedAt: "2026-06-01T10:00:00.000Z",
+});
+
+/** The directory card, re-aimed per test. */
+const card = (relation: "creator" | "player" | "none", archivedAt: string | null = null) => ({
+  id: campaignId,
+  groupId,
+  creatorAccountId: campaign.creatorAccountId,
+  creatorName: "Wren Alderby",
+  name: campaign.name,
+  relation,
+  archivedAt,
+  createdAt: campaign.createdAt,
+});
+
+const aimDirectory = (relation: "creator" | "player" | "none", archivedAt: string | null = null) =>
+  server.routes.set(`GET /groups/${groupId}/campaigns`, {
+    status: 200,
+    body: [card(relation, archivedAt)],
+  });
 
 const paths = (method: string) =>
   server.calls.filter((call) => call.method === method).map((call) => call.pathname);
@@ -53,7 +76,7 @@ beforeEach(() => {
 
 describe("archiving a campaign", () => {
   it("confirms with the campaign's own name before anything is sent", async () => {
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderGroup(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
@@ -65,7 +88,7 @@ describe("archiving a campaign", () => {
   });
 
   it("says the campaign is kept and can be brought back, because that is the trade", async () => {
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderGroup(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     expect(await screen.findByText(/Nothing in it is deleted/)).toBeTruthy();
@@ -75,8 +98,10 @@ describe("archiving a campaign", () => {
   it("names an open night without offering to end one", async () => {
     // The fixture campaign points at session 12, and a finished session cannot
     // be current — `0006_session_finished.ts` makes that structural — so a
-    // non-null pointer is exactly "there is a night open here".
-    await renderCampaigns("/campaigns", mintingSession());
+    // non-null pointer is exactly "there is a night open here". The dialog
+    // reads the campaign row itself: the card is a deliberate projection and
+    // does not carry the pointer.
+    await renderGroup(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     expect(await screen.findByText(/A night is still open here/)).toBeTruthy();
@@ -90,32 +115,32 @@ describe("archiving a campaign", () => {
   });
 
   it("says nothing about a night when there is none", async () => {
-    server.routes.set("GET /me/campaigns", {
+    server.routes.set(`GET /campaigns/${campaignId}`, {
       status: 200,
-      body: [membership("dm", { ...campaign, currentSessionId: null })],
+      body: { ...campaign, currentSessionId: null },
     });
 
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderGroup(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     expect(await screen.findByText("Archive The Salt Road?")).toBeTruthy();
     expect(screen.queryByText(/A night is still open here/)).toBeNull();
   });
 
-  it("takes the row off the list once it is done", async () => {
-    await renderCampaigns("/campaigns", mintingSession());
+  it("re-reads the directory, and the card says Archived", async () => {
+    await renderGroup(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    // A structural write, so the screen re-reads rather than guessing: the
+    // badge appears because the server says so.
+    aimDirectory("creator", archivedCampaign.archivedAt as string);
     nothingLive();
     await userEvent.click(await screen.findByRole("button", { name: "Archive it" }));
 
-    // A structural write, so the screen re-reads rather than guessing: the row
-    // is gone because the server says it is.
-    expect(await screen.findByText("No campaigns yet")).toBeTruthy();
-    expect(screen.queryByText("The Salt Road")).toBeNull();
+    expect(await screen.findByText("Archived")).toBeTruthy();
   });
 
   it("keeps it when the confirmation is declined", async () => {
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderGroup(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     await userEvent.click(await screen.findByRole("button", { name: "Keep it here" }));
 
@@ -130,7 +155,7 @@ describe("archiving a campaign", () => {
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     });
 
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderGroup(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     await userEvent.click(await screen.findByRole("button", { name: "Archive it" }));
 
@@ -143,13 +168,11 @@ describe("archiving a campaign", () => {
 
 describe("the shelf", () => {
   it("asks for nothing until it is opened", async () => {
-    await renderCampaigns("/campaigns", mintingSession());
-    expect(await screen.findByText("The Salt Road")).toBeTruthy();
+    await renderCampaigns("/groups", mintingSession());
+    expect(await screen.findByText("The Salt Company")).toBeTruthy();
 
-    // The live list is one read, and it is the live URL. A count beside the
-    // opener would cost a second request on every load for a number that is
-    // zero for almost everybody.
-    expect(paths("GET")).toContain("/me/campaigns");
+    // A count beside the opener would cost a second request on every load for
+    // a number that is zero for almost everybody.
     expect(paths("GET")).not.toContain(shelf);
 
     await userEvent.click(screen.getByRole("button", { name: /Archived campaigns/ }));
@@ -158,31 +181,28 @@ describe("the shelf", () => {
   });
 
   it("says the shelf is empty rather than looking broken", async () => {
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderCampaigns("/groups", mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: /Archived campaigns/ }));
 
     expect(await screen.findByText(/Nothing here\./)).toBeTruthy();
   });
 
-  it("brings a campaign back, and the live list has it again", async () => {
+  it("brings a campaign back with one press", async () => {
     nothingLive();
-    server.routes.set(`GET ${shelf}`, { status: 200, body: [membership("dm", archivedCampaign)] });
+    server.routes.set(`GET ${shelf}`, {
+      status: 200,
+      body: [membership("creator", archivedCampaign)],
+    });
 
-    await renderCampaigns("/campaigns", mintingSession());
-    expect(await screen.findByText("No campaigns yet")).toBeTruthy();
-
-    await userEvent.click(screen.getByRole("button", { name: /Archived campaigns/ }));
+    await renderCampaigns("/groups", mintingSession());
+    await userEvent.click(await screen.findByRole("button", { name: /Archived campaigns/ }));
     expect(await screen.findByText(/Archived 11 August 2026/)).toBeTruthy();
 
-    // Restored, and both lists re-read: the shelf loses it and the screen
-    // behind the dialog gains it.
-    server.routes.set("GET /me/campaigns", { status: 200, body: [membership("dm")] });
+    server.routes.set("GET /me/campaigns", { status: 200, body: [membership("creator")] });
     server.routes.set(`GET ${shelf}`, { status: 200, body: [] });
     await userEvent.click(screen.getByRole("button", { name: /Restore/ }));
 
     await waitFor(() => expect(paths("POST")).toEqual([`/campaigns/${campaignId}/restore`]));
-    await userEvent.click(await screen.findByRole("button", { name: "Done" }));
-    expect(await screen.findByText("The Salt Road")).toBeTruthy();
   });
 
   it("offers no way back for a table you only sit at", async () => {
@@ -193,11 +213,11 @@ describe("the shelf", () => {
       status: 200,
       body: [
         membership("player", { ...archivedCampaign, name: "The Hag's Bargain" }),
-        membership("dm", { ...archivedCampaign, name: "The Long Winter" }),
+        membership("creator", { ...archivedCampaign, name: "The Long Winter" }),
       ],
     });
 
-    await renderCampaigns("/campaigns", mintingSession());
+    await renderCampaigns("/groups", mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: /Archived campaigns/ }));
 
     expect(await screen.findByText("The Long Winter")).toBeTruthy();
@@ -206,17 +226,16 @@ describe("the shelf", () => {
   });
 });
 
-describe("the player side", () => {
-  it("offers neither the archive control nor the shelf", async () => {
-    server.routes.set("GET /me/campaigns", {
-      status: 200,
-      body: [membership("player", { ...campaign, name: "The Hag's Bargain" })],
-    });
-
-    await renderCampaigns("/play", mintingSession());
-
-    expect(await screen.findByText("The Hag's Bargain")).toBeTruthy();
+describe("somebody else's campaign", () => {
+  it("offers no archive control on a card you play at or merely see", async () => {
+    aimDirectory("player");
+    await renderGroup(mintingSession());
+    expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Archived campaigns/ })).toBeNull();
+
+    aimDirectory("none");
+    await renderGroup(mintingSession());
+    expect(await screen.findByText("Run by Wren Alderby")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
   });
 });

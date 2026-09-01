@@ -7,6 +7,7 @@ import {
   character,
   dmMember,
   fullCampaign,
+  groupId,
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
@@ -36,7 +37,7 @@ export const inviteId = "2b1f2a1e-0000-4000-8000-0000000000e1";
 export const ilse = {
   accountId: ilseAccountId,
   name: "Ilse Vantar",
-  role: "player",
+  relation: "player",
   joinedAt: "2026-07-02T10:00:00.000Z",
 };
 
@@ -44,7 +45,7 @@ export const ilse = {
 export const kofi = {
   accountId: kofiAccountId,
   name: "Kofi Adeyemi",
-  role: "player",
+  relation: "player",
   joinedAt: "2026-07-09T10:00:00.000Z",
 };
 
@@ -89,6 +90,7 @@ export const secondSpare = {
  */
 export const liveInvite = {
   id: inviteId,
+  groupId,
   campaignId,
   label: "Hal",
   status: "live",
@@ -122,7 +124,7 @@ export const takenInvite = {
 export const fullParty = (): Map<string, Answer> => {
   const routes = fullCampaign();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] });
-  routes.set(`GET ${base}/invites`, { status: 200, body: [liveInvite, takenInvite] });
+  routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [liveInvite, takenInvite] });
   routes.set(`GET ${base}/characters`, {
     status: 200,
     body: [brannocOwned, spareCharacter, secondSpare],
@@ -135,11 +137,11 @@ export const fullParty = (): Map<string, Answer> => {
     status: 200,
     body: { ...brannocOwned, accountId: null },
   });
-  routes.set(`POST ${base}/invites`, {
+  routes.set(`POST /groups/${groupId}/invites`, {
     status: 200,
     body: { invite: liveInvite, token: "a-token" },
   });
-  routes.set(`POST ${base}/invites/${inviteId}/revoke`, {
+  routes.set(`POST /groups/${groupId}/invites/${inviteId}/revoke`, {
     status: 200,
     body: { ...liveInvite, status: "revoked", revokedAt: "2026-08-13T10:00:00Z" },
   });
@@ -150,7 +152,7 @@ export const fullParty = (): Map<string, Answer> => {
 export const emptyParty = (): Map<string, Answer> => {
   const routes = fullParty();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember] });
-  routes.set(`GET ${base}/invites`, { status: 200, body: [] });
+  routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [] });
   routes.set(`GET ${base}/characters`, { status: 200, body: [] });
   return routes;
 };

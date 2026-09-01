@@ -55,7 +55,7 @@ export const loadMagicItemLibrary = (query: MagicItemQuery) => (client: TavernsC
       magicItems: page.items,
       nextCursor: page.nextCursor,
       campaigns: memberships
-        .filter((membership) => membership.role === "dm")
+        .filter((membership) => membership.relation === "creator")
         .map((membership) => membership.campaign),
     } satisfies MagicItemLibraryView;
   });

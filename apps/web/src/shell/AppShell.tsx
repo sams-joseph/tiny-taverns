@@ -1,11 +1,11 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import type { CampaignId } from "@taverns/api";
+import type { CampaignId, CampaignRelation } from "@taverns/api";
 import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { SignInSurface } from "../auth/SignInSurface";
 import { HobRegion } from "../hob/HobDock";
-import { useCampaignId, useMode, useSection, type Mode, type Section } from "./location";
+import { useCampaignId, useCampaignRelation, useSection, type Section } from "./location";
 
 /**
  * The fixed shell: **two nav rows**, a per-screen bar under them, a scrolling
@@ -77,133 +77,62 @@ interface NavItem {
 }
 
 /**
- * The global row: everything that is above any campaign.
+ * The global row: everything that is above any campaign, and the same four
+ * items for every account — there is no mode left to branch on.
  *
- * **A function of the mode alone**, which is what makes it the row that never
- * changes as you move around inside a table — the delivery's whole reason for
- * splitting the bar. It is read off the router (`useMode`) rather than passed
- * in, so the bar can never light a section the URL is not in.
- *
- * `Campaigns` leads in both modes, as the delivery has it, on the `layers`
- * glyph it names. *Tables* is what the player's copy of it is called here, and
- * has been since the role switch shipped: it is the same screen answering
- * *"which tables do I sit at"*.
- *
- * **`Characters` is global and campaign-scoped nowhere**, which the delivery
- * agrees with and the API decided first: `GET /me/characters` is the one read on
- * `character` with no campaign in its path, because *"which characters are
- * mine"* is asked across every table at once.
- *
- * ### Library, and the item that finally moved
- *
- * The delivery puts the shared monster library on this row — its own
- * `GLOBAL_DM` is `{ id: "bestiary", icon: "footprints", label: "Library" }` —
- * and it is here now that both halves exist: `GET /library/creatures` is the
- * read, and `bestiary/LibraryScreen.tsx` is the screen. **It genuinely belongs
- * above a campaign**, which is what took two attempts to get right: a Library
- * entity is owned by an *account* and sits in no campaign at all
- * (`0015_library_creatures.ts`), so there is nothing for a campaign-scoped route
- * to read it through and nothing for one to narrow it by.
- *
- * **So `Bestiary` came off the campaign row in the same change**, which is the
- * delivery's *"nothing appears on both rows"* rather than housekeeping. That
- * screen is still a route, and under the Library model its reason is stronger
- * than when it was written: the two lists ask genuinely different questions —
- * the Library holds the **originals**, a campaign's bestiary holds that
- * campaign's **copies** — and neither can answer the other's. See `routes.tsx`,
- * where the decision about it is written down.
- *
- * `#/library/rules` is the same act one table across: the classes, races and
- * backgrounds an account has written, in no campaign. It lives **inside**
- * Library now, as the second shelf of the same account-owned originals model:
- * monsters are a corpus somebody browses, while rules are a bounded vocabulary
- * drawn in three sections. The global row names the product destination; the
- * screen's own tabs name which shelf is open.
- *
- * **Both are DM only, as the delivery draws it** (`GLOBAL_PLAYER` has no Library), and
- * the reason is the mode rather than the endpoint. Player mode is the tables you
- * sit at; authoring monsters is not something you do at somebody else's table.
- * Worth being exact, because it is **not** the reason `Bestiary` was kept out of
- * the player's campaign row: that one is a gate — a stat block is what the
- * product says a player must not have — and this one is not. `libraryRowReadable`
- * would answer any account, so an account that only ever plays somewhere still
- * has a Library and can still reach `#/library` by URL; what it would find there
- * is the bundle and whatever it has written itself, never another table's rows.
- * If the captain wants it on both rows that is a nav edit and nothing else.
+ * `Groups` leads: the group is the top-level container for connected play, and
+ * a campaign is reached through the group that holds it. `Characters` is
+ * account-owned and campaign-scoped nowhere — `GET /me/characters` is the one
+ * read on `character` with no campaign in its path. `Library` is the
+ * account-owned originals (monsters, rules, spells, equipment, magic items),
+ * in no campaign, so it genuinely belongs above one; every account has a
+ * Library, so there is no relation to gate it on.
  */
-const globalNavFor = (mode: Mode): ReadonlyArray<NavItem> => {
-  if (mode === "player") {
-    return [
-      { label: "Tables", icon: "layers", link: { to: "/play" }, section: "play" },
-      {
-        label: "Characters",
-        icon: "user",
-        link: { to: "/play/characters" },
-        section: "playCharacters",
-      },
-      { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
-    ];
-  }
-
-  return [
-    { label: "Campaigns", icon: "layers", link: { to: "/campaigns" }, section: "campaigns" },
-    // `footprints`, as the delivery names it — the same glyph the bestiary's own
-    // empty state wears, which is what makes the two read as one corpus.
-    { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
-    { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
-  ];
-};
+const globalNav: ReadonlyArray<NavItem> = [
+  // The group is home: the container your people, campaigns and shared
+  // history live in. `layers`, the glyph the campaign list wore.
+  { label: "Groups", icon: "layers", link: { to: "/groups" }, section: "groups" },
+  // Account-owned and campaign-scoped nowhere: `GET /me/characters` is the one
+  // read on `character` with no campaign in its path.
+  { label: "Characters", icon: "user", link: { to: "/characters" }, section: "characters" },
+  // `footprints`, as the delivery names it — the same glyph the bestiary's own
+  // empty state wears, which is what makes the two read as one corpus.
+  { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
+  { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
+];
 
 /**
- * The campaign row: the screens inside one table, and only ever inside one.
+ * The campaign row: the screens inside one table, derived from **what this
+ * account is at it** rather than from a global mode.
  *
- * Every item here names the campaign in its path because every endpoint behind
- * it does — which is the same fact that makes the row exist at all. From the
- * campaign list there is no campaign yet, so there is no row rather than a row
- * of disabled items.
+ * The creator gets the full row — every campaign-scoped screen that exists.
+ * A player gets the two screens whose player projections exist: the campaign's
+ * Overview (the participant projection the same URL renders them) and the
+ * Chronicle (whose screen reads `recap.readAsPlayer` for them). *Party*,
+ * *Encounters* and the corpora stay off the player's row because their reads
+ * are behind the creator gate or answer creator-only content — a control that
+ * exists and then errors is worse than one that is absent.
  *
- * **The rule that a screen earns its item on the day it exists survives the
- * split, and it is what makes both rows shorter than the drawing.** The
- * delivery's DM row is Overview / Encounters / Party / Notes / Chronicle and all
- * five are built. Its player row is *My character* / *At the table* /
- * *Chronicle*:
- *
- * - *At the table* has no screen. The player projection of a fight is an open
- *   decision, not an unwritten component, and a nav item that goes nowhere is
- *   the same lie as a stubbed field — the rule that has kept *Run* out of the
- *   DM's row since the second delivery.
- * - *My character* is not campaign-scoped here. The sheet is
- *   `/play/characters/$characterId`, reached from the roster that `Characters`
- *   on the global row already points at, so an item here would be a second
- *   answer to where a sheet lives — and the delivery's own rule is that nothing
- *   appears on both rows.
- * - The player's *Overview* is `PlayerCampaignScreen`, which exists and is what
- *   the row's title already goes to, so it is drawn as the row's first item for
- *   the reason the DM's is.
- *
- * **`Party` stays out of the player's row entirely**, and that is not merely
- * "undrawn": `members.list` is behind the `DmActor` gate and a player's
- * projection of a roster is *nothing* rather than a narrower list (`AGENTS.md`).
- * A control that exists and then errors is worse than one that is absent.
- * (*Bestiary* used to be named here for the same reason; it is off **both**
- * campaign rows now, and its successor on the global row is DM-only.)
+ * While the relation is still unknown — the membership read settling, or an
+ * account that is no participant at all — the row draws no items: a flash of
+ * creator controls at a player is chrome for somebody it does not belong to.
  */
-const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavItem> => {
-  if (mode === "player") {
+const campaignNavFor = (
+  relation: CampaignRelation | undefined,
+  campaignId: CampaignId,
+): ReadonlyArray<NavItem> => {
+  if (relation === undefined) return [];
+  if (relation === "player") {
     return [
       {
         label: "Overview",
-        link: { to: "/play/campaigns/$campaignId", params: { campaignId } },
-        section: "playOverview",
+        link: { to: "/campaigns/$campaignId", params: { campaignId } },
+        section: "overview",
       },
       {
-        // `playChronicle`, never the DM's `chronicle` route — that screen reads
-        // `recap.read`, which is behind the `DmActor` gate and would answer a
-        // player a 404. Two routes, two sections, so neither can light the
-        // other's item.
         label: "Chronicle",
-        link: { to: "/play/campaigns/$campaignId/chronicle", params: { campaignId } },
-        section: "playChronicle",
+        link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
+        section: "chronicle",
       },
     ];
   }
@@ -235,17 +164,11 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       section: "chronicle",
     },
     {
-      // The reference compendium is separate from character-building *Rules*:
-      // these are 2014 rule articles and their ordered sections, copied into a
-      // campaign as snapshots exactly like the other corpora.
       label: "Compendium",
       link: { to: "/campaigns/$campaignId/compendium", params: { campaignId } },
       section: "compendium",
     },
     {
-      // The spellbook is this campaign's copied spell corpus plus the bundled
-      // SRD rows, while `/library/spells` is the account's originals. The two
-      // routes mirror Rules' two shelves rather than replacing one another.
       label: "Spells",
       link: { to: "/campaigns/$campaignId/spells", params: { campaignId } },
       section: "spells",
@@ -261,19 +184,10 @@ const campaignNavFor = (mode: Mode, campaignId: CampaignId): ReadonlyArray<NavIt
       section: "magicItems",
     },
     {
-      // The classes, races and backgrounds this table builds characters from.
-      // A campaign item rather than a global one, and unlike *Bestiary* that is
-      // where it belongs rather than where it is waiting: the list is *this
-      // campaign's* vocabulary, distinct from `/library/rules`, which holds
-      // the account's originals.
       label: "Rules",
       link: { to: "/campaigns/$campaignId/rules", params: { campaignId } },
       section: "rules",
     },
-    // *Bestiary* was the sixth item here and is now *Library* on the global row
-    // — see `globalNavFor`. The route it pointed at still exists and still
-    // works; what it no longer is, is a destination this row offers, because
-    // nothing appears on both rows.
   ];
 };
 
@@ -374,76 +288,6 @@ function CampaignNavLink({ item, active }: { readonly item: NavItem; readonly ac
 }
 
 /**
- * The role switch: which app this is.
- *
- * `AppShell.jsx:42-60` draws it as a two-segment pill in the top row, and the
- * captain settled what it means — **a mode, not a filter.** Flipping it changes
- * the nav, the routes and the screens, not merely which rows a list shows.
- *
- * **So it is two links and holds no state**, which is the whole of how a mode
- * survives a reload, a bookmark and a middle click. The delivery's `setRole`
- * callback would have been a second answer to "which app am I in" beside the
- * URL, and the two would part company the first time somebody shared a link.
- *
- * It lands on the *list* on each side rather than trying to carry the campaign
- * across, because a campaign does not exist on both: role is a fact about a
- * pair, and the table you DM has no player screen to be shown. That is also
- * what lets it hang here rather than only on the two lists — from a fight or a
- * bestiary, *Player* means "the tables I sit at", which is a sentence that is
- * true wherever it is read.
- *
- * **It takes no prop and cannot be switched off**, and that is the fix rather
- * than a detail: see `TopNav`.
- *
- * `aria-pressed` as the delivery has it, and a real `<a>`: this is navigation
- * wearing a toggle's clothes, so it must behave like navigation.
- */
-function RoleSwitch({ mode }: { readonly mode: Mode }) {
-  const options = [
-    { id: "dm", icon: "crown", label: "DM", link: { to: "/campaigns" } },
-    { id: "player", icon: "user", label: "Player", link: { to: "/play" } },
-  ] as const satisfies ReadonlyArray<{
-    id: Mode;
-    icon: IconName;
-    label: string;
-    link: LinkProps;
-  }>;
-
-  return (
-    <div
-      aria-label="Role"
-      className="flex shrink-0 gap-0.5 rounded-pill border border-hairline bg-surface-sunken p-0.5"
-    >
-      {options.map((option) => {
-        const on = option.id === mode;
-        return (
-          <Link
-            key={option.id}
-            {...option.link}
-            // Exact, and no active class, for the reasons `NavLink` gives.
-            // `aria-pressed` is what says which side is on here: this is a
-            // toggle wearing a link's clothes, and the mode it names is true
-            // across a whole half of the app rather than at one URL.
-            activeOptions={{ exact: true }}
-            activeProps={{}}
-            aria-pressed={on}
-            className={cn(
-              "flex h-6.5 items-center gap-1.5 rounded-pill px-2.5 text-caption leading-none font-semibold whitespace-nowrap transition-control",
-              on
-                ? "bg-accent text-on-accent"
-                : "text-muted-foreground hover:bg-surface-raised hover:text-foreground",
-            )}
-          >
-            <Icon name={option.icon} size={13} />
-            {option.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
  * *Ask Hob*, part of the specified layout.
  *
  * The panel it opens is built elsewhere; this is the shell's half of the seam.
@@ -466,40 +310,61 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
 }
 
 /**
- * The app's own bar: where you are in the product, who you are, and **which of
- * the two apps you are in**.
+ * The app's own bar: where you are in the product, and who you are.
  *
  * Not sticky and not on the layering scale — it is a flex row *above* the
- * scrolling column rather than something floating over it, so it never overlaps
- * anything and never has to win.
+ * scrolling column rather than something floating over it, so it never
+ * overlaps anything and never has to win.
  *
- * ### The role switch is part of the bar, not a favour a screen does
- *
- * It was a `roleSwitch` prop defaulting to `false`, offered by the two campaign
- * lists and by nothing else, and on the DM's list only once the account already
- * held a `player` membership. Both halves failed the same way: the pill
- * vanished the moment you went anywhere, and the one place it could appear was
- * hidden from exactly the account that needed it — **you could not reach player
- * mode until you were a player, and the control that takes you there was hidden
- * until you were one.** Every account that predates the invitation is in that
- * state, which is why the captain saw no toggle at all.
- *
- * So it is drawn from `modeOf(route)` like the nav is, with no prop to pass and
- * nothing to opt into. **A control every screen must remember is one every new
- * screen will forget**, and there is no shape of forgetting left: a screen that
- * renders this shell has the switch, and a screen that does not render this
- * shell has no bar to put it in.
- *
- * That settles the single-role account too, and the answer is the honest empty
- * state rather than a hidden control: *Player* on an account that sits at no
- * table lands on `#/play`, which says nobody has invited you yet and that a
- * table appears once its DM shares it. A DM who has been handed a link to
- * somebody else's table can therefore find it — the actual need underneath —
- * without being told a URL.
+ * **There is no role switch.** The group architecture removed the premise: the
+ * relation is per campaign (`useCampaignRelation`), so the campaign row and
+ * the *Ask Hob* button derive themselves from what this account is at the
+ * table the route names, and the same URL renders creator chrome to its
+ * creator and participant chrome to a player. Nothing global is left for a
+ * toggle to say.
  *
  * **Where you are is read from the router, not handed down.** There is no
  * `route` prop to pass and none to get wrong; see `shell/location.ts`.
  */
+/**
+ * *Ask Hob* with the relation applied — a component of its own so the
+ * membership read happens only when the route names a campaign. At a table
+ * this account merely plays at the button is absent rather than present and
+ * failing: the docked panel's verbs are the creator's.
+ */
+function AskHobSlot({
+  campaignId,
+  onAskHob,
+}: {
+  readonly campaignId: CampaignId;
+  readonly onAskHob?: () => void;
+}) {
+  const relation = useCampaignRelation(campaignId);
+  if (relation === "player") return null;
+  return <AskHobButton onClick={onAskHob} />;
+}
+
+/**
+ * The campaign row's items, relation-derived — rendered only inside a
+ * campaign, which is what keeps the membership read off every other screen.
+ */
+function CampaignRowNav({
+  campaignId,
+  section,
+}: {
+  readonly campaignId: CampaignId;
+  readonly section: Section;
+}) {
+  const relation = useCampaignRelation(campaignId);
+  return (
+    <nav aria-label="This campaign" className="ml-2 flex items-stretch self-stretch">
+      {campaignNavFor(relation, campaignId).map((item) => (
+        <CampaignNavLink key={item.label} item={item} active={item.section === section} />
+      ))}
+    </nav>
+  );
+}
+
 function TopNav({
   campaignName,
   campaignBadge,
@@ -512,7 +377,6 @@ function TopNav({
   readonly onAskHob?: () => void;
 }) {
   const section = useSection();
-  const mode = useMode();
   const campaignId = useCampaignId();
 
   return (
@@ -545,29 +409,22 @@ function TopNav({
         </div>
 
         <nav aria-label="Sections" className="flex items-center gap-1">
-          {globalNavFor(mode).map((item) => (
+          {globalNav.map((item) => (
             <GlobalNavLink key={item.label} item={item} active={item.section === section} />
           ))}
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* Absent in player mode rather than present and failing. Asking Hob is
-              a write — `HobThreads.start` needs `campaignWritable` — so a player
-              gets the ordinary `NotFound`, and the captain settled that players
-              do not talk to Hob at all. A button that opens a panel which can
-              only apologise is the DM chrome this mode exists to keep out of the
-              way.
-
-              It is on the *global* row, where the delivery puts it, and that is
-              right even though every question it can ask is about a campaign:
-              the panel is the app's, opens over whatever you are reading, and a
-              button that moved between rows as you navigated would be a control
-              you have to look for. */}
-          {mode === "dm" && <AskHobButton onClick={onAskHob} />}
-          {/* Unconditional, and that is the point — see this component's own
-              note. It is the bar's, like the nav, rather than something each
-              screen remembers to ask for. */}
-          <RoleSwitch mode={mode} />
+          {/* There is no role switch beside this any more: the relation is a
+              fact about the pair (this account, this campaign), read off the
+              membership row per campaign inside `AskHobSlot`, and a global
+              toggle was a second answer to a per-campaign question. Above any
+              campaign the button is simply the bar the designers drew. */}
+          {campaignId === undefined ? (
+            <AskHobButton onClick={onAskHob} />
+          ) : (
+            <AskHobSlot campaignId={campaignId} onAskHob={onAskHob} />
+          )}
           {/* Clerk's own components, unthemed on purpose — see SignInSurface.
               Renders nothing at all when no publishable key is configured, which
               is why the bar can carry it unconditionally. It moved here from the
@@ -582,16 +439,12 @@ function TopNav({
           forget it either. */}
       {campaignId !== undefined && (
         <div className="@container flex h-11.5 items-center gap-3 px-page-sm sm:px-page">
-          <CampaignHome mode={mode} campaignId={campaignId} name={campaignName} />
+          <CampaignHome campaignId={campaignId} name={campaignName} />
           {/* The badge is this row's decoration, so it is the second thing to
               give way — the campaign's own screens say which night it is in
               their subtitle, and a narrow bar has to keep its controls. */}
           <div className="hidden shrink-0 @2xl:block">{campaignBadge}</div>
-          <nav aria-label="This campaign" className="ml-2 flex items-stretch self-stretch">
-            {campaignNavFor(mode, campaignId).map((item) => (
-              <CampaignNavLink key={item.label} item={item} active={item.section === section} />
-            ))}
-          </nav>
+          <CampaignRowNav campaignId={campaignId} section={section} />
           {campaignActions !== undefined && (
             <div className="ml-auto flex shrink-0 items-center gap-2">{campaignActions}</div>
           )}
@@ -629,22 +482,16 @@ function TopNav({
  * that says what it does without a label.
  */
 function CampaignHome({
-  mode,
   campaignId,
   name,
 }: {
-  readonly mode: Mode;
   readonly campaignId: CampaignId;
   readonly name?: string;
 }) {
-  const link: LinkProps =
-    mode === "player"
-      ? { to: "/play/campaigns/$campaignId", params: { campaignId } }
-      : { to: "/campaigns/$campaignId", params: { campaignId } };
-
   return (
     <Link
-      {...link}
+      to="/campaigns/$campaignId"
+      params={{ campaignId }}
       // No `data-active`: this is the title, not an item, and the row's own
       // *Overview* is what lights when you are at it.
       activeProps={{}}

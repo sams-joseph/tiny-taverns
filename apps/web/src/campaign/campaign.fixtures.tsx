@@ -83,8 +83,22 @@ export const page = (
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
 const provenance = { origin: "authored", assistantTurnId: null };
 
+/** The group the fixture campaign lives in — one per shared server. */
+export const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
+
+export const group = {
+  id: groupId,
+  name: "The Salt Company",
+  ownerAccountId: theDmAccountId,
+  archivedAt: null,
+  createdAt: "2026-06-01T10:00:00.000Z",
+  updatedAt: "2026-06-01T10:00:00.000Z",
+};
+
 export const campaign = {
   id: campaignId,
+  groupId,
+  creatorAccountId: theDmAccountId,
   name: "The Salt Road",
   partyName: "The Gilded Spoon",
   playerCount: 4,
@@ -844,7 +858,7 @@ export const dmAccountId = theDmAccountId;
 export const dmMember = {
   accountId: dmAccountId,
   name: "Wren Alderby",
-  role: "dm",
+  relation: "creator",
   joinedAt: "2026-06-01T10:00:00.000Z",
 };
 
@@ -941,13 +955,52 @@ export const combatRuleDetail = {
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
-    // The campaign view reads the membership list in its first round, to know
-    // which side of the role switch this account is on at this table. A test
-    // that wants the other side re-aims this at `role: "player"`, which is what
-    // bounces the screen to `#/play/campaigns/:c`.
+    // The membership list decides which projection a campaign URL renders —
+    // the relation replaced the global mode. A test that wants the player
+    // side re-aims this at `relation: "player"`, which makes the same URL
+    // render the participant projection.
     [
       "GET /me/campaigns",
-      { status: 200, body: [{ campaign, role: "dm", joinedAt: stamps.createdAt }] },
+      { status: 200, body: [{ campaign, relation: "creator", joinedAt: stamps.createdAt }] },
+    ],
+    // The group above the campaign: the directory, the roster, the list. The
+    // campaign screens do not read these, but the group screen and the shell
+    // may, and one shared server has to be able to answer them.
+    // Who is reading — the group view derives `isOwner` from it.
+    ["GET /me", { status: 200, body: { id: theDmAccountId, name: "Wren Alderby" } }],
+    ["GET /groups", { status: 200, body: [{ group, isOwner: true, joinedAt: stamps.createdAt }] }],
+    [`GET /groups/${groupId}`, { status: 200, body: group }],
+    [
+      `GET /groups/${groupId}/campaigns`,
+      {
+        status: 200,
+        body: [
+          {
+            id: campaignId,
+            groupId,
+            creatorAccountId: theDmAccountId,
+            creatorName: "Wren Alderby",
+            name: campaign.name,
+            relation: "creator",
+            archivedAt: null,
+            createdAt: stamps.createdAt,
+          },
+        ],
+      },
+    ],
+    [
+      `GET /groups/${groupId}/members`,
+      {
+        status: 200,
+        body: [
+          {
+            accountId: dmAccountId,
+            name: "Wren Alderby",
+            isOwner: true,
+            joinedAt: stamps.createdAt,
+          },
+        ],
+      },
     ],
     // The other shelf, and empty is the ordinary answer. It is a *second URL*
     // rather than a parameter on the read above, so a test that wants an
@@ -963,7 +1016,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     // nothing outstanding — `party/party.fixtures.tsx` is where a populated
     // roster lives, and it re-aims both.
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
-    [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
+    [`GET /groups/${groupId}/invites`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
     [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
     [`GET /campaigns/${campaignId}/spells`, { status: 200, body: page([fireball]) }],
@@ -1134,10 +1187,17 @@ export const renderNotes = async (hosted: HostedSession = noSession): Promise<vo
  * test of the player side renders.
  */
 export const renderCampaigns = async (
-  path: "/campaigns" | "/play" = "/campaigns",
+  path: "/groups" | "/" = "/groups",
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(path, (screen) => (
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
+  ));
+};
+
+/** The group above the fixture campaign — the directory and the roster. */
+export const renderGroup = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/groups/${groupId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

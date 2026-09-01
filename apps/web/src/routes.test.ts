@@ -1,4 +1,4 @@
-import { CampaignId, CharacterId, EncounterRunId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SessionId, GroupId } from "@taverns/api";
 import { createHashHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
@@ -23,6 +23,7 @@ import { routeTree } from "./routes";
  */
 
 const CAMPAIGN_ID = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
+const GROUP_ID = Schema.decodeSync(GroupId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-000000000501");
 const RUN_ID = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-000000000c01");
 const CHARACTER_ID = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
@@ -68,7 +69,7 @@ describe("the route table", () => {
     // this is the same round trip the old `parseRoute(hrefFor(route))` was:
     // build the URL for a screen, and land back on that screen.
     const screens = [
-      { to: "/campaigns", at: "/campaigns" },
+      { to: "/groups", at: "/groups" },
       { to: "/library", at: "/library" },
       { to: "/gallery", at: "/gallery" },
       {
@@ -97,22 +98,17 @@ describe("the route table", () => {
         at: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
       },
       { to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" }, at: "/join/$token" },
-      { to: "/play", at: "/play/" },
+      { to: "/groups/$groupId", params: { groupId: GROUP_ID }, at: "/groups/$groupId/" },
+      { to: "/characters", at: "/characters/" },
       {
-        to: "/play/campaigns/$campaignId",
-        params: { campaignId: CAMPAIGN_ID },
-        at: "/play/campaigns/$campaignId/",
-      },
-      {
-        to: "/play/campaigns/$campaignId/chronicle",
-        params: { campaignId: CAMPAIGN_ID },
-        at: "/play/campaigns/$campaignId/chronicle",
-      },
-      { to: "/play/characters", at: "/play/characters/" },
-      {
-        to: "/play/characters/$characterId",
+        to: "/characters/$characterId",
         params: { characterId: CHARACTER_ID },
-        at: "/play/characters/$characterId",
+        at: "/characters/$characterId",
+      },
+      {
+        to: "/campaigns/$campaignId/characters/new",
+        params: { campaignId: CAMPAIGN_ID },
+        at: "/campaigns/$campaignId/characters/new",
       },
     ] as const;
 
@@ -230,83 +226,40 @@ describe("the route table", () => {
     });
   });
 
-  it("carries the role switch in the URL, because a mode kept beside it could disagree", () => {
-    // The captain settled the switch as a mode rather than a filter, so it
-    // changes what the app is. Held in React state it would be a second answer
-    // to "which app am I in" beside the URL, and a reload, a bookmark or a
-    // shared link would land on a screen the pill says you are not looking at.
-    //
-    // Under the router the mode is a fact about the *tree*: every player screen
-    // is a descendant of `/play`, so being in player mode and being on one of
-    // those routes are the same statement. `shell/location.ts` reads it, and
-    // `shell/AppShell.test.tsx` pins what the bar does with it.
-    expect(landsOn("/play").at).toBe("/play/");
-    expect(landsOn(`/play/campaigns/${CAMPAIGN_ID}`)).toEqual({
-      at: "/play/campaigns/$campaignId/",
-      params: { campaignId: CAMPAIGN_ID },
+  it("hangs a group's screen off its id, and falls back to the groups list on a bad one", () => {
+    // The group is the top-level container, and there is no mode anywhere in
+    // the URL any more: the same campaign URL renders creator or participant
+    // chrome from the relation, which is data rather than a path segment.
+    expect(landsOn(`/groups/${GROUP_ID}`)).toEqual({
+      at: "/groups/$groupId/",
+      params: { groupId: GROUP_ID },
     });
-
-    const player = [
-      "/play",
-      `/play/campaigns/${CAMPAIGN_ID}`,
-      `/play/campaigns/${CAMPAIGN_ID}/chronicle`,
-      "/play/characters",
-      `/play/characters/${CHARACTER_ID}`,
-    ];
-    for (const path of player) expect(landsOn(path).at.startsWith("/play")).toBe(true);
-
-    // Neither names a mode; the answer only decides which nav they draw, and
-    // the invitation page runs before there is anybody to have a role at all.
-    for (const path of [`/campaigns/${CAMPAIGN_ID}`, "/join/aG93", "/gallery"]) {
-      expect(landsOn(path).at.startsWith("/play")).toBe(false);
-    }
-
-    expect(linkTo("/", { to: "/play" })).toBe("/play");
-    expect(linkTo("/", { to: "/campaigns" })).toBe("/campaigns");
-  });
-
-  it("falls back within the mode, not out of it, on a player link it cannot read", () => {
-    // The id is what was illegible; the mode was not. Falling back to the DM's
-    // list would answer a question the URL did not ask — so every one of these
-    // lands on `/play`'s own splat rather than on the root's.
-    expect(landsOn("/play/campaigns/not-a-uuid").at).toBe("/play/$");
-    expect(landsOn("/play/campaigns").at).toBe("/play/$");
-    expect(landsOn("/play/nonsense").at).toBe("/play/$");
-    // A half-typed sheet link still knows it meant the roster, which is the
-    // same fall-back-one-level a broken run link takes to its campaign.
-    expect(landsOn("/play/characters/not-a-uuid").at).toBe("/play/characters/$");
+    expect(landsOn(`/groups/${GROUP_ID}/a-section-we-do-not-serve`).at).toBe("/groups/$groupId/$");
+    expect(landsOn("/groups/not-a-uuid").at).toBe("/$");
+    expect(linkTo("/", { to: "/groups" })).toBe("/groups");
   });
 
   it("reads the character routes, which name no campaign at all", () => {
     // `GET /me/characters` is the one read on `character` with no campaign in
     // its path, so neither route carries one — the campaign is on the row.
-    expect(landsOn("/play/characters").at).toBe("/play/characters/");
-    expect(landsOn(`/play/characters/${CHARACTER_ID}`)).toEqual({
-      at: "/play/characters/$characterId",
+    expect(landsOn("/characters").at).toBe("/characters/");
+    expect(landsOn(`/characters/${CHARACTER_ID}`)).toEqual({
+      at: "/characters/$characterId",
       params: { characterId: CHARACTER_ID },
     });
+    // A half-typed sheet link still knows it meant the roster, which is the
+    // same fall-back-one-level a broken run link takes to its campaign.
+    expect(landsOn("/characters/not-a-uuid").at).toBe("/characters/$");
   });
 
-  it("gives the player's chronicle a route of its own, under the mode", () => {
-    // Two Chronicles read one record through two endpoints — `recap.read` is
-    // behind the `DmActor` gate, `recap.readAsPlayer` is the narrow one — so
-    // which you get has to be the part of the URL you can read. Under the DM's
-    // prefix it would also be a screen the pill says you are not on.
-    expect(landsOn(`/play/campaigns/${CAMPAIGN_ID}/chronicle`)).toEqual({
-      at: "/play/campaigns/$campaignId/chronicle",
+  it("puts the create form under the campaign it creates at", () => {
+    // The campaign is step one: `character.campaign_id` is `not null`, so a
+    // character has nowhere to live until a table is picked, and the id in the
+    // URL is what makes that pick a thing you can bookmark and reload.
+    expect(landsOn(`/campaigns/${CAMPAIGN_ID}/characters/new`)).toEqual({
+      at: "/campaigns/$campaignId/characters/new",
       params: { campaignId: CAMPAIGN_ID },
     });
-    // The DM's is untouched and still its own screen.
-    expect(landsOn(`/campaigns/${CAMPAIGN_ID}/chronicle`).at).toBe(
-      "/campaigns/$campaignId/chronicle",
-    );
-    // An unknown section under a real player campaign is that table, the same
-    // fallback the DM's side takes.
-    expect(landsOn(`/play/campaigns/${CAMPAIGN_ID}/chronicles`)).toEqual({
-      at: "/play/campaigns/$campaignId/$",
-      params: { campaignId: CAMPAIGN_ID },
-    });
-    expect(landsOn("/play/campaigns/not-a-uuid/chronicle").at).toBe("/play/$");
   });
 
   it("falls back to the list rather than throwing on an id we never minted", () => {
@@ -314,7 +267,7 @@ describe("the route table", () => {
     // refused — and `params.parse` returning `false` is what makes the refusal
     // a link that does not match rather than an error boundary mid-render.
     expect(landsOn("/campaigns/not-a-uuid").at).toBe("/$");
-    expect(landsOn("/campaigns").at).toBe("/campaigns");
+    expect(landsOn("/groups").at).toBe("/groups");
     expect(landsOn("/").at).toBe("/");
   });
 
@@ -335,9 +288,8 @@ describe("the route table", () => {
         path: `/campaigns/${CAMPAIGN_ID}/sessions/${SESSION_ID}/runs/nope`,
         at: "/campaigns/$campaignId/$",
       },
-      { path: "/play/campaigns/nope", at: "/play/$" },
-      { path: "/play/campaigns/nope/chronicle", at: "/play/$" },
-      { path: "/play/characters/nope", at: "/play/characters/$" },
+      { path: "/groups/nope", at: "/$" },
+      { path: "/characters/nope", at: "/characters/$" },
       { path: "/join/not a token", at: "/$" },
     ];
     for (const { path, at } of malformed)

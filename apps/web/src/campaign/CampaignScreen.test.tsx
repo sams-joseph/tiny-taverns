@@ -227,7 +227,7 @@ describe("CampaignScreen", () => {
     // player may see, and break only on the press.
     server.routes.set("GET /me/campaigns", {
       status: 200,
-      body: [{ campaign, role: "player", joinedAt: campaign.createdAt }],
+      body: [{ campaign, relation: "player", joinedAt: campaign.createdAt }],
     });
 
     await renderScreen(mintingSession());
@@ -240,7 +240,7 @@ describe("CampaignScreen", () => {
     // reader ends up — the player's own screen, on `replace` so *Back* returns
     // them where they came from rather than here.
     await waitFor(() => {
-      expect(globalThis.location.hash).toBe(`#/play/campaigns/${campaignId}`);
+      expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`);
     });
     // Not one control of this screen is drawn on the way.
     // Not one control of *this screen* is drawn on the way — the sharing

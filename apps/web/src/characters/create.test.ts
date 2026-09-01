@@ -13,10 +13,10 @@ import {
   type SeededField,
 } from "./create";
 
-const table = (id: string, name: string, role: "dm" | "player"): CampaignMembership =>
+const table = (id: string, name: string, relation: "creator" | "player"): CampaignMembership =>
   ({
     campaign: { id, name },
-    role,
+    relation,
     joinedAt: "2026-07-02T10:00:00.000Z",
   }) as unknown as CampaignMembership;
 
@@ -106,14 +106,14 @@ describe("which tables a character of your own may go into", () => {
     expect(
       tablesForNewCharacter([
         table("a", "The Salt Road", "player"),
-        table("b", "A table I run", "dm"),
+        table("b", "A table I run", "creator"),
         table("c", "The Hag's Bargain", "player"),
       ]).map((row) => row.campaign.name),
     ).toEqual(["The Salt Road", "The Hag's Bargain"]);
   });
 
   it("is empty for an account that only runs games", () => {
-    expect(tablesForNewCharacter([table("b", "A table I run", "dm")])).toEqual([]);
+    expect(tablesForNewCharacter([table("b", "A table I run", "creator")])).toEqual([]);
     expect(tablesForNewCharacter([])).toEqual([]);
   });
 });

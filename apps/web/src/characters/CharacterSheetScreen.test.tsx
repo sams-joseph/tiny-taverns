@@ -142,7 +142,9 @@ describe("a character sheet", () => {
     // the fourth: `DELETE /me/characters/:id` shipped with the create and got
     // its first caller when Hob could draft a character somebody then abandons.
     await tab("Stats");
-    expect(pressable()).toEqual(["Delete", "Edit", "Edit", "Edit"]);
+    // *Ask Hob* is the shell's own chrome on every campaign-less screen — the
+    // bar the designers drew, with no handler here — not a sheet control.
+    expect(pressable()).toEqual(["Ask Hob⌘K", "Delete", "Edit", "Edit", "Edit"]);
     expect(screen.getByRole("button", { name: "Edit abilities" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
     // The cell is still not a roll button, which is what the drawing makes it.
@@ -150,16 +152,18 @@ describe("a character sheet", () => {
 
     // Actions: attacks and spell pips. Nothing rolls and nothing is spent.
     await tab("Actions");
-    expect(pressable()).toEqual(["Delete", "Edit"]);
+    expect(pressable()).toEqual(["Ask Hob⌘K", "Delete", "Edit"]);
 
     // Log: level-ups are a document key with no drawn control behind it.
     await tab("Log");
-    expect(pressable()).toEqual(["Delete", "Edit"]);
+    expect(pressable()).toEqual(["Ask Hob⌘K", "Delete", "Edit"]);
 
     // Story: the backstory is writable; the journal beside it is not, and the
     // four bond/ideal/flaw lines are still read-only.
     await tab("Story");
-    expect(pressable().filter((text) => text !== "Edit" && text !== "Delete")).toEqual([]);
+    expect(
+      pressable().filter((text) => text !== "Edit" && text !== "Delete" && text !== "Ask Hob⌘K"),
+    ).toEqual([]);
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
 
     // The live half of the row is drawn and is nobody's to change here.
@@ -180,7 +184,7 @@ describe("a character sheet", () => {
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
 
     expect(screen.getByRole("button", { name: /Characters/ }).getAttribute("href")).toBe(
-      "/#/play/characters",
+      "/#/characters",
     );
   });
 

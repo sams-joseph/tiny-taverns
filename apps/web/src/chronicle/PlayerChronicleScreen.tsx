@@ -1,5 +1,5 @@
 import type { CampaignId, SessionId } from "@taverns/api";
-import { useParams } from "@tanstack/react-router";
+
 import { Icon, Toggle } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
@@ -56,8 +56,7 @@ const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
   ]),
 );
 
-export function PlayerChronicleScreen() {
-  const { campaignId } = useParams({ from: "/play/campaigns/$campaignId" });
+export function PlayerChronicleScreen({ campaignId }: { readonly campaignId: CampaignId }) {
   const [readAloud, setReadAloud] = useState(false);
   /**
    * Which night is open — `undefined` until somebody chooses, which resolves to

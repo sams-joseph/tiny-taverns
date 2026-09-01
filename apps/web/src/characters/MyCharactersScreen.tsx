@@ -126,9 +126,7 @@ function CharacterCard({
           className="mt-auto w-full"
           size="sm"
           nativeButton={false}
-          render={
-            <Link to="/play/characters/$characterId" params={{ characterId: character.id }} />
-          }
+          render={<Link to="/characters/$characterId" params={{ characterId: character.id }} />}
         >
           Open sheet
         </Button>

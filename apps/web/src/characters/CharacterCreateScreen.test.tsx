@@ -163,7 +163,7 @@ describe("writing down a character of your own", () => {
     expect(screen.queryByRole("button", { name: /Create character/i })).toBeNull();
     // `replace: true`, so *Back* from the sheet goes to wherever the player
     // started rather than to a form for a character they have already made.
-    expect(window.location.hash).toBe(`#/play/characters/${brannocId}`);
+    expect(window.location.hash).toBe(`#/characters/${brannocId}`);
   });
 
   it("writes the background label without changing creation arithmetic", async () => {
@@ -295,7 +295,7 @@ describe("writing down a character of your own", () => {
 
     // And it lands on the shipped sheet, exactly as the form does.
     await screen.findAllByText("Brannoc Duskharrow");
-    expect(window.location.hash).toBe(`#/play/characters/${brannocId}`);
+    expect(window.location.hash).toBe(`#/characters/${brannocId}`);
   });
 
   it("asks again in the same thread, so Hob can see what it already drafted", async () => {
@@ -425,7 +425,7 @@ describe("writing down a character of your own", () => {
     // The card is still there — a refused accept that threw the draft away
     // would be the worse failure, and the redraft loop is still reachable.
     expect(screen.getByText("Sorrel Ash")).toBeTruthy();
-    expect(window.location.hash).toBe(`#/play/campaigns/${campaignId}/characters/new`);
+    expect(window.location.hash).toBe(`#/campaigns/${campaignId}/characters/new`);
   });
 
   it("ignores a proposal that is not a character", async () => {
@@ -506,7 +506,7 @@ describe("writing down a character of your own", () => {
     // away five minutes of typing would be the worse failure.
     await screen.findByText("That campaign is gone, or it belongs to someone else.");
     expect((screen.getByLabelText(/^Name$/) as HTMLInputElement).value).toBe("Sorrel Ash");
-    expect(window.location.hash).toBe(`#/play/campaigns/${campaignId}/characters/new`);
+    expect(window.location.hash).toBe(`#/campaigns/${campaignId}/characters/new`);
   });
   it("seeds the two numbers from a pick, and says what they are", async () => {
     await renderCreate();

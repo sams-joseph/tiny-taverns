@@ -1,99 +1,53 @@
-import type { CampaignId } from "@taverns/api";
+import type { CampaignId, CampaignRelation, GroupId } from "@taverns/api";
 import { useMatchRoute, useParams } from "@tanstack/react-router";
+import { useApiAtom } from "../api/atoms";
+import { membershipsAtom } from "../campaign/load";
 
 /**
- * The three facts the shell needs about where you are, all read off the router.
+ * The facts the shell needs about where you are, read off the router — plus
+ * the one fact a router cannot supply: what this account *is* at the campaign
+ * the route names.
  *
- * **Nothing here is state and nothing is a prop.** The old shell was handed a
- * `route` object that `App.tsx` had computed; the router now owns the URL, so a
- * second copy threaded down through twelve screens would be a second answer to
- * "where am I" — and the one that could disagree, because it is the one nobody
- * updates. Every screen renders `AppShell` with no location prop at all, which
- * is also what makes it impossible for a new screen to pass the wrong one.
+ * **Nothing here is a prop.** The router owns the URL, so a second copy
+ * threaded down through screens would be a second answer to "where am I" — and
+ * the one that could disagree, because it is the one nobody updates. Every
+ * screen renders `AppShell` with no location prop at all.
  *
- * `useMatchRoute` is typed against the route tree, so a path that does not
- * exist fails to compile rather than silently never matching.
+ * ### There is no mode any more, and that is the group architecture's shape
+ *
+ * The old shell carried a global DM/player mode in the URL (`/play/…`) and a
+ * role switch to move between the two halves. The captain's decisions of
+ * 2026-09-01 remove the premise: DM-ness is *per campaign* — the campaign's
+ * creator, immutably — so the same campaign URL renders creator chrome to its
+ * creator and participant chrome to a player, and there is nothing global left
+ * for a toggle to say. `useCampaignRelation` is where the per-campaign answer
+ * comes from: the same `GET /me/campaigns` read the campaign frame already
+ * makes, whose rows carry a derived `relation`.
  */
 
-/** Which app this is: the DM's tool, or the player's. */
-export type Mode = "dm" | "player";
-
 /**
- * Which app you are in.
+ * Which nav item is lit — **one value across two rows**, which is how the
+ * sixth delivery's *"nothing appears on both rows"* is enforced rather than
+ * remembered: being inside a campaign is the same fact as no global item being
+ * lit.
  *
- * **Derived from the match, never stored beside it.** That is what makes the
- * switch a mode rather than a filter without needing a second piece of state to
- * keep in step — there is one answer, the URL is it, and every screen, every
- * nav item and the pill itself read the same function. A role is otherwise a
- * fact about a *pair* (this account, this campaign), so a mode held globally is
- * under-determined the moment you open a table: reading it off the route means
- * the campaign you are looking at is always the campaign the mode is about.
+ * The global row is `Groups | Characters | Library | Components`. A group's
+ * own screen is *within* Groups; a character sheet is *within* the roster it
+ * was opened from, so both light `characters` — the same containment a fight
+ * has with its campaign's Overview.
  *
- * It asks one question — *is this route under `/play`* — rather than listing
- * the player screens by name, so a player screen added tomorrow is in player
- * mode by where it sits in the tree. `join` and `gallery` name no mode and
- * answer `dm`. Neither is a DM screen — the invitation page runs before there
- * is anybody to have a role — and the answer only decides which nav they draw.
- */
-export function useMode(): Mode {
-  const matchRoute = useMatchRoute();
-  return matchRoute({ to: "/play", fuzzy: true }) ? "player" : "dm";
-}
-
-/**
- * Which nav item is lit — **one value across two rows**, which is how the sixth
- * delivery's *"nothing appears on both rows"* is enforced rather than
- * remembered.
- *
- * The shell draws a global row (everything above a campaign) and, inside a
- * campaign, a second row of that campaign's screens. Both rows light an item by
- * asking whether its section is this one, and since there is exactly one answer,
- * **being inside a campaign is the same fact as no global item being lit.** The
- * delivery's own `GlobalItem` does this: `active={screen === n.id}`, with the
- * campaign screens named nowhere in the global list.
- *
- * A campaign and the fight inside it are both *within* the campaign's Overview,
- * so those routes light the same item — the underline says which part of the app
- * you are in, not which URL you are at, and an unlit nav on a campaign page
- * reads as a bug. That is the old "a fight lights Campaigns" rule translated one
- * level down, which is where the campaign's own screens now live. The Chronicle
- * and the party stay their own sections for the reason they always were: they
- * are screens you go *to* from a campaign rather than views of one.
- *
- * **There is one Library section.** `/library` is the monsters an account has
- * written; `/library/rules`, `/library/spells`, `/library/equipment` and
- * `/library/magic-items` are the character vocabulary, spells, gear and magic items. They are shelves under the same
- * global destination, so all light *Library* on the global row and let the
- * screen's own tabs say which shelf is open.
- *
- * **The bestiary stopped being one when the Library took its item.** Its item is
- * on the global row now and points at `/library`, which names no campaign; the
- * campaign-scoped bestiary is still a route (see `routes.tsx`) but is no longer
- * a destination the bar offers, so it falls through to its campaign's Overview
- * exactly as a fight does. A section with no item to light would leave the
- * campaign row dark on a screen inside a campaign, which is the thing that reads
- * as a bug.
- *
- * **The second axis is the mode**, and it is the same rule one level up: a
- * player's campaign is *within* their tables. There is no route that is both, so
- * the two axes cannot fight.
- *
- * `playChronicle` is its own section like `chronicle` is, and is deliberately
- * **not** folded into it: the two are different screens over different
- * endpoints, and one section shared between them would light a nav item that
- * points somewhere the reader cannot go.
- *
- * A character sheet is *within* the roster it was opened from, so both light
- * `Characters` — the same containment `run` has with the campaign's Overview.
+ * **There is one Library section.** `/library` and its shelves all light
+ * *Library* on the global row and let the screen's own tabs say which shelf is
+ * open. The campaign-scoped bestiary is still a route with no item and falls
+ * through to its campaign's Overview, exactly as a fight does.
  */
 export type Section =
   /* The global row: everything above a campaign. */
-  | "campaigns"
+  | "groups"
+  | "characters"
   | "library"
-  | "play"
-  | "playCharacters"
   | "gallery"
-  /* The DM's campaign row. */
+  /* The campaign row. */
   | "overview"
   | "encounters"
   | "notes"
@@ -103,30 +57,16 @@ export type Section =
   | "spells"
   | "equipment"
   | "magicItems"
-  | "chronicle"
-  /* The player's campaign row. */
-  | "playOverview"
-  | "playChronicle";
+  | "chronicle";
 
 export function useSection(): Section {
   const matchRoute = useMatchRoute();
-  const mode = useMode();
 
   if (matchRoute({ to: "/gallery" })) return "gallery";
   // Above any campaign. `/library/rules` is a shelf inside Library, so a fuzzy
   // match on `/library` is what keeps the global row on the one destination.
   if (matchRoute({ to: "/library", fuzzy: true })) return "library";
-  if (mode === "player") {
-    if (matchRoute({ to: "/play/campaigns/$campaignId/chronicle" })) return "playChronicle";
-    // Fuzzy, so anything else inside a player's campaign is its Overview —
-    // exactly what the DM's side does one block down, and for both of its
-    // reasons: a splat means the campaign was legible and the section was not,
-    // and a real route with no item of its own (the create form) would
-    // otherwise leave the campaign row dark.
-    if (matchRoute({ to: "/play/campaigns/$campaignId", fuzzy: true })) return "playOverview";
-    if (matchRoute({ to: "/play/characters", fuzzy: true })) return "playCharacters";
-    return "play";
-  }
+  if (matchRoute({ to: "/characters", fuzzy: true })) return "characters";
   if (matchRoute({ to: "/campaigns/$campaignId/chronicle" })) return "chronicle";
   if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
@@ -137,21 +77,54 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/equipment" })) return "equipment";
   if (matchRoute({ to: "/campaigns/$campaignId/magic-items" })) return "magicItems";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
-  // a fight, the bestiary the Library replaced in the row, and the splat a
+  // a fight, the bestiary, the character create form, and the splat a
   // half-typed section falls back through.
   if (matchRoute({ to: "/campaigns/$campaignId", fuzzy: true })) return "overview";
-  return "campaigns";
+  // Groups is home, and it is also where everything else falls back to.
+  return "groups";
 }
 
 /**
  * The campaign this route is about, if it names one.
  *
  * The decoded, branded id from the match rather than the raw segment: the
- * router already refused anything it did not mint (see `routes.tsx`), so what
- * reaches here is a `CampaignId` or nothing at all. It is what decides whether
- * the campaign-scoped nav items are drawn — from the campaign list there is no
- * campaign yet, so they are absent rather than disabled.
+ * router already refused anything it did not mint (see `routes.tsx`). It is
+ * what decides whether the campaign-scoped nav items are drawn.
  */
 export function useCampaignId(): CampaignId | undefined {
   return useParams({ strict: false }).campaignId;
+}
+
+/** The group this route is about, if it names one. */
+export function useGroupId(): GroupId | undefined {
+  return useParams({ strict: false }).groupId;
+}
+
+/**
+ * What this account is at the campaign the route names — the relation the
+ * chrome derives from, in place of the global mode it replaced.
+ *
+ * `undefined` only while the membership read is still settling: the campaign
+ * row draws no items for that moment, because a row of creator controls
+ * flashed at a player is chrome for somebody it does not belong to.
+ *
+ * **A failed read and an absent membership both fall back to `creator`.** The
+ * bar has to keep working when the server is unreachable — that is exactly
+ * when the nav matters most — and a stranger at a campaign URL gets creator
+ * chrome over the honest `NotFound` the body already answers, which discloses
+ * nothing the URL bar did not. The one state that must never happen is a
+ * *player* seeing creator controls, and a player's membership read succeeding
+ * is the same read their screen needs anyway.
+ *
+ * The read is `membershipsAtom`, the same atom the campaign frame and the
+ * Library's copy select already hold, so on a campaign screen this costs no
+ * extra request.
+ */
+export function useCampaignRelation(
+  campaignId: CampaignId | undefined,
+): CampaignRelation | undefined {
+  const [resource] = useApiAtom(membershipsAtom);
+  if (campaignId === undefined || resource.state === "loading") return undefined;
+  if (resource.state === "failed") return "creator";
+  return resource.value.find((row) => row.campaign.id === campaignId)?.relation ?? "creator";
 }

@@ -55,7 +55,7 @@ export const libraryRuleArticlesAtom = Atom.family((query: RuleArticleQuery) =>
         return {
           articles,
           campaigns: memberships
-            .filter((membership) => membership.role === "dm")
+            .filter((membership) => membership.relation === "creator")
             .map((membership) => membership.campaign),
         } satisfies RuleArticleLibraryView;
       }),

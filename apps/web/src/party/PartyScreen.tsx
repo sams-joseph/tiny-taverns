@@ -279,7 +279,11 @@ function Party({
         // atom the dialog does, and a revoke names `reads.members` because
         // revoking a spent invitation takes the membership it granted in the
         // same transaction.
-        <InviteDialog campaign={view.campaign} onClose={() => onInvite(false)} />
+        <InviteDialog
+          groupId={view.campaign.groupId}
+          campaign={view.campaign}
+          onClose={() => onInvite(false)}
+        />
       )}
       {assigning !== undefined && (
         <AssignDialog

@@ -1,5 +1,5 @@
 import type { CampaignId, Character, Note } from "@taverns/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -28,7 +28,7 @@ import { loadPlayerCampaignView } from "./load";
  * to share, so that is what this says, and it says so in as many words.
  *
  * **One control writes, and it is the second door into the create flow.** *New
- * character* goes to `#/play/campaigns/:c/characters/new` — this screen is
+ * character* goes to `#/campaigns/:c/characters/new` — this screen is
  * already at one table, so unlike the roster's it needs no picker and is a plain
  * link. It is here rather than only on the roster because this is where somebody
  * lands the moment they accept an invitation: `JoinScreen` sends a new player
@@ -136,8 +136,7 @@ const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
   ]),
 );
 
-export function PlayerCampaignScreen() {
-  const { campaignId } = useParams({ from: "/play/campaigns/$campaignId" });
+export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: CampaignId }) {
   const [resource, reload] = useApiAtom(playerCampaignAtom(campaignId));
 
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -160,9 +159,7 @@ export function PlayerCampaignScreen() {
           <Button
             size="sm"
             nativeButton={false}
-            render={
-              <Link to="/play/campaigns/$campaignId/characters/new" params={{ campaignId }} />
-            }
+            render={<Link to="/campaigns/$campaignId/characters/new" params={{ campaignId }} />}
           >
             <Icon name="user-plus" size={14} />
             New character

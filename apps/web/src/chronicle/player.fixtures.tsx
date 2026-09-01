@@ -130,6 +130,16 @@ export const playerRecap12 = {
 const sharedRecord = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+    // The route wrapper reads the membership to pick the projection: this
+    // account is a *player* at the table, so the same URL renders the narrow
+    // Chronicle.
+    [
+      "GET /me/campaigns",
+      {
+        status: 200,
+        body: [{ campaign, relation: "player", joinedAt: "2026-06-01T10:00:00.000Z" }],
+      },
+    ],
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
     [
       `GET /campaigns/${campaignId}/sessions/${session11Id}/recap/player`,
@@ -182,7 +192,7 @@ export const installPlayerChronicleServer = (): StubServer => {
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
 export const renderPlayerChronicle = async (): Promise<void> => {
-  await renderAt(`/play/campaigns/${campaignId}/chronicle`, (screen) => (
+  await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
     <HostedSessionScope session={NO_HOSTED_SESSION}>{screen}</HostedSessionScope>
   ));
 };

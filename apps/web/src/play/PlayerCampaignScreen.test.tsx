@@ -31,7 +31,13 @@ const server = installStubServer();
 const session = mintingSession();
 
 const renderScreen = async (): Promise<void> => {
-  await renderAt(`/play/campaigns/${campaignId}`, (screen) => (
+  // The player's membership is what makes this URL render the participant
+  // projection — the same URL the creator opens, chosen by relation.
+  server.routes.set("GET /me/campaigns", {
+    status: 200,
+    body: [{ campaign, relation: "player", joinedAt: "2026-06-01T10:00:00.000Z" }],
+  });
+  await renderAt(`/campaigns/${campaignId}`, (screen) => (
     <HostedSessionScope session={session}>{screen}</HostedSessionScope>
   ));
 };
@@ -76,18 +82,17 @@ describe("a table you sit at", () => {
   it("keeps the DM's nav off the player's bar", async () => {
     await renderScreen();
 
-    expect(await screen.findByRole("link", { name: /Tables/ })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /Groups/ })).toBeTruthy();
     // The bestiary and the party are the DM's — `members.list` is gated and a
     // player's projection of a roster is nothing at all — and a nav item that
     // goes nowhere is the same lie as a stubbed field.
     expect(screen.queryByRole("link", { name: /Bestiary/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Party/ })).toBeNull();
-    expect(screen.queryByRole("link", { name: /Campaigns/ })).toBeNull();
 
     // *Chronicle* is here because its screen now is, and it points at the
     // player's own route — `recap.readAsPlayer`, not the gated `recap.read`.
     expect(screen.getByRole("link", { name: /Chronicle/ }).getAttribute("href")).toBe(
-      `/#/play/campaigns/${campaignId}/chronicle`,
+      `/#/campaigns/${campaignId}/chronicle`,
     );
   });
 

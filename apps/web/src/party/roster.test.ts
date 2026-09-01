@@ -1,4 +1,4 @@
-import { CampaignInvite, CampaignMember, Character } from "@taverns/api";
+import { GroupInvite, CampaignMember, Character } from "@taverns/api";
 import { DateTime, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
@@ -23,7 +23,7 @@ import { initialsOf, needsOf, nameOf, rosterOf, summaryOf, type RosterRow } from
  */
 
 const member = Schema.decodeUnknownSync(CampaignMember);
-const invite = Schema.decodeUnknownSync(CampaignInvite);
+const invite = Schema.decodeUnknownSync(GroupInvite);
 const character = Schema.decodeUnknownSync(Character);
 
 const dm = member(dmMember);

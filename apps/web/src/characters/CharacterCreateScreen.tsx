@@ -47,7 +47,7 @@ import { characterWritesAt, createOwnCharacter } from "./write";
 
 /**
  * A player writing down a character of their own —
- * `#/play/campaigns/:campaignId/characters/new`, and **the first screen in the
+ * `#/campaigns/:campaignId/characters/new`, and **the first screen in the
  * product on which a non-DM creates anything.**
  *
  * Until `POST /me/campaigns/:c/characters` shipped there was no such thing: a
@@ -135,7 +135,7 @@ import { characterWritesAt, createOwnCharacter } from "./write";
  * rather than to a form for a character they have already made.
  */
 export function CharacterCreateScreen() {
-  const { campaignId } = useParams({ from: "/play/campaigns/$campaignId/characters/new" });
+  const { campaignId } = useParams({ from: "/campaigns/$campaignId/characters/new" });
   const navigate = useNavigate();
   const [resource, reload] = useApiAtom(newCharacterAtom(campaignId));
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -226,7 +226,7 @@ export function CharacterCreateScreen() {
    * would be a second answer to the same question, reachable by typing a URL.
    */
   const membership = view?.memberships.find((row) => row.campaign.id === campaignId);
-  const writable = membership !== undefined && membership.role === "player";
+  const writable = membership !== undefined && membership.relation === "player";
 
   /**
    * The classes, races and backgrounds **this table** offers — the three
@@ -286,7 +286,7 @@ export function CharacterCreateScreen() {
     // the row appears on the DM's party list, which this write has never seen.
     invalidate(characterWritesAt(campaignId));
     await navigate({
-      to: "/play/characters/$characterId",
+      to: "/characters/$characterId",
       params: { characterId: made.success.id },
       replace: true,
     });
@@ -309,7 +309,7 @@ export function CharacterCreateScreen() {
 
     if (Result.isSuccess(made)) {
       await navigate({
-        to: "/play/characters/$characterId",
+        to: "/characters/$characterId",
         params: { characterId: made.success.id },
         replace: true,
       });
@@ -328,7 +328,7 @@ export function CharacterCreateScreen() {
             variant="secondary"
             size="sm"
             nativeButton={false}
-            render={<Link to="/play/characters" />}
+            render={<Link to="/characters" />}
           >
             Cancel
           </Button>

@@ -119,8 +119,8 @@ export const otherCampaign = {
  * is filtered out in `load.ts`, because `derive` writes through `rowWritable`.
  */
 export const bothMemberships = [
-  { campaign, role: "dm", joinedAt: "2026-06-01T10:00:00.000Z" },
-  { campaign: otherCampaign, role: "dm", joinedAt: "2026-06-02T10:00:00.000Z" },
+  { campaign, relation: "creator", joinedAt: "2026-06-01T10:00:00.000Z" },
+  { campaign: otherCampaign, relation: "creator", joinedAt: "2026-06-02T10:00:00.000Z" },
 ];
 
 export const emptyCreatureFacets = {

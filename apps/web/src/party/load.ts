@@ -1,6 +1,6 @@
-import type { CampaignId, CampaignInvite, CampaignMember } from "@taverns/api";
+import type { CampaignId, CampaignMember, GroupInvite } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { invitesAtom, membersAtom } from "../campaign/load";
+import { campaignAtom, invitesAtom, membersAtom } from "../campaign/load";
 
 /**
  * What the party screen reads **beyond the campaign view**: two atoms, one round.
@@ -54,16 +54,29 @@ export interface PartyRoster {
    * already rendered — including the withdrawn-before-taken precedence, which
    * this screen must not restate.
    */
-  readonly invites: ReadonlyArray<CampaignInvite>;
+  readonly invites: ReadonlyArray<GroupInvite>;
 }
 
 export const rosterAtom = Atom.family((campaignId: CampaignId) =>
   Atom.readable(
     (get): AsyncResult.AsyncResult<PartyRoster, unknown> =>
-      AsyncResult.all({
-        members: get(membersAtom(campaignId)),
-        invites: get(invitesAtom(campaignId)),
-      }),
+      // The invitations are the *group's* list now, and which group is a fact
+      // on the campaign row — so the roster goes through the campaign atom the
+      // frame is already holding, which costs no extra request.
+      AsyncResult.flatMap(get(campaignAtom(campaignId)), (campaign) =>
+        AsyncResult.map(
+          AsyncResult.all({
+            members: get(membersAtom(campaignId)),
+            invites: get(invitesAtom(campaign.groupId)),
+          }),
+          // The roster draws only the invitations that seat somebody at
+          // *this* table; group-only ones are the group screen's business.
+          ({ members, invites }) => ({
+            members,
+            invites: invites.filter((invite) => invite.campaignId === campaignId),
+          }),
+        ),
+      ),
     // **A derived atom needs to be told how to refresh, and this is the second
     // argument `Atom.readable` takes for exactly that.** Re-running the read
     // above hands back the two cached parts, so without this the frame's *Try
@@ -73,8 +86,12 @@ export const rosterAtom = Atom.family((campaignId: CampaignId) =>
     // of its eight are keyed on a session id it only has once the campaign has
     // loaded — see `campaignViewKeys`.
     (refresh) => {
+      refresh(campaignAtom(campaignId));
       refresh(membersAtom(campaignId));
-      refresh(invitesAtom(campaignId));
+      // The invitations atom is keyed on the group, which is only known once
+      // the campaign has answered — a write reaches it by key
+      // (`reads.invites`), so what this refresh covers is the two reads whose
+      // keys this screen owns.
     },
   ),
 );

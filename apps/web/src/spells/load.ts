@@ -54,7 +54,7 @@ export const loadSpellLibrary = (query: SpellQuery) => (client: TavernsClient) =
       spells: page.items,
       nextCursor: page.nextCursor,
       campaigns: memberships
-        .filter((membership) => membership.role === "dm")
+        .filter((membership) => membership.relation === "creator")
         .map((membership) => membership.campaign),
     } satisfies SpellLibraryView;
   });

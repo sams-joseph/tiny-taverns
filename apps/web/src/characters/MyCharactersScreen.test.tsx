@@ -89,8 +89,8 @@ describe("your characters", () => {
     // this looks for a button and reads its href.
     const links = screen.getAllByRole("button", { name: "Open sheet" });
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      `/#/play/characters/${brannocId}`,
-      `/#/play/characters/${sorrelId}`,
+      `/#/characters/${brannocId}`,
+      `/#/characters/${sorrelId}`,
     ]);
   });
 
@@ -173,8 +173,8 @@ describe("your characters", () => {
     // `/#/…` rather than `#/…` is what `createHashHistory` builds: the page's
     // own path, then the route behind the fragment.
     expect(tables.map((link) => link.getAttribute("href"))).toEqual([
-      `/#/play/campaigns/${campaignId}/characters/new`,
-      `/#/play/campaigns/${otherCampaignId}/characters/new`,
+      `/#/campaigns/${campaignId}/characters/new`,
+      `/#/campaigns/${otherCampaignId}/characters/new`,
     ]);
 
     cleanup();
@@ -184,7 +184,7 @@ describe("your characters", () => {
 
     await screen.findByText("No characters yet");
     const straight = screen.getByRole("button", { name: /New character/i });
-    expect(straight.getAttribute("href")).toBe(`/#/play/campaigns/${campaignId}/characters/new`);
+    expect(straight.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/characters/new`);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 

@@ -23,10 +23,12 @@ import { type HostedSession } from "../auth/hostedSession";
 
 const TOKEN = "Nk9-b3JkZXJfb2ZfdGhlX2ZlcnJ5bWFu";
 const campaignId = "2b1f2a1e-0000-4000-8000-00000000c0de";
+const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
 
 const preview = {
+  groupName: "The Salt Company",
+  ownerName: "Ada",
   campaignName: "The Salt Road",
-  dmName: "Ada",
   expiresAt: "2026-08-18T13:03:28.070Z",
 };
 
@@ -138,17 +140,23 @@ describe("following an invitation", () => {
     routes.set("POST /invites/preview", { status: 200, body: preview });
     routes.set("POST /invites/redeem", {
       status: 200,
-      body: { campaignId, campaignName: "The Salt Road", shared: false },
+      body: {
+        groupId,
+        groupName: "The Salt Company",
+        campaignId,
+        campaignName: "The Salt Road",
+        shared: false,
+      },
     });
 
     await renderJoin();
     await userEvent.click(await screen.findByRole("button", { name: "Take your seat" }));
 
-    expect(await screen.findByText(/You are at The Salt Road/)).toBeTruthy();
+    expect(await screen.findByText(/You are in The Salt Company/)).toBeTruthy();
     // The ordinary outcome of joining, and the moment to explain it — a
     // campaign starts private, so the alternative is a blank page with no
     // explanation anywhere.
-    expect(screen.getByText(/The DM has not shared this table yet/)).toBeTruthy();
+    expect(screen.getByText(/Your seat at The Salt Road is kept/)).toBeTruthy();
     expect(JSON.parse(calls.find((c) => c.pathname === "/invites/redeem")?.body ?? "{}")).toEqual({
       token: TOKEN,
     });
@@ -158,7 +166,13 @@ describe("following an invitation", () => {
     routes.set("POST /invites/preview", { status: 200, body: preview });
     routes.set("POST /invites/redeem", {
       status: 200,
-      body: { campaignId, campaignName: "The Salt Road", shared: true },
+      body: {
+        groupId,
+        groupName: "The Salt Company",
+        campaignId,
+        campaignName: "The Salt Road",
+        shared: true,
+      },
     });
 
     await renderJoin();
@@ -172,7 +186,7 @@ describe("following an invitation", () => {
     // membership; the DM's campaign screen composes `runs.list`, which is behind
     // the `DmActor` gate, so `#/campaigns/:c` would have answered a brand new
     // player a 404 on the first thing they pressed in the product.
-    expect(open.getAttribute("href")).toBe(`/#/play/campaigns/${campaignId}`);
+    expect(open.getAttribute("href")).toBe(`/#/campaigns/${campaignId}`);
   });
 
   it("gives every dead link the same sentence", async () => {

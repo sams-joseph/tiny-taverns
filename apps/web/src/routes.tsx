@@ -1,4 +1,4 @@
-import { CampaignId, CharacterId, EncounterRunId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, GroupId, SessionId } from "@taverns/api";
 import {
   createHashHistory,
   createRootRoute,
@@ -8,15 +8,13 @@ import {
 import { Schema } from "effect";
 import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
-import { CampaignScreen } from "./campaign/CampaignScreen";
-import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
 import { CharacterCreateScreen } from "./characters/CharacterCreateScreen";
 import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
-import { ChronicleScreen } from "./chronicle/ChronicleScreen";
-import { PlayerChronicleScreen } from "./chronicle/PlayerChronicleScreen";
+import { ChronicleRouteScreen } from "./chronicle/ChronicleRoute";
 import { CompendiumLibraryScreen } from "./compendium/CompendiumLibraryScreen";
 import { CompendiumScreen } from "./compendium/CompendiumScreen";
 import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
@@ -25,9 +23,10 @@ import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
 import { MagicItemsScreen } from "./magic-items/MagicItemsScreen";
+import { GroupScreen } from "./group/GroupScreen";
+import { GroupsScreen } from "./group/GroupsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
-import { PlayerCampaignScreen } from "./play/PlayerCampaignScreen";
 import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
 import { RulesScreen } from "./rules/RulesScreen";
 import { RunScreen } from "./run/RunScreen";
@@ -97,6 +96,7 @@ const decoder = <A,>(schema: Schema.Codec<A, string>) => {
 };
 
 const asCampaignId = decoder(CampaignId);
+const asGroupId = decoder(GroupId);
 const asCharacterId = decoder(CharacterId);
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
@@ -126,17 +126,49 @@ const asToken = (raw: string | undefined): string | undefined =>
 const rootRoute = createRootRoute({ component: SignedOutGate });
 
 /**
- * The campaign list, and the whole of what `#/` means.
+ * The groups this account belongs to — the whole of what `#/` means.
  *
- * `campaigns` and `play` are one screen answering two questions — which tables
- * I run, and which I sit at — off the one `GET /me/campaigns` that already
- * carries the role. Which question is the route it is reached by, never a prop
- * and never state: see `useMode`.
+ * The group is the top-level container for connected play, so home is the
+ * list of your groups, and a campaign is reached through the group that holds
+ * it. There is no `/play` half any more and no mode: the relation is per
+ * campaign, derived where the campaign is rendered.
  */
-const campaignsRoute = createRoute({
+const groupsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/campaigns",
-  component: CampaignsScreen,
+  path: "/groups",
+  component: GroupsScreen,
+});
+
+/**
+ * One group: its campaign directory, its people, and — as the later stages
+ * land — its shared history and its Hob. One `params.parse`, exactly as the
+ * campaign's parent does it, so a bad id is a bad link that falls back to the
+ * groups list.
+ */
+const groupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/groups/$groupId",
+  params: {
+    parse: ({ groupId }) => {
+      const decoded = asGroupId(groupId);
+      return decoded === undefined ? false : { groupId: decoded };
+    },
+  },
+});
+
+const groupIndexRoute = createRoute({
+  getParentRoute: () => groupRoute,
+  path: "/",
+  component: GroupScreen,
+  remountDeps: ({ params }) => params.groupId,
+});
+
+/** An unknown section under a legible group is that group. */
+const groupSplatRoute = createRoute({
+  getParentRoute: () => groupRoute,
+  path: "$",
+  component: GroupScreen,
+  remountDeps: ({ params }) => params.groupId,
 });
 
 /**
@@ -176,7 +208,7 @@ const campaignRoute = createRoute({
 const campaignIndexRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "/",
-  component: CampaignScreen,
+  component: CampaignRouteScreen,
 });
 
 /**
@@ -212,7 +244,7 @@ const notesRoute = createRoute({
 const campaignSplatRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "$",
-  component: CampaignScreen,
+  component: CampaignRouteScreen,
 });
 
 /**
@@ -336,7 +368,7 @@ const libraryMagicItemsRoute = createRoute({
 const chronicleRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "chronicle",
-  component: ChronicleScreen,
+  component: ChronicleRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -430,141 +462,38 @@ const runRoute = createRoute({
 });
 
 /**
- * The player side, and the whole of how the role switch is carried.
+ * Writing down a character of your own — under the campaign it is created at,
+ * because the campaign is *step one*: `character.campaign_id` is `not null`,
+ * so a character has nowhere to live until a table is picked, and putting the
+ * id in the URL is what makes that choice a thing you can bookmark and reload.
  *
- * **The mode lives in the URL and nowhere else.** The captain settled the
- * switch as a *mode* rather than a filter — flipping it changes what the app
- * is, not merely which campaigns are listed — and a mode kept in React state
- * beside the route is a second source of truth that can disagree with it: a
- * reload, a bookmark or a link would land on a screen the pill says you are not
- * looking at. Carried here it cannot, because `useMode` reads the matched
- * routes and the pill is two links.
- *
- * It also answers the question a global pill leaves open. *Player* at a table
- * you DM has no meaning; there is no such route to be in. `#/play` is the
- * tables you sit at, and `#/play/campaigns/:c` is one of them — a screen that
- * reads only what a player may read, so nothing on it can 404.
- *
- * Every player screen is a descendant of this route, which is what makes the
- * mode a fact about the match rather than a list of screen names to keep in
- * step.
+ * Remounted on the campaign: a form half-typed for one table must not survive
+ * into another.
  */
-const playRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/play",
-});
-
-const playIndexRoute = createRoute({
-  getParentRoute: () => playRoute,
-  path: "/",
-  component: CampaignsScreen,
-});
-
-/**
- * Anything under `#/play` we cannot read is still under `#/play`.
- *
- * The id is what was illegible; the mode was not, so falling back to the DM's
- * list would answer a question the URL did not ask.
- */
-const playSplatRoute = createRoute({
-  getParentRoute: () => playRoute,
-  path: "$",
-  component: CampaignsScreen,
-});
-
-const playCampaignRoute = createRoute({
-  getParentRoute: () => playRoute,
-  path: "campaigns/$campaignId",
-  params: {
-    parse: ({ campaignId }) => {
-      const decoded = asCampaignId(campaignId);
-      return decoded === undefined ? false : { campaignId: decoded };
-    },
-  },
-});
-
-const playCampaignIndexRoute = createRoute({
-  getParentRoute: () => playCampaignRoute,
-  path: "/",
-  component: PlayerCampaignScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-const playCampaignSplatRoute = createRoute({
-  getParentRoute: () => playCampaignRoute,
-  path: "$",
-  component: PlayerCampaignScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/**
- * The record of a table you sit at.
- *
- * **A route of its own rather than `#/campaigns/:c/chronicle` in player mode**,
- * and the reason is the mode itself: the mode is read off the match, so a
- * player screen living under the DM's prefix would be a screen the pill says
- * you are not on. It also keeps the two straight in a bookmark — the same
- * campaign has two Chronicles, one wide and one narrow, and which you get is
- * the part of the URL you can read.
- *
- * It names a campaign for the reason the DM's does: `recap.readAsPlayer` and
- * `sessions.list` both hang off `/campaigns/:campaignId`.
- */
-const playChronicleRoute = createRoute({
-  getParentRoute: () => playCampaignRoute,
-  path: "chronicle",
-  component: PlayerChronicleScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/**
- * Writing down a character of your own — **the only player route that names a
- * campaign, and the only one under `/play/campaigns` that writes.**
- *
- * It sits here rather than under `characters` beside the roster because the
- * campaign is *step one*: `character.campaign_id` is `not null`, so a character
- * has nowhere to live until a table is picked, and the captain's decision of
- * 2026-08-26 reorders the drawn flow to say so. Putting the id in the URL is
- * what makes that choice a thing you can bookmark, share and go back to, rather
- * than React state a reload would forget.
- *
- * The two ways in both name it: `MyCharactersScreen`'s *New character*, which
- * folds the memberships it already read, and `PlayerCampaignScreen`, which is
- * already at one table.
- *
- * Remounted on the campaign, like every other screen under this route: a form
- * half-typed for one table must not survive into another.
- */
-const playCharacterCreateRoute = createRoute({
-  getParentRoute: () => playCampaignRoute,
+const characterCreateRoute = createRoute({
+  getParentRoute: () => campaignRoute,
   path: "characters/new",
   component: CharacterCreateScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
 /**
- * The characters this account plays, and one of them.
- *
- * **The only pair of routes in the product that names no campaign**, and that
- * is the endpoint's shape rather than a convenience: `GET /me/characters` is
- * the one read on `character` with no campaign in its path, because the
- * question *"which characters are mine"* is asked across every table at once
- * and a player at three tables has one list, not three. The campaign a
- * character belongs to is on the row (`campaignId`), so the screens still know
- * which table each one sits at.
+ * The characters this account plays, and one of them — top-level, because the
+ * endpoint is: `GET /me/characters` is the one read on `character` with no
+ * campaign in its path. The question *"which characters are mine"* is asked
+ * across every table at once, and a player at three tables has one list.
  *
  * The sheet names the character alone for the same reason. `GET /me/campaigns`
- * is what turns that row's `campaignId` into a name — the join key travels, the
- * name is looked up — which is the rule `CampaignMember.accountId` already
- * follows from the other side.
+ * is what turns that row's `campaignId` into a name — the join key travels,
+ * the name is looked up.
  */
-const playCharactersRoute = createRoute({
-  getParentRoute: () => playRoute,
-  path: "characters",
+const charactersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/characters",
 });
 
-const playCharactersIndexRoute = createRoute({
-  getParentRoute: () => playCharactersRoute,
+const charactersIndexRoute = createRoute({
+  getParentRoute: () => charactersRoute,
   path: "/",
   component: MyCharactersScreen,
 });
@@ -573,14 +502,14 @@ const playCharactersIndexRoute = createRoute({
  * A half-typed sheet link still knows it meant the roster, which is the same
  * fall-back-one-level a broken run link takes to its campaign.
  */
-const playCharactersSplatRoute = createRoute({
-  getParentRoute: () => playCharactersRoute,
+const charactersSplatRoute = createRoute({
+  getParentRoute: () => charactersRoute,
   path: "$",
   component: MyCharactersScreen,
 });
 
-const playCharacterRoute = createRoute({
-  getParentRoute: () => playCharactersRoute,
+const characterRoute = createRoute({
+  getParentRoute: () => charactersRoute,
   path: "$characterId",
   params: {
     parse: ({ characterId }) => {
@@ -626,29 +555,29 @@ const galleryRoute = createRoute({
 });
 
 /**
- * Anything else is the campaign list.
+ * Anything else is the groups list.
  *
- * The last resort of the fall-back chain, and the reason a mangled campaign id,
- * a mangled invitation token and a URL nobody ever minted all land somewhere
- * usable rather than on a not-found screen. A 404 here would be a worse answer
- * than the list: every one of these is a link that was mistyped or truncated,
- * and the list is where you go to find what you meant.
+ * The last resort of the fall-back chain, and the reason a mangled id, a
+ * mangled invitation token and a URL nobody ever minted all land somewhere
+ * usable rather than on a not-found screen: the list is where you go to find
+ * what you meant.
  */
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "$",
-  component: CampaignsScreen,
+  component: GroupsScreen,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: CampaignsScreen,
+  component: GroupsScreen,
 });
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
-  campaignsRoute,
+  groupsRoute,
+  groupRoute.addChildren([groupIndexRoute, groupSplatRoute]),
   libraryRoute,
   libraryRulesRoute,
   libraryCompendiumRoute,
@@ -667,24 +596,11 @@ export const routeTree = rootRoute.addChildren([
     magicItemsRoute,
     chronicleRoute,
     partyRoute,
+    characterCreateRoute,
     runRoute,
     campaignSplatRoute,
   ]),
-  playRoute.addChildren([
-    playIndexRoute,
-    playCampaignRoute.addChildren([
-      playCampaignIndexRoute,
-      playCharacterCreateRoute,
-      playChronicleRoute,
-      playCampaignSplatRoute,
-    ]),
-    playCharactersRoute.addChildren([
-      playCharactersIndexRoute,
-      playCharacterRoute,
-      playCharactersSplatRoute,
-    ]),
-    playSplatRoute,
-  ]),
+  charactersRoute.addChildren([charactersIndexRoute, characterRoute, charactersSplatRoute]),
   joinRoute,
   galleryRoute,
   catchAllRoute,
@@ -721,7 +637,8 @@ declare module "@tanstack/react-router" {
  * string literal it could get wrong.
  */
 export const routes = {
-  campaigns: campaignsRoute,
+  groups: groupsRoute,
+  group: groupRoute,
   library: libraryRoute,
   libraryRules: libraryRulesRoute,
   librarySpells: librarySpellsRoute,
@@ -737,12 +654,10 @@ export const routes = {
   magicItems: magicItemsRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
+  characterCreate: characterCreateRoute,
   run: runRoute,
-  play: playRoute,
-  playCampaign: playCampaignRoute,
-  playChronicle: playChronicleRoute,
-  playCharacters: playCharactersRoute,
-  playCharacter: playCharacterRoute,
+  characters: charactersRoute,
+  character: characterRoute,
   join: joinRoute,
   gallery: galleryRoute,
 } as const;

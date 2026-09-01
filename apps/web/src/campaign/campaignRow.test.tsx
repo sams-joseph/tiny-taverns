@@ -102,8 +102,10 @@ describe("the campaign row, across every destination it offers", () => {
     const seen: Array<{ label: string; badge: string; act: string | undefined }> = [];
     for (const entry of where) {
       await renderAt(entry.path);
-      const row = await screen.findByRole("navigation", { name: "This campaign" });
-      expect(row).toBeInTheDocument();
+      // The row settles once the membership read has: the route wrapper's
+      // loading frame is replaced by the real screen, so the node found first
+      // may be replaced too — every assertion below re-queries.
+      await screen.findByRole("navigation", { name: "This campaign" });
       // The badge is the night the campaign is preparing, so it is looked for
       // *inside the row* — the Chronicle's spine draws a card named for the same
       // session, and finding that one would prove nothing about the bar.

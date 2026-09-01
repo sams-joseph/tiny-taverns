@@ -160,9 +160,9 @@ export const sorrel = {
   sheet: { notes: "", abilities: [], traits: [] },
 };
 
-const membership = (of: unknown, joinedAt: string, role = "player") => ({
+const membership = (of: unknown, joinedAt: string, relation = "player") => ({
   campaign: of,
-  role,
+  relation,
   joinedAt,
 });
 
@@ -311,7 +311,7 @@ export const onlyDmTables = (): Map<string, Answer> => {
   const routes = noCharacters();
   routes.set("GET /me/campaigns", {
     status: 200,
-    body: [membership(campaign, "2026-07-02T10:00:00.000Z", "dm")],
+    body: [membership(campaign, "2026-07-02T10:00:00.000Z", "creator")],
   });
   return routes;
 };
@@ -516,7 +516,7 @@ export const noSession: HostedSession = {
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderRoster = async (hosted: HostedSession = noSession): Promise<void> => {
-  await renderAt("/play/characters", (screen) => (
+  await renderAt("/characters", (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
@@ -532,7 +532,7 @@ export const renderCreate = async (
   at: string = campaignId,
   hosted: HostedSession = noSession,
 ): Promise<void> => {
-  await renderAt(`/play/campaigns/${at}/characters/new`, (screen) => (
+  await renderAt(`/campaigns/${at}/characters/new`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
@@ -541,7 +541,7 @@ export const renderSheet = async (
   characterId = brannocId,
   hosted: HostedSession = noSession,
 ): Promise<void> => {
-  await renderAt(`/play/characters/${characterId}`, (screen) => (
+  await renderAt(`/characters/${characterId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

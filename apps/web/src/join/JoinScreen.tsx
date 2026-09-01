@@ -53,45 +53,51 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="circle-check" size={18} className="text-accent" />
-          You are at {redeemed.campaignName}
+          You are in {redeemed.groupName}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-4">
-        {redeemed.shared ? (
+        {redeemed.campaignId !== null && redeemed.shared ? (
           <>
             <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-              Whatever the DM has shared is yours to read. Everything else stays theirs.
+              The invitation also seats you at {redeemed.campaignName ?? "a table"}. Whatever its
+              creator has shared is yours to read; everything else stays theirs.
             </p>
             <Button
               nativeButton={false}
-              // The player's screen, never the DM's. Redeeming an invitation
-              // mints a `player` membership and nothing else, and the DM's
-              // campaign screen composes `runs.list` — behind the `DmActor`
-              // gate — so this link used to hand a brand new player a 404 on
-              // the very first thing they pressed.
+              // The same URL its creator uses — what it renders is decided by
+              // the relation, so a brand new player lands on the projection
+              // that works rather than on a 404.
               render={
-                <Link
-                  to="/play/campaigns/$campaignId"
-                  params={{ campaignId: redeemed.campaignId }}
-                />
+                <Link to="/campaigns/$campaignId" params={{ campaignId: redeemed.campaignId }} />
               }
             >
-              Open {redeemed.campaignName}
+              Open {redeemed.campaignName ?? "the table"}
+              <Icon name="chevron-right" size={15} />
+            </Button>
+          </>
+        ) : redeemed.campaignId !== null ? (
+          <>
+            {/* Not a failure, and it must not read as one: the creator simply
+                has not opened the table yet. Saying so here is the difference
+                between "they have not shared it" and "this is broken". */}
+            <p className="max-w-measure text-body-s leading-body text-muted-foreground">
+              Your seat at {redeemed.campaignName ?? "the table"} is kept, and it fills in the
+              moment its creator shares the campaign. The group is yours to see now.
+            </p>
+            <Button variant="secondary" nativeButton={false} render={<Link to="/groups" />}>
+              Your groups
               <Icon name="chevron-right" size={15} />
             </Button>
           </>
         ) : (
           <>
-            {/* Not a failure, and it must not read as one: the DM simply has
-                not opened the table yet. Saying so here is the difference
-                between "they have not shared it" and "this is broken", and it
-                is the only place anybody is looking at the moment it matters. */}
             <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-              The DM has not shared this table yet, so there is nothing to read in it. Your seat is
-              kept — it fills in the moment they share it.
+              You are a member now: the group’s campaigns and shared history are yours to see, and a
+              campaign’s own content follows when its creator seats you at it.
             </p>
-            <Button variant="secondary" nativeButton={false} render={<Link to="/play" />}>
-              Your tables
+            <Button variant="secondary" nativeButton={false} render={<Link to="/groups" />}>
+              Your groups
               <Icon name="chevron-right" size={15} />
             </Button>
           </>
@@ -176,13 +182,14 @@ export function JoinScreen() {
         {preview !== undefined && redeemed === undefined && (
           <Card>
             <CardHeader>
-              <CardTitle>{preview.campaignName}</CardTitle>
+              <CardTitle>{preview.campaignName ?? preview.groupName}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-start gap-4">
               <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-                <span className="text-heading">{preview.dmName}</span> has invited you to play at
-                this table. Taking the seat gives you whatever they choose to share — the party, the
-                read-aloud text, the record of what happened — and nothing else.
+                <span className="text-heading">{preview.ownerName}</span> has invited you to join{" "}
+                {preview.campaignName === null
+                  ? `${preview.groupName} — the group their campaigns and shared history live in.`
+                  : `${preview.groupName}, with a seat at ${preview.campaignName}. Taking it gives you whatever its creator chooses to share — and nothing else.`}
               </p>
               <p className="flex items-center gap-1.5 text-caption leading-body text-faint">
                 <Icon name="clock" size={14} />

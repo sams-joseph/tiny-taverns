@@ -1,4 +1,11 @@
-import type { CampaignId, CharacterOptionId, FeatId, RuleArticleId, SessionId } from "@taverns/api";
+import type {
+  CampaignId,
+  CharacterOptionId,
+  FeatId,
+  RuleArticleId,
+  SessionId,
+  GroupId,
+} from "@taverns/api";
 
 /**
  * What a read is *about*, so a write can name it.
@@ -113,8 +120,11 @@ export const reads = {
    */
   sessions: (campaignId: CampaignId): ReadKey => key`sessions:${campaignId}`,
 
-  /** Live invitations and spent ones — the DM's list, and the party screen's third status. */
-  invites: (campaignId: CampaignId): ReadKey => key`invites:${campaignId}`,
+  /**
+   * Live invitations and spent ones — group-scoped since the group
+   * architecture: the owner's list, and the party screen's third status.
+   */
+  invites: (groupId: GroupId): ReadKey => key`invites:${groupId}`,
 
   /** Who is at this table. Withdrawing an accepted invitation takes a row out of it. */
   members: (campaignId: CampaignId): ReadKey => key`members:${campaignId}`,
@@ -193,6 +203,12 @@ export const reads = {
    * be a write that has to remember both.
    */
   myCampaigns: "me:campaigns" as ReadKey,
+
+  /** The groups this account belongs to. */
+  myGroups: "me:groups" as ReadKey,
+
+  /** One group: its row, its campaign directory and its roster. */
+  group: (groupId: GroupId): ReadKey => key`group:${groupId}`,
 
   /** The characters this account plays, across every table. */
   myCharacters: "me:characters" as ReadKey,

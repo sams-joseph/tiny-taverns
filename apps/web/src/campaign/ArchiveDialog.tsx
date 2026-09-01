@@ -1,4 +1,4 @@
-import type { Campaign } from "@taverns/api";
+import type { CampaignId } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -9,9 +9,11 @@ import {
   DialogTitle,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { reads } from "../api/keys";
+import { useApiAtom } from "../api/atoms";
+import { reads, type Invalidation } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
+import { campaignAtom } from "./load";
 
 /**
  * Taking a campaign off the list — the nearest thing this product has to
@@ -58,15 +60,37 @@ import { SaveFailure } from "../ui/form";
  */
 export function ArchiveDialog({
   campaign,
+  alsoInvalidates,
   onClose,
   onArchived,
 }: {
-  readonly campaign: Campaign;
+  /**
+   * The campaign being shelved — the two fields the confirmation needs.
+   * Narrower than `Campaign` so the group directory's card (a deliberate
+   * projection, not the row) can offer the shelf too; whether a night is open
+   * is read from the campaign atom below rather than trusted to the caller.
+   */
+  readonly campaign: {
+    readonly id: CampaignId;
+    readonly name: string;
+  };
+  /**
+   * Extra reads the caller knows this shelving moves — the group directory's
+   * card, from the group screen. The dialog cannot name it itself: it does not
+   * know the group.
+   */
+  readonly alsoInvalidates?: Invalidation;
   readonly onClose: () => void;
   /** Put the confirmation away. The row leaves the list on its own. */
   readonly onArchived: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
+  // Whether a night is open here — the campaign's own row, which the frame has
+  // warm on every campaign screen and which costs the group screen one read
+  // the moment the dialog opens. `null` while it settles, so the line simply
+  // arrives when the answer does.
+  const [row] = useApiAtom(campaignAtom(campaign.id));
+  const currentSessionId = row.state === "ready" ? row.value.currentSessionId : null;
 
   const archive = async () => {
     const done = await submit(
@@ -75,7 +99,7 @@ export function ArchiveDialog({
       // one to the other, so a key per list would be a write that has to
       // remember both. The campaign row goes too: `archivedAt` is on it, and a
       // campaign screen left open behind this dialog draws from it.
-      [reads.myCampaigns, reads.campaign(campaign.id)],
+      [reads.myCampaigns, reads.campaign(campaign.id), ...(alsoInvalidates ?? [])],
     );
     if (Result.isSuccess(done)) onArchived();
   };
@@ -96,7 +120,7 @@ export function ArchiveDialog({
             You can bring it back whenever you like, from{" "}
             <span className="text-heading">Archived campaigns</span> at the foot of the list.
           </p>
-          {campaign.currentSessionId !== null && (
+          {currentSessionId !== null && (
             <p className="text-body-s leading-body text-muted-foreground">
               A night is still open here. Archiving does not end it — it is waiting exactly where
               you left it when the campaign comes back.

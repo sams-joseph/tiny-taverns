@@ -179,9 +179,18 @@ function HostedSessionCampaigns() {
       // A second, independent token fetch rather than reusing the one above:
       // the previous call may have been minutes ago.
       const token = await fetchToken();
-      const created = await runApi(
-        (client) => client.campaigns.create({ payload: { name } }),
+      // A campaign lives in a group now, so the panel founds one to hold it —
+      // the two acts a fresh account takes on the way in.
+      const group = await runApi(
+        (client) => client.groups.create({ payload: { name: `${name} group` } }),
         token,
+      );
+      // A fresh token for the second write too — the panel's whole point is
+      // that a credential is fetched immediately before each call.
+      const created = await runApi(
+        (client) =>
+          client.groups.createCampaign({ params: { groupId: group.id }, payload: { name } }),
+        await fetchToken(),
       );
       setName("");
       setCampaigns((listed) => (listed === undefined ? [created] : [...listed, created]));

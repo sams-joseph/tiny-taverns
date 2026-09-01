@@ -65,7 +65,7 @@ export function NewCharacterAction({
         nativeButton={false}
         render={
           <Link
-            to="/play/campaigns/$campaignId/characters/new"
+            to="/campaigns/$campaignId/characters/new"
             params={{ campaignId: tables[0]!.campaign.id }}
           />
         }
@@ -103,7 +103,7 @@ export function NewCharacterAction({
                   nativeButton={false}
                   render={
                     <Link
-                      to="/play/campaigns/$campaignId/characters/new"
+                      to="/campaigns/$campaignId/characters/new"
                       params={{ campaignId: membership.campaign.id }}
                     />
                   }

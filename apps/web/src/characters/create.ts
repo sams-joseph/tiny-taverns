@@ -29,7 +29,7 @@ export const MAX_LEVEL = 100;
 export const tablesForNewCharacter = (
   memberships: ReadonlyArray<CampaignMembership>,
 ): ReadonlyArray<CampaignMembership> =>
-  memberships.filter((membership) => membership.role === "player");
+  memberships.filter((membership) => membership.relation === "player");
 
 const parseOptional = (raw: string): number | null | undefined =>
   raw.trim() === "" ? null : Number.isInteger(Number(raw)) ? Number(raw) : undefined;

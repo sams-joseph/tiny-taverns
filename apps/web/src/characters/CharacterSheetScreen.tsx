@@ -827,7 +827,7 @@ const sheetAtom = Atom.family((characterId: CharacterId) =>
 );
 
 export function CharacterSheetScreen() {
-  const { characterId } = useParams({ from: "/play/characters/$characterId" });
+  const { characterId } = useParams({ from: "/characters/$characterId" });
   /**
    * The roster's own load, reused whole — **and that is the point rather than a
    * shortcut.** `GET /me/characters` composes `ownRowReadable`, which is the
@@ -897,7 +897,7 @@ export function CharacterSheetScreen() {
             variant="secondary"
             size="sm"
             nativeButton={false}
-            render={<Link to="/play/characters" />}
+            render={<Link to="/characters" />}
           >
             <Icon name="chevron-left" size={14} />
             Characters
@@ -913,10 +913,7 @@ export function CharacterSheetScreen() {
               size="sm"
               nativeButton={false}
               render={
-                <Link
-                  to="/play/campaigns/$campaignId"
-                  params={{ campaignId: character.campaignId }}
-                />
+                <Link to="/campaigns/$campaignId" params={{ campaignId: character.campaignId }} />
               }
             >
               <Icon name="swords" size={14} />
@@ -1015,7 +1012,7 @@ export function CharacterSheetScreen() {
           /* The row is gone, so there is nothing left on this route to draw —
              back to the roster, replacing the entry so *Back* does not land on
              a sheet that no longer exists. */
-          onDeleted={() => void navigate({ to: "/play/characters", replace: true })}
+          onDeleted={() => void navigate({ to: "/characters", replace: true })}
         />
       )}
     </AppShell>

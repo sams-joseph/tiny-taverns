@@ -3,7 +3,7 @@ import { useNavigate, type LinkProps } from "@tanstack/react-router";
 import { Badge, Button, Icon, type IconName } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { asResource, useInvalidate } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
@@ -287,33 +287,10 @@ export function CampaignChrome<Extra = undefined>({
   const loaded = resource.state === "ready" ? resource.value[0] : undefined;
   const extra = resource.state === "ready" ? resource.value[1] : undefined;
 
-  /**
-   * **A player who arrives here is handed the screen that works.**
-   *
-   * Nothing in the product links a player at any of these URLs — the campaign
-   * list and the invitation page both route by role — but a bookmark, or a link
-   * a DM pasted into a chat, still can. It does not fail loudly if they do:
-   * every read the first round makes succeeds for a player, narrowed, so these
-   * screens would draw a DM's chrome (*New encounter*, *Ask Hob*, the sharing
-   * control, the whole campaign row) over a player's data and break only on the
-   * press. Knowing the role is what lets them be handed the one that works.
-   *
-   * `replace`, so *Back* goes where they came from instead of returning here.
-   */
-  const wrongSide = loaded?.role === "player";
-  useEffect(() => {
-    if (wrongSide) {
-      void navigate({
-        to: "/play/campaigns/$campaignId",
-        params: { campaignId },
-        replace: true,
-      });
-    }
-  }, [wrongSide, campaignId, navigate]);
-
-  // Withheld for the frame before the hash lands, so none of this screen's
-  // chrome is ever drawn for somebody it does not belong to.
-  const view = wrongSide ? undefined : loaded;
+  // Which projection this URL renders is the route wrapper's decision now
+  // (`CampaignRoute.tsx`), made from the same membership read before this
+  // screen mounts — so by the time the frame is here, it is the creator's.
+  const view = loaded;
 
   const close = useCallback(() => setEditing(undefined), []);
 
@@ -411,7 +388,7 @@ export function CampaignChrome<Extra = undefined>({
         // withdrawing another — so it has no `onSaved` at all: what a revoke
         // changes about the table underneath is `reads.members`, which the
         // dialog itself names.
-        <InviteDialog campaign={view.campaign} onClose={close} />
+        <InviteDialog groupId={view.campaign.groupId} campaign={view.campaign} onClose={close} />
       )}
       {finishing && view?.session !== undefined && (
         <FinishSessionDialog
