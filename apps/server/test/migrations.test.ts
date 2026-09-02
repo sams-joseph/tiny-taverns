@@ -238,6 +238,7 @@ describe("migrations", () => {
       { migration_id: 28, name: "rules_compendium" },
       { migration_id: 29, name: "feats" },
       { migration_id: 30, name: "group_history" },
+      { migration_id: 31, name: "group_threads" },
     ]);
   }, 60_000);
 
@@ -277,6 +278,7 @@ describe("migrations", () => {
       { migration_id: 28, name: "rules_compendium" },
       { migration_id: 29, name: "feats" },
       { migration_id: 30, name: "group_history" },
+      { migration_id: 31, name: "group_threads" },
     ]);
   }, 60_000);
 });

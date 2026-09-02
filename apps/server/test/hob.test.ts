@@ -22,6 +22,7 @@ import {
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -68,6 +69,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
+  GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
   HobThreads.layer,
@@ -372,7 +374,12 @@ describe("answering", () => {
       "proposeBeat",
       "proposeEncounter",
       "proposeNote",
+      // The two group-context reads — the chronicle and the accepted summary,
+      // keyed on the proof's own group. Read-only; what they can answer is
+      // bounded by what the group admitted (the group-Hob boundary decision).
+      "readGroupSummary",
       "searchCampaign",
+      "searchGroupHistory",
       "sessionLog",
       "sessionRecap",
     ]);
@@ -1569,7 +1576,12 @@ describe("the assistant seam", () => {
       "proposeBeat",
       "proposeEncounter",
       "proposeNote",
+      // The two group-context reads — the chronicle and the accepted summary,
+      // keyed on the proof's own group. Read-only; what they can answer is
+      // bounded by what the group admitted (the group-Hob boundary decision).
+      "readGroupSummary",
       "searchCampaign",
+      "searchGroupHistory",
       "sessionLog",
       "sessionRecap",
     ]);

@@ -124,6 +124,8 @@ export const assistantFromConfig: Layer.Layer<
   | Campaigns
   | Creatures
   | CampaignCreatorActors
+  | GroupHistory
+  | Groups
   | HobThreads
   | Options
   | Recap
@@ -192,6 +194,8 @@ export const servicesOver = <E>(
     | Campaigns
     | Creatures
     | CampaignCreatorActors
+    | GroupHistory
+    | Groups
     | HobThreads
     | Options
     | Recap
@@ -329,6 +333,9 @@ export const servicesOver = <E>(
         Characters.layer,
         EncounterCreatures.layer,
         Encounters.layer,
+        // Group Hob's accepted chronicle line goes through the same
+        // `GroupHistory.create` a member's own hand does.
+        GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
         Notes.layer,
       ]),
     ),
@@ -355,6 +362,10 @@ export const servicesOver = <E>(
         Campaigns.layer,
         Creatures.layer,
         CampaignCreatorActors.layer,
+        // The group surface: the directory and the chronicle. Same memoised
+        // layers the handlers already hold.
+        Groups.layer,
+        GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
         HobThreads.layer,
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of

@@ -256,6 +256,9 @@ const turnId = "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60";
 const aThread = (title: string) => ({
   id: threadId,
   campaignId,
+  // A campaign thread's other scope is null — `assistant_thread_one_scope`
+  // (`0031`): a thread is a campaign's or a group's, never both.
+  groupId: null,
   title,
   createdAt: stamp,
   updatedAt: stamp,

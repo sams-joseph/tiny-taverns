@@ -5,7 +5,7 @@ import {
   AbilityKey,
   type Actor,
   type BackgroundBody,
-  type CampaignId,
+  CampaignId,
   type CharacterOption,
   type CharacterSheet,
   type ClassEntry,
@@ -39,6 +39,8 @@ import {
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
+import type { GroupHistory, PlayedNight } from "../repo/GroupHistory.js";
+import type { Groups } from "../repo/Groups.js";
 import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
 import type { Options } from "../repo/Options.js";
 import type { Recap } from "../repo/Recap.js";
@@ -554,6 +556,132 @@ export const ReadSessionLog = Tool.make("sessionLog", {
 });
 
 /**
+ * The group-context reads — on the DM's toolkit *and* the group toolkit.
+ *
+ * Both read only what the group-Hob boundary decision of 2026-09-01 grants:
+ * the chronicle (copies admitted on purpose) and its accepted summary. A
+ * campaign Hob with these can cite what the group has agreed happened without
+ * ever holding a read into another creator's campaign — the entry was copied
+ * when its creator shared it, and there is nothing else to reach.
+ */
+export const SearchGroupHistory = Tool.make("searchGroupHistory", {
+  description:
+    "Search the group's shared chronicle — what the whole group has agreed " +
+    "happened, across every campaign in it. Lexical: search for names and " +
+    "words somebody would have written. Entries were shared on purpose; " +
+    "campaign prep that was never shared is not in here.",
+  parameters: Schema.Struct({
+    query: Schema.String.check(Schema.isLengthBetween(0, 200)),
+  }),
+  success: Schema.Array(
+    Schema.Struct({
+      title: Schema.NullOr(Schema.String),
+      body: Schema.String,
+      /** ISO date of when it happened, or when it was admitted. */
+      when: Schema.String,
+    }),
+  ),
+  failure: toolFailure,
+  failureMode: "return",
+});
+
+export const ReadGroupSummary = Tool.make("readGroupSummary", {
+  description:
+    "The group's accepted running summary — the story so far across every " +
+    "campaign, as the group last agreed it. One paragraph or a sentence " +
+    "saying there is none yet.",
+  success: Schema.String,
+  failure: NotFound,
+  failureMode: "return",
+});
+
+/**
+ * The group toolkit's own reads: the campaigns, the played timeline, and one
+ * night's canonical story. These are the decision's *canonical events* made
+ * reachable — played sessions, story beats, combat outcomes — and nothing of
+ * anybody's unplayed prep: `nightStory` refuses a planned session exactly as
+ * it refuses a missing one, and no tool here can name a note, a prep item or
+ * an encounter that never ran.
+ */
+export const ListGroupCampaigns = Tool.make("listGroupCampaigns", {
+  description:
+    "The campaigns in this group, each with who runs it. Group-visible " +
+    "metadata only — a campaign's own content belongs to its table.",
+  success: Schema.Array(
+    Schema.Struct({
+      campaignId: CampaignId,
+      name: Schema.String,
+      runBy: Schema.String,
+    }),
+  ),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+export const ListPlayedNights = Tool.make("listPlayedNights", {
+  description:
+    "Every night that has actually been played, across all of this group's " +
+    "campaigns, oldest first — the group's canonical timeline. Planned " +
+    "sessions are not in it. Take campaignId and sessionId to nightStory " +
+    "for what happened on one of them.",
+  success: Schema.Array(
+    Schema.Struct({
+      campaignId: CampaignId,
+      campaign: Schema.String,
+      sessionId: SessionId,
+      number: Schema.Int,
+      title: Schema.NullOr(Schema.String),
+      started: Schema.String,
+    }),
+  ),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+export const NightStory = Tool.make("nightStory", {
+  description:
+    "What happened on one played night, anywhere in the group: the DM's " +
+    "story beats verbatim and each fight by name and outcome. No numbers and " +
+    "no stat blocks — outcomes, not mechanics. Take the ids from " +
+    "listPlayedNights.",
+  parameters: Schema.Struct({
+    campaignId: CampaignId,
+    sessionId: SessionId,
+  }),
+  success: Schema.Struct({
+    campaign: Schema.String,
+    number: Schema.Int,
+    title: Schema.NullOr(Schema.String),
+    beats: Schema.Array(Schema.String),
+    fights: Schema.Array(
+      Schema.Struct({
+        name: Schema.String,
+        round: Schema.Int,
+        outcome: Schema.String,
+      }),
+    ),
+  }),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+export const ProposeGroupEntry = Tool.make("proposeGroupEntry", {
+  description:
+    "Offer the group a line for its shared chronicle — a summary of events, " +
+    "a connection between campaigns, a fact worth keeping. Only a " +
+    "suggestion: nothing enters the chronicle unless a member accepts it.",
+  parameters: Schema.Struct({
+    // `optionalText`, not `optional`: a title is prose, and the sentinel that
+    // rescues an unset enum would eat one genuinely called "None".
+    title: optionalText(200),
+    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+  }),
+  success: Schema.String,
+  failure: toolFailure,
+  failureMode: "return",
+});
+
+/**
  * The four things Hob may offer to add — three to the DM's campaign, one to
  * the player who asked — and *offer* is the whole of what these do.
  *
@@ -903,9 +1031,32 @@ export const HobToolkit = Toolkit.make(
   ReadRecap,
   GetCreature,
   ReadSessionLog,
+  // The group context, read-only: what the group has agreed happened, so a
+  // campaign's Hob can answer "what happened at the other table" exactly as
+  // far as that table's creator shared it — and no further.
+  SearchGroupHistory,
+  ReadGroupSummary,
   ProposeNote,
   ProposeBeat,
   ProposeEncounter,
+);
+
+/**
+ * What **group** Hob is offered: the canonical record and one proposal.
+ *
+ * A third toolkit rather than the DM's narrowed, for the reason the player's
+ * is: a toolkit is what the provider is shown. Group Hob has never heard of
+ * `getCreature`, `sessionRecap` or any campaign write — its whole world is
+ * what the group-Hob boundary decision grants, and the one thing it can offer
+ * is a chronicle line, accepted by a member through `Proposals.acceptGroup`.
+ */
+export const GroupToolkit = Toolkit.make(
+  SearchGroupHistory,
+  ReadGroupSummary,
+  ListGroupCampaigns,
+  ListPlayedNights,
+  NightStory,
+  ProposeGroupEntry,
 );
 
 /**
@@ -984,6 +1135,19 @@ export interface HobRepositories {
    * exactly one the player could have picked by hand.
    */
   readonly options: (typeof Options)["Service"];
+  /**
+   * The group's chronicle and summary — the two group-context reads on the
+   * DM's toolkit, keyed on the proof's own `group`. Read-only like everything
+   * else here; what it can answer is bounded by what was admitted, which is
+   * the decision's whole design.
+   */
+  readonly history: (typeof GroupHistory)["Service"];
+}
+
+/** What group Hob's tools may reach. Read-only, every one, plus the slot. */
+export interface GroupHobRepositories {
+  readonly history: (typeof GroupHistory)["Service"];
+  readonly groups: (typeof Groups)["Service"];
 }
 
 /**
@@ -1092,6 +1256,43 @@ const searchWith =
           }),
         );
 
+/** `searchGroupHistory`, bound — shared by the DM's toolkit and the group's. */
+const searchHistoryWith =
+  (
+    history: (typeof GroupHistory)["Service"],
+    groupId: Parameters<(typeof GroupHistory)["Service"]["search"]>[0],
+    as: <A, E>(effect: Effect.Effect<A, E, CurrentActor>) => Effect.Effect<A, E>,
+  ) =>
+  ({ query }: { readonly query: string }) =>
+    query.trim() === ""
+      ? Effect.fail(
+          new Conflict({
+            message:
+              "searchGroupHistory needs a word to look for. To read the whole " +
+              "story so far, call readGroupSummary; for the timeline, listPlayedNights.",
+          }),
+        )
+      : Effect.map(as(history.search(groupId, query.trim())), (entries) =>
+          entries.map((entry) => ({
+            title: entry.title,
+            body: entry.body,
+            when: (entry.occurredAt ?? entry.acceptedAt).toString(),
+          })),
+        );
+
+const summaryWith =
+  (
+    history: (typeof GroupHistory)["Service"],
+    groupId: Parameters<(typeof GroupHistory)["Service"]["summary"]>[0],
+    as: <A, E>(effect: Effect.Effect<A, E, CurrentActor>) => Effect.Effect<A, E>,
+  ) =>
+  () =>
+    Effect.map(as(history.summary(groupId)), (summary) =>
+      summary === null
+        ? "The group has no accepted summary yet — the chronicle's entries are the record."
+        : summary.text,
+    );
+
 export const dmHandlersFor = (
   repositories: HobRepositories,
   dm: CampaignCreatorActor,
@@ -1166,6 +1367,11 @@ export const dmHandlersFor = (
     sessionLog: ({ sessionId, since }) =>
       repositories.events.list(dm, sessionId, { since: absent(since), limit: LOG_LIMIT }),
 
+    // The group context, keyed on the proof's own group — not a parameter, for
+    // the same reason the campaign is not one.
+    searchGroupHistory: searchHistoryWith(repositories.history, dm.group, as),
+    readGroupSummary: summaryWith(repositories.history, dm.group, as),
+
     proposeNote: ({ title, body, readAloud }) =>
       offer(
         { target: "note", title, body, kind: readAloud === true ? "read_aloud" : "note" },
@@ -1195,6 +1401,67 @@ export const dmHandlersFor = (
             "save it or discard it; say one short line about it and stop — the roster " +
             "is already on their screen.",
         ),
+      ),
+  });
+};
+
+/**
+ * Bind the group toolkit to one group and one actor.
+ *
+ * The group is the path segment the request was routed on, closed over here —
+ * not a tool parameter, for exactly the campaign's reason: a model that
+ * hallucinated another group's id has nowhere to put it. The actor is a plain
+ * member; there is no proof to take, because nothing here diverges by role —
+ * the chronicle and the canonical timeline answer every live member alike, and
+ * the one offer is accepted by any member too.
+ */
+export const groupHandlersFor = (
+  repositories: GroupHobRepositories,
+  actor: Actor,
+  groupId: Parameters<(typeof GroupHistory)["Service"]["search"]>[0],
+  proposal: ProposalSlot,
+) => {
+  const { as, offer } = bind(actor, proposal);
+
+  return GroupToolkit.of({
+    searchGroupHistory: searchHistoryWith(repositories.history, groupId, as),
+    readGroupSummary: summaryWith(repositories.history, groupId, as),
+    listGroupCampaigns: () =>
+      Effect.map(as(repositories.groups.campaigns(groupId)), (cards) =>
+        cards.map((card) => ({
+          campaignId: card.id,
+          name: card.name,
+          runBy: card.creatorName,
+        })),
+      ),
+    listPlayedNights: () =>
+      Effect.map(as(repositories.history.playedNights(groupId)), (nights) =>
+        nights.map((night: PlayedNight) => ({
+          campaignId: night.campaignId,
+          campaign: night.campaignName,
+          sessionId: night.sessionId,
+          number: night.number,
+          title: night.title,
+          started: night.startedAt.toString(),
+        })),
+      ),
+    nightStory: ({ campaignId, sessionId }) =>
+      Effect.map(as(repositories.history.nightStory(groupId, campaignId, sessionId)), (story) => ({
+        campaign: story.campaignName,
+        number: story.number,
+        title: story.title,
+        beats: story.beats,
+        fights: story.fights.map((fight) => ({
+          name: fight.name,
+          round: fight.round,
+          outcome: fight.outcome,
+        })),
+      })),
+    proposeGroupEntry: ({ title, body }) =>
+      offer(
+        { target: "groupHistory", title: blank(title) ?? null, body },
+        "Offered the group a line for its chronicle. Nothing is saved unless a " +
+          "member accepts it; say one short line about it and stop.",
       ),
   });
 };

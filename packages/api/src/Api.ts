@@ -86,6 +86,7 @@ import {
   GroupMembership,
   GroupUpdate,
 } from "./Group.js";
+import { GroupHobStatus } from "./Hob.js";
 import {
   GroupHistoryEntry,
   GroupHistoryEntryCreate,
@@ -2012,6 +2013,55 @@ class HobGroup extends HttpApiGroup.make("hob")
  * that can be reopened next week is the point of §1.4's "interrupted and
  * resumed".
  */
+/**
+ * Group Hob: the assistant over the group's canonical record.
+ *
+ * `HobGroup`'s shape, group-scoped: the group is a path segment closed over by
+ * the handlers and never a tool parameter, the threads are the group's one
+ * shared conversation (any live member resumes it — the chronicle's own
+ * audience), and the accept keeps the one thing this surface can offer, a
+ * chronicle line. What the assistant may know here is
+ * `decision-group-hob-boundary.md`'s list — played sessions, story beats,
+ * combat outcomes, shared recaps — and never anybody's unplayed prep;
+ * `hob-group.test.ts` measures that at the provider wire.
+ */
+class HobGroupSurface extends HttpApiGroup.make("hobGroup")
+  .add(
+    HttpApiEndpoint.get("status", "/", {
+      params: { groupId: GroupId },
+      success: GroupHobStatus,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("ask", "/ask", {
+      params: { groupId: GroupId },
+      payload: HobAsk,
+      success: HttpApiSchema.StreamSse({ events: HobEvent }),
+      error: [NotFound, HobUnavailable],
+    }),
+    HttpApiEndpoint.get("threads", "/threads", {
+      params: { groupId: GroupId },
+      success: Schema.Array(HobThread),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("turns", "/threads/:threadId/turns", {
+      params: { groupId: GroupId, threadId: AssistantThreadId },
+      success: Schema.Array(HobTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("accept", "/threads/:threadId/turns/:turnId/accept", {
+      params: {
+        groupId: GroupId,
+        threadId: AssistantThreadId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: HobAccepted,
+      error: [NotFound, Conflict],
+    }),
+  )
+  .prefix("/groups/:groupId/hob")
+  .middleware(Authorization) {}
+
 class RunsGroup extends HttpApiGroup.make("runs")
   .add(
     HttpApiEndpoint.get("list", "/", {
@@ -2194,6 +2244,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(JoinGroup)
   .add(GroupsGroup)
   .add(GroupHistoryGroup)
+  .add(HobGroupSurface)
   .add(GroupMembersGroup)
   .add(CampaignsGroup)
   .add(MembersGroup)

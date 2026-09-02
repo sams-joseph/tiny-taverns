@@ -19,7 +19,13 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
 import { Recap } from "./Recap.js";
-import { dieOnSqlError } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  likeContains,
+} from "./rows.js";
 import { ensureGroupReadable } from "./visibility.js";
 
 /**
@@ -173,16 +179,48 @@ export const renderRecapEntry = (
   };
 };
 
+/** One played night, as the group's timeline lists it. */
+export interface PlayedNight {
+  readonly campaignId: CampaignId;
+  readonly campaignName: string;
+  readonly sessionId: SessionId;
+  readonly number: number;
+  readonly title: string | null;
+  readonly startedAt: DateTime.Utc;
+  readonly endedAt: DateTime.Utc | null;
+}
+
+/** One played night's canonical story — see `nightStory` on the service. */
+export interface NightStory {
+  readonly campaignName: string;
+  readonly number: number;
+  readonly title: string | null;
+  readonly startedAt: DateTime.Utc;
+  /** The DM's own words, oldest first, verbatim. */
+  readonly beats: ReadonlyArray<string>;
+  /** Name and outcome only — no roster, no numbers, no stat blocks. */
+  readonly fights: ReadonlyArray<{
+    readonly name: string;
+    readonly round: number;
+    readonly outcome: "on the table" | "resolved" | "carried";
+  }>;
+}
+
 export class GroupHistory extends Context.Service<
   GroupHistory,
   {
     readonly list: (
       groupId: GroupId,
     ) => Effect.Effect<ReadonlyArray<GroupHistoryEntry>, NotFound, CurrentActor>;
-    /** A member writing the chronicle by hand — `source_kind: 'manual'`. */
+    /**
+     * A member writing the chronicle by hand — `source_kind: 'manual'` — or,
+     * with `from`, group Hob's accepted proposal: the same statement, one
+     * extra argument, the `Proposals` rule one table across.
+     */
     readonly create: (
       groupId: GroupId,
       payload: GroupHistoryEntryCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<GroupHistoryEntry, NotFound, CurrentActor>;
     /**
      * The campaign creator sharing a played night. Takes the **proof** rather
@@ -204,6 +242,40 @@ export class GroupHistory extends Context.Service<
     readonly summary: (
       groupId: GroupId,
     ) => Effect.Effect<GroupHistorySummary | null, NotFound, CurrentActor>;
+    /**
+     * Lexical search over the chronicle — group Hob's grounding read. `ILIKE`
+     * over title and body, newest admitted first; the corpus is bounded (a
+     * chronicle is written by hand and by accepts), so no `tsvector` yet —
+     * `0008_beats.ts`'s rule, an index nothing reads is worse than none.
+     */
+    readonly search: (
+      groupId: GroupId,
+      q: string,
+    ) => Effect.Effect<ReadonlyArray<GroupHistoryEntry>, NotFound, CurrentActor>;
+    /**
+     * Every **played** night across the group's campaigns — the canonical
+     * timeline the group-Hob boundary decision grants: what has happened is
+     * the group's. Keyed structurally on `session.started_at`: a planned
+     * session is prep and does not exist here, whoever asks.
+     */
+    readonly playedNights: (
+      groupId: GroupId,
+    ) => Effect.Effect<ReadonlyArray<PlayedNight>, NotFound, CurrentActor>;
+    /**
+     * One played night's canonical story: the beats verbatim and the fights
+     * by name and outcome. **This is the one read in the product that crosses
+     * a campaign boundary on group membership alone**, and the decision of
+     * 2026-09-01 is its whole warrant — played sessions, story beats and
+     * combat outcomes are canonical and group-visible. What it deliberately
+     * does not read: notes (prep until shared), prep items, encounters that
+     * never ran, combatant numbers, stat blocks. An unplayed session is the
+     * ordinary `NotFound`, because unplayed prep does not exist at this level.
+     */
+    readonly nightStory: (
+      groupId: GroupId,
+      campaignId: CampaignId,
+      sessionId: SessionId,
+    ) => Effect.Effect<NightStory, NotFound, CurrentActor>;
   }
 >()("GroupHistory") {
   static readonly layer = Layer.effect(this)(
@@ -227,7 +299,7 @@ export class GroupHistory extends Context.Service<
             }),
           ),
 
-        create: (groupId, payload) =>
+        create: (groupId, payload, from) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
@@ -258,13 +330,22 @@ export class GroupHistory extends Context.Service<
                 }
               }
               const rows = yield* sql<EntryRow>`
-                insert into group_history_entry
-                  (group_id, campaign_id, session_id, source_kind, occurred_at,
-                   title, body, created_by_account_id)
-                values (${groupId}, ${payload.campaignId ?? null}, ${payload.sessionId ?? null},
-                        'manual',
-                        ${payload.occurredAt === undefined ? null : DateTime.toDate(payload.occurredAt)},
-                        ${payload.title ?? null}, ${payload.body}, ${actor.accountId})
+                insert into group_history_entry ${sql.insert(
+                  defined({
+                    group_id: groupId,
+                    campaign_id: payload.campaignId,
+                    session_id: payload.sessionId,
+                    source_kind: "manual",
+                    occurred_at:
+                      payload.occurredAt === undefined
+                        ? undefined
+                        : DateTime.toDate(payload.occurredAt),
+                    title: payload.title,
+                    body: payload.body,
+                    created_by_account_id: actor.accountId,
+                    ...assistantColumns(from),
+                  }),
+                )}
                 returning *
               `;
               return toEntry(rows[0]!);
@@ -315,6 +396,126 @@ export class GroupHistory extends Context.Service<
                   and group_history_summary.status = 'accepted'
               `;
               return rows.length === 0 ? null : toSummary(rows[0]!);
+            }),
+          ),
+
+        search: (groupId, q) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureGroupReadable(sql, groupId, actor);
+              const rows = yield* sql<EntryRow>`
+                select * from group_history_entry
+                where group_history_entry.group_id = ${groupId}
+                  and (group_history_entry.body ilike ${likeContains(q)}
+                       or group_history_entry.title ilike ${likeContains(q)})
+                order by group_history_entry.group_seq desc
+                limit 20
+              `;
+              return rows.map(toEntry);
+            }),
+          ),
+
+        playedNights: (groupId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureGroupReadable(sql, groupId, actor);
+              const rows = yield* sql<{
+                readonly campaign_id: CampaignId;
+                readonly campaign_name: string;
+                readonly session_id: SessionId;
+                readonly number: number;
+                readonly title: string | null;
+                readonly started_at: Date;
+                readonly ended_at: Date | null;
+              }>`
+                select campaign.id as campaign_id, campaign.name as campaign_name,
+                       session.id as session_id, session.number, session.title,
+                       session.started_at, session.ended_at
+                from session
+                join campaign on campaign.id = session.campaign_id
+                where campaign.group_id = ${groupId}
+                  and session.started_at is not null
+                order by session.started_at asc, session.id asc
+              `;
+              return rows.map((row): PlayedNight => ({
+                campaignId: row.campaign_id,
+                campaignName: row.campaign_name,
+                sessionId: row.session_id,
+                number: row.number,
+                title: row.title,
+                startedAt: DateTime.fromDateUnsafe(row.started_at),
+                endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
+              }));
+            }),
+          ),
+
+        nightStory: (groupId, campaignId, sessionId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureGroupReadable(sql, groupId, actor);
+              // Two structural claims, both checked: the campaign is of this
+              // group, and the session is of that campaign *and played*. A
+              // planned session answers exactly as a missing one — unplayed
+              // prep does not exist at group level, so there is nothing to be
+              // told apart from nothing.
+              const nights = yield* sql<{
+                readonly number: number;
+                readonly title: string | null;
+                readonly started_at: Date;
+                readonly campaign_name: string;
+              }>`
+                select session.number, session.title, session.started_at,
+                       campaign.name as campaign_name
+                from session
+                join campaign on campaign.id = session.campaign_id
+                where session.id = ${sessionId}
+                  and campaign.id = ${campaignId}
+                  and campaign.group_id = ${groupId}
+                  and session.started_at is not null
+              `;
+              if (nights.length === 0) {
+                return yield* new NotFound({ resource: "session", id: sessionId });
+              }
+              // Beats verbatim — canonical by the decision, whatever their
+              // row-level visibility: a beat records what happened at the
+              // table, and what happened is the group's.
+              const beats = yield* sql<{ readonly body: string }>`
+                select beat.body from beat
+                where beat.session_id = ${sessionId}
+                order by beat.created_at asc, beat.id asc
+              `;
+              const fights = yield* sql<{
+                readonly encounter_name: string;
+                readonly round: number;
+                readonly ended_at: Date | null;
+                readonly ended_reason: string | null;
+              }>`
+                select encounter_run.encounter_name, encounter_run.round,
+                       encounter_run.ended_at, encounter_run.ended_reason
+                from encounter_run
+                where encounter_run.session_id = ${sessionId}
+                order by encounter_run.created_at asc, encounter_run.id asc
+              `;
+              return {
+                campaignName: nights[0]!.campaign_name,
+                number: nights[0]!.number,
+                title: nights[0]!.title,
+                startedAt: DateTime.fromDateUnsafe(nights[0]!.started_at),
+                beats: beats.map((row) => row.body),
+                fights: fights.map((row) => ({
+                  name: row.encounter_name,
+                  round: row.round,
+                  outcome:
+                    row.ended_at === null
+                      ? ("on the table" as const)
+                      : row.ended_reason === "carried"
+                        ? ("carried" as const)
+                        : ("resolved" as const),
+                })),
+              };
             }),
           ),
       };

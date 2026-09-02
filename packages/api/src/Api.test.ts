@@ -140,6 +140,9 @@ describe("the API declaration", () => {
       "groups",
       "health",
       "hob",
+      // Group Hob: the assistant over the group's canonical record — the
+      // group-Hob boundary decision's surface.
+      "hobGroup",
       "invitePreview",
       "invites",
       "join",

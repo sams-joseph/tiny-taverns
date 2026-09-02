@@ -16,6 +16,7 @@ import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
@@ -57,6 +58,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
+  GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
   EncounterCreatures.layer,
@@ -71,6 +73,7 @@ const services = Layer.mergeAll(
       Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
       EncounterCreatures.layer,
       Encounters.layer,
+      GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
       Notes.layer,
     ]),
   ),

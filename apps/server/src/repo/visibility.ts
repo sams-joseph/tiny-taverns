@@ -565,7 +565,7 @@ export const ownRowWritable = (
  * them, and the discrimination is made once per request from the `CampaignCreatorActor`
  * proof rather than read off a row.
  */
-export type ConversationReach = "dm" | "own";
+export type ConversationReach = "dm" | "own" | "group";
 
 /**
  * Threads of a conversation table this actor holds — **one fragment for reading
@@ -605,12 +605,27 @@ export const conversationReachable = (
   sql: SqlClient.SqlClient,
   table: string,
   reach: ConversationReach,
-  campaignId: CampaignId,
+  /** The campaign for `"dm"`/`"own"`, the **group** for `"group"`. */
+  scopeId: CampaignId | GroupId,
   actor: Actor,
 ): Statement.Fragment =>
   reach === "own"
-    ? ownRowWritable(sql, table, campaignId, actor)
-    : sql.and([rowWritable(sql, table, campaignId, actor), sql`${sql(table)}.account_id is null`]);
+    ? ownRowWritable(sql, table, scopeId as CampaignId, actor)
+    : reach === "group"
+      ? // The group's shared conversation: any live member, like the
+        // chronicle. Pinning `group_id` is what makes the three arms a
+        // partition — a campaign thread has none, so no thread answers two
+        // reaches. `account_id is null` is `0031`'s check restated where the
+        // reads happen.
+        sql.and([
+          sql`${sql(table)}.group_id = ${scopeId}`,
+          sql`${sql(table)}.account_id is null`,
+          groupInScope(sql, actor, scopeId as GroupId),
+        ])
+      : sql.and([
+          rowWritable(sql, table, scopeId as CampaignId, actor),
+          sql`${sql(table)}.account_id is null`,
+        ]);
 
 /**
  * Turns of a conversation this actor holds.
@@ -638,12 +653,12 @@ export const conversationTurnReachable = (
   nested: NestedTable,
   reach: ConversationReach,
   parentId: string,
-  campaignId: CampaignId,
+  scopeId: CampaignId | GroupId,
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
-    sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${sql(`${nested.table}.${nested.foreignKey}`)} and ${conversationReachable(sql, nested.parent, reach, campaignId, actor)})`,
+    sql`exists (select 1 from ${sql(nested.parent)} where ${sql(`${nested.parent}.id`)} = ${sql(`${nested.table}.${nested.foreignKey}`)} and ${conversationReachable(sql, nested.parent, reach, scopeId, actor)})`,
   ]);
 
 /**
@@ -1179,14 +1194,14 @@ export const ensureConversationReachable = (
   table: string,
   reach: ConversationReach,
   id: string,
-  campaignId: CampaignId,
+  scopeId: CampaignId | GroupId,
   actor: Actor,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   ensure(
     sql,
     table,
     id,
-    sql`exists (select 1 from ${sql(table)} where ${sql(`${table}.id`)} = ${id} and ${conversationReachable(sql, table, reach, campaignId, actor)})`,
+    sql`exists (select 1 from ${sql(table)} where ${sql(`${table}.id`)} = ${id} and ${conversationReachable(sql, table, reach, scopeId, actor)})`,
   );
 
 /**

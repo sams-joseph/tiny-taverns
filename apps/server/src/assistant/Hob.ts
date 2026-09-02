@@ -3,6 +3,8 @@ import {
   type Campaign,
   type CampaignId,
   CurrentActor,
+  GroupHobStatus,
+  type GroupId,
   type HobAsk,
   HobBegun,
   HobDelta,
@@ -28,6 +30,8 @@ import {
   type Toolkit,
 } from "effect/unstable/ai";
 import { Campaigns } from "../repo/Campaigns.js";
+import { GroupHistory } from "../repo/GroupHistory.js";
+import { Groups } from "../repo/Groups.js";
 import { Creatures } from "../repo/Creatures.js";
 import { CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { HobThreads } from "../repo/HobThreads.js";
@@ -39,6 +43,8 @@ import { Sessions } from "../repo/Sessions.js";
 import {
   type CharacterVocabulary,
   dmHandlersFor,
+  groupHandlersFor,
+  GroupToolkit,
   HobToolkit,
   NO_VOCABULARY,
   playerBindListing,
@@ -115,6 +121,19 @@ export class Hob extends Context.Service<
       campaignId: CampaignId,
       ask: HobAsk,
     ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
+    /** `status`, for the group surface — gated on live group membership. */
+    readonly groupStatus: (
+      groupId: GroupId,
+    ) => Effect.Effect<GroupHobStatus, NotFound, CurrentActor>;
+    /**
+     * Group Hob answers — the canonical-record surface. Same protocol as
+     * `ask`, over the group toolkit and the group's shared thread; see
+     * `decision-group-hob-boundary.md` for what it may and may not know.
+     */
+    readonly askGroup: (
+      groupId: GroupId,
+      ask: HobAsk,
+    ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
   }
 >()("Hob") {
   /**
@@ -125,26 +144,31 @@ export class Hob extends Context.Service<
    * assistant is switched off here" must not be a way to probe which campaigns
    * exist.
    */
-  static readonly unavailable: Layer.Layer<Hob, never, Campaigns> = Layer.effect(this)(
+  static readonly unavailable: Layer.Layer<Hob, never, Campaigns | Groups> = Layer.effect(this)(
     Effect.gen(function* () {
       const campaigns = yield* Campaigns;
+      const groups = yield* Groups;
+      const off = new HobUnavailable({
+        message:
+          "Hob has no model behind it. Set HOB_API_URL and HOB_MODEL in " +
+          "apps/server/.env.local (see .env.example) and restart the server.",
+      });
       return {
         status: (campaignId) =>
           Effect.map(
             campaigns.findById(campaignId),
             (campaign) => new HobStatus({ available: false, model: null, campaign: campaign.name }),
           ),
-        ask: (campaignId) =>
-          Effect.andThen(
-            campaigns.findById(campaignId),
-            Effect.fail(
-              new HobUnavailable({
-                message:
-                  "Hob has no model behind it. Set HOB_API_URL and HOB_MODEL in " +
-                  "apps/server/.env.local (see .env.example) and restart the server.",
-              }),
-            ),
+        ask: (campaignId) => Effect.andThen(campaigns.findById(campaignId), Effect.fail(off)),
+        // Same shape as the campaign pair: the group is still resolved, so
+        // "the assistant is off" is not a cheaper way to probe which groups
+        // exist.
+        groupStatus: (groupId) =>
+          Effect.map(
+            groups.findById(groupId),
+            (group) => new GroupHobStatus({ available: false, model: null, group: group.name }),
           ),
+        askGroup: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
       };
     }),
   );
@@ -164,6 +188,8 @@ export class Hob extends Context.Service<
     | Campaigns
     | Creatures
     | CampaignCreatorActors
+    | GroupHistory
+    | Groups
     | HobThreads
     | LanguageModel.LanguageModel
     | Options
@@ -176,6 +202,7 @@ export class Hob extends Context.Service<
       Effect.gen(function* () {
         const languageModel = yield* LanguageModel.LanguageModel;
         const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
         const dmActors = yield* CampaignCreatorActors;
         const threads = yield* HobThreads;
         const repositories = {
@@ -189,6 +216,9 @@ export class Hob extends Context.Service<
           // `proposeCharacter`, so they are read before the toolkit exists
           // rather than from inside it.
           options: yield* Options,
+          // The group context: the chronicle and the summary for the DM's two
+          // group tools, and the whole record for group Hob's.
+          history: yield* GroupHistory,
         };
 
         return {
@@ -446,6 +476,149 @@ export class Hob extends Context.Service<
                   Stream.unwrap(
                     Effect.as(
                       Effect.logWarning(`Hob's answer failed: ${describe(Cause.squash(cause))}`),
+                      Stream.succeed(failure(apology(Cause.squash(cause)))),
+                    ),
+                  ),
+                ),
+                Stream.ensuring(save),
+              );
+            }),
+
+          groupStatus: (groupId) =>
+            Effect.map(
+              groups.findById(groupId),
+              (group) =>
+                new GroupHobStatus({ available: true, model: options.model, group: group.name }),
+            ),
+
+          /**
+           * The group surface — `ask`'s protocol over the group toolkit and
+           * the group's one shared conversation.
+           *
+           * Deliberately a parallel implementation rather than `ask` bent
+           * around a third branch: `ask` interleaves the DM/player fork, the
+           * vocabulary read and the proof at half a dozen points, and a
+           * version generic over all three scopes would bury the one thing
+           * worth reading here — that this surface holds **no campaign
+           * repository at all**. Its toolkit reaches the chronicle, the
+           * summary, the directory and the canonical timeline, and nothing
+           * else exists to leak. The streaming machinery (`conversation`,
+           * `note`, the tail's ordering rules) is the shared code; what is
+           * duplicated is the assembly, and `hob-group.test.ts` measures the
+           * result at the wire.
+           */
+          askGroup: (groupId, ask) =>
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              // The authorization gate, and the only thing read off the group
+              // row: its name, for the prompt. `groupReadable` underneath, so
+              // a stranger's 404 arrives before a byte of body.
+              const group = yield* groups.findById(groupId);
+
+              const thread =
+                ask.threadId === undefined
+                  ? yield* threads.start("group", groupId, ask.text)
+                  : yield* threads.findById("group", groupId, ask.threadId);
+              const history = yield* threads.turns("group", groupId, thread.id);
+
+              yield* threads.append("group", groupId, thread.id, {
+                id: yield* freshTurnId,
+                who: "user",
+                text: ask.text,
+              });
+
+              const answerId = yield* freshTurnId;
+              const written = yield* Ref.make("");
+              const broke = yield* Ref.make(false);
+              const reachedForOne = yield* Ref.make(false);
+              const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
+              const finished = yield* Ref.make("stop");
+
+              const answering: Stream.Stream<
+                HobEvent,
+                AiError.AiError | Schema.SchemaError,
+                LanguageModel.LanguageModel
+              > = conversation(
+                Effect.flatMap(
+                  GroupToolkit.toHandlers(
+                    groupHandlersFor(
+                      { history: repositories.history, groups },
+                      actor,
+                      groupId,
+                      proposal,
+                    ),
+                  ),
+                  (bound) => Effect.provideContext(GroupToolkit, bound),
+                ),
+                groupPrompt(group.name),
+                history,
+                ask,
+                finished,
+                proposal,
+              );
+
+              const save = Effect.gen(function* () {
+                const text = yield* Ref.get(written);
+                const offered = yield* Ref.get(proposal);
+                if (text === "" && offered === undefined) return;
+                yield* threads.append("group", groupId, thread.id, {
+                  id: answerId,
+                  who: "hob",
+                  text,
+                  proposal: offered,
+                });
+              }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
+
+              // `ask`'s tail, with the DM's build-report gates: group chat is
+              // general chat, so silence is the default and only an explicit
+              // build ask earns the "built nothing" sentence.
+              const tail = Stream.unwrap(
+                Effect.map(
+                  Effect.all([
+                    Ref.get(proposal),
+                    Ref.get(finished),
+                    Ref.get(broke),
+                    Ref.get(written),
+                    Ref.get(reachedForOne),
+                  ]),
+                  ([offered, reason, failed, text, reached]) =>
+                    Stream.fromIterable<HobEvent>([
+                      ...(offered === undefined
+                        ? []
+                        : [
+                            {
+                              event: "proposal" as const,
+                              data: new HobProposed({ turnId: answerId, proposal: offered }),
+                            },
+                          ]),
+                      ...(failed
+                        ? []
+                        : text === "" && offered === undefined
+                          ? [silence]
+                          : offered === undefined && !reached && wouldNotBuild("dm", ask.text, text)
+                            ? [unbuilt("dm")]
+                            : [{ event: "done" as const, data: new HobDone({ reason }) }]),
+                    ]),
+                ),
+              );
+
+              return Stream.fromIterable<HobEvent>([
+                {
+                  event: "began",
+                  data: new HobBegun({ threadId: thread.id, turnId: answerId }),
+                },
+              ]).pipe(
+                Stream.concat(
+                  answering.pipe(Stream.tap((event) => note(written, broke, reachedForOne, event))),
+                ),
+                Stream.concat(tail),
+                Stream.provideService(LanguageModel.LanguageModel, languageModel),
+                Stream.catchCause((cause) =>
+                  Stream.unwrap(
+                    Effect.as(
+                      Effect.logWarning(
+                        `Hob's group answer failed: ${describe(Cause.squash(cause))}`,
+                      ),
                       Stream.succeed(failure(apology(Cause.squash(cause)))),
                     ),
                   ),
@@ -1247,6 +1420,37 @@ const dmPrompt = (campaign: Campaign): string =>
     "",
     "You can see this one campaign and only what this credential is allowed to read.",
     "That is not a restriction you can work around, and you should not try.",
+  ].join("\n");
+
+/**
+ * What Hob is told on the **group** surface.
+ *
+ * Voiced for a member of the whole group rather than for one table's DM, and
+ * it says the boundary out loud so the model does not promise reads it does
+ * not have: what it can see is what the group has agreed happened — shared
+ * recaps, the played timeline, the chronicle — and never anybody's prep.
+ */
+const groupPrompt = (groupName: string): string =>
+  [
+    "You are Hob, the assistant behind the bar in Tiny Taverns. You are helping a member",
+    `of "${groupName}", a group of people playing tabletop campaigns together.`,
+    "",
+    "You can see the group's shared record: the chronicle members have written, the",
+    "running summary, which campaigns exist and who runs them, and every night that has",
+    "actually been played — with its story beats and how its fights ended. You cannot",
+    "see anybody's preparation, private notes or plans, and you should say so if asked.",
+    "",
+    "Everything you say about what happened must come from a tool call. Never state as",
+    "fact a name, an event or a night you have not read: if the record does not say,",
+    "say that it does not. When two campaigns' records disagree, say they disagree",
+    "rather than merging them.",
+    "",
+    "When a member asks you to record something — a summary of events, a connection",
+    "between campaigns — write it and offer it with proposeGroupEntry. Nothing you",
+    "offer enters the chronicle unless a member accepts it. Offer one thing at a time,",
+    "and say one short line about it.",
+    "",
+    "Keep replies to a sentence or two unless asked for more.",
   ].join("\n");
 
 /**

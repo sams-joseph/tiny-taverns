@@ -611,7 +611,11 @@ describe("the scope, counted", () => {
     // projection, and its writes compose `rowWritable`/`campaignWritableById`
     // underneath — a proof on top would be a second answer to the question
     // the predicate answers first.
-    expect(ungated).toBe(155);
+    // Stage 5 added four more: `GroupHistory.search`, `playedNights` and
+    // `nightStory` — the canonical reads the group-Hob boundary decision
+    // grants to every live member — and `Proposals.acceptGroup`, whose
+    // audience is a hand-written chronicle entry's: any member, no proof.
+    expect(ungated).toBe(159);
   });
 });
 

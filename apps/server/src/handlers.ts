@@ -793,6 +793,31 @@ const HobLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * Group Hob's handlers — the same five as the campaign surface, with one
+ * reach: the group's conversation is the group's, so there is no proof to
+ * resolve and no two sets to tell apart. `conversationReachable`'s `"group"`
+ * arm gates every thread read on live membership underneath.
+ */
+const HobGroupLive = HttpApiBuilder.group(
+  TavernsApi,
+  "hobGroup",
+  Effect.fnUntraced(function* (handlers) {
+    const hob = yield* Hob;
+    const threads = yield* HobThreads;
+    const proposals = yield* Proposals;
+
+    return handlers
+      .handle("status", ({ params }) => hob.groupStatus(params.groupId))
+      .handle("ask", ({ params, payload }) => hob.askGroup(params.groupId, payload))
+      .handle("threads", ({ params }) => threads.list("group", params.groupId))
+      .handle("turns", ({ params }) => threads.turns("group", params.groupId, params.threadId))
+      .handle("accept", ({ params }) =>
+        proposals.acceptGroup(params.groupId, params.threadId, params.turnId),
+      );
+  }),
+);
+
 const RunsLive = HttpApiBuilder.group(
   TavernsApi,
   "runs",
@@ -1027,6 +1052,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     BeatsLive,
     SearchLive,
     HobLive,
+    HobGroupLive,
     RunsLive,
     CombatantsLive,
     LiveLive,

@@ -2,7 +2,8 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Character, CharacterSheet } from "./Character.js";
 import { Difficulty, Encounter } from "./Encounter.js";
-import { AssistantThreadId, AssistantTurnId, CampaignId, CreatureId } from "./Ids.js";
+import { GroupHistoryEntry } from "./GroupHistory.js";
+import { AssistantThreadId, AssistantTurnId, CampaignId, CreatureId, GroupId } from "./Ids.js";
 import { Note, NoteKind } from "./Note.js";
 
 /**
@@ -71,6 +72,17 @@ export class HobStatus extends Schema.Class<HobStatus>("HobStatus")({
    * refuses.
    */
   campaign: Schema.String,
+}) {}
+
+/**
+ * `HobStatus` for the group surface. Its own class rather than a renamed
+ * field, because the *"Knows"* strip must be true and what group Hob is bound
+ * to is a group — its canonical history, never any campaign's private prep.
+ */
+export class GroupHobStatus extends Schema.Class<GroupHobStatus>("GroupHobStatus")({
+  available: Schema.Boolean,
+  model: Schema.NullOr(Schema.String),
+  group: Schema.String,
 }) {}
 
 /**
@@ -231,6 +243,20 @@ export const HobProposal = Schema.Union([
     /** Short lines, in the order Hob wrote them. Empty is legal and draws nothing. */
     rationale: Schema.Array(Schema.String),
   }),
+  /**
+   * A line for the group's chronicle — the fifth member, and the only one
+   * offered by **group** Hob. Accepting it writes a `group_history_entry`
+   * through the same `GroupHistory.create` a member's own hand goes through,
+   * with `origin = 'assistant'` and the turn on it; until then it is
+   * transcript, exactly like the other four. A campaign Hob never offers one
+   * and a group Hob offers nothing else — which toolkit was bound is the
+   * whole of that rule.
+   */
+  Schema.Struct({
+    target: Schema.Literal("groupHistory"),
+    title: Schema.NullOr(Schema.String),
+    body: Schema.String,
+  }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
 
@@ -245,7 +271,14 @@ export type HobProposal = typeof HobProposal.Type;
  */
 export class HobThread extends Schema.Class<HobThread>("HobThread")({
   id: AssistantThreadId,
-  campaignId: CampaignId,
+  /**
+   * The thread's scope: a campaign's conversation, or — since group Hob — a
+   * group's. Exactly one is set (`assistant_thread_one_scope`, `0031`); the
+   * pair of nullables is the persisted-column argument `HobProposal` makes,
+   * because a thread written before groups existed must keep decoding.
+   */
+  campaignId: Schema.NullOr(CampaignId),
+  groupId: Schema.NullOr(GroupId),
   title: Schema.String,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
@@ -436,6 +469,8 @@ export const HobAccepted = Schema.Union([
    * /me/characters/:id` against exactly this value.
    */
   Schema.Struct({ accepted: Schema.Literal("character"), character: Character }),
+  /** The chronicle line a group member kept — group Hob's one accept. */
+  Schema.Struct({ accepted: Schema.Literal("groupHistory"), entry: GroupHistoryEntry }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 

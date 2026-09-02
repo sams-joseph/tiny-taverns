@@ -3,6 +3,7 @@ import {
   type AssistantTurnId,
   type CampaignId,
   CurrentActor,
+  type GroupId,
   type HobProposal,
   HobThread,
   HobTurn,
@@ -19,6 +20,7 @@ import {
   ensureCampaignReadable,
   ensureCampaignWritable,
   ensureConversationReachable,
+  ensureGroupReadable,
   type NestedTable,
 } from "./visibility.js";
 
@@ -62,7 +64,8 @@ import {
 
 interface ThreadRow extends ProvenanceColumns {
   readonly id: AssistantThreadId;
-  readonly campaign_id: CampaignId;
+  readonly campaign_id: CampaignId | null;
+  readonly group_id: GroupId | null;
   readonly title: string;
 }
 
@@ -81,6 +84,7 @@ const toThread = (row: ThreadRow): HobThread => {
   return new HobThread({
     id: row.id,
     campaignId: row.campaign_id,
+    groupId: row.group_id,
     title: row.title,
     createdAt,
     updatedAt,
@@ -128,28 +132,28 @@ export class HobThreads extends Context.Service<
     /** Newest first — the panel resumes the one at the front. */
     readonly list: (
       reach: ConversationReach,
-      campaignId: CampaignId,
+      scopeId: CampaignId | GroupId,
     ) => Effect.Effect<ReadonlyArray<HobThread>, NotFound, CurrentActor>;
     readonly findById: (
       reach: ConversationReach,
-      campaignId: CampaignId,
+      scopeId: CampaignId | GroupId,
       id: AssistantThreadId,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /** Starts one, named after the question that started it. */
     readonly start: (
       reach: ConversationReach,
-      campaignId: CampaignId,
+      scopeId: CampaignId | GroupId,
       firstQuestion: string,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /** Oldest first: a conversation, read in the order it happened. */
     readonly turns: (
       reach: ConversationReach,
-      campaignId: CampaignId,
+      scopeId: CampaignId | GroupId,
       threadId: AssistantThreadId,
     ) => Effect.Effect<ReadonlyArray<HobTurn>, NotFound, CurrentActor>;
     readonly append: (
       reach: ConversationReach,
-      campaignId: CampaignId,
+      scopeId: CampaignId | GroupId,
       threadId: AssistantThreadId,
       draft: TurnDraft,
     ) => Effect.Effect<HobTurn, NotFound, CurrentActor>;
@@ -160,28 +164,30 @@ export class HobThreads extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
 
       return {
-        list: (reach, campaignId) =>
+        list: (reach, scopeId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
+              yield* reach === "group"
+                ? ensureGroupReadable(sql, scopeId as GroupId, actor)
+                : ensureCampaignReadable(sql, scopeId as CampaignId, actor);
               const rows = yield* sql<ThreadRow>`
                 select assistant_thread.* from assistant_thread
-                where ${conversationReachable(sql, "assistant_thread", reach, campaignId, actor)}
+                where ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
                 order by assistant_thread.updated_at desc, assistant_thread.id desc
               `;
               return rows.map(toThread);
             }),
           ),
 
-        findById: (reach, campaignId, id) =>
+        findById: (reach, scopeId, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<ThreadRow>`
                 select assistant_thread.* from assistant_thread
                 where assistant_thread.id = ${id}
-                  and ${conversationReachable(sql, "assistant_thread", reach, campaignId, actor)}
+                  and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
               `;
               if (rows.length === 0) {
                 return yield* new NotFound({ resource: "assistant_thread", id });
@@ -197,17 +203,24 @@ export class HobThreads extends Context.Service<
          * any path, so there is no request shape that starts a conversation for
          * somebody else. The `Invites.redeem` shape, a third time.
          */
-        start: (reach, campaignId, firstQuestion) =>
+        start: (reach, scopeId, firstQuestion) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              yield* reach === "own"
-                ? ensureCampaignReadable(sql, campaignId, actor)
-                : ensureCampaignWritable(sql, campaignId, actor);
+              // Three gates for three scopes: the DM's thread needs the
+              // campaign writable, a player's needs it readable, and the
+              // group's needs a live group membership — the chronicle's own
+              // gate, because the group's conversation is the group's.
+              yield* reach === "group"
+                ? ensureGroupReadable(sql, scopeId as GroupId, actor)
+                : reach === "own"
+                  ? ensureCampaignReadable(sql, scopeId as CampaignId, actor)
+                  : ensureCampaignWritable(sql, scopeId as CampaignId, actor);
               const rows = yield* sql<ThreadRow>`
                 insert into assistant_thread ${sql.insert(
                   defined({
-                    campaign_id: campaignId,
+                    campaign_id: reach === "group" ? undefined : scopeId,
+                    group_id: reach === "group" ? scopeId : undefined,
                     account_id: reach === "own" ? actor.accountId : undefined,
                     title: titleFrom(firstQuestion),
                   }),
@@ -218,7 +231,7 @@ export class HobThreads extends Context.Service<
             }),
           ),
 
-        turns: (reach, campaignId, threadId) =>
+        turns: (reach, scopeId, threadId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
@@ -230,19 +243,19 @@ export class HobThreads extends Context.Service<
                 "assistant_thread",
                 reach,
                 threadId,
-                campaignId,
+                scopeId,
                 actor,
               );
               const rows = yield* sql<TurnRow>`
                 select assistant_turn.* from assistant_turn
-                where ${conversationTurnReachable(sql, TURNS, reach, threadId, campaignId, actor)}
+                where ${conversationTurnReachable(sql, TURNS, reach, threadId, scopeId, actor)}
                 order by assistant_turn.created_at asc, assistant_turn.id asc
               `;
               return rows.map(toTurn);
             }),
           ),
 
-        append: (reach, campaignId, threadId, draft) =>
+        append: (reach, scopeId, threadId, draft) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -252,7 +265,7 @@ export class HobThreads extends Context.Service<
                   "assistant_thread",
                   reach,
                   threadId,
-                  campaignId,
+                  scopeId,
                   actor,
                 );
                 const rows = yield* sql<TurnRow>`
@@ -279,7 +292,7 @@ export class HobThreads extends Context.Service<
                 yield* sql`
                   update assistant_thread set updated_at = now()
                   where assistant_thread.id = ${threadId}
-                    and ${conversationReachable(sql, "assistant_thread", reach, campaignId, actor)}
+                    and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
                 `;
                 return toTurn(rows[0]!);
               }),
@@ -303,7 +316,7 @@ export class HobThreads extends Context.Service<
 export const lockTurnForAccept = (
   sql: SqlClient.SqlClient,
   reach: ConversationReach,
-  campaignId: CampaignId,
+  scopeId: CampaignId | GroupId,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
 ) =>
@@ -312,7 +325,7 @@ export const lockTurnForAccept = (
     const rows = yield* sql<TurnRow>`
       select assistant_turn.* from assistant_turn
       where assistant_turn.id = ${turnId}
-        and ${conversationTurnReachable(sql, TURNS, reach, threadId, campaignId, actor)}
+        and ${conversationTurnReachable(sql, TURNS, reach, threadId, scopeId, actor)}
       for update
     `;
     if (rows.length === 0) {

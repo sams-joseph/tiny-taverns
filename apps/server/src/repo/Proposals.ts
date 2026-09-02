@@ -4,6 +4,7 @@ import {
   type CampaignId,
   Conflict,
   CurrentActor,
+  type GroupId,
   type HobAccepted,
   type HobProposal,
   NotFound,
@@ -15,6 +16,7 @@ import { Campaigns } from "./Campaigns.js";
 import { Characters } from "./Characters.js";
 import { EncounterCreatures } from "./EncounterCreatures.js";
 import { Encounters } from "./Encounters.js";
+import { GroupHistory } from "./GroupHistory.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
 import type { AssistantOrigin } from "./rows.js";
@@ -94,6 +96,19 @@ export class Proposals extends Context.Service<
       threadId: AssistantThreadId,
       turnId: AssistantTurnId,
     ) => Effect.Effect<HobAccepted, NotFound | Conflict, CurrentActor>;
+    /**
+     * The group-side yes: a chronicle line group Hob offered, kept by any
+     * live member — the same people a hand-written entry is open to. One
+     * transaction, one lock, one `Conflict` on the second tap, exactly as the
+     * campaign accept; what it materialises through is `GroupHistory.create`
+     * with the turn on it, so an accepted line is made by the same statement
+     * a member's own is.
+     */
+    readonly acceptGroup: (
+      groupId: GroupId,
+      threadId: AssistantThreadId,
+      turnId: AssistantTurnId,
+    ) => Effect.Effect<HobAccepted, NotFound | Conflict, CurrentActor>;
   }
 >()("Proposals") {
   static readonly layer = Layer.effect(this)(
@@ -105,6 +120,7 @@ export class Proposals extends Context.Service<
       const encounters = yield* Encounters;
       const encounterCreatures = yield* EncounterCreatures;
       const characters = yield* Characters;
+      const groupHistory = yield* GroupHistory;
 
       const materialise = (
         campaignId: CampaignId,
@@ -199,6 +215,18 @@ export class Proposals extends Context.Service<
               ),
               (character) => ({ accepted: "character" as const, character }),
             );
+
+          case "groupHistory":
+            // Only a group thread ever carries one — the group toolkit is the
+            // only producer, and it writes into group threads alone — so this
+            // arm is unreachable through the campaign accept. The refusal
+            // stands anyway, because a `switch` that pretended the member does
+            // not exist would silently mis-file the day that invariant moves.
+            return Effect.fail(
+              new Conflict({
+                message: "that belongs to the group's chronicle — accept it there",
+              }),
+            );
         }
       };
 
@@ -224,6 +252,37 @@ export class Proposals extends Context.Service<
                 });
                 yield* markAccepted(sql, turnId);
                 return accepted;
+              }),
+            ),
+          ),
+
+        acceptGroup: (groupId, threadId, turnId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const turn = yield* lockTurnForAccept(sql, "group", groupId, threadId, turnId);
+                if (turn.proposal === null) {
+                  return yield* new NotFound({ resource: "proposal", id: turnId });
+                }
+                if (turn.accepted_at !== null) return yield* alreadyAccepted;
+                if (turn.proposal.target !== "groupHistory") {
+                  // The mirror of the campaign arm's refusal: a campaign
+                  // proposal reached through a group accept would write a row
+                  // into a place its card never named.
+                  return yield* new Conflict({
+                    message: "that belongs to a campaign — accept it there",
+                  });
+                }
+                const entry = yield* groupHistory.create(
+                  groupId,
+                  {
+                    body: turn.proposal.body,
+                    ...(turn.proposal.title === null ? {} : { title: turn.proposal.title }),
+                  },
+                  { assistantTurnId: turnId },
+                );
+                yield* markAccepted(sql, turnId);
+                return { accepted: "groupHistory" as const, entry };
               }),
             ),
           ),
