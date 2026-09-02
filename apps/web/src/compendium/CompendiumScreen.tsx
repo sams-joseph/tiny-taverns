@@ -3,6 +3,7 @@ import { Button, Icon } from "@taverns/ui";
 import { useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
+import { useListQuery, type ListQuery } from "../library/query";
 import { EmptyState } from "../ui/states";
 import {
   campaignRuleArticlesAtom,
@@ -14,10 +15,10 @@ import { isCampaignArticle } from "./ownership";
 import {
   CopyRuleArticleIn,
   RemoveRuleArticleDialog,
+  RuleArticleFilters,
   RuleArticleForm,
   RuleArticleGrid,
   RuleArticleReader,
-  RuleArticleSearch,
 } from "./RuleArticleParts";
 
 const summaryOf = (view: CampaignRuleArticlesView): string => {
@@ -30,7 +31,7 @@ const summaryOf = (view: CampaignRuleArticlesView): string => {
 
 export function CompendiumScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
-  const [query, setQuery] = useState<RuleArticleQuery>(NO_RULE_ARTICLE_QUERY);
+  const list = useListQuery(NO_RULE_ARTICLE_QUERY, { narrows: () => false });
   const [copying, setCopying] = useState(false);
   const [reading, setReading] = useState<RuleArticle>();
   const [editing, setEditing] = useState<RuleArticleDetail | undefined>();
@@ -40,21 +41,19 @@ export function CompendiumScreen() {
     <CampaignChrome<CampaignRuleArticlesView>
       campaignId={campaignId}
       title="Compendium"
-      extra={campaignRuleArticlesAtom({ campaignId, query })}
+      extra={campaignRuleArticlesAtom({ campaignId, query: list.query })}
       subtitle={({ extra }) => summaryOf(extra)}
       actions={() => (
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5">
-          <RuleArticleSearch query={query} onQuery={setQuery} />
-          <Button size="sm" onClick={() => setCopying(true)}>
-            <Icon name="copy" size={13} />
-            Copy article
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => setCopying(true)}>
+          <Icon name="copy" size={13} />
+          Copy article
+        </Button>
       )}
     >
       {(slots) => (
         <Compendium
           slots={slots}
+          list={list}
           campaignId={campaignId}
           reading={reading}
           onRead={setReading}
@@ -72,6 +71,7 @@ export function CompendiumScreen() {
 
 function Compendium({
   slots,
+  list,
   campaignId,
   reading,
   onRead,
@@ -83,6 +83,7 @@ function Compendium({
   onCopying,
 }: {
   readonly slots: CampaignChromeSlots<CampaignRuleArticlesView>;
+  readonly list: ListQuery<RuleArticleQuery>;
   readonly campaignId: CampaignId;
   readonly reading: RuleArticle | undefined;
   readonly onRead: (article: RuleArticle | undefined) => void;
@@ -97,25 +98,31 @@ function Compendium({
 
   return (
     <>
-      {extra.offered.length === 0 ? (
-        <EmptyState icon="book-open" title="No compendium articles">
-          Copy one from the pinned 2014 compendium or from your Library. Campaign copies are
-          snapshots, so later imports and Library edits do not rewrite them.
-        </EmptyState>
-      ) : (
-        <RuleArticleGrid
-          articles={extra.offered}
-          onOpen={onRead}
-          onEdit={(article) =>
-            isCampaignArticle(article)
-              ? () => {
-                  onRead(article);
-                }
-              : undefined
-          }
-          onRemove={(article) => (isCampaignArticle(article) ? () => onRemove(article) : undefined)}
-        />
-      )}
+      <div className="flex flex-col gap-6">
+        <RuleArticleFilters list={list} busy={false} />
+        {extra.offered.length === 0 ? (
+          <EmptyState icon="book-open" title="No compendium articles">
+            {list.narrowed
+              ? "Clear the search — nothing in this campaign matches."
+              : "Copy one from the pinned 2014 compendium or from your Library. Campaign copies are snapshots, so later imports and Library edits do not rewrite them."}
+          </EmptyState>
+        ) : (
+          <RuleArticleGrid
+            articles={extra.offered}
+            onOpen={onRead}
+            onEdit={(article) =>
+              isCampaignArticle(article)
+                ? () => {
+                    onRead(article);
+                  }
+                : undefined
+            }
+            onRemove={(article) =>
+              isCampaignArticle(article) ? () => onRemove(article) : undefined
+            }
+          />
+        )}
+      </div>
 
       {reading !== undefined && (
         <RuleArticleReader

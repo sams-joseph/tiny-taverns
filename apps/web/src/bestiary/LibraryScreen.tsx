@@ -6,11 +6,13 @@ import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
+import { ShowMore } from "../library/filters";
+import { listCount } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CopyIntoCampaign } from "./CopyIntoCampaign";
-import { CorpusControls, CreatureGrid, EnvironmentChips, MorePages } from "./CorpusParts";
+import { CreatureFilters, CreatureGrid } from "./CorpusParts";
 import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
 import { CreatureForm } from "./CreatureForm";
@@ -66,13 +68,13 @@ import { isLibraryEntity } from "./provenance";
  */
 
 /** The list is a page, so an unqualified count would name the wrong thing —
-    see `BestiaryScreen`'s own `countOf`, which this mirrors. */
-const countOf = (n: number, narrowed: boolean, more: boolean): string => {
-  const creatures = `${n} ${n === 1 ? "creature" : "creatures"}`;
-  if (more) return narrowed ? `The first ${creatures} that match` : `The first ${creatures}`;
-  if (narrowed) return `${creatures} ${n === 1 ? "matches" : "match"} what you're looking for`;
-  return n === 0 ? "Nothing here yet" : `${creatures} — yours, and the bundled corpus`;
-};
+    the shared `listCount` phrasing, told what this list is. */
+const countOf = (n: number, narrowed: boolean, more: boolean): string =>
+  listCount(
+    n,
+    { one: "creature", many: "creatures" },
+    { narrowed, hasMore: more, empty: "Nothing here yet", suffix: "yours, and the bundled corpus" },
+  );
 
 /**
  * One page of the Library, keyed on the query and nothing else — the whole point
@@ -130,7 +132,6 @@ export function LibraryScreen() {
           }
         >
           <LibraryNav />
-          <CorpusControls corpus={corpus} label="Search the library" />
           <Button size="sm" onClick={() => setEditing(null)}>
             <Icon name="plus" size={13} />
             Write a creature
@@ -149,7 +150,7 @@ export function LibraryScreen() {
 
       {corpus.shown !== undefined && corpus.resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <EnvironmentChips corpus={corpus} />
+          <CreatureFilters corpus={corpus} label="Search the library" />
 
           {corpus.creatures.length === 0 ? (
             <EmptyState icon="footprints" title="Nothing lives here">
@@ -188,7 +189,13 @@ export function LibraryScreen() {
             />
           )}
 
-          <MorePages corpus={corpus} />
+          <ShowMore
+            hasMore={corpus.hasMore}
+            loadingMore={corpus.loadingMore}
+            onMore={corpus.loadMore}
+            count={corpus.creatures.length}
+            failure={corpus.moreFailure}
+          />
         </div>
       )}
 

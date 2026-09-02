@@ -87,3 +87,16 @@ export const loadMoreCampaignMagicItems =
   (campaignId: CampaignId, query: MagicItemQuery, cursor: PageCursor<MagicItemSort>) =>
   (client: TavernsClient) =>
     client.magicItems.list({ params: { campaignId }, query: magicItemQueryParams(query, cursor) });
+
+/** True when anything besides the search narrows a magic item list. */
+export const magicItemNarrows = (query: MagicItemQuery): boolean =>
+  query.categories.length > 0 ||
+  query.rarities.length > 0 ||
+  query.attunement.length > 0 ||
+  query.variantStates.length > 0;
+
+/** Clearing keeps the sort — reordering a list is not filtering it. */
+export const magicItemClear = (query: MagicItemQuery, initial: MagicItemQuery): MagicItemQuery => ({
+  ...initial,
+  sort: query.sort,
+});

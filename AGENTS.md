@@ -4308,6 +4308,44 @@ worked, driving Chromium over CDP:
   assert on **computed values from the running app** (`getComputedStyle`, `getBoundingClientRect`)
   against the token the kit names. That is what caught the 760px overflow a screenshot did not.
 
+## The Library filter standard: one bar, one place, every tab (2026-09-02)
+
+**Every Library shelf — and the campaign screens sharing their parts — draws one filter pattern,
+and `apps/web/src/library/filters.tsx` + `library/query.ts` are the whole of it.** The captain's
+complaint, verbatim: _"filtering on the creatures tab is just terrible and the filters are located
+in different places in the ui."_ Before this, the creatures tab split a search box in the top bar
+from a screen-filling card of ~100 facet chips in the body, while spells, equipment and magic items
+crammed raw `<select>`s into the top bar until the title wrapped letter by letter. Where anything
+below (the bestiary/Library screen sections, `CorpusControls`, `EnvironmentChips`, per-dialog copy
+controls in footers) disagrees with this section, this one wins.
+
+- **The top bar holds the title, the count, `LibraryNav` and the write action(s) — never a
+  filter.** Three tabs proved the bar cannot fit a filter row without breaking its own layout.
+- **`FilterBar` is the first element of the content column on every tab**, in one order: search
+  (debounced through `useSearchTerm`), a `Sort:` `FilterSelect`, the corpus's facets as
+  `FilterMultiSelect`s (any-of, popup stays open, trigger reads `Type: Beast` or `Type · 2`,
+  aria-label `Filter by X` so it cannot collide with a form field of the same name), boolean
+  `FilterToggle`s — then _Clear filters_ and a "Looking…" status, which are the bar's own so no
+  tab can forget them. `useListQuery` is the query-state hook for the plain tabs;
+  `bestiary/corpus.ts` stays the richer creature version (pages + facet vocabulary) and renders
+  through the same components. Clearing keeps the sort — reordering is not filtering.
+- **Creature facet vocabularies are grouped case-insensitively** in `bestiary/CorpusParts.tsx`
+  (`beast`/`Beast` are genuinely distinct rows — starter bundle vs SRD spelling); one option
+  stands for the group and sends every raw spelling, which the any-of predicate makes exactly
+  what the reader asked for.
+- **Detail dialogs share one shape**: `ui/detail.tsx`'s `DetailBody` (the scrolling middle,
+  `px-gutter py-3`, the header's gutter carried through), `DetailSection` (hairline-ruled runs)
+  and `DetailFacts` (the label/value grid). The copy control is the generalised
+  `library/CopyIn.tsx`, in a `DetailSection` at the end of the body — the `CreatureDialog`
+  placement — with the footer staying _Close_.
+- **Shared behaviour is pinned in `library/filters.test.tsx`; per-tab application in each tab's
+  screen test** (`spells/SpellLibraryScreen.test.tsx` is the worked example). Base UI multiple
+  `Select` (v1.6) is what backs `FilterMultiSelect` — drive it in tests as combobox → options,
+  and the popup stays open across presses.
+- The spells class facet and equipment property facet are fixed 2014 source-key lists (they
+  replaced bare "class key"/"property key" text boxes); a corpus vocabulary read would be the
+  exact answer if one is ever added. No API contract changed for any of this.
+
 ## The bestiary screen: how it consumes the creature contract
 
 `apps/web/src/bestiary/` is `ui_kits/dm-screen/Bestiary.jsx` against the real API — search,

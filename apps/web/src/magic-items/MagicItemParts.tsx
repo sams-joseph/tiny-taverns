@@ -1,10 +1,4 @@
-import type {
-  Campaign,
-  MagicItem,
-  MagicItemCreate,
-  MagicItemSort,
-  MagicItemUpdate,
-} from "@taverns/api";
+import type { Campaign, MagicItem, MagicItemCreate, MagicItemUpdate } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -19,15 +13,24 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Icon,
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
+import { CopyIntoCampaignSection } from "../library/CopyIn";
+import {
+  FilterBar,
+  FilterMultiSelect,
+  FilterSearch,
+  FilterSelect,
+  type FilterOption,
+} from "../library/filters";
+import type { ListQuery } from "../library/query";
 import { routes, router } from "../routes";
-import { SaveFailure } from "../ui/form";
+import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
+import { SaveFailure, Textarea } from "../ui/form";
 import type { MagicItemQuery } from "./load";
 
 const sourceRef = (index: string, name: string, _family: string) => ({
@@ -35,35 +38,46 @@ const sourceRef = (index: string, name: string, _family: string) => ({
   name,
 });
 
-const categories = [
-  ["", "Any category"],
-  ["wondrous-items", "Wondrous Items"],
-  ["potion", "Potion"],
-  ["ring", "Ring"],
-  ["weapon", "Weapon"],
-  ["armor", "Armor"],
-  ["wand", "Wand"],
-  ["staff", "Staff"],
-  ["scroll", "Scroll"],
-  ["rod", "Rod"],
-  ["ammunition", "Ammunition"],
-] as const;
+const CATEGORIES: ReadonlyArray<FilterOption> = [
+  { value: "wondrous-items", label: "Wondrous Items" },
+  { value: "potion", label: "Potion" },
+  { value: "ring", label: "Ring" },
+  { value: "weapon", label: "Weapon" },
+  { value: "armor", label: "Armor" },
+  { value: "wand", label: "Wand" },
+  { value: "staff", label: "Staff" },
+  { value: "scroll", label: "Scroll" },
+  { value: "rod", label: "Rod" },
+  { value: "ammunition", label: "Ammunition" },
+];
 
-const rarities = [
-  ["", "Any rarity"],
-  ["common", "Common"],
-  ["uncommon", "Uncommon"],
-  ["rare", "Rare"],
-  ["very-rare", "Very Rare"],
-  ["legendary", "Legendary"],
-  ["artifact", "Artifact"],
-  ["varies", "Varies"],
-] as const;
+const RARITIES: ReadonlyArray<FilterOption> = [
+  { value: "common", label: "Common" },
+  { value: "uncommon", label: "Uncommon" },
+  { value: "rare", label: "Rare" },
+  { value: "very-rare", label: "Very Rare" },
+  { value: "legendary", label: "Legendary" },
+  { value: "artifact", label: "Artifact" },
+  { value: "varies", label: "Varies" },
+];
 
-const sortLabels: ReadonlyArray<readonly [MagicItemSort, string]> = [
-  ["name", "Name"],
-  ["rarity", "Rarity"],
-  ["recent", "Recently changed"],
+const SORTS: ReadonlyArray<FilterOption> = [
+  { value: "name", label: "Name" },
+  { value: "rarity", label: "Rarity" },
+  { value: "recent", label: "Recent" },
+];
+
+const ATTUNEMENT: ReadonlyArray<FilterOption> = [
+  { value: "", label: "Any attunement" },
+  { value: "required", label: "Required" },
+  { value: "none", label: "None" },
+];
+
+const VARIANTS: ReadonlyArray<FilterOption> = [
+  { value: "", label: "Any variant state" },
+  { value: "base", label: "Has variants" },
+  { value: "variant", label: "Variant" },
+  { value: "standalone", label: "Standalone" },
 ];
 
 const ownerOf = (item: MagicItem): "bundle" | "library" | "campaign" =>
@@ -80,104 +94,58 @@ const variantLine = (item: MagicItem): string =>
       : "Standalone item";
 
 export function MagicItemFilters({
-  query,
-  onQuery,
+  list,
+  busy,
 }: {
-  readonly query: MagicItemQuery;
-  readonly onQuery: (query: MagicItemQuery) => void;
+  readonly list: ListQuery<MagicItemQuery>;
+  readonly busy: boolean;
 }) {
-  const set = <K extends keyof MagicItemQuery>(key: K, value: MagicItemQuery[K]) =>
-    onQuery({ ...query, [key]: value });
-
+  const { value, patch } = list;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Input
-        className="w-64"
-        value={query.q}
-        onChange={(event) => set("q", event.target.value)}
-        placeholder="Search magic items"
-        aria-label="Search magic items"
-      />
-      <NativeSelect
+    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy}>
+      <FilterSearch label="Search magic items" value={list.term} onChange={list.setTerm} />
+      <FilterSelect
         label="Sort"
-        value={query.sort}
-        onChange={(value) => set("sort", value as MagicItemSort)}
-      >
-        {sortLabels.map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
+        value={value.sort}
+        onChange={(sort) => patch({ sort: sort as MagicItemQuery["sort"] })}
+        options={SORTS}
+        className="w-32"
+      />
+      <FilterMultiSelect
         label="Category"
-        value={query.categories[0] ?? ""}
-        onChange={(value) => set("categories", value === "" ? [] : [value])}
-      >
-        {categories.map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
+        values={value.categories}
+        onChange={(categories) => patch({ categories })}
+        options={CATEGORIES}
+        className="w-44"
+      />
+      <FilterMultiSelect
         label="Rarity"
-        value={query.rarities[0] ?? ""}
-        onChange={(value) => set("rarities", value === "" ? [] : [value])}
-      >
-        {rarities.map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
+        values={value.rarities}
+        onChange={(rarities) => patch({ rarities })}
+        options={RARITIES}
+        className="w-36"
+      />
+      <FilterSelect
         label="Attunement"
-        value={query.attunement[0] ?? ""}
-        onChange={(value) => set("attunement", value === "" ? [] : [value as "required" | "none"])}
-      >
-        <option value="">Any</option>
-        <option value="required">Required</option>
-        <option value="none">None</option>
-      </NativeSelect>
-      <NativeSelect
-        label="Variant"
-        value={query.variantStates[0] ?? ""}
-        onChange={(value) =>
-          set("variantStates", value === "" ? [] : [value as "base" | "variant" | "standalone"])
+        value={value.attunement[0] ?? ""}
+        onChange={(attunement) =>
+          patch({ attunement: attunement === "" ? [] : [attunement as "required" | "none"] })
         }
-      >
-        <option value="">Any</option>
-        <option value="base">Has variants</option>
-        <option value="variant">Variant</option>
-        <option value="standalone">Standalone</option>
-      </NativeSelect>
-    </div>
-  );
-}
-
-function NativeSelect({
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-  readonly children: ReactNode;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-label leading-label font-medium text-muted-foreground">
-      <span>{label}</span>
-      <select
-        className="h-9 rounded-control border border-border bg-surface-card px-2 text-label leading-label text-heading shadow-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {children}
-      </select>
-    </label>
+        options={ATTUNEMENT}
+        className="w-44"
+      />
+      <FilterSelect
+        label="Variant"
+        value={value.variantStates[0] ?? ""}
+        onChange={(state) =>
+          patch({
+            variantStates: state === "" ? [] : [state as "base" | "variant" | "standalone"],
+          })
+        }
+        options={VARIANTS}
+        className="w-44"
+      />
+    </FilterBar>
   );
 }
 
@@ -254,31 +222,36 @@ export function MagicItemDialog({
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent>
+      <DialogContent aria-label={`${magicItem.name} magic item`}>
         <DialogHeader>
-          <DialogTitle>{magicItem.name}</DialogTitle>
-          <DialogDescription>
-            {magicItem.categoryName} · {magicItem.rarityName} · {attunementLine(magicItem)}
+          <div className="flex flex-wrap items-start gap-2.5 pr-8">
+            <DialogTitle className="min-w-0 flex-1 break-words">{magicItem.name}</DialogTitle>
+            {magicItem.origin === "system" && <Badge variant="secondary">SRD</Badge>}
+            {ownerOf(magicItem) === "library" && <Badge variant="outline">Library</Badge>}
+          </div>
+          <DialogDescription className="font-serif italic">
+            {magicItem.categoryName} · {magicItem.rarityName}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex max-h-[min(60vh,44rem)] flex-col gap-4 overflow-auto pr-1 text-body-s leading-body text-muted-foreground">
-          {magicItem.magicItem.desc?.map((line, index) => (
-            <p key={index}>{line}</p>
-          ))}
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-label leading-label">
-            <dt>Category</dt>
-            <dd className="text-heading">{magicItem.categoryName}</dd>
-            <dt>Rarity</dt>
-            <dd className="text-heading">{magicItem.rarityName}</dd>
-            <dt>Attunement</dt>
-            <dd className="text-heading">{attunementLine(magicItem)}</dd>
-            <dt>Variant state</dt>
-            <dd className="text-heading">{variantLine(magicItem)}</dd>
-          </dl>
+        <DetailBody>
+          <DetailFacts
+            facts={[
+              { label: "Category", value: magicItem.categoryName },
+              { label: "Rarity", value: magicItem.rarityName },
+              { label: "Attunement", value: attunementLine(magicItem) },
+              { label: "Variant state", value: variantLine(magicItem) },
+            ]}
+          />
+          {(magicItem.magicItem.desc?.length ?? 0) > 0 && (
+            <div className="flex flex-col gap-3 text-body-s leading-body text-muted-foreground">
+              {magicItem.magicItem.desc?.map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
+            </div>
+          )}
           {(baseName !== undefined || variantNames.length > 0) && (
-            <div className="rounded-card border border-border bg-surface-sunken p-3">
-              <h3 className="text-label leading-label font-semibold text-heading">Variants</h3>
-              <div className="mt-2 flex flex-wrap gap-2">
+            <DetailSection title="Variants">
+              <div className="flex flex-wrap gap-2">
                 {baseName !== undefined && (
                   <Button
                     variant="secondary"
@@ -301,90 +274,48 @@ export function MagicItemDialog({
                   </Button>
                 ))}
               </div>
-              <p className="mt-2 text-label leading-label text-faint">
+              <p className="text-caption leading-body text-faint">
                 Variant links come from the source graph; a campaign copy is a snapshot and does not
                 borrow a base item from the bundle.
               </p>
-            </div>
+            </DetailSection>
           )}
-        </div>
-        <DialogFooter>
           {campaigns !== undefined && (
-            <CopyMagicItemIntoCampaign magicItem={magicItem} campaigns={campaigns} />
+            <DetailSection>
+              <CopyIntoCampaignSection
+                noun="magic item"
+                campaigns={campaigns}
+                derive={(campaignId) => (client) =>
+                  client.magicItems.derive({
+                    params: { campaignId, magicItemId: magicItem.id },
+                    payload: {},
+                  })
+                }
+                readsChanged={(campaignId) => [reads.magicItems(campaignId)]}
+                copiedLink={(campaign) => (
+                  <a
+                    className="text-link hover:text-link-hover"
+                    href={router.history.createHref(
+                      router.buildLocation({
+                        to: routes.magicItems.to,
+                        params: { campaignId: campaign.id },
+                      }).publicHref,
+                    )}
+                  >
+                    Open its magic items
+                  </a>
+                )}
+              />
+            </DetailSection>
           )}
-          <Button variant="secondary" onClick={onClose}>
+        </DetailBody>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function CopyMagicItemIntoCampaign({
-  magicItem,
-  campaigns,
-}: {
-  readonly magicItem: MagicItem;
-  readonly campaigns: ReadonlyArray<Campaign>;
-}) {
-  const mutation = useMutation();
-  const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
-  const chosen = campaigns.find((campaign) => campaign.id === campaignId);
-  const [copied, setCopied] = useState<Campaign | undefined>();
-  const href = useMemo(
-    () =>
-      copied === undefined
-        ? undefined
-        : router.history.createHref(
-            router.buildLocation({ to: routes.magicItems.to, params: { campaignId: copied.id } })
-              .publicHref,
-          ),
-    [copied],
-  );
-
-  if (campaigns.length === 0) {
-    return <p className="text-label leading-label text-faint">Run a campaign to copy this in.</p>;
-  }
-
-  const submit = async () => {
-    if (chosen === undefined) return;
-    const result = await mutation.submit(
-      (client) =>
-        client.magicItems.derive({
-          params: { campaignId: chosen.id, magicItemId: magicItem.id },
-          payload: {},
-        }),
-      [reads.magicItems(chosen.id)],
-    );
-    if (Result.isSuccess(result)) setCopied(chosen);
-  };
-
-  return (
-    <div className="mr-auto flex flex-wrap items-center gap-2">
-      <select
-        className="h-9 rounded-control border border-border bg-surface-card px-2 text-label leading-label text-heading shadow-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        value={campaignId}
-        onChange={(event) => setCampaignId(event.target.value)}
-        aria-label="Campaign to copy into"
-      >
-        {campaigns.map((campaign) => (
-          <option key={campaign.id} value={campaign.id}>
-            {campaign.name}
-          </option>
-        ))}
-      </select>
-      <Button size="sm" onClick={submit} disabled={mutation.busy || chosen === undefined}>
-        <Icon name="copy" size={13} />
-        Copy into campaign
-      </Button>
-      {mutation.failure !== undefined && <SaveFailure failure={mutation.failure} />}
-      {href !== undefined && (
-        <a className="text-label leading-label text-accent-ink underline" href={href}>
-          Copied to {copied?.name}
-        </a>
-      )}
-    </div>
   );
 }
 
@@ -477,7 +408,7 @@ export function MagicItemFormDialog({
             It starts in your Library and enters a campaign only as a copy.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid gap-3 px-gutter py-3">
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -528,8 +459,7 @@ export function MagicItemFormDialog({
               aria-label="Attunement requirement"
             />
           )}
-          <textarea
-            className="min-h-32 rounded-card border border-border bg-surface-card px-3 py-2 text-body leading-body text-heading shadow-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <Textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Description"

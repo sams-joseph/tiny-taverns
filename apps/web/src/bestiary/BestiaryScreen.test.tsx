@@ -124,17 +124,19 @@ describe("BestiaryScreen", () => {
     // arrive with pagination: a chip applied to a *page* filters twenty-four
     // rows and calls the result the list.
     server.routes.set(LIST, { status: 200, body: page([bandit]) });
-    await userEvent.click(screen.getByRole("button", { name: "River" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Filter by Environment" }));
+    await userEvent.click(await screen.findByRole("option", { name: "River" }));
 
     await waitFor(() => expect(lastQuery().getAll("environments")).toEqual(["River"]));
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
     expect(screen.getByText("Saltmarsh Bandit")).toBeInTheDocument();
     expect(screen.getByText("1 creature matches what you're looking for")).toBeInTheDocument();
 
-    // Any-of, so a second chip widens rather than narrows — and reaches the wire
-    // as two occurrences of the same key.
+    // Any-of, so a second value widens rather than narrows — and reaches the
+    // wire as two occurrences of the same key. The popup stays open across
+    // presses, which is what any-of means.
     server.routes.set(LIST, { status: 200, body: page([bandit, goblin, hag]) });
-    await userEvent.click(screen.getByRole("button", { name: "Marsh" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Marsh" }));
     await waitFor(() =>
       expect([...lastQuery().getAll("environments")].sort()).toEqual(["Marsh", "River"]),
     );
@@ -142,20 +144,21 @@ describe("BestiaryScreen", () => {
     expect(screen.getByText("Saltmarsh Bandit")).toBeInTheDocument();
   });
 
-  it("keeps every chip on the row once a filter narrows the list", async () => {
+  it("keeps the whole facet vocabulary on offer once a filter narrows the list", async () => {
     await renderBestiary(mintingSession());
     await screen.findByText("Goblin Boss");
 
-    // Only the bandit is left, and it lives in River alone — but the row must
-    // still offer Marsh, or there is no way back out of the filter. That is why
-    // the vocabulary is a read over the corpus rather than a fold over the
-    // answers: the narrowed answer no longer mentions Marsh at all.
+    // Only the bandit is left, and it lives in River alone — but the control
+    // must still offer Marsh, or there is no way back out of the filter. That
+    // is why the vocabulary is a read over the corpus rather than a fold over
+    // the answers: the narrowed answer no longer mentions Marsh at all.
     server.routes.set(LIST, { status: 200, body: page([bandit]) });
-    await userEvent.click(screen.getByRole("button", { name: "River" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Filter by Environment" }));
+    await userEvent.click(await screen.findByRole("option", { name: "River" }));
 
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
     for (const environment of ["Marsh", "River"]) {
-      expect(screen.getByRole("button", { name: environment })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: environment })).toBeInTheDocument();
     }
   });
 
@@ -208,8 +211,8 @@ describe("BestiaryScreen", () => {
 
     expect(lastQuery().get("sort")).toBe("cr");
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Sort creatures" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Sort: Name" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Sort" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Name" }));
 
     await waitFor(() => expect(lastQuery().get("sort")).toBe("name"));
   });
@@ -269,7 +272,7 @@ describe("BestiaryScreen", () => {
     expect(screen.queryByText(/bestiary:import/)).toBeNull();
 
     // And there is a way back out of it.
-    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     wholeBestiary();
     await waitFor(() => expect(lastQuery().get("q")).toBe(""));
   });

@@ -1,84 +1,44 @@
 import type { Creature, CreatureId, CreatureSort } from "@taverns/api";
+import { Input, Label } from "@taverns/ui";
 import {
-  Button,
-  Input,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Toggle,
-} from "@taverns/ui";
-import { FailureNotice } from "../ui/states";
+  FilterBar,
+  FilterMultiSelect,
+  FilterSearch,
+  FilterSelect,
+  FilterToggle,
+  type FilterOption,
+} from "../library/filters";
 import { CreatureCard } from "./CreatureCard";
 import type { Corpus } from "./corpus";
 import type { CorpusView, FacetList } from "./load";
 
 /**
- * The three pieces of furniture both creature lists draw, written once.
+ * The furniture both creature lists draw, written once.
  *
  * The campaign bestiary and the Library are two reads over one corpus, and
- * `corpus.ts` is where the *behaviour* they share lives. This is the rest of it:
- * the search box and the sort that sit in the top bar, the chip row under it,
- * and the grid. Only the shell, the copy and the empty states differ between the
- * two screens, which is what those files are.
+ * `corpus.ts` is where the *behaviour* they share lives. This is the rest of
+ * it: the filter bar and the grid. Only the shell, the copy and the empty
+ * states differ between the two screens, which is what those files are.
  *
- * Nothing here writes. The authoring the Library has lives in `CreatureForm` and
- * reaches the grid as one optional per-row callback; the campaign bestiary
+ * **`CreatureFilters` is the Library standard applied to the richest corpus.**
+ * It replaced two pieces of furniture in two different places — a search box
+ * and sort in the top bar, and a whole card of facet chips in the body that
+ * filled the first screenful before a single creature was visible (the
+ * captain's *"filtering on the creatures tab is just terrible"*). Every facet
+ * the chip wall offered is still here, as the compact any-of selects the other
+ * tabs use, in the one place every tab's filters now live.
+ *
+ * Nothing here writes. The authoring the Library has lives in `CreatureForm`
+ * and reaches the grid as one optional per-row callback; the campaign bestiary
  * passes none, because what it lists are copies and it has never been an
  * authoring surface.
  */
 
-const SORTS: ReadonlyArray<{ readonly value: CreatureSort; readonly label: string }> = [
-  { value: "cr", label: "Sort: CR" },
-  { value: "name", label: "Sort: Name" },
-  { value: "recent", label: "Sort: Recent" },
+const SORTS: ReadonlyArray<FilterOption> = [
+  { value: "cr", label: "CR" },
+  { value: "name", label: "Name" },
+  { value: "recent", label: "Recent" },
 ];
-
-/**
- * The two controls that reach the server, for a screen's `TopBar` children.
- *
- * `label` is on the search box rather than baked in, because "Search creatures"
- * and "Search the library" are the same control asking about different sets and
- * a reader should be told which.
- */
-export function CorpusControls<V extends CorpusView>({
-  corpus,
-  label,
-}: {
-  readonly corpus: Corpus<V>;
-  readonly label: string;
-}) {
-  return (
-    <>
-      <Input
-        aria-label={label}
-        placeholder={label}
-        value={corpus.term}
-        onChange={(event) => corpus.setTerm(event.target.value)}
-        className="h-control-sm w-44"
-      />
-      <Select value={corpus.sort} onValueChange={(value) => corpus.setSort(value as CreatureSort)}>
-        <SelectTrigger aria-label="Sort creatures" className="h-control-sm w-36">
-          {/* Written out rather than left to Base UI: `Select.Value` with
-              neither `items` nor children serialises the *value*, which would
-              put `cr` on screen. */}
-          <SelectValue>
-            {(value) => SORTS.find((entry) => entry.value === value)?.label ?? "Sort: CR"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {SORTS.map((entry) => (
-            <SelectItem key={entry.value} value={entry.value}>
-              {entry.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
-  );
-}
 
 const FACETS: ReadonlyArray<{
   readonly key: FacetList;
@@ -97,106 +57,152 @@ const FACETS: ReadonlyArray<{
   },
   {
     key: "damageImmunities",
-    label: "Immune to damage",
+    label: "Damage immunity",
     values: (view) => view.facets.damageImmunities,
   },
   {
     key: "conditionImmunities",
-    label: "Immune to conditions",
+    label: "Condition immunity",
     values: (view) => view.facets.conditionImmunities,
   },
   { key: "movementModes", label: "Movement", values: (view) => view.facets.movementModes },
 ];
 
-const activeValues = <V extends CorpusView>(
-  corpus: Corpus<V>,
-  key: FacetList,
-): ReadonlyArray<string> => corpus[key];
-
 /**
- * The creature filters: the vocabulary the corpus actually uses, not the
- * prototype's hard-coded four (`Bestiary.jsx:4`).
+ * One facet's vocabulary, grouped case-insensitively.
  *
- * **Pressing one is a request now**, and the rows are read separately for
- * exactly that reason — a vocabulary derived from a narrowed, paged answer
- * could not offer the chip you would press to get back out. See `load.ts`'s
- * `CorpusView`. Renders nothing at all until the corpus has mentioned a facet.
+ * The corpus really does hold `beast` and `Beast` as distinct values — the
+ * starter bundle spells types lowercase and the SRD capitalises them — and a
+ * chip per spelling read as a data bug on screen. A *filter* meaning "beasts"
+ * means both, so one option stands for the group and choosing it sends every
+ * raw spelling; the predicate is any-of, so widening the value list is exactly
+ * what the reader asked for.
  */
-export function EnvironmentChips<V extends CorpusView>({ corpus }: { readonly corpus: Corpus<V> }) {
+const grouped = (
+  vocabulary: ReadonlyArray<string>,
+): {
+  readonly options: ReadonlyArray<FilterOption>;
+  readonly raws: ReadonlyMap<string, ReadonlyArray<string>>;
+} => {
+  const raws = new Map<string, Array<string>>();
+  for (const value of vocabulary) {
+    const key = value.toLowerCase();
+    const entry = raws.get(key);
+    if (entry === undefined) raws.set(key, [value]);
+    else entry.push(value);
+  }
+  const options = [...raws.keys()].map((key) => ({
+    value: key,
+    label: (key[0]?.toUpperCase() ?? "") + key.slice(1),
+  }));
+  return { options, raws };
+};
+
+const groupKeysOf = (selected: ReadonlyArray<string>): ReadonlyArray<string> => [
+  ...new Set(selected.map((value) => value.toLowerCase())),
+];
+
+function FacetSelect<V extends CorpusView>({
+  corpus,
+  facet,
+}: {
+  readonly corpus: Corpus<V>;
+  readonly facet: (typeof FACETS)[number];
+}) {
   const view = corpus.shown;
   if (view === undefined) return null;
-  const hasFacets = FACETS.some((facet) => facet.values(view).length > 0);
-  if (!hasFacets && view.facets.crMin === null && view.facets.crMax === null) return null;
-
+  const vocabulary = facet.values(view);
+  if (vocabulary.length === 0) return null;
+  const { options, raws } = grouped(vocabulary);
   return (
-    <div className="flex flex-col gap-3 rounded-card border border-line-subtle bg-surface-card p-3 shadow-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <Label className="mr-1 text-faint">Challenge</Label>
-        <Input
-          aria-label="Minimum challenge rating"
-          inputMode="decimal"
-          placeholder={view.facets.crMin === null ? "Min" : `Min ${String(view.facets.crMin)}`}
-          value={corpus.crMin}
-          onChange={(event) => corpus.setCrMin(event.target.value)}
-          className="h-control-sm w-20"
-        />
-        <Input
-          aria-label="Maximum challenge rating"
-          inputMode="decimal"
-          placeholder={view.facets.crMax === null ? "Max" : `Max ${String(view.facets.crMax)}`}
-          value={corpus.crMax}
-          onChange={(event) => corpus.setCrMax(event.target.value)}
-          className="h-control-sm w-20"
-        />
-        {view.facets.legendary && (
-          <Toggle
-            size="sm"
-            pressed={corpus.legendary === true}
-            onPressedChange={(pressed) => corpus.setLegendary(pressed ? true : undefined)}
-          >
-            Legendary
-          </Toggle>
-        )}
-        {view.facets.spellcaster && (
-          <Toggle
-            size="sm"
-            pressed={corpus.spellcaster === true}
-            onPressedChange={(pressed) => corpus.setSpellcaster(pressed ? true : undefined)}
-          >
-            Spellcaster
-          </Toggle>
-        )}
-        {corpus.narrowed && (
-          <Button variant="ghost" size="sm" onClick={corpus.clear}>
-            Clear
-          </Button>
-        )}
-        {corpus.resource.state === "loading" && (
-          <span role="status" className="text-caption leading-body text-faint">
-            Looking…
-          </span>
-        )}
-      </div>
-      {FACETS.map((facet) => {
-        const values = facet.values(view);
-        if (values.length === 0) return null;
-        return (
-          <div key={facet.key} className="flex flex-wrap items-center gap-2">
-            <Label className="mr-1 text-faint">{facet.label}</Label>
-            {values.map((value) => (
-              <Toggle
-                key={value}
-                size="sm"
-                pressed={activeValues(corpus, facet.key).includes(value)}
-                onPressedChange={() => corpus.toggleFacet(facet.key, value)}
-              >
-                {value}
-              </Toggle>
-            ))}
-          </div>
-        );
-      })}
-    </div>
+    <FilterMultiSelect
+      label={facet.label}
+      values={groupKeysOf(corpus[facet.key])}
+      onChange={(keys) =>
+        corpus.setFacet(
+          facet.key,
+          keys.flatMap((key) => raws.get(key) ?? [key]),
+        )
+      }
+      options={options}
+      // Wide enough that the two long facet names read whole in the trigger.
+      className={facet.label.length > 10 ? "w-48" : "w-40"}
+    />
+  );
+}
+
+/**
+ * The whole filter row, in the standard order: search, sort, the facets, the
+ * numeric range, the boolean toggles. The clear affordance and the "Looking…"
+ * whisper are `FilterBar`'s own.
+ *
+ * `label` is on the search box rather than baked in, because "Search creatures"
+ * and "Search the library" are the same control asking about different sets and
+ * a reader should be told which.
+ */
+export function CreatureFilters<V extends CorpusView>({
+  corpus,
+  label,
+}: {
+  readonly corpus: Corpus<V>;
+  readonly label: string;
+}) {
+  const view = corpus.shown;
+  return (
+    <FilterBar
+      narrowed={corpus.narrowed}
+      onClear={corpus.clear}
+      busy={corpus.resource.state === "loading" && view !== undefined}
+    >
+      <FilterSearch label={label} value={corpus.term} onChange={corpus.setTerm} />
+      <FilterSelect
+        label="Sort"
+        value={corpus.sort}
+        onChange={(value) => corpus.setSort(value as CreatureSort)}
+        options={SORTS}
+        className="w-32"
+      />
+      {FACETS.map((facet) => (
+        <FacetSelect key={facet.key} corpus={corpus} facet={facet} />
+      ))}
+      {view !== undefined && (
+        <div className="flex items-center gap-1.5">
+          <Label className="text-faint">CR</Label>
+          <Input
+            aria-label="Minimum challenge rating"
+            inputMode="decimal"
+            placeholder={view.facets.crMin === null ? "Min" : `Min ${String(view.facets.crMin)}`}
+            value={corpus.crMin}
+            onChange={(event) => corpus.setCrMin(event.target.value)}
+            className="h-control-sm w-20"
+          />
+          <Input
+            aria-label="Maximum challenge rating"
+            inputMode="decimal"
+            placeholder={view.facets.crMax === null ? "Max" : `Max ${String(view.facets.crMax)}`}
+            value={corpus.crMax}
+            onChange={(event) => corpus.setCrMax(event.target.value)}
+            className="h-control-sm w-20"
+          />
+        </div>
+      )}
+      {view?.facets.legendary === true && (
+        <FilterToggle
+          pressed={corpus.legendary === true}
+          onChange={(pressed) => corpus.setLegendary(pressed ? true : undefined)}
+        >
+          Legendary
+        </FilterToggle>
+      )}
+      {view?.facets.spellcaster === true && (
+        <FilterToggle
+          pressed={corpus.spellcaster === true}
+          onChange={(pressed) => corpus.setSpellcaster(pressed ? true : undefined)}
+        >
+          Spellcaster
+        </FilterToggle>
+      )}
+    </FilterBar>
   );
 }
 
@@ -236,40 +242,6 @@ export function CreatureGrid({
           onOpen={() => onOpen(creature.id)}
         />
       ))}
-    </div>
-  );
-}
-
-/**
- * The rest of the list, when there is one.
- *
- * A button rather than an infinite scroll: the grid is inside a scrolling
- * column that a DM also scrolls to read a card, and a list that grows under the
- * thumb is a list you cannot get to the bottom of. It says how many are already
- * on screen because the subtitle counts the same rows, and a reader who asked
- * for more should be able to see that they arrived.
- *
- * A failed page keeps everything already read on screen and offers the same
- * press again — the rows in hand are still good, which is the difference
- * between this and the screen's own `FailureNotice`.
- */
-export function MorePages<V extends CorpusView>({ corpus }: { readonly corpus: Corpus<V> }) {
-  if (!corpus.hasMore && corpus.moreFailure === undefined) return null;
-
-  return (
-    <div className="flex flex-col items-center gap-3">
-      {corpus.moreFailure !== undefined && (
-        <div className="w-full max-w-3xl">
-          <FailureNotice failure={corpus.moreFailure} onRetry={corpus.loadMore} />
-        </div>
-      )}
-      {corpus.hasMore && (
-        <Button variant="secondary" onClick={corpus.loadMore} disabled={corpus.loadingMore}>
-          {corpus.loadingMore
-            ? "Reading…"
-            : `Show more (${String(corpus.creatures.length)} so far)`}
-        </Button>
-      )}
     </div>
   );
 }

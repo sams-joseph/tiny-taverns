@@ -8,7 +8,9 @@ import type { TavernsClient } from "../api/client";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { CorpusControls, CreatureGrid, EnvironmentChips, MorePages } from "./CorpusParts";
+import { ShowMore } from "../library/filters";
+import { listCount } from "../library/query";
+import { CreatureFilters, CreatureGrid } from "./CorpusParts";
 import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
 import { loadBestiary, moreOfBestiary, type CorpusQuery } from "./load";
@@ -59,16 +61,19 @@ import { loadBestiary, moreOfBestiary, type CorpusQuery } from "./load";
  * the size of the corpus. Saying "the first 24" is the honest version and is
  * also the sentence that makes the *Show more* button below make sense.
  */
-const countOf = (n: number, narrowed: boolean, more: boolean): string => {
-  const creatures = `${n} ${n === 1 ? "creature" : "creatures"}`;
-  if (more) return narrowed ? `The first ${creatures} that match` : `The first ${creatures}`;
-  if (narrowed) return `${creatures} ${n === 1 ? "matches" : "match"} what you're looking for`;
-  // "0 creatures — this campaign's own, and the shared corpus" is a sentence
-  // about a list that is not there. The card below says the rest.
-  return n === 0
-    ? "Nothing in reach yet"
-    : `${creatures} — this campaign's own, and the shared corpus`;
-};
+const countOf = (n: number, narrowed: boolean, more: boolean): string =>
+  listCount(
+    n,
+    { one: "creature", many: "creatures" },
+    {
+      narrowed,
+      hasMore: more,
+      // "0 creatures — this campaign's own…" is a sentence about a list that
+      // is not there. The card below says the rest.
+      empty: "Nothing in reach yet",
+      suffix: "this campaign's own, and the shared corpus",
+    },
+  );
 
 /**
  * One page of this campaign's reachable bestiary, keyed on the campaign and the
@@ -116,9 +121,7 @@ export function BestiaryScreen() {
               ? undefined
               : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
           }
-        >
-          <CorpusControls corpus={corpus} label="Search creatures" />
-        </TopBar>
+        />
       }
     >
       {corpus.shown === undefined && corpus.resource.state === "loading" && (
@@ -132,7 +135,7 @@ export function BestiaryScreen() {
 
       {corpus.shown !== undefined && corpus.resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <EnvironmentChips corpus={corpus} />
+          <CreatureFilters corpus={corpus} label="Search creatures" />
 
           {corpus.creatures.length === 0 ? (
             /* The designers' own empty state (`Bestiary.jsx:57-68`), with its
@@ -160,7 +163,13 @@ export function BestiaryScreen() {
             <CreatureGrid creatures={corpus.creatures} onOpen={setOpened} />
           )}
 
-          <MorePages corpus={corpus} />
+          <ShowMore
+            hasMore={corpus.hasMore}
+            loadingMore={corpus.loadingMore}
+            onMore={corpus.loadMore}
+            count={corpus.creatures.length}
+            failure={corpus.moreFailure}
+          />
         </div>
       )}
 

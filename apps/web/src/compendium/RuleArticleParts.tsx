@@ -29,17 +29,23 @@ import {
   cn,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
+import { CopyIntoCampaignSection } from "../library/CopyIn";
+import { FilterBar, FilterSearch, FilterSelect, type FilterOption } from "../library/filters";
+import type { ListQuery } from "../library/query";
+import { DetailSection } from "../ui/detail";
 import { Field, Textarea, VisibilityField } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { withoutLeadingHeading } from "./blocks";
 import {
   campaignRuleArticleDetailAtom,
   libraryRuleArticleDetailAtom,
   ruleArticleDetailKeys,
   ruleArticleWritesAt,
+  type RuleArticleQuery,
 } from "./load";
 import {
   isBundleArticle,
@@ -48,35 +54,29 @@ import {
   ruleArticleOwnerLabel,
 } from "./ownership";
 
-export function RuleArticleSearch({
-  query,
-  onQuery,
+const SORTS: ReadonlyArray<FilterOption> = [
+  { value: "name", label: "Name" },
+  { value: "recent", label: "Recent" },
+];
+
+export function RuleArticleFilters({
+  list,
+  busy,
 }: {
-  readonly query: { readonly q: string; readonly sort: "name" | "recent" };
-  readonly onQuery: (query: { readonly q: string; readonly sort: "name" | "recent" }) => void;
+  readonly list: ListQuery<RuleArticleQuery>;
+  readonly busy: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-      <Input
-        aria-label="Search compendium"
-        value={query.q}
-        onChange={(event) => onQuery({ ...query, q: event.currentTarget.value })}
-        placeholder="Search rules…"
-        className="h-8 w-64 max-w-full"
+    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy}>
+      <FilterSearch label="Search the compendium" value={list.term} onChange={list.setTerm} />
+      <FilterSelect
+        label="Sort"
+        value={list.value.sort}
+        onChange={(sort) => list.patch({ sort: sort as RuleArticleQuery["sort"] })}
+        options={SORTS}
+        className="w-32"
       />
-      <Select
-        value={query.sort}
-        onValueChange={(value) => onQuery({ ...query, sort: value as "name" | "recent" })}
-      >
-        <SelectTrigger aria-label="Sort compendium" className="h-8 w-34">
-          <SelectValue>{(value) => (value === "recent" ? "Recent" : "Name")}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="name">Name</SelectItem>
-          <SelectItem value="recent">Recent</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
+    </FilterBar>
   );
 }
 
@@ -167,6 +167,27 @@ const plainText = (blocks: ReadonlyArray<RuleBlock>): string =>
     })
     .join(" ");
 
+/**
+ * The `**bold**` and `*italic*` the 2014 source writes inline, rendered rather
+ * than shown as asterisks. Deliberately only those two: the corpus uses
+ * nothing else inline, and a full markdown pass belongs to the source
+ * importer, not a reader.
+ */
+const inline = (text: string): ReactNode =>
+  text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return (
+        <strong key={index} className="font-semibold text-heading">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+
 export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBlock> }) {
   if (blocks.length === 0) return null;
   return (
@@ -189,7 +210,7 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
             );
           }
           case "paragraph":
-            return <p key={index}>{block.text}</p>;
+            return <p key={index}>{inline(block.text)}</p>;
           case "list": {
             const List = block.ordered ? "ol" : "ul";
             return (
@@ -199,7 +220,7 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
               >
                 {block.items.map((item, itemIndex) => (
                   <li key={itemIndex} className={block.ordered ? "list-decimal" : "list-disc"}>
-                    {item}
+                    {inline(item)}
                   </li>
                 ))}
               </List>
@@ -223,7 +244,7 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
                       <tr key={rowIndex} className="odd:bg-surface-card even:bg-surface-raised/40">
                         {block.columns.map((_, cellIndex) => (
                           <td key={cellIndex} className="border-t border-subtle px-3 py-2">
-                            {row[cellIndex] ?? ""}
+                            {inline(row[cellIndex] ?? "")}
                           </td>
                         ))}
                       </tr>
@@ -305,15 +326,40 @@ function RuleArticleDetailView({
       </DialogHeader>
       <div className="min-h-0 overflow-auto px-gutter py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-7">
-          <RuleBlocks blocks={detail.article.intro} />
+          {/* The imported source often opens with a heading repeating the
+              article's own name, which the dialog title has already said. */}
+          <RuleBlocks blocks={withoutLeadingHeading(detail.article.intro, detail.article.name)} />
           {detail.sections.map((section) => (
-            <section key={section.id} className="flex flex-col gap-3 border-t border-subtle pt-5">
+            <section
+              key={section.id}
+              // `first:` covers the article whose whole intro was the heading
+              // the title already said — without it the rule floats under
+              // nothing at the top of the body.
+              className="flex flex-col gap-3 border-t border-subtle pt-5 first:border-t-0 first:pt-0"
+            >
               <h3 className="text-title leading-title font-semibold text-heading">
                 {section.title}
               </h3>
-              <RuleBlocks blocks={section.blocks} />
+              <RuleBlocks blocks={withoutLeadingHeading(section.blocks, section.title)} />
             </section>
           ))}
+          {campaignId === undefined &&
+            campaigns !== undefined &&
+            detail.article.campaignId === null && (
+              <DetailSection>
+                <CopyIntoCampaignSection
+                  noun="article"
+                  campaigns={campaigns}
+                  derive={(intoCampaignId) => (client) =>
+                    client.ruleArticles.derive({
+                      params: { campaignId: intoCampaignId, ruleArticleId: detail.article.id },
+                      payload: {},
+                    })
+                  }
+                  readsChanged={(intoCampaignId) => ruleArticleWritesAt(intoCampaignId)}
+                />
+              </DetailSection>
+            )}
         </div>
       </div>
       <DialogFooter>
@@ -326,63 +372,8 @@ function RuleArticleDetailView({
               Edit
             </Button>
           )}
-        {campaignId === undefined &&
-          campaigns !== undefined &&
-          detail.article.campaignId === null && (
-            <CopyArticleButton article={detail.article} campaigns={campaigns} />
-          )}
       </DialogFooter>
     </>
-  );
-}
-
-function CopyArticleButton({
-  article,
-  campaigns,
-}: {
-  readonly article: RuleArticle;
-  readonly campaigns: ReadonlyArray<Campaign>;
-}) {
-  const [campaignId, setCampaignId] = useState<CampaignId | undefined>(campaigns[0]?.id);
-  const { busy, failure, submit } = useMutation();
-
-  const copy = async () => {
-    if (campaignId === undefined) return;
-    await submit(
-      (client) =>
-        client.ruleArticles.derive({
-          params: { campaignId, ruleArticleId: article.id },
-          payload: {},
-        }),
-      ruleArticleWritesAt(campaignId),
-    );
-  };
-
-  if (campaigns.length === 0) return null;
-  return (
-    <div className="mr-auto flex min-w-0 flex-wrap items-center gap-2">
-      {failure !== undefined && (
-        <span className="text-caption text-danger-ink">Could not copy.</span>
-      )}
-      <Select value={campaignId} onValueChange={(value) => setCampaignId(value as CampaignId)}>
-        <SelectTrigger aria-label="Copy to campaign" className="h-8 w-48">
-          <SelectValue>
-            {(value) => campaigns.find((campaign) => campaign.id === value)?.name}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {campaigns.map((campaign) => (
-            <SelectItem key={campaign.id} value={campaign.id}>
-              {campaign.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button size="sm" disabled={busy || campaignId === undefined} onClick={() => void copy()}>
-        <Icon name="copy" size={13} />
-        {busy ? "Copying…" : "Copy into campaign"}
-      </Button>
-    </div>
   );
 }
 

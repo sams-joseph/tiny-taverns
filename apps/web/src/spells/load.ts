@@ -86,3 +86,17 @@ export const loadMoreCampaignSpells =
   (campaignId: CampaignId, query: SpellQuery, cursor: PageCursor<SpellSort>) =>
   (client: TavernsClient) =>
     client.spells.list({ params: { campaignId }, query: spellQueryParams(query, cursor) });
+
+/** True when anything besides the search narrows a spell list. */
+export const spellNarrows = (query: SpellQuery): boolean =>
+  query.levels.length > 0 ||
+  query.schools.length > 0 ||
+  query.classes.length > 0 ||
+  query.ritual !== undefined ||
+  query.concentration !== undefined;
+
+/** Clearing keeps the sort — reordering a list is not filtering it. */
+export const spellClear = (query: SpellQuery, initial: SpellQuery): SpellQuery => ({
+  ...initial,
+  sort: query.sort,
+});

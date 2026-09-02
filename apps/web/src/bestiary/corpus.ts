@@ -64,6 +64,8 @@ export interface Corpus<V> {
   readonly conditionImmunities: ReadonlyArray<string>;
   readonly movementModes: ReadonlyArray<string>;
   readonly toggleFacet: (facet: FacetList, value: string) => void;
+  /** Replaces a facet's whole selection — what a multi-select control hands back. */
+  readonly setFacet: (facet: FacetList, values: ReadonlyArray<string>) => void;
   readonly crMin: string;
   readonly setCrMin: (value: string) => void;
   readonly crMax: string;
@@ -269,21 +271,30 @@ export function useCorpus<V extends CorpusView, E, E2>(
     })();
   }, [cursor, loadingMore, query, more, fetchCredential]);
 
+  const setters: Record<FacetList, (next: ReadonlyArray<string>) => void> = useMemo(
+    () => ({
+      environments: setEnvironments,
+      sizes: setSizes,
+      types: setTypes,
+      subtypes: setSubtypes,
+      alignments: setAlignments,
+      damageResistances: setDamageResistances,
+      damageImmunities: setDamageImmunities,
+      conditionImmunities: setConditionImmunities,
+      movementModes: setMovementModes,
+    }),
+    [],
+  );
+
+  const setFacet = useCallback(
+    (facet: FacetList, values: ReadonlyArray<string>) => setters[facet](values),
+    [setters],
+  );
+
   const toggleFacet = useCallback(
     (facet: FacetList, value: string) => {
       const update = (current: ReadonlyArray<string>) =>
         current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
-      const setters: Record<FacetList, (next: ReadonlyArray<string>) => void> = {
-        environments: setEnvironments,
-        sizes: setSizes,
-        types: setTypes,
-        subtypes: setSubtypes,
-        alignments: setAlignments,
-        damageResistances: setDamageResistances,
-        damageImmunities: setDamageImmunities,
-        conditionImmunities: setConditionImmunities,
-        movementModes: setMovementModes,
-      };
       const values: Record<FacetList, ReadonlyArray<string>> = {
         environments,
         sizes,
@@ -298,6 +309,7 @@ export function useCorpus<V extends CorpusView, E, E2>(
       setters[facet](update(values[facet]));
     },
     [
+      setters,
       environments,
       sizes,
       types,
@@ -348,6 +360,7 @@ export function useCorpus<V extends CorpusView, E, E2>(
     conditionImmunities,
     movementModes,
     toggleFacet,
+    setFacet,
     crMin,
     setCrMin,
     crMax,

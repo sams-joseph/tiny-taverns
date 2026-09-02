@@ -13,131 +13,130 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Icon,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
+import { CopyIntoCampaignSection } from "../library/CopyIn";
+import {
+  FilterBar,
+  FilterMultiSelect,
+  FilterSearch,
+  FilterSelect,
+  FilterToggle,
+  type FilterOption,
+} from "../library/filters";
+import type { ListQuery } from "../library/query";
 import { routes, router } from "../routes";
-import { SaveFailure } from "../ui/form";
+import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
+import { Field, SaveFailure, Textarea } from "../ui/form";
 import type { SpellLevelKey, SpellQuery } from "./load";
 
 const levelLabel = (level: number): string => (level === 0 ? "Cantrip" : `Level ${level}`);
 
+const SORTS: ReadonlyArray<FilterOption> = [
+  { value: "level", label: "Level" },
+  { value: "name", label: "Name" },
+  { value: "recent", label: "Recent" },
+];
+
+const LEVELS: ReadonlyArray<FilterOption> = Array.from({ length: 10 }, (_, level) => ({
+  value: String(level),
+  label: levelLabel(level),
+}));
+
+const SCHOOLS: ReadonlyArray<FilterOption> = [
+  "abjuration",
+  "conjuration",
+  "divination",
+  "enchantment",
+  "evocation",
+  "illusion",
+  "necromancy",
+  "transmutation",
+].map((school) => ({ value: school, label: school[0]!.toUpperCase() + school.slice(1) }));
+
+/**
+ * The 2014 base classes, by source key — what the bundled corpus's rows name.
+ *
+ * This replaced a bare "class key" text box that asked the reader to know the
+ * wire's spelling. A vocabulary read over the corpus would be the exact
+ * answer; until one exists, the pinned ruleset's twelve are the whole bundled
+ * vocabulary, and a homebrew spell's class is still findable through search.
+ */
+const CLASSES: ReadonlyArray<FilterOption> = [
+  "barbarian",
+  "bard",
+  "cleric",
+  "druid",
+  "fighter",
+  "monk",
+  "paladin",
+  "ranger",
+  "rogue",
+  "sorcerer",
+  "warlock",
+  "wizard",
+].map((key) => ({ value: key, label: key[0]!.toUpperCase() + key.slice(1) }));
+
 export function SpellFilters({
-  query,
-  onQuery,
+  list,
+  busy,
 }: {
-  readonly query: SpellQuery;
-  readonly onQuery: (query: SpellQuery) => void;
+  readonly list: ListQuery<SpellQuery>;
+  readonly busy: boolean;
 }) {
-  const set = <K extends keyof SpellQuery>(key: K, value: SpellQuery[K]) =>
-    onQuery({ ...query, [key]: value });
+  const { value, patch } = list;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Input
-        className="w-64"
-        value={query.q}
-        onChange={(event) => set("q", event.target.value)}
-        placeholder="Search spells"
-        aria-label="Search spells"
+    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy}>
+      <FilterSearch label="Search spells" value={list.term} onChange={list.setTerm} />
+      <FilterSelect
+        label="Sort"
+        value={value.sort}
+        onChange={(sort) => patch({ sort: sort as SpellQuery["sort"] })}
+        options={SORTS}
+        className="w-32"
       />
-      <NativeSelect
+      <FilterMultiSelect
         label="Level"
-        value={query.levels[0] ?? ""}
-        onChange={(value) => set("levels", value === "" ? [] : [value as SpellLevelKey])}
-      >
-        <option value="">Any level</option>
-        {Array.from({ length: 10 }, (_, level) => (
-          <option key={level} value={String(level)}>
-            {levelLabel(level)}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
+        values={value.levels}
+        onChange={(levels) => patch({ levels: levels as ReadonlyArray<SpellLevelKey> })}
+        options={LEVELS}
+        className="w-36"
+      />
+      <FilterMultiSelect
         label="School"
-        value={query.schools[0] ?? ""}
-        onChange={(value) => set("schools", value === "" ? [] : [value])}
+        values={value.schools}
+        onChange={(schools) => patch({ schools })}
+        options={SCHOOLS}
+      />
+      <FilterMultiSelect
+        label="Class"
+        values={value.classes}
+        onChange={(classes) => patch({ classes })}
+        options={CLASSES}
+        className="w-36"
+      />
+      <FilterToggle
+        pressed={value.ritual === true}
+        onChange={(pressed) => patch({ ritual: pressed ? true : undefined })}
       >
-        <option value="">Any school</option>
-        {[
-          "abjuration",
-          "conjuration",
-          "divination",
-          "enchantment",
-          "evocation",
-          "illusion",
-          "necromancy",
-          "transmutation",
-        ].map((school) => (
-          <option key={school} value={school}>
-            {school[0]!.toUpperCase() + school.slice(1)}
-          </option>
-        ))}
-      </NativeSelect>
-      <Input
-        className="w-40"
-        value={query.classes[0] ?? ""}
-        onChange={(event) =>
-          set("classes", event.target.value.trim() === "" ? [] : [event.target.value.trim()])
-        }
-        placeholder="class key"
-        aria-label="Class key"
-      />
-      <ToggleFlag
-        pressed={query.ritual === true}
-        label="Ritual"
-        onClick={() => set("ritual", query.ritual === true ? undefined : true)}
-      />
-      <ToggleFlag
-        pressed={query.concentration === true}
-        label="Concentration"
-        onClick={() => set("concentration", query.concentration === true ? undefined : true)}
-      />
-    </div>
-  );
-}
-
-function NativeSelect({
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-  readonly children: ReactNode;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-label leading-label font-medium text-muted-foreground">
-      <span>{label}</span>
-      <select
-        className="h-9 rounded-control border border-border bg-surface-card px-2 text-label leading-label text-heading shadow-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        Ritual
+      </FilterToggle>
+      <FilterToggle
+        pressed={value.concentration === true}
+        onChange={(pressed) => patch({ concentration: pressed ? true : undefined })}
       >
-        {children}
-      </select>
-    </label>
-  );
-}
-
-function ToggleFlag({
-  pressed,
-  label,
-  onClick,
-}: {
-  readonly pressed: boolean;
-  readonly label: string;
-  readonly onClick: () => void;
-}) {
-  return (
-    <Button variant={pressed ? "default" : "secondary"} size="sm" onClick={onClick}>
-      {label}
-    </Button>
+        Concentration
+      </FilterToggle>
+    </FilterBar>
   );
 }
 
@@ -205,112 +204,83 @@ export function SpellDialog({
 }) {
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent>
+      <DialogContent aria-label={`${spell.name} spell`}>
         <DialogHeader>
-          <DialogTitle>{spell.name}</DialogTitle>
-          <DialogDescription>
-            {levelLabel(spell.level)} · {spell.schoolName} · {spell.castingTime}
+          <div className="flex flex-wrap items-start gap-2.5 pr-8">
+            <DialogTitle className="min-w-0 flex-1 break-words">{spell.name}</DialogTitle>
+            {spell.origin === "system" && <Badge variant="secondary">SRD</Badge>}
+            {spell.ritual && <Badge variant="outline">Ritual</Badge>}
+            {spell.concentration && <Badge variant="outline">Concentration</Badge>}
+          </div>
+          <DialogDescription className="font-serif italic">
+            {levelLabel(spell.level)} · {spell.schoolName}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex max-h-[min(60vh,44rem)] flex-col gap-4 overflow-auto pr-1 text-body-s leading-body text-muted-foreground">
-          {spell.spell.desc.map((line, index) => (
-            <p key={index}>{line}</p>
-          ))}
-          {spell.spell.higherLevel !== undefined && spell.spell.higherLevel.length > 0 && (
-            <section className="flex flex-col gap-2">
-              <h3 className="font-display text-title leading-title font-semibold text-heading">
-                At higher levels
-              </h3>
-              {spell.spell.higherLevel.map((line, index) => (
+        <DetailBody>
+          <DetailFacts
+            facts={[
+              { label: "Casting", value: spell.castingTime },
+              { label: "Range", value: spell.range },
+              { label: "Duration", value: spell.duration },
+              { label: "Components", value: spell.spell.components.join(", ") || "—" },
+              ...(spell.spell.material !== undefined
+                ? [{ label: "Material", value: spell.spell.material }]
+                : []),
+              { label: "Classes", value: spell.classNames.join(", ") || "—" },
+            ]}
+          />
+          {spell.spell.desc.length > 0 && (
+            <div className="flex flex-col gap-3 text-body-s leading-body text-muted-foreground">
+              {spell.spell.desc.map((line, index) => (
                 <p key={index}>{line}</p>
               ))}
-            </section>
+            </div>
           )}
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-label leading-label">
-            <dt>Components</dt>
-            <dd className="text-heading">{spell.spell.components.join(", ") || "—"}</dd>
-            {spell.spell.material !== undefined && (
-              <>
-                <dt>Material</dt>
-                <dd className="text-heading">{spell.spell.material}</dd>
-              </>
-            )}
-            <dt>Classes</dt>
-            <dd className="text-heading">{spell.classNames.join(", ") || "—"}</dd>
-          </dl>
-        </div>
+          {spell.spell.higherLevel !== undefined && spell.spell.higherLevel.length > 0 && (
+            <DetailSection title="At higher levels">
+              <div className="flex flex-col gap-3 text-body-s leading-body text-muted-foreground">
+                {spell.spell.higherLevel.map((line, index) => (
+                  <p key={index}>{line}</p>
+                ))}
+              </div>
+            </DetailSection>
+          )}
+          {campaigns !== undefined && (
+            <DetailSection>
+              <CopyIntoCampaignSection
+                noun="spell"
+                campaigns={campaigns}
+                derive={(campaignId) => (client) =>
+                  client.spells.derive({
+                    params: { campaignId, spellId: spell.id },
+                    payload: {},
+                  })
+                }
+                readsChanged={(campaignId) => [reads.spells(campaignId)]}
+                copiedLink={(campaign) => (
+                  <a
+                    className="text-link hover:text-link-hover"
+                    href={router.history.createHref(
+                      router.buildLocation({
+                        to: routes.spells.to,
+                        params: { campaignId: campaign.id },
+                      }).publicHref,
+                    )}
+                  >
+                    Open its spellbook
+                  </a>
+                )}
+              />
+            </DetailSection>
+          )}
+        </DetailBody>
         <DialogFooter>
-          {campaigns !== undefined && <CopySpellIntoCampaign spell={spell} campaigns={campaigns} />}
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function CopySpellIntoCampaign({
-  spell,
-  campaigns,
-}: {
-  readonly spell: Spell;
-  readonly campaigns: ReadonlyArray<Campaign>;
-}) {
-  const mutation = useMutation();
-  const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
-  const chosen = campaigns.find((campaign) => campaign.id === campaignId);
-  const [copied, setCopied] = useState<Campaign | undefined>();
-  const href = useMemo(
-    () =>
-      copied === undefined
-        ? undefined
-        : router.history.createHref(
-            router.buildLocation({ to: routes.spells.to, params: { campaignId: copied.id } })
-              .publicHref,
-          ),
-    [copied],
-  );
-
-  if (campaigns.length === 0) {
-    return <p className="text-label leading-label text-faint">Run a campaign to copy this in.</p>;
-  }
-
-  const submit = async () => {
-    if (chosen === undefined) return;
-    const result = await mutation.submit(
-      (client) =>
-        client.spells.derive({ params: { campaignId: chosen.id, spellId: spell.id }, payload: {} }),
-      [reads.spells(chosen.id)],
-    );
-    if (Result.isSuccess(result)) setCopied(chosen);
-  };
-
-  return (
-    <div className="mr-auto flex flex-wrap items-center gap-2">
-      <select
-        className="h-9 rounded-control border border-border bg-surface-card px-2 text-label leading-label text-heading shadow-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        value={campaignId}
-        onChange={(event) => setCampaignId(event.target.value)}
-        aria-label="Campaign to copy into"
-      >
-        {campaigns.map((campaign) => (
-          <option key={campaign.id} value={campaign.id}>
-            {campaign.name}
-          </option>
-        ))}
-      </select>
-      <Button size="sm" onClick={submit} disabled={mutation.busy || chosen === undefined}>
-        <Icon name="copy" size={13} />
-        Copy into campaign
-      </Button>
-      {mutation.failure !== undefined && <SaveFailure failure={mutation.failure} />}
-      {href !== undefined && (
-        <a className="text-label leading-label text-accent-ink underline" href={href}>
-          Copied to {copied?.name}
-        </a>
-      )}
-    </div>
   );
 }
 
@@ -366,49 +336,66 @@ export function SpellCreateDialog({ onClose }: { readonly onClose: () => void })
             It starts in your Library and enters a campaign only as a copy.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Name"
-            aria-label="Name"
-          />
-          <NativeSelect label="Level" value={level} onChange={setLevel}>
-            {Array.from({ length: 10 }, (_, item) => (
-              <option key={item} value={String(item)}>
-                {levelLabel(item)}
-              </option>
-            ))}
-          </NativeSelect>
-          <NativeSelect label="School" value={school} onChange={setSchool}>
-            {[
-              "abjuration",
-              "conjuration",
-              "divination",
-              "enchantment",
-              "evocation",
-              "illusion",
-              "necromancy",
-              "transmutation",
-            ].map((item) => (
-              <option key={item} value={item}>
-                {item[0]!.toUpperCase() + item.slice(1)}
-              </option>
-            ))}
-          </NativeSelect>
-          <Input
-            value={classes}
-            onChange={(event) => setClasses(event.target.value)}
-            placeholder="wizard, druid"
-            aria-label="Classes"
-          />
-          <textarea
-            className="min-h-32 rounded-card border border-border bg-surface-card px-3 py-2 text-body leading-body text-heading shadow-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Description"
-            aria-label="Description"
-          />
+        <div className="flex flex-col gap-4 px-gutter py-3">
+          <Field label="Name" htmlFor="spell-name">
+            <Input
+              id="spell-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Name"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Level" htmlFor="spell-level">
+              <Select value={level} onValueChange={(value) => setLevel(value as string)}>
+                <SelectTrigger id="spell-level" aria-label="Level">
+                  <SelectValue>{(value) => levelLabel(Number(value))}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 10 }, (_, item) => (
+                    <SelectItem key={item} value={String(item)}>
+                      {levelLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="School" htmlFor="spell-school">
+              <Select value={school} onValueChange={(value) => setSchool(value as string)}>
+                <SelectTrigger id="spell-school" aria-label="School">
+                  <SelectValue>
+                    {(value) => {
+                      const chosen = value as string;
+                      return chosen[0]!.toUpperCase() + chosen.slice(1);
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {SCHOOLS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <Field label="Classes" htmlFor="spell-classes" hint="Comma-separated, e.g. wizard, druid">
+            <Input
+              id="spell-classes"
+              value={classes}
+              onChange={(event) => setClasses(event.target.value)}
+              placeholder="wizard, druid"
+            />
+          </Field>
+          <Field label="Description" htmlFor="spell-description">
+            <Textarea
+              id="spell-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Description"
+            />
+          </Field>
         </div>
         <DialogFooter>
           {mutation.failure !== undefined && <SaveFailure failure={mutation.failure} />}

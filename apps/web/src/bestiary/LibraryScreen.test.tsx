@@ -182,7 +182,8 @@ describe("LibraryScreen", () => {
     // a one-element array did not survive the wire. `queryArray` fixed it, and
     // once the list is a page there is no honest way to keep them local.
     server.routes.set(LIST, { status: 200, body: page([owlbear, sexton]) });
-    await userEvent.click(screen.getByRole("button", { name: "Barrow" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Filter by Environment" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Barrow" }));
 
     await waitFor(() => expect(lastQuery().getAll("environments")).toEqual(["Barrow"]));
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
@@ -214,8 +215,8 @@ describe("LibraryScreen", () => {
 
     expect(lastQuery().get("sort")).toBe("cr");
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Sort creatures" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Sort: Name" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Sort" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Name" }));
 
     await waitFor(() => expect(lastQuery().get("sort")).toBe("name"));
   });
@@ -456,7 +457,7 @@ describe("LibraryScreen", () => {
     expect(screen.queryByText(/bestiary:import/)).toBeNull();
 
     // And there is a way back out of it.
-    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     wholeLibrary();
     await waitFor(() => expect(lastQuery().get("q")).toBe(""));
   });

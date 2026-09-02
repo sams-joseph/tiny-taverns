@@ -4,16 +4,20 @@ import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { Hob, useHobPanel } from "../hob";
+import { ShowMore } from "../library/filters";
+import { listCount, useListQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
+  equipmentClear,
+  equipmentNarrows,
   loadEquipmentLibrary,
   loadMoreLibraryEquipment,
   NO_EQUIPMENT_QUERY,
   type EquipmentQuery,
 } from "./load";
-import { equipmentCount, useEquipmentPages } from "./pages";
+import { useEquipmentPages } from "./pages";
 import {
   EquipmentDialog,
   EquipmentFilters,
@@ -25,14 +29,24 @@ const libraryEquipmentAtom = Atom.family((query: EquipmentQuery) =>
   apiAtom(loadEquipmentLibrary(query), [reads.libraryEquipment]),
 );
 
+const countOf = (n: number, narrowed: boolean, more: boolean): string =>
+  listCount(
+    n,
+    { one: "item", many: "items" },
+    { narrowed, hasMore: more, empty: "Nothing here yet", suffix: "yours, and the bundled corpus" },
+  );
+
 export function EquipmentLibraryScreen() {
-  const [query, setQuery] = useState<EquipmentQuery>(NO_EQUIPMENT_QUERY);
-  const [resource, reload] = useApiAtom(libraryEquipmentAtom(query));
+  const list = useListQuery(NO_EQUIPMENT_QUERY, {
+    narrows: equipmentNarrows,
+    onClear: (query) => equipmentClear(query, NO_EQUIPMENT_QUERY),
+  });
+  const [resource, reload] = useApiAtom(libraryEquipmentAtom(list.query));
   const [opened, setOpened] = useState<string | undefined>();
   const [editing, setEditing] = useState<string | "new" | undefined>();
   const hob = useHobPanel({ initialOpen: false });
 
-  const pages = useEquipmentPages(resource, query, loadMoreLibraryEquipment);
+  const pages = useEquipmentPages(resource, list.query, loadMoreLibraryEquipment);
   const shown = pages.shown;
   const opening = pages.equipment.find((item) => item.id === opened);
   const editingItem = pages.equipment.find((item) => item.id === editing);
@@ -45,11 +59,12 @@ export function EquipmentLibraryScreen() {
         <TopBar
           title="Library"
           subtitle={
-            shown === undefined ? undefined : equipmentCount(pages.equipment.length, pages.hasMore)
+            shown === undefined
+              ? undefined
+              : countOf(pages.equipment.length, list.narrowed, pages.hasMore)
           }
         >
           <LibraryNav />
-          <EquipmentFilters query={query} onQuery={setQuery} />
           <Button size="sm" onClick={() => setEditing("new")}>
             <Icon name="package" size={13} />
             Write equipment
@@ -67,33 +82,35 @@ export function EquipmentLibraryScreen() {
       )}
       {shown !== undefined && resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
+          <EquipmentFilters list={list} busy={resource.state === "loading"} />
           {pages.equipment.length === 0 ? (
             <EmptyState icon="package" title="No equipment here">
-              Clear a filter, write an item, or load the bundled 2014 SRD corpus with{" "}
-              <code className="font-mono text-mono whitespace-nowrap text-slate-300">
-                pnpm -F server equipment:import
-              </code>
-              .
+              {list.narrowed ? (
+                "Loosen a filter, or clear the search — the bundled corpus is in this list too."
+              ) : (
+                <>
+                  Write an item, or load the bundled 2014 SRD corpus with{" "}
+                  <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+                    pnpm -F server equipment:import
+                  </code>
+                  .
+                </>
+              )}
             </EmptyState>
           ) : (
-            <>
-              <EquipmentGrid
-                equipment={pages.equipment}
-                onOpen={(item) => setOpened(item.id)}
-                onEdit={(item) => setEditing(item.id)}
-              />
-              {pages.hasMore && (
-                <div className="flex justify-center">
-                  <Button variant="secondary" onClick={pages.loadMore} disabled={pages.loadingMore}>
-                    {pages.loadingMore ? "Reading…" : "Show more"}
-                  </Button>
-                </div>
-              )}
-              {pages.moreFailure !== undefined && (
-                <FailureNotice failure={pages.moreFailure} onRetry={pages.loadMore} />
-              )}
-            </>
+            <EquipmentGrid
+              equipment={pages.equipment}
+              onOpen={(item) => setOpened(item.id)}
+              onEdit={(item) => setEditing(item.id)}
+            />
           )}
+          <ShowMore
+            hasMore={pages.hasMore}
+            loadingMore={pages.loadingMore}
+            onMore={pages.loadMore}
+            count={pages.equipment.length}
+            failure={pages.moreFailure}
+          />
         </div>
       )}
       {opening !== undefined && (

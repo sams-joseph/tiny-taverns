@@ -1,8 +1,9 @@
 import type { CharacterOption, Feat, OptionKind } from "@taverns/api";
-import { Button, Icon, Input } from "@taverns/ui";
+import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
+import { FilterBar, FilterSearch } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
@@ -14,6 +15,7 @@ import { libraryRulesAtom } from "./load";
 import { isLibraryOriginal } from "./option";
 import { OptionForm } from "./OptionForm";
 import { OptionSection } from "./OptionSection";
+import { EmptyState } from "../ui/states";
 
 /**
  * **Your library of classes, races and backgrounds** — where one is written,
@@ -60,14 +62,16 @@ import { OptionSection } from "./OptionSection";
  * that refusal is what makes the copy-into-a-campaign step necessary rather
  * than convenient.
  *
- * ### The list is not paged, and the search box is deliberately absent
+ * ### The list is not paged, and the search filters what is already here
  *
  * A vocabulary is bounded by what it hangs off — `CharacterOption.ts` says so
- * and `OPTION_LIMIT` is a sanity bound rather than a page. The monster Library
- * beside this one has a search, chips and a *Show more* because a bestiary is a
- * corpus somebody browses; the bundle's thirty-eight rows in three labelled
- * two-column sections is a page you read, and a control that narrows it would be
- * furniture.
+ * and `OPTION_LIMIT` is a sanity bound rather than a page. So unlike the other
+ * shelves the search narrows the loaded list in the client, instantly and with
+ * no debounce, and the sections that end up empty under it are hidden rather
+ * than drawing four "nothing at all" cards about a corpus that is merely
+ * filtered. The bar itself is the shared Library pattern — same place, same
+ * controls — because *"the filters are located in different places"* was the
+ * complaint that standardised it.
  */
 
 /**
@@ -100,7 +104,7 @@ export function OptionLibraryScreen() {
   }>();
   const [progression, setProgression] = useState<CharacterOption>();
   const [editingFeat, setEditingFeat] = useState<Feat | null>();
-  const [featQuery, setFeatQuery] = useState("");
+  const [term, setTerm] = useState("");
 
   const [resource, reload] = useApiAtom(libraryRulesAtom);
 
@@ -112,8 +116,19 @@ export function OptionLibraryScreen() {
   const options = resource.state === "ready" ? resource.value.options : undefined;
   const vocabulary = resource.state === "ready" ? resource.value.vocabulary : undefined;
   const feats = resource.state === "ready" ? resource.value.feats : undefined;
-  const of = (kind: OptionKind) => (options ?? []).filter((option) => option.kind === kind);
-  const shownFeats = filterFeats(feats ?? [], featQuery);
+  const searching = term.trim() !== "";
+  const of = (kind: OptionKind) =>
+    filterOptions(
+      (options ?? []).filter((option) => option.kind === kind),
+      term,
+    );
+  const shownFeats = filterFeats(feats ?? [], term);
+  const nothingMatches =
+    searching &&
+    of("class").length === 0 &&
+    of("race").length === 0 &&
+    of("background").length === 0 &&
+    shownFeats.length === 0;
 
   return (
     <AppShell
@@ -164,53 +179,62 @@ export function OptionLibraryScreen() {
 
       {options !== undefined && (
         <div className="flex flex-col gap-8">
+          <FilterBar narrowed={searching} onClear={() => setTerm("")}>
+            <FilterSearch label="Search the rules" value={term} onChange={setTerm} />
+          </FilterBar>
+          {nothingMatches && (
+            <EmptyState icon="book-open" title="Nothing matches">
+              No class, race, background or feat answers that — clear the search to see the whole
+              shelf.
+            </EmptyState>
+          )}
           {/* **`isLibraryOriginal`, and never `origin`** — the shipped write
               predicate rendered rather than restated. A bundled row is readable
               here and not writable, so it gets no *Edit*; deleting one you own
               is inside the form, beside the sentence about what happens to the
               copies. No `onRemove` at all on this list: there is no table for a
               row to be taken off. */}
-          <OptionSection
-            title="Classes"
-            options={of("class")}
-            empty="No classes at all"
-            emptyBody={emptyBody("class")}
-            onEdit={(option) =>
-              isLibraryOriginal(option) ? () => setEditing({ kind: "class", option }) : undefined
-            }
-            onProgression={(option) => () => setProgression(option)}
-          />
-          <OptionSection
-            title="Race"
-            options={of("race")}
-            empty="No race at all"
-            emptyBody={emptyBody("race")}
-            onEdit={(option) =>
-              isLibraryOriginal(option) ? () => setEditing({ kind: "race", option }) : undefined
-            }
-          />
+          {!(searching && of("class").length === 0) && (
+            <OptionSection
+              title="Classes"
+              options={of("class")}
+              empty="No classes at all"
+              emptyBody={emptyBody("class")}
+              onEdit={(option) =>
+                isLibraryOriginal(option) ? () => setEditing({ kind: "class", option }) : undefined
+              }
+              onProgression={(option) => () => setProgression(option)}
+            />
+          )}
+          {!(searching && of("race").length === 0) && (
+            <OptionSection
+              title="Race"
+              options={of("race")}
+              empty="No race at all"
+              emptyBody={emptyBody("race")}
+              onEdit={(option) =>
+                isLibraryOriginal(option) ? () => setEditing({ kind: "race", option }) : undefined
+              }
+            />
+          )}
           {/* **Third, and last, for the reason it is third on `RulesScreen` and
               on the create form**: 2014 backgrounds carry proficiencies,
               languages, equipment and feature text. Ability-score arithmetic
               belongs to races and contained subraces. */}
-          <OptionSection
-            title="Backgrounds"
-            options={of("background")}
-            empty="No backgrounds at all"
-            emptyBody={emptyBody("background")}
-            onEdit={(option) =>
-              isLibraryOriginal(option)
-                ? () => setEditing({ kind: "background", option })
-                : undefined
-            }
-          />
-          <div className="flex flex-col gap-3">
-            <Input
-              aria-label="Search feats"
-              placeholder="Search feats"
-              value={featQuery}
-              onChange={(event) => setFeatQuery(event.currentTarget.value)}
+          {!(searching && of("background").length === 0) && (
+            <OptionSection
+              title="Backgrounds"
+              options={of("background")}
+              empty="No backgrounds at all"
+              emptyBody={emptyBody("background")}
+              onEdit={(option) =>
+                isLibraryOriginal(option)
+                  ? () => setEditing({ kind: "background", option })
+                  : undefined
+              }
             />
+          )}
+          {!(searching && shownFeats.length === 0) && (
             <FeatSection
               feats={shownFeats}
               emptyBody={emptyFeatBody}
@@ -218,7 +242,7 @@ export function OptionLibraryScreen() {
                 isLibraryFeatOriginal(feat) ? () => setEditingFeat(feat) : undefined
               }
             />
-          </div>
+          )}
         </div>
       )}
 
@@ -255,6 +279,15 @@ export function OptionLibraryScreen() {
     </AppShell>
   );
 }
+
+const filterOptions = (
+  options: ReadonlyArray<CharacterOption>,
+  query: string,
+): ReadonlyArray<CharacterOption> => {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return options;
+  return options.filter((option) => option.name.toLowerCase().includes(needle));
+};
 
 const filterFeats = (feats: ReadonlyArray<Feat>, query: string): ReadonlyArray<Feat> => {
   const needle = query.trim().toLowerCase();

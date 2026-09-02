@@ -1,13 +1,16 @@
 import type { CampaignId, CharacterOption, ClassLevel, Feature } from "@taverns/api";
 import {
   Badge,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@taverns/ui";
 import { useApiAtom } from "../api/atoms";
+import { DetailBody, DetailSection } from "../ui/detail";
 import { FailureNotice, Loading } from "../ui/states";
 import { campaignOptionProgressionAtom, libraryOptionProgressionAtom } from "./load";
 
@@ -47,24 +50,24 @@ export function ClassProgressionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="@container flex max-h-[65vh] flex-col gap-5 overflow-y-auto px-gutter py-3">
+        <DetailBody className="@container">
           {resource.state === "loading" && <Loading label="Reading the progression…" />}
           {resource.state === "failed" && (
             <FailureNotice failure={resource.failure} onRetry={reload} />
           )}
           {resource.state === "ready" && (
             <>
-              <div className="grid gap-3 @md:grid-cols-3">
-                <CountCard label="Subclasses" value={resource.value.subclasses.length} />
-                <CountCard label="Levels" value={resource.value.levels.length} />
-                <CountCard label="Features" value={resource.value.features.length} />
-              </div>
+              {/* One line, not three tiles: the three counts are one sentence
+                  about the same rows drawn below, and tiles the width of the
+                  dialog read as content rather than a summary. */}
+              <p className="text-label leading-label text-muted-foreground">
+                {countLine(resource.value.subclasses.length, "subclass", "subclasses")} ·{" "}
+                {countLine(resource.value.levels.length, "level", "levels")} ·{" "}
+                {countLine(resource.value.features.length, "feature", "features")}
+              </p>
 
               {resource.value.subclasses.length > 0 && (
-                <section className="flex flex-col gap-2" aria-label="Subclasses">
-                  <h3 className="font-display text-title leading-snug font-semibold text-heading">
-                    Subclasses
-                  </h3>
+                <DetailSection title="Subclasses">
                   <div className="flex flex-wrap gap-2">
                     {resource.value.subclasses.map((subclass) => (
                       <Badge key={subclass.id} variant="secondary">
@@ -72,14 +75,11 @@ export function ClassProgressionDialog({
                       </Badge>
                     ))}
                   </div>
-                </section>
+                </DetailSection>
               )}
 
-              <section className="flex flex-col gap-2" aria-label="Levels">
-                <h3 className="font-display text-title leading-snug font-semibold text-heading">
-                  Levels
-                </h3>
-                <div className="grid gap-2 @3xl:grid-cols-2">
+              <DetailSection title="Levels">
+                <div className="grid gap-2 @lg:grid-cols-2">
                   {resource.value.levels.map((level) => (
                     <div
                       key={level.id}
@@ -101,12 +101,9 @@ export function ClassProgressionDialog({
                     </div>
                   ))}
                 </div>
-              </section>
+              </DetailSection>
 
-              <section className="flex flex-col gap-2" aria-label="Features">
-                <h3 className="font-display text-title leading-snug font-semibold text-heading">
-                  Features
-                </h3>
+              <DetailSection title="Features">
                 <div className="flex flex-col divide-y divide-subtle rounded-card border border-subtle bg-surface-card">
                   {resource.value.features.map((feature) => (
                     <div key={feature.id} className="px-3 py-2">
@@ -119,22 +116,19 @@ export function ClassProgressionDialog({
                     </div>
                   ))}
                 </div>
-              </section>
+              </DetailSection>
             </>
           )}
-        </div>
+        </DetailBody>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function CountCard({ label, value }: { readonly label: string; readonly value: number }) {
-  return (
-    <div className="rounded-control border border-subtle bg-surface-card px-3 py-2">
-      <p className="text-caption leading-body text-muted-foreground">{label}</p>
-      <p className="font-display text-subtitle leading-snug font-semibold text-heading">
-        {String(value)}
-      </p>
-    </div>
-  );
-}
+const countLine = (n: number, one: string, many: string): string =>
+  `${String(n)} ${n === 1 ? one : many}`;

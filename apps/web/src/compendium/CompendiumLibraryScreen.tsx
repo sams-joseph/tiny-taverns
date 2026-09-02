@@ -3,17 +3,18 @@ import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
+import { useListQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { libraryRuleArticlesAtom, NO_RULE_ARTICLE_QUERY, type RuleArticleQuery } from "./load";
+import { libraryRuleArticlesAtom, NO_RULE_ARTICLE_QUERY } from "./load";
 import { isLibraryArticle } from "./ownership";
 import {
   RemoveRuleArticleDialog,
+  RuleArticleFilters,
   RuleArticleForm,
   RuleArticleGrid,
   RuleArticleReader,
-  RuleArticleSearch,
 } from "./RuleArticleParts";
 
 const summaryOf = (articles: ReadonlyArray<RuleArticle>): string => {
@@ -23,8 +24,8 @@ const summaryOf = (articles: ReadonlyArray<RuleArticle>): string => {
 };
 
 export function CompendiumLibraryScreen() {
-  const [query, setQuery] = useState<RuleArticleQuery>(NO_RULE_ARTICLE_QUERY);
-  const [resource, reload] = useApiAtom(libraryRuleArticlesAtom(query));
+  const list = useListQuery(NO_RULE_ARTICLE_QUERY, { narrows: () => false });
+  const [resource, reload] = useApiAtom(libraryRuleArticlesAtom(list.query));
   const [reading, setReading] = useState<RuleArticle>();
   const [editing, setEditing] = useState<RuleArticleDetail | undefined>();
   const [removing, setRemoving] = useState<RuleArticle>();
@@ -43,7 +44,6 @@ export function CompendiumLibraryScreen() {
           subtitle={value === undefined ? undefined : summaryOf(value.articles)}
         >
           <LibraryNav />
-          <RuleArticleSearch query={query} onQuery={setQuery} />
           <Button size="sm" onClick={() => setWriting(true)}>
             <Icon name="plus" size={13} />
             Write an article
@@ -59,25 +59,34 @@ export function CompendiumLibraryScreen() {
           <FailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
-      {value !== undefined &&
-        resource.state !== "failed" &&
-        (value.articles.length === 0 ? (
-          <EmptyState icon="book-open" title="No compendium articles">
-            Clear the search, write an article, or load the pinned 2014 rules with{" "}
-            <code className="font-mono text-mono whitespace-nowrap text-slate-300">
-              pnpm -F server ruleset:import
-            </code>
-            .
-          </EmptyState>
-        ) : (
-          <RuleArticleGrid
-            articles={value.articles}
-            onOpen={setReading}
-            onRemove={(article) =>
-              isLibraryArticle(article) ? () => setRemoving(article) : undefined
-            }
-          />
-        ))}
+      {value !== undefined && resource.state !== "failed" && (
+        <div className="flex flex-col gap-6">
+          <RuleArticleFilters list={list} busy={resource.state === "loading"} />
+          {value.articles.length === 0 ? (
+            <EmptyState icon="book-open" title="No compendium articles">
+              {list.narrowed ? (
+                "Clear the search — the pinned 2014 compendium is in this list too."
+              ) : (
+                <>
+                  Write an article, or load the pinned 2014 rules with{" "}
+                  <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+                    pnpm -F server ruleset:import
+                  </code>
+                  .
+                </>
+              )}
+            </EmptyState>
+          ) : (
+            <RuleArticleGrid
+              articles={value.articles}
+              onOpen={setReading}
+              onRemove={(article) =>
+                isLibraryArticle(article) ? () => setRemoving(article) : undefined
+              }
+            />
+          )}
+        </div>
+      )}
 
       {reading !== undefined && (
         <RuleArticleReader

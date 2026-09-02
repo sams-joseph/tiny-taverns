@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@taverns/ui";
 import type { ReactNode } from "react";
+import { DetailBody, DetailSection } from "../ui/detail";
 import { provenanceOf } from "./provenance";
 import { StatBlockBody } from "./StatBlock";
 
@@ -86,15 +87,15 @@ export function CreatureDialog({
           )}
         </DialogHeader>
 
-        <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto px-gutter py-3">
+        <DetailBody>
           <StatBlockBody
             creature={creature}
             emptyNote="Nothing is written on this one yet. Its rating and the two numbers above are all it has."
           />
 
-          {actions !== undefined && <div className="border-t border-hairline pt-4">{actions}</div>}
+          {actions !== undefined && <DetailSection>{actions}</DetailSection>}
 
-          <div className="flex flex-col gap-2 border-t border-hairline pt-4">
+          <DetailSection>
             <div className="flex flex-wrap items-center gap-1.5">
               {creature.environments.map((environment) => (
                 <Badge key={environment} variant="outline">
@@ -107,8 +108,8 @@ export function CreatureDialog({
                 {line}
               </p>
             ))}
-          </div>
-        </div>
+          </DetailSection>
+        </DetailBody>
 
         <DialogFooter>
           <Button variant="secondary" size="sm" onClick={onClose}>
