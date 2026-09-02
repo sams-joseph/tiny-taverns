@@ -42,13 +42,8 @@ export function CompendiumLibraryScreen() {
         <TopBar
           title="Library"
           subtitle={value === undefined ? undefined : summaryOf(value.articles)}
-        >
-          <LibraryNav />
-          <Button size="sm" onClick={() => setWriting(true)}>
-            <Icon name="plus" size={13} />
-            Write an article
-          </Button>
-        </TopBar>
+          tabs={<LibraryNav />}
+        />
       }
     >
       {resource.state === "loading" && value === undefined && (
@@ -61,7 +56,16 @@ export function CompendiumLibraryScreen() {
       )}
       {value !== undefined && resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <RuleArticleFilters list={list} busy={resource.state === "loading"} />
+          <RuleArticleFilters
+            list={list}
+            busy={resource.state === "loading"}
+            actions={
+              <Button size="sm" onClick={() => setWriting(true)}>
+                <Icon name="plus" size={13} />
+                Write an article
+              </Button>
+            }
+          />
           {value.articles.length === 0 ? (
             <EmptyState icon="book-open" title="No compendium articles">
               {list.narrowed ? (

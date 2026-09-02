@@ -24,14 +24,18 @@ import type { ApiFailure } from "../api/failure";
  *
  * The standard, applied by every list screen over a Library corpus:
  *
- * - **The top bar holds the title, the count, the shelf nav and the write
- *   action(s), and never a filter.** Three tabs proved the bar cannot fit a
- *   filter row without breaking its own layout.
+ * - **The top bar holds the title and the count, and never a filter.** The tab
+ *   strip is its own row below the header (`TopBar`'s `tabs` slot), and a
+ *   tab-scoped write action lives inside that tab's content — the captain's
+ *   rule, quoted on `TopBar`. Three tabs proved the bar cannot fit a filter
+ *   row without breaking its own layout.
  * - **`FilterBar` is the first element of the content column**, on every tab, in
  *   the same order: search, sort, the facets that make sense for the corpus,
  *   boolean toggles, then — supplied by the bar itself so no tab forgets them —
  *   a *Clear filters* button whenever something narrows, and a quiet "Looking…"
- *   while a narrowed answer is on its way.
+ *   while a narrowed answer is on its way. The tab's write action(s) sit at
+ *   the right end of this same row (`actions`), which is the one consistent
+ *   in-content placement every tab uses.
  * - **Controls are the design system's.** `FilterSelect` and `FilterMultiSelect`
  *   replace the raw `<select>`s; `FilterToggle` replaces button-as-toggle.
  * - **Search is debounced** (`useSearchTerm`), so typing a name is one request
@@ -48,6 +52,7 @@ export function FilterBar({
   narrowed,
   onClear,
   busy = false,
+  actions,
   children,
 }: {
   /** Whether anything narrows the list — shows *Clear filters*. */
@@ -55,6 +60,13 @@ export function FilterBar({
   readonly onClear: () => void;
   /** A narrowed answer is on its way — shows a quiet status. */
   readonly busy?: boolean;
+  /**
+   * The tab's own action(s) — *Write a creature* and its siblings — pushed to
+   * the right end of the row. Inside the tab's content by the captain's rule
+   * (quoted on `TopBar`), and on this row rather than somewhere per screen so
+   * every tab puts the verb in the same place.
+   */
+  readonly actions?: ReactNode;
   readonly children: ReactNode;
 }) {
   return (
@@ -69,6 +81,9 @@ export function FilterBar({
         <span role="status" className="text-caption leading-body text-faint">
           Looking…
         </span>
+      )}
+      {actions !== undefined && (
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">{actions}</div>
       )}
     </div>
   );

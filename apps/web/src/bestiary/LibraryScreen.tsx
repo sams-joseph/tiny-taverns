@@ -40,7 +40,7 @@ import { isLibraryEntity } from "./provenance";
  *    so, and `provenance.ts`'s `isLibraryEntity` is the one place a screen asks
  *    it. *May I edit this* is that question and never `origin` — an imported
  *    entity is `imported` and still yours.
- * 2. **Authoring happens here.** *Write a creature* in the top bar, *Edit* on
+ * 2. **Authoring happens here.** *Write a creature* in the filter row, *Edit* on
  *    every row you own, and delete inside the form — `CreatureForm`, the only
  *    authoring surface over `creature` in the product.
  * 3. **Using one copies it in.** `CopyIntoCampaign`, in the stat block dialog,
@@ -130,13 +130,8 @@ export function LibraryScreen() {
               ? undefined
               : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
           }
-        >
-          <LibraryNav />
-          <Button size="sm" onClick={() => setEditing(null)}>
-            <Icon name="plus" size={13} />
-            Write a creature
-          </Button>
-        </TopBar>
+          tabs={<LibraryNav />}
+        />
       }
     >
       {corpus.shown === undefined && corpus.resource.state === "loading" && (
@@ -150,7 +145,18 @@ export function LibraryScreen() {
 
       {corpus.shown !== undefined && corpus.resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <CreatureFilters corpus={corpus} label="Search the library" />
+          <CreatureFilters
+            corpus={corpus}
+            label="Search the library"
+            actions={
+              /* The tab's own verb, inside the tab's content — the captain's
+                 rule, quoted on `TopBar`. */
+              <Button size="sm" onClick={() => setEditing(null)}>
+                <Icon name="plus" size={13} />
+                Write a creature
+              </Button>
+            }
+          />
 
           {corpus.creatures.length === 0 ? (
             <EmptyState icon="footprints" title="Nothing lives here">

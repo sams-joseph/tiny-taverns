@@ -57,13 +57,8 @@ export function SpellLibraryScreen() {
               ? undefined
               : countOf(pages.spells.length, list.narrowed, pages.hasMore)
           }
-        >
-          <LibraryNav />
-          <Button size="sm" onClick={() => setWriting(true)}>
-            <Icon name="plus" size={13} />
-            Write a spell
-          </Button>
-        </TopBar>
+          tabs={<LibraryNav />}
+        />
       }
     >
       {shown === undefined && resource.state === "loading" && (
@@ -76,7 +71,16 @@ export function SpellLibraryScreen() {
       )}
       {shown !== undefined && resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <SpellFilters list={list} busy={resource.state === "loading"} />
+          <SpellFilters
+            list={list}
+            busy={resource.state === "loading"}
+            actions={
+              <Button size="sm" onClick={() => setWriting(true)}>
+                <Icon name="plus" size={13} />
+                Write a spell
+              </Button>
+            }
+          />
           {pages.spells.length === 0 ? (
             <EmptyState icon="book-open" title="No spells here">
               {list.narrowed ? (

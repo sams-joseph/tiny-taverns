@@ -1,5 +1,6 @@
 import type { Creature, CreatureId, CreatureSort } from "@taverns/api";
 import { Input, Label } from "@taverns/ui";
+import type { ReactNode } from "react";
 import {
   FilterBar,
   FilterMultiSelect,
@@ -143,9 +144,12 @@ function FacetSelect<V extends CorpusView>({
 export function CreatureFilters<V extends CorpusView>({
   corpus,
   label,
+  actions,
 }: {
   readonly corpus: Corpus<V>;
   readonly label: string;
+  /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
+  readonly actions?: ReactNode;
 }) {
   const view = corpus.shown;
   return (
@@ -153,6 +157,7 @@ export function CreatureFilters<V extends CorpusView>({
       narrowed={corpus.narrowed}
       onClear={corpus.clear}
       busy={corpus.resource.state === "loading" && view !== undefined}
+      actions={actions}
     >
       <FilterSearch label={label} value={corpus.term} onChange={corpus.setTerm} />
       <FilterSelect

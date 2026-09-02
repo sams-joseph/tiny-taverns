@@ -135,39 +135,11 @@ export function OptionLibraryScreen() {
       onAskHob={hob.toggle}
       panel={<Hob hob={hob} />}
       topBar={
-        <TopBar title="Library" subtitle={options === undefined ? undefined : summaryOf(options)}>
-          <LibraryNav />
-          {/* **Three controls, so they wrap** — `RulesScreen` records the same
-              thing about its four: the shell's action slot is one unwrapped
-              row, which is right for the two every other screen has, and the
-              `min-w-0` is what lets the title beside it give way first. */}
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setEditing({ kind: "background", option: undefined })}
-            >
-              <Icon name="plus" size={14} />
-              Write a background
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setEditing({ kind: "race", option: undefined })}
-            >
-              <Icon name="plus" size={14} />
-              Write a race
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setEditingFeat(null)}>
-              <Icon name="plus" size={14} />
-              Write a feat
-            </Button>
-            <Button size="sm" onClick={() => setEditing({ kind: "class", option: undefined })}>
-              <Icon name="plus" size={14} />
-              Write a class
-            </Button>
-          </div>
-        </TopBar>
+        <TopBar
+          title="Library"
+          subtitle={options === undefined ? undefined : summaryOf(options)}
+          tabs={<LibraryNav />}
+        />
       }
     >
       {resource.state === "loading" && <Loading label="Opening your library…" />}
@@ -179,7 +151,41 @@ export function OptionLibraryScreen() {
 
       {options !== undefined && (
         <div className="flex flex-col gap-8">
-          <FilterBar narrowed={searching} onClear={() => setTerm("")}>
+          <FilterBar
+            narrowed={searching}
+            onClear={() => setTerm("")}
+            actions={
+              /* This tab's four verbs, inside the tab's content — the
+                 captain's rule, quoted on `TopBar`. `FilterBar`'s slot wraps,
+                 which four controls need where every other tab has one. */
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditing({ kind: "background", option: undefined })}
+                >
+                  <Icon name="plus" size={14} />
+                  Write a background
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditing({ kind: "race", option: undefined })}
+                >
+                  <Icon name="plus" size={14} />
+                  Write a race
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setEditingFeat(null)}>
+                  <Icon name="plus" size={14} />
+                  Write a feat
+                </Button>
+                <Button size="sm" onClick={() => setEditing({ kind: "class", option: undefined })}>
+                  <Icon name="plus" size={14} />
+                  Write a class
+                </Button>
+              </>
+            }
+          >
             <FilterSearch label="Search the rules" value={term} onChange={setTerm} />
           </FilterBar>
           {nothingMatches && (

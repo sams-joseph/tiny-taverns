@@ -63,13 +63,8 @@ export function EquipmentLibraryScreen() {
               ? undefined
               : countOf(pages.equipment.length, list.narrowed, pages.hasMore)
           }
-        >
-          <LibraryNav />
-          <Button size="sm" onClick={() => setEditing("new")}>
-            <Icon name="package" size={13} />
-            Write equipment
-          </Button>
-        </TopBar>
+          tabs={<LibraryNav />}
+        />
       }
     >
       {shown === undefined && resource.state === "loading" && (
@@ -82,7 +77,16 @@ export function EquipmentLibraryScreen() {
       )}
       {shown !== undefined && resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <EquipmentFilters list={list} busy={resource.state === "loading"} />
+          <EquipmentFilters
+            list={list}
+            busy={resource.state === "loading"}
+            actions={
+              <Button size="sm" onClick={() => setEditing("new")}>
+                <Icon name="package" size={13} />
+                Write equipment
+              </Button>
+            }
+          />
           {pages.equipment.length === 0 ? (
             <EmptyState icon="package" title="No equipment here">
               {list.narrowed ? (

@@ -68,13 +68,8 @@ export function MagicItemLibraryScreen() {
               ? undefined
               : countOf(pages.magicItems.length, list.narrowed, pages.hasMore)
           }
-        >
-          <LibraryNav />
-          <Button size="sm" onClick={() => setEditing("new")}>
-            <Icon name="gem" size={13} />
-            Write magic item
-          </Button>
-        </TopBar>
+          tabs={<LibraryNav />}
+        />
       }
     >
       {shown === undefined && resource.state === "loading" && (
@@ -87,7 +82,16 @@ export function MagicItemLibraryScreen() {
       )}
       {shown !== undefined && resource.state !== "failed" && (
         <div className="flex flex-col gap-6">
-          <MagicItemFilters list={list} busy={resource.state === "loading"} />
+          <MagicItemFilters
+            list={list}
+            busy={resource.state === "loading"}
+            actions={
+              <Button size="sm" onClick={() => setEditing("new")}>
+                <Icon name="gem" size={13} />
+                Write magic item
+              </Button>
+            }
+          />
           {pages.magicItems.length === 0 ? (
             <EmptyState icon="gem" title="No magic items here">
               {list.narrowed ? (

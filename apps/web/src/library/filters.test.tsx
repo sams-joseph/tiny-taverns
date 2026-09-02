@@ -77,6 +77,19 @@ describe("FilterBar", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("Looking…");
   });
+
+  it("carries the tab's own action inside the bar — the captain's placement", () => {
+    // Tab-scoped verbs live inside the tab's content, not beside the tab strip
+    // — the rule quoted on `TopBar`. The bar's `actions` slot is the one
+    // consistent in-content placement every tab uses.
+    render(
+      <FilterBar narrowed={false} onClear={() => {}} actions={<button>Write a thing</button>}>
+        <span>controls</span>
+      </FilterBar>,
+    );
+    const bar = screen.getByRole("group", { name: "Filters" });
+    expect(bar).toContainElement(screen.getByRole("button", { name: "Write a thing" }));
+  });
 });
 
 describe("FilterSelect", () => {

@@ -4319,8 +4319,20 @@ crammed raw `<select>`s into the top bar until the title wrapped letter by lette
 below (the bestiary/Library screen sections, `CorpusControls`, `EnvironmentChips`, per-dialog copy
 controls in footers) disagrees with this section, this one wins.
 
-- **The top bar holds the title, the count, `LibraryNav` and the write action(s) — never a
-  filter.** Three tabs proved the bar cannot fit a filter row without breaking its own layout.
+- **Tabs get their own row below the header, and tab-scoped actions live inside the tab's
+  content — the captain's standing rule (2026-09-02), for any tabbed screen, not just the
+  Library.** Verbatim: _"If we ever have tabs in the app like we do in the library I want those
+  to be on their own row below the header. And any actions we have that belong to that tab
+  should be inside of the content of that tab and not on the same heirarchical level as the
+  tabs themselves."_ The shared idiom is `TopBar`'s `tabs` slot (`shell/AppShell.tsx`, quoted
+  there too) for the row, and `FilterBar`'s `actions` slot (right end of the filter row) as the
+  one consistent in-content placement for the tab's write verb(s) — do not hand-roll either per
+  screen. The campaign row and the global row are **navigation tiers, not tabs** (the sixth
+  delivery's two-row nav — already their own rows, and _Start session_ belongs to the whole
+  campaign), and the character sheet's `Tabs` already conforms (TabsList its own row inside the
+  content, per-tab edit buttons inside each `TabsContent`).
+- **The top bar holds the title and the count — never a filter, a tab, or a tab's action.**
+  Three tabs proved the bar cannot fit a filter row without breaking its own layout.
 - **`FilterBar` is the first element of the content column on every tab**, in one order: search
   (debounced through `useSearchTerm`), a `Sort:` `FilterSelect`, the corpus's facets as
   `FilterMultiSelect`s (any-of, popup stays open, trigger reads `Type: Beast` or `Type · 2`,

@@ -42,7 +42,7 @@ const lastQuery = () =>
   );
 
 describe("SpellLibraryScreen", () => {
-  it("draws the filter bar in the body and keeps the top bar to nav and the write action", async () => {
+  it("puts the tabs on their own row and the tab's verb inside the tab's content", async () => {
     await renderSpells(mintingSession());
     await screen.findByText("Fireball");
 
@@ -51,9 +51,18 @@ describe("SpellLibraryScreen", () => {
     expect(bar).toContainElement(screen.getByRole("textbox", { name: "Search spells" }));
     expect(bar).toContainElement(screen.getByRole("combobox", { name: "Sort" }));
 
-    // And the top bar carries no filter control beside the nav and the verb.
+    // The captain's rule, both halves. The tab strip is its own row below the
+    // header's title row — not beside the title, and holding nothing but tabs…
     const nav = screen.getByRole("navigation", { name: "Library shelves" });
+    expect(nav.parentElement?.contains(screen.getByRole("heading", { name: "Library" }))).toBe(
+      false,
+    );
     expect(nav.parentElement?.contains(bar)).toBe(false);
+    const write = screen.getByRole("button", { name: /Write a spell/ });
+    expect(nav.parentElement?.contains(write)).toBe(false);
+
+    // …and the tab-scoped verb sits inside the tab's content, in the bar.
+    expect(bar).toContainElement(write);
   });
 
   it("combines the facets on the wire — a level, a flag and the search at once", async () => {

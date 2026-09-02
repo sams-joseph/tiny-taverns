@@ -62,12 +62,15 @@ const SORTS: ReadonlyArray<FilterOption> = [
 export function RuleArticleFilters({
   list,
   busy,
+  actions,
 }: {
   readonly list: ListQuery<RuleArticleQuery>;
   readonly busy: boolean;
+  /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
+  readonly actions?: ReactNode;
 }) {
   return (
-    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy}>
+    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
       <FilterSearch label="Search the compendium" value={list.term} onChange={list.setTerm} />
       <FilterSelect
         label="Sort"

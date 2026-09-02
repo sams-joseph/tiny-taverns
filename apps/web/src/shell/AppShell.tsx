@@ -524,27 +524,51 @@ function CampaignHome({
  * `z-chrome` is the bottom rung of the layering scale in `@taverns/ui`'s
  * `styles.css`: sticky page furniture, deliberately far below the overlay band
  * so a dialog's scrim covers it. Reach for a rung, never a number.
+ *
+ * ### Tabs get their own row, below the header — the captain's rule
+ *
+ * > If we ever have tabs in the app like we do in the library I want those to
+ * > be on their own row below the header. And any actions we have that belong
+ * > to that tab should be inside of the content of that tab and not on the
+ * > same hierarchical level as the tabs themselves.
+ *
+ * So `tabs` is a distinct full-width row under the title row, inside the same
+ * sticky header so the strip's underline lands on the header's own bottom
+ * hairline (the recipe's `-mb-px`, the campaign row's mechanism). `children`
+ * stays for things that are genuinely header-level — a tab-scoped action does
+ * not belong here or on the tab row; it goes inside that tab's content, which
+ * for the Library screens is `FilterBar`'s `actions` slot.
  */
 export function TopBar({
   title,
   subtitle,
+  tabs,
   children,
 }: {
   readonly title: string;
   readonly subtitle?: string;
+  /** A tab strip, on its own row below the title — never beside it. */
+  readonly tabs?: ReactNode;
   readonly children?: ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-chrome flex items-center gap-gutter border-b border-hairline bg-surface-card px-page-sm py-3.5 sm:px-page">
-      <div className="min-w-0 flex-1">
-        <h1 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-          {title}
-        </h1>
-        {subtitle !== undefined && (
-          <p className="mt-1 text-body-s leading-body text-muted-foreground">{subtitle}</p>
-        )}
+    <header className="sticky top-0 z-chrome border-b border-hairline bg-surface-card">
+      <div className="flex items-center gap-gutter px-page-sm py-3.5 sm:px-page">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
+            {title}
+          </h1>
+          {subtitle !== undefined && (
+            <p className="mt-1 text-body-s leading-body text-muted-foreground">{subtitle}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2.5">{children}</div>
       </div>
-      <div className="flex items-center gap-2.5">{children}</div>
+      {tabs !== undefined && (
+        // `items-stretch` with no bottom padding: the strip's items reach the
+        // header's hairline, exactly as the campaign row's do.
+        <div className="flex h-10 items-stretch overflow-x-auto px-page-sm sm:px-page">{tabs}</div>
+      )}
     </header>
   );
 }

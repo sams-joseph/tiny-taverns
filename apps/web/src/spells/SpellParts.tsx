@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
 import { CopyIntoCampaignSection } from "../library/CopyIn";
@@ -89,13 +89,16 @@ const CLASSES: ReadonlyArray<FilterOption> = [
 export function SpellFilters({
   list,
   busy,
+  actions,
 }: {
   readonly list: ListQuery<SpellQuery>;
   readonly busy: boolean;
+  /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
+  readonly actions?: ReactNode;
 }) {
   const { value, patch } = list;
   return (
-    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy}>
+    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
       <FilterSearch label="Search spells" value={list.term} onChange={list.setTerm} />
       <FilterSelect
         label="Sort"

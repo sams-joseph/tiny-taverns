@@ -16,7 +16,7 @@ import {
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CopyIntoCampaignSection } from "../library/CopyIn";
@@ -81,13 +81,16 @@ const ownerOf = (equipment: Equipment): "bundle" | "library" | "campaign" =>
 export function EquipmentFilters({
   list,
   busy,
+  actions,
 }: {
   readonly list: ListQuery<EquipmentQuery>;
   readonly busy: boolean;
+  /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
+  readonly actions?: ReactNode;
 }) {
   const { value, patch } = list;
   return (
-    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy}>
+    <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
       <FilterSearch label="Search equipment" value={list.term} onChange={list.setTerm} />
       <FilterSelect
         label="Sort"
