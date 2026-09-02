@@ -102,18 +102,29 @@ const untouched: ReadonlySet<SeededField> = new Set();
 const scored = (...scores: ReadonlyArray<number>) => assignScores(abilityDrafts([]), scores);
 
 describe("which tables a character of your own may go into", () => {
-  it("is the ones you play at, and not the ones you run", () => {
+  /**
+   * **Every table, the run ones included** — the inversion the continuity
+   * decision of 2026-09-01 made. The old rule filtered to `player` because a
+   * character was campaign-scoped and DM-typed; a character is account-owned
+   * now and its creator is a player too, so a table you run is somewhere a
+   * character of your own belongs exactly as one you sit at is.
+   */
+  it("is every table you are at, the ones you run included", () => {
     expect(
       tablesForNewCharacter([
         table("a", "The Salt Road", "player"),
         table("b", "A table I run", "creator"),
         table("c", "The Hag's Bargain", "player"),
       ]).map((row) => row.campaign.name),
-    ).toEqual(["The Salt Road", "The Hag's Bargain"]);
+    ).toEqual(["The Salt Road", "A table I run", "The Hag's Bargain"]);
   });
 
-  it("is empty for an account that only runs games", () => {
-    expect(tablesForNewCharacter([table("b", "A table I run", "creator")])).toEqual([]);
+  it("offers a creator their own tables, and is empty only with no table at all", () => {
+    expect(
+      tablesForNewCharacter([table("b", "A table I run", "creator")]).map(
+        (row) => row.campaign.name,
+      ),
+    ).toEqual(["A table I run"]);
     expect(tablesForNewCharacter([])).toEqual([]);
   });
 });

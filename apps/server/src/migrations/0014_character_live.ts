@@ -63,6 +63,19 @@ export default Effect.gen(function* () {
       add column conditions text[] not null default '{}'
   `;
 
+  // The continuity decision's explicit answer to concurrent whole-document
+  // writes: one character is now shared by every campaign that seats it, so a
+  // sheet PATCH racing another from a second table (or a second tab) is the
+  // ordinary case rather than the accepted one. Every character UPDATE bumps
+  // this; a caller that read the sheet may send its version back and be
+  // refused with a Conflict when somebody got there first. The live trio needs
+  // none of it — hit points move by an atomic in-SQL delta and never by
+  // read-modify-write.
+  yield* sql`
+    alter table character
+      add column version integer not null default 1
+  `;
+
   // One more kind, dropped and re-added the way `0008` did it — the vocabulary
   // is closed because the runner and the recap branch on it.
   //

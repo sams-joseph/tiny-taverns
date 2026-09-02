@@ -121,17 +121,30 @@ export const revokeMemberAt = (
   campaignId: CampaignId,
   accountId: AccountId,
 ): Effect.Effect<number, SqlError.SqlError> =>
-  Effect.map(
-    sql<{ readonly campaign_id: CampaignId }>`
+  Effect.gen(function* () {
+    const rows = yield* sql<{ readonly campaign_id: CampaignId }>`
       update campaign_member set revoked_at = now()
       where campaign_member.campaign_id = ${campaignId}
         and campaign_member.account_id = ${accountId}
         and campaign_member.revoked_at is null
         and ${notTheCreator(sql)}
       returning campaign_member.campaign_id
-    `,
-    (rows) => rows.length,
-  );
+    `;
+    // Their seats retire with them, in the same transaction — the deferred
+    // participation key (`campaign_character_member_fkey`) would refuse the
+    // COMMIT otherwise, and it is also the honest answer: a character whose
+    // player was removed is not at the table any more. The seat row stands as
+    // history, which is what retiring rather than deleting buys.
+    if (rows.length > 0) {
+      yield* sql`
+        update campaign_character set left_at = now(), updated_at = now()
+        where campaign_character.campaign_id = ${campaignId}
+          and campaign_character.account_id = ${accountId}
+          and campaign_character.left_at is null
+      `;
+    }
+    return rows.length;
+  });
 
 /**
  * Revokes every live participation an account holds across one group's
@@ -148,15 +161,24 @@ export const revokeAllInGroupFor = (
   groupId: GroupId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.asVoid(
-    sql`
+  Effect.gen(function* () {
+    yield* sql`
       update campaign_member set revoked_at = now()
       where campaign_member.group_id = ${groupId}
         and campaign_member.account_id = ${accountId}
         and campaign_member.revoked_at is null
         and ${notTheCreator(sql)}
-    `,
-  );
+    `;
+    // Seats retire with the memberships — `revokeMemberAt`'s clause, across
+    // the group. Scoped by `group_id` on the seat itself, which is the
+    // campaign's own value by the composite key into `campaign`.
+    yield* sql`
+      update campaign_character set left_at = now(), updated_at = now()
+      where campaign_character.group_id = ${groupId}
+        and campaign_character.account_id = ${accountId}
+        and campaign_character.left_at is null
+    `;
+  });
 
 /**
  * Which shelf `mine` reads — the live tables, or the archived ones.
@@ -345,17 +367,23 @@ export class Memberships extends Context.Service<
 
         remove: (creator, accountId) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              if (accountId === creator.actor.accountId) {
-                return yield* new Conflict({
-                  message: "a campaign cannot lose its creator; archive the campaign instead",
-                });
-              }
-              const revoked = yield* revokeMemberAt(sql, creator.campaign, accountId);
-              if (revoked === 0) {
-                return yield* new NotFound({ resource: "member", id: accountId });
-              }
-            }),
+            // One transaction, because `revokeMemberAt` is two statements now
+            // — the revoke and the seat retirement — and the deferred
+            // participation key checks them together at COMMIT. Under
+            // autocommit the first alone would be refused on the spot.
+            sql.withTransaction(
+              Effect.gen(function* () {
+                if (accountId === creator.actor.accountId) {
+                  return yield* new Conflict({
+                    message: "a campaign cannot lose its creator; archive the campaign instead",
+                  });
+                }
+                const revoked = yield* revokeMemberAt(sql, creator.campaign, accountId);
+                if (revoked === 0) {
+                  return yield* new NotFound({ resource: "member", id: accountId });
+                }
+              }),
+            ),
           ),
       };
     }),

@@ -19,9 +19,10 @@ import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Party } from "../src/repo/Party.js";
 import { Search } from "../src/repo/Search.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import { aCharacterAt, aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -46,7 +47,8 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
-  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Characters.layer,
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   Invites.layer,
   Notes.layer,
@@ -78,7 +80,6 @@ const makeFixture = Effect.gen(function* () {
   const beats = yield* Beats;
   const sessions = yield* Sessions;
   const creatures = yield* Creatures;
-  const characters = yield* Characters;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
@@ -150,11 +151,15 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  // The party. `0012_character_sheet.ts` gave a character a document, which is
-  // what makes the people the campaign is about findable at all — before it,
-  // this was the one part of the record with no arm over it.
-  const brannoc = yield* as(
-    characters.create(campaign.id, {
+  // The party. A character is account-owned and top-level now; what makes it
+  // *this campaign's* search result is a live seat here (`characterSeatedAt`),
+  // and who at the table finds it is the seat's `visibility`. Jo owns all four
+  // — a creator is a player too — and the seat's visibility carries what the
+  // old character-level `shared` meant.
+  const brannoc = (yield* aCharacterAt(
+    campaign.id,
+    dm,
+    {
       name: "Brannoc",
       playerName: "Ilse",
       level: 3,
@@ -167,39 +172,44 @@ const makeFixture = Effect.gen(function* () {
         abilities: [],
         traits: [{ name: "Lay on Hands", text: "A pool of fifteen hit points." }],
       },
-      visibility: "shared",
-    }),
-  );
-  const pell = yield* as(
-    characters.create(campaign.id, {
-      name: "Sister Pell",
-      playerName: "Dara",
-      race: "Human",
-      className: "Cleric",
-      sheet: { notes: "Knows what is in the crate and will not say.", abilities: [], traits: [] },
-    }),
-  );
+    },
+    { seatVisibility: "shared" },
+  )).character;
+  const pell = (yield* aCharacterAt(campaign.id, dm, {
+    name: "Sister Pell",
+    playerName: "Dara",
+    race: "Human",
+    className: "Cleric",
+    sheet: { notes: "Knows what is in the crate and will not say.", abilities: [], traits: [] },
+  })).character;
   // Written in a hurry: two columns and no sheet at all, which is the case the
   // snippet fallback exists for.
-  const wren = yield* as(
-    characters.create(campaign.id, {
+  const wren = (yield* aCharacterAt(
+    campaign.id,
+    dm,
+    {
       name: "Wren",
       playerName: "Kofi",
       race: "Tiefling",
       className: "Bard",
-      visibility: "shared",
-    }),
-  );
-  // The same word again, at the other table, so a character that comes back
-  // through campaign A is a leak rather than a coincidence.
-  yield* as(
-    characters.create(otherTable.id, {
+    },
+    { seatVisibility: "shared" },
+  )).character;
+  // The same word again, seated only at the other table, so a character that
+  // comes back through campaign A is a leak rather than a coincidence. (A
+  // character seated at *both* tables would honestly be findable at both —
+  // that is the continuity decision, not a leak — which is why this one has
+  // exactly one seat.)
+  yield* aCharacterAt(
+    otherTable.id,
+    dm,
+    {
       name: "Sixpence Brannoc",
       race: "Half-orc",
       className: "Paladin",
       sheet: { notes: "A different ferryman entirely.", abilities: [], traits: [] },
-      visibility: "shared",
-    }),
+    },
+    { seatVisibility: "shared" },
   );
 
   const outsider = yield* anAccount("Someone else");
@@ -419,9 +429,10 @@ describe("scoping — proven, not reasoned about", () => {
     expect(keys(crate)).not.toContain(`note:${fixture.crateNote.id}`);
     expect(keys(crate)).not.toContain(`beat:${fixture.crateBeat.id}`);
 
-    // The party arm obeys the same rule with no clause of its own: `Brannoc` is
-    // `shared` and Sister Pell is not, so a player finds one of them and the
-    // crate line on the other's sheet is not a way to reach her.
+    // The party arm obeys the seat's rule with no clause of its own:
+    // Brannoc's seat is `shared` and Sister Pell's is not, so a player finds
+    // one of them and the crate line on the other's sheet is not a way to
+    // reach her.
     expect(keys(here)).toContain(`character:${fixture.brannoc.id}`);
     expect(keys(crate)).not.toContain(`character:${fixture.pell.id}`);
 

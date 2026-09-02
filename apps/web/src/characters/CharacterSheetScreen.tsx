@@ -1,4 +1,4 @@
-import type { Character, CharacterId, InventoryItem, Trait } from "@taverns/api";
+import type { Character, CharacterId, InventoryItem, OwnedCharacter, Trait } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   Badge,
@@ -605,7 +605,8 @@ function SheetBody({
   );
 }
 
-function IdentityColumn({ character }: { readonly character: Character }) {
+function IdentityColumn({ owned }: { readonly owned: OwnedCharacter }) {
+  const character = owned.character;
   const identity = character.sheet.identity;
   // Absent is nought up and nought down, and on a writable sheet the row is
   // drawn either way: a player whose character has never gone down still has to
@@ -629,7 +630,7 @@ function IdentityColumn({ character }: { readonly character: Character }) {
         saveOwnCharacter(client, character, {
           sheet: sheetWith(character, { deathSaves: { ...deathSaves, [part]: next } }),
         }),
-      ownCharacterWrites(character),
+      ownCharacterWrites(owned),
     );
   };
   const meta = [identity?.background, identity?.alignment].filter(
@@ -842,9 +843,18 @@ export function CharacterSheetScreen() {
    */
   const [resource, reload] = useApiAtom(sheetAtom(characterId));
   const view = resource.state === "ready" ? resource.value : undefined;
-  const character = view?.characters.find((row) => row.id === characterId);
+  const owned = view?.characters.find((row) => row.character.id === characterId);
+  const character = owned?.character;
+  /**
+   * The banner's table is the character's **first** seat — `load.ts` picked the
+   * same one to read the live table from, so the name and the numbers cannot
+   * disagree about which table they are about. A character seated nowhere has
+   * no campaign line, no banner and no way to a table, which is the honest
+   * shape of a character between tables.
+   */
+  const firstSeat = owned?.seats[0];
   const campaignName =
-    character === undefined ? undefined : view?.campaignNames.get(character.campaignId);
+    firstSeat === undefined ? undefined : view?.campaignNames.get(firstSeat.campaignId);
   /**
    * What the banner says, or nothing.
    *
@@ -856,6 +866,7 @@ export function CharacterSheetScreen() {
     character === undefined || view === undefined
       ? undefined
       : liveBanner(view.live, character, campaignName);
+
   /**
    * Which write is open — one at a time, and above the sheet rather than inside
    * it, because the dialog outlives the section that opened it: a save re-reads
@@ -907,13 +918,13 @@ export function CharacterSheetScreen() {
               go to. A control that led to a screen with nothing on it would be
               the stubbed field this product refuses everywhere else, and the
               banner below is the sentence saying why this one is here. */}
-          {character !== undefined && banner !== undefined && (
+          {firstSeat !== undefined && banner !== undefined && (
             <Button
               variant="secondary"
               size="sm"
               nativeButton={false}
               render={
-                <Link to="/campaigns/$campaignId" params={{ campaignId: character.campaignId }} />
+                <Link to="/campaigns/$campaignId" params={{ campaignId: firstSeat.campaignId }} />
               }
             >
               <Icon name="swords" size={14} />
@@ -973,7 +984,7 @@ export function CharacterSheetScreen() {
                 without the window moving. */}
             <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
               <div className="@3xl:w-rail @3xl:shrink-0">
-                <IdentityColumn character={character} />
+                <IdentityColumn owned={owned!} />
               </div>
               <div className="min-w-0 flex-1">
                 <SheetBody
@@ -990,24 +1001,24 @@ export function CharacterSheetScreen() {
           </>
         ))}
 
-      {character !== undefined && editing === "identity" && (
-        <IdentityDialog character={character} onClose={close} onSaved={close} />
+      {owned !== undefined && editing === "identity" && (
+        <IdentityDialog owned={owned} onClose={close} onSaved={close} />
       )}
-      {character !== undefined && editing === "abilities" && (
-        <AbilitiesDialog character={character} onClose={close} onSaved={close} />
+      {owned !== undefined && editing === "abilities" && (
+        <AbilitiesDialog owned={owned} onClose={close} onSaved={close} />
       )}
-      {character !== undefined && editing === "skills" && (
-        <SkillsDialog character={character} onClose={close} onSaved={close} />
+      {owned !== undefined && editing === "skills" && (
+        <SkillsDialog owned={owned} onClose={close} onSaved={close} />
       )}
-      {character !== undefined && editing === "backstory" && (
-        <BackstoryDialog character={character} onClose={close} onSaved={close} />
+      {owned !== undefined && editing === "backstory" && (
+        <BackstoryDialog owned={owned} onClose={close} onSaved={close} />
       )}
-      {character !== undefined && editing === "gear" && (
-        <GearDialog character={character} onClose={close} onSaved={close} />
+      {owned !== undefined && editing === "gear" && (
+        <GearDialog owned={owned} onClose={close} onSaved={close} />
       )}
-      {character !== undefined && editing === "delete" && (
+      {owned !== undefined && editing === "delete" && (
         <DeleteCharacterDialog
-          character={character}
+          owned={owned}
           onClose={close}
           /* The row is gone, so there is nothing left on this route to draw —
              back to the roster, replacing the entry so *Back* does not land on

@@ -18,6 +18,7 @@ import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Groups } from "./repo/Groups.js";
 import { Characters } from "./repo/Characters.js";
+import { Party } from "./repo/Party.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -282,27 +283,21 @@ const SessionsLive = HttpApiBuilder.group(
   }),
 );
 
-const CharactersLive = HttpApiBuilder.group(
+const PartyLive = HttpApiBuilder.group(
   TavernsApi,
-  "characters",
+  "party",
   Effect.fnUntraced(function* (handlers) {
-    const characters = yield* Characters;
+    const party = yield* Party;
     return handlers
-      .handle("list", ({ params }) => characters.list(params.campaignId))
-      .handle("create", ({ params, payload }) => characters.create(params.campaignId, payload))
-      .handle("findById", ({ params }) =>
-        characters.findById(params.campaignId, params.characterId),
-      )
+      .handle("list", ({ params }) => party.list(params.campaignId))
+      .handle("join", ({ params, payload }) => party.join(params.campaignId, payload))
       .handle("update", ({ params, payload }) =>
-        characters.update(params.campaignId, params.characterId, payload),
+        party.update(params.campaignId, params.campaignCharacterId, payload),
       )
-      .handle("assign", ({ params, payload }) =>
-        characters.assign(params.campaignId, params.characterId, payload),
-      )
+      .handle("leave", ({ params }) => party.leave(params.campaignId, params.campaignCharacterId))
       .handle("damage", ({ params, payload }) =>
-        characters.damage(params.campaignId, params.characterId, payload),
-      )
-      .handle("remove", ({ params }) => characters.remove(params.campaignId, params.characterId));
+        party.damage(params.campaignId, params.campaignCharacterId, payload),
+      );
   }),
 );
 
@@ -990,7 +985,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     MembersLive,
     InvitesLive,
     SessionsLive,
-    CharactersLive,
+    PartyLive,
     NotesLive,
     EncountersLive,
     CreaturesLive,

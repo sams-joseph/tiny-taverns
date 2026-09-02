@@ -8,7 +8,6 @@ import {
   brannoc,
   campaign,
   campaignId,
-  character,
   encounter,
   goblinBoss,
   liveRun,
@@ -17,6 +16,7 @@ import {
   session,
   sessionId,
   page,
+  partySeat,
 } from "../campaign/campaign.fixtures";
 import { installRunServer, renderRunner } from "../run/run.fixtures";
 
@@ -59,7 +59,7 @@ const alsoAnswerTheCampaignView = (over: boolean) => {
   });
   server.routes.set(`GET ${base}/encounters`, { status: 200, body: page([encounter]) });
   server.routes.set(`GET ${base}/notes`, { status: 200, body: page([readAloud]) });
-  server.routes.set(`GET ${base}/characters`, { status: 200, body: [character] });
+  server.routes.set(`GET ${base}/party`, { status: 200, body: [partySeat] });
   server.routes.set(`GET ${sessionPath}`, { status: 200, body: session });
   server.routes.set(`GET ${sessionPath}/prep`, { status: 200, body: [prepItem] });
   server.routes.set(`GET ${sessionPath}/runs`, {

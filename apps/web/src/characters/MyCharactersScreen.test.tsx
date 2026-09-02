@@ -119,14 +119,14 @@ describe("your characters", () => {
     expect(screen.queryByRole("button", { name: /Take your turn/i })).toBeNull();
   });
 
-  it("tells the three empty rosters apart", async () => {
-    // A table to play at, and nothing on it yet — so the copy names both ways
-    // out and the control that is one of them is drawn.
+  it("tells the two empty rosters apart, and a run table now counts", async () => {
+    // A table to be at, and nothing on it yet — so the copy names the way out
+    // and the control that is it is drawn.
     server.routes = noCharacters();
     await renderRoster();
 
     await screen.findByText("No characters yet");
-    expect(screen.getByText(/Write one down for a table you sit at/)).toBeTruthy();
+    expect(screen.getByText(/Write one down for any table you are at/)).toBeTruthy();
     expect(screen.getByText("Ilse Vantar · no characters yet, at 2 tables.")).toBeTruthy();
     expect(screen.getByRole("button", { name: /New character/i })).toBeTruthy();
 
@@ -142,15 +142,17 @@ describe("your characters", () => {
     expect(screen.queryByRole("button", { name: /New character/i })).toBeNull();
 
     cleanup();
-    // The third: a membership, but at a table this account *runs*. A
-    // `memberships.length` check would take the middle branch here and offer a
-    // control that is not drawn.
+    // **The inversion the continuity decision made.** A membership at a table
+    // this account *runs* used to be the third silence — a control deliberately
+    // not drawn, because a character was campaign-scoped and DM-typed. A
+    // creator is a player too now, so their own table offers the create flow
+    // exactly as a played one does.
     server.routes = onlyDmTables();
     await renderRoster();
 
     await screen.findByText("No characters yet");
-    expect(screen.getByText(/You run the tables you are at/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /New character/i })).toBeNull();
+    expect(screen.getByText(/Write one down for any table you are at/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /New character/i })).toBeTruthy();
   });
 
   /**

@@ -1,4 +1,4 @@
-import type { CampaignId, Character, CharacterOwnUpdate } from "@taverns/api";
+import type { CampaignId, CharacterOwnUpdate, OwnedCharacter } from "@taverns/api";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -664,18 +664,26 @@ describe("what a player still cannot reach", () => {
    * DM's party strip and party screen both draw it — a different account, in a
    * different browser, on a screen this dialog has never heard of. Naming the
    * *resource* is what reaches it, so what is asserted is that the resource is
-   * named: `reads.myCharacters` is this screen's own, and `reads.characters` is
-   * the table's.
+   * named: `reads.myCharacters` is this screen's own, and `reads.party` is one
+   * per table the character is seated at — plural since the continuity
+   * decision let one shared character sit at several.
    *
    * It is a unit assertion because the two halves are two accounts and cannot
    * be on screen at once. The mechanism the name relies on is pinned in
    * `api/invalidation.test.tsx`.
    */
-  it("names the DM's party list as well as its own roster", () => {
-    expect(ownCharacterWrites(brannoc as unknown as Character)).toEqual([
-      reads.myCharacters,
-      reads.characters(brannoc.campaignId as CampaignId),
-    ]);
+  it("names every seated table's party list as well as its own roster", () => {
+    const table = "2b1f2a1e-0000-4000-8000-0000000000c1" as CampaignId;
+    const otherTable = "2b1f2a1e-0000-4000-8000-0000000000c2" as CampaignId;
+    expect(
+      ownCharacterWrites({
+        character: brannoc,
+        seats: [
+          { campaignId: table, joinedAt: "2026-07-01T10:00:00.000Z" },
+          { campaignId: otherTable, joinedAt: "2026-07-02T10:00:00.000Z" },
+        ],
+      } as unknown as OwnedCharacter),
+    ).toEqual([reads.myCharacters, reads.party(table), reads.party(otherTable)]);
   });
 
   it("offers nothing to edit on a character that is not yours", async () => {

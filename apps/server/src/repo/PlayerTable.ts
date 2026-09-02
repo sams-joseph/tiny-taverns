@@ -18,8 +18,7 @@ import {
   containedRowReadable,
   ensureCampaignReadable,
   nestedRowReadable,
-  ownRowReadable,
-  rowCampaign,
+  ownCharacter,
   rowReadable,
 } from "./visibility.js";
 
@@ -35,7 +34,7 @@ import {
  * ### Four queries, four shipped predicates, and no new rule
  *
  * `ensureCampaignReadable`, `rowReadable`, `nestedRowReadable`,
- * `containedRowReadable` and `ownRowReadable` — every one of them already in
+ * `containedRowReadable` and `ownCharacter` — every one of them already in
  * `repo/visibility.ts` and every one of them used exactly as its existing
  * callers use it. There is no predicate here, no `.filter` after a read, and
  * nothing that turns a wide row into a narrow one in TypeScript: the columns a
@@ -66,7 +65,7 @@ import {
  * ### The one thing here that is `me`-shaped
  *
  * `seats` is this account's **own** characters in the fight, and the ownership
- * comparison is `ownRowReadable`'s rather than one written here. That is the
+ * comparison is `ownCharacter`'s rather than one written here. That is the
  * rule `repo/Characters.ts` follows and for the same reason: a repository that
  * spelled `account_id = <the actor>` in its own `WHERE` would be the second
  * place the ownership rule lives, and the day the two disagree the wrong one is
@@ -207,11 +206,13 @@ export class PlayerTable extends Context.Service<
                *
                * Two predicates, and neither is redundant: the combatant has to
                * be one this actor may see at all, *and* the character it was
-               * seeded from has to be theirs. `ownRowReadable` is the second —
-               * `ownedRowReadable` conjoined with ownership, the same fragment
-               * `GET /me/characters` composes — so every id returned here is one
-               * the caller already holds and could read in full, and there is no
-               * shape of request that asks for anybody else's.
+               * seeded from has to be theirs. `ownCharacter` is the second —
+               * the same fragment `GET /me/characters` composes over the
+               * shared, account-owned row — so every id returned here is one
+               * the caller already holds and could read in full, and there is
+               * no shape of request that asks for anybody else's. The campaign
+               * gate is the combatant's own predicate above; the character
+               * carries none, because it is campaign-scoped nowhere.
                */
               const seatRows = yield* sql<{
                 readonly id: CombatantId;
@@ -224,7 +225,7 @@ export class PlayerTable extends Context.Service<
                   and exists (
                     select 1 from character
                     where character.id = combatant.character_id
-                      and ${ownRowReadable(sql, "character", rowCampaign(sql, "character"), actor)}
+                      and ${ownCharacter(sql, actor)}
                   )
                 order by combatant.id asc
               `;

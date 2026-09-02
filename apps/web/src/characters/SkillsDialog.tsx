@@ -1,4 +1,4 @@
-import type { Character } from "@taverns/api";
+import type { OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -46,14 +46,20 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * absent count already make.
  */
 export function SkillsDialog({
-  character,
+  owned,
   onClose,
   onSaved,
 }: {
-  readonly character: Character;
+  /**
+   * The character with its seats — the seats are the write's blast radius
+   * (`ownCharacterWrites` names one party per seat), and the character no
+   * longer names a campaign on its own.
+   */
+  readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
+  const character = owned.character;
   const [drafts, setDrafts] = useState<ReadonlyArray<SkillDraft>>(() =>
     skillDrafts(character.sheet.skills ?? []),
   );
@@ -82,7 +88,7 @@ export function SkillsDialog({
         saveOwnCharacter(client, character, {
           sheet: sheetWith(character, { skills: skillsFrom(drafts) }),
         }),
-      ownCharacterWrites(character),
+      ownCharacterWrites(owned),
     );
     if (Result.isSuccess(saved)) onSaved();
   };

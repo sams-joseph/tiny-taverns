@@ -370,16 +370,25 @@ export class EncounterRuns extends Context.Service<
                     // Seed the party. `data.js:15,17,20` — the PCs are in
                     // initiative alongside the monsters, and a fight without
                     // them is not a fight.
+                    // The party is the campaign's **seats**, joined to the
+                    // shared characters they hold. Display comes from the
+                    // seat's snapshot (the table's word for who sits here);
+                    // the numbers come from the one shared character, which
+                    // is what "walked in at half health" means when the half
+                    // health was taken at another table last night.
                     const party =
                       payload.includeParty === false
                         ? []
                         : yield* sql<PartyRow>`
-                            select character.id, character.name, character.player_name,
+                            select character.id, campaign_character.display_name as name,
+                                   character.player_name,
                                    character.descriptor, character.ac, character.hp_max,
                                    character.hp_current, character.conditions
-                            from character
-                            where ${rowReadable(sql, "character", campaignId, actor)}
-                            order by character.created_at asc
+                            from campaign_character
+                            join character on character.id = campaign_character.character_id
+                            where campaign_character.left_at is null
+                              and ${rowReadable(sql, "campaign_character", campaignId, actor)}
+                            order by campaign_character.joined_at asc, campaign_character.id asc
                           `;
 
                     // Seed the monsters, `count` instances each. This is where

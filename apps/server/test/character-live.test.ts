@@ -1,5 +1,7 @@
 import {
   Actor,
+  type CampaignCharacterId,
+  type Character,
   type CharacterId,
   CurrentActor,
   type EncounterRunId,
@@ -8,7 +10,6 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Duration, Effect, Fiber, Layer, ManagedRuntime, Ref, Stream } from "effect";
-import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -22,44 +23,73 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Party } from "../src/repo/Party.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
+import {
+  aCharacterAt,
+  admittedTo,
+  anAccount,
+  aPlayerAt,
+  asDm,
+  createCampaign,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * Characters as live state (`0014`).
+ * Characters as live state, under the continuity decision of 2026-09-01.
  *
  * **The claim this file exists to hold is that two rows cannot disagree about
- * how hurt somebody is.** A hit point belongs to the character, the combatant
- * holds the fight's copy, and one transaction writes both — so the happy path
- * is only half a proof, and the failure path is asserted here as well: a
- * write-through that cannot land takes the fight's own update down with it and
- * leaves *neither* row moved.
+ * how hurt somebody is.** A hit point belongs to the **shared, account-owned
+ * character**, the combatant holds the fight's copy, and one transaction
+ * writes both. The campaign's entry points moved onto the seat — the delta is
+ * `Party.damage` through a live `campaign_character`, the condition edit is
+ * `Party.update` — but the invariant they compose is the same one, and this
+ * file drives it from every side: the fight's own button, the seat's delta,
+ * the seat's condition write, and the seed.
+ *
+ * Two things are new since the character became top-level, and both get their
+ * own tests below:
+ *
+ * - **Containment is the seed.** There is no campaign predicate over
+ *   `character` any more — the write-through's authority is
+ *   `campaignWritableById` and its reach is bounded by which combatants exist,
+ *   because `combatant.character_id` is written only by the seed, from this
+ *   campaign's live seats. So the old "cross-campaign write-through rolls
+ *   back" state is not expressible: what is pinned instead is the seed's own
+ *   containment, seat by seat.
+ * - **A fight's write reaches every table.** One character seated at two
+ *   campaigns is one row of hit points, so damage taken in a fight at one
+ *   table is what the other table's roster reads — the §10 test, inverted on
+ *   the captain's instruction.
  *
  * The other half of the file is the doorbell, whose boundary is a decision
- * rather than a limit: a character written during a session appends
- * `character-updated` and rings; one written between games does neither.
+ * rather than a limit: a **seat-side** write during a session appends
+ * `character-updated` and rings; the owner's own PATCH (`updateOwn`) rings
+ * nothing, ever, even mid-session — the durable sheet is not live state.
  */
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
     Groups.layer,
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // The owner's half needs no `LiveEvents`: nothing it writes rings.
+    Characters.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
     CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
-    // `aPlayerAt` mints and redeems a real invitation now, so the player in
-    // this file is the one the product can actually produce.
+    // `aPlayerAt` and `admittedTo` mint and redeem real invitations, so every
+    // player and every second participation in this file is one the product
+    // can actually produce.
     Invites.layer,
     // Merged as well as provided, so a test can subscribe to the same doorbell
     // the repositories ring. `Layer` memoises by identity, so this is one
     // `PubSub` and not five.
     LiveEvents.layer,
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_character_live"))),
@@ -80,9 +110,9 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(
-    // Shared, so the player below can *read* the party — which is what makes
-    // "refuses the write on a character they can read" a claim about the write
-    // rather than about the campaign being closed.
+    // Shared, so the player below can read the table at all — which is what
+    // makes "refuses a player the delta on a seat they can see" a claim about
+    // the write rather than about the campaign being closed.
     createCampaign({
       name: "The Salt Road",
       partyName: "The Gilded Spoon",
@@ -102,13 +132,19 @@ const makeFixture = Effect.gen(function* () {
   const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: archer.id, count: 2 }));
 
-  /** Somewhere for a cross-campaign write-through to fail to reach. */
-  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence" }));
+  /** The second table the continuity tests carry a character to. */
+  const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
+
+  const player = yield* aPlayerAt(campaign.id, "Pim");
+  // The same person, admitted to the second table — one account, two
+  // participations, one character.
+  const playerElsewhere = yield* admittedTo(otherTable.id, player, "Pim, again");
 
   return {
     dm,
     asDm: yield* as(asDm(dm, campaign.id)),
-    player: yield* aPlayerAt(campaign.id, "Pim"),
+    player,
+    playerElsewhere,
     campaign,
     encounter,
     otherTable,
@@ -119,11 +155,11 @@ let fixture: Effect.Success<typeof makeFixture>;
 let campaigns: (typeof Campaigns)["Service"];
 let characters: (typeof Characters)["Service"];
 let combatants: (typeof Combatants)["Service"];
+let party: (typeof Party)["Service"];
 let runs: (typeof EncounterRuns)["Service"];
 let sessions: (typeof Sessions)["Service"];
 let events: (typeof SessionEvents)["Service"];
 let live: (typeof LiveEvents)["Service"];
-let sql: SqlClient.SqlClient;
 
 // Every service is resolved once, so an effect written below requires nothing
 // but `CurrentActor` — which is what lets `as` provide the actor and run it.
@@ -132,25 +168,28 @@ beforeAll(async () => {
   campaigns = await runtime.runPromise(Campaigns);
   characters = await runtime.runPromise(Characters);
   combatants = await runtime.runPromise(Combatants);
+  party = await runtime.runPromise(Party);
   runs = await runtime.runPromise(EncounterRuns);
   sessions = await runtime.runPromise(Sessions);
   events = await runtime.runPromise(SessionEvents);
   live = await runtime.runPromise(LiveEvents);
-  sql = await runtime.runPromise(SqlClient.SqlClient);
 }, 60_000);
 
 const as = <A, E>(effect: Effect.Effect<A, E, CurrentActor>): Promise<A> =>
   runtime.runPromise(withActor(fixture.dm)(effect).pipe(Effect.orDie));
 
-/** A character of this campaign, with a maximum and nothing said about now. */
+/**
+ * A character of the player's, seated at this campaign, with a maximum and
+ * nothing said about now — the shipped path (`createOwn` writes the shared row
+ * and its seat in one transaction), through the shared fixture helper.
+ */
 let counter = 0;
 const aCharacter = (hpMax: number, name?: string) => {
   counter += 1;
-  return as(
-    characters.create(fixture.campaign.id, {
+  return runtime.runPromise(
+    aCharacterAt(fixture.campaign.id, fixture.player, {
       name: name ?? `Brannoc ${String(counter)}`,
       hpMax,
-      visibility: "shared",
     }),
   );
 };
@@ -173,7 +212,24 @@ const combatantFor = (sessionId: SessionId, runId: EncounterRunId, characterId: 
     ),
   ).then((entry) => entry!);
 
-const characterById = (id: CharacterId) => as(characters.findById(fixture.campaign.id, id));
+/**
+ * The shared character, read the way a table reads it: off the roster. There
+ * is no campaign-scoped character read any more — the seat is the reach — so
+ * this is the product path, not a workaround.
+ */
+const characterVia = (campaignId: typeof fixture.campaign.id, id: CharacterId) =>
+  as(
+    Effect.map(party.list(campaignId), (seats) => seats.find((seat) => seat.character?.id === id)),
+  ).then((seat) => seat!.character!);
+
+const characterById = (id: CharacterId): Promise<Character> =>
+  characterVia(fixture.campaign.id, id);
+
+/** The seat-side delta — the out-of-fight entry point, and the creator's act. */
+const seatDamage = (
+  seatId: CampaignCharacterId,
+  payload: { readonly amount: number; readonly requestId?: string },
+) => as(party.damage(fixture.campaign.id, seatId, payload));
 
 const logOf = (sessionId: SessionId): Promise<ReadonlyArray<SessionEvent>> =>
   as(events.list(fixture.asDm, sessionId, { limit: 500 }));
@@ -187,7 +243,11 @@ const logOf = (sessionId: SessionId): Promise<ReadonlyArray<SessionEvent>> =>
  * fifth of a second and there is nothing here whose correctness depends on
  * their length.
  */
-const doorbellsWhile = <A, E>(sessionId: SessionId, action: Effect.Effect<A, E, CurrentActor>) =>
+const doorbellsWhile = <A, E>(
+  sessionId: SessionId,
+  action: Effect.Effect<A, E, CurrentActor>,
+  actor?: Actor,
+) =>
   runtime.runPromise(
     Effect.gen(function* () {
       const rings = yield* Ref.make(0);
@@ -195,7 +255,7 @@ const doorbellsWhile = <A, E>(sessionId: SessionId, action: Effect.Effect<A, E, 
         Stream.runForEach(live.subscribe(sessionId), () => Ref.update(rings, (n) => n + 1)),
       );
       yield* Effect.sleep(Duration.millis(50));
-      const result = yield* withActor(fixture.dm)(action);
+      const result = yield* withActor(actor ?? fixture.dm)(action);
       yield* Effect.sleep(Duration.millis(150));
       yield* Fiber.interrupt(fiber);
       return { result, rings: yield* Ref.get(rings) };
@@ -205,7 +265,7 @@ const doorbellsWhile = <A, E>(sessionId: SessionId, action: Effect.Effect<A, E, 
 describe("a hit point belongs to the character", () => {
   it("moves both rows when damage lands in a fight", async () => {
     const night = await aNight();
-    const character = await aCharacter(30);
+    const { character } = await aCharacter(30);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
@@ -219,7 +279,7 @@ describe("a hit point belongs to the character", () => {
     );
     expect(hit.hpCurrent).toBe(18);
 
-    // The same number, in the other table, written by the same transaction.
+    // The same number, on the shared row, written by the same transaction.
     expect((await characterById(character.id)).hpCurrent).toBe(18);
 
     // And healing walks both back up together.
@@ -232,7 +292,7 @@ describe("a hit point belongs to the character", () => {
 
   it("clamps once, in the fight, so neither row is a point out", async () => {
     const night = await aNight();
-    const character = await aCharacter(24);
+    const { character } = await aCharacter(24);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
@@ -250,10 +310,11 @@ describe("a hit point belongs to the character", () => {
   }, 60_000);
 
   it("starts a fight from where the party is, not from where it began", async () => {
-    const character = await aCharacter(40);
-    // Hurt out of combat first — the trap in the corridor.
-    await as(characters.damage(fixture.campaign.id, character.id, { amount: 15 }));
-    await as(characters.update(fixture.campaign.id, character.id, { conditions: ["Poisoned"] }));
+    const { character, seatId } = await aCharacter(40);
+    // Hurt out of combat first — the trap in the corridor. Both are seat-side
+    // writes now: the delta and the condition edit go through the seat.
+    await seatDamage(seatId, { amount: 15 });
+    await as(party.update(fixture.campaign.id, seatId, { conditions: ["Poisoned"] }));
 
     const night = await aNight();
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
@@ -264,78 +325,122 @@ describe("a hit point belongs to the character", () => {
     expect(seeded.hpCurrent).toBe(25);
     expect(seeded.hpMax).toBe(40);
     expect(seeded.conditions).toEqual(["Poisoned"]);
+    // The display name is the seat's snapshot — the table's word for them.
+    expect(seeded.displayName).toBe(character.name);
   }, 60_000);
 
-  it("rolls the fight's own write back when the write-through cannot land", async () => {
-    // The failure path, and the reason this file exists. A combatant whose
-    // `character_id` names a character in *another* campaign cannot be produced
-    // through the product — the seed reads characters through `rowReadable` in
-    // the campaign the run belongs to — so it is written here with raw SQL, in
-    // the shape `aPlayerAt` uses for the same reason: a test reaching past the
-    // product to build a state the product refuses, and looking like one.
-    const night = await aNight();
-    const character = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
-    const seeded = await combatantFor(night.id, run.id, character.id);
-
-    const stranger = await as(
-      characters.create(fixture.otherTable.id, { name: "Somebody else", hpMax: 30 }),
+  it("seeds from this campaign's live seats and from nothing else", async () => {
+    // Containment now *is* the seed: `combatant.character_id` is written only
+    // here, from live seats of this campaign, so what bounds the write-through
+    // is which combatants exist. Three characters, one of which belongs in the
+    // fight: one seated here, one seated only at the other table, one whose
+    // seat was retired before the night started.
+    const { character: seatedHere } = await aCharacter(20, "Seated Here");
+    const elsewhere = await runtime.runPromise(
+      aCharacterAt(fixture.otherTable.id, fixture.playerElsewhere, {
+        name: "Elsewhere Only",
+        hpMax: 20,
+      }),
     );
+    const retired = await aCharacter(20, "Left Already");
     await runtime.runPromise(
-      sql`update combatant set character_id = ${stranger.id} where combatant.id = ${seeded.id}`.pipe(
-        Effect.asVoid,
+      withActor(fixture.player)(party.leave(fixture.campaign.id, retired.seatId)).pipe(
         Effect.orDie,
       ),
     );
 
-    const before = await combatantFor(night.id, run.id, stranger.id);
-    expect(before.hpCurrent).toBe(30);
+    const night = await aNight();
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const list = await as(combatants.list(fixture.asDm, night.id, run.id));
+    const characterIds = list
+      .map((entry) => entry.characterId)
+      .filter((id): id is CharacterId => id !== null);
 
-    // A defect, not a typed failure: there is no path through the product that
-    // produces this, and the honest answer to "these two rows would now
-    // disagree" is a 500 rather than a half-applied hit.
-    const exit = await runtime.runPromise(
-      withActor(fixture.dm)(
-        combatants.damage(fixture.asDm, night.id, run.id, seeded.id, { amount: 12 }),
-      ).pipe(Effect.exit),
-    );
-    expect(exit._tag).toBe("Failure");
-
-    // **Neither row moved.** The combatant's own update was in the same
-    // transaction as the write-through that could not land, so it went back
-    // with it.
-    expect((await combatantFor(night.id, run.id, stranger.id)).hpCurrent).toBe(30);
-    expect(
-      (await as(characters.findById(fixture.otherTable.id, stranger.id))).hpCurrent,
-    ).toBeNull();
-
-    // And the log did not record a hit that did not happen.
-    const log = await logOf(night.id);
-    expect(log.filter((event) => event.kind === "combatant-damaged")).toHaveLength(0);
+    expect(characterIds).toContain(seatedHere.id);
+    expect(characterIds).not.toContain(elsewhere.character.id);
+    expect(characterIds).not.toContain(retired.character.id);
   }, 60_000);
 
-  it("sends a character's own delta through the fight it is in", async () => {
+  it("shows a fight's damage at the other table, because there is one character", async () => {
+    // The continuity decision, in a fight: Pim's character is seated at both
+    // tables, the Salt Road hurts them in initiative, and Salt and Sixpence
+    // reads the wound off its own roster. The old architecture's §10 asserted
+    // the opposite; that assertion is now the defect.
+    const { character } = await aCharacter(36, "Brannoc Duskharrow");
+    await runtime.runPromise(
+      withActor(fixture.playerElsewhere)(
+        party.join(fixture.otherTable.id, { characterId: character.id }),
+      ).pipe(Effect.orDie),
+    );
+
     const night = await aNight();
-    const character = await aCharacter(30);
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const seeded = await combatantFor(night.id, run.id, character.id);
+    await as(combatants.damage(fixture.asDm, night.id, run.id, seeded.id, { amount: 13 }));
+
+    const elsewhere = await characterVia(fixture.otherTable.id, character.id);
+    expect(elsewhere.hpCurrent).toBe(23);
+    expect(elsewhere.conditions).toEqual([]);
+  }, 60_000);
+
+  it("keeps the fight standing, snapshot and all, when the character is deleted", async () => {
+    // The snapshot half of the decision, mid-fight: the owner throws the
+    // character away, the seat retires in the same transaction, and the
+    // combatant keeps every field it copied at seed time with only the
+    // pointer nulled. Losing the character must not rewrite the night.
+    const { character } = await aCharacter(30, "Doomed Mid-Fight");
+    const night = await aNight();
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const seeded = await combatantFor(night.id, run.id, character.id);
+    await as(combatants.damage(fixture.asDm, night.id, run.id, seeded.id, { amount: 8 }));
+
+    await runtime.runPromise(
+      withActor(fixture.player)(characters.removeOwn(character.id)).pipe(Effect.orDie),
+    );
+
+    const list = await as(combatants.list(fixture.asDm, night.id, run.id));
+    const still = list.find((entry) => entry.id === seeded.id);
+    expect(still).toBeDefined();
+    expect(still!.displayName).toBe("Doomed Mid-Fight");
+    expect(still!.hpCurrent).toBe(22);
+    expect(still!.characterId).toBeNull();
+
+    // And the fight goes on: with no character behind the row, the damage
+    // moves the combatant alone and there is nothing to write through to.
+    const hit = await as(
+      combatants.damage(fixture.asDm, night.id, run.id, seeded.id, { amount: 5 }),
+    );
+    expect(hit.hpCurrent).toBe(17);
+
+    // The character really is gone from its owner's shelf.
+    const mine = await runtime.runPromise(
+      withActor(fixture.player)(characters.mine).pipe(Effect.orDie),
+    );
+    expect(mine.some((owned) => owned.character.id === character.id)).toBe(false);
+  }, 60_000);
+
+  it("sends a seat's own delta through the fight it is in", async () => {
+    const night = await aNight();
+    const { character, seatId } = await aCharacter(30);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     // The DM reaches for the party list while a fight is still on the table.
     // The delta lands on the fight's copy and comes back through it, so the two
     // entry points cannot produce different answers to one hit.
-    const hurt = await as(characters.damage(fixture.campaign.id, character.id, { amount: 7 }));
+    const hurt = await seatDamage(seatId, { amount: 7 });
     expect(hurt.hpCurrent).toBe(23);
     expect((await combatantFor(night.id, run.id, character.id)).hpCurrent).toBe(23);
     expect(seeded.hpCurrent).toBe(30);
   }, 60_000);
 
-  it("carries a condition set on the character into the fight, and back out", async () => {
+  it("carries a condition set on the seat into the fight, and back out", async () => {
     const night = await aNight();
-    const character = await aCharacter(30);
+    const { character, seatId } = await aCharacter(30);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
-    await as(characters.update(fixture.campaign.id, character.id, { conditions: ["Blessed"] }));
+    await as(party.update(fixture.campaign.id, seatId, { conditions: ["Blessed"] }));
     expect((await combatantFor(night.id, run.id, character.id)).conditions).toEqual(["Blessed"]);
 
     await as(
@@ -346,10 +451,10 @@ describe("a hit point belongs to the character", () => {
 
   it("writes back only what a combatant patch named", async () => {
     const night = await aNight();
-    const character = await aCharacter(30);
+    const { character, seatId } = await aCharacter(30);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
-    await as(characters.damage(fixture.campaign.id, character.id, { amount: 4 }));
+    await seatDamage(seatId, { amount: 4 });
 
     // Renaming a row in the initiative list must not write the fight's hit
     // points back over a character somebody healed a moment ago — so a patch
@@ -363,79 +468,72 @@ describe("a hit point belongs to the character", () => {
 
 describe("out of a fight", () => {
   it("counts down from full when nobody has said where they are", async () => {
-    const character = await aCharacter(28);
+    const { character, seatId } = await aCharacter(28);
     expect(character.hpCurrent).toBeNull();
 
-    const hurt = await as(characters.damage(fixture.campaign.id, character.id, { amount: 10 }));
+    const hurt = await seatDamage(seatId, { amount: 10 });
     expect(hurt.hpCurrent).toBe(18);
   }, 60_000);
 
   it("clamps at nothing and at the maximum", async () => {
-    const character = await aCharacter(28);
-    expect(
-      (await as(characters.damage(fixture.campaign.id, character.id, { amount: 99 }))).hpCurrent,
-    ).toBe(0);
-    expect(
-      (await as(characters.damage(fixture.campaign.id, character.id, { amount: -99 }))).hpCurrent,
-    ).toBe(28);
+    const { seatId } = await aCharacter(28);
+    expect((await seatDamage(seatId, { amount: 99 })).hpCurrent).toBe(0);
+    expect((await seatDamage(seatId, { amount: -99 })).hpCurrent).toBe(28);
   }, 60_000);
 
   it("applies a repeated request once", async () => {
     const night = await aNight();
     await makeCurrent(night.id);
-    const character = await aCharacter(28);
+    const { seatId } = await aCharacter(28);
 
-    const first = await as(
-      characters.damage(fixture.campaign.id, character.id, { amount: 6, requestId: "tap-1" }),
-    );
-    const again = await as(
-      characters.damage(fixture.campaign.id, character.id, { amount: 6, requestId: "tap-1" }),
-    );
+    const first = await seatDamage(seatId, { amount: 6, requestId: "tap-1" });
+    const again = await seatDamage(seatId, { amount: 6, requestId: "tap-1" });
     expect(first.hpCurrent).toBe(22);
     expect(again.hpCurrent).toBe(22);
 
     // A different id is a different hit, not a repeat of the same one.
-    const second = await as(
-      characters.damage(fixture.campaign.id, character.id, { amount: 6, requestId: "tap-2" }),
-    );
+    const second = await seatDamage(seatId, { amount: 6, requestId: "tap-2" });
     expect(second.hpCurrent).toBe(16);
     await makeCurrent(null);
   }, 60_000);
 
-  it("refuses a player the write, on a character they can read", async () => {
-    const character = await aCharacter(28);
+  it("refuses a player the delta, on their own seat", async () => {
+    // The seat is theirs to occupy and to leave — never to damage. The live
+    // trio stays the table's, and the refusal is the ordinary NotFound naming
+    // the seat, while the same seat is plainly in their own roster read.
+    const { seatId } = await aCharacter(28);
     const refused = await runtime.runPromise(
-      withActor(fixture.player)(
-        characters.damage(fixture.campaign.id, character.id, { amount: 5 }),
-      ).pipe(Effect.flip),
+      withActor(fixture.player)(party.damage(fixture.campaign.id, seatId, { amount: 5 })).pipe(
+        Effect.flip,
+      ),
     );
     expect(refused).toBeInstanceOf(NotFound);
-    // Readable — it is `shared` — and still not theirs to change.
-    expect(
-      (
-        await runtime.runPromise(
-          withActor(fixture.player)(characters.findById(fixture.campaign.id, character.id)),
-        )
-      ).id,
-    ).toBe(character.id);
+    expect((refused as NotFound).resource).toBe("campaign_character");
+
+    const seats = await runtime.runPromise(
+      withActor(fixture.player)(party.list(fixture.campaign.id)).pipe(Effect.orDie),
+    );
+    expect(seats.map((seat) => seat.seat.id)).toContain(seatId);
   }, 60_000);
 });
 
 describe("the doorbell, and where it stops", () => {
-  it("rings and records when a character changes during a session", async () => {
+  it("rings and records when a seat's delta lands during a session", async () => {
     const night = await aNight();
     await makeCurrent(night.id);
-    const character = await aCharacter(30);
+    const { character, seatId } = await aCharacter(30);
 
     const { rings } = await doorbellsWhile(
       night.id,
-      characters.damage(fixture.campaign.id, character.id, { amount: 9 }),
+      party.damage(fixture.campaign.id, seatId, { amount: 9 }),
     );
     expect(rings).toBe(1);
 
     const log = await logOf(night.id);
     const recorded = log.filter((event) => event.kind === "character-updated");
-    expect(recorded).toHaveLength(2); // the create, then the damage
+    // Exactly the damage: creating a character rings nothing and records
+    // nothing — `createOwn` is the owner's act, not the table's.
+    expect(recorded).toHaveLength(1);
     const last = recorded.at(-1)!;
     expect(last.combatantId).toBeNull();
     expect(last.encounterRunId).toBeNull();
@@ -446,12 +544,12 @@ describe("the doorbell, and where it stops", () => {
   it("names the fight when the write went through one", async () => {
     const night = await aNight();
     await makeCurrent(night.id);
-    const character = await aCharacter(30);
+    const { character, seatId } = await aCharacter(30);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
-    // From the *character* side, into a fight that is on the table.
-    await as(characters.damage(fixture.campaign.id, character.id, { amount: 11 }));
+    // From the *seat* side, into a fight that is on the table.
+    await seatDamage(seatId, { amount: 11 });
 
     const log = await logOf(night.id);
     const last = log.filter((event) => event.kind === "character-updated").at(-1)!;
@@ -473,7 +571,7 @@ describe("the doorbell, and where it stops", () => {
     // duplicate here would show as a duplicate row in the DM's own log panel.
     const night = await aNight();
     await makeCurrent(night.id);
-    const character = await aCharacter(30);
+    const { character } = await aCharacter(30);
     const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
@@ -485,37 +583,44 @@ describe("the doorbell, and where it stops", () => {
 
     const log = await logOf(night.id);
     expect(log.filter((event) => event.kind === "combatant-damaged")).toHaveLength(1);
-    expect(log.filter((event) => event.kind === "character-updated")).toHaveLength(1); // the create
+    expect(log.filter((event) => event.kind === "character-updated")).toHaveLength(0);
     expect((await characterById(character.id)).hpCurrent).toBe(19);
     await makeCurrent(null);
   }, 60_000);
 
   it("rings nothing when the campaign is on no session", async () => {
-    // The settled decision, asserted rather than assumed: a level-up typed on a
+    // The settled decision, asserted rather than assumed: a delta typed on a
     // Tuesday updates nobody live. `campaign.current_session_id` is null here,
     // so there is no session to key a doorbell on and none is invented.
     const night = await aNight();
-    const character = await aCharacter(30);
+    const { seatId } = await aCharacter(30);
 
     const { result, rings } = await doorbellsWhile(
       night.id,
-      characters.damage(fixture.campaign.id, character.id, { amount: 9 }),
+      party.damage(fixture.campaign.id, seatId, { amount: 9 }),
     );
     expect(rings).toBe(0);
     expect(result.hpCurrent).toBe(21);
     expect(await logOf(night.id)).toHaveLength(0);
   }, 60_000);
 
-  it("rings nothing for a level-up between games either", async () => {
+  it("rings nothing for the owner's own PATCH, even mid-session", async () => {
+    // Stronger than the old "between games" pin: the owner's write is never
+    // live. The durable sheet moved out of the campaign entirely, so a
+    // level-up rings no doorbell and appends nothing whatever night is open —
+    // an open DM page stays stale until it refetches, by decision.
     const night = await aNight();
-    const character = await aCharacter(30);
+    await makeCurrent(night.id);
+    const { character } = await aCharacter(30);
 
     const { rings } = await doorbellsWhile(
       night.id,
-      characters.update(fixture.campaign.id, character.id, { level: 4 }),
+      characters.updateOwn(character.id, { level: 4 }),
+      fixture.player,
     );
     expect(rings).toBe(0);
     expect((await characterById(character.id)).level).toBe(4);
     expect(await logOf(night.id)).toHaveLength(0);
+    await makeCurrent(null);
   }, 60_000);
 });

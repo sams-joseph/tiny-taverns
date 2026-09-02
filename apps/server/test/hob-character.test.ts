@@ -26,6 +26,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Options } from "../src/repo/Options.js";
+import { Party } from "../src/repo/Party.js";
 import { Proposals } from "../src/repo/Proposals.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
@@ -66,7 +67,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
-  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Characters.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
   EncounterCreatures.layer,
@@ -75,11 +76,12 @@ const services = Layer.mergeAll(
   Invites.layer,
   Notes.layer,
   Options.layer,
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Proposals.layer.pipe(
     Layer.provide([
       Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
       Campaigns.layer,
-      Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+      Characters.layer,
       EncounterCreatures.layer,
       Encounters.layer,
       Notes.layer,
@@ -255,9 +257,14 @@ const characterCount = () =>
     Effect.flatMap(
       SqlClient.SqlClient,
       (sql) =>
+        // Both halves of what an accept writes now: the shared character and
+        // its seat at this table. A proposal that moved either would fail this.
         sql<{
           readonly count: string;
-        }>`select count(*)::text as count from character where campaign_id = ${fixture.campaign.id}`,
+        }>`select ((select count(*) from character)
+                 + (select count(*) from campaign_character
+                    where campaign_id = ${fixture.campaign.id}
+                      and left_at is null))::text as count`,
     ).pipe(
       Effect.map((rows) => Number(rows[0]?.count ?? "0")),
       Effect.orDie,
@@ -447,8 +454,22 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.accountId).toBe(fixture.player.accountId);
     expect(character.origin).toBe("assistant");
     expect(character.assistantTurnId).toBe(turnId);
-    // Every default the payload cannot say.
-    expect(character.visibility).toBe("dm");
+    // Every default the payload cannot say. Disclosure moved to the seat with
+    // the split: the shared character carries no `visibility`, and the
+    // campaign's word on who may see it is `campaign_character.visibility` —
+    // the accept seats the draft at the table it was asked at, and the seat
+    // falls to `dm`, so a drafted character fails closed exactly as a typed
+    // one does.
+    const seat = (
+      await runtime.runPromise(
+        Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
+          withActor(fixture.dm),
+          Effect.orDie,
+        ),
+      )
+    ).find((row) => row.character?.id === character.id);
+    expect(seat?.seat.visibility).toBe("dm");
+    expect(seat?.seat.origin).toBe("assistant");
     expect(character.hpCurrent).toBeNull();
     // **The three seeded numbers**, copied off the proposal rather than worked
     // out here — a druid's d8, constitution at rank two (`CON 14`, `+2`), the
@@ -496,25 +517,28 @@ describe("the accept makes a character, and it is the player's own", () => {
     const mine = await runtime.runPromise(
       Effect.flatMap(Characters, (repo) => repo.mine).pipe(withActor(fixture.player), Effect.orDie),
     );
-    expect(mine.map((character) => character.id)).toContain(id);
+    expect(mine.map((owned) => owned.character.id)).toContain(id);
 
+    // The campaign-side read is the party now: the creator reads every seat,
+    // so the drafted character is on their roster the moment it is kept.
     const dmSees = await runtime.runPromise(
-      Effect.flatMap(Characters, (repo) => repo.list(fixture.campaign.id)).pipe(
+      Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
         withActor(fixture.dm),
         Effect.orDie,
       ),
     );
-    expect(dmSees.map((character) => character.id)).toContain(id);
+    expect(dmSees.map((row) => row.character?.id)).toContain(id);
 
-    // `dm` by column default, and the other player at the same shared table is
-    // not its owner — so it is not theirs to see.
+    // The seat is `dm` by column default, and the other player at the same
+    // shared table does not own it — so neither the seat nor the character
+    // behind it is theirs to see.
     const otherSees = await runtime.runPromise(
-      Effect.flatMap(Characters, (repo) => repo.list(fixture.campaign.id)).pipe(
+      Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
         withActor(fixture.otherPlayer),
         Effect.orDie,
       ),
     );
-    expect(otherSees.map((character) => character.id)).not.toContain(id);
+    expect(otherSees.map((row) => row.character?.id)).not.toContain(id);
   }, 60_000);
 
   it("is one row however many times the button is pressed", async () => {

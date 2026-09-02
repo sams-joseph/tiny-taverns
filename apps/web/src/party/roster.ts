@@ -1,4 +1,4 @@
-import type { GroupInvite, CampaignMember, Character } from "@taverns/api";
+import type { GroupInvite, CampaignMember, Character, PartySeat } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 import { DateTime } from "effect";
 import { dayOf } from "../chronicle/format";
@@ -7,22 +7,27 @@ import { dayOf } from "../chronicle/format";
  * The seat vocabulary, derived — and the whole of what this screen knows.
  *
  * `ui_kits/dm-screen/Party.jsx` draws a chair per person with four statuses, an
- * *"Add seat"* button and an *"N of M seats"* subtitle. **There is no seat**
- * (captain's decision, 2026-08-12): a `campaign_member` row cannot exist before
- * an account, so an *open* seat is not representable, and inventing a row to
- * hold one would create a fourth thing that can disagree with membership,
- * invitations and characters at once. `Membership.ts` and `AGENTS.md` both write
- * that down; this module is the client side of it.
+ * *"Add seat"* button and an *"N of M seats"* subtitle. The seat **exists**
+ * now — `campaign_character`, since the continuity decision of 2026-09-01 —
+ * but the half of the 2026-08-12 ruling that mattered still holds: a seat's
+ * deferred key requires a live member, so an *open* seat with nobody in it is
+ * still not representable, and *"Add seat"* and the *"4 of 6"* denominator
+ * still come out of the drawing. What changed is only the middle column of
+ * the table below: `playing` is read off seats rather than off an assignment
+ * column that no longer exists.
  *
  * So three of the drawn statuses are computed here from rows that exist, and the
- * fourth comes out of the drawing:
+ * fourth comes out of the drawing. Under the continuity architecture the middle
+ * column is the **seat** — `campaign_character`, a campaign's join to a shared
+ * account-owned character — which is, pleasingly, the word the drawing wanted
+ * all along, now naming a row that really exists:
  *
  * | drawn          | here                                                          |
  * | -------------- | ------------------------------------------------------------- |
- * | `playing`      | a `player` member with a `Character` whose `accountId` is theirs |
+ * | `playing`      | a `player` member with a live seat at this table              |
  * | `no-character` | the same member with none                                     |
- * | `invited`      | a `GroupInvite` whose `status` is `live`                    |
- * | `open`         | nothing                                                       |
+ * | `invited`      | a `GroupInvite` whose `status` is `live`                      |
+ * | `open`         | nothing — a seat cannot exist before a member                 |
  *
  * **Each line is a person**, which is what the single-use invitation contract
  * buys: one invitation grants one membership and names who took it, so a live
@@ -52,17 +57,18 @@ export type RosterRow =
    */
   | { readonly kind: "dm"; readonly member: CampaignMember }
   /**
-   * A player with at least one character assigned to them.
+   * A player with at least one live seat at this table.
    *
-   * Plural because nothing in the schema stops two: `character.account_id` is a
-   * column on the character, so one person running a pair is expressible, and
-   * showing only the first would be this screen quietly disagreeing with the
-   * party list one screen over.
+   * Plural because nothing in the schema stops two seats: one person running a
+   * pair is expressible, and showing only the first would be this screen
+   * quietly disagreeing with the party list one screen over. The seats carry
+   * their characters; a seat whose character has been deleted still counts —
+   * the person is seated, and the display snapshot says as what.
    */
   | {
       readonly kind: "playing";
       readonly member: CampaignMember;
-      readonly characters: ReadonlyArray<Character>;
+      readonly seats: ReadonlyArray<PartySeat>;
     }
   | { readonly kind: "no-character"; readonly member: CampaignMember }
   | { readonly kind: "invited"; readonly invite: GroupInvite };
@@ -109,17 +115,17 @@ export const initialsOf = (name: string): string => {
  */
 export const rosterOf = (
   members: ReadonlyArray<CampaignMember>,
-  characters: ReadonlyArray<Character>,
+  party: ReadonlyArray<PartySeat>,
   invites: ReadonlyArray<GroupInvite>,
 ): ReadonlyArray<RosterRow> => {
   const dms = members.filter((member) => member.relation === "creator");
   const players = members.filter((member) => member.relation === "player");
 
   const playerRows = players.map((member): RosterRow => {
-    const theirs = characters.filter((character) => character.accountId === member.accountId);
+    const theirs = party.filter((row) => row.seat.accountId === member.accountId);
     return theirs.length === 0
       ? { kind: "no-character", member }
-      : { kind: "playing", member, characters: theirs };
+      : { kind: "playing", member, seats: theirs };
   });
 
   return [
@@ -200,7 +206,7 @@ const medianLevel = (levels: ReadonlyArray<number>): number | undefined => {
 
 export const needsOf = (
   rows: ReadonlyArray<RosterRow>,
-  characters: ReadonlyArray<Character>,
+  party: ReadonlyArray<PartySeat>,
   now: DateTime.Utc,
 ): ReadonlyArray<Nudge> => {
   const nudges: Array<Nudge> = [];
@@ -232,12 +238,14 @@ export const needsOf = (
     });
   }
 
-  // Levelling is measured over the whole party rather than over the assigned
-  // half: a character nobody owns yet is still one the DM is running the
-  // encounter maths against.
-  const levelled = characters.filter(
-    (character): character is Character & { readonly level: number } => character.level !== null,
-  );
+  // Levelling is measured over every seated character — the shared row's
+  // level, which is the same number every other table seating them reads.
+  const levelled = party
+    .map((row) => row.character)
+    .filter(
+      (character): character is Character & { readonly level: number } =>
+        character !== null && character.level !== null,
+    );
   const median = medianLevel(levelled.map((character) => character.level));
   if (median !== undefined) {
     for (const character of levelled) {

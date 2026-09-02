@@ -1,41 +1,42 @@
-import {
-  type AccountId,
-  Actor,
-  type Campaign,
-  type Character,
-  type CharacterSheet,
-  CurrentActor,
-} from "@taverns/api";
+import { type Actor, type CharacterSheet, CurrentActor, type OwnedCharacter } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
-import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
-import { anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import { Party } from "../src/repo/Party.js";
+import {
+  aCharacterAt,
+  accountWide,
+  admittedTo,
+  anAccount,
+  aPlayerAt,
+  createCampaign,
+  scopedTo,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * `GET /me/characters` — the one read on `character` that names no campaign.
+ * `GET /me/characters` — everything an account owns, with everywhere each
+ * character sits.
  *
- * The endpoint is a **narrowing**, not a reach: `ownRowReadable` is
- * `ownedRowReadable` conjoined with ownership, so the interesting question is
- * not "what does it open" but "does anything the seam already refuses survive
- * the loss of a campaign in the path". Four things could have, and each is a
- * section below — a campaign never joined, a campaign left, a credential minted
- * for another table, and a campaign the DM has not shared.
+ * Under the continuity decision of 2026-09-01 this read changed meaning, and
+ * the file pins the change rather than the old shape. It used to be a
+ * *narrowing* of campaign reads — your rows, minus everything the campaign
+ * seam refused — so a revoked membership, an unshared campaign and a
+ * mis-scoped credential each took characters out of the answer. **All three
+ * of those are deliberately inverted now.** A character is account-owned and
+ * campaign-scoped nowhere: `ownCharacter` is the whole predicate, so the list
+ * is ownership and nothing else, and what the campaign seam still governs is
+ * the *seats* — which retire when a membership goes, and which are the only
+ * thing a table's master toggle has any purchase on.
  *
- * The fifth section is the other half of the narrowing: a DM reading their own
- * `mine` gets the characters *assigned to them* and not the tableful they can
- * read through `characters.list`. That is the direction a predicate written as a
- * disjunction rather than a conjunction would have got wrong.
- *
- * The last section is the document. The sheet grew about thirty optional keys
- * and no columns, so the thing worth pinning is that a full sheet survives a
- * round trip byte for byte and that a row written before any of it still reads.
+ * The one narrowing that survives is the one that was always about ownership:
+ * somebody else's character at a table you share is still not yours.
  */
 
 const runtime = ManagedRuntime.make(
@@ -43,7 +44,8 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Groups.layer,
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Characters.layer,
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_my_characters"))),
 );
@@ -54,44 +56,25 @@ const withActor =
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
 
-/**
- * Puts an existing account at a table, through the shipped path.
- *
- * `support/actors.ts`'s `aPlayerAt` mints a fresh account each time, which is
- * right for every other file and wrong for this one: the whole subject here is
- * **one** account at more than one table, which is the state the role switch
- * depends on and the state a cross-campaign read is about. So the invitation is
- * minted and redeemed the same way, with the account supplied.
- */
-const admit = (
-  dm: Actor,
-  campaign: Campaign,
-  account: Actor,
-): Effect.Effect<void, never, Invites> =>
-  Effect.gen(function* () {
-    const invites = yield* Invites;
-    const issued = yield* withActor(dm)(
-      invites.create(campaign.groupId, { label: "a player", campaignId: campaign.id }),
-    );
-    yield* withActor(account)(invites.redeem(issued.token));
-  }).pipe(Effect.orDie);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A> = (effect) =>
+  runtime.runPromise(effect as never);
 
 /**
- * Two DMs, three shared tables and one the DM never shared.
- *
- * Ilse plays at two of them and has a character at each; she was never invited
- * to the third, and the fourth is hers but unshared. Kofi is the second player
- * at Ilse's first table, so "not somebody else's" is measured against a row that
- * really exists and really belongs to a real member.
+ * Two hosts, three tables, and Ilse at all three — one account, several
+ * participations, which is the state this endpoint exists to answer. Kofi is
+ * the second player at the Salt Road, so "not somebody else's" is measured
+ * against a row that really exists and belongs to a real member. The guest is
+ * written in and then revoked *in the fixture*, so their state — an account
+ * admitted nowhere that still owns a character — is a stable fact rather than
+ * a mid-suite mutation.
  */
 const makeFixture = Effect.gen(function* () {
-  const characters = yield* Characters;
+  const invites = yield* Invites;
 
   const jo = yield* anAccount("Jo");
   const fen = yield* anAccount("Fen");
   const ilse = yield* anAccount("Ilse");
-  const kofi = yield* anAccount("Kofi");
-
   const asJo = withActor(jo);
   const asFen = withActor(fen);
 
@@ -99,242 +82,200 @@ const makeFixture = Effect.gen(function* () {
   const sixpence = yield* asFen(
     createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
-  // Jo runs this one too and Ilse was never invited to it.
-  const ferry = yield* asJo(createCampaign({ name: "The Ferry", visibility: "shared" }));
-  // Ilse *is* a member here, and Jo has not shared it. The master toggle is the
-  // whole of this campaign's job.
-  const marsh = yield* asJo(createCampaign({ name: "The Marsh" }));
+  // Shared for now, so Ilse can be seated; one test below unshares it.
+  const marsh = yield* asJo(createCampaign({ name: "The Marsh", visibility: "shared" }));
 
-  yield* admit(jo, saltRoad, ilse);
-  yield* admit(jo, saltRoad, kofi);
-  yield* admit(fen, sixpence, ilse);
-  yield* admit(jo, marsh, ilse);
+  yield* admittedTo(saltRoad.id, ilse, "Ilse");
+  yield* admittedTo(sixpence.id, ilse, "Ilse again");
+  yield* admittedTo(marsh.id, ilse, "Ilse in the marsh");
+  const kofi = yield* aPlayerAt(saltRoad.id, "Kofi");
 
-  // Every character starts `dm`, which is `CharacterDialog`'s fail-closed
-  // default and therefore the state a player's own screen has to work in.
-  const brannoc = yield* asJo(characters.create(saltRoad.id, { name: "Brannoc" }));
-  const wren = yield* asJo(characters.create(saltRoad.id, { name: "Wren" }));
-  const pell = yield* asJo(characters.create(saltRoad.id, { name: "Sister Pell" }));
-  const sorrel = yield* asFen(characters.create(sixpence.id, { name: "Sorrel Ash" }));
-  const kes = yield* asJo(characters.create(ferry.id, { name: "Kes" }));
-  const mott = yield* asJo(characters.create(marsh.id, { name: "Mott" }));
-
-  yield* asJo(characters.assign(saltRoad.id, brannoc.id, { accountId: ilse.accountId }));
-  yield* asJo(characters.assign(saltRoad.id, wren.id, { accountId: kofi.accountId }));
-  // The DM plays one of their own, which is what makes the DM's `mine` a
+  const brannoc = yield* aCharacterAt(saltRoad.id, ilse, { name: "Brannoc" });
+  const sorrel = yield* aCharacterAt(sixpence.id, ilse, { name: "Sorrel Ash" });
+  const mott = yield* aCharacterAt(marsh.id, ilse, { name: "Mott" });
+  const wren = yield* aCharacterAt(saltRoad.id, kofi, { name: "Wren" });
+  // The host plays one of their own, which is what makes a creator's `mine` a
   // narrowing rather than an empty list.
-  yield* asJo(characters.assign(saltRoad.id, pell.id, { accountId: jo.accountId }));
-  yield* asFen(characters.assign(sixpence.id, sorrel.id, { accountId: ilse.accountId }));
-  yield* asJo(characters.assign(marsh.id, mott.id, { accountId: ilse.accountId }));
-  // `kes` is deliberately left unassigned.
+  const pell = yield* aCharacterAt(saltRoad.id, jo, { name: "Sister Pell" });
+
+  // The guest: at the table long enough to write a character down, then
+  // removed — through the shipped path, by withdrawing the invitation that
+  // admitted them, which retires their seats in the same transaction.
+  const guest = yield* aPlayerAt(saltRoad.id, "Guest");
+  const guestsOwn = yield* aCharacterAt(saltRoad.id, guest, { name: "Guest's Own" });
+  const issued = yield* asJo(invites.list(saltRoad.groupId));
+  const guestInvite = issued.find((invite) => invite.label === "Guest");
+  yield* asJo(invites.revoke(saltRoad.groupId, guestInvite!.id));
 
   return {
     jo,
     fen,
     ilse,
     kofi,
+    guest,
     saltRoad,
     sixpence,
-    ferry,
     marsh,
     brannoc,
+    sorrel,
+    mott,
     wren,
     pell,
-    sorrel,
-    kes,
-    mott,
+    guestsOwn,
   };
-});
+}).pipe(Effect.orDie);
 
-interface Fixture {
-  readonly jo: Actor;
-  readonly fen: Actor;
-  readonly ilse: Actor;
-  readonly kofi: Actor;
-  readonly saltRoad: Campaign;
-  readonly sixpence: Campaign;
-  readonly ferry: Campaign;
-  readonly marsh: Campaign;
-  readonly brannoc: Character;
-  readonly wren: Character;
-  readonly pell: Character;
-  readonly sorrel: Character;
-  readonly kes: Character;
-  readonly mott: Character;
-}
-
-let fixture: Fixture;
-
-const mine = (actor: Actor): Promise<ReadonlyArray<Character>> =>
-  runtime.runPromise(Effect.flatMap(Characters, (characters) => withActor(actor)(characters.mine)));
-
-const names = (characters: ReadonlyArray<Character>): ReadonlyArray<string> =>
-  characters.map((character) => character.name).sort();
+let fixture: Effect.Success<typeof makeFixture>;
+let characters: (typeof Characters)["Service"];
+let party: (typeof Party)["Service"];
 
 beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture.pipe(Effect.orDie));
-}, 30_000);
+  fixture = await run(makeFixture);
+  characters = await run(Characters);
+  party = await run(Party);
+}, 60_000);
 
-describe("what a player's own list is", () => {
-  it("returns their characters across every table they are at", async () => {
-    const characters = await mine(fixture.ilse);
-    expect(names(characters)).toEqual(["Brannoc", "Sorrel Ash"]);
-    // Two campaigns, and the row says which — `campaignId` is the join key the
-    // screen matches against `GET /me/campaigns`, because a campaign's *name*
-    // here would be a second answer to what a campaign is called.
-    expect(new Set(characters.map((character) => character.campaignId))).toEqual(
-      new Set([fixture.saltRoad.id, fixture.sixpence.id]),
-    );
+const mine = (actor: Actor): Promise<ReadonlyArray<OwnedCharacter>> =>
+  run(withActor(actor)(characters.mine));
+
+const names = (owned: ReadonlyArray<OwnedCharacter>): ReadonlyArray<string> =>
+  owned.map((row) => row.character.name).sort();
+
+describe("what an account's own list is", () => {
+  it("answers their characters across every table, with seats as the join keys", async () => {
+    const owned = await mine(fixture.ilse);
+    expect(names(owned)).toEqual(["Brannoc", "Mott", "Sorrel Ash"]);
+
+    // The seat carries the campaign id and nothing more: the campaign's
+    // *name* comes from `GET /me/campaigns`, because a name here would be a
+    // second answer to what a campaign is called.
+    const brannoc = owned.find((row) => row.character.id === fixture.brannoc.character.id);
+    expect(brannoc?.seats.map((seat) => seat.campaignId)).toEqual([fixture.saltRoad.id]);
+    expect(brannoc?.seats[0]?.campaignCharacterId).toBe(fixture.brannoc.seatId);
   });
 
-  it("answers the whole row, so a sheet needs no second read", async () => {
+  it("answers the whole row, and the row has no visibility on it", async () => {
     const brannoc = (await mine(fixture.ilse)).find(
-      (character) => character.id === fixture.brannoc.id,
+      (row) => row.character.id === fixture.brannoc.character.id,
     );
-    expect(brannoc?.accountId).toBe(fixture.ilse.accountId);
-    expect(brannoc?.visibility).toBe("dm");
-    expect(brannoc?.sheet).toEqual({ notes: "", abilities: [], traits: [] });
+    expect(brannoc?.character.accountId).toBe(fixture.ilse.accountId);
+    expect(brannoc?.character.sheet).toEqual({ notes: "", abilities: [], traits: [] });
+    // Who at a table may see the character is the *seat's* question now, per
+    // campaign; the shared row deliberately carries no toggle of its own, and
+    // the wire says so.
+    expect("visibility" in brannoc!.character).toBe(false);
   });
 
-  it("is empty for an account that is a member of nothing, rather than a failure", async () => {
-    const nobody = await runtime.runPromise(anAccount("Nobody"));
+  it("is empty for an account that owns nothing, rather than a failure", async () => {
+    const nobody = await run(anAccount("Nobody"));
     expect(await mine(nobody)).toEqual([]);
   });
 
-  it("leaves out a character nobody has been assigned", async () => {
-    // `kes` belongs to no account at all, which is the ordinary state of a row
-    // the DM typed up before the player arrived.
-    const everyone = await Promise.all([
-      mine(fixture.ilse),
-      mine(fixture.jo),
-      mine(fixture.kofi),
-      mine(fixture.fen),
-    ]);
-    expect(everyone.flat().map((character) => character.id)).not.toContain(fixture.kes.id);
-  });
-});
-
-describe("the four narrowings a missing campaign in the path could have lost", () => {
-  it("does not return somebody else's character at a table they share", async () => {
-    // Kofi's Wren is a real row, in a campaign Ilse really is a member of, and
-    // it is not hers. `pell` is `dm` and Jo's, so it is out for two reasons —
-    // Wren is the one that isolates ownership.
-    const characters = await mine(fixture.ilse);
-    expect(characters.map((character) => character.id)).not.toContain(fixture.wren.id);
-    expect(await mine(fixture.kofi)).toHaveLength(1);
+  it("does not answer somebody else's character at a table they share", async () => {
+    // Kofi's Wren is a real row, at a table Ilse really sits at, and it is
+    // not hers — the one old narrowing that survives, because it was always
+    // about ownership.
+    const owned = await mine(fixture.ilse);
+    expect(owned.map((row) => row.character.id)).not.toContain(fixture.wren.character.id);
     expect(names(await mine(fixture.kofi))).toEqual(["Wren"]);
   });
+});
 
-  it("does not return a character in a campaign they never joined", async () => {
-    // Ilse is not a member of The Ferry. Assigning her a character there is not
-    // even expressible — `Characters.assign` refuses an account that is not a
-    // live member — so the honest version of this test is to prove the campaign
-    // is invisible to her at all.
-    const refused = await runtime.runPromise(
-      Effect.flatMap(Characters, (characters) =>
-        withActor(fixture.ilse)(characters.list(fixture.ferry.id)),
-      ).pipe(Effect.result),
+describe("characters outlive tables", () => {
+  it("keeps a character in the list when the membership that seated it is revoked", async () => {
+    // **Deliberately inverted.** The old file pinned that revoking the
+    // membership took the character out of `mine`; under the continuity
+    // decision the character is the account's, and what the revocation takes
+    // is the *seat* — retired in the same transaction, so the table's history
+    // keeps the line and the campaign loses its live claim.
+    const guestsList = await mine(accountWide(fixture.guest));
+    const guestsOwn = guestsList.find((row) => row.character.id === fixture.guestsOwn.character.id);
+    expect(guestsOwn).toBeDefined();
+    expect(guestsOwn!.seats).toEqual([]);
+
+    // And the seat row still stands, retired — campaign history, not a hole.
+    const seatRows = await run(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ readonly left_at: Date | null; readonly display_name: string }>`
+          select left_at, display_name from campaign_character
+          where id = ${fixture.guestsOwn.seatId}
+        `,
+      ),
     );
-    expect(refused._tag).toBe("Failure");
-    expect((await mine(fixture.ilse)).map((character) => character.campaignId)).not.toContain(
-      fixture.ferry.id,
+    expect(seatRows[0]?.left_at).not.toBeNull();
+    expect(seatRows[0]?.display_name).toBe("Guest's Own");
+  });
+
+  it("keeps the list whole when a table is unshared — the toggle governs seats, not sheets", async () => {
+    // **Deliberately inverted.** The master toggle used to keep a player out
+    // of their own character; it now has no purchase on `mine` at all,
+    // because the read composes no campaign predicate. What it still gates is
+    // everything campaign-side: the party read at the unshared table refuses
+    // the same player it always refused.
+    await run(
+      withActor(fixture.jo)(
+        Effect.flatMap(Campaigns, (campaigns) =>
+          campaigns.update(fixture.marsh.id, { visibility: "dm" }),
+        ),
+      ),
+    );
+
+    const owned = await mine(fixture.ilse);
+    const mott = owned.find((row) => row.character.id === fixture.mott.character.id);
+    expect(mott).toBeDefined();
+    // The seat ref stays too: that Ilse sits at the Marsh is a fact she made
+    // by redeeming its invitation, not a disclosure the toggle guards.
+    expect(mott!.seats.map((seat) => seat.campaignId)).toEqual([fixture.marsh.id]);
+
+    const partyRead = await run(
+      withActor(fixture.ilse)(party.list(fixture.marsh.id)).pipe(Effect.result),
+    );
+    expect(partyRead._tag).toBe("Failure");
+
+    await run(
+      withActor(fixture.jo)(
+        Effect.flatMap(Campaigns, (campaigns) =>
+          campaigns.update(fixture.marsh.id, { visibility: "shared" }),
+        ),
+      ),
     );
   });
 
-  it("takes a character back when the membership that carried it is revoked", async () => {
-    const before = await mine(fixture.ilse);
-    expect(before.map((character) => character.id)).toContain(fixture.sorrel.id);
-
-    // Fen withdraws the invitation Ilse took, which revokes the membership it
-    // granted — the shipped path, in one transaction, not a hand-written update.
-    await runtime.runPromise(
-      Effect.gen(function* () {
-        const invites = yield* Invites;
-        const asFen = withActor(fixture.fen);
-        const issued = yield* asFen(invites.list(fixture.sixpence.groupId));
-        yield* asFen(invites.revoke(fixture.sixpence.groupId, issued[0]!.id));
-      }).pipe(Effect.orDie),
-    );
-
-    // The row still exists and still names her account. What went is the reach.
-    expect(names(await mine(fixture.ilse))).toEqual(["Brannoc"]);
-    const stillAssigned = await runtime.runPromise(
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const rows = yield* sql<{ readonly account_id: AccountId | null }>`
-          select account_id from character where id = ${fixture.sorrel.id}
-        `;
-        return rows[0]!.account_id;
-      }).pipe(Effect.orDie),
-    );
-    expect(stillAssigned).toBe(fixture.ilse.accountId);
-
-    // Put her back, so the sections after this one read the fixture as written.
-    await runtime.runPromise(admit(fixture.fen, fixture.sixpence, fixture.ilse));
-    expect(names(await mine(fixture.ilse))).toEqual(["Brannoc", "Sorrel Ash"]);
-  });
-
-  it("refuses to reach past a credential minted for one table", async () => {
-    // Membership and credential scope narrow independently, and a read with no
-    // campaign in its path is exactly where a missing scope clause would not
-    // show up: the same account, one table's worth of reach.
-    const atTheSaltRoad = scopedTo(fixture.ilse, fixture.saltRoad.id);
-    expect(names(await mine(atTheSaltRoad))).toEqual(["Brannoc"]);
-
-    const atSixpence = scopedTo(fixture.ilse, fixture.sixpence.id);
-    expect(names(await mine(atSixpence))).toEqual(["Sorrel Ash"]);
-  });
-
-  it("keeps a player out of their own character while the campaign is unshared", async () => {
-    // Ilse is a live member of The Marsh and Mott is assigned to her. The master
-    // toggle is above ownership in the predicate, so it wins — which is the same
-    // answer `GET /me/campaigns` gives about that campaign, and not a gap.
-    expect((await mine(fixture.ilse)).map((character) => character.id)).not.toContain(
-      fixture.mott.id,
-    );
-
-    // Share it and she has it, which is what makes the clause above the toggle
-    // rather than a coincidence.
-    await runtime.runPromise(
-      Effect.flatMap(Campaigns, (campaigns) =>
-        withActor(fixture.jo)(campaigns.update(fixture.marsh.id, { visibility: "shared" })),
-      ).pipe(Effect.orDie),
-    );
-    expect(names(await mine(fixture.ilse))).toEqual(["Brannoc", "Mott", "Sorrel Ash"]);
-
-    await runtime.runPromise(
-      Effect.flatMap(Campaigns, (campaigns) =>
-        withActor(fixture.jo)(campaigns.update(fixture.marsh.id, { visibility: "dm" })),
-      ).pipe(Effect.orDie),
-    );
+  it("is not narrowed by a campaign-scoped credential", async () => {
+    // **Deliberately inverted**, and pinned in `characters.test.ts` from the
+    // service side; this is the endpoint-shaped half. The old per-table
+    // narrowing was a scope clause in a campaign-scoped predicate; `mine` is
+    // campaign-scoped nowhere, and `ownCharacter` mirrors
+    // `libraryRowReadable`'s written reasoning — scope says which campaign a
+    // credential reaches, and there is none here for it to be about.
+    const scoped = scopedTo(fixture.ilse, fixture.saltRoad.id);
+    expect(names(await mine(scoped))).toEqual(["Brannoc", "Mott", "Sorrel Ash"]);
   });
 });
 
-describe("a DM's own list is narrower than the table they run", () => {
-  it("returns the characters assigned to them and not the ones they can read", async () => {
-    // Jo can read all three Salt Road characters through `characters.list`, and
-    // plays one of them. `mine` is the second fact, not the first — a predicate
-    // written as `readable OR mine` rather than `readable AND mine` would answer
-    // the whole table here and look correct doing it.
-    const readable = await runtime.runPromise(
-      Effect.flatMap(Characters, (characters) =>
-        withActor(fixture.jo)(characters.list(fixture.saltRoad.id)),
-      ),
-    );
-    expect(names(readable)).toEqual(["Brannoc", "Sister Pell", "Wren"]);
+describe("a creator's own list is narrower than the table they run", () => {
+  it("answers the characters they own, not the party they can read", async () => {
+    // Jo reads every live seat at the Salt Road through the party — and owns
+    // exactly one of the characters behind them. A `mine` written as
+    // `readable OR mine` would answer the whole table here and look correct
+    // doing it.
+    const seats = await run(withActor(fixture.jo)(party.list(fixture.saltRoad.id)));
+    expect(seats.map((seat) => seat.seat.displayName).sort()).toEqual([
+      "Brannoc",
+      "Sister Pell",
+      "Wren",
+    ]);
     expect(names(await mine(fixture.jo))).toEqual(["Sister Pell"]);
   });
 });
 
 /**
  * The full sheet the kit draws — `ui_kits/dm-screen/player-data.js`'s `sheet`,
- * mapped onto the document.
- *
- * Written out rather than generated, because the point of the test is that every
- * section of the drawing has somewhere to land: identity and its tagline half,
- * abilities with saves, skills, proficiencies, attacks, spellcasting with live
- * slots, features, inventory, coin, death saves, level-ups, journal and the four
- * story lines.
+ * mapped onto the document. Written out rather than generated, because the
+ * point of the test is that every section of the drawing has somewhere to
+ * land. Written by **the owner** now: the sheet is theirs, and the old DM-side
+ * write it used to arrive through no longer exists.
  */
 const brannocsSheet: CharacterSheet = {
   notes: "The temple on the salt road takes in what the road leaves behind.",
@@ -408,30 +349,25 @@ const brannocsSheet: CharacterSheet = {
 
 describe("the document the sheet draws from", () => {
   it("carries every drawn section through a round trip unchanged", async () => {
-    const written = await runtime.runPromise(
-      Effect.gen(function* () {
-        const characters = yield* Characters;
-        const asJo = withActor(fixture.jo);
-        yield* asJo(
-          characters.update(fixture.saltRoad.id, fixture.brannoc.id, { sheet: brannocsSheet }),
-        );
-        return yield* withActor(fixture.ilse)(characters.mine);
-      }).pipe(Effect.orDie),
+    await run(
+      withActor(fixture.ilse)(
+        characters.updateOwn(fixture.brannoc.character.id, { sheet: brannocsSheet }),
+      ),
     );
-
-    const brannoc = written.find((character) => character.id === fixture.brannoc.id);
+    const brannoc = (await mine(fixture.ilse)).find(
+      (row) => row.character.id === fixture.brannoc.character.id,
+    );
     // `jsonb` does not preserve key order and does not need to; the value is
     // what the sheet reads.
-    expect(brannoc?.sheet).toEqual(brannocsSheet);
+    expect(brannoc?.character.sheet).toEqual(brannocsSheet);
   });
 
-  it("still reads a row written before any of it existed", async () => {
-    // The whole growth is optional keys on one `jsonb` column, so this is what
-    // "no migration and no backfill" means in practice: `sorrel` was created
-    // with no sheet at all and decodes to the same empty document it always did.
+  it("still reads a row written with no sheet at all", async () => {
+    // The whole growth is optional keys on one `jsonb` column: `sorrel` was
+    // created with none and decodes to the same empty document it always did.
     const sorrel = (await mine(fixture.ilse)).find(
-      (character) => character.id === fixture.sorrel.id,
+      (row) => row.character.id === fixture.sorrel.character.id,
     );
-    expect(sorrel?.sheet).toEqual({ notes: "", abilities: [], traits: [] });
+    expect(sorrel?.character.sheet).toEqual({ notes: "", abilities: [], traits: [] });
   });
 });

@@ -108,8 +108,12 @@ export const reads = {
    */
   notes: (campaignId: CampaignId): ReadKey => key`notes:${campaignId}`,
 
-  /** The party at this table, as the DM reads it. */
-  characters: (campaignId: CampaignId): ReadKey => key`characters:${campaignId}`,
+  /**
+   * The party at this table: the seats, each holding a shared account-owned
+   * character. One key for the roster and the characters under it, because a
+   * seat and the character it holds arrive in one answer.
+   */
+  party: (campaignId: CampaignId): ReadKey => key`party:${campaignId}`,
 
   /**
    * The nights of this campaign — **the spine the Chronicle draws and the one

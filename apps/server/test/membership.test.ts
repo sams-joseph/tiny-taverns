@@ -29,13 +29,14 @@ import { Feats } from "../src/repo/Feats.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Party } from "../src/repo/Party.js";
 import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { RuleArticles } from "../src/repo/RuleArticles.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
-import { anAccount, createCampaign } from "./support/actors.js";
+import { aCharacterAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -136,22 +137,18 @@ describe("the reach seam, enforced rather than asserted", () => {
     // writer of the campaign's — whose account this is, the cascade parent and
     // the billing owner and no longer a way in.
     //
-    // `repo/Characters.ts` is `character.account_id`, added by
-    // `0012_character_sheet.ts`: whose character it is. It used to be named by
-    // no predicate at all; `ownedRowReadable` in `repo/visibility.ts` now names
-    // it, which is the one reach this seam has grown — a player reads *their
-    // own* character whatever its visibility, inside a campaign they are still
-    // a live member of. That is a disjunct under the membership and scope
-    // clauses rather than beside them, so nothing here moved: the list is
-    // unchanged, `character_ownership.test.ts` pins the narrowing, and the
-    // stranger below still reads nothing.
+    // `repo/Characters.ts` is `character.account_id` under the continuity
+    // decision: whose character it is, `not null` and the whole of the
+    // owner-side reach. The predicates are `ownCharacter` (the owner, read
+    // and write alike) and `characterSeatedAt` (the campaign side, reached
+    // through a live `campaign_character` seat) — both in
+    // `repo/visibility.ts`, both comparing the column to the actor's own
+    // account and to nothing a caller supplied.
     //
-    // The *write* predicate the column is also a hook for has since been
-    // written: `ownRowWritable`, in the same file, is the first predicate in the
-    // product that lets somebody who is not a DM change a row. It names the same
-    // column and conjoins it onto the same campaign gate, so it is strictly
-    // narrower than the read above and this list is again unchanged.
-    // `player-write.test.ts` pins the boundary.
+    // `repo/Party.ts` is the seat's own `account_id` — whose seat it is, the
+    // join key written from `CurrentActor` at seating time and the value the
+    // owner-retires-their-own-seat predicate compares. The seat is campaign
+    // content, so the generic row predicates cover the rest of it.
     //
     // `repo/Creatures.ts` is the newest and the one that is *not* about a
     // campaign at all: `creature.account_id`, added by
@@ -204,6 +201,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
       "repo/Options.ts",
+      "repo/Party.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
       "repo/visibility.ts",
@@ -253,7 +251,8 @@ const runtime = ManagedRuntime.make(
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Groups.layer,
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Characters.layer,
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     ClassProgression.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
@@ -298,7 +297,6 @@ const dmOf = (
 const makeFixture = Effect.gen(function* () {
   const beats = yield* Beats;
   const campaigns = yield* Campaigns;
-  const characters = yield* Characters;
   const combatants = yield* Combatants;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
@@ -322,7 +320,10 @@ const makeFixture = Effect.gen(function* () {
   const session = yield* as(sessions.create(campaign.id, { number: 12 }));
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
 
-  yield* as(characters.create(campaign.id, { name: "Brannoc", playerName: "Ilse" }));
+  // The creator's own character, seated here — a creator is a player too, and
+  // this is what gives both `character` and `campaign_character` a row for the
+  // stranger below to be refused.
+  yield* aCharacterAt(campaign.id, dm, { name: "Brannoc", playerName: "Ilse" });
   yield* as(notes.create(campaign.id, { title: "The crate" }));
   yield* as(
     beats.create(campaign.id, session.id, { body: "The ferryman would not say his name." }),
@@ -496,6 +497,7 @@ const READS: Record<
     | HobThreads
     | Notes
     | Options
+    | Party
     | PrepItems
     | RuleArticles
     | SessionEvents
@@ -505,7 +507,12 @@ const READS: Record<
 > = {
   campaign: () => Effect.flatMap(Campaigns, (r) => r.list),
   session: (f) => Effect.flatMap(Sessions, (r) => r.list(f.campaign.id)),
-  character: (f) => Effect.flatMap(Characters, (r) => r.list(f.campaign.id)),
+  // `character` left the campaign: it is account-owned and top-level, so its
+  // one read is the owner's `mine` and a stranger's honest answer is an empty
+  // list rather than a 404 about a campaign the read never names. What a
+  // campaign holds is the seat below.
+  character: () => Effect.flatMap(Characters, (r) => r.mine),
+  campaign_character: (f) => Effect.flatMap(Party, (r) => r.list(f.campaign.id)),
   note: (f) => items(Effect.flatMap(Notes, (r) => r.list(f.campaign.id, {}))),
   beat: (f) => items(Effect.flatMap(Beats, (r) => r.list(f.campaign.id, f.session.id, {}))),
   prep_item: (f) => Effect.flatMap(PrepItems, (r) => r.list(f.campaign.id, f.session.id)),

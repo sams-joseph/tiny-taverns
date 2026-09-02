@@ -55,7 +55,10 @@ describe("a table you sit at", () => {
     // Twice: the top nav's context, and the screen's own bar.
     expect(await screen.findAllByText(campaign.name)).toHaveLength(2);
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}`);
-    expect(pathsCalled()).toContain(`/campaigns/${campaignId}/characters`);
+    // The party read — `party.list`, the seats over shared characters — is the
+    // one a player may make; the old campaign-scoped character list is gone
+    // with the continuity decision.
+    expect(pathsCalled()).toContain(`/campaigns/${campaignId}/party`);
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/notes`);
     // The DM's load composes these, and the `DmActor` gate refuses a player the
     // first of them — which is the whole reason this screen is not that screen
@@ -97,7 +100,7 @@ describe("a table you sit at", () => {
   });
 
   it("says what an empty table means rather than looking broken", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] });
+    server.routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: [] });
     server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) });
 
     await renderScreen();

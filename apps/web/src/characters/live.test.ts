@@ -1,6 +1,6 @@
 import type { Character, PlayerLiveTable } from "@taverns/api";
 import { describe, expect, it } from "vitest";
-import { brannoc, sorrel } from "./characters.fixtures";
+import { brannoc, brannocSeatRef, sorrel } from "./characters.fixtures";
 import { liveBanner } from "./live";
 
 /**
@@ -21,7 +21,9 @@ const theirSeat = { characterId: sorrel.id, combatantId: "c-theirs" };
 
 const table = (fight: PlayerLiveTable["fight"]): PlayerLiveTable =>
   ({
-    campaignId: brannoc.campaignId,
+    // The banner's table is the character's first *seat* now — the shared
+    // character itself names no campaign.
+    campaignId: brannocSeatRef.campaignId,
     sessionId: "s-1",
     sessionNumber: 12,
     fight,

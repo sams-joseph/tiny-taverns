@@ -1,10 +1,9 @@
-import type { Character } from "@taverns/api";
+import type { CampaignId, OwnedCharacter } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { useApiAtom } from "../api/atoms";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { tablesForNewCharacter } from "./create";
 import { myCharactersAtom, type MyCharactersView } from "./load";
 import { NewCharacterAction } from "./NewCharacterAction";
 import { hitPoints, rosterSummary } from "./sheet";
@@ -53,10 +52,11 @@ import { Portrait, StatPill } from "./SheetParts";
  *
  * What did not change is who owns what. A character created here is the
  * creator's — `account_id` is `CurrentActor`'s, server-side, and there is
- * nowhere on `CharacterOwnCreate` to name an account — and it is `dm` by column
- * default, so their DM sees it and the rest of the table does not.
- * `campaign/CharacterDialog.tsx` is unchanged and is still how a DM types up
- * somebody else's, with `CharacterAssign` to hand it over.
+ * nowhere on `CharacterOwnCreate` to name an account — and its **seat** is `dm`
+ * by column default, so their DM sees it and the rest of the table does not
+ * until the DM shares the seat. There is no DM-typed character any more: the
+ * continuity decision of 2026-09-01 made every character its player's own, and
+ * the dialog a DM used to type one up in went with it.
  *
  * The button is `NewCharacterAction`, which is *step one of the flow* rather
  * than a control on the form — the captain's reordering puts finding a table
@@ -70,13 +70,20 @@ import { Portrait, StatPill } from "./SheetParts";
  */
 
 function CharacterCard({
-  character,
-  campaignName,
+  owned,
+  campaignNames,
 }: {
-  readonly character: Character;
-  readonly campaignName: string | undefined;
+  readonly owned: OwnedCharacter;
+  readonly campaignNames: ReadonlyMap<CampaignId, string>;
 }) {
+  const character = owned.character;
   const hp = hitPoints(character.hpCurrent, character.hpMax);
+  // The tables this character is seated at, named. A seat whose campaign the
+  // membership read cannot name (a table this account has since left the
+  // group of) gets the honest fallback rather than a blank.
+  const tables = owned.seats.map(
+    (seat) => campaignNames.get(seat.campaignId) ?? "A table you have left",
+  );
 
   return (
     <Card className="h-full">
@@ -114,11 +121,11 @@ function CharacterCard({
         <div className="flex items-center gap-2">
           <Icon name="book-open" size={14} className="shrink-0 text-accent-ink" />
           <span className="min-w-0 flex-1 truncate text-caption leading-body text-foreground">
-            {/* The campaign is always there — it is a `not null` column — but its
-                *name* comes from a second read, and a membership that has been
-                revoked since would leave the id unnamed. Saying so beats an
-                empty line. */}
-            {campaignName ?? "A table you have left"}
+            {/* The seats, named. A character between tables is a real state now
+                — it outlives every seat — and the line says so rather than
+                inventing a campaign. Several seats read as a list, which is
+                the continuity decision on one line. */}
+            {tables.length === 0 ? "Not seated at a table" : tables.join(" · ")}
           </span>
         </div>
 
@@ -136,24 +143,15 @@ function CharacterCard({
 }
 
 /**
- * Three silences, told apart — and none of them papered over.
+ * Two silences, told apart — and neither papered over.
  *
  * An empty roster is exactly what it says: this account owns no character row.
- * *Why* is a question about the memberships `load.ts` already read, and it has
- * three answers rather than the two it had before a player could write one:
- *
- * - **no table at all** — the way in is an invitation, and it is somebody
- *   else's to send;
- * - **tables, but none you play at** — a DM who pressed *Player*. A character of
- *   your own goes at a table you sit at; the one you run is
- *   `campaign/CharacterDialog.tsx`'s. This branch exists so the copy never
- *   offers a control `NewCharacterAction` has decided not to draw, which is the
- *   failure a plain `memberships.length` check makes;
- * - **a table you play at** — write one, or wait for your DM.
- *
- * The last sentence is what changed. It used to read *"your DM writes the
- * characters and says who plays which"*, which was true of every release until
- * this one and is now half the answer.
+ * *Why* is a question about the memberships `load.ts` already read. There used
+ * to be a third branch — *tables, but none you play at*, for a DM whose only
+ * memberships were their own — and it went with the continuity decision of
+ * 2026-09-01: a creator is a player too now, so any table at all is somewhere a
+ * character of your own can go, and `tablesForNewCharacter` never answers empty
+ * while a membership exists.
  */
 function NothingYet({ view }: { readonly view: MyCharactersView }) {
   if (view.memberships.length === 0) {
@@ -165,19 +163,10 @@ function NothingYet({ view }: { readonly view: MyCharactersView }) {
     );
   }
 
-  if (tablesForNewCharacter(view.memberships).length === 0) {
-    return (
-      <EmptyState icon="user" title="No characters yet">
-        You run the tables you are at, and a character of your own belongs at one you play at.
-        Follow the link another DM sends you and it appears here.
-      </EmptyState>
-    );
-  }
-
   return (
     <EmptyState icon="user" title="No characters yet">
-      Write one down for a table you sit at, or wait for your DM to hand you one of theirs. Either
-      way it appears here.
+      Write one down for any table you are at — the ones you run included. It appears here, and on
+      that table&rsquo;s party screen.
     </EmptyState>
   );
 }
@@ -216,11 +205,11 @@ export function MyCharactersScreen() {
           // query, because the question is how wide *this column* is and the
           // Hob panel can take 400px of it without the window moving.
           <div className="grid grid-cols-1 items-stretch gap-gutter @2xl:grid-cols-2 @5xl:grid-cols-3">
-            {view.characters.map((character) => (
+            {view.characters.map((owned) => (
               <CharacterCard
-                key={character.id}
-                character={character}
-                campaignName={view.campaignNames.get(character.campaignId)}
+                key={owned.character.id}
+                owned={owned}
+                campaignNames={view.campaignNames}
               />
             ))}
           </div>

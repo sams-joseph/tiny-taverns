@@ -136,14 +136,13 @@ export const brannoc = {
 };
 
 /**
- * The same account's other character, at another table, with **nothing written
- * on the sheet** — which is every character `CharacterDialog` has ever made and
+ * The same account's other character, seated at another table, with **nothing
+ * written on the sheet** — the state every freshly created row is in and
  * therefore the case the screen has to be right about.
  */
 export const sorrel = {
   ...character,
   id: sorrelId,
-  campaignId: otherCampaignId,
   accountId: brannoc.accountId,
   name: "Sorrel Ash",
   playerName: "Ilse",
@@ -159,6 +158,30 @@ export const sorrel = {
   sheetUrl: null,
   sheet: { notes: "", abilities: [], traits: [] },
 };
+
+/**
+ * The seats — where each character sits, as `GET /me/characters` answers them.
+ *
+ * Under the continuity decision a character is account-owned and campaign-
+ * scoped nowhere; the roster's campaign line and the sheet's live banner both
+ * come off these refs, so the fixture crosses a campaign boundary exactly as
+ * the old `campaignId` column did.
+ */
+export const brannocSeatRef = {
+  campaignCharacterId: "2b1f2a1e-0000-4000-8000-000000000961",
+  campaignId,
+  joinedAt: "2026-07-02T10:00:00.000Z",
+};
+
+export const sorrelSeatRef = {
+  campaignCharacterId: "2b1f2a1e-0000-4000-8000-000000000962",
+  campaignId: otherCampaignId,
+  joinedAt: "2026-07-09T10:00:00.000Z",
+};
+
+/** The rows `GET /me/characters` really sends: the character, with its seats. */
+export const ownedBrannoc = { character: brannoc, seats: [brannocSeatRef] };
+export const ownedSorrel = { character: sorrel, seats: [sorrelSeatRef] };
 
 const membership = (of: unknown, joinedAt: string, relation = "player") => ({
   campaign: of,
@@ -259,7 +282,7 @@ export const twoTables = (): Map<string, Answer> =>
   new Map<string, Answer>([
     ["GET /me", { status: 200, body: account }],
     ...hobRoutes(),
-    ["GET /me/characters", { status: 200, body: [brannoc, sorrel] }],
+    ["GET /me/characters", { status: 200, body: [ownedBrannoc, ownedSorrel] }],
     // The two pickers' vocabulary — what *this table* offers, which since a
     // campaign can have its own classes is a read rather than a constant. It is
     // the campaign list rather than the Library one because a player cannot
@@ -302,10 +325,10 @@ export const noTables = (): Map<string, Answer> => {
 /**
  * One table, and it is one this account **runs** rather than plays at.
  *
- * The case the create control has to get right and the one a `length > 0` check
- * would get wrong: a DM at their own table has a membership, so the roster is
- * not empty of tables, and there is still nowhere a character *of their own*
- * belongs — writing one there is `campaign/CharacterDialog.tsx`.
+ * It used to be the refusal case; the continuity decision of 2026-09-01
+ * inverted it — a creator is a player too, so this membership now offers the
+ * create control and the form exactly as a player one does, and the tests that
+ * read it pin that inversion.
  */
 export const onlyDmTables = (): Map<string, Answer> => {
   const routes = noCharacters();

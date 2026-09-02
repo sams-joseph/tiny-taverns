@@ -136,6 +136,7 @@ describe("migrations", () => {
       "assistant_turn",
       "beat",
       "campaign",
+      "campaign_character",
       "campaign_member",
       "character",
       "character_option",
@@ -365,9 +366,11 @@ describe("upgrading a database whose characters predate the sheet", () => {
         const account = (yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "hash" })} returning id
         `)[0]!.id;
-        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
+        // Account-owned from `0001` — the clean baseline has no campaign_id
+        // on character; a campaign's claim is a seat, which this property
+        // does not need.
         const character = (values: Record<string, unknown>) =>
-          sql`insert into character ${sql.insert({ campaign_id: campaign, ...values })}`;
+          sql`insert into character ${sql.insert({ account_id: account, ...values })}`;
 
         yield* character({
           name: "Brannoc",
@@ -392,12 +395,11 @@ describe("upgrading a database whose characters predate the sheet", () => {
           readonly level: number | null;
           readonly race: string | null;
           readonly class_name: string | null;
-          readonly account_id: string | null;
           readonly sheet_url: string | null;
           readonly body: { readonly notes: string };
         }>`
           select name, player_name, ac, hp_max, visibility, descriptor,
-                 level, species as race, class_name, account_id, sheet_url, body
+                 level, species as race, class_name, sheet_url, body
           from character order by name
         `;
 
@@ -429,8 +431,6 @@ describe("upgrading a database whose characters predate the sheet", () => {
         level: null,
         race: null,
         class_name: null,
-        // The hook, inert. Nothing mints a player credential yet.
-        account_id: null,
         sheet_url: null,
       },
       {
@@ -445,7 +445,6 @@ describe("upgrading a database whose characters predate the sheet", () => {
         level: null,
         race: null,
         class_name: null,
-        account_id: null,
         sheet_url: null,
       },
       {
@@ -459,7 +458,6 @@ describe("upgrading a database whose characters predate the sheet", () => {
         level: null,
         race: null,
         class_name: null,
-        account_id: null,
         sheet_url: null,
       },
     ]);
@@ -489,7 +487,7 @@ describe("upgrading a database whose characters predate the live columns", () =>
         const campaign = yield* rawCampaign(sql, account, "The Salt Road");
         yield* sql`
           insert into character ${sql.insert({
-            campaign_id: campaign,
+            account_id: account,
             name: "Brannoc",
             player_name: "Ilse",
             ac: 18,
@@ -498,7 +496,7 @@ describe("upgrading a database whose characters predate the live columns", () =>
           })}
         `;
         yield* sql`
-          insert into character ${sql.insert({ campaign_id: campaign, name: "Sister Pell" })}
+          insert into character ${sql.insert({ account_id: account, name: "Sister Pell" })}
         `;
 
         // Everything between, because `0014` also widens the session log's

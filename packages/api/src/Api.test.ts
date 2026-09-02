@@ -4,7 +4,8 @@ import { Authorization } from "./Actor.js";
 import { TavernsApi } from "./Api.js";
 import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
-import { Character, CharacterCreate } from "./Character.js";
+import { Character, CharacterOwnCreate } from "./Character.js";
+import { CampaignCharacter, PartyJoin } from "./Party.js";
 import { Combatant, CombatantCreate } from "./Combatant.js";
 import { Creature, CreatureCreate } from "./Creature.js";
 import { Encounter, EncounterCreate } from "./Encounter.js";
@@ -124,7 +125,6 @@ describe("the API declaration", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "beats",
       "campaigns",
-      "characters",
       "combatants",
       "creatures",
       "encounterCreatures",
@@ -155,6 +155,10 @@ describe("the API declaration", () => {
       // reason — the path is the only thing gating the bundled rows — and the
       // one list in the product a *player* reads to fill in a picker.
       "options",
+      // The party: the seats at one campaign's table, each a join to a shared
+      // account-owned character. It replaced the campaign-scoped `characters`
+      // group when the continuity decision made the character top-level.
+      "party",
       "prep",
       "recap",
       "ruleArticles",
@@ -175,7 +179,11 @@ describe("every content schema", () => {
     Beat,
     Campaign,
     Session,
-    Character,
+    // The seat, not the character: under the continuity decision the shared
+    // `Character` deliberately has no `visibility` — who at a *table* may see
+    // it is the seat's question, and the seat carries the whole tail. The
+    // character's own deliberate shape is pinned in its own test below.
+    CampaignCharacter,
     Note,
     Encounter,
     PrepItem,
@@ -204,13 +212,30 @@ describe("every content schema", () => {
     }
   });
 
+  it("gives the shared character provenance and a version, and no visibility", () => {
+    // The continuity decision's wire shape: a character is account-owned and
+    // campaign-scoped nowhere, so a `visibility` here would be a question with
+    // no table in it. The seat (`CampaignCharacter`) is where that column
+    // lives; the character keeps provenance — Hob can draft one — and carries
+    // the optimistic-concurrency `version` every write bumps.
+    const fields = Object.keys(Character.fields);
+    expect(fields).toContain("origin");
+    expect(fields).toContain("assistantTurnId");
+    expect(fields).toContain("version");
+    expect(fields).not.toContain("visibility");
+    expect(fields).not.toContain("campaignId");
+  });
+
   it("leaves visibility optional on create, so the column default decides", () => {
     // The `dm` default is stated once, in the migration. A create payload that
     // required a visibility would move that decision to every caller.
     const creates = {
       CampaignCreate,
       SessionCreate,
-      CharacterCreate,
+      CharacterOwnCreate,
+      // The seat's create: no visibility field at all, so the `dm` default is
+      // the only possible answer — the strongest form of this test's property.
+      PartyJoin,
       NoteCreate,
       EncounterCreate,
       PrepItemCreate,
@@ -230,7 +255,8 @@ describe("every content schema", () => {
     const minimal: Record<string, Record<string, unknown>> = {
       CampaignCreate: { name: "x" },
       SessionCreate: { number: 1, title: "t" },
-      CharacterCreate: { name: "x" },
+      CharacterOwnCreate: { name: "x" },
+      PartyJoin: { characterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       NoteCreate: { title: "x" },
       EncounterCreate: { name: "x" },
       PrepItemCreate: { label: "x" },

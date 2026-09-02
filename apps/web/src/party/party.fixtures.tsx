@@ -5,9 +5,13 @@ import { type HostedSession } from "../auth/hostedSession";
 import {
   campaignId,
   character,
+  characterSeat,
+  dmAccountId,
   dmMember,
   fullCampaign,
   groupId,
+  ilseAccountId,
+  partySeat,
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
@@ -15,20 +19,34 @@ import {
 /**
  * The party screen's test wire.
  *
- * The campaign and the character come from `campaign/campaign.fixtures.tsx`, for
- * the reason that file exists — a field renamed upstream is one edit and not
- * two. What is new here is the roster's own half: members, invitations, and the
- * assignment that joins a character to an account.
+ * The campaign, the shared character and its seat come from
+ * `campaign/campaign.fixtures.tsx`, for the reason that file exists — a field
+ * renamed upstream is one edit and not two. What is new here is the roster's
+ * own half: members, invitations, and the extra seats a populated table holds.
+ *
+ * Under the continuity decision of 2026-09-01 there is no assignment any more —
+ * a character is its owner's, seated by its owner — so what used to be "spare
+ * characters waiting to be given out" are now simply more seats, each with an
+ * owner. Kofi is the `no-character` member precisely because **no seat names
+ * him**, which is the whole derivation now.
  *
  * **The bodies are the JSON the server sends**, not the decoded classes, so a
  * contract rename fails decoding rather than rendering `undefined`.
  */
 
-export { campaign, campaignId, dmAccountId, dmMember } from "../campaign/campaign.fixtures";
+export {
+  campaign,
+  campaignId,
+  characterSeat,
+  dmAccountId,
+  dmMember,
+  ilseAccountId,
+  partySeat,
+  seatId,
+} from "../campaign/campaign.fixtures";
 
 const base = `/campaigns/${campaignId}`;
 
-export const ilseAccountId = "2b1f2a1e-0000-4000-8000-0000000000a2";
 export const kofiAccountId = "2b1f2a1e-0000-4000-8000-0000000000a3";
 
 export const inviteId = "2b1f2a1e-0000-4000-8000-0000000000e1";
@@ -49,14 +67,22 @@ export const kofi = {
   joinedAt: "2026-07-09T10:00:00.000Z",
 };
 
-/** `character`, assigned — which is what `playing` means. */
-export const brannocOwned = { ...character, accountId: ilseAccountId };
+/** Ilse's character — `character` is already hers in the shared fixture. */
+export const brannocOwned = character;
 
-/** Nobody holds this one, so it is what `AssignDialog` offers. */
-export const spareCharacter = {
+/** Brannoc's seat with the shared character behind it: the `playing` proof. */
+export const brannocSeat = partySeat;
+
+/**
+ * The creator's own character, seated — a creator is a player too under the
+ * continuity decision, which is what replaced the old "unassigned spare": a
+ * character with no owner is not representable any more (`account_id` is
+ * `not null`), so every seat here names whose it is.
+ */
+export const sorrelCharacter = {
   ...character,
   id: "2b1f2a1e-0000-4000-8000-000000000902",
-  accountId: null,
+  accountId: dmAccountId,
   name: "Sorrel Ash",
   playerName: null,
   level: 1,
@@ -66,21 +92,47 @@ export const spareCharacter = {
   hpCurrent: null,
 };
 
+export const sorrelSeatId = "2b1f2a1e-0000-4000-8000-000000000952";
+
+export const sorrelSeat = {
+  seat: {
+    ...characterSeat,
+    id: sorrelSeatId,
+    characterId: sorrelCharacter.id,
+    accountId: dmAccountId,
+    displayName: "Sorrel Ash",
+  },
+  character: sorrelCharacter,
+};
+
 /**
- * A third character, so the party has a middle level at all.
+ * A third seated character, so the party has a middle level at all.
  *
  * Two characters have no median worth naming — see `needsOf` — so a fixture with
  * only Brannoc and Sorrel could never draw the levelling line, and the screen's
  * *Needs you* would be pinned one nudge short of what it renders.
  */
-export const secondSpare = {
-  ...spareCharacter,
+export const pellCharacter = {
+  ...sorrelCharacter,
   id: "2b1f2a1e-0000-4000-8000-000000000903",
   name: "Pell",
   level: 3,
   race: "Human",
   className: "Cleric",
   descriptor: "Level 3 Human Cleric",
+};
+
+export const pellSeatId = "2b1f2a1e-0000-4000-8000-000000000953";
+
+export const pellSeat = {
+  seat: {
+    ...characterSeat,
+    id: pellSeatId,
+    characterId: pellCharacter.id,
+    accountId: dmAccountId,
+    displayName: "Pell",
+  },
+  character: pellCharacter,
 };
 
 /**
@@ -118,25 +170,25 @@ export const takenInvite = {
  * of the campaign's destinations and wears `CampaignChrome` — so the screen
  * makes every read the frame does, and a map that answered only the roster's
  * three would 404 the campaign out from under it. The overrides below are the
- * roster's own half: this file's members, invitations and characters in place of
- * the shared fixture's, and the writes those two dialogs make.
+ * roster's own half: this file's members, invitations and seats in place of
+ * the shared fixture's, plus the seat verbs and the invitation writes.
  */
 export const fullParty = (): Map<string, Answer> => {
   const routes = fullCampaign();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] });
   routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [liveInvite, takenInvite] });
-  routes.set(`GET ${base}/characters`, {
+  routes.set(`GET ${base}/party`, {
     status: 200,
-    body: [brannocOwned, spareCharacter, secondSpare],
+    body: [brannocSeat, sorrelSeat, pellSeat],
   });
-  routes.set(`POST ${base}/characters/${spareCharacter.id}/assign`, {
+  // The creator's two seat verbs, on Brannoc's seat: sharing it with the
+  // table, and retiring it. Both answers are what the server would say; what a
+  // test asserts is the request each button makes and the re-read that follows.
+  routes.set(`PATCH ${base}/party/${brannocSeat.seat.id}`, {
     status: 200,
-    body: { ...spareCharacter, accountId: kofiAccountId },
+    body: { ...brannocSeat, seat: { ...brannocSeat.seat, visibility: "shared" } },
   });
-  routes.set(`POST ${base}/characters/${brannocOwned.id}/assign`, {
-    status: 200,
-    body: { ...brannocOwned, accountId: null },
-  });
+  routes.set(`DELETE ${base}/party/${sorrelSeatId}`, { status: 204, body: undefined });
   routes.set(`POST /groups/${groupId}/invites`, {
     status: 200,
     body: { invite: liveInvite, token: "a-token" },
@@ -153,7 +205,7 @@ export const emptyParty = (): Map<string, Answer> => {
   const routes = fullParty();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember] });
   routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [] });
-  routes.set(`GET ${base}/characters`, { status: 200, body: [] });
+  routes.set(`GET ${base}/party`, { status: 200, body: [] });
   return routes;
 };
 

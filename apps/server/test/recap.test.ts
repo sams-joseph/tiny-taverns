@@ -45,7 +45,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
-  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Characters.layer,
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
@@ -93,7 +93,7 @@ const makeFixture = Effect.gen(function* () {
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
   yield* as(
-    characters.create(campaign.id, {
+    characters.createOwn(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
       race: "Half-orc",

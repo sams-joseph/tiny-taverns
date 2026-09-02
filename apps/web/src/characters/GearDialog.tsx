@@ -1,4 +1,4 @@
-import type { Character, InventoryItem } from "@taverns/api";
+import type { InventoryItem, OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -74,14 +74,20 @@ const parseCount = (raw: string): number | undefined =>
   raw.trim() === "" || !Number.isInteger(Number(raw)) ? undefined : Number(raw);
 
 export function GearDialog({
-  character,
+  owned,
   onClose,
   onSaved,
 }: {
-  readonly character: Character;
+  /**
+   * The character with its seats — the seats are the write's blast radius
+   * (`ownCharacterWrites` names one party per seat), and the character no
+   * longer names a campaign on its own.
+   */
+  readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
+  const character = owned.character;
   // The blank line the *Add* button promises, appended on open rather than
   // waiting for a second press inside the dialog.
   const [items, setItems] = useState<ReadonlyArray<DraftItem>>([
@@ -135,7 +141,7 @@ export function GearDialog({
     const saved = await submit(
       (client) =>
         saveOwnCharacter(client, character, { sheet: sheetWith(character, { inventory }) }),
-      ownCharacterWrites(character),
+      ownCharacterWrites(owned),
     );
     if (Result.isSuccess(saved)) onSaved();
   };

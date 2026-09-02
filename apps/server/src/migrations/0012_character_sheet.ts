@@ -68,17 +68,9 @@ import { SqlClient } from "effect/unstable/sql";
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
-  // Whose character it is. `on delete set null` rather than a cascade: losing
-  // an account must not lose the character it played, which is somebody else's
-  // campaign history.
-  yield* sql`
-    alter table character
-      add column account_id uuid references account (id) on delete set null
-  `;
-  yield* sql`
-    create index character_account_id_idx on character (account_id)
-      where account_id is not null
-  `;
+  // `account_id` is in the baseline now — the character is account-owned from
+  // `0001`, by the continuity decision — so this migration is the sheet and
+  // identity columns alone.
 
   // The row half that used to be prose.
   //

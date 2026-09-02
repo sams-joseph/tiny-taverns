@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { Ability, Trait } from "./Creature.js";
-import { AccountId, CampaignId, CharacterId } from "./Ids.js";
-import { provenanceFields, Visibility } from "./Provenance.js";
+import { AccountId, CharacterId } from "./Ids.js";
+import { provenanceFields } from "./Provenance.js";
 
 /**
  * A player character, shaped the way a creature is: **a field earns a column
@@ -283,25 +283,17 @@ export const emptyCharacterSheet: CharacterSheet = { notes: "", abilities: [], t
 
 export class Character extends Schema.Class<Character>("Character")({
   id: CharacterId,
-  campaignId: CampaignId,
   /**
-   * Whose character it is — **the one pointer in the product that is read
-   * through.**
+   * Whose character it is — **owned by an account, campaign-scoped nowhere.**
    *
-   * Null until a DM assigns the character to somebody at their table
-   * (`CharacterAssign` below). Once set it is not merely provenance, unlike
-   * `Combatant.characterId` and `Creature.derivedFrom`: a predicate names it,
-   * and naming it is what lets the player whose character this is read their
-   * own row whatever its `visibility` says.
-   *
-   * What that grants is deliberately small. It is *their own row and no one
-   * else's*, inside a campaign they hold a live membership of, through a
-   * credential that reaches that campaign, and only while the DM has shared the
-   * campaign at all — the master toggle is untouched. It grants no write:
-   * editing your own sheet is its own decision with its own predicate. See
-   * `apps/server/src/repo/visibility.ts`'s `ownedRowReadable`.
+   * The captain's continuity decision of 2026-09-01: a character is a
+   * top-level identity whose playable state — level, hit points, conditions,
+   * inventory, the sheet — carries across every campaign that seats it.
+   * Campaign participation is a `CampaignCharacter` join to this same row,
+   * never a fork of it, and history is preserved by snapshots (`Combatant`
+   * copies display state at seed time) rather than by freezing the character.
    */
-  accountId: Schema.NullOr(AccountId),
+  accountId: AccountId,
   name: Schema.String,
   playerName: Schema.NullOr(Schema.String),
   /** `3`. Absent until somebody says. */
@@ -379,7 +371,19 @@ export class Character extends Schema.Class<Character>("Character")({
    */
   sheetUrl: Schema.NullOr(Schema.String),
   sheet: CharacterSheet,
-  visibility: Visibility,
+  /**
+   * The optimistic-concurrency counter — the continuity decision's explicit
+   * answer to two campaigns (or two tabs) editing one shared sheet. Bumped by
+   * every write; a caller may send it back as `expectedVersion` on the PATCH
+   * and be refused with a `Conflict` when somebody got there first, instead
+   * of silently overwriting them. The live trio needs none of this: a hit
+   * point moves by an atomic in-SQL delta, never by read-modify-write.
+   *
+   * There is no `visibility` here any more: who at a *table* may see the
+   * character is the seat's question (`CampaignCharacter.visibility`), and a
+   * top-level character has no table.
+   */
+  version: Schema.Int,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
@@ -394,115 +398,37 @@ const sheetUrl = Schema.String.check(
   Schema.isLengthBetween(1, 2000),
   Schema.isPattern(/^https?:\/\//i),
 );
-/** The bestiary's own bound, so a condition badge is one word and not an essay. */
-const Condition = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
-const conditions = Schema.Array(Condition).check(Schema.isLengthBetween(0, 24));
-
-export const CharacterCreate = Schema.Struct({
-  name: Schema.NonEmptyString,
-  playerName: Schema.optional(Schema.String),
-  level: Schema.optional(level),
-  race: Schema.optional(shortLabel),
-  subrace: Schema.optional(shortLabel),
-  className: Schema.optional(shortLabel),
-  ac: Schema.optional(ac),
-  hpMax: Schema.optional(hp),
-  /**
-   * Where they are already, for the character typed up mid-campaign.
-   *
-   * This is the **only** payload in the product that sets a current hit point
-   * absolutely, and it is safe here for a reason that does not survive the
-   * insert: a row that does not exist yet is in no fight, so there is no second
-   * copy for it to disagree with. Afterwards the number moves by delta only —
-   * `CharacterDamage` below, or the fight — which is what makes "both copies
-   * always agree" a property of two statements rather than of every caller.
-   */
-  hpCurrent: Schema.optional(hp),
-  tempHp: Schema.optional(hp),
-  conditions: Schema.optional(conditions),
-  sheetUrl: Schema.optional(sheetUrl),
-  /** Omit and the column default — an empty document — decides. */
-  sheet: Schema.optional(CharacterSheet),
-  visibility: Schema.optional(Visibility),
-});
-export type CharacterCreate = typeof CharacterCreate.Type;
-
-export const CharacterUpdate = Schema.Struct({
-  name: Schema.optional(Schema.NonEmptyString),
-  playerName: Schema.optional(Schema.NullOr(Schema.String)),
-  level: Schema.optional(Schema.NullOr(level)),
-  race: Schema.optional(Schema.NullOr(shortLabel)),
-  subrace: Schema.optional(Schema.NullOr(shortLabel)),
-  className: Schema.optional(Schema.NullOr(shortLabel)),
-  ac: Schema.optional(Schema.NullOr(ac)),
-  hpMax: Schema.optional(Schema.NullOr(hp)),
-  /**
-   * `tempHp` and `conditions` are here and **`hpCurrent` deliberately is not.**
-   *
-   * A hit point is the one live value two rows both hold, so it gets exactly
-   * one spelling of a write: a signed delta, `CharacterDamage`. That is not
-   * only bookkeeping — it is what `CombatantDamage` already argues for the
-   * fight's copy. "The ogre hits for 12" is true regardless of what anyone's
-   * screen last showed, whereas an absolute write from a screen that has not
-   * caught up silently undoes whatever happened in between; and with two rows
-   * to keep in step, the screen that has not caught up is now the common case.
-   *
-   * The other two are absolutes because there is no arithmetic in them: temp
-   * hit points are granted whole and conditions are a set the DM edits.
-   */
-  tempHp: Schema.optional(hp),
-  conditions: Schema.optional(conditions),
-  sheetUrl: Schema.optional(Schema.NullOr(sheetUrl)),
-  /** Whole-document, like `CreatureUpdate.statBlock`: send what it should become. */
-  sheet: Schema.optional(CharacterSheet),
-  visibility: Schema.optional(Visibility),
-});
-export type CharacterUpdate = typeof CharacterUpdate.Type;
 
 /**
- * What a **player** may change about their own character — the first player
- * write in the product's history, and deliberately the smaller schema.
+ * What an **owner** may change about their own character — the durable half of
+ * the one shared sheet: their name, the fields the descriptor derives from,
+ * the numbers that move when they level up, where their real sheet lives, and
+ * the document.
  *
- * The captain's decision (`player-edits-own-character`) grants the **durable
- * half only**: their name, the fields the descriptor derives from, the
- * numbers that move when they level up, where their real sheet lives, and the
- * document. *Never hit points, never anything inside a live fight.*
+ * ### Why it is its own schema
  *
- * ### Why it is a second schema rather than a flag on `CharacterUpdate`
+ * The rule `PlayerSessionRecap` set, met on the write side: **distinct schemas
+ * on distinct paths, never a field filter over a wider type.** The live trio —
+ * `hpCurrent`, `tempHp`, `conditions` — has no field here at all: a hit point
+ * moves by delta through `CharacterDamage` (the campaign creator's act,
+ * through the seat), so an owner writing one is not a check that failed — it
+ * is not expressible, and the client's own encoder refuses it before a request
+ * leaves the browser.
  *
- * The same rule `PlayerSessionRecap` follows, met on the write side: **distinct
- * schemas on distinct paths, never a field filter over the wider type.** A
- * payload that *can* carry `hpCurrent` is one that eventually will, and the
- * thing standing between it and the column would be an `if` somebody has to
- * remember. Here the three live columns have no field at all, so a player
- * writing one is not a check that failed — it is not expressible, and it is
- * refused by the client's own encoder before a request leaves the browser.
- *
- * It is the same argument `CharacterAssign` already makes from the other side:
- * the DM-only act of saying whose character this is stays DM-only by *which
- * endpoint exists*.
- *
- * ### What is left out, and why each one
- *
- * - **`hpCurrent`, `tempHp`, `conditions`** — `0014`'s live trio, the values a
- *   fight and a character both hold. `hpCurrent` moves by delta through
- *   `CharacterDamage` and `conditions` writes through to every live combatant;
- *   both are the DM's, by the live-hit-points decision this one sits under.
- * - **`visibility`** — the row's own half of the disclosure seam. Who else at
- *   the table may read this sheet is the DM's answer, and it is not named by the
- *   decision. A new row still fails closed at `dm`, and it stays that way until
- *   a DM says otherwise.
- * - **`accountId`** — not on `CharacterUpdate` either, for the reason
- *   `CharacterAssign` gives at length: the owner of a row is precisely the field
- *   a player must not be able to send.
- * - **`descriptor`** — derived, and writable by nobody.
- *
- * `ac` and `hpMax` are *in*, and are the durable half rather than the live one:
- * they are `0012`'s prep columns, they are what changes when somebody levels or
- * finds better armour, and neither is a hit point. A combatant snapshots both at
- * seed time, so writing them reaches no fight already on the table.
+ * `accountId` is not here either: the owner of a row is precisely the field
+ * its owner must not be able to send. And there is no `visibility` — who at a
+ * table may see the character is the seat's question, the creator's to answer
+ * per campaign.
  */
 export const CharacterOwnUpdate = Schema.Struct({
+  /**
+   * Optimistic concurrency, opted into by sending the version the sheet was
+   * read at: the write is refused with a `Conflict` when the row has moved on
+   * — which, with one character shared across campaigns, is how two tables
+   * editing one sheet notice each other instead of silently overwriting.
+   * Omitted, the write is last-writer-wins, exactly as before.
+   */
+  expectedVersion: Schema.optional(Schema.Int),
   name: Schema.optional(Schema.NonEmptyString),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
   level: Schema.optional(Schema.NullOr(level)),
@@ -518,60 +444,19 @@ export const CharacterOwnUpdate = Schema.Struct({
 export type CharacterOwnUpdate = typeof CharacterOwnUpdate.Type;
 
 /**
- * What a **player** may say when they write down a character of their own —
- * `POST /me/campaigns/:campaignId/characters`, and the first row a non-DM has
- * ever been able to bring into being.
+ * Writing down a character of your own — `POST /me/campaigns/:c/characters`,
+ * which creates the top-level character **and its seat at the named campaign**
+ * in one transaction. Campaign-first survives the split because a seat is
+ * still where a new character is usually headed; a character with no seat is
+ * reachable through the same shape by leaving later.
  *
- * Until this existed a player at a shared table could not create a character at
- * all: `characters.create` composes `campaignWritable`, which requires `isDm`,
- * so every character in the product was typed by its DM and handed over with
- * `CharacterAssign`. That path is unchanged and is still the DM's; this is the
- * other door, and it opens onto a row the caller owns from the moment it exists.
- *
- * ### It is `CharacterOwnUpdate`'s shape, not `CharacterCreate`'s
- *
- * The same rule, met once more: **distinct schemas on distinct paths, never a
- * field filter over the wider type.** Four fields `CharacterCreate` carries are
- * absent here and each is absent for the reason `CharacterOwnUpdate` gives:
- *
- * - **`hpCurrent`** — and this is the one that would otherwise ride in on a
- *   good argument. `CharacterCreate` allows it because *a row that does not
- *   exist yet is in no fight*, so there is no second copy to disagree with; that
- *   is true of this insert too. But it answers a different question — how hurt
- *   somebody already is, which is the DM's to say and moves by delta everywhere
- *   else — and "safe on this one statement" is not the same as "a player's to
- *   set". A character created here starts with `hp_current` null, which is what
- *   the column default already means: *nobody has said yet*, neither zero nor
- *   full.
- * - **`tempHp`, `conditions`** — `0014`'s live trio, and neither is something
- *   true of a character before their first session.
- * - **`visibility`** — the row's own half of the disclosure seam. It falls to
- *   the column default, `dm`, which is the answer a new row must fail to: the
- *   player reads it because they own it (`ownRowReadable`), the DM reads it
- *   because `isDm` is a disjunct of the same predicate, and nobody else at the
- *   table does until the DM says so. **That is the property the whole slice is
- *   verified against**, and it is a column default rather than a decision this
- *   payload gets to make.
- *
- * **`accountId` is not here either, and there is nowhere it could go.** The
- * owner is `CurrentActor`'s, taken server-side — the `Invites.redeem` shape
- * verbatim, *"takes a token and nothing else … so a caller cannot invite
- * somebody else in"*. So the guarantee `CharacterAssign` buys by being its own
- * endpoint — a player cannot point a character at another account — is bought
- * here by the payload having no such field, which is the same guarantee from
- * the same direction.
- *
- * ### What bounds which *campaign* it lands in
- *
- * The campaign is a path segment and therefore a client claim, which is the one
- * way this endpoint differs from `me.updateCharacter` — a PATCH derives the
- * campaign from the row, and an insert has no row to derive it from. What
- * refuses a false claim is `ensureCampaignReadable`, which is exactly the
- * campaign half of `withinReadableCampaign`, the piece `ownRowReadable` and
- * `ownRowWritable` already share. So a row created through this gate is
- * guaranteed readable *and* writable by its creator afterwards, and a player at
- * a table the DM has not shared is refused here with the same `NotFound` they
- * get from everything else at that table. **No new predicate.**
+ * `accountId` is not here and there is nowhere it could go: the owner is
+ * `CurrentActor`'s, taken server-side. The live trio and `visibility` are
+ * absent for `CharacterOwnUpdate`'s reasons — a new character starts with
+ * `hp_current` null (*nobody has said yet*) and a `dm` seat, which its owner
+ * reads because they own the character and the campaign's creator reads
+ * because they run the table, and nobody else does until the creator shares
+ * the seat.
  */
 export const CharacterOwnCreate = Schema.Struct({
   name: Schema.NonEmptyString,
@@ -589,51 +474,22 @@ export const CharacterOwnCreate = Schema.Struct({
 export type CharacterOwnCreate = typeof CharacterOwnCreate.Type;
 
 /**
- * Apply damage or healing to a character, outside a fight or inside one.
+ * Apply damage or healing to a character, through their seat at one campaign —
+ * the creator's delta, `POST /campaigns/:c/party/:seatId/damage`.
  *
- * `CombatantDamage`'s shape exactly, and for its reasons — a delta rather than
- * an absolute, and its own endpoint rather than a `PATCH { hpCurrent }`,
- * because it is the mutation that repeats and therefore the one that has to be
- * safe to repeat. What is different is only where the number lands: this is the
- * trap in the corridor, the poison between rounds, the long rest, and the DM
- * reaching for the party list because the fight is over and someone is still
- * bleeding.
+ * A delta rather than an absolute, and its own endpoint rather than a
+ * `PATCH { hpCurrent }`, because it is the mutation that repeats and therefore
+ * the one that has to be safe to repeat. When the character is in a fight that
+ * is still on this campaign's table, the delta is applied to that fight's
+ * combatant and copied back — one clamp, one transaction, two rows that cannot
+ * part company. See `apps/server/src/repo/vitals.ts`.
  *
- * When the character is in a fight that is still on the table, the delta is
- * applied to that fight's combatant and copied back — one clamp, one
- * transaction, two rows that cannot part company. See
- * `apps/server/src/repo/vitals.ts`.
- *
- * `requestId` is honoured against the session's log, which is where a repeat is
- * recorded. With no session open there is nothing to record it against and a
- * repeat applies again; that is the same boundary the doorbell has, and it is
- * stated here rather than implied.
+ * **The number lands on the shared character**, which is the continuity
+ * decision working: damage taken at one table is what every other table sees,
+ * because there is one character. A second campaign's *live fight* keeps its
+ * own combatant copy until that fight writes — the same already-documented
+ * divergence a carried fight has always had, one table wider.
  */
-/**
- * Whose character this is — the DM saying which of the people at their table
- * plays it.
- *
- * **Its own endpoint rather than a field on `CharacterUpdate`, and that is the
- * whole shape of it.** The PATCH is where a player will one day edit their own
- * sheet, and a character's owner is precisely the field that must not travel on
- * a payload a player can send: a write that could re-point `accountId` would
- * let somebody hand their own character to somebody else, or take one. Kept
- * separate, the DM-only act stays DM-only by *which endpoint exists* rather
- * than by a field check somebody has to remember to write.
- *
- * `accountId` is not "any account". The server refuses one that does not hold a
- * live membership of this campaign, so the set of accounts a DM can name is the
- * set of people already at their table — which is also the only set they can
- * see.
- *
- * `null` unassigns, which is what a player leaving the table looks like from
- * the character's side. The character stays; it stops being anybody's.
- */
-export const CharacterAssign = Schema.Struct({
-  accountId: Schema.NullOr(AccountId),
-});
-export type CharacterAssign = typeof CharacterAssign.Type;
-
 export const CharacterDamage = Schema.Struct({
   /** Positive damages, negative heals. Zero is legal and does nothing. */
   amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),

@@ -6,6 +6,7 @@ import {
   campaign,
   campaignId,
   character,
+  characterSeat,
   encounter,
   encounterId,
   goblinId,
@@ -21,6 +22,7 @@ import {
   renderParty,
   renderScreen,
   rosterRowId,
+  seatId,
   session,
   sessionId,
   page,
@@ -41,7 +43,7 @@ installMemoryStorage();
 const campaignPath = `/campaigns/${campaignId}`;
 const encountersPath = `/campaigns/${campaignId}/encounters`;
 const notesPath = `/campaigns/${campaignId}/notes`;
-const charactersPath = `/campaigns/${campaignId}/characters`;
+const partyPath = `/campaigns/${campaignId}/party`;
 const prepPath = `/campaigns/${campaignId}/sessions/${sessionId}/prep`;
 
 const created = (name: string) => ({
@@ -400,137 +402,83 @@ describe("sharing a campaign", () => {
   });
 });
 
-describe("authoring a character", () => {
+describe("the seats — the creator's two verbs", () => {
+  /**
+   * **The DM-typed character is gone, and this block is what replaced its
+   * tests.** Under the continuity decision of 2026-09-01 a character is
+   * account-owned and written by its owner through the create flow; the
+   * campaign holds a *seat* over it. So the Party screen offers no *Add
+   * character* and no per-row pencil any more — the creator's writes are the
+   * seat's own two verbs, sharing it with the table and retiring it, which is
+   * the whole of `PartySeatUpdate` and `party.leave` given controls.
+   */
   const openParty = async () => {
-    // **A character is written on the Party screen since the split.** The
-    // campaign row has one *Party* destination, so the tab's authoring went
-    // where the tab did rather than being deleted with it.
     await renderParty(mintingSession());
     await screen.findByRole("heading", { name: "Party" });
   };
 
-  it("writes one down, omitting what the DM left blank", async () => {
-    server.routes.set(`POST ${charactersPath}`, { status: 200, body: character });
+  it("offers no character authoring at all — the owner writes, the table seats", async () => {
     await openParty();
+    await screen.findByText("Brannoc");
 
-    // The Party screen's create button — the old tab's, where the tab went.
-    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
-
-    await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
-    await userEvent.type(screen.getByRole("textbox", { name: "Player" }), "Ilse");
-    await userEvent.type(screen.getByRole("spinbutton", { name: "Level" }), "3");
-    await userEvent.type(screen.getByRole("textbox", { name: "Race" }), "Half-orc");
-    await userEvent.type(screen.getByRole("textbox", { name: "Class" }), "Paladin");
-    await userEvent.type(screen.getByRole("spinbutton", { name: "AC" }), "18");
-
-    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
-
-    await waitFor(() =>
-      expect(bodyOf(server, "POST", "/characters")).toEqual({
-        name: "Brannoc",
-        playerName: "Ilse",
-        // The fields that replaced the typed descriptor. **No `descriptor` is
-        // sent and none could be** — it is derived by a generated column, and
-        // `CharacterCreate` has no such field.
-        level: 3,
-        race: "Half-orc",
-        className: "Paladin",
-        ac: 18,
-        // `hpMax`, `sheetUrl` and `sheet` are absent rather than null:
-        // `CharacterCreate` takes no null, and an unfilled number is not a
-        // zero — `PartyList` renders each stat only when there is one.
-        visibility: "dm",
-      }),
-    );
+    expect(screen.queryByRole("button", { name: "Add character" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit Brannoc" })).toBeNull();
   });
 
-  it("sends shared only when the DM says so", async () => {
-    server.routes.set(`POST ${charactersPath}`, { status: 200, body: character });
-    await openParty();
-    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
-
-    await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Brannoc");
-    expect(screen.getByText("Only you can see this character.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("switch", { name: "Players can see this" }));
-
-    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
-
-    await waitFor(() =>
-      expect(bodyOf(server, "POST", "/characters")).toMatchObject({ visibility: "shared" }),
-    );
-  });
-
-  it("opens on what is already there, and clears a field with a null", async () => {
-    server.routes.set(`PATCH ${charactersPath}/${character.id}`, {
+  it("shares a seat with the table, naming the seat and nothing of the sheet", async () => {
+    server.routes.set(`PATCH ${partyPath}/${seatId}`, {
       status: 200,
-      body: { ...character, level: null, descriptor: "Half-orc Paladin" },
+      body: { seat: { ...characterSeat, visibility: "shared" }, character },
     });
     await openParty();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Edit Brannoc" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Share Brannoc with the table" }),
+    );
 
-    expect(await screen.findByRole("textbox", { name: "Character" })).toHaveValue("Brannoc");
-    expect(screen.getByRole("textbox", { name: "Player" })).toHaveValue("Ilse");
-    expect(screen.getByRole("spinbutton", { name: "Hit points" })).toHaveValue(52);
-    expect(screen.getByRole("spinbutton", { name: "Level" })).toHaveValue(3);
-    expect(screen.getByRole("textbox", { name: "Race" })).toHaveValue("Half-orc");
-    expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("Owes the ferryman a name.");
-    // And there is no descriptor field, at all: the half-line is derived from
-    // the identity boxes above, and a form that offered to type it would be the
-    // second answer this shape exists to prevent.
-    expect(screen.queryByRole("textbox", { name: "Descriptor" })).toBeNull();
-
-    await userEvent.clear(screen.getByRole("spinbutton", { name: "Level" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    // A null on update where create omits the field: emptying a box means
-    // "there is no answer", and omitting it would leave the old one. The sheet
-    // goes back whole, so the abilities and features this form never showed
-    // survive an edit made through it.
+    // The payload is the seat's own column and only that: the shared
+    // character's sheet is its owner's, and the PATCH has no field for it.
     await waitFor(() =>
-      expect(bodyOf(server, "PATCH", `/characters/${character.id}`)).toEqual({
-        name: "Brannoc",
-        playerName: "Ilse",
-        level: null,
-        race: "Half-orc",
-        subrace: null,
-        className: "Paladin",
-        ac: 18,
-        hpMax: 52,
-        sheetUrl: null,
-        sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
-        visibility: "dm",
-      }),
+      expect(bodyOf(server, "PATCH", `/party/${seatId}`)).toEqual({ visibility: "shared" }),
     );
   });
 
-  it("refuses a nameless character, and a number out of range, before anything is sent", async () => {
+  it("hides a shared seat again — the same button, reading the current answer", async () => {
+    server.routes.set(`GET ${partyPath}`, {
+      status: 200,
+      body: [{ seat: { ...characterSeat, visibility: "shared" }, character }],
+    });
+    server.routes.set(`PATCH ${partyPath}/${seatId}`, {
+      status: 200,
+      body: { seat: characterSeat, character },
+    });
     await openParty();
-    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
 
-    await userEvent.type(await screen.findByRole("spinbutton", { name: "AC" }), "99");
-    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
-
-    expect(await screen.findByText("Give them a name.")).toBeInTheDocument();
-    expect(screen.getByText("Between 0 and 40.")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Character" })).toHaveAttribute(
-      "aria-invalid",
-      "true",
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Hide Brannoc from the table" }),
     );
-    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/party/${seatId}`)).toEqual({ visibility: "dm" }),
+    );
   });
 
-  it("says so, in the form, when the server refuses the save", async () => {
+  it("retires a seat, which is a DELETE and never touches the character", async () => {
+    server.routes.set(`DELETE ${partyPath}/${seatId}`, { status: 204, body: undefined });
     await openParty();
-    await userEvent.click(await screen.findByRole("button", { name: "Add character" }));
 
-    await userEvent.type(await screen.findByRole("textbox", { name: "Character" }), "Too late");
-    await userEvent.click(screen.getByRole("button", { name: "Add character" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Retire Brannoc's seat" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That campaign is gone, or it belongs to someone else.",
+    await waitFor(() =>
+      expect(
+        server.calls.some(
+          (call) => call.method === "DELETE" && call.pathname === `${partyPath}/${seatId}`,
+        ),
+      ).toBe(true),
     );
-    expect(screen.getByRole("textbox", { name: "Character" })).toHaveValue("Too late");
+    // Retiring is the only removal, and it is the seat's: no request of any
+    // kind names `/me/characters` — the shared row is its owner's to keep.
+    expect(server.calls.some((call) => call.pathname.includes("/me/characters"))).toBe(false);
   });
 });
 

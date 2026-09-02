@@ -115,7 +115,9 @@ beforeAll(async () => {
     const api = yield* clientFor(issued.token);
 
     const campaign = yield* campaignVia(api, { name: "The Salt Road", visibility: "dm" });
-    yield* api.characters.create({
+    // The creator's own character, seated by the same write — an
+    // account-owned row whose seat is what the fight seeds from.
+    yield* api.me.createCharacter({
       params: { campaignId: campaign.id },
       payload: {
         name: "Brannoc",

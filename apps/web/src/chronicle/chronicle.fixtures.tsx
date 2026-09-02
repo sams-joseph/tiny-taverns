@@ -268,7 +268,7 @@ export const fullChronicle = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) }],
-    [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/party`, { status: 200, body: [] }],
     // The night being prepared, which the campaign row names in its badge.
     [`GET /campaigns/${campaignId}/sessions/${session12Id}`, { status: 200, body: session12 }],
     // The fight session 12 picked up is still on the table, so the campaign

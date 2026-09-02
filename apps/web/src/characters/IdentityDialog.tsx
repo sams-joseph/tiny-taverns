@@ -1,4 +1,4 @@
-import type { Character } from "@taverns/api";
+import type { OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -58,15 +58,21 @@ const parseOptional = (raw: string): number | null | undefined =>
 const isWebUrl = (raw: string): boolean => /^https?:\/\//i.test(raw);
 
 export function IdentityDialog({
-  character,
+  owned,
   onClose,
   onSaved,
 }: {
-  readonly character: Character;
+  /**
+   * The character with its seats — the seats are the write's blast radius
+   * (`ownCharacterWrites` names one party per seat), and the character no
+   * longer names a campaign on its own.
+   */
+  readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   /** Re-reads the screen: `descriptor` is derived, so the row comes back changed. */
   readonly onSaved: () => void;
 }) {
+  const character = owned.character;
   const [name, setName] = useState(character.name);
   const [playerName, setPlayerName] = useState(character.playerName ?? "");
   const [levelText, setLevelText] = useState(
@@ -146,7 +152,7 @@ export function IdentityDialog({
         }),
       // A level, a race, a subrace or a class moves the generated `descriptor` — which
       // the DM's party strip draws. See `ownCharacterWrites`.
-      ownCharacterWrites(character),
+      ownCharacterWrites(owned),
     );
 
     if (Result.isSuccess(saved)) onSaved();

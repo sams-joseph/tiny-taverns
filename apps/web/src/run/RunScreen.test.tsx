@@ -243,7 +243,7 @@ describe("the runner", () => {
    * `conditions` is written through to the `character` row in the same
    * transaction (`repo/vitals.ts`), so a condition typed on the initiative list
    * moves what the DM's party list says on a screen this dialog has never seen.
-   * That is why `CombatantDialog` names `reads.characters` — and it is the one
+   * That is why `CombatantDialog` names `reads.party` — and it is the one
    * key on this screen, because everything else a fight writes is the fight's.
    *
    * The fight itself is deliberately *not* named: the runner learns what it did
@@ -269,7 +269,7 @@ describe("the runner", () => {
     // Nothing here can observe the DM's party screen, so what is pinned is the
     // list this write hands the seam. `api/invalidation.test.tsx` is what says
     // the seam then does something with it.
-    expect(combatantWrites(campaignId)).toEqual([reads.characters(campaignId)]);
+    expect(combatantWrites(campaignId)).toEqual([reads.party(campaignId)]);
   });
 
   it("says where to get a credential rather than looking broken", async () => {

@@ -113,7 +113,10 @@ describe("campaign, session, character and note CRUD", () => {
           params: { campaignId },
           payload: { number: 12, title: "The ford" },
         });
-        const character = yield* client.characters.create({
+        // A character is account-owned now and written through `me` — the
+        // campaign in the path is where its seat goes, in the same
+        // transaction. The campaign side of it is a party seat.
+        const character = yield* client.me.createCharacter({
           params: { campaignId },
           payload: {
             name: "Ilse",
@@ -125,11 +128,12 @@ describe("campaign, session, character and note CRUD", () => {
             hpMax: 21,
           },
         });
+        const party = yield* client.party.list({ params: { campaignId } });
 
         const readBack = yield* client.notes.findById({ params: { campaignId, noteId: note.id } });
         const listed = yield* client.campaigns.list();
 
-        return { campaign, note, session, character, readBack, listed };
+        return { campaign, note, session, character, party, readBack, listed };
       }).pipe(Effect.orDie),
     );
 
@@ -143,6 +147,12 @@ describe("campaign, session, character and note CRUD", () => {
     // Derived by the generated column from the three that were sent, and
     // writable through none of them — see `0012_character_sheet.ts`.
     expect(seen.character.descriptor).toBe("Level 3 Half-orc Paladin");
+    // The seat `createCharacter` wrote in the same transaction, with the
+    // display name snapshotted from the character at join time.
+    expect(seen.party.map((row) => row.character?.id)).toContain(seen.character.id);
+    expect(
+      seen.party.find((row) => row.character?.id === seen.character.id)?.seat.displayName,
+    ).toBe("Ilse");
     expect(seen.readBack.body).toBe("Decide what the crate contains");
     expect(seen.listed.map((campaign) => campaign.id)).toContain(seen.campaign.id);
 

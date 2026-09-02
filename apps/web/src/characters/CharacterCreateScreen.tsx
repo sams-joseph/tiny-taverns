@@ -210,23 +210,23 @@ export function CharacterCreateScreen() {
   };
 
   /**
-   * The membership rather than the campaign, because `role` is the half that
-   * decides whether this screen is the right door — and it is already read.
+   * The membership rather than the campaign, because being at the table at all
+   * is the half that decides whether this screen is the right door — and it is
+   * already read.
    *
-   * Two refusals rather than one, and they are different sentences because they
-   * are different situations. **Not a member** is the one the server would give
-   * too, and there is nothing to do about it here. **A member as the DM** is a
-   * table you can reach and still the wrong door: `ensureCampaignReadable`
-   * would let you through — `isDm` is a disjunct of `campaignReadable`, and the
-   * server documents that as harmless — but the pill is a *mode*, and the way
-   * to write a character at a table you run is `campaign/CharacterDialog.tsx`.
+   * **Any membership will do, the creator's included** — the continuity
+   * decision of 2026-09-01 made a character account-owned and the creator a
+   * player too, so the old second refusal (*"You run this table"*, back when
+   * the DM typed characters up in a dialog of their own) is gone with the
+   * dialog. The one refusal left is the one the server would give too: not at
+   * this table.
    *
    * It matters that this agrees with `tablesForNewCharacter`, which is what the
    * picker folds: a screen that drew a form the picker would never have offered
    * would be a second answer to the same question, reachable by typing a URL.
    */
   const membership = view?.memberships.find((row) => row.campaign.id === campaignId);
-  const writable = membership !== undefined && membership.relation === "player";
+  const writable = membership !== undefined;
 
   /**
    * The classes, races and backgrounds **this table** offers — the three
@@ -344,23 +344,16 @@ export function CharacterCreateScreen() {
 
       {view !== undefined &&
         (!writable ? (
-          membership === undefined ? (
-            // The read this screen already makes is what answers it, so the form
-            // is never drawn over a table the save would refuse. `GET
-            // /me/campaigns` is the live shelf and composes the same membership
-            // clause `ensureCampaignReadable` does, so "not in the answer" and
-            // "the create would 404" are the same fact rather than two that
-            // could disagree.
-            <EmptyState icon="eye-off" title="Not your table">
-              You are not at this table, or its DM has not shared it yet. A table appears here once
-              you have followed the link its DM sent you and they have opened it up.
-            </EmptyState>
-          ) : (
-            <EmptyState icon="crown" title="You run this table">
-              A character of your own belongs at a table you play at. The people at this one are on
-              your party screen, and that is where you write them down.
-            </EmptyState>
-          )
+          // The read this screen already makes is what answers it, so the form
+          // is never drawn over a table the save would refuse. `GET
+          // /me/campaigns` is the live shelf and composes the same membership
+          // clause `ensureCampaignReadable` does, so "not in the answer" and
+          // "the create would 404" are the same fact rather than two that
+          // could disagree.
+          <EmptyState icon="eye-off" title="Not your table">
+            You are not at this table, or its DM has not shared it yet. A table appears here once
+            you have followed the link its DM sent you and they have opened it up.
+          </EmptyState>
         ) : stage === "describe" ? (
           hob.draft !== undefined ? (
             /* **The drawn step 2**, and the aside beside it — the sheet as Hob

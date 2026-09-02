@@ -1,57 +1,65 @@
-import {
-  type AccountId,
-  Actor,
-  type Campaign,
-  type Character,
-  type CharacterId,
-  CurrentActor,
-  NotFound,
-} from "@taverns/api";
+import { type Actor, type Campaign, CurrentActor, NotFound } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
-import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
+import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Party } from "../src/repo/Party.js";
 import { Search } from "../src/repo/Search.js";
-import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import {
+  aCharacterAt,
+  accountWide,
+  anAccount,
+  aPlayerAt,
+  createCampaign,
+  scopedTo,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * `character.account_id`, once it means something — the DM's assignment and the
- * one reach it grants.
+ * Ownership and reach, once they are different questions.
  *
- * The defect this closes was measured before it was fixed: a player who joined
- * a shared campaign saw an empty party and a 404 on their own character,
- * because the shipped `CharacterDialog` correctly defaults a new row to `dm`
- * and owning a row granted nothing. Both halves were true and neither was
- * wrong on its own.
+ * Under the continuity decision a character is **account-owned and top-level**,
+ * and the two predicates that answer for it answer different things:
  *
- * The fix is one disjunct in one predicate (`ownedRowReadable`), and a
- * disjunct is exactly the kind of change that widens more than it was meant
- * to. So most of this file is the **negative space**: what ownership does not
- * grant. In order —
+ * - **`ownCharacter`** — `character.account_id` is the actor's own. No
+ *   campaign, no membership, no credential-scope narrowing, deliberately: a
+ *   top-level character has no campaign for any of those to be about, the same
+ *   argument `libraryRowReadable` wrote down first. It is what `mine`,
+ *   `updateOwn` and `removeOwn` compose, so the owner reaches their own
+ *   character **everywhere and always** — through an unshared table, past a
+ *   revocation, on a credential minted for somewhere else.
+ * - **`characterSeatedAt`** — a campaign reaches a character exactly when a
+ *   **live seat** there is readable. The seat's own `ownedRowReadable` carries
+ *   the whole campaign gate (live membership, credential scope, the
+ *   `campaign.visibility` master toggle) plus the seat's `visibility` with the
+ *   creator/owner disjuncts. It is what the campaign search's character arm
+ *   composes, and it is the only way a campaign read ever touches the shared
+ *   row.
  *
- *   1. the assignment: who may make one, and whom it may name
- *   2. the reach it grants — your own row, whatever its visibility
- *   3. the four narrowings it must not lose
- *   4. what did not change: the DM's view, and every write
+ * **Neither leaks into the other**, and that is the file: retiring a seat ends
+ * the campaign's reach without touching the owner's, and owning a character
+ * grants a table nothing it did not seat. The old file's subject — the DM's
+ * assignment — is gone with the model: ownership is set at creation from the
+ * credential, `CharacterAssign` left the wire, and re-pointing a character is
+ * not expressible (pinned below at the type level, not merely untested).
  *
- * `characters.test.ts`'s "grants nothing when it is set behind the product's
- * back" still passes unchanged, and is the complement of §3: the account there
- * is a member of nothing.
+ * `party.test.ts` owns the seat lifecycle itself (join, share, retire, the
+ * revocation's transaction); this file drives the *predicates* through the
+ * reads that compose them.
  */
 
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    Characters.layer,
     Groups.layer,
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     Search.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_character_ownership"))),
 );
@@ -62,16 +70,17 @@ const withActor =
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A> = (effect) =>
+  runtime.runPromise(effect as never);
+
 /**
- * One shared table with two players, and a second table run by somebody else.
- *
- * Every character below is created with the payload `CharacterDialog.tsx`
- * sends — `visibility: "dm"`, the fail-closed default — because that default is
- * half of the defect and keeping it is half of the fix.
+ * One shared table (Jo's, with Pim and Marta playing) and one stranger's (Fen's
+ * own). Every seat starts `dm` — the fail-closed default — except Sister
+ * Pell's, which Jo shares so "the answer is not empty" is never what an
+ * assertion is measuring.
  */
 const makeFixture = Effect.gen(function* () {
-  const characters = yield* Characters;
-
   const jo = yield* anAccount("Jo");
   const asJo = withActor(jo);
   const table = yield* asJo(createCampaign({ name: "The Salt Road", visibility: "shared" }));
@@ -79,349 +88,243 @@ const makeFixture = Effect.gen(function* () {
   const pim = yield* aPlayerAt(table.id, "Pim");
   const marta = yield* aPlayerAt(table.id, "Marta");
 
-  const brannoc = yield* asJo(
-    characters.create(table.id, { name: "Brannoc", playerName: "Pim", visibility: "dm" }),
-  );
-  const sorrel = yield* asJo(
-    characters.create(table.id, { name: "Sorrel", playerName: "Marta", visibility: "dm" }),
-  );
-  // The one row the DM has shared with the table, so "the party list is not
-  // empty" is never what an assertion below is really measuring.
-  const pell = yield* asJo(
-    characters.create(table.id, { name: "Sister Pell", visibility: "shared" }),
+  const brannoc = yield* aCharacterAt(table.id, pim, { name: "Brannoc" });
+  const sorrel = yield* aCharacterAt(table.id, marta, { name: "Sorrel" });
+  const pell = yield* aCharacterAt(
+    table.id,
+    jo,
+    { name: "Sister Pell" },
+    { seatVisibility: "shared" },
   );
 
   const fen = yield* anAccount("Fen");
   const elsewhere = yield* withActor(fen)(
     createCampaign({ name: "Salt and Sixpence", visibility: "shared" }),
   );
-  const sixpence = yield* withActor(fen)(
-    characters.create(elsewhere.id, { name: "Sixpence", visibility: "dm" }),
-  );
+  const sixpence = yield* aCharacterAt(elsewhere.id, fen, { name: "Sixpence" });
 
   return { jo, pim, marta, fen, table, elsewhere, brannoc, sorrel, pell, sixpence };
 });
 
-interface Fixture {
-  readonly jo: Actor;
-  readonly pim: Actor;
-  readonly marta: Actor;
-  readonly fen: Actor;
-  readonly table: Campaign;
-  readonly elsewhere: Campaign;
-  readonly brannoc: Character;
-  readonly sorrel: Character;
-  readonly pell: Character;
-  readonly sixpence: Character;
-}
-
+type Fixture = Effect.Success<typeof makeFixture>;
 let fixture: Fixture;
-
-/** Assigns as the DM, and hands back whatever the repository answered. */
-const assign = (actor: Actor, id: CharacterId, accountId: AccountId | null) =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const characters = yield* Characters;
-      return yield* withActor(actor)(characters.assign(fixture.table.id, id, { accountId })).pipe(
-        Effect.result,
-      );
-    }),
-  );
-
-const read = (actor: Actor, campaignId: Campaign["id"], id: CharacterId) =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const characters = yield* Characters;
-      return yield* withActor(actor)(characters.findById(campaignId, id)).pipe(Effect.result);
-    }),
-  );
-
-const list = (actor: Actor, campaignId: Campaign["id"]) =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const characters = yield* Characters;
-      return yield* withActor(actor)(characters.list(campaignId)).pipe(Effect.result);
-    }),
-  );
-
-const names = (result: Awaited<ReturnType<typeof list>>): ReadonlyArray<string> =>
-  result._tag === "Success" ? result.success.map((character) => character.name).sort() : ["FAILED"];
-
 beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture.pipe(Effect.orDie));
-  // The state the rest of the file is about: each player's character points at
-  // them, assigned through the product rather than behind its back.
-  const first = await assign(fixture.jo, fixture.brannoc.id, fixture.pim.accountId);
-  const second = await assign(fixture.jo, fixture.sorrel.id, fixture.marta.accountId);
-  expect(first._tag).toBe("Success");
-  expect(second._tag).toBe("Success");
+  fixture = await run(makeFixture);
 }, 30_000);
 
-describe("the assignment: the DM's act, and whom it may name", () => {
-  it("points a character at a member of this table, and says so on the wire", async () => {
-    const asDm = await read(fixture.jo, fixture.table.id, fixture.brannoc.id);
-    expect(asDm._tag === "Success" && asDm.success.accountId).toBe(fixture.pim.accountId);
+/** The character arm of a campaign search — `characterSeatedAt`, driven. */
+const found = (actor: Actor, campaignId: Campaign["id"], q: string) =>
+  run(
+    withActor(actor)(
+      Effect.map(
+        Effect.flatMap(Search, (search) => search.search(campaignId, { q })),
+        (hits) => hits.filter((hit) => hit.source === "character").map((hit) => hit.title),
+      ),
+    ),
+  );
+
+/** The same read, expected to be refused — hands back the typed failure. */
+const foundRefused = (actor: Actor, campaignId: Campaign["id"], q: string) =>
+  run(
+    withActor(actor)(Effect.flatMap(Search, (search) => search.search(campaignId, { q }))).pipe(
+      Effect.flip,
+    ),
+  );
+
+const mineNames = (actor: Actor) =>
+  run(
+    withActor(actor)(
+      Effect.map(
+        Effect.flatMap(Characters, (characters) => characters.mine),
+        (owned) => owned.map((row) => row.character.name).sort(),
+      ),
+    ),
+  );
+
+describe("ownership: the owner, everywhere and always", () => {
+  it("answers `mine` with the owner's characters and their seats, and nobody else's", async () => {
+    const names = await mineNames(fixture.pim);
+    expect(names).toEqual(["Brannoc"]);
+
+    const owned = await run(
+      withActor(fixture.pim)(Effect.flatMap(Characters, (characters) => characters.mine)),
+    );
+    expect(owned[0]!.seats.map((seat) => seat.campaignId)).toEqual([fixture.table.id]);
+    // Sorrel is Marta's and Sixpence is Fen's; owning a character grants no
+    // reach into anybody else's, whatever tables they share.
+    expect(names).not.toContain("Sorrel");
+    expect(names).not.toContain("Sixpence");
   });
 
-  it("refuses an account that is not a member here — including one that is a member elsewhere", async () => {
-    // Fen runs their own table and is a stranger at this one. The refusal names
-    // the member rather than the character, because the caller is the DM and
-    // has already proved they may write this row: telling them "that person is
-    // not at your table" is the whole usefulness of the endpoint failing.
-    const stranger = await assign(fixture.jo, fixture.pell.id, fixture.fen.accountId);
-    expect(stranger._tag).toBe("Failure");
-    expect(stranger._tag === "Failure" && (stranger.failure as NotFound).resource).toBe("member");
-
-    // …and nothing was written.
-    const after = await read(fixture.jo, fixture.table.id, fixture.pell.id);
-    expect(after._tag === "Success" && after.success.accountId).toBeNull();
+  it("ignores credential scope, deliberately — a top-level row has no campaign for it to be about", async () => {
+    // Pim's own account, scoped to Fen's table: the campaign reads below all
+    // refuse this credential, and `mine` still answers, because `ownCharacter`
+    // applies no scope clause — `libraryRowReadable`'s documented reasoning,
+    // one table across. Whoever mints the first scoped credential over HTTP
+    // should know this is a decision, not an omission.
+    const misScoped = scopedTo(fixture.pim, fixture.elsewhere.id);
+    expect(await mineNames(misScoped)).toEqual(["Brannoc"]);
   });
 
-  it("refuses a member whose membership has been revoked", async () => {
-    const revoked = await runtime.runPromise(
+  it("survives everything a campaign can do, because it is not a campaign fact", async () => {
+    // The owner edits their character through a table that was never shared:
+    // creation needed a readable campaign (campaign-first), but the ownership
+    // write is campaign-free — the sheet is theirs between games, after a
+    // falling-out, wherever.
+    const quiet = await run(
+      withActor(fixture.jo)(createCampaign({ name: "The Weir", visibility: "shared" })),
+    );
+    const guest = await run(aPlayerAt(quiet.id, "Kofi"));
+    const { character } = await run(aCharacterAt(quiet.id, guest, { name: "Kofi's Own" }));
+    await run(
+      withActor(fixture.jo)(
+        Effect.flatMap(Campaigns, (campaigns) => campaigns.update(quiet.id, { visibility: "dm" })),
+      ),
+    );
+    const updated = await run(
+      withActor(guest)(
+        Effect.flatMap(Characters, (characters) =>
+          characters.updateOwn(character.id, { level: 3 }),
+        ),
+      ),
+    );
+    expect(updated.level).toBe(3);
+    expect(await mineNames(guest)).toContain("Kofi's Own");
+  });
+
+  it("cannot be re-pointed: assignment left the model with the campaign-scoped row", async () => {
+    await run(
       Effect.gen(function* () {
         const characters = yield* Characters;
-        const invites = yield* Invites;
-
-        const asJo = withActor(fixture.jo);
-        const scratch = yield* asJo(createCampaign({ name: "The Ferry", visibility: "shared" }));
-        const guest = yield* aPlayerAt(scratch.id, "Wren");
-        const character = yield* asJo(characters.create(scratch.id, { name: "Wren's own" }));
-
-        // Withdraw the invitation they took, which revokes the membership it
-        // granted — the shipped path, not a hand-written update.
-        const issued = yield* asJo(invites.list(scratch.groupId));
-        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
-
-        return yield* asJo(
-          characters.assign(scratch.id, character.id, { accountId: guest.accountId }),
-        ).pipe(Effect.result);
-      }).pipe(Effect.orDie),
+        // @ts-expect-error — `assign` is gone from the service, as
+        // `CharacterAssign` is gone from the wire. Ownership is set at
+        // creation from the credential and no act re-points a character; if
+        // this line ever compiles again, that boundary has been reopened.
+        expect(characters.assign).toBeUndefined();
+      }),
     );
-
-    expect(revoked._tag).toBe("Failure");
-    expect(revoked._tag === "Failure" && (revoked.failure as NotFound).resource).toBe("member");
-  });
-
-  it("is refused to a player — including for their own character", async () => {
-    // A player may not hand their character to somebody else, and may not take
-    // one. The refusal is the ordinary `NotFound` naming the character, so a
-    // caller who is not the DM learns nothing about the account they named.
-    const ownRow = await assign(fixture.pim, fixture.brannoc.id, fixture.marta.accountId);
-    const someoneElses = await assign(fixture.marta, fixture.brannoc.id, fixture.marta.accountId);
-
-    expect(ownRow._tag).toBe("Failure");
-    expect(ownRow._tag === "Failure" && (ownRow.failure as NotFound).resource).toBe("character");
-    expect(someoneElses._tag).toBe("Failure");
-
-    const unchanged = await read(fixture.jo, fixture.table.id, fixture.brannoc.id);
-    expect(unchanged._tag === "Success" && unchanged.success.accountId).toBe(fixture.pim.accountId);
-  });
-
-  it("cannot reach a character in another campaign by naming this one", async () => {
-    // The campaign in the path is a claim, as everywhere else: Jo naming their
-    // own table and Fen's character gets the ordinary 404.
-    const smuggled = await assign(fixture.jo, fixture.sixpence.id, fixture.pim.accountId);
-    expect(smuggled._tag).toBe("Failure");
-    expect(smuggled._tag === "Failure" && (smuggled.failure as NotFound).resource).toBe(
-      "character",
-    );
-  });
-
-  it("unassigns with null, and the row stops being anybody's", async () => {
-    const character = await runtime.runPromise(
-      Effect.gen(function* () {
-        const characters = yield* Characters;
-        return yield* withActor(fixture.jo)(characters.create(fixture.table.id, { name: "Loan" }));
-      }).pipe(Effect.orDie),
-    );
-
-    const given = await assign(fixture.jo, character.id, fixture.pim.accountId);
-    expect(given._tag === "Success" && given.success.accountId).toBe(fixture.pim.accountId);
-    expect((await read(fixture.pim, fixture.table.id, character.id))._tag).toBe("Success");
-
-    const taken = await assign(fixture.jo, character.id, null);
-    expect(taken._tag === "Success" && taken.success.accountId).toBeNull();
-    expect((await read(fixture.pim, fixture.table.id, character.id))._tag).toBe("Failure");
   });
 });
 
-describe("the reach it grants: your own row, whatever its visibility", () => {
-  it("is the defect, closed: a character created by the dialog is reachable by the player it names", async () => {
-    // `visibility: "dm"` throughout — the DM shared nothing by hand. Before the
-    // ownership disjunct this list held only `Sister Pell` and the read was a
-    // 404.
-    expect(names(await list(fixture.pim, fixture.table.id))).toEqual(["Brannoc", "Sister Pell"]);
-    expect((await read(fixture.pim, fixture.table.id, fixture.brannoc.id))._tag).toBe("Success");
+describe("the seat: a campaign's only reach into the shared row", () => {
+  it("reaches your own character through your own seat, whatever the seat's visibility", async () => {
+    // Brannoc's seat is `dm` — the DM shared nothing — and Pim still finds
+    // their own character in the campaign search. The owner disjunct on the
+    // *seat*, doing what the old ownership disjunct on the row did.
+    expect(await found(fixture.pim, fixture.table.id, "Brannoc")).toEqual(["Brannoc"]);
   });
 
-  it("finds it in search, by the same predicate the list reads through", async () => {
-    const hits = await runtime.runPromise(
-      Effect.gen(function* () {
-        const search = yield* Search;
-        return yield* withActor(fixture.pim)(search.search(fixture.table.id, { q: "Brannoc" }));
-      }).pipe(Effect.orDie),
-    );
-    expect(hits.map((hit) => (hit.source === "character" ? hit.title : hit.source))).toEqual([
-      "Brannoc",
-    ]);
-  });
-});
-
-describe("what ownership does not grant", () => {
-  it("does not reach another player's row", async () => {
-    // Marta's character is `dm` and points at Marta. Pim is a member of the
-    // same campaign and gets the ordinary refusal — from the list and by id.
-    expect(names(await list(fixture.pim, fixture.table.id))).not.toContain("Sorrel");
-    expect((await read(fixture.pim, fixture.table.id, fixture.sorrel.id))._tag).toBe("Failure");
-
-    const hits = await runtime.runPromise(
-      Effect.gen(function* () {
-        const search = yield* Search;
-        return yield* withActor(fixture.pim)(search.search(fixture.table.id, { q: "Sorrel" }));
-      }).pipe(Effect.orDie),
-    );
-    expect(hits).toEqual([]);
+  it("hides another player's dm seat and shows a shared one — the seat's visibility deciding", async () => {
+    expect(await found(fixture.pim, fixture.table.id, "Sorrel")).toEqual([]);
+    expect(await found(fixture.pim, fixture.table.id, "Pell")).toEqual(["Sister Pell"]);
+    // The creator reads every seat, shared or not.
+    expect(await found(fixture.jo, fixture.table.id, "Sorrel")).toEqual(["Sorrel"]);
   });
 
-  it("does not reach a row in a campaign the account is not a member of", async () => {
-    // Written with raw SQL because the product refuses to produce it — which is
-    // the point: this is the predicate answering, with no endpoint in front of
-    // it. Pim has never been at Fen's table.
-    await runtime.runPromise(
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
-          update character set account_id = ${fixture.pim.accountId}
-          where id = ${fixture.sixpence.id}
-        `;
-      }).pipe(Effect.orDie),
+  it("ends with the seat: a retired seat stops the campaign's reach and leaves the owner's alone", async () => {
+    // The headline. Pim seats a second character, then leaves the table with
+    // it: the campaign can no longer say the character exists — even to its
+    // creator — while `mine` still answers its owner in full.
+    const { character, seatId } = await run(
+      aCharacterAt(fixture.table.id, fixture.pim, { name: "Reedwalker" }),
+    );
+    expect(await found(fixture.jo, fixture.table.id, "Reedwalker")).toEqual(["Reedwalker"]);
+
+    await run(
+      withActor(fixture.pim)(
+        Effect.flatMap(Party, (party) => party.leave(fixture.table.id, seatId)),
+      ),
     );
 
-    expect((await read(fixture.pim, fixture.elsewhere.id, fixture.sixpence.id))._tag).toBe(
-      "Failure",
+    expect(await found(fixture.jo, fixture.table.id, "Reedwalker")).toEqual([]);
+    expect(await found(fixture.pim, fixture.table.id, "Reedwalker")).toEqual([]);
+    expect(await mineNames(fixture.pim)).toContain("Reedwalker");
+    // …and the character is untouched by the retirement.
+    const owned = await run(
+      withActor(fixture.pim)(Effect.flatMap(Characters, (characters) => characters.mine)),
     );
-    expect((await list(fixture.pim, fixture.elsewhere.id))._tag).toBe("Failure");
+    expect(owned.find((row) => row.character.id === character.id)?.seats).toEqual([]);
   });
 
   it("does not survive the membership being revoked", async () => {
-    const after = await runtime.runPromise(
-      Effect.gen(function* () {
-        const characters = yield* Characters;
-        const invites = yield* Invites;
-        const asJo = withActor(fixture.jo);
+    const scratch = await run(
+      withActor(fixture.jo)(createCampaign({ name: "The Ferry", visibility: "shared" })),
+    );
+    const guest = await run(aPlayerAt(scratch.id, "Wren"));
+    await run(aCharacterAt(scratch.id, guest, { name: "Wrenkin" }));
+    expect(await found(guest, scratch.id, "Wrenkin")).toEqual(["Wrenkin"]);
 
-        const scratch = yield* asJo(createCampaign({ name: "The Weir", visibility: "shared" }));
-        const guest = yield* aPlayerAt(scratch.id, "Kofi");
-        const character = yield* asJo(characters.create(scratch.id, { name: "Kofi's own" }));
-        yield* asJo(characters.assign(scratch.id, character.id, { accountId: guest.accountId }));
-
-        const before = yield* withActor(guest)(characters.findById(scratch.id, character.id)).pipe(
-          Effect.result,
-        );
-
-        const issued = yield* asJo(invites.list(scratch.groupId));
-        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
-
-        const afterRevoke = yield* withActor(guest)(
-          characters.findById(scratch.id, character.id),
-        ).pipe(Effect.result);
-
-        return { before: before._tag, after: afterRevoke._tag };
-      }).pipe(Effect.orDie),
+    // Withdraw the invitation they took — the shipped path, which revokes the
+    // membership it granted and retires their seats in the same transaction.
+    await run(
+      withActor(fixture.jo)(
+        Effect.gen(function* () {
+          const invites = yield* Invites;
+          const issued = yield* invites.list(scratch.groupId);
+          yield* invites.revoke(scratch.groupId, issued[0]!.id);
+        }),
+      ),
     );
 
-    expect(after).toEqual({ before: "Success", after: "Failure" });
+    // The campaign gate answers the ex-member the ordinary 404…
+    const refused = await foundRefused(guest, scratch.id, "Wrenkin");
+    expect(refused).toBeInstanceOf(NotFound);
+    expect((refused as NotFound).resource).toBe("campaign");
+    // …the retired seat answers the creator nothing (party.test.ts owns the
+    // deep assertion)…
+    expect(await found(fixture.jo, scratch.id, "Wrenkin")).toEqual([]);
+    // …and the character is still whole, and still theirs.
+    expect(await mineNames(accountWide(guest))).toContain("Wrenkin");
   });
 
   it("does not survive a credential minted for another table", async () => {
-    // Membership and credential scope narrow independently, and the ownership
-    // disjunct sits under both. Pim's own account, scoped to Fen's campaign,
-    // reaches nothing of the campaign Pim is actually a member of.
+    // Membership and credential scope narrow independently and the seat's
+    // predicate composes both: Pim's own account, scoped to Fen's campaign,
+    // reaches nothing of the table Pim actually plays at.
     const misScoped = scopedTo(fixture.pim, fixture.elsewhere.id);
-    expect((await read(misScoped, fixture.table.id, fixture.brannoc.id))._tag).toBe("Failure");
-    expect((await list(misScoped, fixture.table.id))._tag).toBe("Failure");
+    const refused = await foundRefused(misScoped, fixture.table.id, "Brannoc");
+    expect(refused).toBeInstanceOf(NotFound);
+    expect((refused as NotFound).resource).toBe("campaign");
   });
 
   it("does not lift the campaign's master toggle", async () => {
-    // The row's own visibility is the only thing ownership relaxes. A campaign
-    // the DM has not shared stays closed to its players, and a character
-    // inside it is not the exception — which is the same answer
-    // `GET /me/campaigns` gives, and the reason `InviteRedeemed` carries
-    // `shared`.
-    const measured = await runtime.runPromise(
-      Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
-        const characters = yield* Characters;
-        const asJo = withActor(fixture.jo);
-
-        const quiet = yield* asJo(createCampaign({ name: "Not yet", visibility: "dm" }));
-        const guest = yield* aPlayerAt(quiet.id, "Ilse");
-        const character = yield* asJo(
-          characters.create(quiet.id, { name: "Ilse's own", visibility: "shared" }),
-        );
-        yield* asJo(characters.assign(quiet.id, character.id, { accountId: guest.accountId }));
-
-        const closed = yield* withActor(guest)(characters.findById(quiet.id, character.id)).pipe(
-          Effect.result,
-        );
-        yield* asJo(campaigns.update(quiet.id, { visibility: "shared" }));
-        const opened = yield* withActor(guest)(characters.findById(quiet.id, character.id)).pipe(
-          Effect.result,
-        );
-
-        return { closed: closed._tag, opened: opened._tag };
-      }).pipe(Effect.orDie),
+    const quiet = await run(
+      withActor(fixture.jo)(createCampaign({ name: "Not Yet", visibility: "shared" })),
     );
+    const guest = await run(aPlayerAt(quiet.id, "Ilse"));
+    await run(aCharacterAt(quiet.id, guest, { name: "Ilsewife" }));
 
-    expect(measured).toEqual({ closed: "Failure", opened: "Success" });
-  });
-
-  it("grants no write at all — the player still cannot edit, damage or delete their own row", async () => {
-    // The *reach* grants no write, and that is still exactly true. A player
-    // editing their own sheet shipped afterwards as `Characters.updateOwn`
-    // behind `ownRowWritable` — a second predicate beside `rowWritable`, not a
-    // widening of it — so every write below still composes `rowWritable` and
-    // still refuses. See `player-write.test.ts` for what the player may do
-    // instead, and how much less it is than this.
-    const refused = await runtime.runPromise(
-      Effect.gen(function* () {
-        const characters = yield* Characters;
-        const as = withActor(fixture.pim);
-        const id = fixture.brannoc.id;
-        return {
-          update: (yield* as(characters.update(fixture.table.id, id, { level: 4 })).pipe(
-            Effect.result,
-          ))._tag,
-          damage: (yield* as(characters.damage(fixture.table.id, id, { amount: 5 })).pipe(
-            Effect.result,
-          ))._tag,
-          remove: (yield* as(characters.remove(fixture.table.id, id)).pipe(Effect.result))._tag,
-        };
-      }).pipe(Effect.orDie),
+    // Un-share the campaign: the guest's own seat is under it, so even their
+    // own character stops answering through the campaign — the same answer
+    // `GET /me/campaigns` gives, and not a gap. `mine` is where their
+    // character still is.
+    await run(
+      withActor(fixture.jo)(
+        Effect.flatMap(Campaigns, (campaigns) => campaigns.update(quiet.id, { visibility: "dm" })),
+      ),
     );
+    const closed = await foundRefused(guest, quiet.id, "Ilsewife");
+    expect(closed).toBeInstanceOf(NotFound);
+    expect(await mineNames(guest)).toContain("Ilsewife");
 
-    expect(refused).toEqual({ update: "Failure", damage: "Failure", remove: "Failure" });
+    await run(
+      withActor(fixture.jo)(
+        Effect.flatMap(Campaigns, (campaigns) =>
+          campaigns.update(quiet.id, { visibility: "shared" }),
+        ),
+      ),
+    );
+    expect(await found(guest, quiet.id, "Ilsewife")).toEqual(["Ilsewife"]);
   });
 });
 
-describe("what the DM sees is unchanged", () => {
-  it("is every row of the party, assigned or not, shared or not", async () => {
-    expect(names(await list(fixture.jo, fixture.table.id))).toEqual([
-      "Brannoc",
-      "Loan",
-      "Sister Pell",
-      "Sorrel",
-    ]);
-  });
-
-  it("still stops at their own tables", async () => {
-    // The disjunct is `or`-ed with `isDm`, which was already satisfied for a
-    // DM — so nothing about the DM's reach could have moved, in either
-    // direction. Fen's table is still Fen's.
-    expect((await list(fixture.jo, fixture.elsewhere.id))._tag).toBe("Failure");
-    expect((await read(fixture.jo, fixture.elsewhere.id, fixture.sixpence.id))._tag).toBe(
-      "Failure",
-    );
+describe("what did not change", () => {
+  it("keeps a creator's reach at their own tables, and only theirs", async () => {
+    // Fen's table is still Fen's: Jo searching it gets the ordinary 404, and
+    // Sixpence never comes back through Jo's own campaign.
+    const refused = await foundRefused(fixture.jo, fixture.elsewhere.id, "Sixpence");
+    expect(refused).toBeInstanceOf(NotFound);
+    expect(await found(fixture.jo, fixture.table.id, "Sixpence")).toEqual([]);
+    expect(await found(fixture.fen, fixture.elsewhere.id, "Sixpence")).toEqual(["Sixpence"]);
   });
 });

@@ -1,5 +1,5 @@
 import {
-  Actor,
+  type Actor,
   type CampaignId,
   type Character,
   type CharacterId,
@@ -15,35 +15,39 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
-import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import { Party } from "../src/repo/Party.js";
+import { accountWide, admittedTo, aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
- * **A player writes down a character of their own** — the first row a non-DM
- * has ever been able to bring into being, and the last third of what ownership
- * grants.
+ * **Writing a character down** — `createOwn`, `removeOwn`, and what the new
+ * row discloses, under the continuity decision of 2026-09-01.
  *
- * `character-ownership.test.ts` pins the read, `player-write.test.ts` the edit;
- * this is the create and the delete. Together the three are the whole of what a
- * player may do to a `character`, and each is bounded by the same two kinds of
- * thing, neither of which may stand in for the other:
+ * A character is an account-owned, top-level row now, and `createOwn` is the
+ * only way one comes into being: the owner writes the shared row *and its
+ * seat at the named campaign* in one transaction. There is no DM-typed
+ * character any more — the state this file used to guard against ("a row the
+ * DM made and assigned") is not representable, and several of the old pins
+ * are therefore **inverted on purpose** rather than lost:
  *
- * - **which rows** — a predicate. `ensureCampaignReadable` decides where a new
- *   character may go; `ownRowWritable` decides which one may be thrown away.
- * - **which columns** — `CharacterOwnCreate`, which has no field for
- *   `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId`.
+ * - a revoked membership used to take the character away; now it retires the
+ *   **seat** and the character survives, because the character was never the
+ *   campaign's to take;
+ * - deleting your own character used to stop when the DM unshared the table;
+ *   now it does not, because the row is campaign-scoped nowhere;
+ * - "a character nobody owns" is gone as a case: `account_id` is `not null`.
+ *
+ * What is *not* inverted: creation is still campaign-first and still gated by
+ * `ensureCampaignReadable` — where a new character may go is the campaign's
+ * question even though what it becomes is the owner's.
  *
  * In order —
  *
- *   1. the grant: a player creates a character at a table they sit at
+ *   1. the grant: an owner creates a character, seated at their table
  *   2. the owner: it is theirs, from the credential and from nowhere else
- *   3. the campaign: every refusal, each shown failing with the answer it gives
- *   4. the disclosure: the DM sees it, the rest of the table does not
- *   5. the delete: your own row, and nobody else's
- *
- * The fourth is the acceptance criterion this slice was written against, and it
- * is measured through the shipped reads from three sides rather than asserted
- * about the column.
+ *   3. the campaign gate: every refusal on the way in
+ *   4. the disclosure: the creator sees the seat, the rest of the table does not
+ *   5. the delete: your own row; the creator's remedy is the seat
  */
 
 const runtime = ManagedRuntime.make(
@@ -51,7 +55,8 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Groups.layer,
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Characters.layer,
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     Invites.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_player_create"))),
 );
@@ -65,10 +70,8 @@ const withActor =
 /**
  * One shared table with two players, and a second table run by a stranger.
  *
- * Deliberately thinner than `player-write.test.ts`'s: every character here is
- * made *by the test's subject* rather than handed over by the DM, because that
- * is the state this slice introduces and the one the assertions have to be
- * about.
+ * Every character below is made *by the test's subject*, because that is the
+ * only way a character is made now.
  */
 const makeFixture = Effect.gen(function* () {
   const jo = yield* anAccount("Jo");
@@ -89,16 +92,26 @@ const makeFixture = Effect.gen(function* () {
 
 let fixture: Effect.Success<typeof makeFixture>;
 let characters: (typeof Characters)["Service"];
+let party: (typeof Party)["Service"];
 
-/** The player's own create, as a `Result` so a refusal is a value. */
+/** The owner's create, as a `Result` so a refusal is a value. */
 const createOwn = (actor: Actor, campaignId: CampaignId, payload: CharacterOwnCreate) =>
   runtime.runPromise(
     withActor(actor)(characters.createOwn(campaignId, payload)).pipe(Effect.result, Effect.orDie),
   );
 
-/** The player's own delete, likewise. */
+/** The owner's delete, likewise. */
 const removeOwn = (actor: Actor, id: CharacterId) =>
   runtime.runPromise(withActor(actor)(characters.removeOwn(id)).pipe(Effect.result, Effect.orDie));
+
+/** The roster as a viewer sees it — the campaign-side read a seat feeds. */
+const rosterNames = (viewer: Actor, campaignId: CampaignId) =>
+  runtime.runPromise(
+    withActor(viewer)(party.list(campaignId)).pipe(
+      Effect.map((seats) => seats.map((seat) => seat.seat.displayName)),
+      Effect.orDie,
+    ),
+  );
 
 /** One refusal shape, so a test cannot pass by matching a different failure. */
 const refusal = (result: { readonly _tag: string; readonly failure?: unknown }) =>
@@ -117,10 +130,11 @@ const succeeded = (result: { readonly _tag: string; readonly success?: unknown }
 beforeAll(async () => {
   fixture = await runtime.runPromise(makeFixture.pipe(Effect.orDie));
   characters = await runtime.runPromise(Characters);
+  party = await runtime.runPromise(Party);
 }, 60_000);
 
-describe("a player creating their own character", () => {
-  it("writes the row, and it comes out theirs", async () => {
+describe("an owner creating their character", () => {
+  it("writes the row, and it comes out theirs — seated at the table they named", async () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, {
         name: "Brannoc",
@@ -134,83 +148,82 @@ describe("a player creating their own character", () => {
     );
 
     expect(made.name).toBe("Brannoc");
-    expect(made.campaignId).toBe(fixture.table.id);
     // From the credential, and from nowhere a caller could reach.
     expect(made.accountId).toBe(fixture.pim.accountId);
-    // The generated column follows the three it is derived from, unchanged by
-    // which endpoint wrote them.
+    // The generated column follows the three it is derived from.
     expect(made.descriptor).toBe("Level 1 Half-orc Paladin");
+    // Fresh sheets start at version 1 — the counter `expectedVersion` reads.
+    expect(made.version).toBe(1);
+    // There is no campaign on the character: the seat is the campaign's fact.
+    expect("campaignId" in made).toBe(false);
+    const mine = await runtime.runPromise(
+      withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
+    );
+    const owned = mine.find((row) => row.character.id === made.id);
+    expect(owned?.seats.map((seat) => seat.campaignId)).toEqual([fixture.table.id]);
   });
 
-  it("leaves the live trio and the disclosure seam at their column defaults", async () => {
+  it("leaves the live trio at its defaults, and carries no disclosure toggle at all", async () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, { name: "Untouched", hpMax: 9 }),
     );
 
-    // `hp_current` null is `0014`'s own meaning: *nobody has said yet*, which is
-    // neither zero nor full. A payload that could set it is one that eventually
-    // would, so `CharacterOwnCreate` has no field for it and the insert names
-    // no column.
+    // `hp_current` null is `0014`'s own meaning: *nobody has said yet*.
     expect(made.hpCurrent).toBeNull();
     expect(made.tempHp).toBe(0);
     expect(made.conditions).toEqual([]);
-    // Fail-closed, and it is the column default rather than a decision the
-    // payload got to make.
-    expect(made.visibility).toBe("dm");
-    // Not the assistant's. Nothing on this path can claim otherwise — see
-    // `repo/Proposals.ts`, which is still the only writer of `assistant`.
+    // Who at a table may see them is the SEAT's question now
+    // (`campaign_character.visibility`, `dm` by default) — the shared
+    // character has no visibility field for a payload to have set.
+    expect("visibility" in made).toBe(false);
+    // Not the assistant's. `repo/Proposals.ts` is still the only writer of
+    // `assistant`.
     expect(made.origin).toBe("authored");
     expect(made.assistantTurnId).toBeNull();
   });
 
-  it("cannot name an account, in the payload or anywhere else", () => {
-    // The compile-time half of the boundary, and the one that matters most: the
-    // owner of a row is precisely the field a player must not be able to send,
-    // and `CharacterAssign` keeps that true for the DM's path by being its own
-    // endpoint. Here it is true because there is nowhere to put one.
-    //
-    // Excess-property checking reports the *first* offending key and stops, so
-    // each refused field needs its own literal or the directives after the first
-    // go unused.
+  it("cannot name an account, a live value, or a version, in the payload or anywhere else", () => {
+    // The compile-time half of the boundary. Excess-property checking reports
+    // the *first* offending key and stops, so each refused field needs its own
+    // literal or the directives after the first go unused.
     // @ts-expect-error — the owner is `CurrentActor`'s.
     const named: CharacterOwnCreate = { name: "Not yours", accountId: fixture.marta.accountId };
-    // @ts-expect-error — `0014`'s live trio is the DM's.
+    // @ts-expect-error — the live trio moves by delta, through a seat.
     const hurt: CharacterOwnCreate = { name: "Not yours", hpCurrent: 3 };
     // @ts-expect-error — likewise.
     const temp: CharacterOwnCreate = { name: "Not yours", tempHp: 3 };
     // @ts-expect-error — likewise.
     const marked: CharacterOwnCreate = { name: "Not yours", conditions: ["Prone"] };
-    // @ts-expect-error — the row's own half of the disclosure seam is the DM's.
+    // @ts-expect-error — disclosure is the seat's; there is no such column here.
     const shared: CharacterOwnCreate = { name: "Not yours", visibility: "shared" };
     // @ts-expect-error — derived, and writable by nobody.
     const described: CharacterOwnCreate = { name: "Not yours", descriptor: "Level 1" };
+    // @ts-expect-error — the counter is the server's; a fresh row starts at 1.
+    const versioned: CharacterOwnCreate = { name: "Not yours", version: 9 };
 
-    // And the runtime half: even encoded by hand, an excess key does not survive
-    // the schema, so a client that sent one is sending an ordinary create.
+    // And the runtime half: even encoded by hand, an excess key does not
+    // survive the schema, so a client that sent one is sending an ordinary
+    // create.
     const encoded = Schema.encodeSync(CharacterOwnCreate)({ name: "Not yours" } as never);
     expect(Object.keys(encoded)).toEqual(["name"]);
-    expect([named, hurt, temp, marked, shared, described].length).toBe(6);
+    expect([named, hurt, temp, marked, shared, described, versioned].length).toBe(7);
   });
 
   it("is refused at a campaign this account is not a member of", async () => {
     const result = await createOwn(fixture.pim, fixture.elsewhere.id, { name: "Trespasser" });
-    // The campaign, not the character: there is no character yet, and the thing
-    // the caller asked about and could not have is the table.
+    // The campaign, not the character: there is no character yet, and the
+    // thing the caller asked about and could not have is the table.
     expect(refusal(result)).toEqual({ _tag: "NotFound", resource: "campaign" });
 
-    // And nothing was written. A refusal that left a row would be the worse
-    // failure, because the DM of that table would see it.
-    const there = await runtime.runPromise(
-      withActor(fixture.fen)(characters.list(fixture.elsewhere.id)).pipe(Effect.orDie),
-    );
-    expect(there.map((row) => row.name)).not.toContain("Trespasser");
+    // And nothing was written — no character, and no seat for that table's
+    // creator to be looking at.
+    expect(await rosterNames(fixture.fen, fixture.elsewhere.id)).not.toContain("Trespasser");
   });
 
-  it("is refused at a table the DM has not shared, and allowed the moment they do", async () => {
-    // The master toggle, two levels above the row and the narrowing easiest to
-    // lose. `ensureCampaignReadable` is the campaign half of
-    // `withinReadableCampaign`, so the answer here and the answer to everything
-    // else at that table are the same clause.
+  it("is refused at a table the creator has not shared, and allowed the moment they do", async () => {
+    // The master toggle. Creation is campaign-first, so this is the one place
+    // the campaign still gets a say over the owner's write: not whether the
+    // character may exist, but whether it may be seated *here*.
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
         const campaigns = yield* Campaigns;
@@ -235,7 +248,12 @@ describe("a player creating their own character", () => {
     expect(measured.opened).toBe("Success");
   }, 60_000);
 
-  it("stops the moment the membership that carried it is revoked", async () => {
+  it("stops at a revoked membership — and the character already made survives it", async () => {
+    // **Inverted from the campaign-scoped model, deliberately.** Withdrawing
+    // the invitation used to take the character with the membership; under the
+    // continuity decision it retires the *seat* (in the same transaction as
+    // the revoke) and the character stays its owner's, because it was never
+    // the campaign's to take. Only the next create at that table is refused.
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
         const invites = yield* Invites;
@@ -244,128 +262,113 @@ describe("a player creating their own character", () => {
         const scratch = yield* asJo(createCampaign({ name: "The Weir", visibility: "shared" }));
         const kofi = yield* aPlayerAt(scratch.id, "Kofi");
 
-        const before = yield* withActor(kofi)(
+        const made = yield* withActor(kofi)(
           characters.createOwn(scratch.id, { name: "Kofi's own" }),
-        ).pipe(Effect.result);
+        );
 
-        // The shipped path: withdrawing the invitation revokes the membership it
-        // granted, in one transaction.
+        // The shipped path: withdrawing the invitation revokes the membership
+        // it granted, in one transaction — seats included.
         const issued = yield* asJo(invites.list(scratch.groupId));
         yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
 
         const after = yield* withActor(kofi)(
           characters.createOwn(scratch.id, { name: "Kofi's second" }),
         ).pipe(Effect.result);
-        const rows = yield* asJo(characters.list(scratch.id));
+        const roster = yield* asJo(party.list(scratch.id));
+        // The account-wide credential is how the person still reads what is
+        // theirs once the campaign-scoped one has nothing left to reach.
+        const mine = yield* withActor(accountWide(kofi))(characters.mine);
 
         return {
-          before: before._tag,
           after: refusal(after),
-          names: rows.map((row) => row.name),
+          roster: roster.map((seat) => seat.seat.displayName),
+          kept: mine.find((row) => row.character.id === made.id),
         };
       }).pipe(Effect.orDie),
     );
 
-    expect(measured.before).toBe("Success");
     expect(measured.after).toEqual({ _tag: "NotFound", resource: "campaign" });
-    // The one they made while they were a member stays; the one they were
-    // refused was never written.
-    expect(measured.names).toEqual(["Kofi's own"]);
+    // The seat retired with the membership, so the creator's roster is empty…
+    expect(measured.roster).toEqual([]);
+    // …and the character outlived the table, seatless.
+    expect(measured.kept).toBeDefined();
+    expect(measured.kept!.seats).toEqual([]);
   }, 60_000);
 
   it("does not survive a credential minted for another table", async () => {
-    // Membership and credential scope narrow independently. Pim's own account,
-    // scoped to Fen's campaign, cannot write at the table Pim is really at — and
-    // cannot write at Fen's either, where the account is not a member.
-    const misScoped = scopedTo(fixture.pim, fixture.elsewhere.id);
+    // Membership and credential scope narrow independently, and the campaign
+    // gate applies both. Pim's own account, scoped to Fen's campaign, cannot
+    // seat a character at the table Pim is really at — and cannot at Fen's
+    // either, where the account is not a member.
+    const misScoped = await runtime.runPromise(
+      admittedTo(fixture.elsewhere.id, fixture.pim, "Pim, elsewhere"),
+    );
     expect(refusal(await createOwn(misScoped, fixture.table.id, { name: "Out of scope" }))).toEqual(
       { _tag: "NotFound", resource: "campaign" },
     );
+    // At the table the credential *does* reach, the create is ordinary.
     expect(
-      refusal(await createOwn(misScoped, fixture.elsewhere.id, { name: "Still not yours" })),
-    ).toEqual({ _tag: "NotFound", resource: "campaign" });
+      (await createOwn(misScoped, fixture.elsewhere.id, { name: "In scope after all" }))._tag,
+    ).toBe("Success");
   });
 
-  it("is one campaign per campaign — a member of two writes into the one they named", async () => {
+  it("seats the character at the campaign it named and at no other", async () => {
     // The path segment is a claim and the gate is what makes it safe, so the
-    // interesting case is an account the gate *would* let through twice: naming
-    // one table must not reach the other.
-    const measured = await runtime.runPromise(
-      Effect.gen(function* () {
-        const second = yield* withActor(fixture.fen)(
-          createCampaign({ name: "The Hag's Bargain", visibility: "shared" }),
-        );
-        // Pim's account, at a second table, on an account-wide credential.
-        const invites = yield* Invites;
-        const issued = yield* withActor(fixture.fen)(
-          invites.create(second.groupId, { label: "Pim", campaignId: second.id }),
-        );
-        const account = new Actor({ accountId: fixture.pim.accountId, scope: { _tag: "account" } });
-        yield* withActor(account)(invites.redeem(issued.token));
-
-        const made = yield* withActor(account)(
-          characters.createOwn(second.id, { name: "Second table" }),
-        );
-        const here = yield* withActor(fixture.jo)(characters.list(fixture.table.id));
-        return { campaignId: made.campaignId, second: second.id, names: here.map((r) => r.name) };
-      }).pipe(Effect.orDie),
+    // interesting case is an account the gate would let through twice: naming
+    // one table must not seat anything at the other.
+    const second = await runtime.runPromise(
+      withActor(fixture.fen)(
+        createCampaign({ name: "The Hag's Bargain", visibility: "shared" }),
+      ).pipe(Effect.orDie),
     );
+    const pimThere = await runtime.runPromise(admittedTo(second.id, fixture.pim, "Pim, again"));
 
-    expect(measured.campaignId).toBe(measured.second);
-    expect(measured.names).not.toContain("Second table");
+    const made = succeeded(await createOwn(pimThere, second.id, { name: "Second table" }));
+    const mine = await runtime.runPromise(
+      withActor(accountWide(fixture.pim))(characters.mine).pipe(Effect.orDie),
+    );
+    const owned = mine.find((row) => row.character.id === made.id);
+    expect(owned?.seats.map((seat) => seat.campaignId)).toEqual([second.id]);
+    expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Second table");
   }, 60_000);
 });
 
 describe("what the new character discloses, and to whom", () => {
   /**
-   * **The acceptance criterion of the whole slice**, measured through the
-   * shipped reads from three sides rather than asserted about the column.
-   *
-   * Nothing here is new machinery. A new row is `dm`; its owner reads it because
-   * `ownedRowReadable` has an ownership disjunct, its DM reads it because `isDm`
-   * is another, and a second player at the same table satisfies neither. What
-   * the slice had to get right was not to reach past any of that.
+   * The acceptance criterion of the player-create slice, restated on the seat:
+   * a new seat is `dm`, so its owner reads it (they own the character), the
+   * campaign's creator reads it (they run the table), and a second player at
+   * the same shared table reads nothing of it until the creator shares the
+   * seat.
    */
-  it("reaches its author, reaches the DM, and reaches nobody else at the table", async () => {
+  it("reaches its owner and the creator, and nobody else at the table", async () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, { name: "Only ours", hpMax: 11 }),
     );
 
-    const [mine, dmSees, martaSees] = await runtime.runPromise(
-      Effect.all([
-        withActor(fixture.pim)(characters.mine),
-        withActor(fixture.jo)(characters.list(fixture.table.id)),
-        withActor(fixture.marta)(characters.list(fixture.table.id)),
-      ]).pipe(Effect.orDie),
+    const mine = await runtime.runPromise(
+      withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
     );
+    expect(mine.map((row) => row.character.id)).toContain(made.id);
 
-    // Its author, through `GET /me/characters`.
-    expect(mine.map((row) => row.id)).toContain(made.id);
-    // Its DM, through the party list the screen draws.
-    expect(dmSees.map((row) => row.id)).toContain(made.id);
-    // And the other player at the same shared table, through the same read, does
-    // not — which is the half that would be silently wrong if the create had
-    // reached for `shared`.
-    expect(martaSees.map((row) => row.id)).not.toContain(made.id);
-    // Nor by naming it directly, which is the read a curious client would try.
-    expect(
-      refusal(
-        await runtime.runPromise(
-          withActor(fixture.marta)(characters.findById(fixture.table.id, made.id)).pipe(
-            Effect.result,
-            Effect.orDie,
-          ),
-        ),
-      ),
-    ).toEqual({ _tag: "NotFound", resource: "character" });
+    // The creator's roster shows the seat, snapshot and all.
+    const creatorSees = await runtime.runPromise(
+      withActor(fixture.jo)(party.list(fixture.table.id)).pipe(Effect.orDie),
+    );
+    const seat = creatorSees.find((row) => row.character?.id === made.id);
+    expect(seat).toBeDefined();
+    expect(seat!.seat.displayName).toBe("Only ours");
+    expect(seat!.seat.visibility).toBe("dm");
+
+    // The other player at the same shared table sees no trace of it.
+    expect(await rosterNames(fixture.marta, fixture.table.id)).not.toContain("Only ours");
   }, 60_000);
 
-  it("is writable by its author afterwards, which is what the gate bought", async () => {
-    // `ensureCampaignReadable` is the campaign half of `withinReadableCampaign`,
-    // the same fragment `ownRowWritable` composes — so *"a row created through
-    // this gate is editable by its creator"* is a property of one predicate
-    // rather than of two kept in step. Measured, because it is the argument the
-    // whole endpoint rests on.
+  it("is writable by its owner afterwards — and would be with no table at all", async () => {
+    // Under the old model this was a property of one predicate holding two
+    // jobs; now it is simpler than that: the character is the owner's, full
+    // stop, and `player-write.test.ts` pins that the campaign has no further
+    // say.
     const made = succeeded(await createOwn(fixture.pim, fixture.table.id, { name: "Then edited" }));
     const edited = await runtime.runPromise(
       withActor(fixture.pim)(characters.updateOwn(made.id, { level: 2, className: "Ranger" })).pipe(
@@ -376,41 +379,41 @@ describe("what the new character discloses, and to whom", () => {
 
     expect(edited._tag).toBe("Success");
     expect(succeeded(edited).descriptor).toBe("Level 2 Ranger");
+    expect(succeeded(edited).version).toBe(2);
   });
 });
 
-describe("a player throwing their own character away", () => {
-  it("removes it, and it leaves every read it was in", async () => {
+describe("an owner throwing their character away", () => {
+  it("removes it, and the roster line it retires stays retired", async () => {
     const made = succeeded(await createOwn(fixture.pim, fixture.table.id, { name: "Regretted" }));
+    expect(await rosterNames(fixture.jo, fixture.table.id)).toContain("Regretted");
+
     expect((await removeOwn(fixture.pim, made.id))._tag).toBe("Success");
 
-    const [mine, dmSees] = await runtime.runPromise(
-      Effect.all([
-        withActor(fixture.pim)(characters.mine),
-        withActor(fixture.jo)(characters.list(fixture.table.id)),
-      ]).pipe(Effect.orDie),
+    const mine = await runtime.runPromise(
+      withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
     );
-    expect(mine.map((row) => row.name)).not.toContain("Regretted");
-    // Gone from the DM's party list too — which is the point of it existing: an
-    // abandoned draft is a row somebody else is looking at.
-    expect(dmSees.map((row) => row.name)).not.toContain("Regretted");
+    expect(mine.map((row) => row.character.name)).not.toContain("Regretted");
+    // Gone from the creator's roster too — the delete retires the seats in
+    // its own transaction. (That the retired row *survives* underneath, as
+    // campaign history with the pointer nulled, is `party.test.ts`'s pin.)
+    expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Regretted");
   }, 60_000);
 
-  it("is refused on somebody else's, even one the DM shared", async () => {
+  it("is refused on somebody else's, even one whose seat the whole table can see", async () => {
     const martas = succeeded(await createOwn(fixture.marta, fixture.table.id, { name: "Sorrel" }));
-    // Shared with the table, so Marta's character is a row Pim can *read*. The
-    // write half is narrower and that is exactly what is being measured: nothing
-    // a player may delete is something they merely happen to be able to see.
+    // The creator shares the SEAT — the disclosure control that replaced the
+    // old row-level toggle — so Sorrel is a character Pim can see at this
+    // table. Seeing is not holding.
+    const martasSeat = (
+      await runtime.runPromise(withActor(fixture.marta)(characters.mine).pipe(Effect.orDie))
+    ).find((row) => row.character.id === martas.id)!.seats[0]!;
     await runtime.runPromise(
       withActor(fixture.jo)(
-        characters.update(fixture.table.id, martas.id, { visibility: "shared" }),
+        party.update(fixture.table.id, martasSeat.campaignCharacterId, { visibility: "shared" }),
       ).pipe(Effect.orDie),
     );
-
-    const readable = await runtime.runPromise(
-      withActor(fixture.pim)(characters.list(fixture.table.id)).pipe(Effect.orDie),
-    );
-    expect(readable.map((row) => row.id)).toContain(martas.id);
+    expect(await rosterNames(fixture.pim, fixture.table.id)).toContain("Sorrel");
 
     expect(refusal(await removeOwn(fixture.pim, martas.id))).toEqual({
       _tag: "NotFound",
@@ -420,56 +423,46 @@ describe("a player throwing their own character away", () => {
     const still = await runtime.runPromise(
       withActor(fixture.marta)(characters.mine).pipe(Effect.orDie),
     );
-    expect(still.map((row) => row.id)).toContain(martas.id);
+    expect(still.map((row) => row.character.id)).toContain(martas.id);
   }, 60_000);
 
-  it("is refused on a character nobody owns", async () => {
-    // `account_id = ${actor.accountId}` never matches null, so an unassigned row
-    // is out of reach of every player at once rather than of a list of them.
-    const orphan = await runtime.runPromise(
-      withActor(fixture.jo)(
-        characters.create(fixture.table.id, { name: "Sister Pell", visibility: "shared" }),
-      ).pipe(Effect.orDie),
+  it("is refused by the campaign's creator, whose remedy is the seat", async () => {
+    // The creator owns nothing here however much table authority they hold:
+    // there is no DM delete of the shared character any more, and `removeOwn`
+    // refuses them like any other non-owner. What the creator *can* do is
+    // retire the seat — clear their own table — and the character survives it.
+    const made = succeeded(
+      await createOwn(fixture.pim, fixture.table.id, { name: "The creator's go" }),
     );
-    expect(refusal(await removeOwn(fixture.pim, orphan.id))).toEqual({
-      _tag: "NotFound",
-      resource: "character",
-    });
-    expect(
-      (
-        await runtime.runPromise(
-          withActor(fixture.jo)(characters.findById(fixture.table.id, orphan.id)).pipe(
-            Effect.orDie,
-          ),
-        )
-      ).name,
-    ).toBe("Sister Pell");
-  }, 60_000);
-
-  it("is refused by the campaign's own DM, who has a delete of their own", async () => {
-    // The two are not one endpoint under two names. `removeOwn` is *yours*, and
-    // the DM owns nothing here however much they may write it; `remove` is the
-    // whole table's and is what a DM presses. Both exist, and each refuses what
-    // the other is for.
-    const made = succeeded(await createOwn(fixture.pim, fixture.table.id, { name: "The DM's go" }));
     expect(refusal(await removeOwn(fixture.jo, made.id))).toEqual({
       _tag: "NotFound",
       resource: "character",
     });
 
-    const asDmDelete = await runtime.runPromise(
-      withActor(fixture.jo)(characters.remove(fixture.table.id, made.id)).pipe(
-        Effect.result,
+    const seat = (
+      await runtime.runPromise(withActor(fixture.pim)(characters.mine).pipe(Effect.orDie))
+    ).find((row) => row.character.id === made.id)!.seats[0]!;
+    await runtime.runPromise(
+      withActor(fixture.jo)(party.leave(fixture.table.id, seat.campaignCharacterId)).pipe(
         Effect.orDie,
       ),
     );
-    expect(asDmDelete._tag).toBe("Success");
+
+    expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("The creator's go");
+    const mine = await runtime.runPromise(
+      withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
+    );
+    const kept = mine.find((row) => row.character.id === made.id);
+    expect(kept).toBeDefined();
+    expect(kept!.seats).toEqual([]);
   }, 60_000);
 
-  it("stops when the campaign is unshared, and gives the row back when it is shared again", async () => {
-    // `ownRowWritable`'s campaign half, met on the delete: the master toggle
-    // takes the write away without taking the row, so a DM who closes the table
-    // mid-evening has not destroyed anything.
+  it("does not stop when the campaign is unshared — the character outlives the table", async () => {
+    // **Inverted, deliberately.** The old delete composed the campaign's
+    // master toggle and stopped when the table closed; the shared character is
+    // campaign-scoped nowhere, so the owner's delete has no campaign to ask.
+    // A creator closing their table mid-evening still loses nothing — the
+    // delete was always the owner's to make.
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
         const campaigns = yield* Campaigns;
@@ -481,15 +474,12 @@ describe("a player throwing their own character away", () => {
 
         yield* asJo(campaigns.update(scratch.id, { visibility: "dm" }));
         const closed = yield* withActor(nan)(characters.removeOwn(made.id)).pipe(Effect.result);
-        yield* asJo(campaigns.update(scratch.id, { visibility: "shared" }));
-        const opened = yield* withActor(nan)(characters.removeOwn(made.id)).pipe(Effect.result);
 
-        return { closed: refusal(closed), opened: opened._tag };
+        return { closed: closed._tag };
       }).pipe(Effect.orDie),
     );
 
-    expect(measured.closed).toEqual({ _tag: "NotFound", resource: "character" });
-    expect(measured.opened).toBe("Success");
+    expect(measured.closed).toBe("Success");
   }, 60_000);
 
   it("answers the same sentence for a character that does not exist", async () => {

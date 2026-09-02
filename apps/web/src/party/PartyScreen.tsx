@@ -1,14 +1,11 @@
-import type { CampaignMember, Character } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { DateTime } from "effect";
 import { useMemo, useState } from "react";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
-import { CharacterDialog } from "../campaign/CharacterDialog";
 import { InviteDialog } from "../campaign/InviteDialog";
 import { PartyList } from "../campaign/PartyList";
 import { EmptyState } from "../ui/states";
-import { AssignDialog } from "./AssignDialog";
 import { rosterAtom, type PartyRoster } from "./load";
 import { needsOf, rosterOf, summaryOf } from "./roster";
 import { RosterCard } from "./RosterCard";
@@ -32,11 +29,10 @@ import { RosterCard } from "./RosterCard";
  * supplies its title, its two controls, its body, and the two reads the frame
  * does not already make (`loadPartyRoster`).
  *
- * **The open dialogs live here, above `CampaignChrome`**, the same rule
- * `EncountersScreen` and `NotesScreen` follow: the top bar's buttons set them
- * and the body reads them, and two slots of one screen must not hold two copies
- * of one answer. `assigning` is the exception and stays in the body, because
- * only the body opens it.
+ * **The open dialog lives here, above `CampaignChrome`**, the same rule
+ * `EncountersScreen` and `NotesScreen` follow: the top bar's button sets it
+ * and the body reads it, and two slots of one screen must not hold two copies
+ * of one answer.
  *
  * ### What the drawing has that this does not
  *
@@ -65,8 +61,6 @@ import { RosterCard } from "./RosterCard";
 export function PartyScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
   const [inviting, setInviting] = useState(false);
-  /** The character being written or edited — the old Party tab's one dialog. */
-  const [editing, setEditing] = useState<{ readonly character: Character | undefined }>();
 
   return (
     <CampaignChrome<PartyRoster>
@@ -75,58 +69,32 @@ export function PartyScreen() {
       extra={rosterAtom(campaignId)}
       subtitle={({ view, extra }) => summaryOf(rosterOf(extra.members, view.party, extra.invites))}
       actions={() => (
-        <>
-          {/* **The characters moved here with the sixth delivery's nav, and
-              that is why this button exists.** The campaign screen's third tab
-              was the party's characters and the only place one could be
-              written; the delivery's campaign row has a single *Party*
-              destination, so collapsing the tab without bringing its authoring
-              along would have deleted the only way to add a character. One
-              screen answers "who is at this table" now, in both senses — the
-              people and what they are running. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setEditing({ character: undefined })}
-          >
-            <Icon name="plus" size={14} />
-            Add character
-          </Button>
-          <Button size="sm" onClick={() => setInviting(true)}>
-            <Icon name="user-plus" size={14} />
-            Invite a player
-          </Button>
-        </>
+        // *Add character* left this bar with the continuity architecture:
+        // there is no DM-typed character any more — everyone, the creator
+        // included, writes their own through the create flow and it arrives
+        // here as a seat. What the creator does from this screen is manage
+        // seats (share, retire — on the character list) and people (below).
+        <Button size="sm" onClick={() => setInviting(true)}>
+          <Icon name="user-plus" size={14} />
+          Invite a player
+        </Button>
       )}
     >
-      {(slots) => (
-        <Party
-          slots={slots}
-          editing={editing}
-          onEdit={setEditing}
-          inviting={inviting}
-          onInvite={setInviting}
-        />
-      )}
+      {(slots) => <Party slots={slots} inviting={inviting} onInvite={setInviting} />}
     </CampaignChrome>
   );
 }
 
 function Party({
   slots,
-  editing,
-  onEdit,
   inviting,
   onInvite,
 }: {
   readonly slots: CampaignChromeSlots<PartyRoster>;
-  readonly editing: { readonly character: Character | undefined } | undefined;
-  readonly onEdit: (editing: { readonly character: Character | undefined } | undefined) => void;
   readonly inviting: boolean;
   readonly onInvite: (inviting: boolean) => void;
 }) {
   const { view, extra } = slots;
-  const [assigning, setAssigning] = useState<CampaignMember | undefined>();
 
   /**
    * The clock, read once per mount rather than per render.
@@ -138,9 +106,9 @@ function Party({
   const [now] = useState(() => DateTime.nowUnsafe());
 
   /**
-   * The characters are the frame's (`CampaignView.party`, which is
-   * `characters.list`) rather than a read of this screen's own — one question,
-   * one answer, in the round the frame was already making.
+   * The seats are the frame's (`CampaignView.party`, which is `party.list`)
+   * rather than a read of this screen's own — one question, one answer, in the
+   * round the frame was already making.
    */
   const rows = useMemo(
     () => rosterOf(extra.members, view.party, extra.invites),
@@ -181,14 +149,7 @@ function Party({
                 )}
               </EmptyState>
             ) : (
-              <RosterCard
-                rows={rows}
-                onAssign={(row) => {
-                  if (row.kind === "playing" || row.kind === "no-character") {
-                    setAssigning(row.member);
-                  }
-                }}
-              />
+              <RosterCard rows={rows} />
             )}
           </section>
 
@@ -204,7 +165,10 @@ function Party({
               <h2 className="mb-3 font-display text-body leading-tight font-semibold tracking-display text-heading">
                 Characters
               </h2>
-              <PartyList party={view.party} onEdit={(character) => onEdit({ character })} />
+              {/* The creator's seat verbs are on the rows: this route is the
+                  creator's side of the relation split, so the writes they
+                  offer are exactly the ones the server accepts. */}
+              <PartyList party={view.party} canManage />
             </section>
           )}
         </div>
@@ -256,22 +220,6 @@ function Party({
         </aside>
       </div>
 
-      {editing !== undefined && (
-        // Keyed on the row, so opening it on a second character builds a fresh
-        // form rather than showing the first one's fields.
-        <CharacterDialog
-          key={editing.character?.id ?? "new-character"}
-          campaignId={view.campaign.id}
-          character={editing.character}
-          onClose={() => onEdit(undefined)}
-          // A character is half of what the roster derives from — writing one
-          // can flip a member from `no-character` to `playing` and drop a line
-          // out of *Needs you*. The dialog says so by naming `reads.characters`;
-          // this screen only has to put the form away.
-          onSaved={() => onEdit(undefined)}
-        />
-      )}
-
       {inviting && (
         // The invitation surface, reused whole. It stays open across several
         // writes — minting one, then withdrawing another — and both reach this
@@ -283,16 +231,6 @@ function Party({
           groupId={view.campaign.groupId}
           campaign={view.campaign}
           onClose={() => onInvite(false)}
-        />
-      )}
-      {assigning !== undefined && (
-        <AssignDialog
-          key={assigning.accountId}
-          campaignId={view.campaign.id}
-          member={assigning}
-          characters={view.party}
-          onClose={() => setAssigning(undefined)}
-          onSaved={() => setAssigning(undefined)}
         />
       )}
     </>

@@ -42,11 +42,11 @@ import { tablesForNewCharacter } from "./create";
  *   question and the answer in different places, and Base UI's is the one
  *   control that is genuinely awkward to drive.
  *
- * **Player tables only.** `ensureCampaignReadable` would let a DM through at
- * their own table and the server documents that as harmless, but the pill is a
- * *mode*: a table you run has no player screen to be on, and the way to write a
- * character there is `campaign/CharacterDialog.tsx`. `tablesForNewCharacter` is
- * where that is decided, once.
+ * **Every table, the ones you run included.** The continuity decision of
+ * 2026-09-01 made a character account-owned and its creator a player too, so
+ * the old *player tables only* narrowing went with the DM-typed character
+ * dialog it existed to point at. `tablesForNewCharacter` is where that is
+ * decided, once.
  */
 export function NewCharacterAction({
   memberships,

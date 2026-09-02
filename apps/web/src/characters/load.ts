@@ -1,9 +1,9 @@
 import type {
   CampaignId,
   CampaignMembership,
-  Character,
   CharacterId,
   CharacterOption,
+  OwnedCharacter,
   PlayerLiveTable,
 } from "@taverns/api";
 import { Effect } from "effect";
@@ -17,11 +17,11 @@ import { campaignOptionsAtom } from "../rules/load";
  * Everything both character screens render, in one shape.
  *
  * **One `Effect` and one round of two calls**, which is the rule
- * `campaign/load.ts` set — and here the second call is not decoration. A
- * `Character` carries `campaignId` and never a campaign's *name*: the name is
- * `GET /me/campaigns`'s answer, and a second copy of it on the character row
- * would be a second answer to what a campaign is called. So the join is done
- * here, once, for the roster and for the sheet alike.
+ * `campaign/load.ts` set — and here the second call is not decoration. An
+ * `OwnedCharacter` carries seat refs (`campaignId`, never a campaign's *name*):
+ * the names are `GET /me/campaigns`'s answer, and a second copy of one on the
+ * seat would be a second answer to what a campaign is called. So the join is
+ * done here, once, for the roster and for the sheet alike.
  *
  * Both reads are ones a player may make with no campaign in the path, and
  * neither can fail for an account that is a member of nothing: `[]` is the
@@ -31,15 +31,15 @@ import { campaignOptionsAtom } from "../rules/load";
  */
 export interface MyCharactersView {
   /**
-   * Every character this account plays, across every table.
+   * Every character this account owns, each with everywhere it is seated.
    *
-   * `repo/visibility.ts`'s `ownRowReadable` is `ownedRowReadable` *conjoined*
-   * with ownership, so this is a narrowing of what `characters.list` would
-   * answer rather than a reach past it. The screen adds no filter of its own and
-   * must not: a client-side "only mine" would be a second answer to a question
-   * the predicate has already settled, and the one that could disagree.
+   * `repo/visibility.ts`'s `ownCharacter` is the whole predicate — the shared
+   * character is account-owned and campaign-scoped nowhere, so ownership is
+   * the entire question and the list survives every table. The screen adds no
+   * filter of its own and must not: a client-side "only mine" would be a
+   * second answer to a question the predicate has already settled.
    */
-  readonly characters: ReadonlyArray<Character>;
+  readonly characters: ReadonlyArray<OwnedCharacter>;
   /**
    * Every table this account sits at, and what it is at each — the answer
    * `GET /me/campaigns` gives, carried whole.
@@ -141,11 +141,17 @@ export interface CharacterSheetView extends MyCharactersView {
 export const loadCharacterSheet = (characterId: CharacterId) => (client: TavernsClient) =>
   Effect.gen(function* () {
     const view = yield* loadMyCharacters(client);
-    const character = view.characters.find((row) => row.id === characterId);
+    const owned = view.characters.find((row) => row.character.id === characterId);
+    // The banner reads the character's **first** seat. One shared character can
+    // sit at several tables now; a banner per seat is a real design the sheet
+    // has not earned yet, and the first seat — the oldest, `mine` orders them
+    // by joined_at — is the table the character has been at longest. A
+    // character seated nowhere has no table to be live at.
+    const seat = owned?.seats[0];
     const live =
-      character === undefined
+      seat === undefined
         ? null
-        : yield* client.table.read({ params: { campaignId: character.campaignId } });
+        : yield* client.table.read({ params: { campaignId: seat.campaignId } });
 
     return { ...view, live } satisfies CharacterSheetView;
   });
@@ -167,12 +173,13 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
  * either knowing the other exists. That is what naming a resource buys and what
  * a screen's `reload` could not.
  *
- * ### The vocabulary is read **only at a table this account plays at**
+ * ### The vocabulary is read **only at a table this account is a member of**
  *
  * The screen already decides whether to draw the form at all from
- * `memberships` — `role === "player"` and nothing else, which is
- * `tablesForNewCharacter`'s rule — and this asks the same question one step
- * earlier so the second read is not made when the answer is no.
+ * `memberships` — any membership, creator or player, which is
+ * `tablesForNewCharacter`'s rule since the continuity decision made the
+ * creator a player too — and this asks the same question one step earlier so
+ * the second read is not made when the answer is no.
  *
  * It is not an optimisation. `options.list` composes `ensureCampaignReadable`,
  * so at a table this account is not a member of it is a **404** — and combined
@@ -254,7 +261,7 @@ export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
        * is still not drawn, because the pill is a mode.
        */
       const membership = roster.value.memberships.find((row) => row.campaign.id === campaignId);
-      if (membership?.relation !== "player") {
+      if (membership === undefined) {
         return AsyncResult.success({ ...roster.value, options: [] });
       }
 

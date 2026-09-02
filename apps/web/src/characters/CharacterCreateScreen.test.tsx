@@ -464,22 +464,20 @@ describe("writing down a character of your own", () => {
     expect(server.calls.some((call) => call.pathname.includes("/hob"))).toBe(false);
   });
 
-  it("draws no form at a table this account runs, and says which refusal it is", async () => {
-    // A DM would pass `ensureCampaignReadable` through `isDm`, and the server
-    // calls that harmless — but the pill is a *mode*, and a table you run has no
-    // player screen to be on. `tablesForNewCharacter` is where that is decided
-    // for the picker; this is the screen agreeing with it, so a typed URL cannot
-    // reach a form the picker would never have offered.
+  it("draws the form at a table this account runs — the continuity inversion", async () => {
+    // **This test used to pin the opposite** — *"You run this table"*, a
+    // refusal drawn because a character was campaign-scoped and DM-typed. The
+    // continuity decision of 2026-09-01 made the character account-owned and
+    // its creator a player too, so a creator's own table offers the form
+    // exactly as a played one does — the screen agreeing with
+    // `tablesForNewCharacter`, which now folds every membership.
     server.routes = onlyDmTables();
     server.routes.set(`POST ${createPath}`, savedAs(brannoc));
     await renderCreate();
 
-    // A different sentence from the one above, because it is a different
-    // situation: this table you can reach, and it is still the wrong door.
-    expect(await screen.findByText("You run this table")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Fill it in myself/i })).toBeTruthy();
+    expect(screen.queryByText("You run this table")).toBeNull();
     expect(screen.queryByText("Not your table")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Create character/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Fill it in myself/i })).toBeNull();
   });
 
   it("says the server did not answer rather than drawing an empty form", async () => {

@@ -177,12 +177,16 @@ export const readAloud = {
   ...stamps,
 };
 
+/** Who owns Brannoc — the player, whose account the seat below names too. */
+export const ilseAccountId = "2b1f2a1e-0000-4000-8000-0000000000a2";
+
 export const character = {
   id: "2b1f2a1e-0000-4000-8000-000000000901",
-  campaignId,
-  // Null on every row the product can write — nothing mints a player
-  // credential yet, and no payload accepts one.
-  accountId: null,
+  // Account-owned and campaign-scoped nowhere — the continuity decision's wire
+  // shape. The campaign's claim on Brannoc is the seat below, and who at a
+  // table may see them is the *seat's* visibility, so neither `campaignId`
+  // nor `visibility` exists here to fixture.
+  accountId: ilseAccountId,
   name: "Brannoc",
   playerName: "Ilse",
   level: 3,
@@ -202,10 +206,32 @@ export const character = {
   conditions: [],
   sheetUrl: null,
   sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
-  visibility: "dm",
+  // The optimistic-concurrency counter every write bumps.
+  version: 1,
   ...provenance,
   ...stamps,
 };
+
+/** Brannoc's seat at this table — `campaign_character`, the campaign's half. */
+export const seatId = "2b1f2a1e-0000-4000-8000-000000000951";
+
+export const characterSeat = {
+  id: seatId,
+  campaignId,
+  characterId: character.id,
+  accountId: ilseAccountId,
+  // Snapshotted at join time, so it survives a rename and the character's
+  // deletion — the roster line is campaign history.
+  displayName: "Brannoc",
+  playerDisplayName: null,
+  visibility: "dm",
+  ...provenance,
+  joinedAt: stamps.createdAt,
+  ...stamps,
+};
+
+/** What `party.list` answers: the seat, and the shared character it holds. */
+export const partySeat = { seat: characterSeat, character };
 
 export const prepItem = {
   id: prepItemId,
@@ -1011,7 +1037,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
-    [`GET /campaigns/${campaignId}/characters`, { status: 200, body: [character] }],
+    [`GET /campaigns/${campaignId}/party`, { status: 200, body: [partySeat] }],
     // The Party screen's own two reads. A campaign with only its DM in it and
     // nothing outstanding — `party/party.fixtures.tsx` is where a populated
     // roster lives, and it re-aims both.

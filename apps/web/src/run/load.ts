@@ -218,6 +218,4 @@ export const subtitleOf = (combatant: Combatant): string | undefined => {
  * assertable; `characters/write.ts`'s `ownCharacterWrites` is the same shape for
  * the same reason.
  */
-export const combatantWrites = (campaignId: CampaignId): Invalidation => [
-  reads.characters(campaignId),
-];
+export const combatantWrites = (campaignId: CampaignId): Invalidation => [reads.party(campaignId)];

@@ -1,4 +1,4 @@
-import type { Character } from "@taverns/api";
+import type { OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -36,14 +36,20 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * sheet the tab is the place to write, not the proof something is written.
  */
 export function BackstoryDialog({
-  character,
+  owned,
   onClose,
   onSaved,
 }: {
-  readonly character: Character;
+  /**
+   * The character with its seats — the seats are the write's blast radius
+   * (`ownCharacterWrites` names one party per seat), and the character no
+   * longer names a campaign on its own.
+   */
+  readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
+  const character = owned.character;
   const [notes, setNotes] = useState(character.sheet.notes);
   const { busy, failure, submit } = useMutation();
 
@@ -53,7 +59,7 @@ export function BackstoryDialog({
         saveOwnCharacter(client, character, {
           sheet: sheetWith(character, { notes: notes.trim() }),
         }),
-      ownCharacterWrites(character),
+      ownCharacterWrites(owned),
     );
     if (Result.isSuccess(saved)) onSaved();
   };

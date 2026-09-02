@@ -1,4 +1,4 @@
-import type { CampaignId, Character, Note } from "@taverns/api";
+import type { CampaignId, Note, PartySeat } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
@@ -44,20 +44,24 @@ import { loadPlayerCampaignView } from "./load";
  * ones, so "shared" is true of nearly everything here and would say nothing —
  * the rule a `Player` badge on every row of a mode's list falls to as well.
  */
-function PartyMember({ character }: { readonly character: Character }) {
-  const detail = [character.descriptor, character.playerName].filter(
-    (part): part is string => part !== null && part !== "",
-  );
+function PartyMember({ seat }: { readonly seat: PartySeat }) {
+  const character = seat.character;
+  const detail = [
+    character?.descriptor ?? null,
+    seat.seat.playerDisplayName ?? character?.playerName ?? null,
+  ].filter((part): part is string => part !== null && part !== "");
 
   return (
     <div className="flex min-h-row flex-wrap items-center gap-2.5 border-t border-hairline px-card py-2 first:border-t-0">
       <Icon name="shield" size={15} className="text-faint" />
-      <span className="text-body-s leading-body text-foreground">{character.name}</span>
+      <span className="text-body-s leading-body text-foreground">
+        {character?.name ?? seat.seat.displayName}
+      </span>
       {detail.length > 0 && (
         <span className="text-body-s leading-body text-muted-foreground">{detail.join(" · ")}</span>
       )}
       <span className="ml-auto flex items-center gap-4">
-        {character.conditions.map((condition) => (
+        {(character?.conditions ?? []).map((condition) => (
           <Badge key={condition} variant="secondary">
             {condition}
           </Badge>
@@ -131,7 +135,7 @@ const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
   // every atom in this app answers.
   apiAtom(loadPlayerCampaignView(campaignId), [
     reads.campaign(campaignId),
-    reads.characters(campaignId),
+    reads.party(campaignId),
     reads.notes(campaignId),
   ]),
 );
@@ -188,8 +192,8 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
               {view.party.length > 0 && (
                 <Section title="The party">
                   <Card>
-                    {view.party.map((character) => (
-                      <PartyMember key={character.id} character={character} />
+                    {view.party.map((seat) => (
+                      <PartyMember key={seat.seat.id} seat={seat} />
                     ))}
                   </Card>
                 </Section>

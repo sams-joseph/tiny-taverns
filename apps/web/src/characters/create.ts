@@ -26,10 +26,16 @@ export const MAX_AC = 40;
 export const MAX_HP = 10_000;
 export const MAX_LEVEL = 100;
 
+/**
+ * Every table this account is at, whichever side of it they sit — the
+ * continuity decision made a creator a player too, so a character of your own
+ * can go into a table you run exactly as into one you sit at. The old rule
+ * filtered to `player` because a character used to be campaign-scoped and
+ * DM-typed; neither is true any more.
+ */
 export const tablesForNewCharacter = (
   memberships: ReadonlyArray<CampaignMembership>,
-): ReadonlyArray<CampaignMembership> =>
-  memberships.filter((membership) => membership.relation === "player");
+): ReadonlyArray<CampaignMembership> => memberships;
 
 const parseOptional = (raw: string): number | null | undefined =>
   raw.trim() === "" ? null : Number.isInteger(Number(raw)) ? Number(raw) : undefined;

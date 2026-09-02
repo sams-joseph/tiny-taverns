@@ -20,9 +20,17 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Party } from "../src/repo/Party.js";
 import { PlayerTable } from "../src/repo/PlayerTable.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
+import {
+  aCharacterAt,
+  aPlayerAt,
+  anAccount,
+  asDm,
+  createCampaign,
+  scopedTo,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -52,8 +60,9 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
   Groups.layer,
-  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Characters.layer,
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
   EncounterCreatures.layer,
@@ -83,7 +92,6 @@ const withActor =
  */
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
-  const characters = yield* Characters;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
   const roster = yield* EncounterCreatures;
@@ -95,27 +103,31 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
-  const brannoc = yield* as(
-    characters.create(campaign.id, {
+  // The players first, because a character is theirs from its first moment
+  // now: created through the owner's `createOwn`, which seats it at the table
+  // in the same transaction. There is no DM-typed character to assign.
+  const player = yield* aPlayerAt(campaign.id, "Pim");
+  const other = yield* aPlayerAt(campaign.id, "Wren");
+  const { character: brannoc } = yield* aCharacterAt(
+    campaign.id,
+    player,
+    {
       name: "Brannoc",
       playerName: "Ilse",
       race: "Half-orc",
       className: "Paladin",
       ac: 18,
       hpMax: 52,
-      visibility: "shared",
-    }),
+    },
+    { seatVisibility: "shared" },
   );
   // A second player's character, so "your own seats" is a narrowing rather than
   // "every character in the fight" wearing the right label.
-  const nessa = yield* as(
-    characters.create(campaign.id, {
-      name: "Nessa",
-      className: "Ranger",
-      ac: 15,
-      hpMax: 34,
-      visibility: "shared",
-    }),
+  const { character: nessa } = yield* aCharacterAt(
+    campaign.id,
+    other,
+    { name: "Nessa", className: "Ranger", ac: 15, hpMax: 34 },
+    { seatVisibility: "shared" },
   );
   const goblin = yield* as(
     creatures.create(campaign.id, {
@@ -144,11 +156,6 @@ const makeFixture = Effect.gen(function* () {
   // The campaign points at the night — the whole of what "playing right now"
   // means, and the same pointer `session/start.ts` writes from the client.
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
-
-  const player = yield* aPlayerAt(campaign.id, "Pim");
-  const other = yield* aPlayerAt(campaign.id, "Wren");
-  yield* as(characters.assign(campaign.id, brannoc.id, { accountId: player.accountId }));
-  yield* as(characters.assign(campaign.id, nessa.id, { accountId: other.accountId }));
 
   const dmOf = yield* as(asDm(dm, campaign.id));
   const run = yield* as(
@@ -253,8 +260,9 @@ describe("the live table, to a player", () => {
   it("gives a player a seat for their own character and none for anybody else's", async () => {
     const answer = await asPlayer(table.read(fixture.campaign.id));
 
-    // Both characters are in the fight and both are `shared`; the narrowing is
-    // ownership, and it is `ownRowReadable`'s rather than a filter here.
+    // Both characters are in the fight and both seats are `shared`; the
+    // narrowing is ownership of the shared character — `ownCharacter`'s
+    // comparison rather than a filter here.
     expect(seatFor(answer, fixture.brannoc.id)).toBeDefined();
     expect(seatFor(answer, fixture.nessa.id)).toBeUndefined();
 

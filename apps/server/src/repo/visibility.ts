@@ -853,6 +853,67 @@ export const copyableIntoCampaign = (
 ): Statement.Fragment =>
   sql.or([corpusRowReadable(sql, table, campaignId, actor), libraryRowReadable(sql, table, actor)]);
 
+/**
+ * Rows of `character` this actor **owns** — the whole of the top-level
+ * character reach, read and write alike.
+ *
+ * The Library's shape, not the campaign predicates': a character is
+ * account-owned and campaign-scoped nowhere (the continuity decision), so
+ * there is no membership to ask about and no master toggle to compose. The
+ * owner's column is compared to the actor's own account and to nothing a
+ * caller supplied. Scope is deliberately not applied, for
+ * `libraryRowReadable`'s documented reason: `Actor.scope` says which campaign
+ * or group a credential reaches, and there is none here for it to be about.
+ */
+export const ownCharacter = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+  sql`character.account_id = ${actor.accountId}`;
+
+/**
+ * Rows of `character` reachable **through a seat at the named campaign** — the
+ * campaign-side read of the shared character, and the one reach the party join
+ * adds to this file.
+ *
+ * The union is over the *seat*, not the character: `ownedRowReadable` on
+ * `campaign_character` carries the whole campaign gate (membership, credential
+ * scope, the master toggle) plus the seat's own `visibility` with the
+ * creator/owner disjuncts — so a character is visible at a table exactly when
+ * a seat holding it is. A retired seat (`left_at` set) reaches nothing.
+ */
+export const characterSeatedAt = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from campaign_character
+              where campaign_character.character_id = character.id
+                and campaign_character.left_at is null
+                and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)})`;
+
+/**
+ * Whether the named campaign's creator may move this character's **live
+ * state** — the vitals seam's own question, asked for the out-of-fight delta
+ * and the seat-side condition write.
+ *
+ * Two clauses and both are load-bearing: a live seat at this campaign (the
+ * containment — the id in the path reaches only characters actually at this
+ * table), and `campaignWritableById` (the authority — the creator, through
+ * the shipped predicate). The character's owner is deliberately not a
+ * disjunct: an owner edits the durable half through `/me`, and the live trio
+ * stays the table's, exactly as it was before the split.
+ */
+export const characterVitalsWritable = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`exists (select 1 from campaign_character
+                where campaign_character.character_id = character.id
+                  and campaign_character.campaign_id = ${campaignId}
+                  and campaign_character.left_at is null)`,
+    campaignWritableById(sql, campaignId, actor),
+  ]);
+
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (
   sql: SqlClient.SqlClient,

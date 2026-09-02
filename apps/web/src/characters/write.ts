@@ -4,6 +4,7 @@ import type {
   CharacterOwnCreate,
   CharacterOwnUpdate,
   CharacterSheet,
+  OwnedCharacter,
 } from "@taverns/api";
 import type { TavernsClient } from "../api/client";
 import { reads, type Invalidation } from "../api/keys";
@@ -20,9 +21,10 @@ import { reads, type Invalidation } from "../api/keys";
  *
  * ### Both boundaries are somewhere else, and neither is in this file
  *
- * - **Which rows** — `ownRowWritable` on the server: yours, inside a campaign
- *   you hold a live membership of, through a credential that reaches it, while
- *   the DM has shared it.
+ * - **Which rows** — `ownCharacter` on the server: yours, full stop. The
+ *   shared character is account-owned and campaign-scoped nowhere (the
+ *   continuity decision of 2026-09-01), so the owner's write no longer waits
+ *   on any campaign's say-so.
  * - **Which columns** — `CharacterOwnUpdate`, which has no field for
  *   `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId`. A control
  *   for one of those is not a check that would fail here; it does not compile,
@@ -70,39 +72,37 @@ export const createOwnCharacter = (
 ) => client.me.createCharacter({ params: { campaignId }, payload });
 
 /**
- * What a player's write to their own sheet changes — **two reads, and the
- * second one is the interesting half.**
+ * What a player's write to their own sheet changes — the owner's roster, and
+ * **every table the character is seated at.**
  *
  * `reads.myCharacters` is the obvious one: it is the read this screen is built
  * on, and the roster behind it.
  *
- * `reads.characters` is the campaign's party list — **a DM's screen, which this
- * write has never seen and cannot reach.** A level-up moves `descriptor` on the
- * party strip and the party screen; a name change moves a row on the roster the
- * DM is looking at in another tab. That is exactly the shape of write this
- * design has to be careful about, and it is answered by naming the *resource*
- * rather than the screen — nobody has to know which screens exist.
+ * `reads.party(...)` per seat is the interesting half, and it grew plural with
+ * the continuity decision: one shared character can sit at several tables, and
+ * a level-up moves `descriptor` on *each* of their party screens. Naming the
+ * resource per seat is what reaches them without knowing which screens exist.
  *
- * It is one function rather than four spellings for the reason `api/keys.ts`
- * exists at all: the four surfaces that write a sheet (identity, backstory,
- * gear, a death save) all change the same two things, and four copies of a list
- * is four chances for one of them to fall behind.
+ * It is one function rather than several spellings for the reason `api/keys.ts`
+ * exists at all: the surfaces that write a sheet (identity, backstory, gear, a
+ * death save) all change the same things, and copies of a key list are chances
+ * for one of them to fall behind.
  */
 export const characterWritesAt = (campaignId: CampaignId): Invalidation => [
   reads.myCharacters,
-  reads.characters(campaignId),
+  reads.party(campaignId),
 ];
 
 /**
- * The same two reads, from a row that already exists.
- *
- * A create knows only where it is going and an edit knows which row it moved,
- * so the two spell the campaign differently and name the same list — one
- * function under both, because two copies of a key list is two chances for one
- * of them to fall behind.
+ * The same reads, from a row that already exists — which is why it takes the
+ * `OwnedCharacter` rather than the bare `Character`: the seats are where the
+ * write's blast radius is written down, and the character alone no longer
+ * names a campaign at all.
  */
-export const ownCharacterWrites = (character: Character): Invalidation =>
-  characterWritesAt(character.campaignId);
+export const ownCharacterWrites = (owned: OwnedCharacter): Invalidation => [
+  reads.myCharacters,
+  ...owned.seats.map((seat) => reads.party(seat.campaignId)),
+];
 
 /**
  * The whole document, with one part replaced.

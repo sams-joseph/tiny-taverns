@@ -17,11 +17,11 @@ import { SqlClient, type Statement } from "effect/unstable/sql";
 import { BEATS } from "./Beats.js";
 import { dieOnSqlError, likeContains } from "./rows.js";
 import {
+  characterSeatedAt,
   containedRowReadable,
   corpusRowReadable,
   ensureCampaignReadable,
   inCampaign,
-  ownedRowReadable,
   rowReadable,
   under,
 } from "./visibility.js";
@@ -47,7 +47,7 @@ import {
  * | `note`      | `rowReadable`                 | campaign-scoped rows    |
  * | `beat`      | the `beat → session` chain    | nested, no `campaign_id`|
  * | `creature`  | `corpusRowReadable`           | half the rows are global|
- * | `character` | `ownedRowReadable`            | plus: your own row      |
+ * | `character` | `characterSeatedAt`           | reached through a seat  |
  *
  * The fourth arm is what `0009_search_index.ts` advertised as "about eight
  * lines", spent — and it is the arm that makes the people the campaign is about
@@ -285,14 +285,15 @@ const characterArm = (
           ''),
         character.descriptor,
         '')`,
-      // The same predicate `Characters.list` reads through, which is the rule
-      // rather than a detail: one table, one read predicate, or search becomes
-      // a second answer to what an actor may have. A character is not a corpus
-      // row — there is no global party, so nothing here needs the null branch
-      // that makes `corpusRowReadable` the delicate one — but it is an *owned*
-      // row, so a player's own character is findable by them whatever its
-      // visibility, and nobody else's is.
-      readable: ownedRowReadable(sql, "character", campaignId, actor),
+      // The same reach the party read has, which is the rule rather than a
+      // detail: one table, one read predicate, or search becomes a second
+      // answer to what an actor may have. The shared character is
+      // account-owned and campaign-scoped nowhere, so what makes it *this*
+      // campaign's search result is a live seat here — `characterSeatedAt`
+      // carries the whole campaign gate plus the seat's `visibility` with the
+      // creator/owner disjuncts, so a `dm` seat's character is findable by
+      // the creator and its owner and nobody else.
+      readable: characterSeatedAt(sql, campaignId, actor),
       matches: sql.or([
         sql`character.name ilike ${likeContains(query)}`,
         // The player's own name, because "who is Ilse running" is a question a

@@ -176,14 +176,6 @@ export type GroupInviteId = typeof GroupInviteId.Type;
 export const CampaignCharacterId = id("CampaignCharacterId");
 export type CampaignCharacterId = typeof CampaignCharacterId.Type;
 
-/** One canonical fact admitted to a group's shared history. */
-export const GroupHistoryEntryId = id("GroupHistoryEntryId");
-export type GroupHistoryEntryId = typeof GroupHistoryEntryId.Type;
-
-/** One derived summary over a group's history entries. */
-export const GroupHistorySummaryId = id("GroupHistorySummaryId");
-export type GroupHistorySummaryId = typeof GroupHistorySummaryId.Type;
-
 /** One conversation with Hob — a thread of turns, scoped to one campaign. */
 export const AssistantThreadId = id("AssistantThreadId");
 export type AssistantThreadId = typeof AssistantThreadId.Type;

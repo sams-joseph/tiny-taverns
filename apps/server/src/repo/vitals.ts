@@ -11,7 +11,11 @@ import type { SqlClient, Statement } from "effect/unstable/sql";
 import { COMBATANT } from "./liveTables.js";
 import type { AppendEvent } from "./SessionEvents.js";
 import { appendEvent } from "./SessionEvents.js";
-import { campaignWritableById, containedRowWritable, rowWritable } from "./visibility.js";
+import {
+  campaignWritableById,
+  characterVitalsWritable,
+  containedRowWritable,
+} from "./visibility.js";
 
 /**
  * The live half of a character, and **the one place both copies of it are
@@ -133,10 +137,14 @@ export interface CharacterVitals {
  * Copy the fight's numbers onto the character they belong to.
  *
  * Called from inside `Combatants.damage` and `Combatants.update`, in their
- * transaction, so the two rows move together or not at all. The predicate is
- * `rowWritable` over `character` — the seam is composed, not restated, and the
- * campaign is bound so a combatant that somehow named a character in another
- * campaign could not reach it.
+ * transaction, so the two rows move together or not at all. The authority is
+ * `campaignWritableById` — the caller is the campaign's creator, writing a
+ * fight in their own campaign through — and the *containment* is the seed-time
+ * pointer: `combatant.character_id` is written only by the seed, from seats
+ * this campaign holds, so the character a combatant names is one this table
+ * seated. The shared character is account-owned now, so there is no campaign
+ * predicate over `character` for this to compose; what bounds the reach is
+ * which combatants exist.
  *
  * Dies when nothing was updated. See the header: silence here is the exact
  * failure this module exists to prevent.
@@ -156,7 +164,7 @@ export const writeThroughToCharacter = (
   return sql<{ readonly id: CharacterId }>`
     update character set ${sql.update(columns)}, updated_at = now()
     where character.id = ${characterId}
-      and ${rowWritable(sql, "character", campaignId, actor)}
+      and ${campaignWritableById(sql, campaignId, actor)}
     returning character.id
   `.pipe(
     Effect.flatMap((rows) =>
@@ -249,11 +257,15 @@ export const applyCharacterDelta = (
       return { hpCurrent, live };
     }
 
+    // Out of a fight the reach is `characterVitalsWritable`: the character is
+    // *seated* at this campaign right now, and the actor is its creator. A
+    // retired seat takes the delta path away with it — the campaign has no
+    // live claim on the shared row once nobody sits there.
     const rows = yield* sql<{ readonly hp_current: number }>`
       update character
       set hp_current = ${clampedCharacterHp(sql, amount)}, updated_at = now()
       where character.id = ${characterId}
-        and ${rowWritable(sql, "character", campaignId, actor)}
+        and ${characterVitalsWritable(sql, campaignId, actor)}
       returning character.hp_current
     `.pipe(Effect.orDie);
     if (rows.length !== 1) {

@@ -589,7 +589,19 @@ describe("the scope, counted", () => {
     // one campaign, and every one of these is about the group above it. What
     // bounds them is `groupReadable`/`groupWritable`, whose authority half is
     // `play_group.owner_account_id` — the governance decision in a predicate.
-    expect(ungated).toBe(153);
+    //
+    // The continuity split moved the count by two: the old campaign-scoped
+    // `Characters` (seven methods) became the owner-side four plus `Party`'s
+    // five. None of the nine takes the proof and none should. The owner
+    // methods are `Characters.updateOwn`'s old argument writ large — the gate
+    // would prove the caller runs the table, and the whole point is that they
+    // need not. `Party` follows `Options`, not `Memberships`: its one read
+    // answers the creator and a player the *same schema*, narrowed by the
+    // seat's own row-level `visibility` rather than by a divergent
+    // projection, and its writes compose `rowWritable`/`campaignWritableById`
+    // underneath — a proof on top would be a second answer to the question
+    // the predicate answers first.
+    expect(ungated).toBe(151);
   });
 });
 

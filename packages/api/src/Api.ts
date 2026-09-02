@@ -4,15 +4,8 @@ import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
-import {
-  Character,
-  CharacterAssign,
-  CharacterCreate,
-  CharacterDamage,
-  CharacterOwnCreate,
-  CharacterOwnUpdate,
-  CharacterUpdate,
-} from "./Character.js";
+import { Character, CharacterDamage, CharacterOwnCreate, CharacterOwnUpdate } from "./Character.js";
+import { OwnedCharacter, PartyJoin, PartySeat, PartySeatUpdate } from "./Party.js";
 import {
   CharacterOption,
   ClassProgression,
@@ -98,6 +91,7 @@ import {
   AssistantThreadId,
   AssistantTurnId,
   BeatId,
+  CampaignCharacterId,
   CampaignId,
   CharacterId,
   CharacterOptionId,
@@ -407,7 +401,7 @@ class MeGroup extends HttpApiGroup.make("me")
      * already follows from the other side.
      */
     HttpApiEndpoint.get("characters", "/characters", {
-      success: Schema.Array(Character),
+      success: Schema.Array(OwnedCharacter),
     }),
     /**
      * **The first write in the product a player may make**, and the only
@@ -613,6 +607,7 @@ class MembersGroup extends HttpApiGroup.make("members")
  * alone (the governance decision), and removing the owner is refused: a group
  * without its owner-member is unrepresentable.
  */
+
 class GroupMembersGroup extends HttpApiGroup.make("groupMembers")
   .add(
     HttpApiEndpoint.get("list", "/", {
@@ -755,65 +750,61 @@ class SessionsGroup extends HttpApiGroup.make("sessions")
   .prefix("/campaigns/:campaignId/sessions")
   .middleware(Authorization) {}
 
-class CharactersGroup extends HttpApiGroup.make("characters")
+/**
+ * The party: the seats at one campaign's table, each holding a shared,
+ * account-owned character. See `Party.ts` for the model — the seat is the
+ * campaign's row, the character is its owner's, and history is snapshots.
+ */
+class PartyGroup extends HttpApiGroup.make("party")
   .add(
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
-      success: Schema.Array(Character),
+      success: Schema.Array(PartySeat),
       error: NotFound,
     }),
-    HttpApiEndpoint.post("create", "/", {
+    /**
+     * The owner seats their own character. The payload has no field for
+     * anybody else's — consent is the shape — and the schema's composite key
+     * proves the pair even against a forged request. Seating a character
+     * already seated here is the same success, like a double-tapped Join.
+     */
+    HttpApiEndpoint.post("join", "/", {
       params: { campaignId: CampaignId },
-      payload: CharacterCreate,
-      success: Character,
-      error: [NotFound, Conflict],
-    }),
-    HttpApiEndpoint.get("findById", "/:characterId", {
-      params: { campaignId: CampaignId, characterId: CharacterId },
-      success: Character,
+      payload: PartyJoin,
+      success: PartySeat,
       error: NotFound,
     }),
-    HttpApiEndpoint.patch("update", "/:characterId", {
-      params: { campaignId: CampaignId, characterId: CharacterId },
-      payload: CharacterUpdate,
-      success: Character,
-      error: [NotFound, Conflict],
-    }),
-    /**
-     * Whose character it is — the DM's act, and the one that makes
-     * `character.account_id` mean something.
-     *
-     * Its own endpoint for the reason `CharacterAssign` gives: the PATCH is
-     * where a player's own edits will land, and the owner of a row is the field
-     * that must not be reachable from there.
-     */
-    HttpApiEndpoint.post("assign", "/:characterId/assign", {
-      params: { campaignId: CampaignId, characterId: CharacterId },
-      payload: CharacterAssign,
-      success: Character,
+    /** The creator's seat PATCH: visibility, display, live conditions. */
+    HttpApiEndpoint.patch("update", "/:campaignCharacterId", {
+      params: { campaignId: CampaignId, campaignCharacterId: CampaignCharacterId },
+      payload: PartySeatUpdate,
+      success: PartySeat,
       error: NotFound,
     }),
     /**
-     * The delta, and the only way a current hit point moves outside a fight.
-     *
-     * Its own endpoint rather than a field on the PATCH above, for the reason
-     * `combatants.damage` has one: it is the write that repeats, so it carries
-     * a `requestId`, and it is the write whose *meaning* is arithmetic rather
-     * than assignment.
+     * Retiring a seat — the owner leaving, or the creator clearing the table.
+     * The seat row survives with `left_at` stamped: the roster line is
+     * campaign history and a delete would rewrite it.
      */
-    HttpApiEndpoint.post("damage", "/:characterId/damage", {
-      params: { campaignId: CampaignId, characterId: CharacterId },
+    HttpApiEndpoint.delete("leave", "/:campaignCharacterId", {
+      params: { campaignId: CampaignId, campaignCharacterId: CampaignCharacterId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * The delta, through the seat — the creator's act, and the only way a
+     * current hit point moves outside a fight. It lands on the **shared**
+     * character, which is the continuity decision working: damage taken at
+     * one table is what every table sees.
+     */
+    HttpApiEndpoint.post("damage", "/:campaignCharacterId/damage", {
+      params: { campaignId: CampaignId, campaignCharacterId: CampaignCharacterId },
       payload: CharacterDamage,
       success: Character,
       error: NotFound,
     }),
-    HttpApiEndpoint.delete("remove", "/:characterId", {
-      params: { campaignId: CampaignId, characterId: CharacterId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
   )
-  .prefix("/campaigns/:campaignId/characters")
+  .prefix("/campaigns/:campaignId/party")
   .middleware(Authorization) {}
 
 class NotesGroup extends HttpApiGroup.make("notes")
@@ -2160,7 +2151,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(MembersGroup)
   .add(InvitesGroup)
   .add(SessionsGroup)
-  .add(CharactersGroup)
+  .add(PartyGroup)
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(CreaturesGroup)

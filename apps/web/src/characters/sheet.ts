@@ -1,4 +1,4 @@
-import type { Character, CharacterSheet, Currency } from "@taverns/api";
+import type { CharacterSheet, Currency, OwnedCharacter } from "@taverns/api";
 
 /**
  * What the sheet screens work out before they draw anything.
@@ -156,11 +156,15 @@ export const sheetTabs = (sheet: CharacterSheet, writable = false): SheetTabs =>
  * only a name we do not yet know, which is that default's own business.
  */
 export const rosterSummary = (
-  characters: ReadonlyArray<Character>,
+  characters: ReadonlyArray<OwnedCharacter>,
   tableCount: number,
   accountName: string,
 ): string => {
-  const tables = new Set(characters.map((character) => character.campaignId)).size;
+  // The tables a character is *seated* at — one shared character can sit at
+  // several, and a character between tables sits at none, so this counts
+  // distinct seat campaigns rather than characters.
+  const tables = new Set(characters.flatMap((row) => row.seats.map((seat) => seat.campaignId)))
+    .size;
   const plural = (count: number, one: string, many: string) =>
     `${String(count)} ${count === 1 ? one : many}`;
 
@@ -169,7 +173,12 @@ export const rosterSummary = (
       ? tableCount === 0
         ? "not at a table yet."
         : `no characters yet, at ${plural(tableCount, "table", "tables")}.`
-      : `${plural(characters.length, "character", "characters")}, at ${plural(tables, "table", "tables")}.`;
+      : tables === 0
+        ? // Characters outlive tables now: a retired seat keeps the character,
+          // so "N characters, at 0 tables" is a real state and gets a sentence
+          // rather than an arithmetic oddity.
+          `${plural(characters.length, "character", "characters")}, none seated at a table.`
+        : `${plural(characters.length, "character", "characters")}, at ${plural(tables, "table", "tables")}.`;
 
   return `${accountName} · ${counted}`;
 };

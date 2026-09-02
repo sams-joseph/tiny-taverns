@@ -1,4 +1,4 @@
-import type { Campaign, CampaignId, Character, CreatedOrder, Note, PageCursor } from "@taverns/api";
+import type { Campaign, CampaignId, CreatedOrder, Note, PageCursor, PartySeat } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 import { collectPages, WHOLE_LIST } from "../api/page";
@@ -6,8 +6,13 @@ import { collectPages, WHOLE_LIST } from "../api/page";
 /** Everything the player's view of a table renders, in one shape. */
 export interface PlayerCampaignView {
   readonly campaign: Campaign;
-  /** The characters this account may read: their own, and any shared. */
-  readonly party: ReadonlyArray<Character>;
+  /**
+   * The seats this account may read: their own, and any the creator shared.
+   * Each holds the whole shared character behind it — a `shared` seat means
+   * the table may see the character, which is what sharing one has always
+   * meant.
+   */
+  readonly party: ReadonlyArray<PartySeat>;
   /** What the DM has shared. A player is answered no `dm` row, by predicate. */
   readonly notes: ReadonlyArray<Note>;
 }
@@ -37,7 +42,7 @@ export const loadPlayerCampaignView = (campaignId: CampaignId) => (client: Taver
     const [campaign, party, notes] = yield* Effect.all(
       [
         client.campaigns.findById({ params: { campaignId } }),
-        client.characters.list({ params: { campaignId } }),
+        client.party.list({ params: { campaignId } }),
         collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
           client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
         ),

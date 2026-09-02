@@ -31,7 +31,7 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Groups.layer,
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Characters.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
     CampaignCreatorActors.layer,
@@ -80,7 +80,7 @@ const makeFixture = Effect.gen(function* () {
   );
 
   yield* as(
-    characters.create(campaign.id, {
+    characters.createOwn(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
       race: "Half-orc",
@@ -90,7 +90,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   yield* as(
-    characters.create(campaign.id, {
+    characters.createOwn(campaign.id, {
       name: "Wren",
       playerName: "Kofi",
       race: "Tiefling",
@@ -100,7 +100,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   yield* as(
-    characters.create(campaign.id, {
+    characters.createOwn(campaign.id, {
       name: "Sister Pell",
       playerName: "Dara",
       race: "Human",

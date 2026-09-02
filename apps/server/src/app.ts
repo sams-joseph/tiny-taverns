@@ -25,6 +25,7 @@ import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
+import { Party } from "./repo/Party.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -226,6 +227,7 @@ export const servicesOver = <E>(
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
   | Options
   | RuleArticles
+  | Party
   | PlayerTable
   | PrepItems
   | Proposals
@@ -244,10 +246,14 @@ export const servicesOver = <E>(
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Groups.layer,
-    // A character is live state since `0014` — damage taken in a fight writes
-    // the character in the same transaction, and a character written during a
-    // session rings the doorbell. So this is a live repository too.
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // The owner's half of the shared character. It rings no doorbell — the
+    // durable sheet is not live state, and the live trio moved to the party —
+    // so it takes no `LiveEvents`.
+    Characters.layer,
+    // The campaign's half: the seats. The condition write-through and the
+    // delta are live writes, so this is a live repository the way the old
+    // campaign-scoped `Characters` was.
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
@@ -316,7 +322,7 @@ export const servicesOver = <E>(
         // A player accepting a character draft goes through `createOwn`, so the
         // accept path holds `Characters` as well now — the same statement a
         // typed one takes, with `assistant_turn_id` on it.
-        Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+        Characters.layer,
         EncounterCreatures.layer,
         Encounters.layer,
         Notes.layer,
@@ -404,6 +410,7 @@ export const applicationOver = <E>(
     | Notes
     | Options
     | RuleArticles
+    | Party
     | PlayerTable
     | PrepItems
     | Proposals

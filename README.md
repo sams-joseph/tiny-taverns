@@ -126,8 +126,12 @@ before the monster corpus so imported monster relationships can be populated. Th
 and feats are imported by the same `ruleset:import` command; feats depend only on the ability-score
 vocabulary the command seeds first.
 
-If an existing development database still carries the pre-2014 character-rules rows, use the
-clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server equipment:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server bestiary:import && pnpm -F server magic-item:import`.
+**A database from before the group architecture (2026-09-01) must be reset** — `0001` is a clean
+baseline now and the migrator silently skips rewritten ids, so an old database keeps the old shape
+for ever. Use the clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server equipment:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server bestiary:import && pnpm -F server magic-item:import`.
+Against a Postgres this repo's Docker does not own, the reset half is
+`pnpm -F server db:reset:fresh -- --force` (drop + recreate the database `DATABASE_URL` names, then
+migrate) — the product's one destructive command, run by a person, never by the server.
 
 That is the whole setup, and it needs no Clerk account. Paste the token into the Server
 panel's **Machine token** box to reach the authenticated endpoints.
@@ -174,6 +178,9 @@ build order) and caches results.
 | `pnpm db:up`        | Start the development database          |
 | `pnpm db:down`      | Stop it, keeping the data               |
 | `pnpm db:reset`     | Stop it and throw the data away         |
+
+For a Postgres outside this repo's Docker, `pnpm -F server db:reset:fresh -- --force` drops and
+recreates the database `DATABASE_URL` names and runs the whole migration ledger.
 
 Each maps to `turbo run <task>`; you can also target one package, e.g.
 `pnpm turbo run test --filter web`.

@@ -10,7 +10,15 @@ import { Characters } from "../src/repo/Characters.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Memberships } from "../src/repo/Memberships.js";
-import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
+import { Party } from "../src/repo/Party.js";
+import {
+  aCharacterAt,
+  aPlayerAt,
+  anAccount,
+  asDm,
+  createCampaign,
+  scopedTo,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -20,10 +28,12 @@ import { migratedDatabase } from "./support/database.js";
  * The fourth delivery draws four statuses per chair: `playing`, `no-character`,
  * `invited` and `open`. Three of them are questions about rows that already
  * exist and the fourth is not representable, because a `campaign_member` row
- * cannot exist before an account. So there is no seat table, and this file is
- * where that is measured rather than asserted: the last block derives each of
- * the three from this list plus `invites.list` plus `characters.list`, and shows
- * the counts the screen's subtitle needs falling out of the same three reads.
+ * cannot exist before an account — and neither can a `campaign_character`
+ * seat, whose `account_id` is `not null` too. So there is no empty chair, and
+ * this file is where that is measured rather than asserted: the last block
+ * derives each of the three from this list plus `invites.list` plus
+ * `Party.list` (the live seats), and shows the counts the screen's subtitle
+ * needs falling out of the same three reads.
  *
  * Four blocks:
  *
@@ -38,7 +48,8 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
   Groups.layer,
-  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Characters.layer,
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   CampaignCreatorActors.layer,
   Invites.layer,
   Memberships.layer,
@@ -62,9 +73,7 @@ const as =
  * than about a table nobody has opened.
  */
 const makeFixture = Effect.gen(function* () {
-  const characters = yield* Characters;
   const invites = yield* Invites;
-  const sql = yield* SqlClient.SqlClient;
 
   const dm = yield* anAccount("Ada");
   const campaign = yield* as(dm)(createCampaign({ name: "The Salt Road", visibility: "shared" }));
@@ -75,17 +84,13 @@ const makeFixture = Effect.gen(function* () {
   const playing = yield* aPlayerAt(campaign.id, "Ilse");
   const seated = yield* aPlayerAt(campaign.id, "Marta");
 
-  const brannoc = yield* as(dm)(
-    characters.create(campaign.id, { name: "Brannoc", playerName: "Ilse" }),
-  );
-  // **The one thing here written behind the product's back**, and deliberately
-  // so: nothing assigns `character.account_id` yet — that is its own step, with
-  // its own predicate — and this file is about the roster rather than about the
-  // write that will populate it. What it buys is the fourth block below, which
-  // has to be able to tell a member with a character from one without.
-  yield* sql`
-    update character set account_id = ${playing.accountId} where id = ${brannoc.id}
-  `;
+  // Ilse writes her own character down, which seats it — the shipped path,
+  // and what the fourth block below needs: a member with a live seat beside
+  // one without.
+  const brannoc = yield* aCharacterAt(campaign.id, playing, {
+    name: "Brannoc",
+    playerName: "Ilse",
+  });
 
   // Outstanding: minted, never redeemed. It is what *"invited, hasn't opened
   // it"* is, and it is on `campaign_invite` rather than anywhere near this list.
@@ -100,7 +105,7 @@ const makeFixture = Effect.gen(function* () {
     stranger: yield* anAccount("Bo"),
     campaign,
     otherTable,
-    brannoc,
+    brannoc: brannoc.character,
     outstanding,
   };
 }).pipe(Effect.orDie);
@@ -264,24 +269,20 @@ describe("the seat vocabulary, derived", () => {
   it("answers three of the drawn statuses from three shipped reads, and cannot answer the fourth", async () => {
     // The decision, exercised. `Party.jsx` draws `playing` / `no-character` /
     // `invited` / `open`; this is all four of them computed from the roster,
-    // `invites.list` and `characters.list`, with no fourth source and no seat
-    // row anywhere.
+    // `invites.list` and `Party.list` — the live seats — with no fourth
+    // source and no empty chair anywhere.
     const derived = await runtime.runPromise(
       Effect.gen(function* () {
         const dm = yield* asDm(fixture.dm, fixture.campaign.id);
         const members = yield* Effect.flatMap(Memberships, (m) => m.list(dm));
-        const characters = yield* as(fixture.dm)(
-          Effect.flatMap(Characters, (c) => c.list(fixture.campaign.id)),
+        const seats = yield* as(fixture.dm)(
+          Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)),
         );
         const invites = yield* as(fixture.dm)(
           Effect.flatMap(Invites, (i) => i.list(fixture.campaign.groupId)),
         );
 
-        const owned = new Set(
-          characters.flatMap((character) =>
-            character.accountId === null ? [] : [character.accountId],
-          ),
-        );
+        const owned = new Set(seats.map((row) => row.seat.accountId));
         const players = members.filter((member) => member.relation === "player");
 
         return {
@@ -307,27 +308,29 @@ describe("the seat vocabulary, derived", () => {
     expect(derived.subtitle).toBe("2 players, 1 invitation outstanding");
   }, 60_000);
 
-  it("has no seat to hold an empty chair, and nowhere to put one", async () => {
+  it("has nowhere to put an empty chair", async () => {
     // The negative half, and the reason it is a schema property rather than a
-    // convention: there is no table an `open` seat could be a row of, and a
-    // membership cannot precede the account it names — `campaign_member`'s
-    // `account_id` is `not null` and a real foreign key. So *"Add seat"* is not
-    // a button somebody declined to build, it is one with nothing behind it.
-    const tables = await runtime.runPromise(
+    // convention: a membership cannot precede the account it names, and a
+    // seat cannot either — `account_id` is `not null` and a real foreign key
+    // on both `campaign_member` and `campaign_character`. So *"Add seat"* is
+    // not a button somebody declined to build, it is one with nothing behind
+    // it: every chair the roster can draw has a person in it.
+    const nullable = await runtime.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
-        const rows = yield* sql<{ readonly table_name: string }>`
-          select table_name from information_schema.tables
-          where table_schema = 'public' and table_name like '%seat%'
+        const rows = yield* sql<{
+          readonly table_name: string;
+          readonly is_nullable: string;
+        }>`
+          select table_name, is_nullable from information_schema.columns
+          where table_name in ('campaign_member', 'campaign_character')
+            and column_name = 'account_id'
+          order by table_name
         `;
-        const nullable = yield* sql<{ readonly is_nullable: string }>`
-          select is_nullable from information_schema.columns
-          where table_name = 'campaign_member' and column_name = 'account_id'
-        `;
-        return { seats: rows.length, nullable: nullable[0]!.is_nullable };
+        return rows.map((row) => `${row.table_name}:${row.is_nullable}`);
       }).pipe(Effect.orDie),
     );
 
-    expect(tables).toEqual({ seats: 0, nullable: "NO" });
+    expect(nullable).toEqual(["campaign_character:NO", "campaign_member:NO"]);
   }, 60_000);
 });

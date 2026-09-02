@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Icon } from "@taverns/ui";
+import { Badge, Card, Icon } from "@taverns/ui";
 import { dayOf } from "../chronicle/format";
 import { initialsOf, keyOf, nameOf, type RosterRow } from "./roster";
 
@@ -12,10 +12,11 @@ import { initialsOf, keyOf, nameOf, type RosterRow } from "./roster";
  * names who took it, so an outstanding one is a named person who has not arrived
  * rather than a share of a reusable link.
  *
- * The drawn hover-revealed action row is deliberately not hover-revealed. A
- * control that exists only under a pointer is one a keyboard and a touch screen
- * cannot find, and the one action here — giving somebody a character — is the
- * thing the screen exists to make possible.
+ * The drawn assignment control is gone with the continuity architecture: a
+ * character is its owner's, seated by its owner, and there is no re-pointing
+ * for a creator to perform. What a creator manages is the *seat* — shared or
+ * hidden, kept or retired — and those verbs live on the character list below
+ * the roster, where the seat is drawn.
  */
 
 /** The person avatar, `PlayerParts.jsx`'s `Seat`, in theme names. */
@@ -40,12 +41,14 @@ const detailOf = (row: RosterRow): string => {
     case "dm":
       return "Runs this table.";
     case "playing":
-      return row.characters
-        .map((character) =>
-          character.descriptor === null || character.descriptor === ""
+      return row.seats
+        .map((seat) => {
+          const character = seat.character;
+          if (character === null) return `${seat.seat.displayName} (character deleted)`;
+          return character.descriptor === null || character.descriptor === ""
             ? character.name
-            : `${character.name} · ${character.descriptor}`,
-        )
+            : `${character.name} · ${character.descriptor}`;
+        })
         .join(" and ");
     case "no-character":
       return "Joined, and has not got a character yet.";
@@ -56,15 +59,7 @@ const detailOf = (row: RosterRow): string => {
   }
 };
 
-function RosterLine({
-  row,
-  first,
-  onAssign,
-}: {
-  readonly row: RosterRow;
-  readonly first: boolean;
-  readonly onAssign: () => void;
-}) {
+function RosterLine({ row, first }: { readonly row: RosterRow; readonly first: boolean }) {
   const name = nameOf(row);
   const muted = row.kind !== "playing";
 
@@ -95,37 +90,15 @@ function RosterLine({
       {row.kind === "playing" && <Badge variant="success">Playing</Badge>}
       {row.kind === "no-character" && <Badge variant="destructive">No character</Badge>}
       {row.kind === "invited" && <Badge variant="info">Invited</Badge>}
-
-      {/* Only a player member can hold a character: assignment names an account,
-          and an invitation has none until it is taken. */}
-      {(row.kind === "playing" || row.kind === "no-character") && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onAssign}
-          aria-label={
-            row.kind === "playing" ? `Change ${name}'s character` : `Give ${name} a character`
-          }
-        >
-          <Icon name={row.kind === "playing" ? "pencil" : "user-plus"} size={13} />
-          {row.kind === "playing" ? "Change" : "Give them a character"}
-        </Button>
-      )}
     </div>
   );
 }
 
-export function RosterCard({
-  rows,
-  onAssign,
-}: {
-  readonly rows: ReadonlyArray<RosterRow>;
-  readonly onAssign: (row: RosterRow) => void;
-}) {
+export function RosterCard({ rows }: { readonly rows: ReadonlyArray<RosterRow> }) {
   return (
     <Card>
       {rows.map((row, index) => (
-        <RosterLine key={keyOf(row)} row={row} first={index === 0} onAssign={() => onAssign(row)} />
+        <RosterLine key={keyOf(row)} row={row} first={index === 0} />
       ))}
     </Card>
   );

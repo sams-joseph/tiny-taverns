@@ -118,14 +118,28 @@ describe("which tabs the document can fill", () => {
 });
 
 describe("the roster's own line", () => {
-  const at = (campaignId: string) => ({ campaignId }) as never;
+  /**
+   * The tables are counted over **seats** now — one shared character can sit
+   * at several, and a character between tables sits at none, which is a real
+   * state a retired seat leaves behind.
+   */
+  const at = (...campaignIds: ReadonlyArray<string>) =>
+    ({ seats: campaignIds.map((campaignId) => ({ campaignId })) }) as never;
 
-  it("names the reader, then counts characters and the tables they are at", () => {
+  it("names the reader, then counts characters and the tables they are seated at", () => {
     expect(rosterSummary([at("a"), at("b")], 2, "Ilse Vantar")).toBe(
       "Ilse Vantar · 2 characters, at 2 tables.",
     );
     expect(rosterSummary([at("a"), at("a")], 3, "Ilse Vantar")).toBe(
       "Ilse Vantar · 2 characters, at 1 table.",
+    );
+    // One character seated at two tables: the continuity decision on one line.
+    expect(rosterSummary([at("a", "b")], 2, "Ilse Vantar")).toBe(
+      "Ilse Vantar · 1 character, at 2 tables.",
+    );
+    // Characters outlive their tables — every seat retired, the rows remain.
+    expect(rosterSummary([at(), at()], 2, "Ilse Vantar")).toBe(
+      "Ilse Vantar · 2 characters, none seated at a table.",
     );
   });
 

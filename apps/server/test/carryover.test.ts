@@ -56,7 +56,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
   Groups.layer,
-  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Characters.layer,
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
@@ -91,8 +91,10 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road" }));
+  // The creator's own character, seated by `createOwn`'s own transaction —
+  // the seat is what the fight seeds a combatant from.
   yield* as(
-    characters.create(campaign.id, {
+    characters.createOwn(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
       race: "Half-orc",

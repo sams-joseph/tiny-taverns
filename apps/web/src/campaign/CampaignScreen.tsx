@@ -1,4 +1,4 @@
-import type { CampaignId, Character, Encounter } from "@taverns/api";
+import type { CampaignId, Encounter, PartySeat } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle, Icon, type IconName } from "@taverns/ui";
 import { useState, type ReactNode } from "react";
@@ -9,7 +9,6 @@ import {
   type CampaignAct,
   type CampaignChromeSlots,
 } from "./CampaignChrome";
-import { CharacterDialog } from "./CharacterDialog";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
 import type { CampaignView } from "./load";
@@ -173,15 +172,13 @@ function PartyStrip({
   playerCount,
   campaignId,
 }: {
-  readonly party: ReadonlyArray<Character>;
+  readonly party: ReadonlyArray<PartySeat>;
   readonly playerCount: number;
   readonly campaignId: CampaignId;
 }) {
-  const held = new Set(
-    party
-      .map((character) => character.accountId)
-      .filter((id): id is NonNullable<typeof id> => id !== null),
-  );
+  // A seat names the account that holds it, so "how many players have no
+  // character" is the players minus the accounts with a live seat.
+  const held = new Set(party.map((row) => row.seat.accountId));
   const without = Math.max(0, playerCount - held.size);
 
   return (
@@ -201,14 +198,14 @@ function PartyStrip({
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {party.map((character) => (
-              <div key={character.id} className="flex items-center gap-2.5">
+            {party.map((row) => (
+              <div key={row.seat.id} className="flex items-center gap-2.5">
                 <span className="min-w-0 flex-1 truncate text-body-s leading-snug font-medium text-foreground">
-                  {character.name}
+                  {row.character?.name ?? row.seat.displayName}
                 </span>
-                {character.playerName !== null && (
+                {(row.seat.playerDisplayName ?? row.character?.playerName) != null && (
                   <span className="shrink-0 text-micro leading-snug whitespace-nowrap text-faint">
-                    {character.playerName}
+                    {row.seat.playerDisplayName ?? row.character?.playerName}
                   </span>
                 )}
               </div>
@@ -241,9 +238,7 @@ const subtitleFor = (view: CampaignView): string | undefined => {
 };
 
 /** The one dialog slot the Overview raises for itself. */
-type Editing =
-  | { readonly what: "encounter"; readonly encounter: Encounter | undefined }
-  | { readonly what: "character"; readonly character: Character | undefined };
+type Editing = { readonly what: "encounter"; readonly encounter: Encounter | undefined };
 
 function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
   const { view, run, act, finishSession } = slots;
@@ -331,15 +326,6 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
           key={editing.encounter?.id ?? "new-encounter"}
           campaignId={view.campaign.id}
           encounter={editing.encounter}
-          onClose={() => setEditing(undefined)}
-          onSaved={() => setEditing(undefined)}
-        />
-      )}
-      {editing?.what === "character" && (
-        <CharacterDialog
-          key={editing.character?.id ?? "new-character"}
-          campaignId={view.campaign.id}
-          character={editing.character}
           onClose={() => setEditing(undefined)}
           onSaved={() => setEditing(undefined)}
         />

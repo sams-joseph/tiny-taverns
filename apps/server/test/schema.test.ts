@@ -115,6 +115,26 @@ beforeAll(async () => {
     .sort();
 }, 60_000);
 
+describe("the group architecture's two structural absences", () => {
+  it("gives campaign_member no role column — the creator is the campaign's one DM", () => {
+    // The participation decision of 2026-09-01: `campaign.creator_account_id`
+    // is the whole answer to who runs a table, and a role column here would be
+    // the co-DM door this architecture deliberately has no hinge for. If this
+    // fails, somebody has re-added the column the clean baseline removed.
+    expect(columnFor("campaign_member", "role")).toBeUndefined();
+  });
+
+  it("gives character no campaign_id — playable state is account-owned and shared", () => {
+    // The continuity decision: one character, one row of state, carried across
+    // campaigns by seats. A campaign_id here would be the fork the decision
+    // forbids; the campaign's claim on a character is a `campaign_character`
+    // row and nothing else.
+    expect(columnFor("character", "campaign_id")).toBeUndefined();
+    const owner = columnFor("character", "account_id");
+    expect(owner?.is_nullable).toBe("NO");
+  });
+});
+
 describe("every content-bearing table", () => {
   it("is the set this file thinks it is", () => {
     // A guard on the guard: if this list changes, the assertions below have
@@ -124,6 +144,11 @@ describe("every content-bearing table", () => {
       "assistant_turn",
       "beat",
       "campaign",
+      // The seat: a campaign's join to a shared account-owned character. It
+      // is content — the table's word for a character, gated by its own
+      // visibility, and a seat can be the assistant's the day a drafted
+      // character is kept.
+      "campaign_character",
       "character",
       // A class or a race — the pieces a character is built from, in the
       // same three-owner shape a `creature` has. Content, and it carries the

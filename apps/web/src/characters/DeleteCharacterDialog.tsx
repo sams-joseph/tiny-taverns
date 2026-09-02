@@ -1,4 +1,4 @@
-import type { Character } from "@taverns/api";
+import type { OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -53,15 +53,21 @@ import { ownCharacterWrites } from "./write";
  * clauses that let it be edited.
  */
 export function DeleteCharacterDialog({
-  character,
+  owned,
   onClose,
   onDeleted,
 }: {
-  readonly character: Character;
+  /**
+   * The character with its seats — the seats are the write's blast radius
+   * (`ownCharacterWrites` names one party per seat), and the character no
+   * longer names a campaign on its own.
+   */
+  readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   /** The row is gone; the screen has nothing left to draw. */
   readonly onDeleted: () => void;
 }) {
+  const character = owned.character;
   const { busy, failure, submit } = useMutation();
 
   const remove = async () => {
@@ -70,7 +76,7 @@ export function DeleteCharacterDialog({
       // The same two reads every write to this row names: this account's roster,
       // and the campaign's party list — a DM's screen, which this write has
       // never seen and reaches by naming the resource rather than the screen.
-      ownCharacterWrites(character),
+      ownCharacterWrites(owned),
     );
     if (Result.isSuccess(done)) onDeleted();
   };

@@ -2,19 +2,25 @@ import {
   Actor,
   type AccountId,
   type Campaign,
+  type CampaignCharacterId,
   type CampaignCreate,
   type CampaignId,
+  type Character,
+  type CharacterOwnCreate,
   CurrentActor,
   type GroupId,
   type NotFound,
+  type Visibility,
 } from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "../../src/Accounts.js";
 import { Campaigns } from "../../src/repo/Campaigns.js";
+import { Characters } from "../../src/repo/Characters.js";
 import { type CampaignCreatorActor, CampaignCreatorActors } from "../../src/repo/CreatorActor.js";
 import { Groups } from "../../src/repo/Groups.js";
 import { Invites } from "../../src/repo/Invites.js";
+import { Party } from "../../src/repo/Party.js";
 
 /**
  * The actors every repository test needs, under the group architecture.
@@ -55,6 +61,15 @@ export const scopedToGroup = (actor: Actor, groupId: GroupId): Actor =>
   new Actor({ accountId: actor.accountId, scope: { _tag: "group", groupId } });
 
 /**
+ * The same account's **account-wide** credential — what `aPlayerAt`'s scoped
+ * one came from. For the assertions about what survives a revocation: the
+ * scoped credential loses its reach with the membership, and the account-wide
+ * one is how the person still reads what is theirs.
+ */
+export const accountWide = (actor: Actor): Actor =>
+  new Actor({ accountId: actor.accountId, scope: { _tag: "account" } });
+
+/**
  * A fresh group founded by this actor — who becomes its owner and first
  * member, through the shipped `Groups.create` path.
  */
@@ -80,6 +95,66 @@ export const aCampaignBy = (
     const campaigns = yield* Campaigns;
     const groupId = yield* aGroupBy(actor, `${payload.name} group`);
     return yield* Effect.provideService(campaigns.create(groupId, payload), CurrentActor, actor);
+  }).pipe(Effect.orDie);
+
+/** A character and the seat `createOwn` gave it — what most fixtures want back. */
+export interface SeatedCharacter {
+  readonly character: Character;
+  readonly seatId: CampaignCharacterId;
+}
+
+/**
+ * A character seated at a campaign, through the shipped path: the **owner's**
+ * `createOwn`, which writes the shared account-owned row and its seat in one
+ * transaction. There is no DM-typed character any more — a table's creator
+ * seats their own characters exactly as a player does — so this is the one
+ * spelling every fixture uses, whoever the owner is.
+ *
+ * The seat starts `dm` (the column default, fail-closed). Pass
+ * `seatVisibility: "shared"` to have the campaign's **creator** share it
+ * through the party PATCH, which is the only writer that column has — a
+ * fixture that wrote it with SQL would be green against a state the product
+ * cannot reach.
+ */
+export const aCharacterAt = (
+  campaignId: CampaignId,
+  owner: Actor,
+  payload: CharacterOwnCreate,
+  options?: { readonly seatVisibility?: Visibility },
+): Effect.Effect<SeatedCharacter, never, Characters | Party | SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const characters = yield* Characters;
+    const party = yield* Party;
+    const sql = yield* SqlClient.SqlClient;
+    const character = yield* Effect.provideService(
+      characters.createOwn(campaignId, payload),
+      CurrentActor,
+      owner,
+    );
+    // The seat id is a fact lookup, like `ownerOf`: the row `createOwn` just
+    // wrote, found by the pair the partial unique index makes unique.
+    const seats = yield* sql<{ readonly id: CampaignCharacterId }>`
+      select campaign_character.id from campaign_character
+      where campaign_character.campaign_id = ${campaignId}
+        and campaign_character.character_id = ${character.id}
+        and campaign_character.left_at is null
+    `;
+    const seatId = seats[0]!.id;
+    if (options?.seatVisibility !== undefined && options.seatVisibility !== "dm") {
+      const creators = yield* sql<{ readonly creator_account_id: AccountId }>`
+        select campaign.creator_account_id from campaign where campaign.id = ${campaignId}
+      `;
+      const creator = new Actor({
+        accountId: creators[0]!.creator_account_id,
+        scope: { _tag: "account" },
+      });
+      yield* Effect.provideService(
+        party.update(campaignId, seatId, { visibility: options.seatVisibility }),
+        CurrentActor,
+        creator,
+      );
+    }
+    return { character, seatId };
   }).pipe(Effect.orDie);
 
 /**
@@ -114,6 +189,29 @@ export const aPlayerAt = (
       owner,
     );
     const account = yield* anAccount(name);
+    yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
+    return scopedTo(account, campaignId);
+  }).pipe(Effect.orDie);
+
+/**
+ * An **existing** account admitted to a campaign — `aPlayerAt` for a person
+ * who already exists, which is what "the same character at two tables" needs:
+ * one account, two participations. Same shipped path (a campaign-naming
+ * invitation, redeemed), and the same campaign-scoped credential back.
+ */
+export const admittedTo = (
+  campaignId: CampaignId,
+  account: Actor,
+  label = "an existing member",
+): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const invites = yield* Invites;
+    const { owner, groupId } = yield* ownerOf(campaignId);
+    const issued = yield* Effect.provideService(
+      invites.create(groupId, { label, campaignId }),
+      CurrentActor,
+      owner,
+    );
     yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
     return scopedTo(account, campaignId);
   }).pipe(Effect.orDie);

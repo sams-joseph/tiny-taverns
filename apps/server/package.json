@@ -16,7 +16,8 @@
     "ruleset:import": "tsx --env-file-if-exists=.env.local src/bin/import-ruleset.ts",
     "spell:import": "tsx --env-file-if-exists=.env.local src/bin/import-spells.ts",
     "equipment:import": "tsx --env-file-if-exists=.env.local src/bin/import-equipment.ts",
-    "magic-item:import": "tsx --env-file-if-exists=.env.local src/bin/import-magic-items.ts"
+    "magic-item:import": "tsx --env-file-if-exists=.env.local src/bin/import-magic-items.ts",
+    "db:reset:fresh": "tsx --env-file-if-exists=.env.local src/bin/reset-fresh.ts"
   },
   "dependencies": {
     "@clerk/backend": "3.15.1",

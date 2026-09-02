@@ -1,13 +1,13 @@
 import type {
   Campaign,
   CampaignId,
-  Character,
   CreatedOrder,
   CampaignRelation,
   Encounter,
   EncounterRun,
   Note,
   PrepItem,
+  PartySeat,
   Session,
   SessionId,
   PageCursor,
@@ -32,7 +32,13 @@ export interface CampaignView {
   readonly session: Session | undefined;
   readonly encounters: ReadonlyArray<Encounter>;
   readonly notes: ReadonlyArray<Note>;
-  readonly party: ReadonlyArray<Character>;
+  /**
+   * The seats at this table, each holding the shared account-owned character
+   * behind it — `party.list`. A seat whose character has been deleted keeps
+   * standing with `character: null`, which is campaign history rather than an
+   * error.
+   */
+  readonly party: ReadonlyArray<PartySeat>;
   /** The "Before you sit down" checklist. Empty when there is no session. */
   readonly prep: ReadonlyArray<PrepItem>;
   /**
@@ -129,10 +135,7 @@ export const notesAtom = Atom.family((campaignId: CampaignId) =>
 );
 
 export const partyAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom(
-    (client) => client.characters.list({ params: { campaignId } }),
-    [reads.characters(campaignId)],
-  ),
+  apiAtom((client) => client.party.list({ params: { campaignId } }), [reads.party(campaignId)]),
 );
 
 const sessionAtom = Atom.family((night: Night) =>
@@ -190,7 +193,7 @@ export const campaignViewKeys = (
   reads.myCampaigns,
   reads.encounters(campaignId),
   reads.notes(campaignId),
-  reads.characters(campaignId),
+  reads.party(campaignId),
   reads.sessions(campaignId),
   ...(sessionId === undefined ? [] : [reads.prep(sessionId), reads.runs(sessionId)]),
 ];

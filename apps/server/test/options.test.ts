@@ -184,7 +184,7 @@ const makeFixture = Effect.gen(function* () {
    * `"Circle of the Moon Druid"` is one of the three shapes live data really
    * holds, and it is the one a fuzzy matcher would read as a druid.
    */
-  const legacy = yield* asJo.characters.create({
+  const legacy = yield* asJo.me.createCharacter({
     params: { campaignId: saltRoad.id },
     payload: {
       name: "Sorrel",
@@ -1139,14 +1139,13 @@ describe("the copy, which is the whole of how a class reaches a player", () => {
 
 describe("existing characters", () => {
   it("keep the free-text labels they were typed with, and nothing rewrites them", async () => {
-    // The acceptance criterion, measured rather than assumed. `0017` touches
-    // `character` not at all — no column, no backfill, no matcher — so a
-    // descriptor a DM typed before any of this existed reads exactly as it did.
-    const still = await as(fixture.jo.token, (client) =>
-      client.characters.findById({
-        params: { campaignId: fixture.saltRoad.id, characterId: fixture.legacy.id },
-      }),
-    );
+    // The acceptance criterion, measured rather than assumed. Nothing about
+    // the vocabulary work touches `character` — no column, no backfill, no
+    // matcher — so a label typed before any of this existed reads exactly as
+    // it did. The read is the owner's own (`GET /me/characters`), because that
+    // is the one read a shared, account-owned character has.
+    const mine = await as(fixture.jo.token, (client) => client.me.characters());
+    const still = mine.find((owned) => owned.character.id === fixture.legacy.id)!.character;
 
     expect(still.className).toBe("Circle of the Moon Druid");
     expect(still.race).toBe("Half-orc");
@@ -1168,7 +1167,7 @@ describe("existing characters", () => {
       }),
     );
     const made = await as(fixture.jo.token, (client) =>
-      client.characters.create({
+      client.me.createCharacter({
         params: { campaignId: fixture.saltRoad.id },
         payload: { name: "Brannoc", className: OPTIONS.bloodsworn, level: 1, ac: 14, hpMax: 12 },
       }),
@@ -1181,11 +1180,9 @@ describe("existing characters", () => {
       }),
     );
 
-    const after = await as(fixture.jo.token, (client) =>
-      client.characters.findById({
-        params: { campaignId: fixture.saltRoad.id, characterId: made.id },
-      }),
-    );
+    const after = (await as(fixture.jo.token, (client) => client.me.characters())).find(
+      (owned) => owned.character.id === made.id,
+    )!.character;
     expect(after.hpMax).toBe(12);
     expect(after.ac).toBe(14);
     expect(after.className).toBe(OPTIONS.bloodsworn);
@@ -1196,11 +1193,9 @@ describe("existing characters", () => {
         params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
       }),
     );
-    const orphaned = await as(fixture.jo.token, (client) =>
-      client.characters.findById({
-        params: { campaignId: fixture.saltRoad.id, characterId: made.id },
-      }),
-    );
+    const orphaned = (await as(fixture.jo.token, (client) => client.me.characters())).find(
+      (owned) => owned.character.id === made.id,
+    )!.character;
     expect(orphaned.className).toBe(OPTIONS.bloodsworn);
     expect(orphaned.hpMax).toBe(12);
   });

@@ -21,6 +21,7 @@ export * from "./MagicItem.js";
 export * from "./Membership.js";
 export * from "./Note.js";
 export * from "./Page.js";
+export * from "./Party.js";
 export * from "./PlayerLive.js";
 export * from "./PlayerRecap.js";
 export * from "./PrepItem.js";

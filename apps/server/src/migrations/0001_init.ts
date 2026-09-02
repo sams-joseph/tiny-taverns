@@ -252,10 +252,24 @@ export default Effect.gen(function* () {
       foreign key (current_session_id) references session (id) on delete set null
   `;
 
+  // The character: **account-owned, top-level, and the one copy of playable
+  // state** — the captain's continuity decision of 2026-09-01. Level, hit
+  // points, conditions, inventory and the sheet carry across every campaign
+  // that seats the character; the campaign join below holds participation and
+  // display snapshots, never a fork of state. There is no `campaign_id` here,
+  // and `apps/server/test/schema.test.ts` fails if one ever reappears.
+  //
+  // `visibility` is carried for the uniform content tail and is deliberately
+  // inert, `assistant_thread.visibility`'s precedent: the row is its owner's,
+  // and the campaign-scoped answer — who at a table may see the seat and the
+  // character behind it — lives on `campaign_character.visibility`.
+  //
+  // The identity/sheet/live columns land in `0012` and `0014`, as they always
+  // did; this is the baseline shape they grow from.
   yield* sql`
     create table character (
       id                 uuid primary key default gen_random_uuid(),
-      campaign_id        uuid not null references campaign (id) on delete cascade,
+      account_id         uuid not null references account (id) on delete restrict,
       name               text not null,
       player_name        text,
       descriptor         text,
@@ -269,10 +283,68 @@ export default Effect.gen(function* () {
       created_at         timestamptz not null default now(),
       updated_at         timestamptz not null default now(),
       constraint character_assistant_provenance
-        check ((origin = 'assistant') = (assistant_turn_id is not null))
+        check ((origin = 'assistant') = (assistant_turn_id is not null)),
+      constraint character_account_key unique (id, account_id)
     )
   `;
-  yield* sql`create index character_campaign_id_idx on character (campaign_id)`;
+  yield* sql`create index character_account_id_idx on character (account_id)`;
+
+  // The party join: one character's seat at one campaign's table.
+  //
+  // - `(campaign_id, group_id)` binds the seat to the campaign's own group.
+  // - `(character_id, account_id)` proves the seating account owns the
+  //   character — a creator cannot seat somebody else's character, because the
+  //   pair would not exist. `on delete set null (character_id)` keeps the
+  //   display snapshot standing when a character is deleted: the roster line
+  //   is campaign history, and losing the character must not rewrite it.
+  // - `requires_member` pins a live seat to a live participation, so revoking
+  //   a participant refuses until their seats are retired in the same
+  //   transaction.
+  // - `visibility` here is the campaign-scoped answer — who at *this table*
+  //   may see the seat and the shared character state behind it.
+  yield* sql`
+    create table campaign_character (
+      id                   uuid primary key default gen_random_uuid(),
+      campaign_id          uuid not null,
+      group_id             uuid not null,
+      character_id         uuid,
+      account_id           uuid not null references account (id) on delete cascade,
+      display_name         text not null,
+      player_display_name  text,
+      visibility           text not null default 'dm'
+                             check (visibility in ('dm', 'shared')),
+      origin               text not null default 'authored'
+                             check (origin in ('system', 'imported', 'authored', 'assistant')),
+      assistant_turn_id    uuid,
+      joined_at            timestamptz not null default now(),
+      left_at              timestamptz,
+      created_at           timestamptz not null default now(),
+      updated_at           timestamptz not null default now(),
+      requires_member      boolean generated always as (nullif(left_at is null, false)) stored,
+      constraint campaign_character_assistant_provenance
+        check ((origin = 'assistant') = (assistant_turn_id is not null)),
+      constraint campaign_character_campaign_fkey
+        foreign key (campaign_id, group_id)
+        references campaign (id, group_id) on delete cascade,
+      constraint campaign_character_character_fkey
+        foreign key (character_id, account_id)
+        references character (id, account_id) on delete set null (character_id),
+      constraint campaign_character_requires_member
+        foreign key (campaign_id, account_id, requires_member)
+        references campaign_member (campaign_id, account_id, is_active)
+        deferrable initially deferred
+    )
+  `;
+  yield* sql`create index campaign_character_campaign_idx on campaign_character (campaign_id)`;
+  yield* sql`create index campaign_character_character_idx on campaign_character (character_id)`;
+  yield* sql`create index campaign_character_account_idx on campaign_character (account_id)`;
+  // One live seat per character per campaign. Retired seats may accumulate —
+  // leaving and coming back is two joins — and a deleted character's seats
+  // (character_id null) are outside the key, as nulls are distinct.
+  yield* sql`
+    create unique index campaign_character_one_active
+      on campaign_character (campaign_id, character_id) where left_at is null
+  `;
 
   yield* sql`
     create table note (
