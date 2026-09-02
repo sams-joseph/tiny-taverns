@@ -86,6 +86,7 @@ import {
   GroupMembership,
   GroupUpdate,
 } from "./Group.js";
+import { GroupLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
 import { GroupHobStatus } from "./Hob.js";
 import {
   GroupHistoryEntry,
@@ -654,6 +655,37 @@ class GroupHistoryGroup extends HttpApiGroup.make("groupHistory")
     }),
   )
   .prefix("/groups/:groupId/history")
+  .middleware(Authorization) {}
+
+/**
+ * The group's shared Library shelf: the explicit share/copy layer of the
+ * 2026-09-01 Library decision. `list` is any live member's; `share` and
+ * `unshare` are the **owner's** — a grant over their own original, made and
+ * withdrawn by them alone. What a share grants is being a `derive` source
+ * for the group's campaigns; nothing here reads or writes the original.
+ */
+class GroupLibraryGroup extends HttpApiGroup.make("groupLibrary")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { groupId: GroupId },
+      success: Schema.Array(GroupLibraryShare),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("share", "/", {
+      params: { groupId: GroupId },
+      payload: LibraryShareCreate,
+      success: GroupLibraryShare,
+      error: NotFound,
+    }),
+    /** Withdrawing the grant. Copies already made are snapshots and stand. */
+    HttpApiEndpoint.post("unshare", "/unshare", {
+      params: { groupId: GroupId },
+      payload: LibraryShareCreate,
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/groups/:groupId/library")
   .middleware(Authorization) {}
 
 class GroupMembersGroup extends HttpApiGroup.make("groupMembers")
@@ -2244,6 +2276,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(JoinGroup)
   .add(GroupsGroup)
   .add(GroupHistoryGroup)
+  .add(GroupLibraryGroup)
   .add(HobGroupSurface)
   .add(GroupMembersGroup)
   .add(CampaignsGroup)

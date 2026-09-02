@@ -37,6 +37,7 @@ import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { GroupHistory } from "./repo/GroupHistory.js";
+import { LibraryShares } from "./repo/LibraryShares.js";
 import { Groups } from "./repo/Groups.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
@@ -210,6 +211,7 @@ export const servicesOver = <E>(
   | Campaigns
   | Groups
   | GroupHistory
+  | LibraryShares
   | Characters
   | ClassProgression
   | Combatants
@@ -254,6 +256,8 @@ export const servicesOver = <E>(
     Groups.layer,
     // The chronicle renders recaps at share time, so it composes `Recap`.
     GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+    // The group's shared Library shelf — grants to copy, never content.
+    LibraryShares.layer,
     // The owner's half of the shared character. It rings no doorbell — the
     // durable sheet is not live state, and the live trio moved to the party —
     // so it takes no `LiveEvents`.
@@ -406,6 +410,7 @@ export const applicationOver = <E>(
     | Campaigns
     | Groups
     | GroupHistory
+    | LibraryShares
     | Characters
     | ClassProgression
     | Combatants

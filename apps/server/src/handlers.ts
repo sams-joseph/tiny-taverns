@@ -17,6 +17,7 @@ import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { GroupHistory } from "./repo/GroupHistory.js";
+import { LibraryShares } from "./repo/LibraryShares.js";
 import { Groups } from "./repo/Groups.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
@@ -799,6 +800,19 @@ const HobLive = HttpApiBuilder.group(
  * resolve and no two sets to tell apart. `conversationReachable`'s `"group"`
  * arm gates every thread read on live membership underneath.
  */
+/** The group's shared Library shelf. Reads and writes are the repository's whole story. */
+const GroupLibraryLive = HttpApiBuilder.group(
+  TavernsApi,
+  "groupLibrary",
+  Effect.fnUntraced(function* (handlers) {
+    const shares = yield* LibraryShares;
+    return handlers
+      .handle("list", ({ params }) => shares.list(params.groupId))
+      .handle("share", ({ params, payload }) => shares.share(params.groupId, payload))
+      .handle("unshare", ({ params, payload }) => shares.unshare(params.groupId, payload));
+  }),
+);
+
 const HobGroupLive = HttpApiBuilder.group(
   TavernsApi,
   "hobGroup",
@@ -1029,6 +1043,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     MeLive,
     GroupsLive,
     GroupHistoryLive,
+    GroupLibraryLive,
     GroupMembersLive,
     InvitePreviewLive,
     JoinLive,

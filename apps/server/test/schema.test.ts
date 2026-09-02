@@ -63,6 +63,9 @@ const NOT_CONTENT = [
   // players, which a group-level row has none of. See 0030_group_history.ts.
   "group_history_summary",
   "group_invite",
+  // A share is a grant to copy — a predicate input, not content. The original
+  // it names keeps its own tail exactly where it always was.
+  "group_library_share",
   "group_member",
   "language",
   "magic_item_rarity",

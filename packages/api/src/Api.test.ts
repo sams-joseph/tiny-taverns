@@ -136,6 +136,9 @@ describe("the API declaration", () => {
       // `groupHistory` is its chronicle: copies admitted on purpose, the
       // group-Hob boundary's data half.
       "groupHistory",
+      // The explicit Library share layer — grants to copy, never widened
+      // predicates. The 2026-09-01 Library decision's surface.
+      "groupLibrary",
       "groupMembers",
       "groups",
       "health",

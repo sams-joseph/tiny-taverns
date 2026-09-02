@@ -615,7 +615,10 @@ describe("the scope, counted", () => {
     // `nightStory` — the canonical reads the group-Hob boundary decision
     // grants to every live member — and `Proposals.acceptGroup`, whose
     // audience is a hand-written chronicle entry's: any member, no proof.
-    expect(ungated).toBe(159);
+    // And stage 6's three: `LibraryShares.list`/`share`/`unshare` — the
+    // grant is the resource owner's act over their own original, checked in
+    // the statement, and the reads are any live member's.
+    expect(ungated).toBe(162);
   });
 });
 

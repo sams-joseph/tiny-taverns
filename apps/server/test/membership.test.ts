@@ -16,6 +16,7 @@ import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
+import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
@@ -189,6 +190,14 @@ describe("the reach seam, enforced rather than asserted", () => {
     // seeder names the column in the negative for the arbiter-index reason
     // above. If a change here ever seems to need a predicate of its own, that
     // is a finding rather than a step.
+    //
+    // `repo/LibraryShares.ts` is the explicit-share layer of the 2026-09-01
+    // Library decision: `owner_account_id`/`shared_by_account_id` on the
+    // grant row, written from `CurrentActor` and compared against the
+    // resource's own owner — never a value a caller supplied. The reach it
+    // grants lives in one predicate (`groupSharedIntoCampaign`,
+    // `repo/visibility.ts`), and `group-library.test.ts` pins that it never
+    // widens a Library.
     expect(mentioning(/\baccount_id\b/)).toEqual([
       "bestiary/import.ts",
       "equipment/import.ts",
@@ -200,6 +209,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Feats.ts",
       "repo/Groups.ts",
       "repo/HobThreads.ts",
+      "repo/LibraryShares.ts",
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
       "repo/Options.ts",
@@ -254,6 +264,7 @@ const runtime = ManagedRuntime.make(
     Campaigns.layer,
     Groups.layer,
     GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+    LibraryShares.layer,
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     ClassProgression.layer,
@@ -328,6 +339,16 @@ const makeFixture = Effect.gen(function* () {
   // stranger below to be refused.
   yield* aCharacterAt(campaign.id, dm, { name: "Brannoc", playerName: "Ilse" });
   yield* as(notes.create(campaign.id, { title: "The crate" }));
+  // A Library original of the creator's, granted to the group — the share
+  // shelf's row for the stranger below to be refused.
+  const original = yield* as(
+    creatures.libraryCreate({ name: "Bog Owlbear", type: "Monstrosity", cr: "3", ac: 14, hp: 59 }),
+  );
+  yield* as(
+    Effect.flatMap(LibraryShares, (shares) =>
+      shares.share(campaign.groupId, { kind: "creature", resourceId: original.id as string }),
+    ),
+  );
   // The group's chronicle: one entry through the shipped write, and one
   // accepted summary — raw SQL, because the accept flow is group Hob's and has
   // not shipped; the read under test is the same either way.
@@ -512,6 +533,7 @@ const READS: Record<
     | EquipmentRepo
     | Feats
     | GroupHistory
+    | LibraryShares
     | MagicItems
     | HobThreads
     | Notes
@@ -599,6 +621,10 @@ const READS: Record<
   // campaign, so the stranger's refusal names the group. Reached through the
   // fixture campaign's own group, the way every group read in src is.
   group_history_entry: (f) => Effect.flatMap(GroupHistory, (r) => r.list(f.campaign.groupId)),
+  // The share shelf: reach data any live member reads, a grant a stranger
+  // must not see exists. Gated on group membership like the chronicle.
+  group_library_share: (f) =>
+    Effect.flatMap(LibraryShares, (shares) => shares.list(f.campaign.groupId)),
   // `summary` answers one row or null; boxed so the harness's "something to
   // miss / nothing leaked" arithmetic reads it like every list.
   group_history_summary: (f) =>

@@ -866,7 +866,49 @@ export const copyableIntoCampaign = (
   campaignId: CampaignId,
   actor: Actor,
 ): Statement.Fragment =>
-  sql.or([corpusRowReadable(sql, table, campaignId, actor), libraryRowReadable(sql, table, actor)]);
+  sql.or([
+    corpusRowReadable(sql, table, campaignId, actor),
+    libraryRowReadable(sql, table, actor),
+    groupSharedIntoCampaign(sql, table, campaignId, actor),
+  ]);
+
+/**
+ * Library originals **explicitly shared to the named campaign's group** — the
+ * third disjunct of {@link copyableIntoCampaign}, and the whole of what the
+ * group Library sharing decision of 2026-09-01 adds to this file.
+ *
+ * Complete on its own, like the two beside it: the campaign gate
+ * (`campaignReadable`, so a stranger's campaign id reaches nothing), the
+ * grant (a `group_library_share` row of the campaign's own group naming this
+ * table and this row), and the resource still being what the grant recorded —
+ * a Library original (`campaign_id is null`) of the share's `owner_account_id`.
+ * That last clause is what makes a dangling or stale grant inert rather than
+ * wrong.
+ *
+ * **This is deliberately not a widening of `libraryRowReadable`**, and it must
+ * never become one: a member's own Library still answers their originals and
+ * the bundle, nothing of their groupmates'. The share grants exactly one
+ * thing — being a `derive` source for campaigns of that group — because a
+ * campaign takes content by snapshot, never by view. `group-library.test.ts`
+ * pins both directions.
+ */
+export const groupSharedIntoCampaign = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(table)}.campaign_id is null`,
+    sql`exists (select 1
+                from group_library_share
+                join campaign as shared_into on shared_into.id = ${campaignId}
+                where group_library_share.group_id = shared_into.group_id
+                  and group_library_share.resource_kind = ${table}
+                  and group_library_share.resource_id = ${sql(`${table}.id`)}
+                  and group_library_share.owner_account_id = ${sql(`${table}.account_id`)})`,
+    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
+  ]);
 
 /**
  * Rows of `character` this actor **owns** — the whole of the top-level
