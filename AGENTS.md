@@ -34,6 +34,65 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
 
+## The group architecture of 2026-09-01: what supersedes what
+
+Six captain decisions landed as one clean-reset rewrite (branch
+`fm/tav-group-architecture-implementation`, six staged commits). **Where anything below this
+section disagrees with this one, this one wins** — most of the actor/visibility, invitation,
+role-switch, character and Hob prose further down predates the rewrite and describes mechanisms
+that are now spelled differently. The decision records live in
+`~/projects/firstmate/data/tav-group-architecture-plan/`.
+
+- **Groups are the top-level container** (`play_group` — `group` is a keyword). One owner, who
+  manages membership and invitations (governance decision); any live member creates campaigns
+  and becomes that campaign's **creator and sole DM**. There is **no role column anywhere**:
+  creator-ness is `campaign.creator_account_id`, owner-ness is `play_group.owner_account_id`,
+  and `schema.test.ts` fails if `campaign_member.role` reappears. `DmActor` is now
+  `CampaignCreatorActor` (`repo/CreatorActor.ts`) and carries the campaign **and its group**.
+- **Group membership is eligibility, not participation.** A member reads group surfaces and can
+  found campaigns; a campaign's content needs that campaign's own `campaign_member` row
+  (invitations may name a campaign to seat the redeemer at in the same act; invitations are
+  group-scoped, owner-minted). The deferred generated-column composite-FK idiom
+  (`is_active generated always as (revoked_at is null)`, referencing side
+  `nullif(<live>, false)`) chains owner→member, creator→member, participant→member and
+  seat→participant; revocations retire seats in the same transaction.
+- **A character is account-owned, top-level, one copy of playable state** (continuity decision).
+  No `character.campaign_id`, no `character.visibility`, new `version` column — the owner PATCH
+  takes optional `expectedVersion` → `Conflict`. `campaign_character` is the **seat**: the party
+  join, display snapshots and campaign-scoped visibility, never a state fork. The live trio still
+  moves only through `vitals.ts`, now via `party.damage`/seat PATCH; **damage taken at one table
+  IS visible at every other table seating the character** — report §10's isolation test is
+  deliberately inverted, and `party.test.ts`/`character-live.test.ts` pin the shared state, the
+  snapshot immutability and the atomic clamp. There is no DM-typed character, no assignment and
+  no re-pointing; creators write their own characters like anybody else.
+- **Navigation has no global mode.** The role pill is gone; chrome derives from the account's
+  _relation_ to the campaign in the route (`useCampaignRelation`, GET /me/campaigns rows carry
+  `relation: "creator" | "player"`), and route wrappers pick the projection per campaign.
+- **Group history** (`group_history_entry`/`group_history_summary`, 0030) is the chronicle:
+  copies admitted on purpose, ordered by one global acceptance sequence, never read back through
+  a campaign — the entry survives its campaign's deletion. `fromRecap` renders the played night
+  to prose at share time (creator's proof required); at most one `accepted` summary per group.
+- **Group Hob** (`/groups/:g/hob`, stage 5) knows **all canonical events across the group** —
+  played sessions (keyed structurally on `session.started_at`), story beats verbatim, combat
+  outcomes by name and round — and _nothing unplayed_: notes, planned encounters, prep lines and
+  draft threads are creator-only until shared or realized in play. `hob-group.test.ts` measures
+  that at the provider wire with planted sentinels (zero prep bytes in any captured request).
+  `assistant_thread` has two scopes since 0031 (campaign XOR group); the group thread is the
+  group's one shared conversation. The DM's campaign toolkit gained two read-only group tools
+  (`searchGroupHistory`, `readGroupSummary`). Group Hob's one proposal is a chronicle line,
+  accepted by any member (`Proposals.acceptGroup`).
+- **Library sharing is explicit** (`group_library_share`, 0032): the owner grants their own
+  original to a group, which makes it a `derive` source for the group's campaigns via
+  `groupSharedIntoCampaign` — the third disjunct of `copyableIntoCampaign`, so all seven
+  copyable corpora got it at once. **Group membership alone never widens Library visibility**,
+  and `libraryRowReadable` is untouched; `group-library.test.ts` pins both directions.
+- **The migration ledger is a clean baseline.** `0001_init.ts` was rewritten in place; an old
+  development database silently keeps the old shape (the migrator skips rewritten ids) and must
+  be reset — `pnpm db:reset`, or `pnpm -F server db:reset:fresh -- --force` against a Postgres
+  the repo's Docker does not own (the product's one destructive command; never startup DDL).
+  Relatedly: `start.smoke.test.ts` provisions its own database now — a spawned `dist/main.js`
+  must never migrate the developer's default.
+
 ## The design system: what is canonical, and how it reaches Tailwind
 
 `packages/design-system` is the designers' delivered Tiny Taverns system, copied in whole.
