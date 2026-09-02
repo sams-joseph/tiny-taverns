@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { provisionDatabase } from "./support/database.js";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -53,6 +54,8 @@ const ATTEMPT_TIMEOUT_MS = 2_000;
  * stops the second test paying for it twice.
  */
 let compiled: Promise<unknown> | undefined;
+let scratch: Promise<string> | undefined;
+const databaseUrl = () => (scratch ??= provisionDatabase("taverns_test_start_smoke"));
 const buildOnce = () =>
   // `dist/` is removed first, exactly as the build script removes it: `tsc`
   // never deletes an output whose source is gone, and the migration loader
@@ -87,10 +90,15 @@ async function freePort(): Promise<number> {
 const spawned: ChildProcess[] = [];
 
 /** Start `dist/main.js` under plain `node`, exactly as `pnpm -F server start` does. */
-function startServer(port: number): { server: ChildProcess; output: () => string } {
+function startServer(
+  port: number,
+  databaseUrl: string,
+): { server: ChildProcess; output: () => string } {
   const server = spawn(process.execPath, ["dist/main.js"], {
     cwd: appDir,
-    env: { ...process.env, PORT: String(port) },
+    // Its own database, provisioned per file — never the developer's default.
+    // See `provisionDatabase` for the near-miss that made this explicit.
+    env: { ...process.env, PORT: String(port), DATABASE_URL: databaseUrl },
     stdio: ["ignore", "pipe", "pipe"],
   });
   spawned.push(server);
@@ -163,7 +171,7 @@ describe("production start (built output under plain node)", () => {
     await buildOnce();
 
     const port = await freePort();
-    const { server, output } = startServer(port);
+    const { server, output } = startServer(port, await databaseUrl());
 
     const deadline = Date.now() + 20_000;
     let response: Response | undefined;
@@ -227,7 +235,7 @@ describe("production start (built output under plain node)", () => {
     await buildOnce();
 
     const port = await freePort();
-    const { server, output } = startServer(port);
+    const { server, output } = startServer(port, await databaseUrl());
 
     // Hammer connect() until one succeeds. Everything before that must be
     // refused — the socket is not bound yet — and the one that succeeds is the

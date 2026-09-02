@@ -16,6 +16,7 @@ import { Health } from "./Health.js";
 import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
+import { GroupHistory } from "./repo/GroupHistory.js";
 import { Groups } from "./repo/Groups.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
@@ -280,6 +281,30 @@ const SessionsLive = HttpApiBuilder.group(
         sessions.update(params.campaignId, params.sessionId, payload),
       )
       .handle("remove", ({ params }) => sessions.remove(params.campaignId, params.sessionId));
+  }),
+);
+
+/**
+ * The group's chronicle. `fromRecap` is the one handler here that spends a
+ * proof: sharing a played night is the campaign creator's act, so the payload
+ * campaign becomes a `CampaignCreatorActor` exactly as the live groups do it,
+ * and the repository checks the proof's group against the path.
+ */
+const GroupHistoryLive = HttpApiBuilder.group(
+  TavernsApi,
+  "groupHistory",
+  Effect.fnUntraced(function* (handlers) {
+    const history = yield* GroupHistory;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => history.list(params.groupId))
+      .handle("create", ({ params, payload }) => history.create(params.groupId, payload))
+      .handle("fromRecap", ({ params, payload }) =>
+        asDm(payload.campaignId, (creator) =>
+          history.fromRecap(params.groupId, creator, payload.sessionId),
+        ),
+      )
+      .handle("summary", ({ params }) => history.summary(params.groupId));
   }),
 );
 
@@ -978,6 +1003,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     HealthLive,
     MeLive,
     GroupsLive,
+    GroupHistoryLive,
     GroupMembersLive,
     InvitePreviewLive,
     JoinLive,

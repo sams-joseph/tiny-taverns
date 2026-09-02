@@ -56,6 +56,12 @@ const NOT_CONTENT = [
   "feat_description",
   "feat_prerequisite_ability_score",
   "feat_prerequisite_group",
+  "group_history_entry",
+  // The chronicle has provenance and deliberately no visibility column: being
+  // in the table *is* the visibility — an entry exists because the group
+  // admitted it, and a dm/shared axis is a statement about a campaign's
+  // players, which a group-level row has none of. See 0030_group_history.ts.
+  "group_history_summary",
   "group_invite",
   "group_member",
   "language",

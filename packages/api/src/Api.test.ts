@@ -133,6 +133,9 @@ describe("the API declaration", () => {
       "feats",
       // Groups: the top-level container for connected play, and where a
       // campaign is created — a campaign belongs to exactly one group.
+      // `groupHistory` is its chronicle: copies admitted on purpose, the
+      // group-Hob boundary's data half.
+      "groupHistory",
       "groupMembers",
       "groups",
       "health",

@@ -87,6 +87,12 @@ import {
   GroupUpdate,
 } from "./Group.js";
 import {
+  GroupHistoryEntry,
+  GroupHistoryEntryCreate,
+  GroupHistoryFromRecap,
+  GroupHistorySummary,
+} from "./GroupHistory.js";
+import {
   AccountId,
   AssistantThreadId,
   AssistantTurnId,
@@ -607,6 +613,47 @@ class MembersGroup extends HttpApiGroup.make("members")
  * alone (the governance decision), and removing the owner is refused: a group
  * without its owner-member is unrepresentable.
  */
+
+/**
+ * Group history: the group's shared chronicle — copies admitted on purpose,
+ * canonical once admitted, ordered by acceptance. See `GroupHistory.ts` for
+ * the model; the boundary it implements is `decision-group-hob-boundary.md`'s:
+ * what has *happened* is the group's, unplayed prep stays its creator's.
+ *
+ * Reads are any live member's (`groupReadable`). `create` is any member
+ * writing the chronicle by hand; `fromRecap` is the campaign **creator's**
+ * act — it renders their played night to prose and stores the copy, which is
+ * how canonical campaign history crosses into group context without a group
+ * read ever touching campaign tables.
+ */
+class GroupHistoryGroup extends HttpApiGroup.make("groupHistory")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { groupId: GroupId },
+      success: Schema.Array(GroupHistoryEntry),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { groupId: GroupId },
+      payload: GroupHistoryEntryCreate,
+      success: GroupHistoryEntry,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("fromRecap", "/from-recap", {
+      params: { groupId: GroupId },
+      payload: GroupHistoryFromRecap,
+      success: GroupHistoryEntry,
+      error: [NotFound, Conflict],
+    }),
+    /** The current accepted summary, or `null` — the ordinary state of a young group. */
+    HttpApiEndpoint.get("summary", "/summary", {
+      params: { groupId: GroupId },
+      success: Schema.NullOr(GroupHistorySummary),
+      error: NotFound,
+    }),
+  )
+  .prefix("/groups/:groupId/history")
+  .middleware(Authorization) {}
 
 class GroupMembersGroup extends HttpApiGroup.make("groupMembers")
   .add(
@@ -2146,6 +2193,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(InvitePreviewGroup)
   .add(JoinGroup)
   .add(GroupsGroup)
+  .add(GroupHistoryGroup)
   .add(GroupMembersGroup)
   .add(CampaignsGroup)
   .add(MembersGroup)

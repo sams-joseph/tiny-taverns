@@ -428,7 +428,11 @@ describe("the scope, counted", () => {
     // player; `add` and `remove` arrived gated for the same reason on the day
     // participation management became an endpoint, and the gate also carries
     // the group the eligibility check is asked about.
-    expect(gated).toBe(19);
+    // The twentieth is `GroupHistory.fromRecap` — sharing a played night to
+    // the group's chronicle is the campaign creator's act, so it takes the
+    // proof the recap itself requires rather than a campaign id a caller
+    // could aim.
+    expect(gated).toBe(20);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -590,6 +594,12 @@ describe("the scope, counted", () => {
     // bounds them is `groupReadable`/`groupWritable`, whose authority half is
     // `play_group.owner_account_id` — the governance decision in a predicate.
     //
+    // `GroupHistory` adds four: `list`, `create`, `summary` and `fromRecap`
+    // itself, which appears in *both* counts — it takes the creator proof for
+    // the campaign half and still reads the ambient actor for the group half,
+    // because being the creator of a campaign says nothing about being a live
+    // member of the group named in the path.
+    //
     // The continuity split moved the count by two: the old campaign-scoped
     // `Characters` (seven methods) became the owner-side four plus `Party`'s
     // five. None of the nine takes the proof and none should. The owner
@@ -601,7 +611,7 @@ describe("the scope, counted", () => {
     // projection, and its writes compose `rowWritable`/`campaignWritableById`
     // underneath — a proof on top would be a second answer to the question
     // the predicate answers first.
-    expect(ungated).toBe(151);
+    expect(ungated).toBe(155);
   });
 });
 

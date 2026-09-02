@@ -55,6 +55,29 @@ export const freshDatabase = (name: string): Layer.Layer<SqlClient.SqlClient | P
     }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain),
   ).pipe(Layer.orDie);
 
+/**
+ * A fresh database as a plain URL — for the one file that spawns a real
+ * `node` process rather than building a layer (`start.smoke.test.ts`).
+ *
+ * The smoke test used to let `dist/main.js` inherit the developer's
+ * `DATABASE_URL` default, which meant a spawned server migrating **the shared
+ * dev database** on boot. That was invisible while the ledger never grew past
+ * what dev had applied — and became a boot failure (and a near-miss write to
+ * a database the suite does not own) the day the clean baseline added `0030`:
+ * an old-ledger dev database cannot take a new migration, by design. A
+ * spawned server gets a database of its own, like every other file.
+ */
+export const provisionDatabase = (name: string): Promise<string> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const quoted = `"${name.replaceAll('"', '""')}"`;
+      yield* sql.unsafe(`drop database if exists ${quoted} with (force)`);
+      yield* sql.unsafe(`create database ${quoted}`);
+      return urlFor(name);
+    }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain),
+  );
+
 /** A fresh database with the migrations already applied. */
 export const migratedDatabase = (
   name: string,

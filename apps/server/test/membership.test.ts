@@ -15,6 +15,8 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { GroupHistory } from "../src/repo/GroupHistory.js";
+import { Recap } from "../src/repo/Recap.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { ClassProgression } from "../src/repo/ClassProgression.js";
@@ -251,6 +253,7 @@ const runtime = ManagedRuntime.make(
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Groups.layer,
+    GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     ClassProgression.layer,
@@ -325,6 +328,21 @@ const makeFixture = Effect.gen(function* () {
   // stranger below to be refused.
   yield* aCharacterAt(campaign.id, dm, { name: "Brannoc", playerName: "Ilse" });
   yield* as(notes.create(campaign.id, { title: "The crate" }));
+  // The group's chronicle: one entry through the shipped write, and one
+  // accepted summary — raw SQL, because the accept flow is group Hob's and has
+  // not shipped; the read under test is the same either way.
+  yield* as(
+    Effect.flatMap(GroupHistory, (h) =>
+      h.create(campaign.groupId, { body: "Both tables reached the crossing." }),
+    ),
+  );
+  yield* Effect.flatMap(
+    SqlClient.SqlClient,
+    (sql) => sql`
+      insert into group_history_summary (group_id, status, last_group_seq, text, origin)
+      values (${campaign.groupId}, 'accepted', 1, 'The story so far.', 'authored')
+    `,
+  ).pipe(Effect.orDie);
   yield* as(
     beats.create(campaign.id, session.id, { body: "The ferryman would not say his name." }),
   );
@@ -493,6 +511,7 @@ const READS: Record<
     | Encounters
     | EquipmentRepo
     | Feats
+    | GroupHistory
     | MagicItems
     | HobThreads
     | Notes
@@ -576,6 +595,17 @@ const READS: Record<
   assistant_thread: (f) => Effect.flatMap(HobThreads, (r) => r.list("dm", f.campaign.id)),
   assistant_turn: (f) =>
     Effect.flatMap(HobThreads, (r) => r.turns("dm", f.campaign.id, f.thread.id)),
+  // The group's chronicle: gated on live *group* membership rather than on a
+  // campaign, so the stranger's refusal names the group. Reached through the
+  // fixture campaign's own group, the way every group read in src is.
+  group_history_entry: (f) => Effect.flatMap(GroupHistory, (r) => r.list(f.campaign.groupId)),
+  // `summary` answers one row or null; boxed so the harness's "something to
+  // miss / nothing leaked" arithmetic reads it like every list.
+  group_history_summary: (f) =>
+    Effect.map(
+      Effect.flatMap(GroupHistory, (r) => r.summary(f.campaign.groupId)),
+      (summary) => (summary === null ? [] : [summary]),
+    ),
 };
 
 beforeAll(async () => {

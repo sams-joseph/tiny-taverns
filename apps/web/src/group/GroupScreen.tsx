@@ -14,6 +14,7 @@ import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { SaveFailure } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { GroupChronicle } from "./GroupChronicle";
 import { groupViewAtom } from "./load";
 
 /**
@@ -257,6 +258,8 @@ export function GroupScreen() {
                 </div>
               )}
             </section>
+
+            <GroupChronicle groupId={groupId} />
 
             <section className="flex max-w-2xl flex-col" aria-label="Members">
               <span className="pb-1 text-label leading-snug font-semibold text-heading">

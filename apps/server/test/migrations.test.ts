@@ -170,6 +170,8 @@ describe("migrations", () => {
       "feat_prerequisite_ability_score",
       "feat_prerequisite_group",
       "feature",
+      "group_history_entry",
+      "group_history_summary",
       "group_invite",
       "group_member",
       "language",
@@ -235,6 +237,7 @@ describe("migrations", () => {
       { migration_id: 27, name: "character_vocabulary_traits" },
       { migration_id: 28, name: "rules_compendium" },
       { migration_id: 29, name: "feats" },
+      { migration_id: 30, name: "group_history" },
     ]);
   }, 60_000);
 
@@ -273,6 +276,7 @@ describe("migrations", () => {
       { migration_id: 27, name: "character_vocabulary_traits" },
       { migration_id: 28, name: "rules_compendium" },
       { migration_id: 29, name: "feats" },
+      { migration_id: 30, name: "group_history" },
     ]);
   }, 60_000);
 });

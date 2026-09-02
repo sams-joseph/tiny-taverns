@@ -16,6 +16,7 @@ export * from "./Feat.js";
 export * from "./Hob.js";
 export * from "./Ids.js";
 export * from "./Group.js";
+export * from "./GroupHistory.js";
 export * from "./Invite.js";
 export * from "./MagicItem.js";
 export * from "./Membership.js";

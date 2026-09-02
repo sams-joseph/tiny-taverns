@@ -133,6 +133,9 @@ export const reads = {
   /** Who is at this table. Withdrawing an accepted invitation takes a row out of it. */
   members: (campaignId: CampaignId): ReadKey => key`members:${campaignId}`,
 
+  /** The group's chronicle — entries and the accepted summary, one key. */
+  groupHistory: (groupId: GroupId): ReadKey => key`group-history:${groupId}`,
+
   /** This campaign's bestiary: its own creatures, plus the bundle. */
   creatures: (campaignId: CampaignId): ReadKey => key`creatures:${campaignId}`,
 
