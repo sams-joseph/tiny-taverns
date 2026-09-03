@@ -489,3 +489,39 @@ export const valuesOf = (value: FilterInputValue, facetKey: string): ReadonlyArr
   const condition = conditionOf(value, facetKey);
   return condition !== undefined && condition.operator === "in" ? condition.values : [];
 };
+
+/**
+ * The single-line layout's fixed numbers, shared with the tests that drive the
+ * measurement. `gap` is the box's `gap-1.5`, `paddingX` its `px-2` pair, and
+ * `inputReserve` the typing room the line always keeps (`min-w-24` plus
+ * breathing space) — pills never squeeze the search out of its own box.
+ */
+export const PILL_LAYOUT = { gap: 6, paddingX: 16, inputReserve: 120 } as const;
+
+/**
+ * How many of the newest pills fit on one line.
+ *
+ * `pillWidths` is oldest → newest; the fit walks newest → oldest, because the
+ * filter the user just added must stay visible while the older ones collect
+ * into the overflow chip (whose own width is reserved the moment anything
+ * hides). Everything fitting means no chip and no reserve.
+ */
+export const visiblePillCount = (layout: {
+  readonly available: number;
+  readonly pillWidths: ReadonlyArray<number>;
+  readonly overflowWidth: number;
+  readonly gap: number;
+}): number => {
+  const { available, pillWidths, overflowWidth, gap } = layout;
+  const total = pillWidths.reduce((sum, width) => sum + width + gap, 0);
+  if (total <= available) return pillWidths.length;
+  let used = overflowWidth + gap;
+  let count = 0;
+  for (let index = pillWidths.length - 1; index >= 0; index -= 1) {
+    const next = used + pillWidths[index]! + gap;
+    if (next > available) break;
+    used = next;
+    count += 1;
+  }
+  return count;
+};

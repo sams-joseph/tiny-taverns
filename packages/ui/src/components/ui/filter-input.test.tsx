@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -71,7 +71,9 @@ const renderInput = (props?: {
 };
 
 const pillOf = (name: RegExp | string) => {
-  const pills = [...document.querySelectorAll("[data-slot=combobox-chip]")] as Array<HTMLElement>;
+  // The first match is the visible line's pill; the measurement clones sit in
+  // an aria-hidden row after it in the DOM.
+  const pills = [...document.querySelectorAll("[data-pill]")] as Array<HTMLElement>;
   const wanted = pills.find((pill) =>
     typeof name === "string"
       ? (pill.getAttribute("aria-label") ?? "") === name
@@ -313,5 +315,107 @@ describe("FilterInput", () => {
     await user.type(input, "time: dusk{Enter}");
     expect(seen.current.filters).toEqual([]);
     expect(seen.current.text).toBe("time: dusk");
+  });
+});
+
+describe("overflow: the line never wraps, the oldest collect into a chip", () => {
+  /**
+   * jsdom lays nothing out, so the measurement is driven: the chips container
+   * reports the width under test, every pill clone measures 120, the overflow
+   * clone 60, and the chrome rects stay 0. With `PILL_LAYOUT` (gap 6, padding
+   * 16, input reserve 120) a 400-wide box has 252px for pills — one 120px pill
+   * beside the 60px chip — and an 800-wide box fits all three.
+   */
+  let containerWidth = 400;
+  const restore: Array<() => void> = [];
+
+  const stub = (proto: object, property: string, get: (this: HTMLElement) => number) => {
+    const original = Object.getOwnPropertyDescriptor(proto, property);
+    Object.defineProperty(proto, property, { configurable: true, get });
+    restore.push(() => {
+      if (original !== undefined) Object.defineProperty(proto, property, original);
+      else delete (proto as Record<string, unknown>)[property];
+    });
+  };
+
+  beforeEach(() => {
+    containerWidth = 400;
+    stub(HTMLElement.prototype, "offsetWidth", function (this: HTMLElement) {
+      if (this.dataset["measure"] === "pill") return 120;
+      if (this.dataset["measure"] === "overflow") return 60;
+      return 20;
+    });
+    stub(Element.prototype, "clientWidth", function (this: HTMLElement) {
+      return this.getAttribute("data-slot") === "combobox-chips" ? containerWidth : 0;
+    });
+  });
+  afterEach(() => {
+    while (restore.length > 0) restore.pop()?.();
+  });
+
+  const THREE: FilterInputValue = {
+    ...EMPTY_FILTER_VALUE,
+    filters: [
+      { facet: "type", operator: "in", values: ["beast"] },
+      { facet: "cr", operator: "gte", values: ["3"] },
+      { facet: "legendary", operator: "is", values: ["true"] },
+    ],
+  };
+
+  it("keeps the newest pill visible and collects the older into the chip", () => {
+    renderInput({ initial: THREE });
+
+    // The newest — Legendary — is on the line; Type and CR are collected.
+    expect(pillOf("Legendary is Yes")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove filter Type" })).toBeNull();
+    expect(screen.getByRole("button", { name: "2 more filters" })).toHaveTextContent("+2 filters");
+  });
+
+  it("shows everything when the box is wide enough, with no chip at all", () => {
+    containerWidth = 800;
+    renderInput({ initial: THREE });
+
+    expect(screen.queryByRole("button", { name: /more filter/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Remove filter Type" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove filter CR" })).toBeInTheDocument();
+  });
+
+  it("opens the collected pills in a popover, every segment still live", async () => {
+    const user = userEvent.setup();
+    const { seen } = renderInput({ initial: THREE });
+
+    await user.click(screen.getByRole("button", { name: "2 more filters" }));
+    // The collected pills are whole in the popover — operator editable…
+    await user.click(await screen.findByRole("button", { name: "Change how CR matches" }));
+    expect(seen.current.filters[1]).toEqual({ facet: "cr", operator: "lte", values: ["3"] });
+
+    // …and removable. Dropping one re-fits the line: one pill still hides.
+    await user.click(screen.getByRole("button", { name: "Remove filter Type" }));
+    expect(seen.current.filters.map((condition) => condition.facet)).toEqual(["cr", "legendary"]);
+    expect(screen.getByRole("button", { name: "1 more filter" })).toHaveTextContent("+1 filter");
+
+    // Removing the last collected pill retires the chip and its popover.
+    await user.click(screen.getByRole("button", { name: "Remove filter CR" }));
+    expect(seen.current.filters.map((condition) => condition.facet)).toEqual(["legendary"]);
+    expect(screen.queryByRole("button", { name: /more filter/ })).toBeNull();
+  });
+
+  it("a filter added while overflowing lands visible, not collected", async () => {
+    const user = userEvent.setup();
+    const { seen, input } = renderInput({ initial: THREE });
+
+    await user.type(input, "tag:Marsh{Enter}");
+    // Close the picker before reading the line — an open popup holds the
+    // accessibility tree.
+    await user.keyboard("{Escape}");
+    expect(seen.current.filters.at(-1)).toEqual({
+      facet: "tag",
+      operator: "in",
+      values: ["Marsh"],
+    });
+    expect(pillOf("Tag is Marsh")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "3 more filters" })).toBeInTheDocument();
+    // The newest pill is the interactive one on the line.
+    expect(screen.getByRole("button", { name: "Remove filter Tag" })).toBeInTheDocument();
   });
 });

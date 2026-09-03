@@ -67,6 +67,7 @@ export {
   ComboboxTrigger,
 } from "./components/ui/combobox";
 export { FilterInput } from "./components/ui/filter-input";
+export { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 export {
   EMPTY_FILTER_VALUE,
   compositionOf,
@@ -75,12 +76,14 @@ export {
   fieldLabelOf,
   operatorLabelOf,
   operatorsFor,
+  PILL_LAYOUT,
   rangeBoundsOf,
   rangeConditionOf,
   searchTextOf,
   suggestionsFor,
   valuesLabelOf,
   valuesOf,
+  visiblePillCount,
   withComposition,
   withNextOperator,
   withValue,

@@ -11,6 +11,7 @@ import {
   suggestionsFor,
   valuesLabelOf,
   valuesOf,
+  visiblePillCount,
   withComposition,
   withNextOperator,
   withValue,
@@ -333,5 +334,32 @@ describe("withComposition and valuesOf", () => {
     };
     expect(valuesOf(value, "type")).toEqual(["beast", "undead"]);
     expect(valuesOf(value, "tag")).toEqual([]);
+  });
+});
+
+describe("visiblePillCount", () => {
+  const layout = { gap: 6, overflowWidth: 60 };
+
+  it("shows everything that fits, with no chip reserved", () => {
+    expect(visiblePillCount({ ...layout, available: 400, pillWidths: [120, 120, 120] })).toBe(3);
+  });
+
+  it("keeps the newest pills and reserves the chip once anything hides", () => {
+    // 3 × 126 = 378 > 300; chip 66 + newest 126 = 192, + next 126 = 318 > 300.
+    expect(visiblePillCount({ ...layout, available: 300, pillWidths: [120, 120, 120] })).toBe(1);
+  });
+
+  it("can hide everything when even one pill and the chip cannot share the line", () => {
+    expect(visiblePillCount({ ...layout, available: 100, pillWidths: [120, 120] })).toBe(0);
+  });
+
+  it("fits by width, not by count — a narrow newest pill lets an older one stay", () => {
+    // Newest first: 46 + chip 66 = 112, + 80 = 192, + 200 = 392 > 320 → 2 visible.
+    expect(visiblePillCount({ ...layout, available: 320, pillWidths: [200, 74, 40] })).toBe(2);
+  });
+
+  it("is exact at the boundary", () => {
+    // 2 × 126 = 252 fits 252 exactly.
+    expect(visiblePillCount({ ...layout, available: 252, pillWidths: [120, 120] })).toBe(2);
   });
 });
