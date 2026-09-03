@@ -1,4 +1,5 @@
 export * from "./Account.js";
+export * from "./ActionOverlay.js";
 export * from "./Actor.js";
 export * from "./Api.js";
 export * from "./Beat.js";

@@ -48,6 +48,12 @@ interface DraftItem {
   readonly weight: string;
   readonly note: string;
   readonly equipped: boolean;
+  /**
+   * Carried through untouched: the kit wrote it, the form does not draw it,
+   * and a save that dropped it would cut the weapon attack on `actions` off
+   * from the line it was derived from.
+   */
+  readonly equipmentId: InventoryItem["equipmentId"];
 }
 
 const blank = (key: string): DraftItem => ({
@@ -57,6 +63,7 @@ const blank = (key: string): DraftItem => ({
   weight: "",
   note: "",
   equipped: false,
+  equipmentId: undefined,
 });
 
 const draftsOf = (items: ReadonlyArray<InventoryItem>): ReadonlyArray<DraftItem> =>
@@ -67,6 +74,7 @@ const draftsOf = (items: ReadonlyArray<InventoryItem>): ReadonlyArray<DraftItem>
     weight: item.weight ?? "",
     note: item.note ?? "",
     equipped: item.equipped === true,
+    equipmentId: item.equipmentId,
   }));
 
 /** `""` ⇄ absent, and a fraction of an item is not a thing to carry. */
@@ -77,6 +85,7 @@ export function GearDialog({
   owned,
   onClose,
   onSaved,
+  onReload,
 }: {
   /**
    * The character with its seats — the seats are the write's blast radius
@@ -86,6 +95,8 @@ export function GearDialog({
   readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   readonly onSaved: () => void;
+  /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
+  readonly onReload?: () => void;
 }) {
   const character = owned.character;
   // The blank line the *Add* button promises, appended on open rather than
@@ -135,6 +146,7 @@ export function GearDialog({
           // Only when it is true: a `false` on every line would be twelve keys
           // saying nothing, and absent is what the reader already draws.
           ...(item.equipped ? { equipped: true } : {}),
+          ...(item.equipmentId === undefined ? {} : { equipmentId: item.equipmentId }),
         };
       });
 
@@ -249,7 +261,7 @@ export function GearDialog({
         <DialogFooter>
           {failure !== undefined && (
             <div className="mr-auto min-w-0 flex-1 text-left">
-              <SaveFailure failure={failure} />
+              <SaveFailure failure={failure} onReload={onReload} />
             </div>
           )}
           <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>

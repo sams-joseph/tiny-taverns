@@ -6,6 +6,7 @@ import {
   CharacterOptionId,
   CharacterOptionSubraceId,
   ClassLevelId,
+  EquipmentId,
   FeatureId,
   LanguageId,
   ProficiencyId,
@@ -175,6 +176,116 @@ export const OptionFeatureGrant = Schema.Struct({
 });
 export type OptionFeatureGrant = typeof OptionFeatureGrant.Type;
 
+/**
+ * One piece of a class's starting kit, as the 2014 source lists it: a counted
+ * item, or a category the player picks from (*"any martial weapon"*).
+ *
+ * `equipmentId` is the bundled `equipment` row the importer resolved the
+ * source index to — provenance for the inventory line and the weapon attack a
+ * fresh sheet derives, and never read through. A category line has no id and a
+ * `category` instead; the pick is the player's, made on the create form from
+ * `OptionDetails.equipment`, which carries that category's members.
+ */
+export const KitLine = Schema.Struct({
+  name: sourceName,
+  quantity: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
+  equipmentId: Schema.optional(EquipmentId),
+  category: Schema.optional(sourceReference),
+});
+export type KitLine = typeof KitLine.Type;
+
+/** One side of an *(a) … or (b) …* choice — its lines, and the label the form draws. */
+export const KitOption = Schema.Struct({
+  label: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240)),
+  lines: Schema.Array(KitLine).check(Schema.isLengthBetween(0, 20)),
+});
+export type KitOption = typeof KitOption.Type;
+
+export const KitChoice = Schema.Struct({
+  /** The source's own sentence: *"(a) chain mail or (b) leather armor, longbow, and 20 arrows"*. */
+  desc: Schema.String.check(Schema.isLengthBetween(0, 500)),
+  options: Schema.Array(KitOption).check(Schema.isLengthBetween(1, 10)),
+});
+export type KitChoice = typeof KitChoice.Type;
+
+/**
+ * The class's starting equipment, **structured** — the fixed lines every
+ * member of the class carries, then the *(a)/(b)* choices in the source's
+ * order. `ClassBody.summary` is the same thing as prose; this is the shape the
+ * create form's kit picker and `sheetGrantsFor` read, and the reference table
+ * `character_option_equipment_reference` is the flat FK-backed index of the
+ * same rows. The importer writes all three from one source record.
+ */
+export const StartingKit = Schema.Struct({
+  fixed: Schema.Array(KitLine).check(Schema.isLengthBetween(0, 40)),
+  choices: Schema.Array(KitChoice).check(Schema.isLengthBetween(0, 20)),
+});
+export type StartingKit = typeof StartingKit.Type;
+
+/**
+ * The half of an `equipment` row a fresh sheet needs to write a weapon attack
+ * and an inventory line — the weapon columns, not the display document. On a
+ * class option's `details` for every row its kit names and every member of
+ * every category its kit lets the player pick from; absent on the other kinds.
+ */
+export const KitEquipment = Schema.Struct({
+  id: EquipmentId,
+  index: Schema.NullOr(sourceKey),
+  name: sourceName,
+  weaponCategory: Schema.NullOr(sourceName),
+  weaponRange: Schema.NullOr(sourceName),
+  categoryRange: Schema.NullOr(sourceName),
+  armorCategory: Schema.NullOr(sourceName),
+  damageDice: Schema.NullOr(sourceName),
+  damageType: Schema.NullOr(sourceName),
+  twoHandedDamageDice: Schema.NullOr(sourceName),
+  rangeNormal: Schema.NullOr(Schema.Int),
+  rangeLong: Schema.NullOr(Schema.Int),
+  throwRangeNormal: Schema.NullOr(Schema.Int),
+  throwRangeLong: Schema.NullOr(Schema.Int),
+  /** Property names: `"Finesse"`, `"Versatile"`, `"Thrown"`. */
+  properties: Schema.Array(sourceName),
+  weight: Schema.NullOr(Schema.Finite),
+  /** `"holy-symbols"`, `"arcane-foci"` — the gear category a kit choice can name. */
+  gearCategoryIndex: Schema.NullOr(sourceKey),
+  /** `"Musical Instrument"` — the tool category a kit choice can name. */
+  toolCategory: Schema.NullOr(sourceName),
+});
+export type KitEquipment = typeof KitEquipment.Type;
+
+/** What a class table says about casting at one level, with the zero rows trimmed. */
+export const ClassLevelSpellcasting = Schema.Struct({
+  cantripsKnown: Schema.optional(Schema.Int),
+  spellsKnown: Schema.optional(Schema.Int),
+  /** Slots per spell level, index 0 = 1st level; trailing zeros dropped. */
+  slots: Schema.Array(Schema.Int).check(Schema.isLengthBetween(0, 9)),
+});
+export type ClassLevelSpellcasting = typeof ClassLevelSpellcasting.Type;
+
+/**
+ * One row of the class table, projected for the sheet: the proficiency bonus,
+ * the casting table, the class-specific counters (`rage_count`,
+ * `action_surges`, `channel_divinity_charges` — the 2014 source's own keys,
+ * zeros dropped) and the top-level features granted at that level, by name and
+ * id. **No prose above level 1** — `levelOneFeatures` carries the level-1
+ * paragraphs a fresh sheet's Features section draws; a feature granted higher
+ * up reaches the sheet as its name, its id and its counters, and the
+ * progression endpoint is where its paragraph lives. The options list is the
+ * create form's picker and is read whole, which is why it does not carry
+ * ninety kilobytes of feature text.
+ */
+export const OptionClassLevel = Schema.Struct({
+  level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+  proficiencyBonus: Schema.NullOr(Schema.Int),
+  spellcasting: Schema.optional(ClassLevelSpellcasting),
+  /** The source's counters by its own keys; a challenge rating is a fraction, so finite rather than integer. */
+  classSpecific: Schema.optional(Schema.Record(Schema.String, Schema.Finite)),
+  features: Schema.Array(
+    Schema.Struct({ id: FeatureId, index: Schema.NullOr(sourceKey), name: sourceName }),
+  ).check(Schema.isLengthBetween(0, 50)),
+});
+export type OptionClassLevel = typeof OptionClassLevel.Type;
+
 export const OptionDetails = Schema.Struct({
   subraces: Schema.Array(OptionSubraceDetail).check(Schema.isLengthBetween(0, 50)),
   abilityBonuses: Schema.Array(OptionAbilityGrant).check(Schema.isLengthBetween(0, 80)),
@@ -189,6 +300,12 @@ export const OptionDetails = Schema.Struct({
   /** Class options only: the level-1 `class_level` row's proficiency bonus. */
   proficiencyBonus: Schema.optional(
     Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 20 })),
+  ),
+  /** Class options only: the kit's rows and the pickable category members. */
+  equipment: Schema.optional(Schema.Array(KitEquipment).check(Schema.isLengthBetween(0, 200))),
+  /** Class options only: the class table, one row per level, no prose. */
+  classLevels: Schema.optional(
+    Schema.Array(OptionClassLevel).check(Schema.isLengthBetween(0, 100)),
   ),
 });
 export type OptionDetails = typeof OptionDetails.Type;
@@ -234,6 +351,16 @@ export type OptionRelationsInput = typeof OptionRelationsInput.Type;
 export const ClassBody = Schema.Struct({
   hitDie,
   unarmouredAc,
+  /**
+   * `"INT"` for a wizard, `"CHA"` for a paladin — the ability a spell attack and
+   * a save DC are worked out from. The 2014 source states it per class and the
+   * importer used to drop it, which is why no sheet could carry a spell save
+   * DC; absent for a class that does not cast, and for a homebrew class that
+   * has not said.
+   */
+  spellcastingAbility: Schema.optional(AbilityKey),
+  /** The structured starting kit — see `StartingKit`. Absent when the source lists none. */
+  startingKit: Schema.optional(StartingKit),
   /** Projected creation-facing source facts; the concrete progression rows live beside it. */
   proficiencies: Schema.optional(textList),
   savingThrows: Schema.optional(textList),

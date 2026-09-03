@@ -188,9 +188,63 @@ this wins.**
   `ruleset:import` (option equipment references), and `ruleset:import` before `spell:import`
   (`spell_subclass` needs `subclass`). Wrong order fails loudly; re-running settles it.
 - **Known gaps, reported rather than built**: `party.join` (seat an existing character at a
-  second table) still has no client caller, and spellcasting slots for level-1 casters are in
-  `class_level.body.spellcasting` but nothing writes `sheet.spellcasting` yet — choosing known
-  spells is its own picker domain.
+  second table) still has no client caller. Spell slots and the casting numbers are written now
+  (see the actions section below); choosing known or prepared spells is still its own picker
+  domain and nothing writes `spellcasting.known`.
+
+## Actions and resources on a fresh sheet, 2026-09-03: the corpus writes both
+
+Slice 1 of the actions plan (`~/projects/firstmate/data/tav-character-actions-plan/report.md`),
+with slice 0 folded in. Pointer-style; the files carry the arguments.
+
+- **Two typed document keys, `sheet.actions` and `sheet.resources`** (`packages/api/src/Character.ts`,
+  `SheetAction` / `SheetResource`), both optional so every row decodes and there was no migration.
+  Document by the column rule's own test: the DM's runner holds no action, no cost and no counter,
+  so nothing here has a second holder. Each line carries a **stable link back to its source row**
+  (`equipmentId` / `spellId` / `featureId` / `racialTraitId`, nullable, the `derived_from` idiom —
+  provenance, never read through) and `derived: true`, which is what a later level-up reads to know
+  which lines are the corpus's to rewrite. `attacks` and `spellcasting.slots` are the **legacy**
+  keys: `characters/sheet.ts`'s `actionRows` / `slotRows` read the new keys first and fall back, so
+  an old row draws exactly as it did. `InventoryItem.equipmentId` is the same link on a gear line.
+- **The captain's D6 on the action economy: draw the cost on each line (`1 action`, `bonus`,
+  `reaction`, `free`) and track nothing per turn.** `ActionCost` is the field, the sheet badges it
+  with the existing `outline` variant (no token invented), and no per-turn state exists anywhere.
+- **`sheetGrantsFor` composes them** (`packages/api/src/SheetGrants.ts`), still the one call both
+  composers make — the form's `payloadFrom` and Hob's `proposeCharacter` — and it now takes the
+  `level`, the seeded `abilities` (a to-hit and a save DC are read off them) and the `kitChoices`.
+  Weapon attacks come off the starting kit's `equipment` rows with the 2014 ability rule and the
+  proficiency lines; slots, cantrips known and the casting numbers off `class_level.body.spellcasting`
+  and the class's `spellcastingAbility`; the popular counters off `classSpecific`; hit dice off the
+  die and the level. `SheetGrants.test.ts` pins the report's three worked examples (Fighter 1,
+  Paladin 5, Wizard 3) with numbers read off the real rows; `hob-character.test.ts` and
+  `create.test.ts` pin that the two composers agree.
+- **The overlay is `packages/api/src/ActionOverlay.ts`** — a curated table keyed by
+  `feature.source_key` / `racial_trait.source_key` for what the source says only in prose (the
+  cost, the recharge, the prose-only limits: Second Wind, Lay on Hands, Divine Sense). Not a parser,
+  for the reason the file states. `apps/server/test/character-actions.test.ts` proves every key
+  resolves to a real bundled row, that the importer keeps a Wizard's INT and a Paladin's CHA and
+  settles both on re-import, and that a Fighter 1 through the real create endpoint comes back with
+  a Longsword on its Actions section.
+- **The importer keeps two things it used to drop** (`ruleset/import.ts`): `ClassBody.spellcastingAbility`
+  and `ClassBody.startingKit`, the kit as structure (fixed lines, then _(a)/(b)_ choices, a category
+  line where the source says _"any martial weapon"_), each counted line resolved to its bundled
+  `equipment` id in the same transaction — hence `equipment:import` before `ruleset:import`.
+  `optionDetailsFor` hydrates `details.equipment` (the kit's rows plus every member of every
+  category its choices name, spelled in SQL by `categoryMembers` and on the client by `inCategory`
+  — keep the two in step) and `details.classLevels` (the class table with **no prose above level
+  1**; the options list is the picker and is read whole, so it does not carry ninety kilobytes of
+  feature text — a feature granted above level 1 reaches a sheet as its name, id and counters).
+- **The create form has a kit picker** (`characters/create.ts`'s `kitChoices`, `CharacterCreateScreen.tsx`):
+  both sides listed as a select, a select per pick inside a side that names a category, side (a)
+  by default; an unpicked category lands on the gear as a line with no attack behind it, never a
+  weapon nobody chose. Hob takes no picks, so a draft carries side (a) throughout.
+- **Slice 0, the stale-save guard, is on**: `saveOwnCharacter` sends `expectedVersion` with every
+  write, the server's `Conflict` sentence renders in `SaveFailure` with a _Reload_ action (offered
+  for a conflict only), and `sheetWrites.test.tsx` pins both.
+- **Deliberately absent, pending later slices**: no spend, no rest, no roll — the pips, the uses
+  notes (`2/2 · short rest`, matched to a feature by name) and the dice are read-only text, and
+  the sheet's rule that a control is drawn only where a write exists is unchanged. No known or
+  prepared spell is chosen (slice 3), and a level-up does not yet recompute derived lines.
 
 ## The design system: what is canonical, and how it reaches Tailwind
 

@@ -1,4 +1,12 @@
-import type { CharacterSheet, Currency, OwnedCharacter } from "@taverns/api";
+import type {
+  CharacterSheet,
+  Currency,
+  OwnedCharacter,
+  SheetAction,
+  SheetResource,
+  SpellSlot,
+  Trait,
+} from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 
 /**
@@ -143,20 +151,108 @@ const some = (list: ReadonlyArray<unknown> | undefined): boolean =>
 
 const written = (text: string | undefined): boolean => text !== undefined && text.trim() !== "";
 
+/**
+ * The spell slots, wherever the document holds them: the `"slot:N"` rows of
+ * `resources` — what a fresh sheet carries since the corpus started writing it
+ * — and, on a row written before that, the legacy `spellcasting.slots`. One
+ * reader for both, so the pips and the section rule cannot disagree about
+ * whether there is anything to draw.
+ */
+export const slotRows = (sheet: CharacterSheet): ReadonlyArray<SpellSlot> => {
+  const fromResources = (sheet.resources ?? []).flatMap((resource) => {
+    const match = /^slot:(\d+)$/.exec(resource.id);
+    return match?.[1] === undefined
+      ? []
+      : [{ level: Number(match[1]), used: resource.used, total: resource.max }];
+  });
+  return fromResources.length > 0 ? fromResources : (sheet.spellcasting?.slots ?? []);
+};
+
+/**
+ * The Actions section's lines, wherever the document holds them: `actions`
+ * first, and the legacy `attacks` (`Trait`s) drawn through the same shape so a
+ * row written before the key exists reads exactly as it did — the note as the
+ * range line, and no cost, because a `Trait` never carried one.
+ */
+export const actionRows = (sheet: CharacterSheet): ReadonlyArray<SheetAction> =>
+  sheet.actions !== undefined && sheet.actions.length > 0
+    ? sheet.actions
+    : (sheet.attacks ?? []).map((attack: Trait): SheetAction => ({
+        id: `attack:${attack.name}`,
+        name: attack.name,
+        ...(attack.text === "" ? {} : { text: attack.text }),
+        ...(attack.hit === undefined ? {} : { hit: attack.hit }),
+        ...(attack.dice === undefined ? {} : { dice: attack.dice }),
+        ...(attack.note === undefined ? {} : { range: attack.note }),
+        source: "other",
+      }));
+
+/** *"1 action"*, *"bonus"* — the economy as the drawing badges it, D6's cost on the line. */
+export const costLabel = (cost: SheetAction["cost"]): string | undefined => {
+  switch (cost) {
+    case "action":
+      return "1 action";
+    case "bonus":
+      return "bonus";
+    case "reaction":
+      return "reaction";
+    case "free":
+      return "free";
+    default:
+      return undefined;
+  }
+};
+
+const rechargeWords = (recharge: SheetResource["recharge"]): string | undefined => {
+  switch (recharge) {
+    case "short":
+      return "short rest";
+    case "long":
+      return "long rest";
+    case "dawn":
+      return "dawn";
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * *"2/2 · short rest"*, *"25/25 hp · long rest"* — the accent note a feature
+ * row wears when a counter of the same name is on `resources`. Matched by name
+ * because a `Trait` carries no id, and read-only: nothing here spends one.
+ */
+export const usesNote = (
+  trait: Trait,
+  resources: ReadonlyArray<SheetResource> | undefined,
+): string | undefined => {
+  const wanted = trait.name.trim().toLowerCase();
+  const resource = (resources ?? []).find(
+    (candidate) =>
+      !candidate.id.startsWith("slot:") && candidate.name.trim().toLowerCase() === wanted,
+  );
+  if (resource === undefined) return undefined;
+  const left = Math.max(0, resource.max - resource.used);
+  const count = `${String(left)}/${String(resource.max)}${resource.unit === undefined ? "" : ` ${resource.unit}`}`;
+  const recharge = rechargeWords(resource.recharge);
+  return recharge === undefined ? count : `${count} · ${recharge}`;
+};
+
 export const sheetSections = (sheet: CharacterSheet, writable = false): SheetSections => {
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
 
   const sections = {
     abilities: writable || some(sheet.abilities) || some(sheet.skills) || some(sheet.proficiencies),
-    actions: some(sheet.attacks),
+    // `actions` is what the corpus writes now; `attacks` is the key a row
+    // written before it holds, and it still draws.
+    actions: some(sheet.actions) || some(sheet.attacks),
     magic:
-      spellcasting !== undefined &&
-      (some(spellcasting.slots) ||
-        some(spellcasting.known) ||
-        written(spellcasting.ability) ||
-        written(spellcasting.save) ||
-        written(spellcasting.attack)),
+      slotRows(sheet).length > 0 ||
+      (spellcasting !== undefined &&
+        (some(spellcasting.known) ||
+          written(spellcasting.ability) ||
+          written(spellcasting.save) ||
+          written(spellcasting.attack))),
     features: some(sheet.traits),
     gear:
       writable ||

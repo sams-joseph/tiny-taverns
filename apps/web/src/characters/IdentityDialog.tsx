@@ -61,6 +61,7 @@ export function IdentityDialog({
   owned,
   onClose,
   onSaved,
+  onReload,
 }: {
   /**
    * The character with its seats — the seats are the write's blast radius
@@ -71,6 +72,8 @@ export function IdentityDialog({
   readonly onClose: () => void;
   /** Re-reads the screen: `descriptor` is derived, so the row comes back changed. */
   readonly onSaved: () => void;
+  /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
+  readonly onReload?: () => void;
 }) {
   const character = owned.character;
   const [name, setName] = useState(character.name);
@@ -300,7 +303,7 @@ export function IdentityDialog({
         <DialogFooter>
           {failure !== undefined && (
             <div className="mr-auto min-w-0 flex-1 text-left">
-              <SaveFailure failure={failure} />
+              <SaveFailure failure={failure} onReload={onReload} />
             </div>
           )}
           <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>

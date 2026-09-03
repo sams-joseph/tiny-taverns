@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { Ability, Trait } from "./Creature.js";
-import { AccountId, CharacterId } from "./Ids.js";
+import { AccountId, CharacterId, EquipmentId, FeatureId, RacialTraitId, SpellId } from "./Ids.js";
 import { provenanceFields } from "./Provenance.js";
 
 /**
@@ -104,6 +104,15 @@ export const SpellKnown = Schema.Struct({
 });
 export type SpellKnown = typeof SpellKnown.Type;
 
+/**
+ * The casting aside — ability, save DC, attack bonus — and the known list.
+ *
+ * Since the corpus started writing the sheet, `slots` here is the **legacy**
+ * home for spell slots: a fresh sheet carries them as `resources` (`"slot:N"`)
+ * and this key holds only the three numbers and the counts the class table
+ * states. A row written before that still decodes and still draws, because the
+ * reader falls back to `slots` when no slot resource is present.
+ */
 export const Spellcasting = Schema.Struct({
   /** `"CHA"` */
   ability: Schema.optional(Schema.String),
@@ -111,6 +120,10 @@ export const Spellcasting = Schema.Struct({
   save: Schema.optional(Schema.String),
   /** `"+6"` */
   attack: Schema.optional(Schema.String),
+  /** How many cantrips the class table says are known at this level. */
+  cantripsKnown: Schema.optional(Schema.Int),
+  /** How many spells a known-caster's table says are known at this level. */
+  spellsKnown: Schema.optional(Schema.Int),
   slots: Schema.optional(Schema.Array(SpellSlot)),
   known: Schema.optional(Schema.Array(SpellKnown)),
 });
@@ -126,8 +139,127 @@ export const InventoryItem = Schema.Struct({
   /** `"From session 11"` — the badge beside the name. */
   note: Schema.optional(Schema.String),
   equipped: Schema.optional(Schema.Boolean),
+  /**
+   * The `equipment` row this line came from, when the starting kit wrote it —
+   * **provenance, never an access path**, the `derived_from` idiom. It is what
+   * lets a weapon attack on `actions` say which line of the pack it is, and
+   * what a later level-up would re-derive an attack from. Absent on a line the
+   * player typed; `null` once the row it named is gone or out of reach, and the
+   * line stands either way.
+   */
+  equipmentId: Schema.optional(Schema.NullOr(EquipmentId)),
 });
 export type InventoryItem = typeof InventoryItem.Type;
+
+/**
+ * The action economy, as a cost on each line — **and nothing tracked per turn.**
+ *
+ * The captain's decision D6 (2026-09-03): draw `1 action` / `bonus` / `reaction`
+ * on the line and hold no "spent this turn" state anywhere. A turn's spending is
+ * gone when the turn ends, nothing on `combatant` holds one, and a wrong tick
+ * would be a lie read out at the table. `free` is the drawn word for a thing
+ * that costs no action (Action Surge, an object interaction); absent means the
+ * corpus does not say.
+ */
+export const ActionCost = Schema.Literals(["action", "bonus", "reaction", "free"]);
+export type ActionCost = typeof ActionCost.Type;
+
+/** What kind of row a line came out of — the badge's colour and the reader's grouping. */
+export const ActionSource = Schema.Literals(["weapon", "spell", "feature", "racial", "other"]);
+export type ActionSource = typeof ActionSource.Type;
+
+/**
+ * One thing the character can do, as the sheet and the table draw it: a name,
+ * a cost, and the roll parts — `CharacterSheetB.jsx`'s `BAttack` row, which is
+ * a name, a kind line, a to-hit and a dice button.
+ *
+ * ### Why a shape of its own, beside `Trait`
+ *
+ * `attacks` is `Trait`s, and `Trait` is the bestiary's: a named block of prose
+ * that a monster, a feature and a spell all are. An action is not a block of
+ * prose — it is *a line with a cost and a roll*, and the drawing draws it as
+ * one. Growing `Trait` with a cost and a recharge would drag `StatBlock.tsx`
+ * into every change here, and nothing on a `Trait` can say which row it came
+ * from. That last part is the point of this shape.
+ *
+ * ### Document, by the column rule
+ *
+ * *A value two rows both hold gets a column, and one transaction writes both.*
+ * The DM's runner holds no action, no attack and no cost — a combatant snapshots
+ * a name, an armour class and hit points — so nothing here has a second holder,
+ * and an actions column would have no reader but the row that owns it. It is
+ * one optional key on the `jsonb` document: every row written before it still
+ * decodes, and there is no migration.
+ *
+ * ### The link back, and `derived`
+ *
+ * `equipmentId` / `spellId` / `featureId` / `racialTraitId` name the row the
+ * line was derived from. **Provenance, never read through** — the same rule as
+ * `derived_from` on a campaign copy: a spell the DM later un-shares leaves the
+ * line standing with its id set to `null`, and no reader follows the pointer
+ * to answer anything. `derived: true` is the level-up contract for a later
+ * slice: a recompute rewrites every derived line from the corpus for the new
+ * level and leaves every line without the flag — the ones the player typed —
+ * alone. Nothing recomputes on a read.
+ */
+export const SheetAction = Schema.Struct({
+  /** Stable within one sheet: `"atk:longsword"`, `"feat:second-wind"`. */
+  id: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
+  cost: Schema.optional(ActionCost),
+  /** `"+5"` — pre-signed, like `Trait.hit`. */
+  hit: Schema.optional(Schema.String),
+  /** `"1d8+3"` — the bonus inside the notation, so a roll reads it whole. */
+  dice: Schema.optional(Schema.String),
+  /** `"Slashing"`, `"Radiant"` */
+  damageType: Schema.optional(Schema.String),
+  /** `"Reach 10 ft."`, `"80/320 ft."`, `"Thrown 20/60 ft."` */
+  range: Schema.optional(Schema.String),
+  /** The kind line under the name: `"Martial melee · Versatile (1d10)"`. */
+  text: Schema.optional(Schema.String),
+  source: ActionSource,
+  /** Which counter it spends — a `SheetResource.id`, `"slot:1"` or `"res:second-wind"`. */
+  resource: Schema.optional(Schema.String),
+  equipmentId: Schema.optional(Schema.NullOr(EquipmentId)),
+  spellId: Schema.optional(Schema.NullOr(SpellId)),
+  featureId: Schema.optional(Schema.NullOr(FeatureId)),
+  racialTraitId: Schema.optional(Schema.NullOr(RacialTraitId)),
+  derived: Schema.optional(Schema.Boolean),
+});
+export type SheetAction = typeof SheetAction.Type;
+
+/** When a counter comes back: a short rest, a long rest, the next dawn, or never. */
+export const ResourceRecharge = Schema.Literals(["short", "long", "dawn", "never"]);
+export type ResourceRecharge = typeof ResourceRecharge.Type;
+
+/**
+ * A counter with a ceiling and a recharge — spell slots per level, a feature's
+ * uses, the hit dice, the Lay on Hands pool. Keyed by the same ids an action's
+ * `resource` names, because a slot is spent by many actions (every first-level
+ * spell, Divine Smite) and a feature's counter is one line; the drawing
+ * separates them too (`BSlots` against the `note` on a feature row).
+ *
+ * **`used` is live and in the document by the same argument `SpellSlot` made**:
+ * nothing else holds it — the DM's runner draws no slot and no use — so there
+ * is no second copy to keep in step. It is read-only on this slice; the spend
+ * and the rest that move it are their own endpoints in a later one, and until
+ * then it is written at creation and moved by nothing.
+ */
+export const SheetResource = Schema.Struct({
+  /** `"slot:1"` … `"slot:9"`, `"hit-dice"`, `"res:<feature index>"`. */
+  id: Schema.NonEmptyString,
+  /** `"1st-level slots"`, `"Hit dice"`, `"Lay on Hands"` */
+  name: Schema.NonEmptyString,
+  used: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 })),
+  max: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 })),
+  recharge: ResourceRecharge,
+  /** `"hp"` for a pool measured in hit points, `"d10"` for the hit dice. */
+  unit: Schema.optional(Schema.String),
+  featureId: Schema.optional(Schema.NullOr(FeatureId)),
+  racialTraitId: Schema.optional(Schema.NullOr(RacialTraitId)),
+  derived: Schema.optional(Schema.Boolean),
+});
+export type SheetResource = typeof SheetResource.Type;
 
 /**
  * Coin, as five counted piles.
@@ -260,6 +392,19 @@ export const CharacterSheet = Schema.Struct({
    * attack from a feature by inspecting the fields.
    */
   attacks: Schema.optional(Schema.Array(Trait)),
+  /**
+   * What the character can do, derived from the corpus at creation — weapon
+   * attacks from the starting kit, features with a cost — and typed by the
+   * player after. **The Actions section reads this first and `attacks` as the
+   * fallback**, so a row that already holds `attacks` draws exactly as it did.
+   */
+  actions: Schema.optional(Schema.Array(SheetAction)),
+  /**
+   * The counters: slots per level, feature uses, hit dice, a pool. Read-only on
+   * this slice — see `SheetResource`. The Spellcasting section reads its
+   * `"slot:N"` rows first and `spellcasting.slots` as the fallback.
+   */
+  resources: Schema.optional(Schema.Array(SheetResource)),
   spellcasting: Schema.optional(Spellcasting),
   inventory: Schema.optional(Schema.Array(InventoryItem)),
   currency: Schema.optional(Currency),

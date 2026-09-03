@@ -28,7 +28,7 @@ import {
  * path, so the fixture has to cross a campaign boundary or it proves nothing.
  */
 
-export { campaign, campaignId, campaignOptions } from "../campaign/campaign.fixtures";
+export { campaign, campaignId, campaignOptions, longswordRow } from "../campaign/campaign.fixtures";
 
 export const brannocId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
 export const sorrelId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000902");
@@ -59,11 +59,9 @@ const fullSheet = {
     { label: "CHA", score: "16", modifier: "+3", save: "+6", proficient: true },
   ],
   traits: [
-    {
-      name: "Lay on Hands",
-      text: "Touch a creature and restore hit points from the pool.",
-      note: "25 hp pool · 15 remaining",
-    },
+    // No `note` of its own: the sheet draws the counter on `resources` beside
+    // the name, *15/25 hp · long rest*, matched by name.
+    { name: "Lay on Hands", text: "Touch a creature and restore hit points from the pool." },
     { name: "Extra Attack", text: "Attack twice when you take the Attack action." },
   ],
   identity: {
@@ -82,9 +80,75 @@ const fullSheet = {
     { name: "Arcana", ability: "INT", bonus: "-1", proficient: false },
   ],
   proficiencies: ["All armour", "Shields", "Orcish"],
+  /**
+   * The legacy Actions key, kept on the fixture beside `actions` below: the
+   * screen reads `actions` first, so these are what a row written before the
+   * corpus wrote the sheet draws — `legacySheet` is that row.
+   */
   attacks: [
     { name: "Halberd", text: "Slashing", hit: "+7", dice: "1d10+4", note: "Reach 10 ft." },
     { name: "Divine Smite", text: "Radiant", hit: "—", dice: "2d8" },
+  ],
+  /** What the corpus writes now: a line with a cost, a source and a link back. */
+  actions: [
+    {
+      id: "atk:halberd",
+      name: "Halberd",
+      cost: "action",
+      hit: "+7",
+      dice: "1d10+4",
+      damageType: "Slashing",
+      range: "Reach 10 ft.",
+      text: "Martial Melee · Heavy · Two-Handed · Attack ×2",
+      source: "weapon",
+      equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0001",
+      derived: true,
+    },
+    {
+      id: "feat:divine-smite",
+      name: "Divine Smite",
+      dice: "2d8",
+      damageType: "Radiant",
+      text: "When you hit with a melee weapon attack, expend a spell slot",
+      source: "feature",
+      resource: "slot:1",
+      featureId: "2b1f2a1e-0000-4000-8000-0000000f0001",
+      derived: true,
+    },
+    {
+      id: "feat:lay-on-hands",
+      name: "Lay on Hands",
+      cost: "action",
+      text: "Restore hit points from the pool, by touch",
+      source: "feature",
+      resource: "res:lay-on-hands",
+      featureId: "2b1f2a1e-0000-4000-8000-0000000f0002",
+      derived: true,
+    },
+  ],
+  /** The counters — slots as `slot:N`, the pool, the hit dice — read-only on this build. */
+  resources: [
+    { id: "slot:1", name: "1st-level slots", used: 1, max: 4, recharge: "long", derived: true },
+    { id: "slot:2", name: "2nd-level slots", used: 0, max: 2, recharge: "long", derived: true },
+    {
+      id: "hit-dice",
+      name: "Hit dice",
+      used: 2,
+      max: 5,
+      recharge: "long",
+      unit: "d10",
+      derived: true,
+    },
+    {
+      id: "res:lay-on-hands",
+      name: "Lay on Hands",
+      used: 10,
+      max: 25,
+      recharge: "long",
+      unit: "hp",
+      featureId: "2b1f2a1e-0000-4000-8000-0000000f0002",
+      derived: true,
+    },
   ],
   spellcasting: {
     ability: "CHA",
@@ -117,6 +181,16 @@ const fullSheet = {
     flaw: "He cannot let a debt stand.",
   },
 };
+
+/**
+ * The same document as a row written before the corpus wrote the sheet holds
+ * it: `attacks` and `spellcasting.slots` and no `actions` or `resources`. The
+ * screen's fallback reads these, so a test over this sheet is what says an
+ * old row still draws exactly as it did.
+ */
+export const legacySheet = (({ actions: _actions, resources: _resources, ...rest }) => rest)(
+  fullSheet,
+);
 
 /** Assigned to the reader, with the whole document behind it. */
 export const brannoc = {

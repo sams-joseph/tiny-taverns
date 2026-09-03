@@ -1,3 +1,12 @@
+import type {
+  AbilityKey,
+  ClassBody,
+  KitChoice,
+  KitLine,
+  KitOption,
+  StartingKit,
+} from "@taverns/api";
+import { ABILITY_KEYS } from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { syncSystemClassProgression } from "./progression.js";
@@ -53,6 +62,168 @@ const walkEquipmentOptions = (value: unknown, found: EquipmentReference[]): void
 
   for (const child of Object.values(record)) walkEquipmentOptions(child, found);
 };
+
+/**
+ * `"wis"` → `"WIS"`: the source's `spellcasting.spellcasting_ability.index`,
+ * which the importer used to drop — no sheet could say a spell save DC until
+ * it reached `ClassBody.spellcastingAbility`.
+ */
+const spellcastingAbilityOf = (raw: unknown): AbilityKey | undefined => {
+  const record = maybeRecord(raw);
+  const index = sourceIndexOf(maybeRecord(record?.spellcasting)?.spellcasting_ability);
+  const key = index?.toUpperCase();
+  return key !== undefined && (ABILITY_KEYS as ReadonlyArray<string>).includes(key)
+    ? (key as AbilityKey)
+    : undefined;
+};
+
+const nameOf = (value: unknown): string | undefined => {
+  const name = maybeRecord(value)?.name;
+  return typeof name === "string" && name.trim() !== "" ? name : undefined;
+};
+
+/** *"Martial Weapons"* → *"Any martial weapon"*: what a category line is called on a sheet. */
+const anyOf = (categoryName: string): string =>
+  `Any ${categoryName.toLowerCase().replace(/s$/, "").replace(/foci$/, "focus")}`;
+
+interface KitBuild {
+  readonly equipmentId: (index: string) => Effect.Effect<string, SqlError.SqlError>;
+}
+
+/** One option node of the source's kit grammar, as the lines it carries. */
+const kitLinesOf = (
+  value: unknown,
+  build: KitBuild,
+): Effect.Effect<ReadonlyArray<KitLine>, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const record = maybeRecord(value);
+    if (record === undefined) return [];
+    switch (record.option_type) {
+      case "counted_reference": {
+        const index = sourceIndexOf(record.of);
+        const name = nameOf(record.of);
+        if (index === undefined || name === undefined) return [];
+        const equipmentId = yield* build.equipmentId(index);
+        return [
+          {
+            name,
+            quantity: quantityOf(record.count) ?? 1,
+            equipmentId: equipmentId as KitLine["equipmentId"],
+          },
+        ];
+      }
+      case "multiple": {
+        const items = Array.isArray(record.items) ? record.items : [];
+        const lines: Array<KitLine> = [];
+        for (const item of items) lines.push(...(yield* kitLinesOf(item, build)));
+        return lines;
+      }
+      case "choice":
+        return yield* categoryLinesOf(record.choice, build);
+      default:
+        return [];
+    }
+  });
+
+/** A `from.option_set_type === "equipment_category"` node: one line the player picks from. */
+const categoryLinesOf = (
+  value: unknown,
+  build: KitBuild,
+): Effect.Effect<ReadonlyArray<KitLine>, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const record = maybeRecord(value);
+    const from = maybeRecord(record?.from);
+    if (from === undefined) return [];
+    if (from.option_set_type === "equipment_category") {
+      const index = sourceIndexOf(from.equipment_category);
+      const name = nameOf(from.equipment_category);
+      if (index === undefined || name === undefined) return [];
+      return [
+        { name: anyOf(name), quantity: quantityOf(record?.choose) ?? 1, category: { index, name } },
+      ];
+    }
+    const options = Array.isArray(from.options) ? from.options : [];
+    const lines: Array<KitLine> = [];
+    for (const option of options) lines.push(...(yield* kitLinesOf(option, build)));
+    return lines;
+  });
+
+const kitLabel = (lines: ReadonlyArray<KitLine>): string =>
+  lines.length === 0
+    ? "Nothing"
+    : lines
+        .map((line) => (line.quantity > 1 ? `${String(line.quantity)} × ${line.name}` : line.name))
+        .join(", ");
+
+/**
+ * The class's starting kit, structured off the source's own grammar: the
+ * fixed `starting_equipment` lines, then one `KitChoice` per
+ * `starting_equipment_options` entry with a `KitOption` per side. A side is a
+ * counted item, a bundle of them (`multiple`), or a category the player picks
+ * from; each equipment index is resolved to the bundled row's id in the same
+ * transaction, so a kit line is provenance the moment it is written. Absent
+ * when the source lists nothing.
+ */
+const startingKitOf = (
+  raw: unknown,
+  build: KitBuild,
+): Effect.Effect<StartingKit | undefined, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const record = maybeRecord(raw);
+    const fixed: Array<KitLine> = [];
+    const starting = Array.isArray(record?.starting_equipment) ? record.starting_equipment : [];
+    for (const item of starting) {
+      const row = maybeRecord(item);
+      const index = sourceIndexOf(row?.equipment);
+      const name = nameOf(row?.equipment);
+      if (index === undefined || name === undefined) continue;
+      const equipmentId = yield* build.equipmentId(index);
+      fixed.push({
+        name,
+        quantity: quantityOf(row?.quantity) ?? 1,
+        equipmentId: equipmentId as KitLine["equipmentId"],
+      });
+    }
+    const choices: Array<KitChoice> = [];
+    const options = Array.isArray(record?.starting_equipment_options)
+      ? record.starting_equipment_options
+      : [];
+    for (const entry of options) {
+      const choice = maybeRecord(entry);
+      const from = maybeRecord(choice?.from);
+      const desc = typeof choice?.desc === "string" ? choice.desc : "";
+      let sides: Array<KitOption> = [];
+      if (from?.option_set_type === "equipment_category") {
+        const lines = yield* categoryLinesOf(choice, build);
+        sides = [{ label: kitLabel(lines), lines }];
+      } else {
+        const nodes = Array.isArray(from?.options) ? from.options : [];
+        for (const node of nodes) {
+          const lines = yield* kitLinesOf(node, build);
+          sides.push({ label: kitLabel(lines), lines });
+        }
+      }
+      if (sides.length > 0) choices.push({ desc, options: sides });
+    }
+    return fixed.length === 0 && choices.length === 0 ? undefined : { fixed, choices };
+  });
+
+/** The snapshot's class body plus the two keys read off its raw record. */
+const classBodyOf = (
+  sql: SqlClient.SqlClient,
+  option: SystemOption & { readonly kind: "class" },
+): Effect.Effect<ClassBody, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const spellcastingAbility = spellcastingAbilityOf(option.raw);
+    const startingKit = yield* startingKitOf(option.raw, {
+      equipmentId: (index) => systemEquipmentId(sql, index),
+    });
+    return {
+      ...option.body,
+      ...(spellcastingAbility === undefined ? {} : { spellcastingAbility }),
+      ...(startingKit === undefined ? {} : { startingKit }),
+    };
+  });
 
 const optionEquipmentReferences = (raw: unknown): ReadonlyArray<EquipmentReference> => {
   const found: EquipmentReference[] = [];
@@ -237,6 +408,16 @@ export const importSystemOptions = (
             option.sourceIndex,
           );
 
+          /**
+           * A class body carries two things the snapshot's literal body does
+           * not and its raw record does: the casting ability, and the kit as
+           * structure. Both are read off `raw` here so the generated snapshot
+           * stays what the source said, and re-running the import settles them
+           * on a database that predates them — the upsert below rewrites
+           * `body` whole.
+           */
+          const body: ClassBody | SystemOption["body"] =
+            option.kind === "class" ? yield* classBodyOf(sql, option) : option.body;
           const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into character_option (
               campaign_id, account_id, origin, source_corpus, source_family, source_key,
@@ -251,7 +432,7 @@ export const importSystemOptions = (
               ${key.sourceKey},
               ${option.kind},
               ${option.name},
-              ${JSON.stringify(option.body)},
+              ${JSON.stringify(body)},
               'shared'
             )
             on conflict (source_corpus, source_family, source_key)

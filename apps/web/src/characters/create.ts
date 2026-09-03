@@ -6,8 +6,13 @@ import type {
   CharacterOwnCreate,
   CharacterSeed,
   CharacterSheet,
+  ClassOption,
+  EquipmentId,
+  KitEquipment,
+  KitPick,
   RaceBody,
   SheetIdentity,
+  StartingKit,
   SubraceBody,
 } from "@taverns/api";
 import {
@@ -15,8 +20,10 @@ import {
   asClassOption,
   asRaceOption,
   bonusesLine,
+  defaultKitPicks,
   emptyCharacterSheet,
   identityGrants,
+  inCategory,
   optionNamed,
   seedFor,
   sheetGrantsFor,
@@ -54,6 +61,13 @@ export interface CharacterDraft {
   readonly subrace: string;
   readonly raceBonusChoices: ReadonlyArray<AbilityKey>;
   readonly className: string;
+  /**
+   * Which side of each of the class's *(a)/(b)* kit choices was taken, and
+   * which rows were picked where a side says *"any martial weapon"* — one
+   * entry per `startingKit.choices` entry, in order. Reset to side (a)
+   * throughout when the class changes, because the choices are the class's.
+   */
+  readonly kitChoices: ReadonlyArray<KitPick>;
   readonly background: string;
   readonly ac: string;
   readonly hpMax: string;
@@ -70,6 +84,7 @@ export const emptyDraft: CharacterDraft = {
   subrace: "",
   raceBonusChoices: [],
   className: "",
+  kitChoices: [],
   background: "",
   ac: "",
   hpMax: "",
@@ -185,6 +200,61 @@ export const raceChoiceNote = (
     : `${race.name} chooses ${String(choice.choose)} extra +1 bonuses from ${allowed}. Pick ${String(remaining)} more.`;
 };
 
+export const classIn = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): ClassOption | undefined => asClassOption(optionNamed(options, "class", draft.className));
+
+/** The picked class's structured kit, when the source lists one. */
+export const kitOf = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): StartingKit | undefined => classIn(draft, options)?.body.startingKit;
+
+/** The rows a kit category offers — what a *"pick a martial weapon"* select lists. */
+export const kitRowsIn = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+  categoryIndex: string,
+): ReadonlyArray<KitEquipment> =>
+  (classIn(draft, options)?.details?.equipment ?? []).filter((row) =>
+    inCategory(row, categoryIndex),
+  );
+
+/** A class pick resets the kit to side (a) throughout: the choices are the class's own. */
+export const withKitDefaults = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): CharacterDraft => ({ ...draft, kitChoices: defaultKitPicks(kitOf(draft, options)) });
+
+/** Take side `option` of choice `index`; the side's own picks start empty. */
+export const pickKitSide = (
+  draft: CharacterDraft,
+  index: number,
+  option: number,
+): CharacterDraft => ({
+  ...draft,
+  kitChoices: draft.kitChoices.map((pick, at) => (at === index ? { option, picks: [] } : pick)),
+});
+
+/** Pick the `slot`th row of choice `index`'s category lines, in the side's order. */
+export const pickKitRow = (
+  draft: CharacterDraft,
+  index: number,
+  slot: number,
+  equipmentId: EquipmentId | undefined,
+): CharacterDraft => ({
+  ...draft,
+  kitChoices: draft.kitChoices.map((pick, at) => {
+    if (at !== index) return pick;
+    // The picks are the dense list `kitLinesFor` consumes in order, so a slot
+    // cleared in the middle closes up rather than leaving a hole.
+    const picks = pick.picks.filter((_, position) => position !== slot);
+    if (equipmentId !== undefined) picks.splice(Math.min(slot, picks.length), 0, equipmentId);
+    return { ...pick, picks };
+  }),
+});
+
 export const seedOf = (
   draft: CharacterDraft,
   options: ReadonlyArray<CharacterOption>,
@@ -235,17 +305,20 @@ export const payloadFrom = (
   // Dwarf Fighter and a drafted one start on the same document.
   const raceOption = raceIn(draft, options);
   const subraceOption = subraceIn(draft, options);
+  // The seed's cells go in, because a weapon's to-hit and a spell save DC are
+  // read off them; the level is the box's, so a Paladin 5 typed here gets the
+  // level-5 slots; the kit is as picked, side (a) where it was not.
+  const seed = seedOf(draft, options);
   const grants = sheetGrantsFor({
-    classOption: asClassOption(optionNamed(options, "class", draft.className)),
+    classOption: classIn(draft, options),
     raceOption: asRaceOption(raceOption),
     subraceName: subraceOption?.name ?? (subrace === "" ? undefined : subrace),
     backgroundOption: asBackgroundOption(optionNamed(options, "background", draft.background)),
+    level: level ?? undefined,
+    abilities: seed.abilities,
+    kitChoices: draft.kitChoices,
   });
-  const abilities = withSavingThrows(
-    seedOf(draft, options).abilities,
-    grants.savingThrows,
-    grants.proficiencyBonus,
-  );
+  const abilities = withSavingThrows(seed.abilities, grants.savingThrows, grants.proficiencyBonus);
   const identity: SheetIdentity = {
     ...identityGrants(grants),
     ...(background === "" ? {} : { background }),
@@ -257,6 +330,11 @@ export const payloadFrom = (
     traits: grants.traits,
     ...(Object.keys(identity).length === 0 ? {} : { identity }),
     ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
+    // The corpus's half of the Actions and Spellcasting sections, through the
+    // same call Hob's `proposeCharacter` makes.
+    ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
+    ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
+    ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
     ...(grants.inventory.length === 0 ? {} : { inventory: grants.inventory }),
     ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
   };
@@ -276,6 +354,9 @@ export const payloadFrom = (
     Object.keys(identity).length === 0 &&
     grants.proficiencies.length === 0 &&
     grants.traits.length === 0 &&
+    grants.actions.length === 0 &&
+    grants.resources.length === 0 &&
+    grants.spellcasting === undefined &&
     grants.inventory.length === 0 &&
     grants.gold === undefined
       ? {}

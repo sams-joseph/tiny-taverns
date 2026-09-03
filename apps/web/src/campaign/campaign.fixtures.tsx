@@ -489,6 +489,122 @@ const bundled = (
   body,
 });
 
+/** A bundled `equipment` row's weapon columns, as `details.equipment` carries them. */
+export const longswordRow = {
+  id: "2b1f2a1e-0000-4000-8000-0000000e0001",
+  index: "longsword",
+  name: "Longsword",
+  weaponCategory: "Martial",
+  weaponRange: "Melee",
+  categoryRange: "Martial Melee",
+  armorCategory: null,
+  damageDice: "1d8",
+  damageType: "Slashing",
+  twoHandedDamageDice: "1d10",
+  rangeNormal: 5,
+  rangeLong: null,
+  throwRangeNormal: null,
+  throwRangeLong: null,
+  properties: ["Versatile"],
+  weight: 3,
+  gearCategoryIndex: null,
+  toolCategory: null,
+};
+const shieldRow = {
+  ...longswordRow,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0003",
+  index: "shield",
+  name: "Shield",
+  weaponCategory: null,
+  weaponRange: null,
+  categoryRange: null,
+  armorCategory: "Shield",
+  damageDice: null,
+  damageType: null,
+  twoHandedDamageDice: null,
+  rangeNormal: null,
+  properties: [],
+  weight: 6,
+};
+
+/**
+ * The one bundled class with its kit and its table written out, the way the
+ * importer and `optionDetailsFor` really send them — cut to one choice and one
+ * level, which is all the create form's kit picker needs to be driven.
+ */
+function fighterWithKit<A extends { readonly body: Record<string, unknown> }>(row: A) {
+  return {
+    ...row,
+    body: {
+      ...row.body,
+      proficiencies: ["All armor", "Shields", "Simple Weapons", "Martial Weapons"],
+      savingThrows: ["STR", "CON"],
+      startingKit: {
+        fixed: [],
+        choices: [
+          {
+            desc: "(a) a martial weapon and a shield or (b) two martial weapons",
+            options: [
+              {
+                label: "Any martial weapon, Shield",
+                lines: [
+                  {
+                    name: "Any martial weapon",
+                    quantity: 1,
+                    category: { index: "martial-weapons", name: "Martial Weapons" },
+                  },
+                  { name: "Shield", quantity: 1, equipmentId: shieldRow.id },
+                ],
+              },
+              {
+                label: "2 × Any martial weapon",
+                lines: [
+                  {
+                    name: "Any martial weapon",
+                    quantity: 2,
+                    category: { index: "martial-weapons", name: "Martial Weapons" },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    details: {
+      subraces: [],
+      abilityBonuses: [],
+      languages: [],
+      proficiencies: [],
+      traits: [],
+      choices: [],
+      levelOneFeatures: [
+        {
+          id: "2b1f2a1e-0000-4000-8000-0000000f0010",
+          index: "second-wind",
+          name: "Second Wind",
+          desc: ["You have a limited well of stamina."],
+        },
+      ],
+      proficiencyBonus: 2,
+      equipment: [longswordRow, shieldRow],
+      classLevels: [
+        {
+          level: 1,
+          proficiencyBonus: 2,
+          features: [
+            {
+              id: "2b1f2a1e-0000-4000-8000-0000000f0010",
+              index: "second-wind",
+              name: "Second Wind",
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 const bundledClasses = (
   [
     ["Barbarian", 12, ["DEX", "CON"]],
@@ -505,7 +621,9 @@ const bundledClasses = (
     ["Wizard", 6, ["DEX"]],
   ] as ReadonlyArray<readonly [string, number, ReadonlyArray<string>]>
 ).map(([name, hitDie, unarmouredAc], index) =>
-  bundled("class", index, name, { hitDie, unarmouredAc }),
+  name === "Fighter"
+    ? fighterWithKit(bundled("class", index, name, { hitDie, unarmouredAc }))
+    : bundled("class", index, name, { hitDie, unarmouredAc }),
 );
 
 const raceBody = (

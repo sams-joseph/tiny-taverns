@@ -91,6 +91,10 @@ describe("editing the durable columns", () => {
 
     await waitFor(() =>
       expect(sent()).toEqual({
+        // The version the sheet was read at, on every write — the client
+        // half of the stale-save guard `repo/Characters.ts` has kept since
+        // the continuity decision and nobody sent until now.
+        expectedVersion: 1,
         name: "Brannoc Duskharrow",
         playerName: "Ilse",
         level: 6,
@@ -174,6 +178,74 @@ describe("editing the durable columns", () => {
   });
 });
 
+/**
+ * **The stale-save guard, from the client's side.** Every write carries the
+ * version the sheet was read at (asserted above), so a save over a sheet that
+ * moved on — the same character edited at another table, or in another tab —
+ * is refused with the server's own sentence rather than silently overwriting
+ * whoever got there first. The dialog stays, the typing stays, and *Reload*
+ * re-reads the sheet and closes the form the refused draft was made in.
+ */
+describe("a sheet that moved on under the form", () => {
+  const conflict = {
+    status: 409,
+    body: {
+      _tag: "Conflict",
+      message:
+        "the sheet moved on while you were editing (version 3, you read 1). Reload it and make the change again.",
+    },
+  };
+
+  it("says the server's sentence, keeps what was typed, and offers a reload", async () => {
+    server.routes.set(`PATCH ${patchPath}`, conflict);
+    await renderSheet();
+    const reads = () => server.calls.filter((call) => call.pathname === "/me/characters").length;
+    const before = reads();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const race = await screen.findByRole("textbox", { name: "Race" });
+    await userEvent.clear(race);
+    await userEvent.type(race, "Goliath");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await screen.findByText(/the sheet moved on while you were editing/);
+    expect(sent()).toMatchObject({ expectedVersion: 1, race: "Goliath" });
+    expect(screen.getByRole("textbox", { name: "Race" }).getAttribute("value")).toBe("Goliath");
+    // A refused write re-reads nothing on its own: the screen still shows what
+    // the server holds, and the choice to reload is the player's.
+    expect(reads()).toBe(before);
+
+    await userEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(reads()).toBe(before + 1));
+    // The form goes with the draft it held — it was made against a version
+    // the server just refused.
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Race" })).toBeNull());
+  });
+
+  it("offers no reload for a refusal that is not a conflict", async () => {
+    server.routes.set(`PATCH ${patchPath}`, {
+      status: 404,
+      body: { _tag: "NotFound", resource: "character", id: brannocId },
+    });
+    await renderSheet();
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await screen.findByText(/belongs to someone else/);
+    expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
+  });
+
+  it("guards a death-save mark the same way", async () => {
+    server.routes.set(`PATCH ${patchPath}`, conflict);
+    await renderSheet();
+    await userEvent.click(await screen.findByRole("button", { name: "Failures 3" }));
+
+    await screen.findByText(/the sheet moved on while you were editing/);
+    expect(sent()).toMatchObject({ expectedVersion: 1 });
+    expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
+  });
+});
+
 describe("editing the abilities", () => {
   const openAbilities = async () => {
     await section("Abilities & skills");
@@ -226,6 +298,7 @@ describe("editing the abilities", () => {
 
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        expectedVersion: 1,
         sheet: {
           notes: "",
           traits: [],
@@ -292,6 +365,7 @@ describe("editing the abilities", () => {
 
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        expectedVersion: 1,
         sheet: {
           notes: "",
           traits: [],
@@ -393,6 +467,7 @@ describe("editing the skills", () => {
 
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        expectedVersion: 1,
         sheet: {
           notes: "",
           abilities: [],
@@ -496,6 +571,7 @@ describe("editing the backstory", () => {
 
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        expectedVersion: 1,
         sheet: { notes: "Raised by the marsh.", abilities: [], traits: [] },
       }),
     );
@@ -616,6 +692,7 @@ describe("marking a death save", () => {
 
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
+        expectedVersion: 1,
         sheet: { notes: "", abilities: [], traits: [], deathSaves: { successes: 0, failures: 1 } },
       }),
     );

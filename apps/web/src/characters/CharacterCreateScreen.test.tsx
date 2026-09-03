@@ -13,6 +13,7 @@ import {
   draftTurnId,
   hobRoutes,
   installCharacterServer,
+  longswordRow,
   onlyDmTables,
   renderCreate,
   savedAs,
@@ -143,6 +144,18 @@ describe("writing down a character of your own", () => {
         // The corpora's identity keys — the race answers the speed and the
         // class the hit die, through the same `sheetGrantsFor` Hob composes.
         identity: { speed: "30 ft.", hitDice: "1/1 d8" },
+        // And the one counter every class has, its hit dice, on `resources`.
+        resources: [
+          {
+            id: "hit-dice",
+            name: "Hit dice",
+            used: 0,
+            max: 1,
+            recharge: "long",
+            unit: "d8",
+            derived: true,
+          },
+        ],
       },
     });
     // The whole disclosure property in one assertion: the row comes out at its
@@ -152,6 +165,83 @@ describe("writing down a character of your own", () => {
     for (const key of ["accountId", "hpCurrent", "tempHp", "conditions", "visibility"]) {
       expect(body).not.toHaveProperty(key);
     }
+  });
+
+  /**
+   * **The kit picker: both sides listed, the pick decides.** The Fighter's
+   * source says *(a) a martial weapon and a shield or (b) two martial
+   * weapons*; the form draws the sides as a select and, inside the chosen
+   * side, a select per pick over the category's rows. What lands on the
+   * sheet is the pick — a Longsword line on the gear with its equipment id,
+   * and the Longsword attack on `actions` derived from it — through the same
+   * `sheetGrantsFor` Hob composes.
+   */
+  it("lists the kit's sides and derives the attack from the weapon picked", async () => {
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Brannoc");
+    await pick("Class", "Fighter");
+
+    // Side (a) is the default, and its category line is a select of its own.
+    expect(
+      screen.getByText("(a) a martial weapon and a shield or (b) two martial weapons"),
+    ).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Kit choice 1" }).textContent).toContain(
+      "Any martial weapon, Shield",
+    );
+    await pick("Any martial weapon", "Longsword");
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+
+    const body = bodyOf(server, "POST", createPath) as { sheet: Record<string, unknown> };
+    expect(body.sheet["inventory"]).toEqual([
+      { name: "Longsword", equipmentId: longswordRow.id },
+      { name: "Shield", equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0003" },
+    ]);
+    expect(body.sheet["actions"]).toEqual([
+      expect.objectContaining({
+        id: "atk:longsword",
+        name: "Longsword",
+        cost: "action",
+        // No scores set: a bare 10, so the bonus is the proficiency alone.
+        hit: "+2",
+        dice: "1d8",
+        damageType: "Slashing",
+        source: "weapon",
+        equipmentId: longswordRow.id,
+        derived: true,
+      }),
+      expect.objectContaining({ name: "Second Wind", cost: "bonus", dice: "1d10+1" }),
+    ]);
+    expect(body.sheet["resources"]).toEqual([
+      expect.objectContaining({ id: "hit-dice", max: 1, unit: "d10" }),
+      expect.objectContaining({ id: "res:second-wind", max: 1, recharge: "short" }),
+    ]);
+  });
+
+  it("takes the other side of a kit choice and drops the picks made against the first", async () => {
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Brannoc");
+    await pick("Class", "Fighter");
+    await pick("Any martial weapon", "Longsword");
+    await pick("Kit choice 1", "2 × Any martial weapon");
+
+    // Two picks now, both empty again.
+    expect(screen.getByRole("combobox", { name: "Any martial weapon (1)" }).textContent).toContain(
+      "Pick one",
+    );
+    expect(screen.getByRole("combobox", { name: "Any martial weapon (2)" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+
+    const body = bodyOf(server, "POST", createPath) as { sheet: Record<string, unknown> };
+    // An unpicked category is a line with no weapon behind it, never a weapon
+    // nobody chose.
+    expect(body.sheet["inventory"]).toEqual([
+      { name: "Any martial weapon", quantity: 2, note: "Your pick" },
+    ]);
+    expect(
+      (body.sheet["actions"] as ReadonlyArray<{ name: string }>).map((action) => action.name),
+    ).toEqual(["Second Wind"]);
   });
 
   it("lands on the shipped sheet, and does not leave the form in the history", async () => {
@@ -210,6 +300,17 @@ describe("writing down a character of your own", () => {
       traits: [{ name: "Riverwise", text: "You know who watches the crossings." }],
       identity: { hitDice: "1/1 d8", background: "Salt-runner" },
       proficiencies: ["Athletics", "River cant"],
+      resources: [
+        {
+          id: "hit-dice",
+          name: "Hit dice",
+          used: 0,
+          max: 1,
+          recharge: "long",
+          unit: "d8",
+          derived: true,
+        },
+      ],
       inventory: [{ name: "Travel-stained clothes" }, { name: "ferryman's token" }],
       currency: { gp: 15 },
     });

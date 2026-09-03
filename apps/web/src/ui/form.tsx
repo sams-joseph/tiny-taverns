@@ -1,5 +1,5 @@
 import type { Visibility } from "@taverns/api";
-import { Label, Switch, cn } from "@taverns/ui";
+import { Button, Label, Switch, cn } from "@taverns/ui";
 import type { ComponentProps, ReactNode } from "react";
 import type { ApiFailure } from "../api/failure";
 
@@ -160,13 +160,32 @@ const detailFor = (failure: ApiFailure): string | undefined => {
  * DM's eye lands on it next to the button they just pressed — not a card, which
  * is the shape a failed *load* takes because there is nothing else on screen.
  */
-export function SaveFailure({ failure }: { readonly failure: ApiFailure }) {
+export function SaveFailure({
+  failure,
+  onReload,
+}: {
+  readonly failure: ApiFailure;
+  /**
+   * What *Reload* does, when the failure is a `Conflict` — the sheet moved on
+   * under the form, and the only honest remedy is to read it again and make
+   * the change over. Offered only for a conflict: a 404 or a dead server has
+   * nothing to reload into.
+   */
+  readonly onReload?: () => void;
+}) {
   const detail = detailFor(failure);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <p role="alert" className="text-body-s leading-body text-danger">
         {sentenceFor(failure)}
       </p>
+      {failure.kind === "conflict" && onReload !== undefined && (
+        <div>
+          <Button variant="outline" size="sm" onClick={onReload}>
+            Reload
+          </Button>
+        </div>
+      )}
       {/* One truncated line, never a wrapped paragraph. A transport failure's
           detail is a whole URL, and left to wrap it grew the footer under the
           buttons — the detail is for whoever is debugging, and the sentence

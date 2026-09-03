@@ -1,8 +1,10 @@
-import type { CharacterSheet } from "@taverns/api";
+import type { CharacterSheet, SheetAction, SheetResource } from "@taverns/api";
 import { emptyCharacterSheet } from "@taverns/api";
 import { describe, expect, it } from "vitest";
 import {
+  actionRows,
   coins,
+  costLabel,
   drawnSections,
   hitPoints,
   hpFraction,
@@ -11,6 +13,8 @@ import {
   sectionInView,
   SHEET_SECTIONS,
   sheetSections,
+  slotRows,
+  usesNote,
 } from "./sheet";
 
 /**
@@ -70,6 +74,34 @@ describe("coin", () => {
   });
 });
 
+const halberd: SheetAction = {
+  id: "atk:halberd",
+  name: "Halberd",
+  cost: "action",
+  hit: "+7",
+  dice: "1d10+4",
+  damageType: "Slashing",
+  range: "Reach 10 ft.",
+  source: "weapon",
+  derived: true,
+};
+const slot = (level: number, used: number, max: number): SheetResource => ({
+  id: `slot:${String(level)}`,
+  name: `${String(level)}st-level slots`,
+  used,
+  max,
+  recharge: "long",
+  derived: true,
+});
+const secondWind: SheetResource = {
+  id: "res:second-wind",
+  name: "Second Wind",
+  used: 1,
+  max: 1,
+  recharge: "short",
+  derived: true,
+};
+
 describe("which sections the document can fill", () => {
   const only = (part: Partial<CharacterSheet>): CharacterSheet => ({
     ...emptyCharacterSheet,
@@ -99,6 +131,13 @@ describe("which sections the document can fill", () => {
     expect(sheetSections(only({ skills: [{ name: "Athletics" }] })).abilities).toBe(true);
     expect(sheetSections(only({ proficiencies: ["Orcish"] })).abilities).toBe(true);
     expect(sheetSections(only({ attacks: [{ name: "Halberd", text: "" }] })).actions).toBe(true);
+    // The corpus's key opens the same section, and a slot resource opens
+    // Spellcasting with no `spellcasting` block at all.
+    expect(sheetSections(only({ actions: [halberd] })).actions).toBe(true);
+    expect(sheetSections(only({ resources: [slot(1, 0, 2)] })).magic).toBe(true);
+    // A counter that is not a slot opens nothing on its own: it is drawn beside
+    // the feature it belongs to.
+    expect(sheetSections(only({ resources: [secondWind] })).magic).toBe(false);
     // Spellcasting with nothing but a save DC is still spellcasting.
     expect(sheetSections(only({ spellcasting: { save: "14" } })).magic).toBe(true);
     // The continuous sheet gives features their own section, where the tabbed
@@ -167,6 +206,97 @@ describe("which sections the document can fill", () => {
       "story",
       "log",
     ]);
+  });
+});
+
+/**
+ * **Two keys, one reader each**: the corpus's `actions` and `resources` first,
+ * the legacy `attacks` and `spellcasting.slots` when those are all a row has.
+ * Decided here rather than in the screen because the wrong answer draws fine —
+ * an old row with an empty Actions section, or a new one drawing its slots
+ * twice.
+ */
+describe("the Actions and Spellcasting readers", () => {
+  const only = (part: Partial<CharacterSheet>): CharacterSheet => ({
+    ...emptyCharacterSheet,
+    ...part,
+  });
+
+  it("reads actions first and falls back to the legacy attacks, drawn as lines with no cost", () => {
+    expect(actionRows(only({ actions: [halberd] }))).toEqual([halberd]);
+    expect(
+      actionRows(
+        only({
+          attacks: [
+            { name: "Halberd", text: "Slashing", hit: "+7", dice: "1d10+4", note: "Reach 10 ft." },
+          ],
+          actions: [],
+        }),
+      ),
+    ).toEqual([
+      {
+        id: "attack:Halberd",
+        name: "Halberd",
+        text: "Slashing",
+        hit: "+7",
+        dice: "1d10+4",
+        range: "Reach 10 ft.",
+        source: "other",
+      },
+    ]);
+    expect(actionRows(emptyCharacterSheet)).toEqual([]);
+  });
+
+  it("reads the slot resources first and the legacy slots when there are none", () => {
+    expect(slotRows(only({ resources: [slot(1, 1, 4), secondWind, slot(2, 0, 2)] }))).toEqual([
+      { level: 1, used: 1, total: 4 },
+      { level: 2, used: 0, total: 2 },
+    ]);
+    expect(
+      slotRows(
+        only({
+          spellcasting: { slots: [{ level: 1, used: 0, total: 2 }] },
+          resources: [secondWind],
+        }),
+      ),
+    ).toEqual([{ level: 1, used: 0, total: 2 }]);
+    expect(slotRows(emptyCharacterSheet)).toEqual([]);
+  });
+
+  it("badges the cost in the drawing's words, and says nothing for a line without one", () => {
+    expect(costLabel("action")).toBe("1 action");
+    expect(costLabel("bonus")).toBe("bonus");
+    expect(costLabel("reaction")).toBe("reaction");
+    expect(costLabel("free")).toBe("free");
+    expect(costLabel(undefined)).toBeUndefined();
+  });
+
+  it("writes a feature's uses as text beside its name, by name", () => {
+    const trait = { name: "Second Wind", text: "" };
+    expect(usesNote(trait, [secondWind])).toBe("0/1 · short rest");
+    expect(usesNote({ name: "second wind", text: "" }, [{ ...secondWind, used: 0 }])).toBe(
+      "1/1 · short rest",
+    );
+    expect(
+      usesNote({ name: "Lay on Hands", text: "" }, [
+        {
+          id: "res:lay-on-hands",
+          name: "Lay on Hands",
+          used: 10,
+          max: 25,
+          recharge: "long",
+          unit: "hp",
+        },
+      ]),
+    ).toBe("15/25 hp · long rest");
+    expect(
+      usesNote({ name: "Arcane Recovery", text: "" }, [
+        { id: "res:arcane-recovery", name: "Arcane Recovery", used: 0, max: 1, recharge: "dawn" },
+      ]),
+    ).toBe("1/1 · dawn");
+    // A slot is never a feature's note, whatever it is called.
+    expect(usesNote({ name: "1st-level slots", text: "" }, [slot(1, 0, 4)])).toBeUndefined();
+    expect(usesNote(trait, undefined)).toBeUndefined();
   });
 });
 

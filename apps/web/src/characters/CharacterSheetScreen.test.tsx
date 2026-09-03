@@ -5,7 +5,10 @@ import {
   bodyOf,
   brannoc,
   brannocId,
+  brannocSeatRef,
   installCharacterServer,
+  legacySheet,
+  ownedSorrel,
   renderSheet,
   savedAs,
   sorrelId,
@@ -164,20 +167,32 @@ describe("a character sheet", () => {
     expect(screen.getByText("Athletics")).toBeTruthy();
     expect(screen.getByText("All armour")).toBeTruthy();
 
-    // Actions: the attack and its notation, shown and not rolled. (The fixture
-    // carries a halberd too, so the word is on the sheet twice now that every
-    // section is on screen at once.)
+    // Actions: read off `actions` — the attack with its notation, shown and
+    // not rolled, and **its cost as a badge and nothing ticked** (D6). (The
+    // fixture carries a halberd on the gear too, so the word is on the sheet
+    // twice now that every section is on screen at once.)
     expect(inSection("actions").getByText("Halberd")).toBeTruthy();
     expect(inSection("actions").getByText("1d10+4")).toBeTruthy();
+    expect(inSection("actions").getAllByText("1 action")).toHaveLength(2);
+    expect(
+      inSection("actions").getByText(/Heavy · Two-Handed · Attack ×2 · Slashing · Reach 10 ft\./),
+    ).toBeTruthy();
+    // A feature with a roll and no cost draws the roll and no badge.
+    expect(inSection("actions").getByText("2d8")).toBeTruthy();
+    expect(inSection("actions").getByText(/expend a spell slot/)).toBeTruthy();
 
     // Spellcasting: the header aside, the slots as pips plus a sentence
-    // (because the pips are decoration), the known list.
+    // (because the pips are decoration) — off the `slot:N` resources — and
+    // the known list.
     expect(screen.getByText("CHA · save 14 · atk +6")).toBeTruthy();
     expect(screen.getByText("3 of 4 left")).toBeTruthy();
+    expect(screen.getByText("2 of 2 left")).toBeTruthy();
     expect(screen.getByText("Bless")).toBeTruthy();
 
-    // Features & traits, their own section on the continuous sheet.
-    expect(screen.getByText("Lay on Hands")).toBeTruthy();
+    // Features & traits, their own section on the continuous sheet — and a
+    // feature with a counter on `resources` wears it as text, read-only.
+    expect(inSection("features").getByText("Lay on Hands")).toBeTruthy();
+    expect(inSection("features").getByText("15/25 hp · long rest")).toBeTruthy();
 
     // Gear & coin: the list and the purse. An absent pile is absent, not a zero.
     expect(inSection("gear").getByText("Halberd")).toBeTruthy();
@@ -206,6 +221,32 @@ describe("a character sheet", () => {
    * prepared toggle, a portrait upload, a roll log — and none of them is here,
    * which is the rule that decided which affordances landed and has not moved.
    */
+  /**
+   * A row written before the corpus wrote the sheet holds `attacks` and
+   * `spellcasting.slots` and neither new key. It draws exactly as it did: the
+   * Actions section off the `Trait`s (no cost, because a `Trait` never carried
+   * one) and the pips off the legacy slots.
+   */
+  it("still draws a sheet that holds only the legacy attacks and slots", async () => {
+    server.routes.set("GET /me/characters", {
+      status: 200,
+      body: [
+        { character: { ...brannoc, sheet: legacySheet }, seats: [brannocSeatRef] },
+        ownedSorrel,
+      ],
+    });
+    await renderSheet();
+    await screen.findByRole("navigation", { name: "Sheet sections" });
+
+    expect(inSection("actions").getByText("Halberd")).toBeTruthy();
+    expect(inSection("actions").getByText("1d10+4")).toBeTruthy();
+    expect(inSection("actions").getByText(/Reach 10 ft\./)).toBeTruthy();
+    expect(inSection("actions").queryByText("1 action")).toBeNull();
+    expect(screen.getByText("3 of 4 left")).toBeTruthy();
+    // No counter on `resources`, so the feature wears no note it did not carry.
+    expect(inSection("features").queryByText(/long rest/)).toBeNull();
+  });
+
   it("offers no control the payload cannot carry", async () => {
     await renderSheet();
     await screen.findByRole("navigation", { name: "Sheet sections" });

@@ -39,6 +39,7 @@ export function BackstoryDialog({
   owned,
   onClose,
   onSaved,
+  onReload,
 }: {
   /**
    * The character with its seats — the seats are the write's blast radius
@@ -48,6 +49,8 @@ export function BackstoryDialog({
   readonly owned: OwnedCharacter;
   readonly onClose: () => void;
   readonly onSaved: () => void;
+  /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
+  readonly onReload?: () => void;
 }) {
   const character = owned.character;
   const [notes, setNotes] = useState(character.sheet.notes);
@@ -99,7 +102,7 @@ export function BackstoryDialog({
         <DialogFooter>
           {failure !== undefined && (
             <div className="mr-auto min-w-0 flex-1 text-left">
-              <SaveFailure failure={failure} />
+              <SaveFailure failure={failure} onReload={onReload} />
             </div>
           )}
           <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>

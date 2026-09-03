@@ -3,6 +3,8 @@ import type {
   CampaignId,
   CharacterOptionId,
   CharacterOptionSubraceId,
+  KitEquipment,
+  OptionClassLevel,
   OptionDetails,
   OptionFeatureGrant,
   OptionRelationsInput,
@@ -13,6 +15,7 @@ import type {
   RuleProficiency,
   RuleSkill,
   RuleTrait,
+  StartingKit,
 } from "@taverns/api";
 import { Effect } from "effect";
 import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
@@ -1400,6 +1403,122 @@ export const optionDetailsFor = (
     `;
     const proficiencyBonus = levelOne[0]?.proficiency_bonus ?? null;
 
+    /**
+     * The class table, one row per level with no prose — see
+     * `OptionClassLevel`. Only numeric `classSpecific` values and only the
+     * non-zero ones, because every level of a class carries every key and a
+     * reader treats absent as zero; slots trimmed of trailing zeros the same
+     * way. Empty for races and backgrounds by construction.
+     */
+    const levelRows = yield* sql<{
+      readonly level: number;
+      readonly proficiency_bonus: number | null;
+      readonly body: { readonly classSpecific?: unknown; readonly spellcasting?: unknown };
+    }>`
+      select level, proficiency_bonus, body
+      from class_level
+      where class_option_id = ${optionId}
+        and subclass_id is null
+      order by level
+    `;
+    const featureRows = yield* sql<{
+      readonly id: string;
+      readonly index: string | null;
+      readonly name: string;
+      readonly level: number;
+    }>`
+      select id::text, source_key as index, name, level
+      from feature
+      where class_option_id = ${optionId}
+        and subclass_id is null
+        and parent_feature_id is null
+      order by level, lower(name)
+    `;
+    const classLevels: Array<OptionClassLevel> = levelRows.map((row) => {
+      const table = maybeObject(row.body.spellcasting);
+      const slots = Array.from({ length: 9 }, (_, i) =>
+        numberAt(table, `spell_slots_level_${String(i + 1)}`),
+      );
+      while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
+      const cantripsKnown = numberAt(table, "cantrips_known");
+      const spellsKnown = numberAt(table, "spells_known");
+      const spellcasting =
+        table === undefined
+          ? undefined
+          : {
+              ...(cantripsKnown === 0 ? {} : { cantripsKnown }),
+              ...(spellsKnown === 0 ? {} : { spellsKnown }),
+              slots,
+            };
+      const counters = Object.entries(maybeObject(row.body.classSpecific) ?? {}).flatMap(
+        ([key, value]): ReadonlyArray<readonly [string, number]> =>
+          typeof value === "number" && Number.isFinite(value) && value !== 0 ? [[key, value]] : [],
+      );
+      return {
+        level: row.level,
+        proficiencyBonus: row.proficiency_bonus,
+        ...(spellcasting === undefined ? {} : { spellcasting }),
+        ...(counters.length === 0 ? {} : { classSpecific: Object.fromEntries(counters) }),
+        features: featureRows
+          .filter((feature) => feature.level === row.level)
+          .map((feature) => ({
+            id: feature.id as never,
+            index: feature.index,
+            name: feature.name,
+          })),
+      };
+    });
+
+    /**
+     * The kit's rows, and the members of every category the kit lets the
+     * player pick from — the weapon columns a fresh sheet derives an attack
+     * from. The reference table names the counted rows; the categories are
+     * read off the body's `startingKit`, spelled against the same columns
+     * `inCategory` reads on the client, so the picker's members and the
+     * composer's check cannot disagree.
+     */
+    const kitBody = yield* sql<{ readonly kit: StartingKit | null }>`
+      select body -> 'startingKit' as kit from character_option where id = ${optionId}
+    `;
+    const categories = new Set<string>();
+    for (const choice of kitBody[0]?.kit?.choices ?? []) {
+      for (const side of choice.options) {
+        for (const line of side.lines)
+          if (line.category !== undefined) categories.add(line.category.index);
+      }
+    }
+    const equipment = yield* sql<KitEquipment>`
+      select equipment.id::text,
+             equipment.source_key as index,
+             equipment.name,
+             equipment.weapon_category as "weaponCategory",
+             equipment.weapon_range as "weaponRange",
+             equipment.category_range as "categoryRange",
+             equipment.armor_category as "armorCategory",
+             equipment.damage_dice as "damageDice",
+             equipment.damage_type_name as "damageType",
+             equipment.two_handed_damage_dice as "twoHandedDamageDice",
+             equipment.range_normal as "rangeNormal",
+             equipment.range_long as "rangeLong",
+             equipment.throw_range_normal as "throwRangeNormal",
+             equipment.throw_range_long as "throwRangeLong",
+             equipment.property_names as properties,
+             equipment.weight,
+             equipment.gear_category_index as "gearCategoryIndex",
+             equipment.tool_category as "toolCategory"
+      from equipment
+      where equipment.campaign_id is null
+        and equipment.account_id is null
+        and (
+          equipment.id in (
+            select equipment_id from character_option_equipment_reference
+            where option_id = ${optionId}
+          )
+          or ${categoryMembers(sql, [...categories])}
+        )
+      order by lower(equipment.name)
+    `;
+
     return {
       subraces,
       abilityBonuses,
@@ -1409,5 +1528,51 @@ export const optionDetailsFor = (
       choices,
       ...(levelOneFeatures.length === 0 ? {} : { levelOneFeatures }),
       ...(proficiencyBonus === null ? {} : { proficiencyBonus }),
+      ...(equipment.length === 0 ? {} : { equipment }),
+      ...(classLevels.length === 0 ? {} : { classLevels }),
     };
   });
+
+const maybeObject = (value: unknown): Record<string, unknown> | undefined =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const numberAt = (record: Record<string, unknown> | undefined, key: string): number => {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+};
+
+/**
+ * The 2014 kit categories the class sources name, as a `where` fragment over
+ * the row's own columns — the SQL spelling of `@taverns/api`'s `inCategory`.
+ * An unknown category matches nothing rather than everything.
+ */
+const categoryMembers = (
+  sql: SqlClient.SqlClient,
+  categories: ReadonlyArray<string>,
+): Statement.Fragment => {
+  const clauses = categories.map((category) => {
+    switch (category) {
+      case "martial-weapons":
+        return sql`equipment.weapon_category = 'Martial'`;
+      case "simple-weapons":
+        return sql`equipment.weapon_category = 'Simple'`;
+      case "martial-melee-weapons":
+        return sql`equipment.category_range = 'Martial Melee'`;
+      case "martial-ranged-weapons":
+        return sql`equipment.category_range = 'Martial Ranged'`;
+      case "simple-melee-weapons":
+        return sql`equipment.category_range = 'Simple Melee'`;
+      case "simple-ranged-weapons":
+        return sql`equipment.category_range = 'Simple Ranged'`;
+      case "musical-instruments":
+        return sql`equipment.tool_category = 'Musical Instrument'`;
+      case "artisans-tools":
+        return sql`equipment.tool_category = 'Artisan''s Tools'`;
+      default:
+        return sql`equipment.gear_category_index = ${category}`;
+    }
+  });
+  return clauses.length === 0 ? sql`false` : sql.or(clauses);
+};

@@ -1,4 +1,11 @@
-import type { Character, CharacterId, InventoryItem, OwnedCharacter, Trait } from "@taverns/api";
+import type {
+  Character,
+  CharacterId,
+  InventoryItem,
+  OwnedCharacter,
+  SheetAction,
+  Trait,
+} from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, cn, Icon } from "@taverns/ui";
 
@@ -19,12 +26,16 @@ import { SkillsDialog } from "./SkillsDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { loadCharacterSheet } from "./load";
 import {
+  actionRows,
   coins,
+  costLabel,
   drawnSections,
   hitPoints,
   sectionInView,
   type SheetSectionId,
   type SheetSectionSpec,
+  slotRows,
+  usesNote,
 } from "./sheet";
 import {
   AbilityCell,
@@ -157,41 +168,54 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
 /** How far below the scroller's top edge the reading line sits, in CSS pixels. */
 const SPY_SLACK = 60;
 
-function Attack({ attack }: { readonly attack: Trait }) {
+/**
+ * One line of the Actions section — `CharacterSheetB.jsx`'s `BAttack` row: the
+ * name, a kind line, the to-hit and the notation, plus the cost as a badge.
+ *
+ * **The cost is drawn and nothing is ticked** — the captain's decision D6: a
+ * turn's spending is gone when the turn ends and nothing holds it, so the badge
+ * says what a line costs and the sheet keeps no per-turn state. The badge wears
+ * the `outline` variant rather than a variant of its own; the system ships none
+ * for an economy and inventing a token is not this screen's to do. The dice are
+ * still notation rather than a button: rolling is a later slice.
+ */
+function ActionLine({ action }: { readonly action: SheetAction }) {
+  const cost = costLabel(action.cost);
+  const kind = [action.text, action.damageType, action.range].filter(
+    (part): part is string => part !== undefined && part !== "",
+  );
   return (
     <div className="flex min-h-10 flex-wrap items-center gap-2.5 border border-hairline bg-surface-sunken px-2.5 py-2">
       <div className="min-w-0 flex-1">
-        <p className="text-body-s leading-snug font-semibold text-heading">{attack.name}</p>
-        {attack.text !== "" && (
-          <p className="text-micro leading-body text-muted-foreground">{attack.text}</p>
+        <p className="text-body-s leading-snug font-semibold text-heading">{action.name}</p>
+        {kind.length > 0 && (
+          <p className="text-micro leading-body text-muted-foreground">{kind.join(" · ")}</p>
         )}
       </div>
-      {attack.note !== undefined && attack.note !== "" && (
-        <span className="text-micro leading-none text-muted-foreground">{attack.note}</span>
-      )}
-      {attack.hit !== undefined && attack.hit !== "" && (
+      {cost !== undefined && <Badge variant="outline">{cost}</Badge>}
+      {action.hit !== undefined && action.hit !== "" && (
         <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
-          {attack.hit}
+          {action.hit}
         </span>
       )}
       {/* The notation, shown and not rolled — there is no dice tray behind a
           button here, and `StatBlock.tsx` renders a monster's the same way. */}
-      {attack.dice !== undefined && attack.dice !== "" && (
+      {action.dice !== undefined && action.dice !== "" && (
         <span className="rounded-xs bg-surface-raised px-1.5 py-px font-mono text-micro leading-snug text-accent-ink">
-          {attack.dice}
+          {action.dice}
         </span>
       )}
     </div>
   );
 }
 
-function Feature({ trait }: { readonly trait: Trait }) {
+function Feature({ trait, note }: { readonly trait: Trait; readonly note?: string | undefined }) {
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-body-s leading-snug font-semibold text-heading">{trait.name}</span>
-        {trait.note !== undefined && trait.note !== "" && (
-          <span className="text-micro leading-none text-accent-ink">{trait.note}</span>
+        {note !== undefined && note !== "" && (
+          <span className="text-micro leading-none text-accent-ink">{note}</span>
         )}
       </div>
       {trait.text !== "" && (
@@ -312,6 +336,7 @@ function SheetDocument({
 }) {
   const sheet = character.sheet;
   const spellcasting = sheet.spellcasting;
+  const slots = slotRows(sheet);
   const story = sheet.story;
   const storyLines: ReadonlyArray<{ readonly label: string; readonly value: string }> = [
     { label: "Personality", value: story?.personality },
@@ -417,32 +442,35 @@ function SheetDocument({
       {actions !== undefined && (
         <DocumentSection section={actions} register={register}>
           <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2">
-            {(sheet.attacks ?? []).map((attack) => (
-              <Attack key={attack.name} attack={attack} />
+            {actionRows(sheet).map((action) => (
+              <ActionLine key={action.id} action={action} />
             ))}
           </div>
         </DocumentSection>
       )}
 
-      {magic !== undefined && spellcasting !== undefined && (
+      {magic !== undefined && (
         <DocumentSection
           section={magic}
           register={register}
           aside={
             <span className="text-micro leading-none text-faint">
               {[
-                spellcasting.ability,
-                spellcasting.save === undefined ? undefined : `save ${spellcasting.save}`,
-                spellcasting.attack === undefined ? undefined : `atk ${spellcasting.attack}`,
+                spellcasting?.ability,
+                spellcasting?.save === undefined ? undefined : `save ${spellcasting.save}`,
+                spellcasting?.attack === undefined ? undefined : `atk ${spellcasting.attack}`,
+                spellcasting?.cantripsKnown === undefined
+                  ? undefined
+                  : `${String(spellcasting.cantripsKnown)} cantrips`,
               ]
                 .filter((part): part is string => part !== undefined && part !== "")
                 .join(" · ")}
             </span>
           }
         >
-          {spellcasting.slots !== undefined && spellcasting.slots.length > 0 && (
+          {slots.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2.5 border-b border-hairline pb-3">
-              {spellcasting.slots.map((slot) => (
+              {slots.map((slot) => (
                 <div key={slot.level} className="flex items-center gap-2">
                   <span className="text-micro leading-none text-muted-foreground">
                     L{slot.level}
@@ -470,7 +498,7 @@ function SheetDocument({
             </div>
           )}
           <div className="grid grid-cols-1 gap-x-gutter @md:grid-cols-2">
-            {(spellcasting.known ?? []).map((spell) => (
+            {(spellcasting?.known ?? []).map((spell) => (
               <div key={spell.name} className="flex min-h-10 items-center gap-2">
                 <Mark on={spell.prepared === true} tone="magic" />
                 <span
@@ -495,7 +523,14 @@ function SheetDocument({
         <DocumentSection section={features} register={register}>
           <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
             {sheet.traits.map((trait) => (
-              <Feature key={trait.name} trait={trait} />
+              /* A feature with a counter on `resources` wears it as its note —
+                 *2/2 · short rest* — read-only; the spend is a later slice. A
+                 note the trait already carries wins, being the player's own. */
+              <Feature
+                key={trait.name}
+                trait={trait}
+                note={trait.note ?? usesNote(trait, sheet.resources)}
+              />
             ))}
           </div>
         </DocumentSection>
@@ -644,11 +679,14 @@ function IdentityCard({
   owned,
   open,
   onToggle,
+  onReload,
 }: {
   readonly owned: OwnedCharacter;
   /** Whether the narrow summary is expanded — screen state, above the resource. */
   readonly open: boolean;
   readonly onToggle: () => void;
+  /** Re-read the sheet after a stale-version refusal on a death-save mark. */
+  readonly onReload: () => void;
 }) {
   const character = owned.character;
   const identity = character.sheet.identity;
@@ -860,7 +898,7 @@ function IdentityCard({
               </p>
             ) : (
               <div className="mt-1">
-                <SaveFailure failure={failure} />
+                <SaveFailure failure={failure} onReload={onReload} />
               </div>
             )}
           </div>
@@ -926,6 +964,7 @@ function SheetScroller({
   onToggleVitals,
   scrollTopRef,
   onEdit,
+  onReload,
 }: {
   readonly owned: OwnedCharacter;
   readonly banner: LiveBanner | undefined;
@@ -935,6 +974,7 @@ function SheetScroller({
   readonly onToggleVitals: () => void;
   readonly scrollTopRef: { current: number };
   readonly onEdit: (what: "abilities" | "skills" | "backstory" | "gear") => void;
+  readonly onReload: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const spine = useRef<HTMLElement>(null);
@@ -1031,7 +1071,12 @@ function SheetScroller({
           `order-*` pair on the rail and the document arranges without a second
           copy of either. */}
       <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-        <IdentityCard owned={owned} open={vitalsOpen} onToggle={onToggleVitals} />
+        <IdentityCard
+          owned={owned}
+          open={vitalsOpen}
+          onToggle={onToggleVitals}
+          onReload={onReload}
+        />
         <SectionSpine ref={spine} sections={sections} active={active} onGo={go} />
         <SheetDocument
           character={owned.character}
@@ -1121,6 +1166,16 @@ export function CharacterSheetScreen() {
   const [vitalsOpen, setVitalsOpen] = useState(false);
   const scrollTop = useRef(0);
   const close = () => setEditing(undefined);
+  /**
+   * The remedy for a stale-version refusal: read the sheet again and let the
+   * player make the change over on the document as it now is. The dialog goes,
+   * because the draft it holds was made against the version the server just
+   * refused.
+   */
+  const reloadAndClose = () => {
+    reload();
+    close();
+  };
   const navigate = useNavigate();
   // The lit section must be a drawn one — a section can stop being drawn
   // between renders — so the held value falls back to the first rather than
@@ -1234,23 +1289,24 @@ export function CharacterSheetScreen() {
             onToggleVitals={() => setVitalsOpen((current) => !current)}
             scrollTopRef={scrollTop}
             onEdit={setEditing}
+            onReload={reload}
           />
         ))}
 
       {owned !== undefined && editing === "identity" && (
-        <IdentityDialog owned={owned} onClose={close} onSaved={close} />
+        <IdentityDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "abilities" && (
-        <AbilitiesDialog owned={owned} onClose={close} onSaved={close} />
+        <AbilitiesDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "skills" && (
-        <SkillsDialog owned={owned} onClose={close} onSaved={close} />
+        <SkillsDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "backstory" && (
-        <BackstoryDialog owned={owned} onClose={close} onSaved={close} />
+        <BackstoryDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "gear" && (
-        <GearDialog owned={owned} onClose={close} onSaved={close} />
+        <GearDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "delete" && (
         <DeleteCharacterDialog

@@ -1,14 +1,25 @@
-import type { CampaignMembership, CharacterOption, OptionKind, RaceBody } from "@taverns/api";
+import type {
+  CampaignMembership,
+  CharacterOption,
+  KitEquipment,
+  OptionKind,
+  RaceBody,
+} from "@taverns/api";
 import { describe, expect, it } from "vitest";
 import { abilityDrafts, abilitySummary, assignScores } from "./abilities";
 import {
   emptyDraft,
+  kitOf,
+  kitRowsIn,
   payloadFrom,
+  pickKitRow,
+  pickKitSide,
   problemsIn,
   raceChoiceNote,
   selectedRaceBonuses,
   seededDraft,
   tablesForNewCharacter,
+  withKitDefaults,
   type CharacterDraft,
   type SeededField,
 } from "./create";
@@ -42,7 +53,151 @@ const raceBody = (
   ...extra,
 });
 
+/** The weapon columns of a bundled `equipment` row, as `details.equipment` carries them. */
+const weapon = (
+  id: string,
+  name: string,
+  index: string,
+  category: "Simple" | "Martial",
+  damageDice: string,
+  damageType: string,
+  properties: ReadonlyArray<string> = [],
+): KitEquipment => ({
+  id: id as never,
+  index,
+  name,
+  weaponCategory: category,
+  weaponRange: "Melee",
+  categoryRange: `${category} Melee`,
+  armorCategory: null,
+  damageDice,
+  damageType,
+  twoHandedDamageDice: null,
+  rangeNormal: 5,
+  rangeLong: null,
+  throwRangeNormal: null,
+  throwRangeLong: null,
+  properties,
+  weight: null,
+  gearCategoryIndex: null,
+  toolCategory: null,
+});
+const LONGSWORD = weapon(
+  "2b1f2a1e-0000-4000-8000-0000000e0001",
+  "Longsword",
+  "longsword",
+  "Martial",
+  "1d8",
+  "Slashing",
+  ["Versatile"],
+);
+const HANDAXE = weapon(
+  "2b1f2a1e-0000-4000-8000-0000000e0002",
+  "Handaxe",
+  "handaxe",
+  "Simple",
+  "1d6",
+  "Slashing",
+  ["Light", "Thrown"],
+);
+const SHIELD: KitEquipment = {
+  ...weapon("2b1f2a1e-0000-4000-8000-0000000e0003", "Shield", "shield", "Martial", "", ""),
+  weaponCategory: null,
+  weaponRange: null,
+  categoryRange: null,
+  damageDice: null,
+  damageType: null,
+  rangeNormal: null,
+  armorCategory: "Shield",
+};
+
+/**
+ * A Fighter with a structured kit and a class table — the shape the importer
+ * writes and `optionDetailsFor` hydrates, cut down to what the form reads.
+ */
+const FIGHTER: CharacterOption = {
+  ...option("class", "Fighter", {
+    hitDie: 10,
+    unarmouredAc: ["DEX"],
+    proficiencies: ["Martial Weapons", "Simple Weapons", "Saving Throw: STR"],
+    savingThrows: ["STR", "CON"],
+    startingKit: {
+      fixed: [],
+      choices: [
+        {
+          desc: "(a) a martial weapon and a shield or (b) two martial weapons",
+          options: [
+            {
+              label: "Any martial weapon, Shield",
+              lines: [
+                {
+                  name: "Any martial weapon",
+                  quantity: 1,
+                  category: { index: "martial-weapons", name: "Martial Weapons" },
+                },
+                { name: "Shield", quantity: 1, equipmentId: SHIELD.id },
+              ],
+            },
+            {
+              label: "2 × Any martial weapon",
+              lines: [
+                {
+                  name: "Any martial weapon",
+                  quantity: 2,
+                  category: { index: "martial-weapons", name: "Martial Weapons" },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          desc: "(a) a light crossbow and 20 bolts or (b) two handaxes",
+          options: [
+            { label: "Crossbow, light, 20 × Crossbow bolt", lines: [] },
+            {
+              label: "2 × Handaxe",
+              lines: [{ name: "Handaxe", quantity: 2, equipmentId: HANDAXE.id }],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  details: {
+    subraces: [],
+    abilityBonuses: [],
+    languages: [],
+    proficiencies: [],
+    traits: [],
+    choices: [],
+    levelOneFeatures: [
+      {
+        id: "2b1f2a1e-0000-4000-8000-0000000f0010" as never,
+        index: "second-wind",
+        name: "Second Wind",
+        desc: ["A well of stamina."],
+      },
+    ],
+    proficiencyBonus: 2,
+    equipment: [HANDAXE, LONGSWORD, SHIELD],
+    classLevels: [
+      {
+        level: 1,
+        proficiencyBonus: 2,
+        features: [
+          {
+            id: "2b1f2a1e-0000-4000-8000-0000000f0010" as never,
+            index: "second-wind",
+            name: "Second Wind",
+          },
+        ],
+      },
+    ],
+  },
+} as unknown as CharacterOption;
+
 const VOCABULARY: ReadonlyArray<CharacterOption> = [
+  FIGHTER,
   option("class", "Druid", { hitDie: 8, unarmouredAc: ["DEX"] }),
   option("class", "Barbarian", { hitDie: 12, unarmouredAc: ["DEX", "CON"] }),
   option("class", "Monk", { hitDie: 8, unarmouredAc: ["DEX", "WIS"] }),
@@ -306,8 +461,100 @@ describe("2014 backgrounds on the manual path", () => {
       traits: [{ name: "Riverwise", text: "You know who watches the crossings." }],
       identity: { speed: "30 ft.", hitDice: "1/1 d8", background: "Salt-runner" },
       proficiencies: ["Athletics", "River cant"],
+      // The one counter every class has: its hit dice, off the class's die.
+      resources: [
+        {
+          id: "hit-dice",
+          name: "Hit dice",
+          used: 0,
+          max: 1,
+          recharge: "long",
+          unit: "d8",
+          derived: true,
+        },
+      ],
       inventory: [{ name: "ferryman's token" }],
       currency: { gp: 15 },
     });
+  });
+});
+
+/**
+ * **The starting kit, and what the pick decides.** Both sides of every choice
+ * are listed by the source; the form's pick is what lands on the sheet, and
+ * the weapon attack on `actions` follows the pick — through the same
+ * `sheetGrantsFor` Hob composes, which takes side (a) when nobody picks.
+ */
+describe("the starting kit", () => {
+  const fighter = draftWith({ className: "Fighter", abilities: scored(16, 14, 15, 8, 12, 10) });
+
+  it("resets the picks to side (a) when the class is picked, and lists what a category offers", () => {
+    const reset = withKitDefaults(fighter, VOCABULARY);
+    expect(reset.kitChoices).toEqual([
+      { option: 0, picks: [] },
+      { option: 0, picks: [] },
+    ]);
+    expect(kitOf(reset, VOCABULARY)?.choices).toHaveLength(2);
+    expect(kitRowsIn(reset, VOCABULARY, "martial-weapons").map((row) => row.name)).toEqual([
+      "Longsword",
+    ]);
+    // No class, no kit.
+    expect(kitOf(draftWith({}), VOCABULARY)).toBeUndefined();
+    expect(withKitDefaults(draftWith({ className: "Druid" }), VOCABULARY).kitChoices).toEqual([]);
+  });
+
+  it("carries the pick onto the gear and derives the weapon's attack from it", () => {
+    const picked = pickKitRow(withKitDefaults(fighter, VOCABULARY), 0, 0, LONGSWORD.id);
+    const sheet = payloadFrom(picked, VOCABULARY).sheet;
+    expect(sheet?.inventory).toEqual([
+      { name: "Longsword", equipmentId: LONGSWORD.id },
+      { name: "Shield", equipmentId: SHIELD.id },
+    ]);
+    expect(
+      sheet?.actions?.map((action) => [action.name, action.cost, action.hit, action.dice]),
+    ).toEqual([
+      ["Longsword", "action", "+5", "1d8+3"],
+      ["Second Wind", "bonus", undefined, "1d10+1"],
+    ]);
+    expect(sheet?.actions?.[0]).toMatchObject({
+      source: "weapon",
+      equipmentId: LONGSWORD.id,
+      derived: true,
+    });
+    expect(sheet?.resources?.map((resource) => resource.id)).toEqual([
+      "hit-dice",
+      "res:second-wind",
+    ]);
+  });
+
+  it("leaves an unpicked category as a line with no attack behind it", () => {
+    const sheet = payloadFrom(withKitDefaults(fighter, VOCABULARY), VOCABULARY).sheet;
+    expect(sheet?.inventory?.map((item) => item.name)).toEqual(["Any martial weapon", "Shield"]);
+    expect(sheet?.inventory?.[0]).toEqual({ name: "Any martial weapon", note: "Your pick" });
+    expect(sheet?.actions?.map((action) => action.name)).toEqual(["Second Wind"]);
+  });
+
+  it("takes the other side, and clears the picks made against the first", () => {
+    const first = pickKitRow(withKitDefaults(fighter, VOCABULARY), 0, 0, LONGSWORD.id);
+    const other = pickKitSide(pickKitSide(first, 0, 1), 1, 1);
+    expect(other.kitChoices).toEqual([
+      { option: 1, picks: [] },
+      { option: 1, picks: [] },
+    ]);
+    const sheet = payloadFrom(other, VOCABULARY).sheet;
+    expect(sheet?.inventory).toEqual([
+      { name: "Any martial weapon", quantity: 2, note: "Your pick" },
+      { name: "Handaxe", quantity: 2, equipmentId: HANDAXE.id },
+    ]);
+    // Two handaxes are one attack line.
+    expect(sheet?.actions?.filter((action) => action.name === "Handaxe")).toHaveLength(1);
+    expect(sheet?.actions?.[0]).toMatchObject({ name: "Handaxe", hit: "+5", dice: "1d6+3" });
+  });
+
+  it("closes a cleared pick up rather than leaving a hole", () => {
+    const two = pickKitSide(withKitDefaults(fighter, VOCABULARY), 0, 1);
+    const both = pickKitRow(pickKitRow(two, 0, 0, LONGSWORD.id), 0, 1, LONGSWORD.id);
+    expect(both.kitChoices[0]?.picks).toEqual([LONGSWORD.id, LONGSWORD.id]);
+    expect(pickKitRow(both, 0, 0, undefined).kitChoices[0]?.picks).toEqual([LONGSWORD.id]);
   });
 });

@@ -47,7 +47,19 @@ export const saveOwnCharacter = (
   client: TavernsClient,
   character: Character,
   payload: CharacterOwnUpdate,
-) => client.me.updateCharacter({ params: { characterId: character.id }, payload });
+) =>
+  client.me.updateCharacter({
+    params: { characterId: character.id },
+    // **The version the sheet was read at goes with every write** — the
+    // client half of the optimistic-concurrency check `repo/Characters.ts`
+    // has kept since the continuity decision and nobody sent. One shared
+    // character sits at several tables and in several tabs; a save that
+    // carried a stale document used to overwrite whoever got there first,
+    // silently. Now it is refused with the server's own `Conflict` sentence,
+    // and `SaveFailure` offers *Reload* beside it. The whole-document shape
+    // is otherwise exactly as it was.
+    payload: { expectedVersion: character.version, ...payload },
+  });
 
 /**
  * Writing one down for the first time — `POST /me/campaigns/:c/characters`.

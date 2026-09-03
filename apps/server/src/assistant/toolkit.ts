@@ -1670,18 +1670,26 @@ export const playerHandlersFor = (
        * Fighter starts with. See `@taverns/api`'s `SheetGrants`.
        */
       const raceEntry = raceEntryOf(raceOption);
-      const grants = sheetGrantsFor({
-        classOption: asClassOption(classOption),
-        raceOption: asRaceOption(raceOption),
-        subraceName: subraceOption?.name ?? namedSubrace,
-        backgroundOption: asBackgroundOption(backgroundOption),
-      });
       const seed = seedFor({
         classEntry: classEntryOf(classOption),
         raceEntry,
         subraceEntry: subraceOption,
         raceBonusChoices: raceChoiceBonuses(raceEntry, abilityOrder),
         abilities: abilitiesFrom(abilityOrder),
+      });
+      // The seed's cells go in, because a weapon's to-hit and a spell save DC
+      // are read off them; the level is the seed's, which the captain fixes at
+      // 1. No kit side is picked here — the tool takes no picks, so side (a)
+      // of every choice is what a draft carries, exactly as the form does
+      // before the player touches the picker — and the model's own `kit`
+      // names are appended as plain lines below.
+      const grants = sheetGrantsFor({
+        classOption: asClassOption(classOption),
+        raceOption: asRaceOption(raceOption),
+        subraceName: subraceOption?.name ?? namedSubrace,
+        backgroundOption: asBackgroundOption(backgroundOption),
+        level: seed.level,
+        abilities: seed.abilities,
       });
       const abilities = withSavingThrows(
         seed.abilities,
@@ -1704,8 +1712,11 @@ export const playerHandlersFor = (
         ...(blank(flaw) === undefined ? {} : { flaw: blank(flaw)! }),
       };
       const carried = [
-        ...grants.inventory.map((item) => item.name),
-        ...(kit ?? []).map((item) => item.trim()).filter((item) => item !== ""),
+        ...grants.inventory,
+        ...(kit ?? [])
+          .map((item) => item.trim())
+          .filter((item) => item !== "")
+          .map((name) => ({ name })),
       ];
       /**
        * The document, assembled here so the card and the row cannot disagree.
@@ -1727,7 +1738,13 @@ export const playerHandlersFor = (
         ...(Object.keys(story).length === 0 ? {} : { story }),
         ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
         ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
-        ...(carried.length === 0 ? {} : { inventory: carried.map((name) => ({ name })) }),
+        // The corpus's half of the Actions and Spellcasting sections, through
+        // the same `sheetGrantsFor` the form composes — so a drafted Fighter
+        // and a hand-filled one carry the same Longsword line.
+        ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
+        ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
+        ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
+        ...(carried.length === 0 ? {} : { inventory: carried }),
         ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
       };
 

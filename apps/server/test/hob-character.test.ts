@@ -550,7 +550,15 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.sheet.identity?.speed).toBe("30 ft.");
     expect(character.sheet.identity?.proficiency).toBe("+2");
     expect(character.sheet.identity?.hitDice).toBe("1/1 d8");
+    // The class's starting kit first — side (a) of every choice, because the
+    // tool takes no picks, with a category the source leaves open kept as a
+    // line — then the background's, then the model's own names.
     expect(character.sheet.inventory?.map((item) => item.name)).toEqual([
+      "Leather Armor",
+      "Explorer's Pack",
+      "Shield",
+      "Scimitar",
+      "Any druidic focus",
       "1 × Clothes, common",
       "1 × Pouch",
       "Choose 1 equipment",
@@ -558,7 +566,43 @@ describe("the accept makes a character, and it is the player's own", () => {
       "Scimitar",
       "Herbalism kit",
     ]);
+    expect(character.sheet.inventory?.[3]?.equipmentId).toBeTypeOf("string");
     expect(character.sheet.currency).toEqual({ gp: 15 });
+    // **The Actions and Spellcasting sections are the corpus's now**, through
+    // the same `sheetGrantsFor` the form calls: the scimitar swung with the
+    // elf-raised DEX (finesse), the druid's two first-level slots, the hit
+    // die, and the casting numbers off the imported ability — WIS ranked
+    // first is 15, `+2`, so save 12 and attack `+4` at proficiency `+2`.
+    expect(character.sheet.actions).toEqual([
+      expect.objectContaining({
+        id: "atk:scimitar",
+        name: "Scimitar",
+        cost: "action",
+        hit: "+4",
+        dice: "1d6+2",
+        damageType: "Slashing",
+        source: "weapon",
+        derived: true,
+      }),
+    ]);
+    expect(character.sheet.resources).toEqual([
+      { id: "slot:1", name: "1st-level slots", used: 0, max: 2, recharge: "long", derived: true },
+      {
+        id: "hit-dice",
+        name: "Hit dice",
+        used: 0,
+        max: 1,
+        recharge: "long",
+        unit: "d8",
+        derived: true,
+      },
+    ]);
+    expect(character.sheet.spellcasting).toEqual({
+      ability: "WIS",
+      save: "12",
+      attack: "+4",
+      cantripsKnown: 2,
+    });
     expect(traitNames).toContain("Shelter of the Faithful");
     expect(character.sheet.identity?.subclass).toBe("Circle of the Land (Marsh)");
     expect(character.sheet.notes).toContain("Ashfen");
