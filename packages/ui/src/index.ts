@@ -51,6 +51,44 @@ export {
 } from "./components/ui/tabs";
 
 export {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  ComboboxSeparator,
+} from "./components/ui/combobox";
+export { FilterInput } from "./components/ui/filter-input";
+export {
+  EMPTY_FILTER_VALUE,
+  compositionOf,
+  rangeBoundsOf,
+  rangeValueOf,
+  sameToken,
+  searchTextOf,
+  suggestionsFor,
+  tokenLabelOf,
+  tokenValuesOf,
+  withComposition,
+  withToken,
+  withoutToken,
+} from "./components/ui/filter-input-model";
+export type {
+  FilterInputFacet,
+  FilterInputOption,
+  FilterInputSuggestion,
+  FilterInputToken,
+  FilterInputValue,
+} from "./components/ui/filter-input-model";
+
+export {
   Dialog,
   DialogClose,
   DialogContent,
