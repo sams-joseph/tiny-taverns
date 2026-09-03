@@ -180,11 +180,12 @@ describe("operators", () => {
     });
   });
 
-  it("a boolean's press flips its value — is ⇄ is not", () => {
+  it("a boolean's press flips its value; the operator stays a plain is", () => {
     const on: FilterCondition = { facet: "legendary", operator: "is", values: ["true"] };
     const off = withNextOperator(on, FACETS[4]!);
     expect(off.values).toEqual(["false"]);
-    expect(operatorLabelOf(off)).toBe("is not");
+    // The pill reads `Legendary is No` — the polarity lives in the value.
+    expect(operatorLabelOf(off)).toBe("is");
   });
 });
 

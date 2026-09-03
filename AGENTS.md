@@ -4366,29 +4366,43 @@ worked, driving Chromium over CDP:
 
 ## The Library filter standard: one input for search and filters (2026-09-03)
 
-**Every search/filter surface draws one control — `FilterInput` in `packages/ui`, the Linear
-filter-builder idiom the captain asked for on 2026-09-03: free text is the search, and facets
-land as removable chips in the same box** (typed as `type:beast`, or picked from the suggestion
-popup; a `range` facet like CR takes `1-5`, `3-`, `-8` or one exact value; a `boolean` facet's
-suggestion is the token). `packages/ui/src/components/ui/filter-input-model.ts` is the grammar —
-facet schema, parsing, suggestions, commit semantics — separately tested because everything in it
-is wrong silently; `filter-input.tsx` wires it onto `combobox.tsx`, a port of the base-nova
-registry combobox onto Base UI (**not** shadcn's `command`, which is `cmdk` and cmdk is Radix —
-the lockfile must stay Radix-free). Chip keyboard behaviour (ArrowLeft into chips, Backspace on
-an empty input removing the last, Enter committing the highlighted suggestion) is the
-primitive's own; suggestions auto-highlight only mid-composition so a bare Enter on free text
-never commits a filter, the popup stays open across commits (any-of — Base UI's close-on-select
-is cancelled via `onOpenChange`), and no popup renders at all over plain text that suggests
-nothing. `apps/web/src/library/filters.tsx` (`FilterBar` + `FilterBox` + the sort-only
-`FilterSelect`) + `library/query.ts` (`useFilterQuery`: the value, the debounced `q`, and the
-`valuesOf`/`flagOf`/`rangeOf` readers a screen derives its wire query from) are the consumer
-half. Each tab's facet schema lives in its `load.ts` beside a `*QueryOf(filter, sort)`; the
-creature corpus builds its schema from the server's vocabulary read and expands grouped tokens
-back to raw spellings. Converted everywhere: all six Library shelves, campaign Encounters
-(tag/difficulty tokens over the loaded list), Notes, the Chronicle (`in:` replaced the scope
-select — absence is "everything"), and the encounter `CreaturePicker` (facet-free). Where older
-prose below describes `FilterSearch`/`FilterMultiSelect`/`FilterToggle` or per-facet dropdowns,
-this section wins.
+**Every search/filter surface draws one control — `FilterInput` in `packages/ui`, matched to
+the captain's Linear screenshot (iteration 2, 2026-09-03): free text is the search, and an
+active filter is a _condition_ — one facet, an operator, a value set — rendered as a segmented
+pill, `field | operator | value(s) | ×`, never a `key:value` token.** The operator segment is a
+button that cycles the facet's operator set (enum `is`/`is any of` plus `is none of` only where
+the facet declares `not: true`; range `is` / `is at least` / `is at most` / `is between`,
+derived from the typed shape; a boolean's operator is a fixed `is` and its _value_ segment
+flips Yes ⇄ No — polarity lives in the value, so no pill ever reads "is not No"). The value
+segment is a real `Combobox.Trigger` that reopens the facet's picker with the chosen values as
+checkbox rows; several values aggregate ("3 environments", the facet's `many` noun). The
+suggestion flow is fields first, then values; typing `type:beast{Enter}` is still the fast path
+into the same condition; an add-filter `+` opens the field picker without typing. A _browsed_
+picker (query empty) stays on its facet across picks and the bare `key:` remnant is swept when
+the popup closes (`strippedOnClose`); a typed query commits and spends whole. Value mode lists
+the whole vocabulary uncapped (the popup scrolls — a cap silently hid `Undead` behind 12 rows);
+the field-mode cross-match cap stays. **Match all / Match any** (`FilterInputValue.match` +
+`matchToggle`) renders only where the consumer honours OR — the client-filtered Encounters
+screen; the server-paged corpora can only AND their clauses, and the toggle (like the `not`
+operator) must not be offered where it would mean narrowing a page and calling it the list.
+`filter-input-model.ts` is the grammar, separately tested; `filter-input.tsx` wires it onto
+`combobox.tsx`, a port of the base-nova registry combobox onto Base UI (**not** shadcn's
+`command`, which is `cmdk` and cmdk is Radix — the lockfile must stay Radix-free). Keyboard is
+the primitive's (ArrowLeft into pills, Backspace on empty input removes the last pill whole,
+Enter commits the highlighted row; auto-highlight only mid-composition so a bare Enter on free
+text never commits a filter); the popup stays open across commits (close-on-select cancelled
+via `onOpenChange`) and never renders over plain text that suggests nothing.
+`apps/web/src/library/filters.tsx` (`FilterBar` + `FilterBox` + the sort-only `FilterSelect`) +
+`library/query.ts` (`useFilterQuery`: the value, the debounced `q`, and the
+`valuesOf`/`flagOf`/`rangeOf` readers — `valuesOf` reads only `in` conditions, `flagOf` is now
+`boolean | undefined` since booleans gained an honest is-not over the server's equality filter)
+are the consumer half. Each tab's facet schema lives in its `load.ts` beside a
+`*QueryOf(filter, sort)`; the creature corpus builds its schema from the server's vocabulary
+read and expands grouped values back to raw spellings. Converted everywhere: all six Library
+shelves, campaign Encounters (tag/difficulty with exclusion + the match toggle, filtered
+client-side), Notes, the Chronicle (`in:` replaced the scope select — absence is "everything"),
+and the encounter `CreaturePicker` (facet-free). Where older prose below describes
+`FilterSearch`/`FilterMultiSelect`/`FilterToggle` or per-facet dropdowns, this section wins.
 
 - **Tabs get their own row below the header, and tab-scoped actions live inside the tab's
   content — the captain's standing rule (2026-09-02), for any tabbed screen, not just the

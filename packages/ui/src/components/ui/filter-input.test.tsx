@@ -190,11 +190,16 @@ describe("FilterInput", () => {
     ]);
 
     const pill = pillOf("Legendary is Yes");
-    await user.click(within(pill).getByRole("button", { name: "Change how Legendary matches" }));
+    // The operator is fixed for a boolean; the value segment flips it, so the
+    // pill reads `Legendary is No` and never a double negative.
+    expect(
+      within(pill).getByRole("button", { name: "Change how Legendary matches" }),
+    ).toBeDisabled();
+    await user.click(within(pill).getByRole("button", { name: "Switch Legendary to No" }));
     expect(seen.current.filters).toEqual([
       { facet: "legendary", operator: "is", values: ["false"] },
     ]);
-    expect(pillOf("Legendary is not No")).toBeInTheDocument();
+    expect(pillOf("Legendary is No")).toBeInTheDocument();
   });
 
   it("the value segment reopens the facet's picker with the chosen values checked", async () => {

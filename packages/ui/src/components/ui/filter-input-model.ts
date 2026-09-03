@@ -222,7 +222,7 @@ export const operatorLabelOf = (condition: FilterCondition): string => {
     case "not":
       return condition.values.length > 1 ? "is none of" : "is not";
     case "is":
-      return condition.values[0] === "false" ? "is not" : "is";
+      return "is";
     case "eq":
       return "is";
     case "gte":
@@ -369,12 +369,14 @@ export const valueSuggestionsFor = (
   }
   if (facet.kind === "enum") {
     const needle = query.trim().toLowerCase();
+    // The whole vocabulary, uncapped — the popup scrolls, and a picker whose
+    // later values are unreachable except by typing is a silent hole. The cap
+    // is for field-mode cross-matches, which are a convenience, not the list.
     return facet.options
       .filter(
         (option) =>
           needle === "" || contains(option.label, needle) || contains(option.value, needle),
       )
-      .slice(0, SUGGESTION_CAP)
       .map((option) => ({
         kind: "value",
         facet: facet.key,
