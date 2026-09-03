@@ -38,7 +38,7 @@ export function NotesScreen() {
             value={filter}
             onChange={setFilter}
             facets={[]}
-            className="min-h-control-sm w-52 py-0.5"
+            className="min-h-control-sm max-w-52 py-0.5"
           />
           <Button variant="secondary" size="sm" onClick={() => setEditing({ note: undefined })}>
             <Icon name="plus" size={14} />

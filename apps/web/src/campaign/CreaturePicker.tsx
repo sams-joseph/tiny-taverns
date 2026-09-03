@@ -90,6 +90,7 @@ export function CreaturePicker({
         value={{ text: term, filters: [], match: "all" }}
         onChange={(next) => setTerm(next.text)}
         facets={[]}
+        className="max-w-full"
       />
 
       {resource.state === "loading" && <Loading label="Reading the bestiary…" />}

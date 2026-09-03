@@ -1,6 +1,6 @@
 import type { Creature, CreatureId, CreatureSort } from "@taverns/api";
 import type { ReactNode } from "react";
-import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import { FilterBar, FilterBox, SortMenu, type FilterOption } from "../library/filters";
 import { CreatureCard } from "./CreatureCard";
 import type { Corpus } from "./corpus";
 import type { CorpusView } from "./load";
@@ -57,12 +57,10 @@ export function CreatureFilters<V extends CorpusView>({
       actions={actions}
     >
       <FilterBox label={label} list={corpus.list} facets={corpus.facets} />
-      <FilterSelect
-        label="Sort"
+      <SortMenu
         value={corpus.sort}
         onChange={(value) => corpus.setSort(value as CreatureSort)}
         options={SORTS}
-        className="w-32"
       />
     </FilterBar>
   );

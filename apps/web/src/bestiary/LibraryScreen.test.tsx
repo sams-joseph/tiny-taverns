@@ -214,8 +214,8 @@ describe("LibraryScreen", () => {
 
     expect(lastQuery().get("sort")).toBe("cr");
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Sort" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Name" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sort — CR" }));
+    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Name" }));
 
     await waitFor(() => expect(lastQuery().get("sort")).toBe("name"));
   });

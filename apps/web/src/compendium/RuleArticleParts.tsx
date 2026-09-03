@@ -25,7 +25,7 @@ import { useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import { FilterBar, FilterBox, SortMenu, type FilterOption } from "../library/filters";
 import type { FilterQuery } from "../library/query";
 import { Field, Textarea } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -60,12 +60,10 @@ export function RuleArticleFilters({
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
       <FilterBox label="Search the compendium" list={list} />
-      <FilterSelect
-        label="Sort"
+      <SortMenu
         value={sort}
         onChange={(value) => onSort(value as RuleArticleQuery["sort"])}
         options={SORTS}
-        className="w-32"
       />
     </FilterBar>
   );

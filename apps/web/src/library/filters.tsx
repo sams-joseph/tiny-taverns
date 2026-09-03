@@ -1,11 +1,13 @@
 import {
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
   FilterInput,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Icon,
   type FilterInputFacet,
   type FilterInputValue,
 } from "@taverns/ui";
@@ -43,9 +45,12 @@ import type { ApiFailure } from "../api/failure";
  *   (`FilterMultiSelect` and friends) is gone; a tab describes its facets as a
  *   schema instead and everything else — suggestions, parsing, chips, the
  *   keyboard — reads identically on every tab.
- * - **Sort stays its own `FilterSelect`.** Reordering is not filtering: a sort
- *   always has an answer, so a removable chip is the wrong shape for it, and
- *   `clear` keeps it — the rule every tab already followed.
+ * - **Sort stays its own control, an icon-button dropdown (`SortMenu`).**
+ *   Reordering is not filtering: a sort always has an answer, so a removable
+ *   chip is the wrong shape for it, and `clear` keeps it — the rule every tab
+ *   already followed. The captain asked for the icon-button menu over the old
+ *   labelled select (2026-09-03), so the control is one quiet button beside
+ *   the box with the active order checked in its menu.
  * - **Search is debounced** (`useFilterQuery`), so typing a name is one request
  *   rather than eight — the creatures tab always did this and the other tabs
  *   fired one request per keystroke.
@@ -98,12 +103,15 @@ export function FilterBar({
 }
 
 /**
- * The one search-and-filter box, standard width and grammar on every tab.
+ * The one search-and-filter box, standard sizing and grammar on every tab.
  *
  * `FilterInput` is the component (`@taverns/ui`); this wrapper is only the
  * standard sizing and the `FilterQuery` plumbing, so every tab's box grows,
- * wraps and reads the same. `facets` is the tab's own schema — a tab with none
- * gets a plain search box with the same look, popup-free.
+ * wraps and reads the same. The box is content-sized — the component's own
+ * compact default, growing with text and pills — and this wrapper adds only
+ * the shelves' shared ceiling (`max-w-3xl`), past which the overflow chip
+ * takes over. `facets` is the tab's own schema — a tab with none gets a plain
+ * search box with the same look, popup-free.
  */
 export function FilterBox({
   label,
@@ -127,7 +135,7 @@ export function FilterBox({
       facets={facets}
       label={label}
       matchToggle={matchToggle}
-      className="max-w-3xl min-w-64 shrink grow basis-80"
+      className="max-w-3xl"
     />
   );
 }
@@ -138,46 +146,51 @@ export interface FilterOption {
 }
 
 /**
- * A single-choice facet. The trigger always says which facet it is, and what is
- * chosen — `Sort: Name`, `Category: Armor` — because a bare value floating in a
- * row of controls does not say what it filters.
+ * The sort control — an icon button opening a dropdown of the orderings, the
+ * active one checked. It replaced a labelled `Select` (`Sort: Name`) at the
+ * captain's request; the current order still reads without opening anything,
+ * from the button's own accessible name and title (`Sort — Name`).
  *
- * An `options` entry with value `""` is the way out — "Any rarity" — and the
- * trigger then shows the facet's name alone.
+ * A menu rather than a select because a sort is a command over the list, not a
+ * form value — and radio rows are the direction affordance's future home if a
+ * sort ever grows one; today every ordering is a single choice.
  */
-export function FilterSelect({
-  label,
+export function SortMenu({
+  label = "Sort",
   value,
   onChange,
   options,
-  className = "w-40",
 }: {
-  readonly label: string;
+  readonly label?: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly options: ReadonlyArray<FilterOption>;
-  readonly className?: string;
 }) {
-  const shown = (chosen: string): string => {
-    if (chosen === "") return label;
-    const entry = options.find((option) => option.value === chosen);
-    return `${label}: ${entry?.label ?? chosen}`;
-  };
+  const active = options.find((option) => option.value === value)?.label ?? value;
+  const name = `${label} — ${active}`;
   return (
-    <Select value={value} onValueChange={(next) => onChange(next as string)}>
-      <SelectTrigger aria-label={label} className={`h-control-sm ${className}`}>
-        {/* Written out rather than left to Base UI: `Select.Value` with neither
-            `items` nor children serialises the raw value. */}
-        <SelectValue>{(chosen) => shown(chosen as string)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={name}
+        title={name}
+        render={<Button variant="ghost" size="icon" className="size-control-sm" />}
+      >
+        <Icon name="arrow-up-down" size={15} className="pointer-events-none" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onChange(next as string)}>
+          {/* Inside the radio group — Base UI's GroupLabel throws outside one. */}
+          <DropdownMenuLabel>{label} by</DropdownMenuLabel>
+          {options.map((option) => (
+            // `closeOnClick`: a sort is one choice, not a set — Base UI's
+            // radio items stay open by default for the checkbox-like case.
+            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

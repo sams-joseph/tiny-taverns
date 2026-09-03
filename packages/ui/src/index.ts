@@ -66,6 +66,17 @@ export {
   ComboboxSeparator,
   ComboboxTrigger,
 } from "./components/ui/combobox";
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu";
 export { FilterInput } from "./components/ui/filter-input";
 export { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 export {

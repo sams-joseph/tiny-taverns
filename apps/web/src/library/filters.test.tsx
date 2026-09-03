@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { FilterInputFacet } from "@taverns/ui";
-import { FilterBar, FilterBox, FilterSelect, ShowMore } from "./filters";
+import { FilterBar, FilterBox, ShowMore, SortMenu } from "./filters";
 import { listCount, useFilterQuery } from "./query";
 
 /**
@@ -87,25 +87,37 @@ describe("FilterBar", () => {
   });
 });
 
-describe("FilterSelect", () => {
+describe("SortMenu", () => {
   const SORTS = [
     { value: "cr", label: "CR" },
     { value: "name", label: "Name" },
   ];
 
-  it("names the facet and the choice in the trigger, never the bare value", async () => {
+  it("is an icon button whose name carries the active order, opening a checked menu", async () => {
     function Harness() {
       const [value, setValue] = useState("cr");
-      return <FilterSelect label="Sort" value={value} onChange={setValue} options={SORTS} />;
+      return <SortMenu value={value} onChange={setValue} options={SORTS} />;
     }
     render(<Harness />);
 
-    const trigger = screen.getByRole("combobox", { name: "Sort" });
-    expect(trigger).toHaveTextContent("Sort: CR");
+    // The active order reads without opening anything — the button's own name.
+    const trigger = screen.getByRole("button", { name: "Sort — CR" });
 
     await userEvent.click(trigger);
-    await userEvent.click(await screen.findByRole("option", { name: "Name" }));
-    expect(trigger).toHaveTextContent("Sort: Name");
+    // The menu marks the active order; picking another moves the check and the
+    // name, and the menu closes on the pick.
+    expect(await screen.findByRole("menuitemradio", { name: "CR" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByRole("menuitemradio", { name: "Name" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Name" }));
+
+    expect(screen.getByRole("button", { name: "Sort — Name" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 });
 

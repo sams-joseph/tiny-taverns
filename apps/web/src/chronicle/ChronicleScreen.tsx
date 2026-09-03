@@ -194,7 +194,7 @@ export function ChronicleScreen() {
             value={filter}
             onChange={setFilter}
             facets={SEARCH_FACETS}
-            className="min-h-control-sm w-64 py-0.5"
+            className="min-h-control-sm max-w-64 py-0.5"
           />
           <Toggle size="sm" pressed={readAloud} onPressedChange={setReadAloud}>
             <Icon name="megaphone" size={13} />

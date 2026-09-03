@@ -47,14 +47,31 @@ import { Popover, PopoverContent, PopoverTrigger } from "./popover";
  * add-filter button. `filter-input-model.ts` is the grammar; this is the
  * wiring of that grammar onto the composed combobox.
  *
- * **The box is always one line.** It grows to whatever width its consumer
- * gives it; when the pills no longer fit beside the typing room the line
- * always keeps, the *oldest* collect into one overflow chip — the filter just
- * added stays visible — and the chip opens a popover holding the collected
- * pills, every segment still live. The fit is measured off an invisible clone
- * row (`data-measure`), recomputed on every change and on resize; a container
- * that measures zero wide (jsdom, `display: none`) shows everything, so the
- * overflow never fires on a box nobody can see.
+ * **The box is always one line, and it is sized by its contents.** Empty it is
+ * a compact search box (`min-w-48`); it grows with the text and the pills —
+ * the input is `field-sizing-content`, so typing widens the box character by
+ * character with no JS in the loop — up to whatever `max-w-*` its consumer
+ * gives it, where the overflow behaviour below takes over. **The ceiling is
+ * the consumer's to supply** (every current one does): the component sets no
+ * `max-w-*` of its own, because `tw-theme.ts`'s tailwind-merge config knows
+ * only the named `measure` container scale, so a default here and a
+ * consumer's `max-w-3xl` would *both* survive the merge and CSS source order
+ * — not the consumer — would pick the winner. When the pills no
+ * longer fit beside the typing room the line always keeps, the *oldest*
+ * collect into one overflow chip — the filter just added stays visible — and
+ * the chip opens a popover holding the collected pills, every segment still
+ * live. The fit is measured off an invisible clone row (`data-measure`),
+ * recomputed on every change and on resize; a container that measures zero
+ * wide (jsdom, `display: none`) shows everything, so the overflow never fires
+ * on a box nobody can see.
+ *
+ * The fit is measured against the box's *limit* — its computed `max-width`
+ * bounded by its parent — never its current width, whose feedback loop is
+ * written out on `recompute`. One invariant pairs with that: **the input's own
+ * `min-w-30` (120px) equals `PILL_LAYOUT.inputReserve`**, so a set of pills
+ * the fit counted as fitting beside the reserve really does fit beside the
+ * input at its minimum, and the box the fit promised is the box CSS lays out.
+ * `filter-input.test.tsx` pins the pair.
  *
  * Controlled by `FilterInputValue` — `{ text, filters, match }` — which a
  * consumer maps onto its own query state (`searchTextOf` gives the text minus
@@ -172,13 +189,36 @@ export function FilterInput({
    * rather than the live one so the answer never depends on what is already
    * hidden. The chrome beside the pills (icon, add-filter, match toggle) is
    * measured live; the input contributes its reserve, not its stretched width.
+   *
+   * The room the pills are fitted against is the box's **limit** — its
+   * computed `max-width`, bounded by its parent's width — never its current
+   * width. On a content-sized (`w-fit`) box the current width *depends on
+   * which pills are already hidden*: the render that first hides one shrinks
+   * the box to icon + chip + input, and a fit read off that narrower box
+   * concludes the pill still does not fit, so a single pill on a wide screen
+   * collects into its own chip and the wrong answer holds itself up. A box
+   * with no computed pixel limit (a fixed-width consumer, or a stubbed jsdom
+   * container) falls back to `clientWidth`, which for a non-`w-fit` box is
+   * the limit.
    */
   const recompute = React.useCallback(() => {
     const container = containerRef.current;
     const measure = measureRef.current;
     if (container === null || measure === null) return;
     const count = value.filters.length;
-    if (container.clientWidth === 0) {
+    const parentWidth = container.parentElement?.clientWidth ?? 0;
+    const cap = (width: string): number =>
+      width.endsWith("px")
+        ? Number.parseFloat(width)
+        : width.endsWith("%") && parentWidth > 0
+          ? (parentWidth * Number.parseFloat(width)) / 100
+          : Number.POSITIVE_INFINITY;
+    const bounded = Math.min(
+      cap(getComputedStyle(container).maxWidth),
+      parentWidth > 0 ? parentWidth : Number.POSITIVE_INFINITY,
+    );
+    const limit = Number.isFinite(bounded) ? bounded : container.clientWidth;
+    if (limit === 0) {
       setVisible(count);
       return;
     }
@@ -199,8 +239,7 @@ export function FilterInput({
           child.getAttribute("data-pill") === null,
       )
       .reduce((sum, child) => sum + child.getBoundingClientRect().width + PILL_LAYOUT.gap, 0);
-    const available =
-      container.clientWidth - PILL_LAYOUT.paddingX - PILL_LAYOUT.inputReserve - chrome;
+    const available = limit - PILL_LAYOUT.paddingX - PILL_LAYOUT.inputReserve - chrome;
     setVisible(visiblePillCount({ available, pillWidths, overflowWidth, gap: PILL_LAYOUT.gap }));
   }, [value.filters.length]);
 
@@ -210,6 +249,10 @@ export function FilterInput({
     if (container === null || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(recompute);
     observer.observe(container);
+    // The parent too: the limit is bounded by the parent's width, and a parent
+    // that grows does not resize a content-sized box sitting in its chip state
+    // — without this, widening the window never lets collected pills back out.
+    if (container.parentElement !== null) observer.observe(container.parentElement);
     return () => observer.disconnect();
   }, [recompute]);
 
@@ -252,7 +295,7 @@ export function FilterInput({
     >
       <ComboboxChips
         ref={containerRef}
-        className={cn("relative flex-nowrap overflow-hidden", className)}
+        className={cn("relative w-fit min-w-48 flex-nowrap overflow-hidden", className)}
       >
         <Icon name="search" size={14} className="ml-1 shrink-0 text-faint" />
         {shown.map((condition) => (
@@ -289,6 +332,14 @@ export function FilterInput({
           ref={inputRef}
           aria-label={label}
           placeholder={placeholder ?? label}
+          // `field-sizing-content` is what makes the box content-sized: the
+          // input's width tracks its text (its placeholder, when empty), and
+          // the `w-fit` container follows it. `min-w-30` must stay equal to
+          // `PILL_LAYOUT.inputReserve` — see the fit invariant above —
+          // and `flex-auto` (basis auto, not `flex-1`'s basis 0) is what lets
+          // the content size reach the container while still filling leftover
+          // room on a clamped or consumer-fixed box.
+          className="min-w-30 flex-auto field-sizing-content"
         />
         {facets.length > 0 && (
           <ComboboxTrigger

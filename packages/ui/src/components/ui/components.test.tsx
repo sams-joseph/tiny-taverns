@@ -1,3 +1,4 @@
+import * as React from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -6,6 +7,14 @@ import { Badge } from "./badge";
 import { Button } from "./button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./card";
 import { Checkbox } from "./checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
 import { Icon } from "./icon";
 import { Input } from "./input";
 import { Label } from "./label";
@@ -135,6 +144,69 @@ describe("Toggle", () => {
 
     await user.click(screen.getByRole("button", { name: "Marsh" }));
     expect(seen).toEqual([true]);
+  });
+});
+
+describe("DropdownMenu", () => {
+  it("opens on the trigger, runs an item, and closes", async () => {
+    const user = userEvent.setup();
+    let ran = false;
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Actions</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem
+            onClick={() => {
+              ran = true;
+            }}
+          >
+            Rename
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    expect(ran).toBe(true);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("marks the active radio row and a pick moves the group's value", async () => {
+    const user = userEvent.setup();
+    const seen = { current: "name" };
+    function Harness() {
+      const [order, setOrder] = React.useState("name");
+      seen.current = order;
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger>Sort</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuRadioGroup
+              value={order}
+              onValueChange={(value) => setOrder(value as string)}
+            >
+              <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="recent">Recent</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Sort" }));
+    expect(await screen.findByRole("menuitemradio", { name: "Name" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByRole("menuitemradio", { name: "Recent" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    await user.click(screen.getByRole("menuitemradio", { name: "Recent" }));
+    expect(seen.current).toBe("recent");
   });
 });
 

@@ -103,7 +103,7 @@ export function EncountersScreen() {
             matchToggle
             // Wide enough that the overflow chip, the match toggle and the
             // typing room share the single line without clipping.
-            className="min-h-control-sm w-96 py-0.5"
+            className="min-h-control-sm max-w-96 py-0.5"
           />
           <Button
             variant="secondary"

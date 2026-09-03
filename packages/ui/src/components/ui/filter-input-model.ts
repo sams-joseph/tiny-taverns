@@ -493,8 +493,12 @@ export const valuesOf = (value: FilterInputValue, facetKey: string): ReadonlyArr
 /**
  * The single-line layout's fixed numbers, shared with the tests that drive the
  * measurement. `gap` is the box's `gap-1.5`, `paddingX` its `px-2` pair, and
- * `inputReserve` the typing room the line always keeps (`min-w-24` plus
- * breathing space) — pills never squeeze the search out of its own box.
+ * `inputReserve` the typing room the line always keeps — pills never squeeze
+ * the search out of its own box. It must equal the input's own `min-w-30`
+ * (120px): on the content-sized box the fit subtracts the reserve from a
+ * `clientWidth` that only contains the input's real width, so a reserve wider
+ * than the input's minimum would count pills as overflowing a box that grew to
+ * fit them. `filter-input.test.tsx` pins the pair.
  */
 export const PILL_LAYOUT = { gap: 6, paddingX: 16, inputReserve: 120 } as const;
 

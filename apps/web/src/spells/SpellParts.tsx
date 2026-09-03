@@ -24,7 +24,7 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import { FilterBar, FilterBox, SortMenu, type FilterOption } from "../library/filters";
 import type { FilterQuery } from "../library/query";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { Field, SaveFailure, Textarea } from "../ui/form";
@@ -53,12 +53,10 @@ export function SpellFilters({
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
       <FilterBox label="Search spells" list={list} facets={SPELL_FACETS} />
-      <FilterSelect
-        label="Sort"
+      <SortMenu
         value={sort}
         onChange={(value) => onSort(value as SpellQuery["sort"])}
         options={SORTS}
-        className="w-32"
       />
     </FilterBar>
   );

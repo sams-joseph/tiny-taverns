@@ -6,6 +6,7 @@ import { useState } from "react";
 import { FilterInput } from "./filter-input";
 import {
   EMPTY_FILTER_VALUE,
+  PILL_LAYOUT,
   type FilterInputFacet,
   type FilterInputValue,
 } from "./filter-input-model";
@@ -315,6 +316,38 @@ describe("FilterInput", () => {
     await user.type(input, "time: dusk{Enter}");
     expect(seen.current.filters).toEqual([]);
     expect(seen.current.text).toBe("time: dusk");
+  });
+});
+
+describe("content-driven width", () => {
+  /**
+   * jsdom lays nothing out, so the width contract is pinned as classes: the
+   * box is `w-fit` — a compact `min-w-48` default that grows with its
+   * contents to the consumer's `max-w-*` — and the growth engine is the
+   * input's `field-sizing-content`, which sizes the input to its own text so
+   * the fitted container follows it with no JS in the loop.
+   */
+  it("the box is content-sized: a compact default growing to the consumer's max", () => {
+    renderInput();
+    const box = document.querySelector('[data-slot="combobox-chips"]');
+    expect(box).toHaveClass("w-fit", "min-w-48");
+    // No max-w-* of its own: the merge config knows only the named "measure"
+    // container scale, so a default here and a consumer's max-w-3xl would both
+    // survive and CSS order — not the consumer — would pick the winner.
+    expect([...(box?.classList ?? [])].some((name) => name.startsWith("max-w-"))).toBe(false);
+  });
+
+  it("the input is content-sized and keeps exactly the reserve the fit subtracts", () => {
+    const { input } = renderInput();
+    expect(input).toHaveClass("field-sizing-content", "flex-auto");
+    // The invariant the fit depends on (see the component's doc block): the
+    // input's minimum width — `min-w-30`, 120px — must equal
+    // `PILL_LAYOUT.inputReserve`. On an unclamped `w-fit` box the fit
+    // subtracts the reserve from a clientWidth that only contains the input's
+    // real width; a reserve wider than the input's minimum under-counts, and
+    // pills collect into the chip while there is visibly room.
+    expect(input).toHaveClass("min-w-30");
+    expect(PILL_LAYOUT.inputReserve).toBe(120);
   });
 });
 

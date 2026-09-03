@@ -19,7 +19,7 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import { FilterBar, FilterBox, SortMenu, type FilterOption } from "../library/filters";
 import type { FilterQuery } from "../library/query";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { SaveFailure, Textarea } from "../ui/form";
@@ -60,12 +60,10 @@ export function EquipmentFilters({
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
       <FilterBox label="Search equipment" list={list} facets={EQUIPMENT_FACETS} />
-      <FilterSelect
-        label="Sort"
+      <SortMenu
         value={sort}
         onChange={(value) => onSort(value as EquipmentQuery["sort"])}
         options={SORTS}
-        className="w-32"
       />
     </FilterBar>
   );

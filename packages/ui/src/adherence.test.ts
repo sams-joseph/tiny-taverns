@@ -45,6 +45,7 @@ describe("design-system adherence", () => {
       "checkbox",
       "combobox",
       "dialog",
+      "dropdown-menu",
       "filter-input",
       "icon",
       "input",

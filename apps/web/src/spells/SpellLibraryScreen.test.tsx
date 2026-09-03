@@ -49,7 +49,7 @@ describe("SpellLibraryScreen", () => {
     // The one filter group, in the content column — the standard placement.
     const bar = screen.getByRole("group", { name: "Filters" });
     expect(bar).toContainElement(screen.getByRole("combobox", { name: "Search spells" }));
-    expect(bar).toContainElement(screen.getByRole("combobox", { name: "Sort" }));
+    expect(bar).toContainElement(screen.getByRole("button", { name: "Sort — Level" }));
 
     // The captain's rule, both halves. The tab strip is its own row below the
     // header's title row — not beside the title, and holding nothing but tabs…

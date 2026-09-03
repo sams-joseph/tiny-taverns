@@ -3,6 +3,7 @@ import {
   ArrowBigUpDash,
   ArrowRight,
   ArrowUp,
+  ArrowUpDown,
   Backpack,
   Bell,
   BookOpen,
@@ -128,11 +129,16 @@ import {
  * `baseline`, `pointer` and `ellipsis` (CSS values) plus `home`, `sheet`, `table`
  * and `vault` — screen and campaign ids, and the campaign row draws no icons at
  * all, which is exactly the trap: an id list that looks like the icon lists above it.
+ *
+ * `arrow-up-down` is named by a captain's request rather than a kit delivery —
+ * the sort control became an icon-button dropdown (2026-09-03), and no delivered
+ * surface had ever drawn a sort glyph to copy.
  */
 export const icons = {
   "arrow-big-up-dash": ArrowBigUpDash,
   "arrow-right": ArrowRight,
   "arrow-up": ArrowUp,
+  "arrow-up-down": ArrowUpDown,
   backpack: Backpack,
   bell: Bell,
   "book-open": BookOpen,
