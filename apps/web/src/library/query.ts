@@ -1,10 +1,18 @@
+import {
+  EMPTY_FILTER_VALUE,
+  rangeBoundsOf,
+  searchTextOf,
+  tokenValuesOf,
+  type FilterInputFacet,
+  type FilterInputValue,
+} from "@taverns/ui";
 import { useEffect, useState } from "react";
 
 /**
- * The query half of the shared Library filter pattern — the hooks and the
- * count phrasing, in a file of their own so the component file stays
- * fast-refreshable. `filters.tsx` is the controls; this is the state they
- * drive.
+ * The query half of the shared filter pattern — the hook every filterable list
+ * drives its `FilterInput` with, and the count phrasing, in a file of their own
+ * so the component file stays fast-refreshable. `filters.tsx` is the controls;
+ * this is the state they drive.
  */
 /**
  * Long enough that typing a name is one request rather than eight, short enough
@@ -34,44 +42,61 @@ export function useSearchTerm(): {
 }
 
 /**
- * One tab's whole query state: the debounced search plus everything else, with
- * the narrowed flag and the clear affordance every tab owes the bar.
+ * One list's whole filter state, as the unified `FilterInput` holds it: free
+ * text (debounced into `q`) plus the committed facet tokens, with the readers a
+ * screen derives its own wire query from.
  *
- * The creatures corpus keeps its own richer version of this in
- * `bestiary/corpus.ts` (it also owns pages and a facet vocabulary); this is the
- * same contract for the tabs whose query is a plain object.
+ * Sort deliberately stays outside — a token that can be removed is the wrong
+ * shape for a control that always has an answer, so every screen keeps its
+ * sort in a `FilterSelect` beside the box and `clear` never touches it.
  */
-export function useListQuery<Q extends { readonly q: string }>(
-  initial: Q,
-  options: {
-    /** Whether anything besides the search narrows — sort never counts. */
-    readonly narrows: (query: Q) => boolean;
-    /** What clearing resets to; defaults to `initial`. Keep the sort. */
-    readonly onClear?: (query: Q) => Q;
-  },
-): {
-  readonly query: Q;
-  readonly term: string;
-  readonly setTerm: (term: string) => void;
-  readonly value: Q;
-  readonly patch: (partial: Partial<Q>) => void;
+export interface FilterQuery {
+  /** What the box holds — hand it straight to `FilterInput`. */
+  readonly value: FilterInputValue;
+  readonly onChange: (value: FilterInputValue) => void;
+  /** The settled search text — the input minus any `facet:` composition. */
+  readonly q: string;
+  /** Whether anything narrows: a settled search, or any token at all. */
   readonly narrowed: boolean;
   readonly clear: () => void;
-} {
-  const search = useSearchTerm();
-  const [rest, setRest] = useState(initial);
-  const query = { ...rest, q: search.q };
-  const narrowed = search.q.trim() !== "" || options.narrows(rest);
-  const patch = (partial: Partial<Q>) => setRest((current) => ({ ...current, ...partial }));
-  const clear = () => {
-    search.reset();
-    setRest((current) => options.onClear?.(current) ?? initial);
+  /** One enum facet's committed values — any-of, in commit order. */
+  readonly valuesOf: (facetKey: string) => ReadonlyArray<string>;
+  /** A boolean facet: `true` when its chip is on, `undefined` otherwise. */
+  readonly flagOf: (facetKey: string) => true | undefined;
+  /** A range facet's two ends, `undefined` where an end (or the chip) is absent. */
+  readonly rangeOf: (facetKey: string) => {
+    readonly min: string | undefined;
+    readonly max: string | undefined;
   };
-  return { query, term: search.term, setTerm: search.setTerm, value: rest, patch, narrowed, clear };
 }
 
-/** What `useListQuery` hands a tab's filter row. */
-export type ListQuery<Q extends { readonly q: string }> = ReturnType<typeof useListQuery<Q>>;
+export function useFilterQuery(facets: ReadonlyArray<FilterInputFacet>): FilterQuery {
+  const [value, setValue] = useState(EMPTY_FILTER_VALUE);
+  const [q, setQ] = useState("");
+  const text = searchTextOf(value.text, facets);
+  useEffect(() => {
+    const timer = setTimeout(() => setQ(text), SEARCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+  const clear = () => {
+    setValue(EMPTY_FILTER_VALUE);
+    setQ("");
+  };
+  return {
+    value,
+    onChange: setValue,
+    q,
+    narrowed: q.trim() !== "" || value.tokens.length > 0,
+    clear,
+    valuesOf: (facetKey) => tokenValuesOf(value, facetKey),
+    flagOf: (facetKey) =>
+      value.tokens.some((token) => token.facet === facetKey) ? true : undefined,
+    rangeOf: (facetKey) => {
+      const token = value.tokens.find((candidate) => candidate.facet === facetKey);
+      return token === undefined ? { min: undefined, max: undefined } : rangeBoundsOf(token.value);
+    },
+  };
+}
 
 /**
  * The standard count sentence for a paged, filterable list — the phrasing the

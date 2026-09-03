@@ -162,7 +162,7 @@ describe("LibraryScreen", () => {
     await screen.findByText("Bog Owlbear");
 
     server.routes.set(LIST, { status: 200, body: page([goblin]) });
-    await userEvent.type(screen.getByRole("textbox", { name: "Search the library" }), "nimble");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search the library" }), "nimble");
 
     // Same reason as the campaign bestiary: "nimble escape" is a trait, in no
     // column. `LibraryFilter` is spread into `CreatureFilter` precisely so the
@@ -180,8 +180,9 @@ describe("LibraryScreen", () => {
     // a one-element array did not survive the wire. `queryArray` fixed it, and
     // once the list is a page there is no honest way to keep them local.
     server.routes.set(LIST, { status: 200, body: page([owlbear, sexton]) });
-    await userEvent.click(screen.getByRole("combobox", { name: "Filter by Environment" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Barrow" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Search the library" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Environment" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Environment: Barrow" }));
 
     await waitFor(() => expect(lastQuery().getAll("environments")).toEqual(["Barrow"]));
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());
@@ -401,7 +402,7 @@ describe("LibraryScreen", () => {
     await screen.findByText("Bog Owlbear");
 
     server.routes.set(LIST, { status: 200, body: page([]) });
-    await userEvent.type(screen.getByRole("textbox", { name: "Search the library" }), "dragon");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search the library" }), "dragon");
 
     expect(await screen.findByText(/Loosen a filter/)).toBeInTheDocument();
     expect(screen.queryByText(/bestiary:import/)).toBeNull();

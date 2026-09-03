@@ -5,16 +5,15 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { Hob, useHobPanel } from "../hob";
 import { ShowMore } from "../library/filters";
-import { listCount, useListQuery } from "../library/query";
+import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   loadMagicItemLibrary,
   loadMoreLibraryMagicItems,
-  magicItemClear,
-  magicItemNarrows,
-  NO_MAGIC_ITEM_QUERY,
+  MAGIC_ITEM_FACETS,
+  magicItemQueryOf,
   type MagicItemQuery,
 } from "./load";
 import { useMagicItemPages } from "./pages";
@@ -37,22 +36,20 @@ const countOf = (n: number, narrowed: boolean, more: boolean): string =>
   );
 
 export function MagicItemLibraryScreen() {
-  const list = useListQuery(NO_MAGIC_ITEM_QUERY, {
-    narrows: magicItemNarrows,
-    onClear: (query) => magicItemClear(query, NO_MAGIC_ITEM_QUERY),
-  });
-  const [resource, reload] = useApiAtom(libraryMagicItemsAtom(list.query));
+  const list = useFilterQuery(MAGIC_ITEM_FACETS);
+  const [sort, setSort] = useState<MagicItemQuery["sort"]>("name");
+  const query = magicItemQueryOf(list, sort);
+  const [resource, reload] = useApiAtom(libraryMagicItemsAtom(query));
   const [opened, setOpened] = useState<string | undefined>();
   const [editing, setEditing] = useState<string | "new" | undefined>();
   const hob = useHobPanel({ initialOpen: false });
 
-  const pages = useMagicItemPages(resource, list.query, loadMoreLibraryMagicItems);
+  const pages = useMagicItemPages(resource, query, loadMoreLibraryMagicItems);
   const shown = pages.shown;
   const opening = pages.magicItems.find((item) => item.id === opened);
   const editingItem = pages.magicItems.find((item) => item.id === editing);
   const navigateToName = (name: string) => {
-    list.clear();
-    list.setTerm(name);
+    list.onChange({ text: name, tokens: [] });
     setOpened(undefined);
   };
 
@@ -84,6 +81,8 @@ export function MagicItemLibraryScreen() {
         <div className="flex flex-col gap-6">
           <MagicItemFilters
             list={list}
+            sort={sort}
+            onSort={setSort}
             busy={resource.state === "loading"}
             actions={
               <Button size="sm" onClick={() => setEditing("new")}>

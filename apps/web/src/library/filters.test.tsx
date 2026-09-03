@@ -2,23 +2,18 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import {
-  FilterBar,
-  FilterMultiSelect,
-  FilterSearch,
-  FilterSelect,
-  FilterToggle,
-  ShowMore,
-} from "./filters";
-import { listCount, useListQuery } from "./query";
+import type { FilterInputFacet } from "@taverns/ui";
+import { FilterBar, FilterBox, FilterSelect, ShowMore } from "./filters";
+import { listCount, useFilterQuery } from "./query";
 
 /**
- * The shared Library filter pattern, pinned as components.
+ * The shared filter pattern, pinned as components.
  *
  * Every tab renders these; what each tab's own test pins is which facets it
  * offers and what reaches its wire. What is pinned here is the behaviour no
- * tab may vary: where the clear affordance comes from, what a trigger says,
- * and that an any-of facet really accumulates values.
+ * tab may vary: where the clear affordance comes from, how the unified box's
+ * state debounces and reads back, and that the whole pattern is one input
+ * rather than a row of controls.
  */
 
 describe("listCount", () => {
@@ -114,65 +109,7 @@ describe("FilterSelect", () => {
   });
 });
 
-describe("FilterMultiSelect", () => {
-  const OPTIONS = [
-    { value: "beast", label: "Beast" },
-    { value: "fey", label: "Fey" },
-    { value: "undead", label: "Undead" },
-  ];
-
-  function Harness({ onChange }: { readonly onChange: (values: ReadonlyArray<string>) => void }) {
-    const [values, setValues] = useState<ReadonlyArray<string>>([]);
-    return (
-      <FilterMultiSelect
-        label="Type"
-        values={values}
-        onChange={(next) => {
-          setValues(next);
-          onChange(next);
-        }}
-        options={OPTIONS}
-      />
-    );
-  }
-
-  it("accumulates values across presses — any-of, with the popup staying open", async () => {
-    const onChange = vi.fn();
-    render(<Harness onChange={onChange} />);
-
-    const trigger = screen.getByRole("combobox", { name: "Filter by Type" });
-    expect(trigger).toHaveTextContent("Type");
-
-    await userEvent.click(trigger);
-    await userEvent.click(await screen.findByRole("option", { name: "Beast" }));
-    expect(onChange).toHaveBeenLastCalledWith(["beast"]);
-    // One value: the trigger names it.
-    expect(trigger).toHaveTextContent("Type: Beast");
-
-    // The popup did not close, which is what any-of means.
-    await userEvent.click(screen.getByRole("option", { name: "Fey" }));
-    expect(onChange).toHaveBeenLastCalledWith(["beast", "fey"]);
-    // Several: the trigger counts.
-    expect(trigger).toHaveTextContent("Type · 2");
-
-    // Pressing a chosen value takes it back out.
-    await userEvent.click(screen.getByRole("option", { name: "Beast" }));
-    expect(onChange).toHaveBeenLastCalledWith(["fey"]);
-  });
-});
-
-describe("FilterToggle and ShowMore", () => {
-  it("renders a pressed state the way the design system spells it", async () => {
-    const onChange = vi.fn();
-    render(
-      <FilterToggle pressed={false} onChange={onChange}>
-        Ritual
-      </FilterToggle>,
-    );
-    await userEvent.click(screen.getByRole("button", { name: "Ritual" }));
-    expect(onChange).toHaveBeenCalledWith(true);
-  });
-
+describe("ShowMore", () => {
   it("counts what is already on screen, and vanishes when the list is whole", () => {
     const { rerender } = render(
       <ShowMore hasMore loadingMore={false} onMore={() => {}} count={24} />,
@@ -184,51 +121,89 @@ describe("FilterToggle and ShowMore", () => {
   });
 });
 
-describe("useListQuery", () => {
-  interface Query {
-    readonly q: string;
-    readonly sort: "name" | "recent";
-    readonly kinds: ReadonlyArray<string>;
-  }
-  const initial: Query = { q: "", sort: "name", kinds: [] };
+describe("useFilterQuery with FilterBox", () => {
+  const FACETS: ReadonlyArray<FilterInputFacet> = [
+    {
+      kind: "enum",
+      key: "kind",
+      label: "Kind",
+      options: [
+        { value: "class", label: "Class" },
+        { value: "race", label: "Race" },
+      ],
+    },
+    { kind: "range", key: "cr", label: "CR" },
+    { kind: "boolean", key: "ritual", label: "Ritual" },
+  ];
 
   function Harness() {
-    const list = useListQuery(initial, {
-      narrows: (query) => query.kinds.length > 0,
-      onClear: (query) => ({ ...initial, sort: query.sort }),
-    });
+    const list = useFilterQuery(FACETS);
     return (
       <FilterBar narrowed={list.narrowed} onClear={list.clear}>
-        <FilterSearch label="Search" value={list.term} onChange={list.setTerm} />
-        <button onClick={() => list.patch({ kinds: ["class"] })}>narrow</button>
-        <button onClick={() => list.patch({ sort: "recent" })}>reorder</button>
-        <output>{JSON.stringify(list.query)}</output>
+        <FilterBox label="Search" list={list} facets={FACETS} />
+        <output data-testid="query">
+          {JSON.stringify({
+            q: list.q,
+            kinds: list.valuesOf("kind"),
+            ritual: list.flagOf("ritual") ?? null,
+            cr: list.rangeOf("cr"),
+          })}
+        </output>
       </FilterBar>
     );
   }
 
+  const read = () =>
+    JSON.parse(screen.getByTestId("query").textContent ?? "{}") as {
+      q: string;
+      kinds: ReadonlyArray<string>;
+      ritual: true | null;
+      cr: { min?: string; max?: string };
+    };
+
   it("debounces the search into the query, so typing is one request rather than eight", async () => {
     render(<Harness />);
-    const q = () => (JSON.parse(screen.getByRole("status").textContent ?? "{}") as Query).q;
 
-    await userEvent.type(screen.getByRole("textbox", { name: "Search" }), "gob");
-    expect(q()).toBe("");
-    await waitFor(() => expect(q()).toBe("gob"));
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "gob");
+    expect(read().q).toBe("");
+    await waitFor(() => expect(read().q).toBe("gob"));
   });
 
-  it("clears everything but keeps the sort — reordering is not filtering", async () => {
+  it("a composition in progress never reaches the query as text", async () => {
     render(<Harness />);
-    const query = () => JSON.parse(screen.getByRole("status").textContent ?? "{}") as Query;
 
-    await userEvent.click(screen.getByRole("button", { name: "reorder" }));
-    // Sort alone never narrows, so there is nothing to clear yet.
-    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "gob kind:cl");
+    await waitFor(() => expect(read().q).toBe("gob"));
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: "narrow" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Search" }), "gob");
+  it("commits tokens the readers hand back typed — enum, range and boolean", async () => {
+    render(<Harness />);
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "kind:class{Enter}");
+    await userEvent.type(box, "cr:0-5{Enter}");
+    await waitFor(() => expect(read().kinds).toEqual(["class"]));
+    expect(read().cr).toEqual({ min: "0", max: "5" });
+
+    // A boolean facet's suggestion is the token itself.
+    await userEvent.type(box, "ritu");
+    await userEvent.click(await screen.findByRole("option", { name: "Ritual" }));
+    await waitFor(() => expect(read().ritual).toBe(true));
+  });
+
+  it("clear empties the search and every token, from the bar's own button", async () => {
+    render(<Harness />);
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "kind:class{Enter}");
+    await userEvent.type(box, "gob");
+    await waitFor(() => expect(read().q).toBe("gob"));
+
+    // The suggestion popup is open from typing; close it before reaching for
+    // the bar (an open popup holds the accessibility tree, like any popup).
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-
-    await waitFor(() => expect(query()).toEqual({ q: "", sort: "recent", kinds: [] }));
-    expect(screen.getByRole("textbox", { name: "Search" })).toHaveValue("");
+    await waitFor(() => expect(read()).toEqual({ q: "", kinds: [], ritual: null, cr: {} }));
+    expect(box).toHaveValue("");
   });
 });

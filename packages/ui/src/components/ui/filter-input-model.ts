@@ -98,25 +98,29 @@ export interface FilterComposition {
 }
 
 /**
- * The `facet:` composition in progress, if the trailing word opens with a
- * known facet key (or label) and a colon. Unknown prefixes are not
- * compositions — `time: dusk` in a note search is text, not a filter.
- * Boolean facets have no value mode, so they never compose.
+ * The `facet:` composition in progress: the last word-opening `key:` in the
+ * text, with **everything after the colon as the value query — spaces
+ * included**, because enum labels are things like `Level 3` and `Animal
+ * Handling`. Unknown prefixes are not compositions — `time: dusk` in a note
+ * search is text, not a filter. Boolean facets have no value mode, so they
+ * never compose.
  */
 export const compositionOf = (
   text: string,
   facets: ReadonlyArray<FilterInputFacet>,
 ): FilterComposition | undefined => {
-  const start = wordStart(text);
-  const segment = text.slice(start);
-  const colon = segment.indexOf(":");
-  if (colon <= 0) return undefined;
-  const prefix = segment.slice(0, colon).toLowerCase();
-  const facet = facets.find(
-    (candidate) => candidate.key.toLowerCase() === prefix || candidate.label.toLowerCase() === prefix,
-  );
-  if (facet === undefined || facet.kind === "boolean") return undefined;
-  return { head: text.slice(0, start), facet, query: segment.slice(colon + 1) };
+  for (const match of [...text.matchAll(/(^|\s)([A-Za-z][\w-]*):/g)].reverse()) {
+    const prefix = match[2]!.toLowerCase();
+    const facet = facets.find(
+      (candidate) =>
+        candidate.key.toLowerCase() === prefix || candidate.label.toLowerCase() === prefix,
+    );
+    if (facet === undefined || facet.kind === "boolean") continue;
+    const start = match.index + match[1]!.length;
+    const colon = start + match[2]!.length;
+    return { head: text.slice(0, start), facet, query: text.slice(colon + 1) };
+  }
+  return undefined;
 };
 
 /** The free-text search a consumer should run — the input minus any composition. */

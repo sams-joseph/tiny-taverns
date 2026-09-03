@@ -46,6 +46,13 @@ describe("compositionOf", () => {
     expect(composition?.head).toBe("goblin ");
   });
 
+  it("carries spaces in the value query — enum labels are things like Level 3", () => {
+    const composition = compositionOf("goblin type:some beast", FACETS);
+    expect(composition?.facet.key).toBe("type");
+    expect(composition?.query).toBe("some beast");
+    expect(composition?.head).toBe("goblin ");
+  });
+
   it("matches the facet's label as well as its key, case-insensitively", () => {
     expect(compositionOf("Type:undead", FACETS)?.facet.key).toBe("type");
     expect(compositionOf("CR:3-", FACETS)?.facet.key).toBe("cr");

@@ -24,20 +24,11 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import {
-  FilterBar,
-  FilterMultiSelect,
-  FilterSearch,
-  FilterSelect,
-  FilterToggle,
-  type FilterOption,
-} from "../library/filters";
-import type { ListQuery } from "../library/query";
+import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import type { FilterQuery } from "../library/query";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { Field, SaveFailure, Textarea } from "../ui/form";
-import type { SpellLevelKey, SpellQuery } from "./load";
-
-const levelLabel = (level: number): string => (level === 0 ? "Cantrip" : `Level ${level}`);
+import { levelLabel, SPELL_FACETS, SPELL_SCHOOLS as SCHOOLS, type SpellQuery } from "./load";
 
 const SORTS: ReadonlyArray<FilterOption> = [
   { value: "level", label: "Level" },
@@ -45,98 +36,30 @@ const SORTS: ReadonlyArray<FilterOption> = [
   { value: "recent", label: "Recent" },
 ];
 
-const LEVELS: ReadonlyArray<FilterOption> = Array.from({ length: 10 }, (_, level) => ({
-  value: String(level),
-  label: levelLabel(level),
-}));
-
-const SCHOOLS: ReadonlyArray<FilterOption> = [
-  "abjuration",
-  "conjuration",
-  "divination",
-  "enchantment",
-  "evocation",
-  "illusion",
-  "necromancy",
-  "transmutation",
-].map((school) => ({ value: school, label: school[0]!.toUpperCase() + school.slice(1) }));
-
-/**
- * The 2014 base classes, by source key — what the bundled corpus's rows name.
- *
- * This replaced a bare "class key" text box that asked the reader to know the
- * wire's spelling. A vocabulary read over the corpus would be the exact
- * answer; until one exists, the pinned ruleset's twelve are the whole bundled
- * vocabulary, and a homebrew spell's class is still findable through search.
- */
-const CLASSES: ReadonlyArray<FilterOption> = [
-  "barbarian",
-  "bard",
-  "cleric",
-  "druid",
-  "fighter",
-  "monk",
-  "paladin",
-  "ranger",
-  "rogue",
-  "sorcerer",
-  "warlock",
-  "wizard",
-].map((key) => ({ value: key, label: key[0]!.toUpperCase() + key.slice(1) }));
-
 export function SpellFilters({
   list,
+  sort,
+  onSort,
   busy,
   actions,
 }: {
-  readonly list: ListQuery<SpellQuery>;
+  readonly list: FilterQuery;
+  readonly sort: SpellQuery["sort"];
+  readonly onSort: (sort: SpellQuery["sort"]) => void;
   readonly busy: boolean;
   /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
   readonly actions?: ReactNode;
 }) {
-  const { value, patch } = list;
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
-      <FilterSearch label="Search spells" value={list.term} onChange={list.setTerm} />
+      <FilterBox label="Search spells" list={list} facets={SPELL_FACETS} />
       <FilterSelect
         label="Sort"
-        value={value.sort}
-        onChange={(sort) => patch({ sort: sort as SpellQuery["sort"] })}
+        value={sort}
+        onChange={(value) => onSort(value as SpellQuery["sort"])}
         options={SORTS}
         className="w-32"
       />
-      <FilterMultiSelect
-        label="Level"
-        values={value.levels}
-        onChange={(levels) => patch({ levels: levels as ReadonlyArray<SpellLevelKey> })}
-        options={LEVELS}
-        className="w-36"
-      />
-      <FilterMultiSelect
-        label="School"
-        values={value.schools}
-        onChange={(schools) => patch({ schools })}
-        options={SCHOOLS}
-      />
-      <FilterMultiSelect
-        label="Class"
-        values={value.classes}
-        onChange={(classes) => patch({ classes })}
-        options={CLASSES}
-        className="w-36"
-      />
-      <FilterToggle
-        pressed={value.ritual === true}
-        onChange={(pressed) => patch({ ritual: pressed ? true : undefined })}
-      >
-        Ritual
-      </FilterToggle>
-      <FilterToggle
-        pressed={value.concentration === true}
-        onChange={(pressed) => patch({ concentration: pressed ? true : undefined })}
-      >
-        Concentration
-      </FilterToggle>
     </FilterBar>
   );
 }

@@ -1,9 +1,9 @@
 import type { CharacterOption, Feat, OptionKind } from "@taverns/api";
-import { Button, Icon } from "@taverns/ui";
+import { Button, EMPTY_FILTER_VALUE, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
-import { FilterBar, FilterSearch } from "../library/filters";
+import { FilterBar, FilterBox } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { FailureNotice, Loading } from "../ui/states";
@@ -104,7 +104,8 @@ export function OptionLibraryScreen() {
   }>();
   const [progression, setProgression] = useState<CharacterOption>();
   const [editingFeat, setEditingFeat] = useState<Feat | null>();
-  const [term, setTerm] = useState("");
+  const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
+  const term = filter.text;
 
   const [resource, reload] = useApiAtom(libraryRulesAtom);
 
@@ -153,7 +154,7 @@ export function OptionLibraryScreen() {
         <div className="flex flex-col gap-8">
           <FilterBar
             narrowed={searching}
-            onClear={() => setTerm("")}
+            onClear={() => setFilter(EMPTY_FILTER_VALUE)}
             actions={
               /* This tab's four verbs, inside the tab's content — the
                  captain's rule, quoted on `TopBar`. `FilterBar`'s slot wraps,
@@ -186,7 +187,7 @@ export function OptionLibraryScreen() {
               </>
             }
           >
-            <FilterSearch label="Search the rules" value={term} onChange={setTerm} />
+            <FilterBox label="Search the rules" list={{ value: filter, onChange: setFilter }} />
           </FilterBar>
           {nothingMatches && (
             <EmptyState icon="book-open" title="Nothing matches">

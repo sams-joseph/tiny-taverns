@@ -25,8 +25,8 @@ import { useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import { FilterBar, FilterSearch, FilterSelect, type FilterOption } from "../library/filters";
-import type { ListQuery } from "../library/query";
+import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import type { FilterQuery } from "../library/query";
 import { Field, Textarea } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { withoutLeadingHeading } from "./blocks";
@@ -45,21 +45,25 @@ const SORTS: ReadonlyArray<FilterOption> = [
 
 export function RuleArticleFilters({
   list,
+  sort,
+  onSort,
   busy,
   actions,
 }: {
-  readonly list: ListQuery<RuleArticleQuery>;
+  readonly list: FilterQuery;
+  readonly sort: RuleArticleQuery["sort"];
+  readonly onSort: (sort: RuleArticleQuery["sort"]) => void;
   readonly busy: boolean;
   /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
   readonly actions?: ReactNode;
 }) {
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
-      <FilterSearch label="Search the compendium" value={list.term} onChange={list.setTerm} />
+      <FilterBox label="Search the compendium" list={list} />
       <FilterSelect
         label="Sort"
-        value={list.value.sort}
-        onChange={(sort) => list.patch({ sort: sort as RuleArticleQuery["sort"] })}
+        value={sort}
+        onChange={(value) => onSort(value as RuleArticleQuery["sort"])}
         options={SORTS}
         className="w-32"
       />

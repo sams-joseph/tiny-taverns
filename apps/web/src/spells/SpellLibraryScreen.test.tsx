@@ -48,7 +48,7 @@ describe("SpellLibraryScreen", () => {
 
     // The one filter group, in the content column — the standard placement.
     const bar = screen.getByRole("group", { name: "Filters" });
-    expect(bar).toContainElement(screen.getByRole("textbox", { name: "Search spells" }));
+    expect(bar).toContainElement(screen.getByRole("combobox", { name: "Search spells" }));
     expect(bar).toContainElement(screen.getByRole("combobox", { name: "Sort" }));
 
     // The captain's rule, both halves. The tab strip is its own row below the
@@ -69,21 +69,26 @@ describe("SpellLibraryScreen", () => {
     await renderSpells(mintingSession());
     await screen.findByText("Fireball");
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Filter by Level" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Level 3" }));
+    const box = screen.getByRole("combobox", { name: "Search spells" });
+
+    // A typed composition commits with the keyboard alone.
+    await userEvent.type(box, "level:Level 3{Enter}");
     await waitFor(() => expect(lastQuery().getAll("levels")).toEqual(["3"]));
 
-    // Any-of within the facet: a second level widens.
-    await userEvent.click(screen.getByRole("option", { name: "Cantrip" }));
+    // Any-of within the facet: a second level widens. The popup drill-down and
+    // the typed grammar are the same commit.
+    await userEvent.click(box);
+    await userEvent.click(await screen.findByRole("option", { name: "Level" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Level: Cantrip" }));
     await waitFor(() => expect([...lastQuery().getAll("levels")].sort()).toEqual(["0", "3"]));
 
-    await userEvent.keyboard("{Escape}");
-    await userEvent.click(screen.getByRole("button", { name: "Ritual" }));
+    // A boolean facet is a ready token in the suggestions.
+    await userEvent.click(await screen.findByRole("option", { name: "Ritual" }));
     await waitFor(() => expect(lastQuery().get("ritual")).toBe("true"));
     // The level facet is still on the same request — the facets combine.
     expect([...lastQuery().getAll("levels")].sort()).toEqual(["0", "3"]);
 
-    await userEvent.type(screen.getByRole("textbox", { name: "Search spells" }), "fire");
+    await userEvent.type(box, "fire");
     await waitFor(() => expect(lastQuery().get("q")).toBe("fire"));
     expect(lastQuery().get("ritual")).toBe("true");
   });
@@ -92,16 +97,20 @@ describe("SpellLibraryScreen", () => {
     await renderSpells(mintingSession());
     await screen.findByText("Fireball");
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Filter by School" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Evocation" }));
-    await userEvent.keyboard("{Escape}");
-    await userEvent.type(screen.getByRole("textbox", { name: "Search spells" }), "fire");
+    const box = screen.getByRole("combobox", { name: "Search spells" });
+    await userEvent.type(box, "school:evoc{Enter}");
+    await userEvent.type(box, "fire");
     await waitFor(() => expect(lastQuery().get("q")).toBe("fire"));
+    expect(lastQuery().getAll("schools")).toEqual(["evocation"]);
+    // The committed facet is a removable chip in the same box.
+    expect(screen.getByText("School: Evocation")).toBeInTheDocument();
 
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     await waitFor(() => expect(lastQuery().get("q")).toBe(""));
     expect(lastQuery().getAll("schools")).toEqual([]);
-    expect(screen.getByRole("textbox", { name: "Search spells" })).toHaveValue("");
+    expect(box).toHaveValue("");
+    expect(screen.queryByText("School: Evocation")).toBeNull();
   });
 
   it("tells the two empty silences apart", async () => {
@@ -109,7 +118,7 @@ describe("SpellLibraryScreen", () => {
     await screen.findByText("Fireball");
 
     server.routes.set(LIST, { status: 200, body: page([]) });
-    await userEvent.type(screen.getByRole("textbox", { name: "Search spells" }), "quokka");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search spells" }), "quokka");
 
     expect(await screen.findByText(/Loosen a filter/)).toBeInTheDocument();
     expect(screen.queryByText(/spell:import/)).toBeNull();

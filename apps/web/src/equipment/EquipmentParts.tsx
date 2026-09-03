@@ -19,30 +19,22 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import {
-  FilterBar,
-  FilterMultiSelect,
-  FilterSearch,
-  FilterSelect,
-  type FilterOption,
-} from "../library/filters";
-import type { ListQuery } from "../library/query";
+import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import type { FilterQuery } from "../library/query";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { SaveFailure, Textarea } from "../ui/form";
-import type { EquipmentQuery } from "./load";
+import { EQUIPMENT_FACETS, type EquipmentQuery } from "./load";
 
 const sourceRef = (index: string, name: string, _family: string) => ({
   index,
   name,
 });
 
-const CATEGORIES: ReadonlyArray<FilterOption> = [
-  { value: "adventuring-gear", label: "Adventuring Gear" },
-  { value: "armor", label: "Armor" },
-  { value: "mounts-and-vehicles", label: "Mounts and Vehicles" },
-  { value: "tools", label: "Tools" },
-  { value: "weapon", label: "Weapons" },
-];
+const costLine = (equipment: Equipment): string =>
+  `${equipment.costQuantity} ${equipment.costUnit}`;
+
+const ownerOf = (equipment: Equipment): "bundle" | "library" | "campaign" =>
+  equipment.campaignId !== null ? "campaign" : equipment.accountId !== null ? "library" : "bundle";
 
 const SORTS: ReadonlyArray<FilterOption> = [
   { value: "name", label: "Name" },
@@ -51,64 +43,29 @@ const SORTS: ReadonlyArray<FilterOption> = [
   { value: "recent", label: "Recent" },
 ];
 
-/**
- * The 2014 weapon properties, by source key — what the bundled corpus's rows
- * name. This replaced a bare "property key" text box; see the spells tab's
- * class facet for the reasoning, which is the same.
- */
-const PROPERTIES: ReadonlyArray<FilterOption> = [
-  { value: "ammunition", label: "Ammunition" },
-  { value: "finesse", label: "Finesse" },
-  { value: "heavy", label: "Heavy" },
-  { value: "light", label: "Light" },
-  { value: "loading", label: "Loading" },
-  { value: "monk", label: "Monk" },
-  { value: "reach", label: "Reach" },
-  { value: "special", label: "Special" },
-  { value: "thrown", label: "Thrown" },
-  { value: "two-handed", label: "Two-handed" },
-  { value: "versatile", label: "Versatile" },
-];
-
-const costLine = (equipment: Equipment): string =>
-  `${equipment.costQuantity} ${equipment.costUnit}`;
-
-const ownerOf = (equipment: Equipment): "bundle" | "library" | "campaign" =>
-  equipment.campaignId !== null ? "campaign" : equipment.accountId !== null ? "library" : "bundle";
-
 export function EquipmentFilters({
   list,
+  sort,
+  onSort,
   busy,
   actions,
 }: {
-  readonly list: ListQuery<EquipmentQuery>;
+  readonly list: FilterQuery;
+  readonly sort: EquipmentQuery["sort"];
+  readonly onSort: (sort: EquipmentQuery["sort"]) => void;
   readonly busy: boolean;
   /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
   readonly actions?: ReactNode;
 }) {
-  const { value, patch } = list;
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
-      <FilterSearch label="Search equipment" value={list.term} onChange={list.setTerm} />
+      <FilterBox label="Search equipment" list={list} facets={EQUIPMENT_FACETS} />
       <FilterSelect
         label="Sort"
-        value={value.sort}
-        onChange={(sort) => patch({ sort: sort as EquipmentQuery["sort"] })}
+        value={sort}
+        onChange={(value) => onSort(value as EquipmentQuery["sort"])}
         options={SORTS}
         className="w-32"
-      />
-      <FilterMultiSelect
-        label="Category"
-        values={value.categories}
-        onChange={(categories) => patch({ categories })}
-        options={CATEGORIES}
-        className="w-44"
-      />
-      <FilterMultiSelect
-        label="Property"
-        values={value.properties}
-        onChange={(properties) => patch({ properties })}
-        options={PROPERTIES}
       />
     </FilterBar>
   );

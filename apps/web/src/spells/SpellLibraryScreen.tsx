@@ -5,16 +5,15 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { Hob, useHobPanel } from "../hob";
 import { ShowMore } from "../library/filters";
-import { listCount, useListQuery } from "../library/query";
+import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   loadMoreLibrarySpells,
   loadSpellLibrary,
-  NO_SPELL_QUERY,
-  spellClear,
-  spellNarrows,
+  SPELL_FACETS,
+  spellQueryOf,
   type SpellQuery,
 } from "./load";
 import { useSpellPages } from "./pages";
@@ -32,16 +31,15 @@ const countOf = (n: number, narrowed: boolean, more: boolean): string =>
   );
 
 export function SpellLibraryScreen() {
-  const list = useListQuery(NO_SPELL_QUERY, {
-    narrows: spellNarrows,
-    onClear: (query) => spellClear(query, NO_SPELL_QUERY),
-  });
-  const [resource, reload] = useApiAtom(librarySpellsAtom(list.query));
+  const list = useFilterQuery(SPELL_FACETS);
+  const [sort, setSort] = useState<SpellQuery["sort"]>("level");
+  const query = spellQueryOf(list, sort);
+  const [resource, reload] = useApiAtom(librarySpellsAtom(query));
   const [opened, setOpened] = useState<string | undefined>();
   const [writing, setWriting] = useState(false);
   const hob = useHobPanel({ initialOpen: false });
 
-  const pages = useSpellPages(resource, list.query, loadMoreLibrarySpells);
+  const pages = useSpellPages(resource, query, loadMoreLibrarySpells);
   const shown = pages.shown;
   const opening = pages.spells.find((spell) => spell.id === opened);
 
@@ -73,6 +71,8 @@ export function SpellLibraryScreen() {
         <div className="flex flex-col gap-6">
           <SpellFilters
             list={list}
+            sort={sort}
+            onSort={setSort}
             busy={resource.state === "loading"}
             actions={
               <Button size="sm" onClick={() => setWriting(true)}>

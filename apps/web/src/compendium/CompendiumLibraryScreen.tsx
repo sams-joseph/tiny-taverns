@@ -3,11 +3,11 @@ import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { Hob, useHobPanel } from "../hob";
-import { useListQuery } from "../library/query";
+import { useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { libraryRuleArticlesAtom, NO_RULE_ARTICLE_QUERY } from "./load";
+import { libraryRuleArticlesAtom, ruleArticleQueryOf, type RuleArticleQuery } from "./load";
 import { isLibraryArticle } from "./ownership";
 import {
   RemoveRuleArticleDialog,
@@ -24,8 +24,9 @@ const summaryOf = (articles: ReadonlyArray<RuleArticle>): string => {
 };
 
 export function CompendiumLibraryScreen() {
-  const list = useListQuery(NO_RULE_ARTICLE_QUERY, { narrows: () => false });
-  const [resource, reload] = useApiAtom(libraryRuleArticlesAtom(list.query));
+  const list = useFilterQuery([]);
+  const [sort, setSort] = useState<RuleArticleQuery["sort"]>("name");
+  const [resource, reload] = useApiAtom(libraryRuleArticlesAtom(ruleArticleQueryOf(list, sort)));
   const [reading, setReading] = useState<RuleArticle>();
   const [editing, setEditing] = useState<RuleArticleDetail | undefined>();
   const [removing, setRemoving] = useState<RuleArticle>();
@@ -58,6 +59,8 @@ export function CompendiumLibraryScreen() {
         <div className="flex flex-col gap-6">
           <RuleArticleFilters
             list={list}
+            sort={sort}
+            onSort={setSort}
             busy={resource.state === "loading"}
             actions={
               <Button size="sm" onClick={() => setWriting(true)}>

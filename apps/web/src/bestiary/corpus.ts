@@ -2,79 +2,56 @@ import type { Creature, CreatureSort, Page, PageCursor } from "@taverns/api";
 import { Effect, Result } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { AsyncResult, Atom } from "effect/unstable/reactivity";
+import type { FilterInputFacet, FilterInputOption } from "@taverns/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { runApiResult, type TavernsClient } from "../api/client";
 import type { ApiFailure, Resource } from "../api/failure";
 import { useCredential } from "../auth/credential";
-import { NO_QUERY, type CorpusQuery, type CorpusView, type FacetList } from "./load";
+import { useFilterQuery, type FilterQuery } from "../library/query";
+import { NO_QUERY, type CorpusQuery, type CorpusView } from "./load";
 
 /**
- * Reading a list of creatures: the controls, the debounce, the pages, and the
- * one thing a screen can only know by remembering what it has been told.
+ * Reading a list of creatures: the unified filter box, the debounce, the pages,
+ * and the one thing a screen can only know by remembering what it has been
+ * told.
  *
- * **Two screens read one corpus** — the campaign bestiary and the Library — and
- * everything about *how* they read it is the same, because the server takes the
- * same filter for both (`LibraryFilter` is spread into `CreatureFilter` in
- * `packages/api`, precisely so the two cannot drift). What differs is the
- * endpoint, the shell around it and the copy; none of that is here.
- *
- * So this hook owns the whole of the reading behaviour, and it is a hook rather
- * than a second copy of thirty lines for the same reason `chronicle/fight.ts` is
- * one function: the parts where two screens must not disagree are files.
+ * The Library shelf and the encounter picker read one corpus, and everything
+ * about *how* it is read is the same because the server takes the same filter
+ * for both. This hook owns the whole of the reading behaviour; only the shell,
+ * the copy and the empty states live in the screens.
  *
  * ### Every control is the server's, and the list is a page
  *
- * The search and the sort always were. **The chips are now**, and the two
- * changes are one change: the wire could not carry a one-element array
- * (`packages/api`'s `queryArray` is the fix), and a chip applied to *the answer*
- * would have been applied to a page — narrowing twenty-four rows and calling the
- * result the list. `load.ts` argues both halves.
+ * The search and the sort always were, and the facets are clauses of the same
+ * query — a facet applied to *the answer* would be applied to a page, narrowing
+ * twenty-four rows and calling the result the list. `load.ts` argues both
+ * halves.
  *
- * What that cost is the two things this hook used to work out for itself:
+ * What the richest corpus adds over `useFilterQuery` alone:
  *
- * - **the chip vocabulary** is a read of its own now (`CorpusView.vocabulary`),
- *   because a row accumulated from answers would offer only what page one
- *   happened to mention and could never grow back the chip you would press to
- *   get out of a filter;
+ * - **the facet schema is built from the server's vocabulary read**
+ *   (`CorpusView.facets`), because a schema accumulated from answers would
+ *   offer only what page one happened to mention and could never grow back the
+ *   value you would pick to get out of a filter;
+ * - **facet vocabularies are grouped case-insensitively** — the corpus really
+ *   does hold `beast` and `Beast` as distinct spellings (the starter bundle
+ *   lowercases what the SRD capitalises), and a filter meaning "beasts" means
+ *   both, so one option stands for the group and a committed token expands to
+ *   every raw spelling on the wire;
  * - **`barren`** — empty *at all*, as opposed to empty for this filter — is
- *   still worked out here, and is still settled only by an answer that narrowed
- *   nothing. It now needs the chips clear as well as the search, which is
- *   exactly what "narrowed nothing" means once the chips reach the server.
- *
- * **`shown` is the last good answer, kept so a re-query does not blank the
- * grid.** A DM typing a name would otherwise flicker through "Loading…" once per
- * settled keystroke; the screen draws the previous list and says quietly that a
- * newer one is coming.
+ *   still settled only by an answer that narrowed nothing;
+ * - **`shown` is the last good answer**, kept so a re-query does not blank the
+ *   grid while a newer one is on its way.
  */
 export interface Corpus<V> {
-  /** What is in the search box this instant — debounced into the query below. */
-  readonly term: string;
-  readonly setTerm: (term: string) => void;
+  /** The unified filter state — search text, tokens, and the readers. */
+  readonly list: FilterQuery;
+  /** The facet schema the box suggests from, built from the shown vocabulary. */
+  readonly facets: ReadonlyArray<FilterInputFacet>;
   readonly sort: CreatureSort;
   readonly setSort: (sort: CreatureSort) => void;
-  /** The pressed chips. Any-of, and sent rather than applied to the answer. */
-  readonly environments: ReadonlyArray<string>;
-  readonly sizes: ReadonlyArray<string>;
-  readonly types: ReadonlyArray<string>;
-  readonly subtypes: ReadonlyArray<string>;
-  readonly alignments: ReadonlyArray<string>;
-  readonly damageResistances: ReadonlyArray<string>;
-  readonly damageImmunities: ReadonlyArray<string>;
-  readonly conditionImmunities: ReadonlyArray<string>;
-  readonly movementModes: ReadonlyArray<string>;
-  readonly toggleFacet: (facet: FacetList, value: string) => void;
-  /** Replaces a facet's whole selection — what a multi-select control hands back. */
-  readonly setFacet: (facet: FacetList, values: ReadonlyArray<string>) => void;
-  readonly crMin: string;
-  readonly setCrMin: (value: string) => void;
-  readonly crMax: string;
-  readonly setCrMax: (value: string) => void;
-  readonly legendary: boolean | undefined;
-  readonly setLegendary: (value: boolean | undefined) => void;
-  readonly spellcaster: boolean | undefined;
-  readonly setSpellcaster: (value: boolean | undefined) => void;
-  /** Empties the search and the chips — the way back out of a filter. */
+  /** Empties the search and the tokens — the way back out of a filter. */
   readonly clear: () => void;
   /**
    * Whether the reader narrowed anything.
@@ -83,8 +60,6 @@ export interface Corpus<V> {
    * and an empty answer under a different sort is still an empty corpus.
    */
   readonly narrowed: boolean;
-  /** Every environment the corpus mentions, from the server, alphabetical. */
-  readonly vocabulary: ReadonlyArray<string>;
   /** Empty *at all*, rather than empty for this filter. `undefined` until an unnarrowed answer lands. */
   readonly barren: boolean | undefined;
   /** The last good answer, whole — a screen reads its own extra fields off this. */
@@ -103,26 +78,141 @@ export interface Corpus<V> {
   readonly reload: () => void;
 }
 
+/** The nine any-of facets, in the order the suggestion popup offers them. */
+const ENUM_FACETS: ReadonlyArray<{
+  readonly key: string;
+  readonly label: string;
+  readonly field: FacetField;
+}> = [
+  { key: "environment", label: "Environment", field: "environments" },
+  { key: "size", label: "Size", field: "sizes" },
+  { key: "type", label: "Type", field: "types" },
+  { key: "subtype", label: "Subtype", field: "subtypes" },
+  { key: "alignment", label: "Alignment", field: "alignments" },
+  { key: "resists", label: "Resists", field: "damageResistances" },
+  { key: "immune", label: "Damage immunity", field: "damageImmunities" },
+  { key: "condition", label: "Condition immunity", field: "conditionImmunities" },
+  { key: "movement", label: "Movement", field: "movementModes" },
+];
+
+type FacetField =
+  | "environments"
+  | "sizes"
+  | "types"
+  | "subtypes"
+  | "alignments"
+  | "damageResistances"
+  | "damageImmunities"
+  | "conditionImmunities"
+  | "movementModes";
+
 /**
- * Long enough that typing a name is one request rather than eight, short enough
- * that the list has moved by the time the eye gets to it. Same number as
- * `CreaturePicker`, for the same reason.
+ * One facet's vocabulary, grouped case-insensitively — one option per group,
+ * and the raw spellings a committed group key expands back into. The predicate
+ * is any-of, so widening a token to every spelling is exactly what the reader
+ * asked for.
  */
-const SEARCH_SETTLE_MS = 250;
+const grouped = (
+  vocabulary: ReadonlyArray<string>,
+): {
+  readonly options: ReadonlyArray<FilterInputOption>;
+  readonly raws: ReadonlyMap<string, ReadonlyArray<string>>;
+} => {
+  const raws = new Map<string, Array<string>>();
+  for (const value of vocabulary) {
+    const key = value.toLowerCase();
+    const entry = raws.get(key);
+    if (entry === undefined) raws.set(key, [value]);
+    else entry.push(value);
+  }
+  const options = [...raws.keys()].map((key) => ({
+    value: key,
+    label: (key[0]?.toUpperCase() ?? "") + key.slice(1),
+  }));
+  return { options, raws };
+};
+
+/** A CR bound as the wire's number filter reads it — a fraction becomes its decimal. */
+const crBound = (bound: string | undefined): string => {
+  if (bound === undefined) return "";
+  const fraction = /^(\d+)\/(\d+)$/.exec(bound);
+  if (fraction === null) return bound;
+  const denominator = Number(fraction[2]);
+  return denominator === 0 ? bound : String(Number(fraction[1]) / denominator);
+};
+
+/** The facet schema for what the vocabulary read said this corpus holds. */
+const facetsOf = (view: CorpusView | undefined): ReadonlyArray<FilterInputFacet> => {
+  if (view === undefined) return [];
+  const out: Array<FilterInputFacet> = [];
+  for (const facet of ENUM_FACETS) {
+    const vocabulary = view.facets[facet.field];
+    if (vocabulary.length === 0) continue;
+    out.push({
+      kind: "enum",
+      key: facet.key,
+      label: facet.label,
+      options: grouped(vocabulary).options,
+    });
+  }
+  out.push({
+    kind: "range",
+    key: "cr",
+    label: "CR",
+    hint:
+      view.facets.crMin === null || view.facets.crMax === null
+        ? undefined
+        : `Type a range — like ${String(view.facets.crMin)}-${String(view.facets.crMax)} — then press Enter.`,
+  });
+  if (view.facets.legendary) out.push({ kind: "boolean", key: "legendary", label: "Legendary" });
+  if (view.facets.spellcaster)
+    out.push({ kind: "boolean", key: "spellcaster", label: "Spellcaster" });
+  return out;
+};
+
+/** The wire query for what the box holds — group keys expanded to raw spellings. */
+const queryOf = (
+  list: FilterQuery,
+  sort: CreatureSort,
+  view: CorpusView | undefined,
+): CorpusQuery => {
+  const expand = (key: string, field: FacetField): ReadonlyArray<string> => {
+    const selected = list.valuesOf(key);
+    if (selected.length === 0 || view === undefined) return selected;
+    const { raws } = grouped(view.facets[field]);
+    return selected.flatMap((group) => raws.get(group) ?? [group]);
+  };
+  const cr = list.rangeOf("cr");
+  return {
+    ...NO_QUERY,
+    q: list.q,
+    sort,
+    environments: expand("environment", "environments"),
+    sizes: expand("size", "sizes"),
+    types: expand("type", "types"),
+    subtypes: expand("subtype", "subtypes"),
+    alignments: expand("alignment", "alignments"),
+    damageResistances: expand("resists", "damageResistances"),
+    damageImmunities: expand("immune", "damageImmunities"),
+    conditionImmunities: expand("condition", "conditionImmunities"),
+    movementModes: expand("movement", "movementModes"),
+    crMin: crBound(cr.min),
+    crMax: crBound(cr.max),
+    legendary: list.flagOf("legendary"),
+    spellcaster: list.flagOf("spellcaster"),
+  };
+};
 
 /**
  * `first` turns a settled query into the atom that reads its first page. The
  * caller builds it with an `Atom.family` at module scope — one per screen, keyed
  * on the query and on whatever else the read names — so **nothing here has to be
  * `useCallback`-stable**: this hook keys on the atom it is handed, and the atom
- * is the identity. That is the one thing the port simplified rather than moved.
+ * is the identity.
  *
  * `more` is the same query one page on, and stays a plain call because appending
  * a page is not a resource: it adds to what is on screen rather than replacing
- * it. It is a second function rather than an optional cursor on the first
- * because the two answer different shapes — the first page comes with the
- * campaign (or the tables to copy into) and the chip vocabulary, and asking for
- * those again with every page would be three requests to add twenty-four rows.
+ * it.
  */
 export function useCorpus<V extends CorpusView, E, E2>(
   first: (query: CorpusQuery) => Atom.Atom<AsyncResult.AsyncResult<V, E>>,
@@ -133,72 +223,18 @@ export function useCorpus<V extends CorpusView, E, E2>(
     client: TavernsClient,
   ) => Effect.Effect<Page<Creature, CreatureSort>, E2, HttpClient.HttpClient>,
 ): Corpus<V> {
-  const [term, setTerm] = useState("");
-  const [q, setQ] = useState("");
+  const [shown, setShown] = useState<V>();
+  const facets = useMemo(() => facetsOf(shown), [shown]);
+  const list = useFilterQuery(facets);
   const [sort, setSort] = useState<CreatureSort>(NO_QUERY.sort);
-  const [environments, setEnvironments] = useState<ReadonlyArray<string>>([]);
-  const [sizes, setSizes] = useState<ReadonlyArray<string>>([]);
-  const [types, setTypes] = useState<ReadonlyArray<string>>([]);
-  const [subtypes, setSubtypes] = useState<ReadonlyArray<string>>([]);
-  const [alignments, setAlignments] = useState<ReadonlyArray<string>>([]);
-  const [damageResistances, setDamageResistances] = useState<ReadonlyArray<string>>([]);
-  const [damageImmunities, setDamageImmunities] = useState<ReadonlyArray<string>>([]);
-  const [conditionImmunities, setConditionImmunities] = useState<ReadonlyArray<string>>([]);
-  const [movementModes, setMovementModes] = useState<ReadonlyArray<string>>([]);
-  const [crMin, setCrMin] = useState("");
-  const [crMax, setCrMax] = useState("");
-  const [legendary, setLegendary] = useState<boolean | undefined>();
-  const [spellcaster, setSpellcaster] = useState<boolean | undefined>();
 
-  useEffect(() => {
-    const timer = setTimeout(() => setQ(term), SEARCH_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [term]);
-
-  // The chips are in here now: they are a clause of the query, so pressing one
-  // is a load exactly as typing is. The memo is no longer what keeps the read
-  // stable — `Atom.family` compares the query structurally, so an equal query
-  // is the same atom however this object was built — but it is still what keeps
-  // the *key* cheap to compare on an unrelated re-render.
-  const query = useMemo<CorpusQuery>(
-    () => ({
-      q,
-      sort,
-      environments,
-      sizes,
-      types,
-      subtypes,
-      alignments,
-      damageResistances,
-      damageImmunities,
-      conditionImmunities,
-      movementModes,
-      crMin,
-      crMax,
-      legendary,
-      spellcaster,
-    }),
-    [
-      q,
-      sort,
-      environments,
-      sizes,
-      types,
-      subtypes,
-      alignments,
-      damageResistances,
-      damageImmunities,
-      conditionImmunities,
-      movementModes,
-      crMin,
-      crMax,
-      legendary,
-      spellcaster,
-    ],
-  );
+  // The tokens are in the query: pressing a suggestion is a load exactly as
+  // typing is. `Atom.family` compares the query structurally, so an equal
+  // query is the same atom however this object was built — a fresh object per
+  // render is the same read.
+  const query = queryOf(list, sort, shown);
   const [resource, reload] = useApiAtom(first(query));
 
-  const [shown, setShown] = useState<V>();
   const [barren, setBarren] = useState<boolean>();
   /** The pages after the first, for the query `shown` came from. */
   const [extra, setExtra] = useState<ReadonlyArray<Creature>>([]);
@@ -206,21 +242,7 @@ export function useCorpus<V extends CorpusView, E, E2>(
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailure, setMoreFailure] = useState<ApiFailure>();
 
-  const narrowed =
-    q.trim() !== "" ||
-    environments.length > 0 ||
-    sizes.length > 0 ||
-    types.length > 0 ||
-    subtypes.length > 0 ||
-    alignments.length > 0 ||
-    damageResistances.length > 0 ||
-    damageImmunities.length > 0 ||
-    conditionImmunities.length > 0 ||
-    movementModes.length > 0 ||
-    crMin.trim() !== "" ||
-    crMax.trim() !== "" ||
-    legendary !== undefined ||
-    spellcaster !== undefined;
+  const narrowed = list.narrowed;
   /**
    * Read inside the effect below rather than depended on, and that is
    * load-bearing rather than tidy.
@@ -271,107 +293,18 @@ export function useCorpus<V extends CorpusView, E, E2>(
     })();
   }, [cursor, loadingMore, query, more, fetchCredential]);
 
-  const setters: Record<FacetList, (next: ReadonlyArray<string>) => void> = useMemo(
-    () => ({
-      environments: setEnvironments,
-      sizes: setSizes,
-      types: setTypes,
-      subtypes: setSubtypes,
-      alignments: setAlignments,
-      damageResistances: setDamageResistances,
-      damageImmunities: setDamageImmunities,
-      conditionImmunities: setConditionImmunities,
-      movementModes: setMovementModes,
-    }),
-    [],
-  );
-
-  const setFacet = useCallback(
-    (facet: FacetList, values: ReadonlyArray<string>) => setters[facet](values),
-    [setters],
-  );
-
-  const toggleFacet = useCallback(
-    (facet: FacetList, value: string) => {
-      const update = (current: ReadonlyArray<string>) =>
-        current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
-      const values: Record<FacetList, ReadonlyArray<string>> = {
-        environments,
-        sizes,
-        types,
-        subtypes,
-        alignments,
-        damageResistances,
-        damageImmunities,
-        conditionImmunities,
-        movementModes,
-      };
-      setters[facet](update(values[facet]));
-    },
-    [
-      setters,
-      environments,
-      sizes,
-      types,
-      subtypes,
-      alignments,
-      damageResistances,
-      damageImmunities,
-      conditionImmunities,
-      movementModes,
-    ],
-  );
-
-  const clear = useCallback(() => {
-    setTerm("");
-    setQ("");
-    setEnvironments([]);
-    setSizes([]);
-    setTypes([]);
-    setSubtypes([]);
-    setAlignments([]);
-    setDamageResistances([]);
-    setDamageImmunities([]);
-    setConditionImmunities([]);
-    setMovementModes([]);
-    setCrMin("");
-    setCrMax("");
-    setLegendary(undefined);
-    setSpellcaster(undefined);
-  }, []);
-
   const creatures = useMemo(
     () => [...(shown?.creatures ?? []), ...extra],
     [shown?.creatures, extra],
   );
 
   return {
-    term,
-    setTerm,
+    list,
+    facets,
     sort,
     setSort,
-    environments,
-    sizes,
-    types,
-    subtypes,
-    alignments,
-    damageResistances,
-    damageImmunities,
-    conditionImmunities,
-    movementModes,
-    toggleFacet,
-    setFacet,
-    crMin,
-    setCrMin,
-    crMax,
-    setCrMax,
-    legendary,
-    setLegendary,
-    spellcaster,
-    setSpellcaster,
-    clear,
+    clear: list.clear,
     narrowed,
-    vocabulary: shown?.vocabulary ?? [],
     barren,
     shown,
     creatures,

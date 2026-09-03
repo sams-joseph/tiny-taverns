@@ -19,63 +19,21 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import {
-  FilterBar,
-  FilterMultiSelect,
-  FilterSearch,
-  FilterSelect,
-  type FilterOption,
-} from "../library/filters";
-import type { ListQuery } from "../library/query";
+import { FilterBar, FilterBox, FilterSelect, type FilterOption } from "../library/filters";
+import type { FilterQuery } from "../library/query";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { SaveFailure, Textarea } from "../ui/form";
-import type { MagicItemQuery } from "./load";
+import { MAGIC_ITEM_FACETS, type MagicItemQuery } from "./load";
 
 const sourceRef = (index: string, name: string, _family: string) => ({
   index,
   name,
 });
 
-const CATEGORIES: ReadonlyArray<FilterOption> = [
-  { value: "wondrous-items", label: "Wondrous Items" },
-  { value: "potion", label: "Potion" },
-  { value: "ring", label: "Ring" },
-  { value: "weapon", label: "Weapon" },
-  { value: "armor", label: "Armor" },
-  { value: "wand", label: "Wand" },
-  { value: "staff", label: "Staff" },
-  { value: "scroll", label: "Scroll" },
-  { value: "rod", label: "Rod" },
-  { value: "ammunition", label: "Ammunition" },
-];
-
-const RARITIES: ReadonlyArray<FilterOption> = [
-  { value: "common", label: "Common" },
-  { value: "uncommon", label: "Uncommon" },
-  { value: "rare", label: "Rare" },
-  { value: "very-rare", label: "Very Rare" },
-  { value: "legendary", label: "Legendary" },
-  { value: "artifact", label: "Artifact" },
-  { value: "varies", label: "Varies" },
-];
-
 const SORTS: ReadonlyArray<FilterOption> = [
   { value: "name", label: "Name" },
   { value: "rarity", label: "Rarity" },
   { value: "recent", label: "Recent" },
-];
-
-const ATTUNEMENT: ReadonlyArray<FilterOption> = [
-  { value: "", label: "Any attunement" },
-  { value: "required", label: "Required" },
-  { value: "none", label: "None" },
-];
-
-const VARIANTS: ReadonlyArray<FilterOption> = [
-  { value: "", label: "Any variant state" },
-  { value: "base", label: "Has variants" },
-  { value: "variant", label: "Variant" },
-  { value: "standalone", label: "Standalone" },
 ];
 
 const ownerOf = (item: MagicItem): "bundle" | "library" | "campaign" =>
@@ -93,58 +51,27 @@ const variantLine = (item: MagicItem): string =>
 
 export function MagicItemFilters({
   list,
+  sort,
+  onSort,
   busy,
   actions,
 }: {
-  readonly list: ListQuery<MagicItemQuery>;
+  readonly list: FilterQuery;
+  readonly sort: MagicItemQuery["sort"];
+  readonly onSort: (sort: MagicItemQuery["sort"]) => void;
   readonly busy: boolean;
   /** The tab's own write action(s), forwarded to `FilterBar`'s slot. */
   readonly actions?: ReactNode;
 }) {
-  const { value, patch } = list;
   return (
     <FilterBar narrowed={list.narrowed} onClear={list.clear} busy={busy} actions={actions}>
-      <FilterSearch label="Search magic items" value={list.term} onChange={list.setTerm} />
+      <FilterBox label="Search magic items" list={list} facets={MAGIC_ITEM_FACETS} />
       <FilterSelect
         label="Sort"
-        value={value.sort}
-        onChange={(sort) => patch({ sort: sort as MagicItemQuery["sort"] })}
+        value={sort}
+        onChange={(value) => onSort(value as MagicItemQuery["sort"])}
         options={SORTS}
         className="w-32"
-      />
-      <FilterMultiSelect
-        label="Category"
-        values={value.categories}
-        onChange={(categories) => patch({ categories })}
-        options={CATEGORIES}
-        className="w-44"
-      />
-      <FilterMultiSelect
-        label="Rarity"
-        values={value.rarities}
-        onChange={(rarities) => patch({ rarities })}
-        options={RARITIES}
-        className="w-36"
-      />
-      <FilterSelect
-        label="Attunement"
-        value={value.attunement[0] ?? ""}
-        onChange={(attunement) =>
-          patch({ attunement: attunement === "" ? [] : [attunement as "required" | "none"] })
-        }
-        options={ATTUNEMENT}
-        className="w-44"
-      />
-      <FilterSelect
-        label="Variant"
-        value={value.variantStates[0] ?? ""}
-        onChange={(state) =>
-          patch({
-            variantStates: state === "" ? [] : [state as "base" | "variant" | "standalone"],
-          })
-        }
-        options={VARIANTS}
-        className="w-44"
       />
     </FilterBar>
   );

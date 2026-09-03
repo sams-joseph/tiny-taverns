@@ -1,6 +1,8 @@
 import type { Equipment, EquipmentSort, PageCursor } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
+import type { FilterInputFacet, FilterInputOption } from "@taverns/ui";
+import type { FilterQuery } from "../library/query";
 
 export interface EquipmentQuery {
   readonly q: string;
@@ -64,12 +66,43 @@ export const loadMoreLibraryEquipment =
   (query: EquipmentQuery, cursor: PageCursor<EquipmentSort>) => (client: TavernsClient) =>
     client.library.equipment({ query: equipmentQueryParams(query, cursor) });
 
-/** True when anything besides the search narrows an equipment list. */
-export const equipmentNarrows = (query: EquipmentQuery): boolean =>
-  query.categories.length > 0 || query.properties.length > 0;
-
-/** Clearing keeps the sort — reordering a list is not filtering it. */
-export const equipmentClear = (query: EquipmentQuery, initial: EquipmentQuery): EquipmentQuery => ({
-  ...initial,
-  sort: query.sort,
+/** The wire query for what the unified filter box holds, plus the sort beside it. */
+export const equipmentQueryOf = (filter: FilterQuery, sort: EquipmentSort): EquipmentQuery => ({
+  ...NO_EQUIPMENT_QUERY,
+  q: filter.q,
+  sort,
+  categories: filter.valuesOf("category"),
+  properties: filter.valuesOf("property"),
 });
+
+const CATEGORIES: ReadonlyArray<FilterInputOption> = [
+  { value: "adventuring-gear", label: "Adventuring Gear" },
+  { value: "armor", label: "Armor" },
+  { value: "mounts-and-vehicles", label: "Mounts and Vehicles" },
+  { value: "tools", label: "Tools" },
+  { value: "weapon", label: "Weapons" },
+];
+
+/**
+ * The 2014 weapon properties, by source key — what the bundled corpus's rows
+ * name. See the spells tab's class facet for the reasoning, which is the same.
+ */
+const PROPERTIES: ReadonlyArray<FilterInputOption> = [
+  { value: "ammunition", label: "Ammunition" },
+  { value: "finesse", label: "Finesse" },
+  { value: "heavy", label: "Heavy" },
+  { value: "light", label: "Light" },
+  { value: "loading", label: "Loading" },
+  { value: "monk", label: "Monk" },
+  { value: "reach", label: "Reach" },
+  { value: "special", label: "Special" },
+  { value: "thrown", label: "Thrown" },
+  { value: "two-handed", label: "Two-handed" },
+  { value: "versatile", label: "Versatile" },
+];
+
+/** The equipment tab's facet schema — what its `FilterBox` suggests and parses. */
+export const EQUIPMENT_FACETS: ReadonlyArray<FilterInputFacet> = [
+  { kind: "enum", key: "category", label: "Category", options: CATEGORIES },
+  { kind: "enum", key: "property", label: "Property", options: PROPERTIES },
+];

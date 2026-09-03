@@ -1,12 +1,13 @@
 import {
   Button,
-  Input,
+  FilterInput,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Toggle,
+  type FilterInputFacet,
+  type FilterInputValue,
 } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { FailureNotice } from "../ui/states";
@@ -30,15 +31,22 @@ import type { ApiFailure } from "../api/failure";
  *   rule, quoted on `TopBar`. Three tabs proved the bar cannot fit a filter
  *   row without breaking its own layout.
  * - **`FilterBar` is the first element of the content column**, on every tab, in
- *   the same order: search, sort, the facets that make sense for the corpus,
- *   boolean toggles, then — supplied by the bar itself so no tab forgets them —
- *   a *Clear filters* button whenever something narrows, and a quiet "Looking…"
- *   while a narrowed answer is on its way. The tab's write action(s) sit at
- *   the right end of this same row (`actions`), which is the one consistent
- *   in-content placement every tab uses.
- * - **Controls are the design system's.** `FilterSelect` and `FilterMultiSelect`
- *   replace the raw `<select>`s; `FilterToggle` replaces button-as-toggle.
- * - **Search is debounced** (`useSearchTerm`), so typing a name is one request
+ *   the same order: the search-and-filter box, sort, then — supplied by the bar
+ *   itself so no tab forgets them — a *Clear filters* button whenever something
+ *   narrows, and a quiet "Looking…" while a narrowed answer is on its way. The
+ *   tab's write action(s) sit at the right end of this same row (`actions`),
+ *   which is the one consistent in-content placement every tab uses.
+ * - **Search and filters are one box** (`FilterBox`, over `@taverns/ui`'s
+ *   `FilterInput`) — the Linear filter-builder idiom the captain asked for.
+ *   Free text searches; `type:beast`, a popup pick or a typed range lands as a
+ *   removable chip in the same input. The per-facet dropdown row it replaced
+ *   (`FilterMultiSelect` and friends) is gone; a tab describes its facets as a
+ *   schema instead and everything else — suggestions, parsing, chips, the
+ *   keyboard — reads identically on every tab.
+ * - **Sort stays its own `FilterSelect`.** Reordering is not filtering: a sort
+ *   always has an answer, so a removable chip is the wrong shape for it, and
+ *   `clear` keeps it — the rule every tab already followed.
+ * - **Search is debounced** (`useFilterQuery`), so typing a name is one request
  *   rather than eight — the creatures tab always did this and the other tabs
  *   fired one request per keystroke.
  */
@@ -89,23 +97,33 @@ export function FilterBar({
   );
 }
 
-/** The search box: same width, height and idiom on every tab. */
-export function FilterSearch({
+/**
+ * The one search-and-filter box, standard width and grammar on every tab.
+ *
+ * `FilterInput` is the component (`@taverns/ui`); this wrapper is only the
+ * standard sizing and the `FilterQuery` plumbing, so every tab's box grows,
+ * wraps and reads the same. `facets` is the tab's own schema — a tab with none
+ * gets a plain search box with the same look, popup-free.
+ */
+export function FilterBox({
   label,
-  value,
-  onChange,
+  list,
+  facets = [],
 }: {
   readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
+  readonly list: {
+    readonly value: FilterInputValue;
+    readonly onChange: (value: FilterInputValue) => void;
+  };
+  readonly facets?: ReadonlyArray<FilterInputFacet>;
 }) {
   return (
-    <Input
-      aria-label={label}
-      placeholder={label}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-control-sm w-56"
+    <FilterInput
+      value={list.value}
+      onChange={list.onChange}
+      facets={facets}
+      label={label}
+      className="max-w-3xl min-w-64 shrink grow basis-80"
     />
   );
 }
@@ -156,75 +174,6 @@ export function FilterSelect({
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-/**
- * An any-of facet: several values may be pressed at once and the list shows
- * rows matching any of them — the capability the creatures chip wall had,
- * kept, in a control that does not fill the first screenful.
- *
- * The trigger counts rather than lists: `Type: beast` for one, `Type · 3` for
- * several. The popup stays open across presses, which is what any-of means.
- */
-export function FilterMultiSelect({
-  label,
-  values,
-  onChange,
-  options,
-  className = "w-40",
-}: {
-  readonly label: string;
-  readonly values: ReadonlyArray<string>;
-  readonly onChange: (values: ReadonlyArray<string>) => void;
-  readonly options: ReadonlyArray<FilterOption>;
-  readonly className?: string;
-}) {
-  const shown = (): string => {
-    if (values.length === 0) return label;
-    if (values.length === 1) {
-      const entry = options.find((option) => option.value === values[0]);
-      return `${label}: ${entry?.label ?? values[0] ?? ""}`;
-    }
-    return `${label} · ${String(values.length)}`;
-  };
-  return (
-    <Select
-      multiple
-      value={values as Array<string>}
-      onValueChange={(next) => onChange(next as ReadonlyArray<string>)}
-    >
-      {/* "Filter by X" rather than the bare facet name, so the control cannot
-          collide with a form field of the same name on the same screen — the
-          Library's "Type" box did exactly that. */}
-      <SelectTrigger aria-label={`Filter by ${label}`} className={`h-control-sm ${className}`}>
-        <SelectValue>{() => shown()}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-/** A boolean facet — `Legendary`, `Ritual` — as the design system's toggle. */
-export function FilterToggle({
-  pressed,
-  onChange,
-  children,
-}: {
-  readonly pressed: boolean;
-  readonly onChange: (pressed: boolean) => void;
-  readonly children: string;
-}) {
-  return (
-    <Toggle size="sm" pressed={pressed} onPressedChange={(next) => onChange(next)}>
-      {children}
-    </Toggle>
   );
 }
 
