@@ -323,7 +323,10 @@ export function FilterInput({
           ref={measureRef}
           data-measure="row"
           aria-hidden
-          className="pointer-events-none invisible absolute top-0 left-0 flex items-center gap-1.5"
+          // `w-0 overflow-hidden` keeps the clone row out of the container's
+          // scrollWidth — an absolutely positioned row wider than the box
+          // would otherwise read as clipped content to anything measuring it.
+          className="pointer-events-none invisible absolute top-0 left-0 flex w-0 items-center gap-1.5 overflow-hidden"
         >
           {value.filters.map((condition) => (
             <div key={condition.facet} data-measure="pill">

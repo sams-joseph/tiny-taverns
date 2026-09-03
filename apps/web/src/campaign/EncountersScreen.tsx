@@ -101,7 +101,9 @@ export function EncountersScreen() {
             onChange={setFilter}
             facets={encounterFacets(view.encounters)}
             matchToggle
-            className="min-h-control-sm w-64 py-0.5"
+            // Wide enough that the overflow chip, the match toggle and the
+            // typing room share the single line without clipping.
+            className="min-h-control-sm w-96 py-0.5"
           />
           <Button
             variant="secondary"

@@ -4385,6 +4385,17 @@ the field-mode cross-match cap stays. **Match all / Match any** (`FilterInputVal
 `matchToggle`) renders only where the consumer honours OR — the client-filtered Encounters
 screen; the server-paged corpora can only AND their clauses, and the toggle (like the `not`
 operator) must not be offered where it would mean narrowing a page and calling it the list.
+**The box is always one line** (iteration 3): it grows to its consumer's width; when the pills
+stop fitting beside the reserved typing room, the _oldest_ collect into a `+N filters` chip —
+the filter just added stays visible — whose popover (a new lean `popover.tsx` port, pure Base
+UI) holds the collected pills with every segment live. The fit is a pure `visiblePillCount`
+over widths measured from an invisible `w-0 overflow-hidden` clone row (an absolute row wider
+than the box would otherwise inflate `scrollWidth`), recomputed per change and on resize; a
+zero-width container shows everything, so jsdom and `display: none` never overflow — overflow
+component tests drive the measurement through prototype `offsetWidth`/`clientWidth` getters and
+the `PILL_LAYOUT` constants. A consumer's fixed-width box must leave room for its own chrome:
+the chip + input reserve + add-filter (+ match toggle) — `w-64` clipped the Encounters toggle,
+`w-96` is its floor.
 `filter-input-model.ts` is the grammar, separately tested; `filter-input.tsx` wires it onto
 `combobox.tsx`, a port of the base-nova registry combobox onto Base UI (**not** shadcn's
 `command`, which is `cmdk` and cmdk is Radix — the lockfile must stay Radix-free). Keyboard is
