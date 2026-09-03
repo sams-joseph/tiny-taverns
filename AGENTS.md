@@ -4364,16 +4364,31 @@ worked, driving Chromium over CDP:
   assert on **computed values from the running app** (`getComputedStyle`, `getBoundingClientRect`)
   against the token the kit names. That is what caught the 760px overflow a screenshot did not.
 
-## The Library filter standard: one bar, one place, every tab (2026-09-02)
+## The Library filter standard: one input for search and filters (2026-09-03)
 
-**Every Library shelf — and the campaign screens sharing their parts — draws one filter pattern,
-and `apps/web/src/library/filters.tsx` + `library/query.ts` are the whole of it.** The captain's
-complaint, verbatim: _"filtering on the creatures tab is just terrible and the filters are located
-in different places in the ui."_ Before this, the creatures tab split a search box in the top bar
-from a screen-filling card of ~100 facet chips in the body, while spells, equipment and magic items
-crammed raw `<select>`s into the top bar until the title wrapped letter by letter. Where anything
-below (the bestiary/Library screen sections, `CorpusControls`, `EnvironmentChips`, per-dialog copy
-controls in footers) disagrees with this section, this one wins.
+**Every search/filter surface draws one control — `FilterInput` in `packages/ui`, the Linear
+filter-builder idiom the captain asked for on 2026-09-03: free text is the search, and facets
+land as removable chips in the same box** (typed as `type:beast`, or picked from the suggestion
+popup; a `range` facet like CR takes `1-5`, `3-`, `-8` or one exact value; a `boolean` facet's
+suggestion is the token). `packages/ui/src/components/ui/filter-input-model.ts` is the grammar —
+facet schema, parsing, suggestions, commit semantics — separately tested because everything in it
+is wrong silently; `filter-input.tsx` wires it onto `combobox.tsx`, a port of the base-nova
+registry combobox onto Base UI (**not** shadcn's `command`, which is `cmdk` and cmdk is Radix —
+the lockfile must stay Radix-free). Chip keyboard behaviour (ArrowLeft into chips, Backspace on
+an empty input removing the last, Enter committing the highlighted suggestion) is the
+primitive's own; suggestions auto-highlight only mid-composition so a bare Enter on free text
+never commits a filter, the popup stays open across commits (any-of — Base UI's close-on-select
+is cancelled via `onOpenChange`), and no popup renders at all over plain text that suggests
+nothing. `apps/web/src/library/filters.tsx` (`FilterBar` + `FilterBox` + the sort-only
+`FilterSelect`) + `library/query.ts` (`useFilterQuery`: the value, the debounced `q`, and the
+`valuesOf`/`flagOf`/`rangeOf` readers a screen derives its wire query from) are the consumer
+half. Each tab's facet schema lives in its `load.ts` beside a `*QueryOf(filter, sort)`; the
+creature corpus builds its schema from the server's vocabulary read and expands grouped tokens
+back to raw spellings. Converted everywhere: all six Library shelves, campaign Encounters
+(tag/difficulty tokens over the loaded list), Notes, the Chronicle (`in:` replaced the scope
+select — absence is "everything"), and the encounter `CreaturePicker` (facet-free). Where older
+prose below describes `FilterSearch`/`FilterMultiSelect`/`FilterToggle` or per-facet dropdowns,
+this section wins.
 
 - **Tabs get their own row below the header, and tab-scoped actions live inside the tab's
   content — the captain's standing rule (2026-09-02), for any tabbed screen, not just the
@@ -4387,32 +4402,41 @@ controls in footers) disagrees with this section, this one wins.
   delivery's two-row nav — already their own rows, and _Start session_ belongs to the whole
   campaign), and the character sheet's `Tabs` already conforms (TabsList its own row inside the
   content, per-tab edit buttons inside each `TabsContent`).
-- **The top bar holds the title and the count — never a filter, a tab, or a tab's action.**
-  Three tabs proved the bar cannot fit a filter row without breaking its own layout.
-- **`FilterBar` is the first element of the content column on every tab**, in one order: search
-  (debounced through `useSearchTerm`), a `Sort:` `FilterSelect`, the corpus's facets as
-  `FilterMultiSelect`s (any-of, popup stays open, trigger reads `Type: Beast` or `Type · 2`,
-  aria-label `Filter by X` so it cannot collide with a form field of the same name), boolean
-  `FilterToggle`s — then _Clear filters_ and a "Looking…" status, which are the bar's own so no
-  tab can forget them. `useListQuery` is the query-state hook for the plain tabs;
-  `bestiary/corpus.ts` stays the richer creature version (pages + facet vocabulary) and renders
-  through the same components. Clearing keeps the sort — reordering is not filtering.
-- **Creature facet vocabularies are grouped case-insensitively** in `bestiary/CorpusParts.tsx`
+- **The top bar holds the title and the count on the Library shelves — never a filter, a tab, or
+  a tab's action.** Three tabs proved the bar cannot fit a filter row without breaking its own
+  layout. The campaign screens (Encounters, Notes, Chronicle) keep their box in `CampaignChrome`'s
+  `actions` slot — their established placement, deliberately left where it was in the 2026-09-03
+  conversion rather than re-laid-out.
+- **`FilterBar` is the first element of the content column on every Library tab**, in one order:
+  the `FilterBox`, a `Sort:` `FilterSelect` — then _Clear filters_ and a "Looking…" status, which
+  are the bar's own so no tab can forget them. Sort stays outside the box on purpose: a removable
+  chip is the wrong shape for a control that always has an answer, and clearing keeps the sort —
+  reordering is not filtering. `useFilterQuery` is the query-state hook for the plain tabs;
+  `bestiary/corpus.ts` stays the richer creature version (pages + vocabulary-driven schema +
+  `barren`).
+- **Creature facet vocabularies are grouped case-insensitively** in `bestiary/corpus.ts`
   (`beast`/`Beast` are genuinely distinct rows — starter bundle vs SRD spelling); one option
-  stands for the group and sends every raw spelling, which the any-of predicate makes exactly
-  what the reader asked for.
+  stands for the group, a committed token stores the group key, and the query expands it to
+  every raw spelling, which the any-of predicate makes exactly what the reader asked for. CR
+  fractions (`1/4`) are folded to decimals for the wire's number filter.
 - **Detail dialogs share one shape**: `ui/detail.tsx`'s `DetailBody` (the scrolling middle,
   `px-gutter py-3`, the header's gutter carried through), `DetailSection` (hairline-ruled runs)
   and `DetailFacts` (the label/value grid). The copy control is the generalised
   `library/CopyIn.tsx`, in a `DetailSection` at the end of the body — the `CreatureDialog`
   placement — with the footer staying _Close_.
-- **Shared behaviour is pinned in `library/filters.test.tsx`; per-tab application in each tab's
-  screen test** (`spells/SpellLibraryScreen.test.tsx` is the worked example). Base UI multiple
-  `Select` (v1.6) is what backs `FilterMultiSelect` — drive it in tests as combobox → options,
-  and the popup stays open across presses.
+- **Shared behaviour is pinned in `packages/ui`'s `filter-input-model.test.ts` +
+  `filter-input.test.tsx` and `library/filters.test.tsx`; per-tab application in each tab's
+  screen test** (`spells/SpellLibraryScreen.test.tsx` is the worked example). In jsdom the box is
+  `getByRole("combobox", { name: "Search …" })`; typed commits are `type:bea{Enter}`
+  (auto-highlight makes Enter take the first match while composing). **An open suggestion popup
+  holds the accessibility tree** — press Escape before reaching for anything outside it (the
+  Clear button, a card) or `getByRole` finds nothing.
 - The spells class facet and equipment property facet are fixed 2014 source-key lists (they
   replaced bare "class key"/"property key" text boxes); a corpus vocabulary read would be the
-  exact answer if one is ever added. No API contract changed for any of this.
+  exact answer if one is ever added. No API contract changed for any of this. One delivered-CSS
+  trap the chips box hit: `tokens/base.css` puts the global `--ring` on every bare
+  `:focus-visible` element, so an unstyled input nested inside a focus-styled container renders
+  two rectangles — the inner input opts out with `focus-visible:shadow-none`.
 
 ## The bestiary screen: how it consumes the creature contract
 

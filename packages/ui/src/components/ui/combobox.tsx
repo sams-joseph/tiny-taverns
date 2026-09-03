@@ -215,6 +215,10 @@ function ComboboxChipsInput({ className, ...props }: ComboboxPrimitive.Input.Pro
       className={cn(
         "h-6 min-w-24 flex-1 bg-transparent font-sans text-body-s text-foreground",
         "outline-none placeholder:text-faint",
+        // The chips container draws the focus treatment; without this the
+        // delivered base.css puts the global --ring on the bare inner input
+        // too, and the box reads as two nested rectangles.
+        "focus-visible:shadow-none",
         className,
       )}
       {...props}
