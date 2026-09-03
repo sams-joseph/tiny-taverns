@@ -40,9 +40,7 @@ import { matches } from "./load";
  * filter is client-side over the campaign's own encounters, so its vocabulary
  * is what those rows carry.
  */
-const encounterFacets = (
-  encounters: ReadonlyArray<Encounter>,
-): ReadonlyArray<FilterInputFacet> => {
+const encounterFacets = (encounters: ReadonlyArray<Encounter>): ReadonlyArray<FilterInputFacet> => {
   const tags = [...new Set(encounters.flatMap((encounter) => encounter.tags))].sort();
   const difficulties = [
     ...new Set(encounters.flatMap((encounter) => encounter.difficulty ?? [])),

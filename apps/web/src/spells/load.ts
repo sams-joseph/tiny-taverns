@@ -66,8 +66,7 @@ export const spellQueryOf = (filter: FilterQuery, sort: SpellSort): SpellQuery =
   concentration: filter.flagOf("concentration"),
 });
 
-export const levelLabel = (level: number): string =>
-  level === 0 ? "Cantrip" : `Level ${level}`;
+export const levelLabel = (level: number): string => (level === 0 ? "Cantrip" : `Level ${level}`);
 
 const LEVELS: ReadonlyArray<FilterInputOption> = Array.from({ length: 10 }, (_, level) => ({
   value: String(level),

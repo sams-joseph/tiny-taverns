@@ -174,7 +174,11 @@ describe("withToken", () => {
   });
 
   it("spends the matched trailing word on a cross-match commit", () => {
-    const next = withToken({ text: "goblin bea", tokens: [] }, { facet: "type", value: "beast" }, FACETS);
+    const next = withToken(
+      { text: "goblin bea", tokens: [] },
+      { facet: "type", value: "beast" },
+      FACETS,
+    );
     expect(next.text).toBe("goblin ");
   });
 

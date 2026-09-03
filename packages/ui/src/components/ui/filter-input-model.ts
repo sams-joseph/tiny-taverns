@@ -230,8 +230,7 @@ export const suggestionsFor = (
   const needle = text.slice(wordStart(text)).trim().toLowerCase();
   const out: Array<FilterInputSuggestion> = [];
   for (const facet of facets) {
-    const named =
-      needle === "" || contains(facet.label, needle) || contains(facet.key, needle);
+    const named = needle === "" || contains(facet.label, needle) || contains(facet.key, needle);
     if (!named) continue;
     if (facet.kind === "boolean") {
       out.push({
@@ -286,7 +285,12 @@ export const withToken = (
   const already = value.tokens.some((candidate) => sameToken(candidate, token));
   const tokens = already
     ? value.tokens.filter((candidate) => !sameToken(candidate, token))
-    : [...(single ? value.tokens.filter((candidate) => candidate.facet !== token.facet) : value.tokens), token];
+    : [
+        ...(single
+          ? value.tokens.filter((candidate) => candidate.facet !== token.facet)
+          : value.tokens),
+        token,
+      ];
   return { text: spentText(value.text, facets), tokens };
 };
 
@@ -309,8 +313,5 @@ export const withoutToken = (
 });
 
 /** Every committed value of one facet, in commit order. */
-export const tokenValuesOf = (
-  value: FilterInputValue,
-  facetKey: string,
-): ReadonlyArray<string> =>
+export const tokenValuesOf = (value: FilterInputValue, facetKey: string): ReadonlyArray<string> =>
   value.tokens.filter((token) => token.facet === facetKey).map((token) => token.value);

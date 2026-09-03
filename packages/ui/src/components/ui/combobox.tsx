@@ -47,7 +47,10 @@ function ComboboxContent({
   anchor,
   ...props
 }: ComboboxPrimitive.Popup.Props &
-  Pick<ComboboxPrimitive.Positioner.Props, "side" | "align" | "sideOffset" | "alignOffset" | "anchor">) {
+  Pick<
+    ComboboxPrimitive.Positioner.Props,
+    "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
+  >) {
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner

@@ -19,7 +19,6 @@ export interface RuleArticleQuery {
 
 export const NO_RULE_ARTICLE_QUERY: RuleArticleQuery = { q: "", sort: "name" };
 
-
 /** The wire query for what the unified filter box holds, plus the sort beside it. */
 export const ruleArticleQueryOf = (
   filter: { readonly q: string },
