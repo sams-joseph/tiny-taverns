@@ -123,7 +123,7 @@ const makeFixture = Effect.gen(function* () {
   const sorrel = yield* withActor(marta)(characters.createOwn(table.id, { name: "Sorrel" }));
 
   const goblin = yield* asJo(
-    creatures.create(table.id, {
+    creatures.libraryCreate({
       name: "Goblin Archer",
       size: "Small",
       type: "Humanoid",
@@ -359,13 +359,16 @@ describe("the columns: the live half is not expressible", () => {
   it("refuses a subrace that no seated campaign's vocabulary contains", async () => {
     // Subraces are not a fourth option kind. A shared character crossing
     // campaigns cannot be bound to one table's vocabulary, so the pair has to
-    // resolve through SOME campaign the character is seated at — here there
-    // is exactly one, and its Elf has no Hill Dwarf.
+    // resolve through SOME campaign the character is seated at — here there is
+    // exactly one, and the Elf its vocabulary offers has no Hill Dwarf. The
+    // vocabulary is `usableInCampaign` since the instancing decision of
+    // 2026-09-02, so the race is the reader's own Library original rather than
+    // a campaign copy — exactly what the create form would have offered Pim.
     await runtime.runPromise(
       sql`
-        insert into character_option (campaign_id, kind, name, body, visibility)
+        insert into character_option (account_id, kind, name, body, visibility)
         values (
-          ${fixture.table.id},
+          ${fixture.pim.accountId},
           'race',
           'Elf',
           ${JSON.stringify({

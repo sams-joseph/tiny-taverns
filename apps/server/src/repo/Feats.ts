@@ -3,7 +3,6 @@ import {
   type CampaignId,
   CurrentActor,
   Feat,
-  type FeatDerive,
   type FeatFilterValues,
   type FeatId,
   type FeatLibraryCreate,
@@ -12,7 +11,6 @@ import {
   type FeatPrerequisiteAbilityInput,
   type FeatPrerequisiteGroupId,
   type FeatSort,
-  type FeatUpdate,
   NotFound,
   type Page,
   type RuleAbilityScore,
@@ -36,14 +34,7 @@ import {
   pageOfRows,
   timeColumn,
 } from "./paging.js";
-import {
-  copyableIntoCampaign,
-  corpusRowReadable,
-  ensureCampaignWritable,
-  libraryRowReadable,
-  libraryRowWritable,
-  rowWritable,
-} from "./visibility.js";
+import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
 interface FeatRow extends ProvenanceColumns {
   readonly id: FeatId;
@@ -137,7 +128,7 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<FeatSort, Ordering<FeatRo
   };
 };
 
-const patchColumns = (patch: FeatDerive | FeatLibraryUpdate | FeatUpdate) =>
+const patchColumns = (patch: FeatLibraryUpdate) =>
   defined({
     name: patch.name,
     visibility: "visibility" in patch ? patch.visibility : undefined,
@@ -184,83 +175,18 @@ const syncPrerequisites = (
     }
   }).pipe(dieOnSqlError);
 
-const copyChildren = (
-  sql: SqlClient.SqlClient,
-  sourceId: FeatId,
-  copyId: FeatId,
-): Effect.Effect<void, never> =>
-  Effect.gen(function* () {
-    const descriptions = yield* sql<DescriptionRow>`
-      select text from feat_description where feat_id = ${sourceId} order by ordinal, id
-    `;
-    yield* syncDescription(
-      sql,
-      copyId,
-      descriptions.map((row) => row.text),
-    );
-
-    const groups = yield* sql<{
-      readonly id: FeatPrerequisiteGroupId;
-      readonly ordinal: number;
-    }>`
-      select id::text, ordinal from feat_prerequisite_group
-      where feat_id = ${sourceId}
-      order by ordinal, id
-    `;
-    for (const group of groups) {
-      const copied = yield* sql<{ readonly id: FeatPrerequisiteGroupId }>`
-        insert into feat_prerequisite_group (feat_id, ordinal)
-        values (${copyId}, ${group.ordinal})
-        returning id::text
-      `;
-      const prereqs = yield* sql<{
-        readonly ability_score_id: string;
-        readonly minimum_score: number;
-        readonly ordinal: number;
-      }>`
-        select ability_score_id::text, minimum_score, ordinal
-        from feat_prerequisite_ability_score
-        where group_id = ${group.id}
-        order by ordinal, id
-      `;
-      for (const prerequisite of prereqs) {
-        yield* sql`
-          insert into feat_prerequisite_ability_score (
-            feat_id, group_id, ability_score_id, minimum_score, ordinal
-          ) values (
-            ${copyId}, ${copied[0]!.id}, ${prerequisite.ability_score_id},
-            ${prerequisite.minimum_score}, ${prerequisite.ordinal}
-          )
-        `;
-      }
-    }
-  }).pipe(dieOnSqlError);
-
+/**
+ * The Library's feats — originals and the bundle, `libraryRowReadable` /
+ * `libraryRowWritable` and nothing else.
+ *
+ * The campaign-scoped methods went with the instancing decision of 2026-09-02:
+ * campaign copies became internal plumbing, and this corpus has no
+ * per-campaign consumer at all, so the Library is its entire surface. Old
+ * campaign rows in existing data are inert and unlisted.
+ */
 export class Feats extends Context.Service<
   Feats,
   {
-    readonly list: (
-      campaignId: CampaignId,
-      filter: FeatFilterValues,
-    ) => Effect.Effect<Page<Feat, FeatSort>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: FeatId,
-    ) => Effect.Effect<Feat, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: FeatId,
-      patch: FeatUpdate,
-    ) => Effect.Effect<Feat, NotFound, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: FeatId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
-    readonly derive: (
-      campaignId: CampaignId,
-      id: FeatId,
-      patch: FeatDerive,
-    ) => Effect.Effect<Feat, NotFound, CurrentActor>;
     readonly library: (
       filter: FeatFilterValues,
     ) => Effect.Effect<Page<Feat, FeatSort>, never, CurrentActor>;
@@ -319,144 +245,7 @@ export class Feats extends Context.Service<
           );
         });
 
-      const readable = (campaignId: CampaignId, id: FeatId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<FeatRow>`
-            select ${sql.unsafe(featColumns())}
-            from feat
-            where feat.id = ${id}
-              and ${corpusRowReadable(sql, "feat", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
-          return rows[0]!;
-        });
-
-      const copyable = (campaignId: CampaignId, id: FeatId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<FeatRow>`
-            select ${sql.unsafe(featColumns())}
-            from feat
-            where feat.id = ${id}
-              and ${copyableIntoCampaign(sql, "feat", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
-          return rows[0]!;
-        });
-
       return {
-        list: (campaignId, filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<FeatRow>`
-                select ${sql.unsafe(featColumns())}
-                from feat
-                where ${sql.and([
-                  corpusRowReadable(sql, "feat", campaignId, actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              const hydrated = yield* Effect.all(rows.map(hydrate), { concurrency: "unbounded" });
-              const byId = new Map(hydrated.map((feat) => [feat.id, feat]));
-              return pageOfRows(rows, filter.limit, ordering, sort, (row) => byId.get(row.id)!);
-            }),
-          ),
-
-        findById: (campaignId, id) =>
-          dieOnSqlError(Effect.flatMap(readable(campaignId, id), hydrate)),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<FeatRow>`
-                  update feat
-                  set ${setClause(sql, patchColumns(patch))}
-                  where feat.id = ${id}
-                    and ${rowWritable(sql, "feat", campaignId, actor)}
-                  returning ${sql.unsafe(featColumns())}
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
-                if (patch.description !== undefined)
-                  yield* syncDescription(sql, rows[0]!.id, patch.description);
-                if (patch.prerequisites !== undefined)
-                  yield* syncPrerequisites(sql, rows[0]!.id, patch.prerequisites);
-                return yield* hydrate(rows[0]!);
-              }),
-            ),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: FeatId }>`
-                delete from feat
-                where feat.id = ${id}
-                  and ${rowWritable(sql, "feat", campaignId, actor)}
-                returning feat.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
-            }),
-          ),
-
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                const rows = yield* sql<FeatRow>`
-                  insert into feat ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      derived_from: source.id,
-                      source_corpus: source.source_corpus,
-                      source_family: source.source_family,
-                      source_key: source.source_key,
-                      name: patch.name ?? source.name,
-                      visibility: patch.visibility,
-                    }),
-                  )}
-                  returning ${sql.unsafe(featColumns())}
-                `;
-                const copy = rows[0]!;
-                if (patch.description === undefined && patch.prerequisites === undefined) {
-                  yield* copyChildren(sql, source.id, copy.id);
-                } else {
-                  if (patch.description === undefined) {
-                    const descriptions = yield* descriptionsFor(source.id);
-                    yield* syncDescription(
-                      sql,
-                      copy.id,
-                      descriptions.map((description) => description.text),
-                    );
-                  } else yield* syncDescription(sql, copy.id, patch.description);
-                  if (patch.prerequisites === undefined) {
-                    const prerequisites = yield* prerequisitesFor(source.id);
-                    yield* syncPrerequisites(
-                      sql,
-                      copy.id,
-                      prerequisites.map((prerequisite) => ({
-                        abilityScoreId: prerequisite.ability_score_id,
-                        minimumScore: prerequisite.minimum_score,
-                      })),
-                    );
-                  } else yield* syncPrerequisites(sql, copy.id, patch.prerequisites);
-                }
-                return yield* hydrate(copy);
-              }),
-            ),
-          ),
-
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {

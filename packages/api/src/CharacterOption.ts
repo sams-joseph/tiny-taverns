@@ -440,9 +440,6 @@ export const OptionUpdate = Schema.Struct({
 });
 export type OptionUpdate = typeof OptionUpdate.Type;
 
-export const OptionDerive = OptionUpdate;
-export type OptionDerive = typeof OptionDerive.Type;
-
 export const OptionFilter = {
   kind: Schema.optional(OptionKind),
 } as const;

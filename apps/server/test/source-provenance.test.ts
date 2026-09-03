@@ -1,10 +1,4 @@
-import {
-  Actor,
-  type CharacterOptionId,
-  type ClassBody,
-  CurrentActor,
-  type CreatureId,
-} from "@taverns/api";
+import { Actor, type ClassBody, CurrentActor, type CreatureId } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, describe, expect, it } from "vitest";
@@ -15,6 +9,8 @@ import type { SystemCreature } from "../src/bestiary/systemCreatures.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
+import { Encounters } from "../src/repo/Encounters.js";
 import { Options } from "../src/repo/Options.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import type { SystemOption } from "../src/ruleset/systemOptions.js";
@@ -30,7 +26,14 @@ const run = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    Accounts | Campaigns | Groups | Creatures | Options | SqlClient.SqlClient
+    | Accounts
+    | Campaigns
+    | EncounterCreatures
+    | Encounters
+    | Groups
+    | Creatures
+    | Options
+    | SqlClient.SqlClient
   >,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
 
@@ -200,7 +203,12 @@ describe("rules source identity", () => {
     expect(rows).toEqual([{ name: "Renamed Class", visibility: "dm", body: renamed.body }]);
   });
 
-  it("copies source identity onto campaign snapshots and leaves the snapshot content alone after source updates", async () => {
+  it("carries source identity onto the internal instance a roster add mints", async () => {
+    // The campaign-copy endpoints are gone (the instancing decision of
+    // 2026-09-02); the one snapshot the product still takes is the internal
+    // instance `EncounterCreatures.create` mints from an owned original, and
+    // it copies the source triplet exactly as `derive` did — so lineage
+    // survives the plumbing.
     const accounts = await run(
       Accounts.pipe(Effect.flatMap((service) => service.issue("Source DM"))),
     );
@@ -209,83 +217,51 @@ describe("rules source identity", () => {
       createCampaign({ name: "The Source Road" }).pipe(Effect.provideService(CurrentActor, actor)),
     );
 
-    const monsterSource = "source-test-snapshot-creature";
-    const classSource = "source-test-snapshot-class";
-    await run(importSystemCreatures([creature(monsterSource, "Snapshot Beast", 20)]));
-    await run(importSystemOptions([option(classSource, "Snapshot Class", 8)]));
-
-    const sourceRows = await sql(
-      (client) => client<{
-        readonly source_key: string;
-        readonly domain_id: CreatureId | CharacterOptionId;
-      }>`
-      select source_key, id::text as domain_id
-      from creature
-      where source_key = ${monsterSource}
-      union all
-      select source_key, id::text as domain_id
-      from character_option
-      where source_key = ${classSource}
-      order by source_key
-    `,
-    );
-    const classRow = sourceRows.find((row) => row.source_key === classSource);
-    const monsterRow = sourceRows.find((row) => row.source_key === monsterSource);
-    if (classRow === undefined || monsterRow === undefined) throw new Error("expected source rows");
-
-    await run(
-      Effect.all([
-        Creatures.pipe(
-          Effect.flatMap((creatures) =>
-            creatures.derive(campaign.id, monsterRow.domain_id as CreatureId, {}),
-          ),
-        ),
-        Options.pipe(
-          Effect.flatMap((options) =>
-            options.derive(campaign.id, classRow.domain_id as CharacterOptionId, {}),
-          ),
-        ),
-      ]).pipe(Effect.provideService(CurrentActor, actor)),
+    // An owned original wearing a source triplet — the shape an imported-then-
+    // owned row has; written with SQL because no shipped path stamps one.
+    const original = await sql(
+      (client) => client<{ readonly id: CreatureId }>`
+        insert into creature (
+          account_id, origin, source_corpus, source_family, source_key,
+          name, type, cr, cr_sort, ac, hp
+        )
+        values (
+          ${accounts.accountId}, 'imported', 'somewhere-else', 'monsters',
+          'source-test-instance-lineage', 'Lineage Beast', 'Beast', '1', 1, 12, 20
+        )
+        returning id
+      `,
     );
 
-    await run(importSystemCreatures([creature(monsterSource, "Snapshot Beast Revised", 21)]));
-    await run(importSystemOptions([option(classSource, "Snapshot Class Revised", 12)]));
+    const line = await run(
+      Effect.gen(function* () {
+        const encounters = yield* Encounters;
+        const roster = yield* EncounterCreatures;
+        const encounter = yield* encounters.create(campaign.id, { name: "Lineage check" });
+        return yield* roster.create(campaign.id, encounter.id, {
+          creatureId: original[0]!.id,
+        });
+      }).pipe(Effect.provideService(CurrentActor, actor)),
+    );
 
-    const copies = await sql(
+    const instance = await sql(
       (client) => client<{
-        readonly table_name: string;
-        readonly name: string;
         readonly source_corpus: string;
         readonly source_family: string;
         readonly source_key: string;
+        readonly derived_from: string;
       }>`
-      select 'creature' as table_name, name, source_corpus, source_family, source_key
-      from creature
-      where campaign_id = ${campaign.id}
-      union all
-      select 'character_option' as table_name, name, source_corpus, source_family, source_key
-      from character_option
-      where campaign_id = ${campaign.id}
-      order by table_name
-    `,
+        select source_corpus, source_family, source_key, derived_from::text
+        from creature where id = ${line.creatureId}
+      `,
     );
 
-    expect(copies).toEqual([
-      {
-        table_name: "character_option",
-        name: "Snapshot Class",
-        source_corpus: "5e-bits-2014",
-        source_family: "classes",
-        source_key: classSource,
-      },
-      {
-        table_name: "creature",
-        name: "Snapshot Beast",
-        source_corpus: "taverns-starter",
-        source_family: "monsters",
-        source_key: monsterSource,
-      },
-    ]);
+    expect(instance[0]).toEqual({
+      source_corpus: "somewhere-else",
+      source_family: "monsters",
+      source_key: "source-test-instance-lineage",
+      derived_from: original[0]!.id,
+    });
   });
 
   it("keeps source keys as all-or-nothing metadata and removes the old raw source graph", async () => {

@@ -19,7 +19,7 @@ import { dieOnSqlError, likeContains } from "./rows.js";
 import {
   characterSeatedAt,
   containedRowReadable,
-  corpusRowReadable,
+  usableInCampaign,
   ensureCampaignReadable,
   inCampaign,
   rowReadable,
@@ -46,7 +46,7 @@ import {
  * | ----------- | ----------------------------- | ----------------------- |
  * | `note`      | `rowReadable`                 | campaign-scoped rows    |
  * | `beat`      | the `beat → session` chain    | nested, no `campaign_id`|
- * | `creature`  | `corpusRowReadable`           | half the rows are global|
+ * | `creature`  | `usableInCampaign`            | what the picker offers  |
  * | `character` | `characterSeatedAt`           | reached through a seat  |
  *
  * The fourth arm is what `0009_search_index.ts` advertised as "about eight
@@ -240,17 +240,15 @@ const creatureArm = (
       // under the name, and it is the honest subtitle for a result row.
       snippet: sql`coalesce(creature.body ->> 'meta', '')`,
       // The one predicate here that returns rows with no campaign of their own.
-      // The campaign gate is still outside the unowned/equals branch, which is
-      // what keeps a bundled creature reachable only through a campaign this
-      // actor can read.
-      //
-      // **A Library entity is deliberately not findable here**, and that falls
-      // out of the predicate rather than being arranged: a search is scoped to a
-      // campaign by its path, and an original is in no campaign. What a campaign
-      // search finds of a monster somebody authored is the *copy* they brought
-      // in, which is the row that campaign actually contains. The Library has
-      // its own search, over the same two matchers, in `Creatures.library`.
-      readable: corpusRowReadable(sql, "creature", campaignId, actor),
+      // Since the instancing decision of 2026-09-02 this is `usableInCampaign` —
+      // what the campaign can *use*: the bundle (under its row-visibility
+      // rule), the caller's own Library, and group-shared originals. **Never a
+      // campaign instance**: those are plumbing an encounter roster points at,
+      // and a search hit has to be something a screen can show, which since the
+      // campaign bestiary screen went is only what the picker offers. The
+      // campaign gate is inside the predicate, so a bundled creature is still
+      // reachable only through a campaign this actor can read.
+      readable: usableInCampaign(sql, "creature", campaignId, actor),
       matches: sql.or([
         sql`creature.name ilike ${likeContains(query)}`,
         sql`creature.search @@ websearch_to_tsquery('english', ${query})`,

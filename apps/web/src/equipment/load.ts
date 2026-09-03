@@ -1,4 +1,4 @@
-import type { Campaign, CampaignId, Equipment, EquipmentSort, PageCursor } from "@taverns/api";
+import type { Equipment, EquipmentSort, PageCursor } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -51,54 +51,18 @@ export const equipmentQueryParams = (
 export interface EquipmentLibraryView {
   readonly equipment: ReadonlyArray<Equipment>;
   readonly nextCursor: PageCursor<EquipmentSort> | null;
-  readonly campaigns: ReadonlyArray<Campaign>;
 }
 
 export const loadEquipmentLibrary = (query: EquipmentQuery) => (client: TavernsClient) =>
-  Effect.gen(function* () {
-    const [page, memberships] = yield* Effect.all(
-      [
-        client.library.equipment({ query: equipmentQueryParams(query, undefined) }),
-        client.me.campaigns(),
-      ],
-      { concurrency: "unbounded" },
-    );
-    return {
-      equipment: page.items,
-      nextCursor: page.nextCursor,
-      campaigns: memberships
-        .filter((membership) => membership.relation === "creator")
-        .map((membership) => membership.campaign),
-    } satisfies EquipmentLibraryView;
-  });
-
-export interface CampaignEquipmentView {
-  readonly equipment: ReadonlyArray<Equipment>;
-  readonly nextCursor: PageCursor<EquipmentSort> | null;
-}
-
-export const loadCampaignEquipment =
-  (campaignId: CampaignId, query: EquipmentQuery) => (client: TavernsClient) =>
-    Effect.map(
-      client.equipment.list({
-        params: { campaignId },
-        query: equipmentQueryParams(query, undefined),
-      }),
-      (page) =>
-        ({
-          equipment: page.items,
-          nextCursor: page.nextCursor,
-        }) satisfies CampaignEquipmentView,
-    );
+  Effect.map(
+    client.library.equipment({ query: equipmentQueryParams(query, undefined) }),
+    (page) =>
+      ({ equipment: page.items, nextCursor: page.nextCursor }) satisfies EquipmentLibraryView,
+  );
 
 export const loadMoreLibraryEquipment =
   (query: EquipmentQuery, cursor: PageCursor<EquipmentSort>) => (client: TavernsClient) =>
     client.library.equipment({ query: equipmentQueryParams(query, cursor) });
-
-export const loadMoreCampaignEquipment =
-  (campaignId: CampaignId, query: EquipmentQuery, cursor: PageCursor<EquipmentSort>) =>
-  (client: TavernsClient) =>
-    client.equipment.list({ params: { campaignId }, query: equipmentQueryParams(query, cursor) });
 
 /** True when anything besides the search narrows an equipment list. */
 export const equipmentNarrows = (query: EquipmentQuery): boolean =>

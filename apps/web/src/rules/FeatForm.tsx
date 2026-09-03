@@ -1,9 +1,4 @@
-import type {
-  CampaignId,
-  Feat,
-  FeatPrerequisiteAbilityInput,
-  OptionVocabulary,
-} from "@taverns/api";
+import type { Feat, FeatPrerequisiteAbilityInput, OptionVocabulary } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -19,8 +14,7 @@ import { useMemo, useState } from "react";
 import type { TavernsClient } from "../api/client";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
-import { featWritesAt } from "./load";
+import { Field, SaveFailure, Textarea } from "../ui/form";
 
 interface PrerequisiteDraft {
   readonly abilityScoreId: string;
@@ -43,16 +37,12 @@ const prereqsFrom = (
       }));
 
 export function FeatForm({
-  campaignId,
   feat,
-  source,
   vocabulary,
   onClose,
   onSaved,
 }: {
-  readonly campaignId: CampaignId | undefined;
   readonly feat: Feat | undefined;
-  readonly source: "library" | "campaign";
   readonly vocabulary: OptionVocabulary;
   readonly onClose: () => void;
   readonly onSaved: () => void;
@@ -60,7 +50,6 @@ export function FeatForm({
   const firstAbilityId = vocabulary.abilities[0]?.id ?? "";
   const [name, setName] = useState(feat?.name ?? "");
   const [description, setDescription] = useState(linesFrom(feat));
-  const [visibility, setVisibility] = useState(feat?.visibility ?? "dm");
   const [prerequisites, setPrerequisites] = useState(() => prereqsFrom(feat, firstAbilityId));
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
@@ -97,42 +86,20 @@ export function FeatForm({
     setShowProblems(true);
     if (problem !== undefined || prereqProblem !== undefined) return;
 
-    const write = (client: TavernsClient) => {
-      if (source === "library") {
-        return feat === undefined
-          ? client.library.createFeat({ payload: payload() })
-          : client.library.updateFeat({ params: { featId: feat.id }, payload: payload() });
-      }
-      if (campaignId === undefined) throw new Error("campaign id is required to write a feat copy");
-      return feat === undefined
-        ? (() => {
-            throw new Error("new campaign feats are created in the Library, then copied in");
-          })()
-        : client.feats.update({
-            params: { campaignId, featId: feat.id },
-            payload: { ...payload(), visibility },
-          });
-    };
+    const write = (client: TavernsClient) =>
+      feat === undefined
+        ? client.library.createFeat({ payload: payload() })
+        : client.library.updateFeat({ params: { featId: feat.id }, payload: payload() });
 
-    const result = await submit(
-      write,
-      source === "library" || campaignId === undefined
-        ? [reads.libraryFeats]
-        : featWritesAt(campaignId),
-    );
+    const result = await submit(write, [reads.libraryFeats]);
     if (Result.isSuccess(result)) onSaved();
   };
 
   const remove = async () => {
     if (feat === undefined) return;
     const result = await submit(
-      (client) =>
-        source === "library"
-          ? client.library.removeFeat({ params: { featId: feat.id } })
-          : client.feats.remove({ params: { campaignId: campaignId!, featId: feat.id } }),
-      source === "library" || campaignId === undefined
-        ? [reads.libraryFeats]
-        : featWritesAt(campaignId),
+      (client) => client.library.removeFeat({ params: { featId: feat.id } }),
+      [reads.libraryFeats],
     );
     if (Result.isSuccess(result)) onSaved();
   };
@@ -143,9 +110,7 @@ export function FeatForm({
         <DialogHeader>
           <DialogTitle>{feat === undefined ? "Write a feat" : `Edit ${feat.name}`}</DialogTitle>
           <DialogDescription>
-            {source === "library"
-              ? "It lives in your library until you copy it into a campaign."
-              : "This is this campaign's snapshot. Editing it does not change the Library original."}
+            It lives in your library, ready to share with a group or use at your tables.
           </DialogDescription>
         </DialogHeader>
 
@@ -170,17 +135,6 @@ export function FeatForm({
               onChange={(event) => setDescription(event.currentTarget.value)}
             />
           </Field>
-
-          {source === "campaign" && (
-            <VisibilityField
-              id="feat-visibility"
-              value={visibility}
-              onChange={setVisibility}
-              shared="Players can see and choose this feat."
-              hidden="Only the DM can see this feat."
-              disabled={busy}
-            />
-          )}
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">

@@ -1,6 +1,4 @@
 import {
-  type Campaign,
-  type CampaignId,
   blocksToMarkdown,
   type RuleArticle,
   type RuleArticleDetail,
@@ -8,7 +6,6 @@ import {
   type RuleBlock,
   type RuleSection,
   type RuleSectionDraft,
-  type Visibility,
 } from "@taverns/api";
 import {
   Badge,
@@ -21,32 +18,19 @@ import {
   DialogTitle,
   Icon,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   cn,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import { CopyIntoCampaignSection } from "../library/CopyIn";
 import { FilterBar, FilterSearch, FilterSelect, type FilterOption } from "../library/filters";
 import type { ListQuery } from "../library/query";
-import { DetailSection } from "../ui/detail";
-import { Field, Textarea, VisibilityField } from "../ui/form";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { Field, Textarea } from "../ui/form";
+import { FailureNotice, Loading } from "../ui/states";
 import { withoutLeadingHeading } from "./blocks";
-import {
-  campaignRuleArticleDetailAtom,
-  libraryRuleArticleDetailAtom,
-  ruleArticleDetailKeys,
-  ruleArticleWritesAt,
-  type RuleArticleQuery,
-} from "./load";
+import { libraryRuleArticleDetailAtom, ruleArticleDetailKeys, type RuleArticleQuery } from "./load";
 import {
   isBundleArticle,
   isCampaignArticle,
@@ -111,9 +95,6 @@ export function RuleArticleGrid({
                 </h3>
                 <p className="mt-1 text-caption leading-body text-muted-foreground">
                   {article.sectionCount} {article.sectionCount === 1 ? "section" : "sections"}
-                  {article.visibility === "dm" && article.campaignId !== null
-                    ? " · not shared"
-                    : ""}
                 </p>
               </div>
               <ArticleBadge article={article} />
@@ -264,22 +245,14 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
 
 export function RuleArticleReader({
   articleId,
-  campaignId,
-  campaigns,
   onClose,
   onEdit,
 }: {
   readonly articleId: RuleArticleId;
-  readonly campaignId?: CampaignId;
-  readonly campaigns?: ReadonlyArray<Campaign>;
   readonly onClose: () => void;
   readonly onEdit?: (detail: RuleArticleDetail) => void;
 }) {
-  const atom =
-    campaignId === undefined
-      ? libraryRuleArticleDetailAtom(articleId)
-      : campaignRuleArticleDetailAtom({ campaignId, articleId });
-  const [resource, reload] = useApiAtom(atom);
+  const [resource, reload] = useApiAtom(libraryRuleArticleDetailAtom(articleId));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -292,13 +265,7 @@ export function RuleArticleReader({
           <FailureNotice failure={resource.failure} onRetry={reload} />
         )}
         {resource.state === "ready" && (
-          <RuleArticleDetailView
-            detail={resource.value}
-            campaignId={campaignId}
-            campaigns={campaigns}
-            onClose={onClose}
-            onEdit={onEdit}
-          />
+          <RuleArticleDetailView detail={resource.value} onClose={onClose} onEdit={onEdit} />
         )}
       </DialogContent>
     </Dialog>
@@ -307,14 +274,10 @@ export function RuleArticleReader({
 
 function RuleArticleDetailView({
   detail,
-  campaignId,
-  campaigns,
   onClose,
   onEdit,
 }: {
   readonly detail: RuleArticleDetail;
-  readonly campaignId?: CampaignId;
-  readonly campaigns?: ReadonlyArray<Campaign>;
   readonly onClose: () => void;
   readonly onEdit?: (detail: RuleArticleDetail) => void;
 }) {
@@ -346,35 +309,17 @@ function RuleArticleDetailView({
               <RuleBlocks blocks={withoutLeadingHeading(section.blocks, section.title)} />
             </section>
           ))}
-          {campaignId === undefined &&
-            campaigns !== undefined &&
-            detail.article.campaignId === null && (
-              <DetailSection>
-                <CopyIntoCampaignSection
-                  noun="article"
-                  campaigns={campaigns}
-                  derive={(intoCampaignId) => (client) =>
-                    client.ruleArticles.derive({
-                      params: { campaignId: intoCampaignId, ruleArticleId: detail.article.id },
-                      payload: {},
-                    })
-                  }
-                  readsChanged={(intoCampaignId) => ruleArticleWritesAt(intoCampaignId)}
-                />
-              </DetailSection>
-            )}
         </div>
       </div>
       <DialogFooter>
         <Button variant="secondary" size="sm" onClick={onClose}>
           Close
         </Button>
-        {onEdit !== undefined &&
-          (isLibraryArticle(detail.article) || isCampaignArticle(detail.article)) && (
-            <Button size="sm" onClick={() => onEdit(detail)}>
-              Edit
-            </Button>
-          )}
+        {onEdit !== undefined && isLibraryArticle(detail.article) && (
+          <Button size="sm" onClick={() => onEdit(detail)}>
+            Edit
+          </Button>
+        )}
       </DialogFooter>
     </>
   );
@@ -389,12 +334,10 @@ const draftsFrom = (detail: RuleArticleDetail | undefined): ReadonlyArray<RuleSe
 const sectionMarkdown = (section: RuleSection): string => blocksToMarkdown(section.blocks);
 
 export function RuleArticleForm({
-  campaignId,
   detail,
   onClose,
   onSaved,
 }: {
-  readonly campaignId?: CampaignId;
   readonly detail?: RuleArticleDetail;
   readonly onClose: () => void;
   readonly onSaved: () => void;
@@ -405,7 +348,6 @@ export function RuleArticleForm({
     existing === undefined ? "" : blocksToMarkdown(existing.intro),
   );
   const [sections, setSections] = useState<ReadonlyArray<RuleSectionDraft>>(draftsFrom(detail));
-  const [visibility, setVisibility] = useState<Visibility>(existing?.visibility ?? "dm");
   const { busy, failure, submit } = useMutation();
   const nameError = name.trim() === "" ? "Give it a name." : undefined;
 
@@ -419,23 +361,14 @@ export function RuleArticleForm({
         .filter((section) => section.title !== "" || section.content.trim() !== ""),
     };
     const result = await submit(
-      (client) => {
-        if (campaignId === undefined) {
-          return existing === undefined
-            ? client.library.createRuleArticle({ payload })
-            : client.library.updateRuleArticle({
-                params: { ruleArticleId: existing.id },
-                payload,
-              });
-        }
-        return client.ruleArticles.update({
-          params: { campaignId, ruleArticleId: existing!.id },
-          payload: { ...payload, visibility },
-        });
-      },
-      existing === undefined
-        ? [reads.libraryRuleArticles]
-        : ruleArticleDetailKeys(detail!, campaignId),
+      (client) =>
+        existing === undefined
+          ? client.library.createRuleArticle({ payload })
+          : client.library.updateRuleArticle({
+              params: { ruleArticleId: existing.id },
+              payload,
+            }),
+      existing === undefined ? [reads.libraryRuleArticles] : ruleArticleDetailKeys(detail!),
     );
     if (Result.isSuccess(result)) onSaved();
   };
@@ -457,11 +390,7 @@ export function RuleArticleForm({
           <DialogTitle>
             {existing === undefined ? "Write a compendium article" : `Edit ${existing.name}`}
           </DialogTitle>
-          <DialogDescription>
-            {campaignId === undefined
-              ? "This original lives in your Library until you copy it into a campaign."
-              : "This edits the campaign's snapshot only; the original it came from is untouched."}
-          </DialogDescription>
+          <DialogDescription>This original lives in your Library.</DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[min(72vh,38.75rem)] flex-col gap-4 overflow-auto px-gutter py-4">
           <Field label="Name" htmlFor="rule-article-name" error={nameError}>
@@ -472,15 +401,6 @@ export function RuleArticleForm({
               onChange={(event) => setName(event.currentTarget.value)}
             />
           </Field>
-          {campaignId !== undefined && (
-            <VisibilityField
-              id="rule-article-visibility"
-              value={visibility}
-              onChange={setVisibility}
-              shared="Players can read this copied reference."
-              hidden="Only the DM can read this copied reference."
-            />
-          )}
           <Field
             label="Introduction"
             htmlFor="rule-article-intro"
@@ -550,12 +470,10 @@ export function RuleArticleForm({
 }
 
 export function RemoveRuleArticleDialog({
-  campaignId,
   article,
   onClose,
   onRemoved,
 }: {
-  readonly campaignId?: CampaignId;
   readonly article: RuleArticle;
   readonly onClose: () => void;
   readonly onRemoved: () => void;
@@ -563,11 +481,8 @@ export function RemoveRuleArticleDialog({
   const { busy, failure, submit } = useMutation();
   const remove = async () => {
     const result = await submit(
-      (client) =>
-        campaignId === undefined
-          ? client.library.removeRuleArticle({ params: { ruleArticleId: article.id } })
-          : client.ruleArticles.remove({ params: { campaignId, ruleArticleId: article.id } }),
-      campaignId === undefined ? [reads.libraryRuleArticles] : [reads.ruleArticles(campaignId)],
+      (client) => client.library.removeRuleArticle({ params: { ruleArticleId: article.id } }),
+      [reads.libraryRuleArticles],
     );
     if (Result.isSuccess(result)) onRemoved();
   };
@@ -577,16 +492,11 @@ export function RemoveRuleArticleDialog({
       <DialogContent aria-label={`Remove ${article.name}`}>
         <DialogHeader>
           <DialogTitle>Remove {article.name}?</DialogTitle>
-          <DialogDescription>
-            {campaignId === undefined
-              ? "This removes your Library original only. Copies already in campaigns stay where they are."
-              : "This removes the campaign snapshot only. The Library original or pinned reference row is not touched."}
-          </DialogDescription>
+          <DialogDescription>This removes your Library original only.</DialogDescription>
         </DialogHeader>
         <div className="px-gutter py-3 text-body-s leading-body text-muted-foreground">
-          {campaignId === undefined
-            ? "Campaign snapshots are copies, so deleting the original does not rewrite the tables that already copied it."
-            : "Players and future compendium searches at this table will no longer see this copied article."}
+          The pinned 2014 reference is not touched, and characters already built from it keep what
+          they have.
         </div>
         <DialogFooter>
           {failure !== undefined && (
@@ -596,82 +506,7 @@ export function RemoveRuleArticleDialog({
             Keep it
           </Button>
           <Button variant="destructive" size="sm" disabled={busy} onClick={() => void remove()}>
-            {busy ? "Removing…" : campaignId === undefined ? "Remove original" : "Remove snapshot"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function CopyRuleArticleIn({
-  campaignId,
-  articles,
-  onClose,
-}: {
-  readonly campaignId: CampaignId;
-  readonly articles: ReadonlyArray<RuleArticle>;
-  readonly onClose: () => void;
-}) {
-  const [selected, setSelected] = useState<RuleArticleId | undefined>(articles[0]?.id);
-  const { busy, failure, submit } = useMutation();
-  const names = useMemo(
-    () => new Map(articles.map((article) => [article.id, article.name])),
-    [articles],
-  );
-
-  const copy = async () => {
-    if (selected === undefined) return;
-    const result = await submit(
-      (client) =>
-        client.ruleArticles.derive({
-          params: { campaignId, ruleArticleId: selected },
-          payload: {},
-        }),
-      ruleArticleWritesAt(campaignId),
-    );
-    if (Result.isSuccess(result)) onClose();
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Copy compendium article">
-        <DialogHeader>
-          <DialogTitle>Copy a rule article</DialogTitle>
-          <DialogDescription>
-            Pick a Library or pinned 2014 article. Taverns copies the article and its sections into
-            this campaign as a snapshot.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 px-gutter py-4">
-          {articles.length === 0 ? (
-            <EmptyState icon="book-open" title="No compendium articles">
-              Run the ruleset importer, or write an article in your Library first.
-            </EmptyState>
-          ) : (
-            <Select value={selected} onValueChange={(value) => setSelected(value as RuleArticleId)}>
-              <SelectTrigger aria-label="Rule article" className="w-full">
-                <SelectValue>{(value) => names.get(value as RuleArticleId)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {articles.map((article) => (
-                  <SelectItem key={article.id} value={article.id}>
-                    {article.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-        <DialogFooter>
-          {failure !== undefined && (
-            <span className="mr-auto text-caption text-danger-ink">Could not copy.</span>
-          )}
-          <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={busy || selected === undefined} onClick={() => void copy()}>
-            {busy ? "Copying…" : "Copy"}
+            {busy ? "Removing…" : "Remove original"}
           </Button>
         </DialogFooter>
       </DialogContent>

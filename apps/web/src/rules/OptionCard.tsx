@@ -3,31 +3,19 @@ import { Badge, Button, Card, CardContent, Icon } from "@taverns/ui";
 import { numbersOf, ownerOf } from "./option";
 
 /**
- * One class or race, as a row on either list over this table.
+ * One class or race, as a row on the Library's list.
  *
- * **The Rules screen and the Library screen share it**, the way `CreatureCard`
- * is shared by the campaign bestiary and the monster Library, and for the same
- * reason: what a row *is* — its name, the numbers a character is seeded from,
- * the sentence under it — is one question, and two cards would answer it twice.
+ * The verbs are the caller's: `onEdit` is passed for the rows this reader may
+ * act on and omitted otherwise, which is the shipped write predicate rendered
+ * rather than restated — `isLibraryOriginal`. The Library passes no `onRemove`
+ * at all: deleting an original lives inside `OptionForm`. What a card says
+ * about a row is decided by **who owns it**, never by `origin` — `ownerOf` in
+ * `option.ts` is where that is written.
  *
- * ### What differs between the two lists is not a flag
- *
- * - **The verbs are the caller's.** `onEdit` and `onRemove` are passed for the
- *   rows that reader may act on and omitted otherwise, which is the shipped
- *   write predicate rendered rather than restated — `isCampaignCopy` on the
- *   campaign's list, `isLibraryOriginal` on the Library's. The Library passes
- *   no `onRemove` at all: deleting an original lives inside `OptionForm`, next
- *   to the sentence about what happens to the copies.
- * - **The sharing line is drawn exactly when the row is a campaign's**, which
- *   is not a screen flag but the true rule: `visibility` says which of a
- *   *campaign's* players may read a row, so on an original — which is in no
- *   campaign, and whose column sits at its `dm` default because nothing writes
- *   it — it is not a fact about anybody. Drawn there it would mark every row a
- *   DM had ever written as hidden from players who could never have seen it.
- *
- * What a card says about a row is decided by **who owns it**, never by `origin`
- * — `ownerOf` in `option.ts` is where that is written, along with the reason it
- * matters.
+ * (Its second reader, the campaign Rules screen, went with the instancing
+ * decision of 2026-09-02: a campaign holds no managed option copies, so there
+ * is no campaign list, no sharing badge and no per-copy visibility any more —
+ * a table's offering is the bundle plus the group's shares.)
  */
 
 export function OptionCard({
@@ -45,7 +33,6 @@ export function OptionCard({
   readonly onProgression?: () => void;
 }) {
   const owner = ownerOf(option);
-  const unshared = owner === "campaign" && option.visibility === "dm";
 
   return (
     <Card tone="raised">
@@ -59,16 +46,8 @@ export function OptionCard({
             {option.name}
             {/* **Absence is what says "this is yours"**, the same call
                 `bestiary/provenance.ts` makes about an authored creature: a
-                badge on every row would say nothing. So only the two things a
-                reader has to know are drawn — that a row is not theirs to edit,
-                and that a row their players cannot see is one nobody can pick. */}
+                badge on every row would say nothing. */}
             {owner === "bundle" && <Badge variant="secondary">Standard</Badge>}
-            {unshared && (
-              <Badge variant="outline">
-                <Icon name="lock" size={11} />
-                Not shared
-              </Badge>
-            )}
           </p>
           <p className="text-caption leading-body text-muted-foreground">{numbersOf(option)}</p>
           {option.body.summary !== undefined && option.body.summary !== "" && (
@@ -77,11 +56,6 @@ export function OptionCard({
             </p>
           )}
           {option.details !== undefined && <DetailsSummary details={option.details} />}
-          {unshared && (
-            <p className="mt-1.5 text-caption leading-body text-muted-foreground">
-              Nobody at this table can pick it until you share it.
-            </p>
-          )}
         </div>
 
         {(onEdit !== undefined || onRemove !== undefined || onProgression !== undefined) && (

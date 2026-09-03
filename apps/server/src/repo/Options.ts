@@ -8,7 +8,6 @@ import {
   Conflict,
   CurrentActor,
   NotFound,
-  type OptionDerive,
   type OptionDetails,
   type OptionFilterValues,
   type OptionKind,
@@ -21,23 +20,17 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
-import { copyClassProgression } from "./ClassProgression.js";
 import {
-  campaignVocabulary,
-  copyOptionRelationships,
   libraryVocabulary,
   optionDetailsFor,
   syncOptionRelationsInput,
 } from "../ruleset/vocabularies.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
-  copyableIntoCampaign,
-  corpusRowReadable,
   ensureCampaignReadable,
-  ensureCampaignWritable,
+  usableInCampaign,
   libraryRowReadable,
   libraryRowWritable,
-  rowWritable,
 } from "./visibility.js";
 
 interface OptionRow extends ProvenanceColumns {
@@ -158,87 +151,56 @@ const readOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
  *
  * | method               | reads through          | writes through       |
  * | -------------------- | ---------------------- | -------------------- |
- * | `list` / `findById`  | `corpusRowReadable`    |                      |
- * | `update` / `remove`  | `corpusRowReadable`    | `rowWritable`        |
+ * | `list`               | `usableInCampaign`     |                      |
  * | `library*`           | `libraryRowReadable`   | `libraryRowWritable` |
- * | `derive`             | `copyableIntoCampaign` | `rowWritable`        |
  *
- * **The bundle is immutable and no line here says so.** Both write predicates
- * compare an ownership column to a value the request carries — `rowWritable`
- * the campaign in the path, `libraryRowWritable` the account the credential
- * resolved to — and a bundled row has neither, so a null is compared to a uuid
- * and matches nothing. `character_option_system_is_unowned` is what makes that
- * a fact about the schema rather than about how the seeder happens to be
- * written. There is no `origin = 'system'` check in this file and there does
+ * **The bundle is immutable and no line here says so.** The write predicate
+ * compares `account_id` to the account the credential resolved to; a bundled
+ * row's is null, and a null never equals a uuid.
+ * `character_option_system_is_unowned` is what makes that a fact about the
+ * schema. There is no `origin = 'system'` check in this file and there does
  * not need to be one.
  *
- * ### There is no campaign-scoped `create`, and that is the model
+ * ### There are no campaign-copy methods, and that is the model
  *
- * Authoring happens in the Library — the captain's second statement — so a
- * campaign gets an option through `derive` and through nothing else. That is
- * the one place this file deliberately differs from `Creatures.ts`, which does
- * have a campaign `create` and which `AGENTS.md` already records as the
- * endpoint contradicting the model.
+ * Since the instancing decision of 2026-09-02 a campaign holds no managed
+ * option copies at all: authoring happens in the Library, and what a table
+ * offers its players is decided by the **group share** — `usableInCampaign`'s
+ * third disjunct. A character seeded from an option stores labels, never
+ * pointers, so no per-campaign instance is needed anywhere; existing campaign
+ * rows in old data are inert and unlisted.
  *
  * ### And the one thing that is genuinely different from a monster
  *
  * A monster is used *in a campaign*; a class is used *by a character*, and a
  * character may be a player's. `libraryRowReadable` compares `account_id` to
  * the **reader's** account, so a player can never read their DM's Library —
- * which makes `derive` load-bearing rather than convenient. Without the copy
- * there is no way for a player to pick a homebrew class at all.
+ * which is what makes the group share load-bearing rather than convenient:
+ * sharing the original to the group is the one act that puts a homebrew class
+ * in front of the table's players.
  */
 export class Options extends Context.Service<
   Options,
   {
-    /** Concrete abilities, languages, skills, proficiencies and traits a campaign author can attach. */
-    readonly vocabulary: (
-      campaignId: CampaignId,
-    ) => Effect.Effect<OptionVocabulary, NotFound, CurrentActor>;
     /**
-     * This campaign's vocabulary: what it has copied in, plus the bundle.
+     * This campaign's vocabulary: the shared bundle, the reader's own Library,
+     * and originals explicitly shared to the campaign's group
+     * (`usableInCampaign`) — never a campaign row.
      *
      * **Not paged.** A vocabulary is bounded by what it hangs off, like a
      * campaign's members and a night's checklist — the reads `Page.ts` names as
      * deliberately unpaged. `OPTION_LIMIT` is a sanity bound, not a page.
      *
      * This is the read the **create form's pickers** make, which is the only
-     * list in the product a player reads to fill in a control. So the last
-     * clause of `corpusRowReadable` — `isDm OR visibility = 'shared'` — is what
-     * decides whether a class is pickable, and the copy-in dialog is where that
-     * is answered out loud.
+     * list in the product a player reads to fill in a control. The bundle keeps
+     * the row-visibility rule (`isCreator OR visibility = 'shared'`), so what a
+     * player sees of it is unchanged; the group share is what decides whether a
+     * homebrew class is pickable.
      */
     readonly list: (
       campaignId: CampaignId,
       filter: OptionFilterValues,
     ) => Effect.Effect<ReadonlyArray<CharacterOption>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: CharacterOptionId,
-    ) => Effect.Effect<CharacterOption, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: CharacterOptionId,
-      patch: OptionUpdate,
-    ) => Effect.Effect<CharacterOption, NotFound | Conflict, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: CharacterOptionId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
-    /**
-     * **Bring an option into this campaign** — the copy, and the only way a row
-     * gets here.
-     *
-     * A **snapshot**: nothing is read through `derived_from`, so editing the
-     * original afterwards does not reach the copy and deleting the original
-     * leaves it standing with a null pointer. The same rule a derived creature
-     * follows, and the same rule a character follows one hop further on.
-     */
-    readonly derive: (
-      campaignId: CampaignId,
-      id: CharacterOptionId,
-      patch: OptionDerive,
-    ) => Effect.Effect<CharacterOption, NotFound | Conflict, CurrentActor>;
     /**
      * The Library — **originals only**: the bundle and what this account has
      * authored, with no campaign in the path and no campaign row in the answer.
@@ -284,19 +246,6 @@ export class Options extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      /** One row of this campaign's vocabulary, or a 404 that says nothing more. */
-      const readable = (campaignId: CampaignId, id: CharacterOptionId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<OptionRow>`
-            select * from character_option
-            where character_option.id = ${id}
-              and ${corpusRowReadable(sql, "character_option", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-          return rows[0]!;
-        });
-
       /** The same, for the Library: this account's own originals and the bundle. */
       const inLibrary = (id: CharacterOptionId) =>
         Effect.gen(function* () {
@@ -305,26 +254,6 @@ export class Options extends Context.Service<
             select * from character_option
             where character_option.id = ${id}
               and ${libraryRowReadable(sql, "character_option", actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-          return rows[0]!;
-        });
-
-      /**
-       * What `derive` may copy: this campaign's vocabulary, the bundle, or the
-       * caller's own Library — and nothing else.
-       *
-       * A separate reader rather than a flag on `readable`, so the wider
-       * predicate is reachable from exactly one method, which is the rule
-       * `Creatures.ts` states for the identical function.
-       */
-      const copyable = (campaignId: CampaignId, id: CharacterOptionId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<OptionRow>`
-            select * from character_option
-            where character_option.id = ${id}
-              and ${copyableIntoCampaign(sql, "character_option", campaignId, actor)}
           `;
           if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
           return rows[0]!;
@@ -363,15 +292,6 @@ export class Options extends Context.Service<
             );
 
       return {
-        vocabulary: (campaignId) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignWritable(sql, campaignId, actor);
-              return yield* campaignVocabulary(sql, campaignId);
-            }),
-          ),
-
         list: (campaignId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
@@ -382,7 +302,7 @@ export class Options extends Context.Service<
               const rows = yield* sql<OptionRow>`
                 select * from character_option
                 where ${sql.and([
-                  corpusRowReadable(sql, "character_option", campaignId, actor),
+                  usableInCampaign(sql, "character_option", campaignId, actor),
                   ...ofKind(sql, filter.kind),
                 ])}
                 order by ${readOrder(sql)}
@@ -390,108 +310,6 @@ export class Options extends Context.Service<
               `;
               return yield* hydrateAll(rows);
             }),
-          ),
-
-        findById: (campaignId, id) =>
-          dieOnSqlError(Effect.flatMap(readable(campaignId, id), hydrate)),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                // Read first, so the kind is known before the body is judged —
-                // and so a caller who may not write the row learns nothing more
-                // than that it is not there.
-                const row = yield* readable(campaignId, id);
-                const columns = yield* columnsFor(row, patch, patch.visibility);
-                const rows = yield* sql<OptionRow>`
-                  update character_option set ${setClause(sql, columns)}
-                  where character_option.id = ${id}
-                    and ${rowWritable(sql, "character_option", campaignId, actor)}
-                  returning *
-                `;
-                // A bundled option lands here: readable through this campaign,
-                // not writable, and the refusal says the same thing as "no such
-                // option" on purpose.
-                if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-                const updated = rows[0]!;
-                yield* syncOptionRelationsInput(sql, updated.id, patch.relations);
-                return yield* hydrate(updated);
-              }),
-            ),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: CharacterOptionId }>`
-                delete from character_option
-                where character_option.id = ${id}
-                  and ${rowWritable(sql, "character_option", campaignId, actor)}
-                returning character_option.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-            }),
-          ),
-
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                if (patch.body !== undefined && bodyKind(patch.body) !== source.kind) {
-                  return yield* wrongKind(source.kind, bodyKind(patch.body));
-                }
-                const rows = yield* sql<OptionRow>`
-                  insert into character_option ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      derived_from: source.id,
-                      source_corpus: source.source_corpus,
-                      source_family: source.source_family,
-                      source_key: source.source_key,
-                      // Not from the patch, and there is no field for it: a
-                      // class that arrived as a race would carry a document
-                      // its own column contradicts. What a copy is, is what the
-                      // original was.
-                      kind: source.kind,
-                      name: patch.name ?? source.name,
-                      body: encodeBody(patch.body ?? source.body),
-                      // **Not copied**, and this is the field the feature turns
-                      // on. A copy is a new row and a new row fails closed, so
-                      // it takes the column default (`dm`) unless the payload
-                      // says otherwise — and for a *class* the shipped dialog
-                      // does say otherwise, out loud, because a rules entry no
-                      // player can pick is not a rules entry. Inheriting the
-                      // original's would make the safe default depend on what
-                      // you happened to copy from; a Library original has no
-                      // visibility to inherit in the first place.
-                      visibility: patch.visibility,
-                    }),
-                  )}
-                  returning *
-                `;
-                const copy = rows[0]!;
-                if (source.kind === "class") {
-                  yield* copyClassProgression(
-                    sql,
-                    source.id,
-                    copy.id,
-                    { campaign_id: campaignId },
-                    patch.visibility,
-                  );
-                }
-                yield* copyOptionRelationships(sql, source.id, copy.id, {
-                  campaign_id: campaignId,
-                });
-                yield* syncOptionRelationsInput(sql, copy.id, patch.relations);
-                return yield* hydrate(copy);
-              }),
-            ),
           ),
 
         libraryVocabulary: () =>

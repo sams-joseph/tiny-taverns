@@ -1,4 +1,4 @@
-import { Actor, CurrentActor, type RuleArticleId } from "@taverns/api";
+import { Actor, CurrentActor } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, describe, expect, it } from "vitest";
@@ -8,8 +8,6 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
 import { RuleArticles } from "../src/repo/RuleArticles.js";
 import { importSystemRuleArticles } from "../src/ruleset/rules.js";
-import type { SystemRuleArticle } from "../src/ruleset/systemRules.js";
-import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_rule_articles");
@@ -23,25 +21,6 @@ const run = <A, E>(
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
   run(Effect.flatMap(SqlClient.SqlClient, effect));
-
-const article = (
-  sourceIndex: string,
-  name: string,
-  sectionText = "Original text.",
-): SystemRuleArticle => ({
-  sourceIndex,
-  name,
-  content: `# ${name}\n\nAn imported top-level rule.`,
-  sections: [
-    {
-      sourceIndex: `${sourceIndex}-section`,
-      title: "Imported Section",
-      content: `## Imported Section\n\n${sectionText}`,
-      ordinal: 0,
-      parentSourceIndex: null,
-    },
-  ],
-});
 
 describe("2014 rules compendium import", () => {
   it("imports the pinned six rules and thirty-three ordered sections", async () => {
@@ -151,16 +130,11 @@ describe("2014 rules compendium import", () => {
     expect(attackBlocks.some((block) => block.kind === "list")).toBe(true);
   });
 
-  it("authors Library articles, finds them by section text, and copies snapshots into a campaign", async () => {
+  it("authors Library articles and finds them by section text", async () => {
     const dm = await run(
       Accounts.pipe(Effect.flatMap((accounts) => accounts.issue("Compendium DM"))),
     );
     const actor = new Actor({ accountId: dm.accountId, scope: { _tag: "account" } });
-    const campaign = await run(
-      createCampaign({ name: "The Reference Road" }).pipe(
-        Effect.provideService(CurrentActor, actor),
-      ),
-    );
 
     const created = await run(
       RuleArticles.pipe(
@@ -188,75 +162,5 @@ describe("2014 rules compendium import", () => {
       ),
     );
     expect(found.items.map((row) => row.name)).toContain("House Weather");
-
-    const copy = await run(
-      RuleArticles.pipe(
-        Effect.flatMap((articles) =>
-          articles.derive(campaign.id, created.article.id, { visibility: "shared" }),
-        ),
-        Effect.provideService(CurrentActor, actor),
-      ),
-    );
-    expect(copy.article.campaignId).toBe(campaign.id);
-    expect(copy.article.accountId).toBeNull();
-    expect(copy.article.derivedFrom).toBe(created.article.id);
-    expect(copy.sections[0]?.blocks).toEqual(created.sections[0]?.blocks);
-  });
-
-  it("leaves campaign copies unchanged after a system source update", async () => {
-    const dm = await run(
-      Accounts.pipe(Effect.flatMap((accounts) => accounts.issue("Snapshot DM"))),
-    );
-    const actor = new Actor({ accountId: dm.accountId, scope: { _tag: "account" } });
-    const campaign = await run(
-      createCampaign({ name: "The Snapshot Road" }).pipe(
-        Effect.provideService(CurrentActor, actor),
-      ),
-    );
-
-    const source = "source-test-rule-snapshot";
-    await run(importSystemRuleArticles([article(source, "Snapshot Rule", "First version.")]));
-    const sourceRows = await sql(
-      (client) => client<{ readonly id: RuleArticleId }>`
-        select id::text as id
-        from rule_article
-        where source_key = ${source}
-      `,
-    );
-    const sourceId = sourceRows[0]!.id;
-
-    await run(
-      RuleArticles.pipe(
-        Effect.flatMap((articles) => articles.derive(campaign.id, sourceId, {})),
-        Effect.provideService(CurrentActor, actor),
-      ),
-    );
-
-    await run(
-      importSystemRuleArticles([article(source, "Snapshot Rule Revised", "Second version.")]),
-    );
-
-    const rows = await sql(
-      (client) => client<{
-        readonly name: string;
-        readonly campaign_id: string | null;
-        readonly section_text: string;
-      }>`
-        select
-          rule_article.name,
-          rule_article.campaign_id::text,
-          rule_section.body::text as section_text
-        from rule_article
-        join rule_section on rule_section.article_id = rule_article.id
-        where rule_article.source_key = ${source}
-        order by rule_article.campaign_id nulls first
-      `,
-    );
-
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ name: "Snapshot Rule Revised", campaign_id: null });
-    expect(rows[0]!.section_text).toContain("Second version");
-    expect(rows[1]).toMatchObject({ name: "Snapshot Rule", campaign_id: campaign.id });
-    expect(rows[1]!.section_text).toContain("First version");
   });
 });

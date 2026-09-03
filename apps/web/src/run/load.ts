@@ -4,19 +4,16 @@ import type {
   Combatant,
   Creature,
   CreatureId,
-  CreatureSort,
   EncounterRun,
   EncounterRunId,
   Session,
   SessionId,
-  PageCursor,
 } from "@taverns/api";
 import { Effect, Option } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, writableApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { reads, type Invalidation } from "../api/keys";
-import { collectPages, WHOLE_LIST } from "../api/page";
 
 /**
  * What the runner reads, split by how often it changes — and the atoms over it.
@@ -60,12 +57,17 @@ export interface RunFrame {
   readonly campaign: Campaign;
   readonly session: Session;
   /**
-   * The bestiary, indexed — the stat-block panel's whole source.
+   * The stat blocks behind this fight's combatants, indexed by creature id.
    *
-   * A combatant carries `creatureId` as *provenance*, not as an access path
-   * (`Combatant.ts`), so a stat block is a lookup that may legitimately miss:
-   * the creature may have been deleted, or may be one this credential cannot
-   * read. The panel says so rather than rendering an empty document.
+   * Resolved per combatant through `creatures.findById` rather than by
+   * collecting the corpus list: since the instancing decision of 2026-09-02
+   * that list is the picker's (the bundle, the Library, the group's shares)
+   * and never contains the campaign instances a fight's rows point at — only
+   * the by-id read reaches those. A combatant carries `creatureId` as
+   * *provenance*, not as an access path (`Combatant.ts`), so a lookup may
+   * legitimately miss: the creature may have been deleted, or may be one this
+   * credential cannot read. The panel says so rather than rendering an empty
+   * document.
    */
   readonly creatures: ReadonlyMap<CreatureId, Creature>;
 }
@@ -96,33 +98,54 @@ export const loadLiveState =
     });
 
 /**
- * The three reads a fight never changes, in one round.
+ * The reads a fight never changes, in one round plus one.
  *
- * All concurrent: every one of them is addressed by an id already in the route,
- * so there is no waterfall to be had. Three hooks would give the runner eight
- * combinations of loading and failed to render while a DM waits with their
- * finger on the table.
+ * The campaign, the night and this run's combatant list load concurrently;
+ * then each distinct `creatureId` on the list resolves through
+ * `creatures.findById`, concurrently and tolerating misses. Two rounds rather
+ * than one because which stat blocks a fight needs is written on its own rows
+ * — the same cost `campaign/load.ts` pays for the same reason. A fight's set
+ * of creatures is fixed at seed time (`CombatantCreate` carries no creature),
+ * so reading it in the frame cannot go stale under the doorbell.
  */
 export const loadRunFrame = (path: RunPath) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const { campaignId, sessionId } = path;
-    const [campaign, session, creatures] = yield* Effect.all(
+    const { campaignId, sessionId, runId } = path;
+    const [campaign, session, combatants] = yield* Effect.all(
       [
         client.campaigns.findById({ params: { campaignId } }),
         client.sessions.findById({ params: { campaignId, sessionId } }),
-        // The whole reachable bestiary, because this is a lookup table from a
-        // combatant's `creatureId` to a row — a page of it would leave holes.
-        collectPages((cursor: PageCursor<CreatureSort> | undefined) =>
-          client.creatures.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
-        ),
+        client.combatants.list({ params: { campaignId, sessionId, runId } }),
       ],
+      { concurrency: "unbounded" },
+    );
+
+    const creatureIds = [
+      ...new Set(
+        combatants
+          .map((combatant) => combatant.creatureId)
+          .filter((creatureId): creatureId is CreatureId => creatureId !== null),
+      ),
+    ];
+    const creatures = yield* Effect.all(
+      creatureIds.map((creatureId) =>
+        client.creatures
+          .findById({ params: { campaignId, creatureId } })
+          // Provenance, not an access path: a deleted or unreadable creature
+          // is an ordinary miss the panel has a sentence for.
+          .pipe(Effect.catchTag("NotFound", () => Effect.succeed(undefined))),
+      ),
       { concurrency: "unbounded" },
     );
 
     return {
       campaign,
       session,
-      creatures: new Map(creatures.map((creature) => [creature.id, creature])),
+      creatures: new Map(
+        creatures
+          .filter((creature): creature is Creature => creature !== undefined)
+          .map((creature) => [creature.id, creature]),
+      ),
     } satisfies RunFrame;
   });
 

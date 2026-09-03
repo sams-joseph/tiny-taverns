@@ -1,4 +1,4 @@
-import { Actor, CurrentActor, MagicItemId, NotFound, type MagicItemCreate } from "@taverns/api";
+import { Actor, CurrentActor, MagicItemId, type MagicItemCreate } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -10,7 +10,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { MagicItems } from "../src/repo/MagicItems.js";
-import { aPlayerAt, createCampaign } from "./support/actors.js";
+import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_magic_items");
@@ -58,15 +58,6 @@ const dmCampaign = (name: string) =>
 
 const withActor = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R>) =>
   Effect.provideService(effect, CurrentActor, actor);
-
-const firstItemNamed = (name: string) =>
-  Effect.flatMap(MagicItems, (magicItems) =>
-    Effect.map(magicItems.library({ q: name, sort: "name", limit: 10 }), (page) => {
-      const match = page.items.find((item) => item.name === name);
-      if (match === undefined) throw new Error(`expected ${name}`);
-      return match;
-    }),
-  );
 
 const itemWithSourceIndex = (sourceIndex: string) =>
   Effect.gen(function* () {
@@ -209,12 +200,12 @@ describe("2014 SRD magic items", () => {
   }, 60_000);
 
   it("filters in SQL by one-value arrays, attunement and variant state", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Item Filters"));
+    const { actor } = await run(dmCampaign("The Item Filters"));
     const page = await run(
       withActor(
         actor,
         Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, {
+          magicItems.library({
             q: "weapon",
             categories: ["weapon"],
             rarities: ["rare"],
@@ -234,29 +225,11 @@ describe("2014 SRD magic items", () => {
     expect(page.items.every((item) => item.isVariant)).toBe(true);
   });
 
-  it("does not let a stranger read bundled magic items through a campaign they cannot reach", async () => {
-    const { campaign } = await run(dmCampaign("The Gated Hoard"));
-    const issued = await run(
-      Effect.flatMap(Accounts, (accounts) => accounts.issue("Item Stranger")),
-    );
-    const stranger = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
-
-    const result = await attempt(
-      withActor(
-        stranger,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, { q: "Ammunition", limit: 5 }),
-        ),
-      ),
-    );
-
-    expect(result._tag).toBe("Failure");
-    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
-    expect(result._tag === "Failure" && (result.failure as NotFound).resource).toBe("campaign");
-  });
-
-  it("keeps Library originals out of campaign lists until they are copied", async () => {
-    const { actor: firstDm, campaign } = await run(dmCampaign("The Private Hoard"));
+  it("keeps Library originals per reader: another account's Library shows nothing", async () => {
+    // The Library is the whole magic-item surface since the instancing
+    // decision of 2026-09-02 — no campaign list, no copy-in, no per-campaign
+    // sharing. The boundary left to pin is the Library's own.
+    const { actor: firstDm } = await run(dmCampaign("The Private Hoard"));
     const { actor: secondDm } = await run(dmCampaign("The Other Hoard"));
 
     const original = await run(
@@ -268,15 +241,13 @@ describe("2014 SRD magic items", () => {
       ),
     );
 
-    const beforeCopy = await run(
+    const mine = await run(
       withActor(
         firstDm,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, { q: "Fen's Lantern Ring" }),
-        ),
+        Effect.flatMap(MagicItems, (magicItems) => magicItems.library({ q: "Fen's Lantern Ring" })),
       ),
     );
-    const strangerLibrary = await run(
+    const theirs = await run(
       withActor(
         secondDm,
         Effect.flatMap(MagicItems, (magicItems) => magicItems.library({ q: "Fen's Lantern Ring" })),
@@ -285,111 +256,9 @@ describe("2014 SRD magic items", () => {
 
     expect(original.isVariant).toBe(false);
     expect(original.variantCount).toBe(0);
-    expect(original.magicItem.variants).toEqual([]);
-    expect(beforeCopy.items).toEqual([]);
-    expect(strangerLibrary.items).toEqual([]);
-
-    const copy = await run(
-      withActor(
-        firstDm,
-        Effect.flatMap(MagicItems, (magicItems) => magicItems.derive(campaign.id, original.id, {})),
-      ),
-    );
-    const afterCopy = await run(
-      withActor(
-        firstDm,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, { q: "Fen's Lantern Ring" }),
-        ),
-      ),
-    );
-
-    expect(copy.campaignId).toBe(campaign.id);
-    expect(copy.accountId).toBeNull();
-    expect(copy.derivedFrom).toBe(original.id);
-    expect(copy.isVariant).toBe(false);
-    expect(afterCopy.items.map((item) => item.id)).toEqual([copy.id]);
-  });
-
-  it("copies a magic item as a campaign snapshot and does not follow later source updates", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Snapshot Hoard"));
-    const source = await run(withActor(actor, firstItemNamed("Amulet of Health")));
-    const copy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.derive(campaign.id, source.id, { name: "Fen's Amulet of Vigour" }),
-        ),
-      ),
-    );
-
-    const raw = MAGIC_ITEM_RAW.find((item) => item.index === "amulet-of-health");
-    if (raw === undefined) throw new Error("expected raw Amulet of Health");
-    await run(importSystemMagicItems([{ ...raw, name: "Amulet of Health, Revised" }]));
-
-    const copiedAgain = await run(
-      withActor(
-        actor,
-        Effect.flatMap(MagicItems, (magicItems) => magicItems.findById(campaign.id, copy.id)),
-      ),
-    );
-    const revisedSource = await run(withActor(actor, firstItemNamed("Amulet of Health, Revised")));
-
-    expect(copiedAgain.name).toBe("Fen's Amulet of Vigour");
-    expect(copiedAgain.magicItem.desc).toEqual(source.magicItem.desc);
-    expect(revisedSource.id).toBe(source.id);
-  }, 60_000);
-
-  it("lets a player read shared system rows but not a campaign's DM-only copy", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Shared Hoard"));
-    const player = await run(aPlayerAt(campaign.id, "Item Player"));
-    const source = await run(withActor(actor, firstItemNamed("Ring of Invisibility")));
-    const dmOnlyCopy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.derive(campaign.id, source.id, { name: "Quiet Ring" }),
-        ),
-      ),
-    );
-
-    const playerBeforeShare = await run(
-      withActor(
-        player,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, { q: "Quiet Ring" }),
-        ),
-      ),
-    );
-    expect(playerBeforeShare.items).toEqual([]);
-
-    const playerSystem = await run(
-      withActor(
-        player,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, { q: "Ring of Invisibility" }),
-        ),
-      ),
-    );
-    expect(playerSystem.items.map((item) => item.name)).toContain("Ring of Invisibility");
-
-    await run(
-      withActor(
-        actor,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.update(campaign.id, dmOnlyCopy.id, { visibility: "shared" }),
-        ),
-      ),
-    );
-    const playerAfterShare = await run(
-      withActor(
-        player,
-        Effect.flatMap(MagicItems, (magicItems) =>
-          magicItems.list(campaign.id, { q: "Quiet Ring" }),
-        ),
-      ),
-    );
-    expect(playerAfterShare.items.map((item) => item.name)).toEqual(["Quiet Ring"]);
+    expect(original.campaignId).toBeNull();
+    expect(mine.items.map((item) => item.id)).toEqual([original.id]);
+    expect(theirs.items).toEqual([]);
   });
 
   it("refuses a variant/base relation that crosses ownership scopes", async () => {

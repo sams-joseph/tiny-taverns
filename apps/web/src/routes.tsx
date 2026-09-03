@@ -6,7 +6,6 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { Schema } from "effect";
-import { BestiaryScreen } from "./bestiary/BestiaryScreen";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { EncountersScreen } from "./campaign/EncountersScreen";
@@ -16,21 +15,16 @@ import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleRouteScreen } from "./chronicle/ChronicleRoute";
 import { CompendiumLibraryScreen } from "./compendium/CompendiumLibraryScreen";
-import { CompendiumScreen } from "./compendium/CompendiumScreen";
 import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
-import { EquipmentScreen } from "./equipment/EquipmentScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
-import { MagicItemsScreen } from "./magic-items/MagicItemsScreen";
 import { GroupScreen } from "./group/GroupScreen";
 import { GroupsScreen } from "./group/GroupsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
-import { RulesScreen } from "./rules/RulesScreen";
 import { RunScreen } from "./run/RunScreen";
-import { SpellbookScreen } from "./spells/SpellbookScreen";
 import { SpellLibraryScreen } from "./spells/SpellLibraryScreen";
 
 /**
@@ -248,41 +242,6 @@ const campaignSplatRoute = createRoute({
 });
 
 /**
- * The bestiary names a campaign, because the API does: `creatures.list` hangs
- * off `/campaigns/:campaignId/creatures`, and that path is the only thing
- * gating the global `system` rows it returns beside the campaign's own. A
- * top-level `#/bestiary` would have no campaign to read *through*.
- *
- * `remountDeps` is the router's own answer to what `App.tsx` used to spell as a
- * `key`: a different campaign is a different bestiary — the environment chips
- * and the "is this list empty at all" answer are accumulated from what has been
- * read — so the match is remounted rather than re-rendered with new props.
- *
- * **It is no longer in the nav, and it is deliberately still a route.** The
- * *Library* item on the global row is `libraryRoute` below, and the sixth
- * delivery's rule is that nothing appears on both rows — so the campaign row
- * gave the item up.
- *
- * What it did not give up is the question. Under the captain's Library model the
- * two lists are **disjoint by predicate**: `libraryRowReadable` is anchored on
- * `campaign_id is null`, so the Library holds originals and can never show a
- * campaign's rows, while `corpusRowReadable` holds this campaign's **copies**
- * plus the bundle. So this screen is the only place *"what is in this
- * campaign"* is answered at all, and deleting the route would have retired a
- * capability and broken every bookmark to it at the same time.
- *
- * It is reachable rather than merely surviving: `CopyIntoCampaign` links here
- * after a copy lands, which is the one moment a DM wants to see the campaign's
- * own list. See `AGENTS.md`.
- */
-const bestiaryRoute = createRoute({
-  getParentRoute: () => campaignRoute,
-  path: "bestiary",
-  component: BestiaryScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/**
  * The Library: where a monster is authored, and **the first route outside
  * `/play/characters` that names no campaign.**
  *
@@ -385,57 +344,6 @@ const partyRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "party",
   component: PartyScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/**
- * The classes, races and backgrounds a character at this table is built from.
- *
- * It names a campaign because the read does — `options.list` hangs off
- * `/campaigns/:campaignId`, and that path is the *only* thing gating the
- * bundled rows it returns beside the campaign's own copies, exactly as it is
- * for the bestiary. A campaign-less Rules screen would have nothing to read
- * *through*.
- *
- * Remounted per campaign: which class is half-typed in the dialog belongs to
- * the table it is being written for.
- */
-const rulesRoute = createRoute({
-  getParentRoute: () => campaignRoute,
-  path: "rules",
-  component: RulesScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/** The campaign's copied reference compendium, plus the pinned 2014 rules. */
-const compendiumRoute = createRoute({
-  getParentRoute: () => campaignRoute,
-  path: "compendium",
-  component: CompendiumScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/** The campaign's copied spells, plus the SRD bundle every campaign reads through it. */
-const spellsRoute = createRoute({
-  getParentRoute: () => campaignRoute,
-  path: "spells",
-  component: SpellbookScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/** The campaign's copied equipment, plus the SRD bundle every campaign reads through it. */
-const equipmentRoute = createRoute({
-  getParentRoute: () => campaignRoute,
-  path: "equipment",
-  component: EquipmentScreen,
-  remountDeps: ({ params }) => params.campaignId,
-});
-
-/** The campaign's copied magic items, plus the SRD bundle every campaign reads through it. */
-const magicItemsRoute = createRoute({
-  getParentRoute: () => campaignRoute,
-  path: "magic-items",
-  component: MagicItemsScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -588,12 +496,6 @@ export const routeTree = rootRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
     notesRoute,
-    bestiaryRoute,
-    rulesRoute,
-    compendiumRoute,
-    spellsRoute,
-    equipmentRoute,
-    magicItemsRoute,
     chronicleRoute,
     partyRoute,
     characterCreateRoute,
@@ -647,11 +549,6 @@ export const routes = {
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,
-  bestiary: bestiaryRoute,
-  rules: rulesRoute,
-  spells: spellsRoute,
-  equipment: equipmentRoute,
-  magicItems: magicItemsRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
   characterCreate: characterCreateRoute,

@@ -103,7 +103,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const goblin = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Goblin Archer",
       size: "Small",
       type: "Humanoid",

@@ -108,10 +108,14 @@ const globalNav: ReadonlyArray<NavItem> = [
  * The creator gets the full row — every campaign-scoped screen that exists.
  * A player gets the two screens whose player projections exist: the campaign's
  * Overview (the participant projection the same URL renders them) and the
- * Chronicle (whose screen reads `recap.readAsPlayer` for them). *Party*,
- * *Encounters* and the corpora stay off the player's row because their reads
- * are behind the creator gate or answer creator-only content — a control that
- * exists and then errors is worse than one that is absent.
+ * Chronicle (whose screen reads `recap.readAsPlayer` for them). *Party* and
+ * *Encounters* stay off the player's row because their reads are behind the
+ * creator gate or answer creator-only content — a control that exists and then
+ * errors is worse than one that is absent. The corpora are on nobody's row:
+ * since the instancing decision of 2026-09-02 a campaign has no corpus screens
+ * at all — the Library is where creatures, rules, spells, equipment, magic
+ * items and the compendium live, and a campaign only ever *uses* them through
+ * encounters, fights and the create form.
  *
  * While the relation is still unknown — the membership read settling, or an
  * account that is no participant at all — the row draws no items: a flash of
@@ -162,31 +166,6 @@ const campaignNavFor = (
       label: "Chronicle",
       link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
       section: "chronicle",
-    },
-    {
-      label: "Compendium",
-      link: { to: "/campaigns/$campaignId/compendium", params: { campaignId } },
-      section: "compendium",
-    },
-    {
-      label: "Spells",
-      link: { to: "/campaigns/$campaignId/spells", params: { campaignId } },
-      section: "spells",
-    },
-    {
-      label: "Equipment",
-      link: { to: "/campaigns/$campaignId/equipment", params: { campaignId } },
-      section: "equipment",
-    },
-    {
-      label: "Magic items",
-      link: { to: "/campaigns/$campaignId/magic-items", params: { campaignId } },
-      section: "magicItems",
-    },
-    {
-      label: "Rules",
-      link: { to: "/campaigns/$campaignId/rules", params: { campaignId } },
-      section: "rules",
     },
   ];
 };

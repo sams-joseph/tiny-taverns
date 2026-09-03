@@ -141,6 +141,7 @@ describe("a roster line, which moves a number the write never sent", () => {
         id: "2b1f2a1e-0000-4000-8000-000000000b09",
         encounterId,
         creatureId: goblinId,
+        name: "Goblin Boss",
         count: 1,
         visibility: "dm",
         origin: "authored",

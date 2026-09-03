@@ -108,11 +108,7 @@ export function SpellLibraryScreen() {
         </div>
       )}
       {opening !== undefined && (
-        <SpellDialog
-          spell={opening}
-          campaigns={shown?.campaigns ?? []}
-          onClose={() => setOpened(undefined)}
-        />
+        <SpellDialog spell={opening} onClose={() => setOpened(undefined)} />
       )}
       {writing && <SpellCreateDialog onClose={() => setWriting(false)} />}
     </AppShell>

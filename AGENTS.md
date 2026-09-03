@@ -93,6 +93,62 @@ that are now spelled differently. The decision records live in
   Relatedly: `start.smoke.test.ts` provisions its own database now — a spawned `dist/main.js`
   must never migrate the developer's default.
 
+## Campaign copies became plumbing, 2026-09-02: point-of-use instancing
+
+Captain's direction, verbatim: _"We don't really need to have this concept of copying a library
+item into a campaign. We still need to have an instance of a library object for campaigns so we
+can track health etc. But we don't need to have some separate management for library objects
+within a campaign. The user should only ever interact with them through things indirectly."_
+**Where anything below this section describes campaign corpus screens, `derive` endpoints,
+campaign-copy visibility toggles or `copyableIntoCampaign` as a user-facing seam, this section
+wins.** The group architecture section above still wins over both where they touch.
+
+- **No campaign-scoped corpus management exists anywhere.** The campaign `spells`, `equipment`,
+  `magicItems`, `ruleArticles` and `feats` API groups are gone whole; `creatures` keeps only
+  `list` + `findById` and `options` keeps only `list`. Every `derive` endpoint is gone, and with
+  it every web campaign corpus screen (Bestiary/Rules/Spells/Equipment/Magic items/Compendium
+  under a campaign), `library/CopyIn.tsx`, `bestiary/CopyIntoCampaign.tsx` and the campaign-copy
+  edit/remove/visibility verbs. The campaign row's nav is Overview / Encounters / Party / Notes /
+  Chronicle. Old corpus bookmarks fall through the splat to the campaign.
+- **`usableInCampaign` (`repo/visibility.ts`) is what campaign corpus reads answer now**: rows in
+  no campaign, gated on `campaignReadable`, that are (a) the bundle under the same row-visibility
+  rule `corpusRowReadable` always applied to it — so what a player sees of the bundle is
+  unchanged: shared options/equipment yes, `dm` stat blocks no — or (b) the **reader's own**
+  Library, or (c) originals **explicitly shared to the campaign's group**. It never returns a
+  campaign row. `creatures.list`/`options.list`, `Search.ts`'s creature arm,
+  `Characters.subraceResolves` and Hob's vocabulary all compose it, so what is pickable is what
+  validates and what search finds.
+- **The one instance the product still mints is internal, inside
+  `EncounterCreatures.create`.** A roster add accepts anything `copyableIntoCampaign` reaches;
+  when the source is an _owned original_ (Library or group-shared: `campaign_id` null,
+  `account_id` not null) it copies the row into the campaign in the same transaction — one
+  `insert … select`, `derived_from` kept — and points the line at the snapshot. A bundled row is
+  referenced directly (immutable; a re-import updates prep in place, which is a version upgrade
+  doing its job — history is immune one level down, at combatant seed). The duplicate 409 sees
+  through the instancing (`derived_from` checked per encounter), so "add it twice" cannot mint a
+  second invisible instance. Deleting a Library original leaves every roster standing.
+- **Instances are enumerable by nothing and editable by nobody.** No list returns a campaign
+  creature row; `creatures.findById` resolves one (`corpusRowReadable OR usableInCampaign` —
+  deliberately **not** bare `copyableIntoCampaign`, whose library disjunct has no campaign gate
+  and no visibility test: spelled that way, a player read a bundled stat block by id and a
+  stranger's campaign id answered instead of 404ing; `bestiary.test.ts` caught it live). The
+  roster wire row (`EncounterCreature`) carries a server-joined `name` so no client ever
+  dereferences instance ids to draw a roster; the run screen resolves combatant stat blocks per
+  id through `findById`.
+- **How homebrew reaches players now**: the DM's Library serves _all_ of their own tables
+  directly (no copy step), and the **group share** is the one explicit act that puts an original
+  in front of a table's other members — a shared class appears in the create form's pickers and
+  in Hob's grammar; withdrawing the grant takes it back out, and instances already minted stand.
+  A player's own Library is also in their picker at any table they sit at (it grants nothing they
+  could not type into the sheet by hand).
+- **`CreatureFilter.scope` is gone** — it named the campaign/bundle split. Character option
+  relationship-copying (`copyOptionRelationships`, `copyClassProgression`) went with `derive`;
+  a character seeds from labels and stays a snapshot exactly as before. Existing campaign copies
+  in old data are inert: rosters keep pointing at them, nothing lists or edits them.
+- Old campaign-copy prose further down (the Library sections' `derive` tables, "the copy, which
+  is the whole of how a class reaches a player", the campaign shelves under the screens
+  sections) is historical context for those files' evolution, not the shipped surface.
+
 ## The design system: what is canonical, and how it reaches Tailwind
 
 `packages/design-system` is the designers' delivered Tiny Taverns system, copied in whole.

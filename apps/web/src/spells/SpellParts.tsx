@@ -1,4 +1,4 @@
-import type { Campaign, Spell, SpellCreate } from "@taverns/api";
+import type { Spell, SpellCreate } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -24,7 +24,6 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import { CopyIntoCampaignSection } from "../library/CopyIn";
 import {
   FilterBar,
   FilterMultiSelect,
@@ -34,7 +33,6 @@ import {
   type FilterOption,
 } from "../library/filters";
 import type { ListQuery } from "../library/query";
-import { routes, router } from "../routes";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import type { SpellLevelKey, SpellQuery } from "./load";
@@ -198,11 +196,9 @@ export function SpellGrid({
 
 export function SpellDialog({
   spell,
-  campaigns,
   onClose,
 }: {
   readonly spell: Spell;
-  readonly campaigns?: ReadonlyArray<Campaign>;
   readonly onClose: () => void;
 }) {
   return (
@@ -246,34 +242,6 @@ export function SpellDialog({
                   <p key={index}>{line}</p>
                 ))}
               </div>
-            </DetailSection>
-          )}
-          {campaigns !== undefined && (
-            <DetailSection>
-              <CopyIntoCampaignSection
-                noun="spell"
-                campaigns={campaigns}
-                derive={(campaignId) => (client) =>
-                  client.spells.derive({
-                    params: { campaignId, spellId: spell.id },
-                    payload: {},
-                  })
-                }
-                readsChanged={(campaignId) => [reads.spells(campaignId)]}
-                copiedLink={(campaign) => (
-                  <a
-                    className="text-link hover:text-link-hover"
-                    href={router.history.createHref(
-                      router.buildLocation({
-                        to: routes.spells.to,
-                        params: { campaignId: campaign.id },
-                      }).publicHref,
-                    )}
-                  >
-                    Open its spellbook
-                  </a>
-                )}
-              />
             </DetailSection>
           )}
         </DetailBody>

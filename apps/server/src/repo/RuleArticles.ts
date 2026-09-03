@@ -5,14 +5,12 @@ import {
   NotFound,
   type Page,
   RuleArticle,
-  type RuleArticleDerive,
   type RuleArticleDetail,
   type RuleArticleFilterValues,
   type RuleArticleId,
   type RuleArticleLibraryCreate,
   type RuleArticleLibraryUpdate,
   type RuleArticleSort,
-  type RuleArticleUpdate,
   RuleSection,
   type RuleSectionId,
   type RuleSectionDraft,
@@ -37,15 +35,7 @@ import {
   pageOfRows,
   timeColumn,
 } from "./paging.js";
-import {
-  copyableIntoCampaign,
-  corpusRowReadable,
-  ensureCampaignReadable,
-  ensureCampaignWritable,
-  libraryRowReadable,
-  libraryRowWritable,
-  rowWritable,
-} from "./visibility.js";
+import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
 interface RuleArticleRow extends ProvenanceColumns {
   readonly id: RuleArticleId;
@@ -145,9 +135,7 @@ const orderingsOf = (
   };
 };
 
-const updateColumns = (
-  patch: RuleArticleDerive | RuleArticleLibraryUpdate | RuleArticleUpdate,
-): Record<string, unknown> =>
+const updateColumns = (patch: RuleArticleLibraryUpdate): Record<string, unknown> =>
   defined({
     name: patch.name,
     body: patch.intro === undefined ? undefined : encodeRuleBlocks(patch.intro),
@@ -179,96 +167,18 @@ const insertDraftSections = (
     }
   }).pipe(dieOnSqlError);
 
-const copySections = (
-  sql: SqlClient.SqlClient,
-  sourceArticleId: RuleArticleId,
-  copyArticleId: RuleArticleId,
-): Effect.Effect<void, never> =>
-  Effect.gen(function* () {
-    const source = yield* sql<{
-      readonly id: RuleSectionId;
-      readonly parent_section_id: RuleSectionId | null;
-      readonly source_corpus: string | null;
-      readonly source_family: string | null;
-      readonly source_key: string | null;
-      readonly title: string;
-      readonly body: unknown;
-      readonly ordinal: number;
-    }>`
-      select
-        id::text as id,
-        parent_section_id::text,
-        source_corpus,
-        source_family,
-        source_key,
-        title,
-        body,
-        ordinal
-      from rule_section
-      where article_id = ${sourceArticleId}
-      order by ordinal, title, id
-    `;
-
-    const sourceToCopy = new Map<RuleSectionId, RuleSectionId>();
-    for (const section of source) {
-      const rows = yield* sql<{ readonly id: RuleSectionId }>`
-        insert into rule_section (
-          article_id, parent_section_id, source_corpus, source_family, source_key,
-          title, body, ordinal
-        )
-        values (
-          ${copyArticleId},
-          null,
-          ${section.source_corpus},
-          ${section.source_family},
-          ${section.source_key},
-          ${section.title},
-          ${JSON.stringify(section.body)},
-          ${section.ordinal}
-        )
-        returning id::text
-      `;
-      sourceToCopy.set(section.id, rows[0]!.id);
-    }
-
-    for (const section of source) {
-      if (section.parent_section_id === null) continue;
-      const id = sourceToCopy.get(section.id);
-      const parent = sourceToCopy.get(section.parent_section_id);
-      if (id === undefined || parent === undefined) continue;
-      yield* sql`
-        update rule_section
-        set parent_section_id = ${parent}
-        where id = ${id}
-      `;
-    }
-  }).pipe(dieOnSqlError);
-
+/**
+ * The Library's rule articles — originals and the bundle, `libraryRowReadable` /
+ * `libraryRowWritable` and nothing else.
+ *
+ * The campaign-scoped methods went with the instancing decision of 2026-09-02:
+ * campaign copies became internal plumbing, and this corpus has no
+ * per-campaign consumer at all, so the Library is its entire surface. Old
+ * campaign rows in existing data are inert and unlisted.
+ */
 export class RuleArticles extends Context.Service<
   RuleArticles,
   {
-    readonly list: (
-      campaignId: CampaignId,
-      filter: RuleArticleFilterValues,
-    ) => Effect.Effect<Page<RuleArticle, RuleArticleSort>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: RuleArticleId,
-    ) => Effect.Effect<RuleArticleDetail, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: RuleArticleId,
-      patch: RuleArticleUpdate,
-    ) => Effect.Effect<RuleArticleDetail, NotFound, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: RuleArticleId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
-    readonly derive: (
-      campaignId: CampaignId,
-      id: RuleArticleId,
-      patch: RuleArticleDerive,
-    ) => Effect.Effect<RuleArticleDetail, NotFound, CurrentActor>;
     readonly library: (
       filter: RuleArticleFilterValues,
     ) => Effect.Effect<Page<RuleArticle, RuleArticleSort>, never, CurrentActor>;
@@ -308,134 +218,7 @@ export class RuleArticles extends Context.Service<
           sections: sections.map(toSection),
         }));
 
-      const readable = (campaignId: CampaignId, id: RuleArticleId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<RuleArticleRow>`
-            select ${sql.unsafe(articleColumns())}
-            from rule_article
-            where rule_article.id = ${id}
-              and ${corpusRowReadable(sql, "rule_article", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
-          return rows[0]!;
-        });
-
-      const copyable = (campaignId: CampaignId, id: RuleArticleId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<RuleArticleRow>`
-            select ${sql.unsafe(articleColumns())}
-            from rule_article
-            where rule_article.id = ${id}
-              and ${copyableIntoCampaign(sql, "rule_article", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
-          return rows[0]!;
-        });
-
       return {
-        list: (campaignId, filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<RuleArticleRow>`
-                select ${sql.unsafe(articleColumns())}
-                from rule_article
-                where ${sql.and([
-                  corpusRowReadable(sql, "rule_article", campaignId, actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toArticle);
-            }),
-          ),
-
-        findById: (campaignId, id) =>
-          dieOnSqlError(Effect.flatMap(readable(campaignId, id), detail)),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<RuleArticleRow>`
-                  update rule_article
-                  set ${setClause(sql, updateColumns(patch))}
-                  where rule_article.id = ${id}
-                    and ${rowWritable(sql, "rule_article", campaignId, actor)}
-                  returning ${sql.unsafe(articleColumns())}
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
-                if (patch.sections !== undefined)
-                  yield* insertDraftSections(sql, rows[0]!.id, patch.sections);
-                const reread = yield* sql<RuleArticleRow>`
-                  select ${sql.unsafe(articleColumns())}
-                  from rule_article
-                  where id = ${rows[0]!.id}
-                `;
-                return yield* detail(reread[0]!);
-              }),
-            ),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: RuleArticleId }>`
-                delete from rule_article
-                where rule_article.id = ${id}
-                  and ${rowWritable(sql, "rule_article", campaignId, actor)}
-                returning rule_article.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
-            }),
-          ),
-
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                const rows = yield* sql<RuleArticleRow>`
-                  insert into rule_article ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      derived_from: source.id,
-                      source_corpus: source.source_corpus,
-                      source_family: source.source_family,
-                      source_key: source.source_key,
-                      name: patch.name ?? source.name,
-                      body:
-                        patch.intro === undefined
-                          ? JSON.stringify(source.body)
-                          : encodeRuleBlocks(patch.intro),
-                      visibility: patch.visibility,
-                    }),
-                  )}
-                  returning ${sql.unsafe(articleColumns())}
-                `;
-                const copy = rows[0]!;
-                if (patch.sections === undefined) yield* copySections(sql, source.id, copy.id);
-                else yield* insertDraftSections(sql, copy.id, patch.sections);
-                const reread = yield* sql<RuleArticleRow>`
-                  select ${sql.unsafe(articleColumns())}
-                  from rule_article
-                  where id = ${copy.id}
-                `;
-                return yield* detail(reread[0]!);
-              }),
-            ),
-          ),
-
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {

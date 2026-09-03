@@ -83,7 +83,7 @@ const actLabel = (): string | undefined =>
 describe("the campaign row, across every destination it offers", () => {
   it("carries the night and the campaign's own press on all of them", async () => {
     const where = await destinations();
-    // Overview, Encounters, Party, Notes, Chronicle, Compendium, Spells, Equipment, Magic items, Rules.
+    // Overview, Encounters, Party, Notes, Chronicle.
     // Named so that a row that silently lost an item is a failure rather than a
     // smaller loop.
     expect(where.map((entry) => entry.label)).toEqual([
@@ -92,11 +92,6 @@ describe("the campaign row, across every destination it offers", () => {
       "Party",
       "Notes",
       "Chronicle",
-      "Compendium",
-      "Spells",
-      "Equipment",
-      "Magic items",
-      "Rules",
     ]);
 
     const seen: Array<{ label: string; badge: string; act: string | undefined }> = [];
@@ -123,11 +118,6 @@ describe("the campaign row, across every destination it offers", () => {
       { label: "Party", badge: "Session 12", act: "Start an encounter" },
       { label: "Notes", badge: "Session 12", act: "Start an encounter" },
       { label: "Chronicle", badge: "Session 12", act: "Start an encounter" },
-      { label: "Compendium", badge: "Session 12", act: "Start an encounter" },
-      { label: "Spells", badge: "Session 12", act: "Start an encounter" },
-      { label: "Equipment", badge: "Session 12", act: "Start an encounter" },
-      { label: "Magic items", badge: "Session 12", act: "Start an encounter" },
-      { label: "Rules", badge: "Session 12", act: "Start an encounter" },
     ]);
   }, 30_000);
 
@@ -163,11 +153,6 @@ describe("the campaign row, across every destination it offers", () => {
       { label: "Party", badges: 0, act: "Start session" },
       { label: "Notes", badges: 0, act: "Start session" },
       { label: "Chronicle", badges: 0, act: "Start session" },
-      { label: "Compendium", badges: 0, act: "Start session" },
-      { label: "Spells", badges: 0, act: "Start session" },
-      { label: "Equipment", badges: 0, act: "Start session" },
-      { label: "Magic items", badges: 0, act: "Start session" },
-      { label: "Rules", badges: 0, act: "Start session" },
     ]);
   }, 30_000);
 });

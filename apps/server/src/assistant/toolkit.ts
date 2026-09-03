@@ -232,11 +232,12 @@ export const NO_VOCABULARY: CharacterVocabulary = {
 /**
  * The names of one kind, de-duplicated case-insensitively, first spelling kept.
  *
- * Duplicates are expected rather than defensive: copying one Library original
- * into a campaign twice makes two rows, deliberately, and nothing refuses it.
- * The first spelling is kept because that is the row `optionNamed` resolves to —
- * it is a `find`, so an enum offering the second copy's casing would name a row
- * the handler will not reach.
+ * Duplicates are expected rather than defensive: a group share and the
+ * sharer's own Library can answer the same name twice, and nothing refuses a
+ * shared original named like a bundled one. The first spelling is kept because
+ * that is the row `optionNamed` resolves to — it is a `find`, so an enum
+ * offering the second row's casing would name a row the handler will not
+ * reach.
  */
 const namesOf = (
   options: ReadonlyArray<CharacterOption>,
@@ -509,8 +510,8 @@ const CreatureLine = Schema.Struct({
 
 export const ListCreatures = Tool.make("listCreatures", {
   description:
-    "Every creature this campaign can put in a fight — the ones in its own " +
-    "bestiary and the ones in the shared corpus — by name. Use it to see what " +
+    "Every creature this campaign can put in a fight — the shared corpus, the " +
+    "DM's own Library, and what the group shares — by name. Use it to see what " +
     "is available before building an encounter, and take `creatureId` straight " +
     "to proposeEncounter. At most 50 are listed; if what you want is not here, " +
     "look for it by name with searchCampaign.",
@@ -732,8 +733,8 @@ export const ProposeBeat = Tool.make("proposeBeat", {
 
 export const ProposeEncounter = Tool.make("proposeEncounter", {
   description:
-    "Offer the DM an encounter to save, built from creatures that are already " +
-    "in this campaign or in the shared bestiary. Find each creature with " +
+    "Offer the DM an encounter to save, built from creatures this campaign " +
+    "can use — see listCreatures. Find each creature with " +
     "searchCampaign (source 'creature') and use the id from the hit — do not " +
     "invent one, and do not propose a creature you have not found. Only a " +
     "suggestion; nothing is saved unless the DM accepts it.",
@@ -995,7 +996,7 @@ const OptionLine = Schema.Struct({
 export const ListOptions = Tool.make("listOptions", {
   description:
     "Every class, race and background a character in this campaign can be built from — " +
-    "the ones its DM has written or copied in, and the shared bundle. Use it " +
+    "the shared bundle, plus what is shared to this table's group. Use it " +
     "before proposeCharacter, and copy a `name` back exactly as it came.",
   success: Schema.Array(OptionLine),
   failure: NotFound,
@@ -1130,7 +1131,7 @@ export interface HobRepositories {
    * hands the result down as a {@link CharacterVocabulary} — which is why this
    * is the one repository no handler below calls.
    *
-   * It is `Options.list`, the same method and the same `corpusRowReadable` the
+   * It is `Options.list`, the same method and the same `usableInCampaign` the
    * create form's own pickers read through, so an option Hob may offer is
    * exactly one the player could have picked by hand.
    */
@@ -1343,8 +1344,8 @@ export const dmHandlersFor = (
     listCreatures: () =>
       Effect.map(
         // Ordered by name and capped, which is the reading policy and not a
-        // narrowing: the predicate is `corpusRowReadable`, exactly as the
-        // bestiary screen's own list is. The cap is stated in the tool's
+        // narrowing: the predicate is `usableInCampaign`, exactly as the
+        // encounter picker's own list is. The cap is stated in the tool's
         // description rather than left for the model to discover, because a
         // silently truncated list reads as "that is all there is".
         as(repositories.creatures.list(campaignId, { sort: "name", limit: CREATURE_LIMIT })),

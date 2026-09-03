@@ -518,18 +518,6 @@ export const CreatureSort = Schema.Literals(["cr", "name", "recent"]);
 export type CreatureSort = typeof CreatureSort.Type;
 
 /**
- * Which half of the corpus to list.
- *
- * `Site.jsx:86` — "Save your own creatures next to the official ones" — so
- * `all` is the default and the two halves are one list. The other two exist
- * because "my creatures" and "the official ones" are the questions a DM
- * actually asks, and because a filter that names the split is what makes the
- * global-versus-campaign boundary testable from the outside.
- */
-export const CreatureScope = Schema.Literals(["all", "campaign", "system"]);
-export type CreatureScope = typeof CreatureScope.Type;
-
-/**
  * The controls that mean the same thing whether the list is a campaign's
  * bestiary or the shared Library — searching, narrowing by environment, and
  * ordering.
@@ -577,20 +565,13 @@ export type LibraryFilterValues = typeof LibraryFilterValues.Type;
 const LibraryFilterValues = Schema.Struct(LibraryFilter);
 
 /**
- * `Bestiary.jsx`'s three controls, as query parameters.
- *
- * `scope` is the one the Library has no use for. Every row that list can return
- * is `campaign_id is null` — the bundle and the reader's own entities — so
- * `scope: "campaign"` would name nothing and `scope: "system"` would be the only
- * narrowing left, which is `origin` read as a filter. The split a Library screen
- * actually wants is *mine* versus *the bundle*, and every row already carries
- * `accountId`, so it is a fact on the row rather than a parameter that could
- * disagree with one.
+ * The campaign picker's controls — the same filter the Library takes, because
+ * since the instancing decision of 2026-09-02 the campaign list answers the
+ * same kind of rows: `campaign_id is null` originals and the bundle, narrowed
+ * per reader. The old `scope` parameter named the campaign-copy/bundle split
+ * and went with the copy model.
  */
-export const CreatureFilter = {
-  ...LibraryFilter,
-  scope: Schema.optional(CreatureScope),
-} as const;
+export const CreatureFilter = LibraryFilter;
 
 /**
  * The decoded filter, as a repository sees it. Derived from the same fields the

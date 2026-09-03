@@ -95,7 +95,6 @@ export function CompendiumLibraryScreen() {
       {reading !== undefined && (
         <RuleArticleReader
           articleId={reading.id}
-          campaigns={value?.campaigns ?? []}
           onClose={() => setReading(undefined)}
           onEdit={(detail) => {
             setReading(undefined);

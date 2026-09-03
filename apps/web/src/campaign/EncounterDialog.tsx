@@ -1,13 +1,11 @@
 import type {
   CampaignId,
   CreatureId,
-  CreatureSort,
   Difficulty,
   Encounter,
   EncounterCreatureId,
   EncounterId,
   Visibility,
-  PageCursor,
 } from "@taverns/api";
 import {
   Button,
@@ -31,7 +29,6 @@ import { useCallback, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { collectPages, WHOLE_LIST } from "../api/page";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { CreaturePicker } from "./CreaturePicker";
@@ -443,12 +440,16 @@ function EncounterForm({
 }
 
 /**
- * An encounter's roster with each line's creature named, keyed on the campaign
- * and the encounter — or on `undefined`, which is a new encounter and an empty
- * list rather than a request.
+ * An encounter's roster, keyed on the campaign and the encounter — or on
+ * `undefined`, which is a new encounter and an empty list rather than a
+ * request.
  *
- * Composed into one Effect for the reason `campaign/load.ts` gives: two atoms
- * here would be four states to render inside a dialog that has room for one.
+ * The name rides on the row itself (`EncounterCreature.name`, resolved
+ * server-side), and that is load-bearing rather than convenient: a roster line
+ * may point at a campaign instance the corpus list never returns — the
+ * instancing decision of 2026-09-02 — so a client-side join against
+ * `creatures.list` would name some lines "unknown" about creatures that are
+ * right there.
  */
 const rosterAtom = Atom.family(
   ({
@@ -462,36 +463,23 @@ const rosterAtom = Atom.family(
       (client) =>
         encounterId === undefined
           ? Effect.succeed<ReadonlyArray<RosterLine>>([])
-          : Effect.gen(function* () {
-              const [rows, creatures] = yield* Effect.all(
-                [
-                  client.encounterCreatures.list({ params: { campaignId, encounterId } }),
-                  collectPages((cursor: PageCursor<CreatureSort> | undefined) =>
-                    client.creatures.list({
-                      params: { campaignId },
-                      query: { limit: WHOLE_LIST, cursor },
-                    }),
-                  ),
-                ],
-                { concurrency: "unbounded" },
-              );
-              const byId = new Map(creatures.map((creature) => [creature.id, creature]));
-              return rows.map((row): RosterLine => ({
-                key: row.id,
-                id: row.id,
-                creatureId: row.creatureId,
-                // A line whose creature this actor cannot read is still a line.
-                // Say so rather than dropping it and silently shrinking the roster.
-                name: byId.get(row.creatureId)?.name ?? "A creature you cannot see",
-                count: row.count,
-                savedCount: row.count,
-              }));
-            }),
-      // This encounter's own roster, and the campaign's creatures behind it.
-      // `reads.encounters` is what a roster write already names — for the
-      // `creatureCount` on the card — so a save reaching this list too costs
-      // nothing and keeps a reopened dialog honest.
-      encounterId === undefined ? [] : [reads.encounters(campaignId), reads.creatures(campaignId)],
+          : Effect.map(
+              client.encounterCreatures.list({ params: { campaignId, encounterId } }),
+              (rows) =>
+                rows.map((row): RosterLine => ({
+                  key: row.id,
+                  id: row.id,
+                  creatureId: row.creatureId,
+                  name: row.name,
+                  count: row.count,
+                  savedCount: row.count,
+                })),
+            ),
+      // This encounter's own roster. `reads.encounters` is what a roster write
+      // already names — for the `creatureCount` on the card — so a save
+      // reaching this list too costs nothing and keeps a reopened dialog
+      // honest.
+      encounterId === undefined ? [] : [reads.encounters(campaignId)],
     ),
 );
 

@@ -271,8 +271,6 @@ export function OptionLibraryScreen() {
       {editingFeat !== undefined && vocabulary !== undefined && (
         <FeatForm
           feat={editingFeat ?? undefined}
-          source="library"
-          campaignId={undefined}
           vocabulary={vocabulary}
           onClose={() => setEditingFeat(undefined)}
           onSaved={() => setEditingFeat(undefined)}

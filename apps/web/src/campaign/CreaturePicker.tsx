@@ -120,8 +120,9 @@ export function CreaturePicker({
                   <span className="shrink-0 font-mono text-mono leading-none font-medium text-muted-foreground">
                     CR {creature.cr}
                   </span>
-                  {/* The corpus a DM shares between their own campaigns, not one
-                      they wrote. Worth marking, because deriving is how you edit it. */}
+                  {/* The bundled corpus, against rows from the DM's own
+                      Library or the group's shares — worth marking because it
+                      is the one kind of row nobody wrote. */}
                   {creature.origin === "system" && <Badge variant="outline">Shared corpus</Badge>}
                   <Button
                     variant="ghost"

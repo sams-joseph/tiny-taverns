@@ -1,4 +1,4 @@
-import type { Campaign, CampaignId, MagicItem, MagicItemSort, PageCursor } from "@taverns/api";
+import type { MagicItem, MagicItemSort, PageCursor } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -39,54 +39,18 @@ export const magicItemQueryParams = (
 export interface MagicItemLibraryView {
   readonly magicItems: ReadonlyArray<MagicItem>;
   readonly nextCursor: PageCursor<MagicItemSort> | null;
-  readonly campaigns: ReadonlyArray<Campaign>;
 }
 
 export const loadMagicItemLibrary = (query: MagicItemQuery) => (client: TavernsClient) =>
-  Effect.gen(function* () {
-    const [page, memberships] = yield* Effect.all(
-      [
-        client.library.magicItems({ query: magicItemQueryParams(query, undefined) }),
-        client.me.campaigns(),
-      ],
-      { concurrency: "unbounded" },
-    );
-    return {
-      magicItems: page.items,
-      nextCursor: page.nextCursor,
-      campaigns: memberships
-        .filter((membership) => membership.relation === "creator")
-        .map((membership) => membership.campaign),
-    } satisfies MagicItemLibraryView;
-  });
-
-export interface CampaignMagicItemView {
-  readonly magicItems: ReadonlyArray<MagicItem>;
-  readonly nextCursor: PageCursor<MagicItemSort> | null;
-}
-
-export const loadCampaignMagicItems =
-  (campaignId: CampaignId, query: MagicItemQuery) => (client: TavernsClient) =>
-    Effect.map(
-      client.magicItems.list({
-        params: { campaignId },
-        query: magicItemQueryParams(query, undefined),
-      }),
-      (page) =>
-        ({
-          magicItems: page.items,
-          nextCursor: page.nextCursor,
-        }) satisfies CampaignMagicItemView,
-    );
+  Effect.map(
+    client.library.magicItems({ query: magicItemQueryParams(query, undefined) }),
+    (page) =>
+      ({ magicItems: page.items, nextCursor: page.nextCursor }) satisfies MagicItemLibraryView,
+  );
 
 export const loadMoreLibraryMagicItems =
   (query: MagicItemQuery, cursor: PageCursor<MagicItemSort>) => (client: TavernsClient) =>
     client.library.magicItems({ query: magicItemQueryParams(query, cursor) });
-
-export const loadMoreCampaignMagicItems =
-  (campaignId: CampaignId, query: MagicItemQuery, cursor: PageCursor<MagicItemSort>) =>
-  (client: TavernsClient) =>
-    client.magicItems.list({ params: { campaignId }, query: magicItemQueryParams(query, cursor) });
 
 /** True when anything besides the search narrows a magic item list. */
 export const magicItemNarrows = (query: MagicItemQuery): boolean =>

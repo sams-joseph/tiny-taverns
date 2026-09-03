@@ -4,7 +4,6 @@ import {
   type CharacterOption,
   type CharacterOptionId,
   type ClassBody,
-  seedFor,
   type RaceBody,
   TavernsApi,
 } from "@taverns/api";
@@ -108,25 +107,9 @@ const SALTBORN: RaceBody = {
   traits: [],
   subraces: [],
 };
-const SALT_RUNNER: BackgroundBody = {
-  proficiencies: ["Athletics"],
-  languages: [],
-  equipment: ["ferryman's token"],
-  choices: [],
-};
 const systemClasses = SYSTEM_OPTIONS.filter((option) => option.kind === "class");
 const systemRaces = SYSTEM_OPTIONS.filter((option) => option.kind === "race");
 const systemBackgrounds = SYSTEM_OPTIONS.filter((option) => option.kind === "background");
-
-/** The standard array a player might have typed, constitution at +2. */
-const CON_HEAVY = [
-  { label: "STR", score: "12", modifier: "+1" },
-  { label: "DEX", score: "14", modifier: "+2" },
-  { label: "CON", score: "15", modifier: "+2" },
-  { label: "INT", score: "10", modifier: "+0" },
-  { label: "WIS", score: "13", modifier: "+1" },
-  { label: "CHA", score: "8", modifier: "-1" },
-];
 
 /**
  * Two DMs with tables of their own, a player at one of them minted through a
@@ -393,40 +376,6 @@ describe("the bundle", () => {
     ).toBe(true);
   });
 
-  it("copies race relationships as a campaign snapshot, not a view of the bundle", async () => {
-    const dwarf = (
-      await as(fixture.jo.token, (client) => client.library.options({ query: { kind: "race" } }))
-    ).find((option) => option.name === "Dwarf");
-    if (dwarf === undefined) throw new Error("expected bundled Dwarf");
-
-    const copy = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: dwarf.id },
-        payload: { visibility: "shared" },
-      }),
-    );
-    expect(copy.details?.traits.map((grant) => grant.trait.name)).toContain("Darkvision");
-    expect(
-      copy.details?.traits.every((grant) => grant.trait.id !== dwarf.details?.traits[0]?.trait.id),
-    ).toBe(true);
-
-    await sql(
-      (client) => client`
-        update racial_trait set name = 'Darkvision (changed upstream)'
-        where origin = 'system' and campaign_id is null and account_id is null and name = 'Darkvision'
-      `,
-    );
-    const reread = await as(fixture.jo.token, (client) =>
-      client.options.findById({ params: { campaignId: fixture.saltRoad.id, optionId: copy.id } }),
-    );
-    expect(reread.details?.traits.map((grant) => grant.trait.name)).toContain("Darkvision");
-    expect(reread.details?.traits.map((grant) => grant.trait.name)).not.toContain(
-      "Darkvision (changed upstream)",
-    );
-
-    await runtime.runPromise(importSystemOptions().pipe(Effect.orDie));
-  });
-
   it("lands shared, which is what makes a player's picker work at all", async () => {
     // **The one place this importer differs from `bestiary:import`, and the
     // reason is the whole shape of the feature.** A stat block is the thing the
@@ -510,26 +459,20 @@ describe("the bundle", () => {
     );
   });
 
-  it("cannot be written by anybody, through either path", async () => {
+  it("cannot be written by anybody, through the one write path left", async () => {
     // No `origin = 'system'` check exists anywhere in `apps/server/src` and none
     // is needed: `libraryRowWritable` compares `account_id` to the credential's
-    // account and a bundled row's is null, `rowWritable` compares `campaign_id`
-    // to the path's and a bundled row's is null. A null never equals a uuid.
+    // account and a bundled row's is null. A null never equals a uuid.
     const throughLibrary = await refused(fixture.jo.token, (client) =>
       client.library.updateOption({
         params: { optionId: fixture.bundledDruid },
         payload: { name: "Druid (revised)" },
       }),
     );
-    const throughCampaign = await refused(fixture.jo.token, (client) =>
-      client.options.update({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.bundledDruid },
-        payload: { name: "Druid (revised)" },
-      }),
-    );
-
     expect(throughLibrary._tag).toBe("NotFound");
-    expect(throughCampaign._tag).toBe("NotFound");
+    // There is no campaign write path at all any more — the group of
+    // campaign-copy endpoints went with the instancing decision of 2026-09-02,
+    // which is a stronger statement than a second refusal.
   });
 
   it("imports the pinned 2014 class progression and updates it idempotently", async () => {
@@ -643,8 +586,9 @@ describe("the Library shows originals only", () => {
     // **The asymmetry the whole design turns on.** `libraryRowReadable`
     // compares `account_id` to the *reader's* account, so a player at Jo's own
     // table sees the bundle and nothing of Jo's. That is why a homebrew class
-    // has to be copied into the campaign before it can be picked — the copy is
-    // not a convenience, it is the only thing that makes the feature work.
+    // has to be **shared to the group** before a player can pick it — the
+    // grant is not a convenience, it is the only thing that makes the feature
+    // work.
     const seen = await as(fixture.pim.token, (client) => client.library.options({ query: {} }));
 
     expect(named(seen)).toContain("Druid");
@@ -697,18 +641,21 @@ describe("the Library shows originals only", () => {
 });
 
 describe("a campaign's vocabulary", () => {
-  it("is the bundle until something is copied in", async () => {
-    // A campaign nobody has copied anything into still has a full picker: the
-    // bundle belongs to every campaign at once, which is what
-    // `corpusRowReadable`'s `unowned` half means. And it is *only* the bundle —
-    // the DM's own Library originals are not in it, which is the whole reason
-    // the copy exists.
+  it("is the bundle plus the reader's own Library, and never a campaign row", async () => {
+    // Since the instancing decision of 2026-09-02 the vocabulary is
+    // `usableInCampaign`: the shared bundle, the *reader's* own originals, and
+    // whatever is shared to the table's group. Bo's own class is right there
+    // at Bo's table — authoring-then-using needs no copy step — and nothing in
+    // the answer is ever a campaign row.
     const ours = await optionsAt(fixture.bo.token, fixture.theirTable.id);
 
     expect(named(ours)).toContain("Druid");
     expect(named(ours)).toContain("Dwarf");
-    expect(ours).toHaveLength(systemClasses.length + systemRaces.length + systemBackgrounds.length);
-    expect(named(ours)).not.toContain(OPTIONS.theirs);
+    expect(named(ours)).toContain(OPTIONS.theirs);
+    expect(ours).toHaveLength(
+      systemClasses.length + systemRaces.length + systemBackgrounds.length + 1,
+    );
+    expect(named(ours)).not.toContain(OPTIONS.bloodsworn);
     expect(ours.every((option) => option.campaignId === null)).toBe(true);
   });
 
@@ -731,409 +678,55 @@ describe("a campaign's vocabulary", () => {
   });
 });
 
-describe("the copy, which is the whole of how a class reaches a player", () => {
-  it("lands DM-only unless the caller says otherwise, and then no player can pick it", async () => {
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.bloodsworn.id },
-        payload: {},
+describe("the group share, which is the whole of how a class reaches a player", () => {
+  it("reaches no player until the owner shares it to the group", async () => {
+    const before = await optionsAt(fixture.pim.token, fixture.saltRoad.id);
+    expect(named(before)).not.toContain(OPTIONS.bloodsworn);
+
+    await as(fixture.jo.token, (client) =>
+      client.groupLibrary.share({
+        params: { groupId: fixture.saltRoad.groupId },
+        payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );
 
-    expect(copied.visibility).toBe("dm");
-    expect(copied.campaignId).toBe(fixture.saltRoad.id);
-    expect(copied.accountId).toBeNull();
-    expect(copied.derivedFrom).toBe(fixture.bloodsworn.id);
-    expect(copied.origin).toBe("authored");
+    const after = await optionsAt(fixture.pim.token, fixture.saltRoad.id);
+    const offered = after.find((option) => option.name === OPTIONS.bloodsworn);
+    expect(offered).toBeDefined();
+    // What is offered is the original itself — a vocabulary entry, not a copy
+    // and not a view widened anywhere else: Pim's own Library still shows
+    // nothing of Jo's, which `library.test.ts`'s twin pins for creatures.
+    expect(offered?.id).toBe(fixture.bloodsworn.id);
+    expect(offered?.campaignId).toBeNull();
 
-    const asDm = await optionsAt(fixture.jo.token, fixture.saltRoad.id);
-    const asPlayer = await optionsAt(fixture.pim.token, fixture.saltRoad.id);
+    const pimLibrary = await as(fixture.pim.token, (client) =>
+      client.library.options({ query: {} }),
+    );
+    expect(named(pimLibrary)).not.toContain(OPTIONS.bloodsworn);
+  });
 
-    expect(named(asDm)).toContain(OPTIONS.bloodsworn);
-    // `corpusRowReadable` ends in `isDm OR visibility = 'shared'`. This is the
-    // friction the copy-in dialog answers by sending `shared` out loud.
-    expect(named(asPlayer)).not.toContain(OPTIONS.bloodsworn);
-
+  it("stops reaching the picker when the grant is withdrawn", async () => {
     await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
+      client.groupLibrary.unshare({
+        params: { groupId: fixture.saltRoad.groupId },
+        payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
+      }),
+    );
+    const after = await optionsAt(fixture.pim.token, fixture.saltRoad.id);
+    expect(named(after)).not.toContain(OPTIONS.bloodsworn);
+
+    // Put it back for the tests below.
+    await as(fixture.jo.token, (client) =>
+      client.groupLibrary.share({
+        params: { groupId: fixture.saltRoad.groupId },
+        payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );
   });
 
-  it("is pickable by a player the moment the DM shares it", async () => {
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.bloodsworn.id },
-        // What the shipped dialog sends: the visible screen-level choice, not a
-        // changed column default.
-        payload: { visibility: "shared" },
-      }),
-    );
-
-    const asPlayer = await optionsAt(fixture.pim.token, fixture.saltRoad.id, "class");
-    expect(named(asPlayer)).toContain(OPTIONS.bloodsworn);
-
-    const picked = asPlayer.find((option) => option.name === OPTIONS.bloodsworn);
-    expect(picked?.kind).toBe("class");
-
-    // **The acceptance arithmetic, end to end.** A player picks the campaign's
-    // own class, and the seed the create form runs cannot tell it from a
-    // bundled one: d10 + CON 2 is 12 hit points, and 10 + DEX 2 + CON 2 is
-    // armour class 14.
-    const seed = seedFor({
-      classEntry: picked?.kind === "class" ? picked.body : undefined,
-      raceEntry: undefined,
-      subraceEntry: undefined,
-      backgroundEntry: undefined,
-      abilities: CON_HEAVY,
-    });
-    expect(seed).toEqual({ level: 1, ac: 14, hpMax: 12, abilities: CON_HEAVY, appliedBonuses: [] });
-
-    await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
-  });
-
-  it("copies a class's progression as a campaign snapshot", async () => {
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.createOption({
-        payload: {
-          kind: "class",
-          name: "Star-pact Warden",
-          body: { hitDie: 8, unarmouredAc: ["DEX"] },
-        },
-      }),
-    );
-    const sourceIds = await runtime.runPromise(
-      Effect.flatMap(SqlClient.SqlClient, (client) =>
-        Effect.gen(function* () {
-          const subclass = yield* client<{ readonly id: string }>`
-            insert into subclass ${client.insert({
-              account_id: fixture.jo.accountId,
-              class_option_id: original.id,
-              name: "Star oath",
-              body: JSON.stringify({ desc: [] }),
-              visibility: "shared",
-            })}
-            returning id::text
-          `;
-          const level = yield* client<{ readonly id: string }>`
-            insert into class_level ${client.insert({
-              account_id: fixture.jo.accountId,
-              class_option_id: original.id,
-              subclass_id: subclass[0]!.id,
-              level: 3,
-              ability_score_bonuses: 0,
-              proficiency_bonus: 2,
-              body: JSON.stringify({ features: [] }),
-              visibility: "shared",
-            })}
-            returning id::text
-          `;
-          const feature = yield* client<{ readonly id: string }>`
-            insert into feature ${client.insert({
-              account_id: fixture.jo.accountId,
-              class_option_id: original.id,
-              subclass_id: subclass[0]!.id,
-              class_level_id: level[0]!.id,
-              name: "Starlit vow",
-              level: 3,
-              body: JSON.stringify({ desc: [], prerequisites: [] }),
-              visibility: "shared",
-            })}
-            returning id::text
-          `;
-          return { subclass: subclass[0]!.id, level: level[0]!.id, feature: feature[0]!.id };
-        }),
-      ).pipe(Effect.orDie),
-    );
-
-    const copy = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: original.id },
-        payload: { visibility: "shared" },
-      }),
-    );
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.progression({
-        params: { campaignId: fixture.saltRoad.id, optionId: copy.id },
-      }),
-    );
-
-    expect(copied.subclasses.map((subclass) => subclass.name)).toEqual(["Star oath"]);
-    expect(copied.levels.map((level) => level.level)).toEqual([3]);
-    expect(copied.features.map((feature) => feature.name)).toEqual(["Starlit vow"]);
-    expect(copied.subclasses[0]?.campaignId).toBe(fixture.saltRoad.id);
-    expect(copied.subclasses[0]?.accountId).toBeNull();
-    expect(copied.subclasses[0]?.derivedFrom).toBe(sourceIds.subclass);
-    expect(copied.levels[0]?.derivedFrom).toBe(sourceIds.level);
-    expect(copied.features[0]?.derivedFrom).toBe(sourceIds.feature);
-    expect(copied.features[0]?.subclassId).toBe(copied.subclasses[0]?.id);
-    expect(copied.features[0]?.classLevelId).toBe(copied.levels[0]?.id);
-
-    await runtime.runPromise(
-      Effect.flatMap(
-        SqlClient.SqlClient,
-        (client) =>
-          client`
-          update subclass set name = 'Star oath, revised'
-          where id = ${sourceIds.subclass}
-        `,
-      ).pipe(Effect.orDie),
-    );
-    const afterSourceEdit = await as(fixture.jo.token, (client) =>
-      client.options.progression({
-        params: { campaignId: fixture.saltRoad.id, optionId: copy.id },
-      }),
-    );
-    expect(afterSourceEdit.subclasses.map((subclass) => subclass.name)).toEqual(["Star oath"]);
-  });
-
-  it("carries a background's 2014 grants without changing the seed", async () => {
-    // **The acceptance shape of the background slice, over real HTTP.** A DM
-    // authors one, shares it, and a player at that table picks it. In 2014 the
-    // background reaches the sheet as proficiencies/equipment; race and subrace
-    // entries carry the ability-score arithmetic, so the seed stays unchanged.
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.createOption({
-        payload: {
-          kind: "background",
-          name: OPTIONS.saltRunner,
-          body: SALT_RUNNER,
-        },
-      }),
-    );
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: original.id },
-        payload: { visibility: "shared" },
-      }),
-    );
-
-    const asPlayer = await optionsAt(fixture.pim.token, fixture.saltRoad.id, "background");
-    // The bundled SRD background is here too.
-    expect(named(asPlayer)).toContain(OPTIONS.saltRunner);
-    expect(named(asPlayer)).toContain("Acolyte");
-    const bundled = asPlayer.find((option) => option.name === "Acolyte");
-    expect(bundled?.kind === "background" && bundled.body.proficiencies).toBeDefined();
-
-    const picked = asPlayer.find((option) => option.name === OPTIONS.saltRunner);
-    if (picked?.kind !== "background") throw new Error("expected a background");
-
-    // 2014 backgrounds do not seed ability scores. They reach the sheet as
-    // displayed proficiencies and equipment, while race/subrace entries carry
-    // the creation arithmetic.
-    const seed = seedFor({
-      classEntry: { hitDie: 8, unarmouredAc: ["DEX"] },
-      raceEntry: undefined,
-      subraceEntry: undefined,
-      backgroundEntry: picked.body,
-      abilities: CON_HEAVY,
-    });
-    expect(seed.hpMax).toBe(10);
-    expect(seed.ac).toBe(12);
-    expect(seed.abilities).toEqual(CON_HEAVY);
-
-    // And the same character with the *bundled* background is the same answer,
-    // because 2014 backgrounds do not seed ability scores.
-    const plain = seedFor({
-      classEntry: { hitDie: 8, unarmouredAc: ["DEX"] },
-      raceEntry: undefined,
-      subraceEntry: undefined,
-      backgroundEntry: bundled?.kind === "background" ? bundled.body : undefined,
-      abilities: CON_HEAVY,
-    });
-    expect(plain.hpMax).toBe(10);
-    expect(plain.abilities).toEqual(CON_HEAVY);
-
-    await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
-    await as(fixture.jo.token, (client) =>
-      client.library.removeOption({ params: { optionId: original.id } }),
-    );
-  });
-
-  it("refuses a body whose shape contradicts the row's own kind", async () => {
-    // The three documents are told apart by shape alone — `hitDie`,
-    // `hpPerLevel`, `proficiencies`, one required key each — because a PATCH
-    // carries a body and no kind. **This is why `BackgroundBody.proficiencies`
-    // is required rather than optional**: an all-optional body would match
-    // first inside `Schema.Union` and swallow the other two whole.
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.createOption({
-        payload: { kind: "background", name: "Wrong shape", body: SALT_RUNNER },
-      }),
-    );
-
-    const refusedBody = await refused(fixture.jo.token, (client) =>
-      client.library.updateOption({
-        params: { optionId: original.id },
-        payload: { body: { hitDie: 8, unarmouredAc: ["DEX"] } },
-      }),
-    );
-    expect(refusedBody._tag).toBe("Conflict");
-
-    // And the other direction, so neither is an accident of union order.
-    const ontoAClass = await refused(fixture.jo.token, (client) =>
-      client.library.updateOption({
-        params: { optionId: fixture.bloodsworn.id },
-        payload: { body: SALT_RUNNER },
-      }),
-    );
-    expect(ontoAClass._tag).toBe("Conflict");
-
-    // The class is untouched by the refusal.
-    const stillAClass = await as(fixture.jo.token, (client) =>
-      client.library.findOption({ params: { optionId: fixture.bloodsworn.id } }),
-    );
-    expect(stillAClass.kind === "class" && stillAClass.body.hitDie).toBe(10);
-
-    await as(fixture.jo.token, (client) =>
-      client.library.removeOption({ params: { optionId: original.id } }),
-    );
-  });
-
-  it("refuses a source this account cannot reach", async () => {
-    // `copyableIntoCampaign` is this campaign's own vocabulary, the bundle, or
-    // the caller's own Library — and nothing else. Not another account's
-    // Library, and not another campaign's copy.
-    const stranger = await refused(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.theirs.id },
-        payload: {},
-      }),
-    );
-
-    expect(stranger._tag).toBe("NotFound");
-  });
-
-  it("refuses a player copying anything into the table they play at", async () => {
-    // `ensureCampaignWritable` requires `isDm`. A player's rules vocabulary is
-    // their DM's to decide.
-    const denied = await refused(fixture.pim.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.bundledDruid },
-        payload: { visibility: "shared" },
-      }),
-    );
-
-    expect(denied._tag).toBe("NotFound");
-  });
-
-  it("is a snapshot: editing the original afterwards does not reach it", async () => {
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.bloodsworn.id },
-        payload: { visibility: "shared" },
-      }),
-    );
-
-    await as(fixture.jo.token, (client) =>
-      client.library.updateOption({
-        params: { optionId: fixture.bloodsworn.id },
-        payload: { name: "Bloodsworn (revised)", body: { hitDie: 6, unarmouredAc: [] } },
-      }),
-    );
-
-    const still = await as(fixture.jo.token, (client) =>
-      client.options.findById({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
-
-    expect(still.name).toBe(OPTIONS.bloodsworn);
-    expect(still.kind === "class" && still.body.hitDie).toBe(10);
-
-    // And the original really did change, so the assertion above is about
-    // propagation rather than about a write that did nothing.
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.findOption({ params: { optionId: fixture.bloodsworn.id } }),
-    );
-    expect(original.name).toBe("Bloodsworn (revised)");
-
-    // Put it back, so the fixture reads the same for whatever runs next.
-    await as(fixture.jo.token, (client) =>
-      client.library.updateOption({
-        params: { optionId: fixture.bloodsworn.id },
-        payload: { name: OPTIONS.bloodsworn, body: BLOODSWORN },
-      }),
-    );
-    await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
-  });
-
-  it("leaves a campaign's copy standing when the original is deleted", async () => {
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.createOption({
-        payload: { kind: "race", name: "Marshfolk", body: { ...SALTBORN, hpPerLevel: 1 } },
-      }),
-    );
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: original.id },
-        payload: { visibility: "shared" },
-      }),
-    );
-
-    // No `Conflict`, and nothing refuses it: a copy is a separate row and a
-    // character stores a label rather than a pointer, so nothing loses anything.
-    await as(fixture.jo.token, (client) =>
-      client.library.removeOption({ params: { optionId: original.id } }),
-    );
-
-    const still = await as(fixture.jo.token, (client) =>
-      client.options.findById({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
-    expect(still.name).toBe("Marshfolk");
-    expect(still.derivedFrom).toBeNull();
-
-    await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
-  });
-
-  it("does not copy a kind the payload could contradict", async () => {
-    // A copy is what the original was. There is no `kind` on `OptionDerive`, so
-    // a body whose shape says something else is refused before the insert.
-    const mismatch = await refused(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.saltborn.id },
-        payload: {
-          body: { hitDie: 8, unarmouredAc: ["DEX"] } satisfies ClassBody,
-        },
-      }),
-    );
-    expect(mismatch._tag).toBe("Conflict");
-    expect(mismatch.message).toBe("that is a race, and the change describes a class");
-
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.saltborn.id },
-        payload: { name: "Saltborn (ours)" },
-      }),
-    );
-
-    expect(copied.kind).toBe("race");
-    expect(copied.kind === "race" && (copied.body as RaceBody).hpPerLevel).toBe(2);
-
-    await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
-    );
+  it("stays inside the group: another table's player never sees it", async () => {
+    const elsewhere = await optionsAt(fixture.bo.token, fixture.theirTable.id);
+    expect(named(elsewhere)).not.toContain(OPTIONS.bloodsworn);
   });
 });
 
@@ -1154,18 +747,12 @@ describe("existing characters", () => {
     expect(still.hpMax).toBe(27);
   });
 
-  it("do not move when the campaign's own class changes under them", async () => {
+  it("do not move when the class they were seeded from changes under them", async () => {
     // **The last hop, and the one that would be a real defect.** A DM who edits
-    // a campaign copy changes what the *next* character is made from. There is
-    // no recompute-all-sheets and there must not be one: it would overwrite the
-    // numbers a player typed, with no way to tell an intentional value from a
-    // stale seed.
-    const copied = await as(fixture.jo.token, (client) =>
-      client.options.derive({
-        params: { campaignId: fixture.saltRoad.id, optionId: fixture.bloodsworn.id },
-        payload: { visibility: "shared" },
-      }),
-    );
+    // a Library original changes what the *next* character is made from. There
+    // is no recompute-all-sheets and there must not be one: it would overwrite
+    // the numbers a player typed, with no way to tell an intentional value
+    // from a stale seed.
     const made = await as(fixture.jo.token, (client) =>
       client.me.createCharacter({
         params: { campaignId: fixture.saltRoad.id },
@@ -1174,8 +761,8 @@ describe("existing characters", () => {
     );
 
     await as(fixture.jo.token, (client) =>
-      client.options.update({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
+      client.library.updateOption({
+        params: { optionId: fixture.bloodsworn.id },
         payload: { body: { hitDie: 4, unarmouredAc: [] } },
       }),
     );
@@ -1187,11 +774,9 @@ describe("existing characters", () => {
     expect(after.ac).toBe(14);
     expect(after.className).toBe(OPTIONS.bloodsworn);
 
-    // And removing the option leaves the character standing with its label.
+    // And deleting the original leaves the character standing with its label.
     await as(fixture.jo.token, (client) =>
-      client.options.remove({
-        params: { campaignId: fixture.saltRoad.id, optionId: copied.id },
-      }),
+      client.library.removeOption({ params: { optionId: fixture.bloodsworn.id } }),
     );
     const orphaned = (await as(fixture.jo.token, (client) => client.me.characters())).find(
       (owned) => owned.character.id === made.id,

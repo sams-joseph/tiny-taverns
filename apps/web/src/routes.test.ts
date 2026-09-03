@@ -78,11 +78,6 @@ describe("the route table", () => {
         at: "/campaigns/$campaignId/",
       },
       {
-        to: "/campaigns/$campaignId/bestiary",
-        params: { campaignId: CAMPAIGN_ID },
-        at: "/campaigns/$campaignId/bestiary",
-      },
-      {
         to: "/campaigns/$campaignId/chronicle",
         params: { campaignId: CAMPAIGN_ID },
         at: "/campaigns/$campaignId/chronicle",
@@ -165,23 +160,28 @@ describe("the route table", () => {
     expect(href.slice(0, href.indexOf("#"))).not.toContain("aG93LWRvLXlvdS1kbw");
   });
 
-  it("hangs the bestiary off a campaign, because the API does", () => {
-    // `creatures.list` is `/campaigns/:campaignId/creatures`, and that path is
-    // the only thing gating the global `system` rows it returns beside the
-    // campaign's own — so there is no campaign-less bestiary to route to.
-    expect(landsOn(`/campaigns/${CAMPAIGN_ID}/bestiary`)).toEqual({
-      at: "/campaigns/$campaignId/bestiary",
-      params: { campaignId: CAMPAIGN_ID },
-    });
-    expect(landsOn("/campaigns/not-a-uuid/bestiary").at).toBe("/$");
+  it("routes no campaign corpus screen at all, which is the instancing decision", () => {
+    // A campaign holds no managed collection of library objects since
+    // 2026-09-02: no bestiary, rules, spells, equipment, magic-items or
+    // compendium route under a campaign. Each falls through the splat to the
+    // campaign itself, so an old bookmark lands on the table it named rather
+    // than on a screen that no longer exists.
+    for (const section of [
+      "bestiary",
+      "rules",
+      "spells",
+      "equipment",
+      "magic-items",
+      "compendium",
+    ]) {
+      expect(landsOn(`/campaigns/${CAMPAIGN_ID}/${section}`).at).toBe("/campaigns/$campaignId/$");
+    }
   });
 
   it("gives the Library routes that name no campaign, because their rows are in none", () => {
     // Library entities are owned by an account and sit in no campaign, so
-    // `libraryRowReadable` composes no campaign gate at all. The two shelves —
-    // creatures, and rules vocabulary — therefore carry no campaign id, while
-    // the campaign-scoped bestiary and Rules screens remain the copies/config
-    // of one table.
+    // `libraryRowReadable` composes no campaign gate at all — and the Library
+    // is the only place a corpus is managed now.
     expect(landsOn("/library")).toEqual({ at: "/library", params: {} });
     expect(landsOn("/library/rules")).toEqual({ at: "/library/rules", params: {} });
     expect(landsOn("/library/anything").at).toBe("/$");
@@ -277,7 +277,6 @@ describe("the route table", () => {
     // invisible everywhere else.
     const malformed = [
       { path: "/campaigns/nope", at: "/$" },
-      { path: "/campaigns/nope/bestiary", at: "/$" },
       { path: "/campaigns/nope/chronicle", at: "/$" },
       { path: "/campaigns/nope/party", at: "/$" },
       {

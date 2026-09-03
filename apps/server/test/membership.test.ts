@@ -205,6 +205,11 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Characters.ts",
       "repo/ClassProgression.ts",
       "repo/Creatures.ts",
+      // The point-of-use instancing seam (2026-09-02): a roster add reads the
+      // source's owner columns to decide whether an owned original needs an
+      // internal campaign instance minted for it. The comparison is against
+      // `copyableIntoCampaign`'s answer, never a caller-supplied account.
+      "repo/EncounterCreatures.ts",
       "repo/Equipment.ts",
       "repo/Feats.ts",
       "repo/Groups.ts",
@@ -369,7 +374,7 @@ const makeFixture = Effect.gen(function* () {
   );
   yield* as(prep.create(campaign.id, session.id, { label: "Reread the ford" }));
   yield* as(
-    spells.create(campaign.id, {
+    spells.libraryCreate({
       name: "Shield",
       level: 1,
       school: { index: "abjuration", name: "Abjuration" },
@@ -381,7 +386,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   yield* as(
-    equipment.create(campaign.id, {
+    equipment.libraryCreate({
       name: "Hemp Rope",
       equipmentCategory: { index: "adventuring-gear", name: "Adventuring Gear" },
       cost: { quantity: 1, unit: "gp" },
@@ -389,7 +394,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   yield* as(
-    magicItems.create(campaign.id, {
+    magicItems.libraryCreate({
       name: "Lantern Ring",
       equipmentCategory: { index: "ring", name: "Ring" },
       rarity: { index: "uncommon", name: "Uncommon" },
@@ -397,7 +402,7 @@ const makeFixture = Effect.gen(function* () {
   );
 
   const creature = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Bullywug Croaker",
       type: "humanoid",
       cr: "1/4",
@@ -408,10 +413,11 @@ const makeFixture = Effect.gen(function* () {
   const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: creature.id, count: 6 }));
 
-  // A homebrew class, authored into this account's Library and copied into the
-  // table. The copy is what the campaign read below has to have and the
-  // stranger has to be refused; the original is deliberately *not* what that
-  // read answers, which is the Library model in one line.
+  // A homebrew class, authored into this account's Library. Since the
+  // instancing decision of 2026-09-02 a campaign holds no managed option
+  // copies: the campaign vocabulary read below answers the DM their own
+  // original (`usableInCampaign`), and the stranger is refused at the campaign
+  // gate. The progression rows hang off the original, in the Library.
   const homebrew = yield* as(
     options.libraryCreate({
       kind: "class",
@@ -419,34 +425,31 @@ const makeFixture = Effect.gen(function* () {
       body: { hitDie: 10, unarmouredAc: ["DEX", "CON"] },
     }),
   );
-  const classCopy = yield* as(options.derive(campaign.id, homebrew.id, { visibility: "shared" }));
   const houseRules = yield* as(
     ruleArticles.libraryCreate({
       name: "House Weather",
       sections: [{ title: "Storm Glass", content: "## Storm Glass\n\nFog answers the bell." }],
     }),
   );
-  const ruleCopy = yield* as(ruleArticles.derive(campaign.id, houseRules.article.id, {}));
-  const homebrewFeat = yield* as(
+  yield* as(
     feats.libraryCreate({
       name: "Tavern Wrestler",
       description: ["Hold your ground when the room turns rough."],
     }),
   );
-  yield* as(feats.derive(campaign.id, homebrewFeat.id, { visibility: "shared" }));
 
   const sql = yield* SqlClient.SqlClient;
   yield* sql`
     insert into racial_trait ${sql.insert({
-      campaign_id: campaign.id,
+      account_id: dm.accountId,
       name: "Saltborn",
       body: JSON.stringify({ desc: ["Knows the old road by lantern light."] }),
     })}
   `;
   const subclass = yield* sql<{ readonly id: string }>`
     insert into subclass ${sql.insert({
-      campaign_id: campaign.id,
-      class_option_id: classCopy.id,
+      account_id: dm.accountId,
+      class_option_id: homebrew.id,
       name: "Oathkept",
       visibility: "shared",
     })}
@@ -454,8 +457,8 @@ const makeFixture = Effect.gen(function* () {
   `;
   const level = yield* sql<{ readonly id: string }>`
     insert into class_level ${sql.insert({
-      campaign_id: campaign.id,
-      class_option_id: classCopy.id,
+      account_id: dm.accountId,
+      class_option_id: homebrew.id,
       subclass_id: subclass[0]!.id,
       level: 1,
       visibility: "shared",
@@ -464,8 +467,8 @@ const makeFixture = Effect.gen(function* () {
   `;
   yield* sql`
     insert into feature ${sql.insert({
-      campaign_id: campaign.id,
-      class_option_id: classCopy.id,
+      account_id: dm.accountId,
+      class_option_id: homebrew.id,
       subclass_id: subclass[0]!.id,
       class_level_id: level[0]!.id,
       name: "Blood vow",
@@ -496,8 +499,8 @@ const makeFixture = Effect.gen(function* () {
     encounter,
     run,
     thread,
-    classCopy,
-    ruleCopy,
+    homebrew,
+    houseRules,
   };
 }).pipe(Effect.orDie);
 
@@ -566,36 +569,42 @@ const READS: Record<
   // leak somebody would have found by using the product rather than by testing
   // it.
   character_option: (f) => Effect.flatMap(Options, (r) => r.list(f.campaign.id, {})),
-  rule_article: (f) => items(Effect.flatMap(RuleArticles, (r) => r.list(f.campaign.id, {}))),
-  feat: (f) => items(Effect.flatMap(Feats, (r) => r.list(f.campaign.id, {}))),
+  // The five corpora below lost their campaign-scoped reads with the
+  // instancing decision of 2026-09-02: the Library is their whole surface, and
+  // a Library read is scoped to the reader's own account — so "a stranger
+  // reads nothing" holds as an empty answer about *their* Library rather than
+  // a 404 about somebody's campaign.
+  rule_article: (f) =>
+    items(Effect.flatMap(RuleArticles, (r) => r.library({ q: f.houseRules.article.name }))),
+  feat: () => items(Effect.flatMap(Feats, (r) => r.library({ q: "Tavern Wrestler" }))),
   rule_section: (f) =>
     Effect.map(
-      Effect.flatMap(RuleArticles, (r) => r.findById(f.campaign.id, f.ruleCopy.article.id)),
+      Effect.flatMap(RuleArticles, (r) => r.libraryFindById(f.houseRules.article.id)),
       (detail) => detail.sections,
     ),
-  racial_trait: (f) =>
+  racial_trait: () =>
     Effect.map(
-      Effect.flatMap(Options, (r) => r.vocabulary(f.campaign.id)),
+      Effect.flatMap(Options, (r) => r.libraryVocabulary()),
       (vocabulary) => vocabulary.traits,
     ),
   subclass: (f) =>
     Effect.map(
-      Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
+      Effect.flatMap(ClassProgression, (r) => r.libraryRead(f.homebrew.id)),
       (progression) => progression.subclasses,
     ),
   class_level: (f) =>
     Effect.map(
-      Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
+      Effect.flatMap(ClassProgression, (r) => r.libraryRead(f.homebrew.id)),
       (progression) => progression.levels,
     ),
   feature: (f) =>
     Effect.map(
-      Effect.flatMap(ClassProgression, (r) => r.read(f.campaign.id, f.classCopy.id)),
+      Effect.flatMap(ClassProgression, (r) => r.libraryRead(f.homebrew.id)),
       (progression) => progression.features,
     ),
-  spell: (f) => items(Effect.flatMap(Spells, (r) => r.list(f.campaign.id, {}))),
-  equipment: (f) => items(Effect.flatMap(EquipmentRepo, (r) => r.list(f.campaign.id, {}))),
-  magic_item: (f) => items(Effect.flatMap(MagicItems, (r) => r.list(f.campaign.id, {}))),
+  spell: () => items(Effect.flatMap(Spells, (r) => r.library({ q: "Shield" }))),
+  equipment: () => items(Effect.flatMap(EquipmentRepo, (r) => r.library({ q: "Hemp Rope" }))),
+  magic_item: () => items(Effect.flatMap(MagicItems, (r) => r.library({ q: "Lantern Ring" }))),
   encounter: (f) => items(Effect.flatMap(Encounters, (r) => r.list(f.campaign.id, {}))),
   encounter_creature: (f) =>
     Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),

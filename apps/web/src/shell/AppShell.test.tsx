@@ -66,14 +66,8 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
   "/campaigns/$campaignId/notes": `/campaigns/${campaignId}/notes`,
-  "/campaigns/$campaignId/bestiary": `/campaigns/${campaignId}/bestiary`,
   "/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
   "/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
-  "/campaigns/$campaignId/rules": `/campaigns/${campaignId}/rules`,
-  "/campaigns/$campaignId/compendium": `/campaigns/${campaignId}/compendium`,
-  "/campaigns/$campaignId/spells": `/campaigns/${campaignId}/spells`,
-  "/campaigns/$campaignId/equipment": `/campaigns/${campaignId}/equipment`,
-  "/campaigns/$campaignId/magic-items": `/campaigns/${campaignId}/magic-items`,
   "/campaigns/$campaignId/characters/new": `/campaigns/${campaignId}/characters/new`,
   "/campaigns/$campaignId/sessions/$sessionId/runs/$runId": `/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`,
   "/characters/": "/characters",
@@ -170,10 +164,10 @@ describe("the shell's top bar", () => {
       }
     });
 
-    it("took Bestiary off the campaign row, and left the screen reachable", async () => {
-      // *Nothing appears on both rows* — so the item moved rather than being
-      // duplicated. The route it used to point at is deliberately still a
-      // route (see `routes.tsx`).
+    it("lands an old bestiary bookmark on the campaign, with the Library above", async () => {
+      // The campaign corpus routes are gone with the instancing decision of
+      // 2026-09-02; a stale bookmark falls through the splat to the campaign
+      // it named, and the Library on the global row is where the corpus lives.
       await renderAt(`/campaigns/${campaignId}/bestiary`);
       expect(screen.queryByRole("link", { name: "Bestiary" })).toBeNull();
       expect(within(nav()).getByRole("link", { name: "Library" })).toBeTruthy();
@@ -232,20 +226,15 @@ describe("the shell's top bar", () => {
       await renderAt(`/campaigns/${campaignId}`);
 
       const links = await campaignItems();
-      // Bestiary left this row when Library arrived on the one above; the
-      // three gear shelves and the compendium are campaign corpora and the
-      // Library shelves are the originals.
+      // No corpus screen on this row at all — the instancing decision of
+      // 2026-09-02. The Library above holds the originals; what a campaign
+      // uses of them shows up inside encounters, fights and the create form.
       expect(links.map((link) => link.textContent)).toEqual([
         "Overview",
         "Encounters",
         "Party",
         "Notes",
         "Chronicle",
-        "Compendium",
-        "Spells",
-        "Equipment",
-        "Magic items",
-        "Rules",
       ]);
       // Every one of them names the campaign, because every endpoint behind
       // them does — which is the same fact that makes the row exist at all.

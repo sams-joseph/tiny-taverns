@@ -843,8 +843,12 @@ export const libraryRowWritable = (
   ]);
 
 /**
- * Rows this actor may **copy into** the named campaign — the campaign's own
- * bestiary, plus their own Library. The source read of `creatures/:id/derive`.
+ * Rows this actor may **use in** the named campaign — the campaign's own
+ * internal instances plus everything `usableInCampaign` reaches. Since the
+ * 2026-09-02 instancing decision this is the source read of
+ * `EncounterCreatures.create` (which materialises the instance at the point of
+ * use) and of `creatures.findById` (which must resolve an instance a roster or
+ * a fight already names, as well as anything the picker offers).
  *
  * A plain `or` of two predicates that are each complete on their own, which is a
  * different shape from the union inside `corpusRowReadable` and must not be
@@ -870,6 +874,55 @@ export const copyableIntoCampaign = (
     corpusRowReadable(sql, table, campaignId, actor),
     libraryRowReadable(sql, table, actor),
     groupSharedIntoCampaign(sql, table, campaignId, actor),
+  ]);
+
+/**
+ * Rows of a corpus table this campaign can **use** — what the pickers list:
+ * the bundle, the caller's own Library, and originals explicitly shared to the
+ * campaign's group. **Never a campaign row**, which is the instancing decision
+ * of 2026-09-02 written as a predicate: a campaign's copies are internal
+ * plumbing, so no list may enumerate them, and this is what
+ * `creatures.list` and `options.list` answer instead of `corpusRowReadable`.
+ *
+ * It is `copyableIntoCampaign` minus the campaign-copy disjunct, with one
+ * deliberate carry-over: **the bundle keeps the row-visibility rule
+ * `corpusRowReadable` always applied to it** (`isCreator OR visibility =
+ * 'shared'`), so what a *player* sees of the bundle through a campaign is
+ * unchanged — options and equipment are imported `shared` and reach the create
+ * form; creatures are not and stay the creator's. The own-Library half tests
+ * no visibility, exactly as `libraryRowReadable` does not (your rows have
+ * nobody to hide from), and the group-share half is the explicit act itself —
+ * sharing an original to the group *is* putting it in front of the group's
+ * campaigns, pickers included.
+ *
+ * The campaign gate applies to every half, own-Library included: this is a
+ * campaign-scoped read reached by path, and a path is a claim. What an
+ * account's Library answers with no campaign in the question is
+ * `libraryRowReadable`'s, unchanged.
+ */
+export const usableInCampaign = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`${sql(table)}.campaign_id is null`,
+    sql`exists (select 1 from campaign where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)})`,
+    sql.or([
+      sql.and([
+        sql`${sql(table)}.account_id is null`,
+        sql.or([isCreator(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
+      ]),
+      sql`${sql(table)}.account_id = ${actor.accountId}`,
+      sql`exists (select 1
+                  from group_library_share
+                  join campaign as shared_into on shared_into.id = ${campaignId}
+                  where group_library_share.group_id = shared_into.group_id
+                    and group_library_share.resource_kind = ${table}
+                    and group_library_share.resource_id = ${sql(`${table}.id`)}
+                    and group_library_share.owner_account_id = ${sql(`${table}.account_id`)})`,
+    ]),
   ]);
 
 /**

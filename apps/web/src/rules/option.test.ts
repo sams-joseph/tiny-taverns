@@ -2,7 +2,7 @@ import type { CharacterOption, RaceBody } from "@taverns/api";
 import { AccountId, CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { isCampaignCopy, isLibraryOriginal, numbersOf, ownerOf, unarmouredLine } from "./option";
+import { isLibraryOriginal, numbersOf, ownerOf, unarmouredLine } from "./option";
 
 const aCampaign = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const anAccount = Schema.decodeSync(AccountId)("2b1f2a1e-0000-4000-8000-0000000000a1");
@@ -127,8 +127,8 @@ describe("which rows this table may edit", () => {
       body: { hitDie: 8, unarmouredAc: [] },
     });
 
-    expect(isCampaignCopy(bundled)).toBe(false);
-    expect(isCampaignCopy(copy)).toBe(true);
+    expect(ownerOf(bundled)).toBe("bundle");
+    expect(ownerOf(copy)).toBe("campaign");
   });
 
   it("says no to a Library original", () => {
@@ -138,7 +138,7 @@ describe("which rows this table may edit", () => {
       origin: "authored",
       body: raceBody([{ ability: "CON", amount: 1 }]),
     });
-    expect(isCampaignCopy(original)).toBe(false);
+    expect(ownerOf(original)).toBe("library");
   });
 });
 
@@ -181,7 +181,7 @@ describe("which rows the library may edit", () => {
 
     expect([bundled, mine, copy].map(ownerOf)).toEqual(["bundle", "library", "campaign"]);
     for (const row of [bundled, mine, copy]) {
-      expect(isCampaignCopy(row) && isLibraryOriginal(row)).toBe(false);
+      expect(ownerOf(row) === "campaign" && isLibraryOriginal(row)).toBe(false);
     }
   });
 });

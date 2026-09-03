@@ -126,18 +126,23 @@ describe("the API declaration", () => {
       "beats",
       "campaigns",
       "combatants",
+      // The creatures a campaign can *use* — the encounter picker's read, plus
+      // the by-id resolution of internal instances. The campaign-copy
+      // management endpoints (create/update/remove/derive) are gone: campaign
+      // instances are plumbing `encounterCreatures.create` materialises at the
+      // point of use (captain's decision, 2026-09-02).
       "creatures",
       "encounterCreatures",
       "encounters",
-      "equipment",
-      "feats",
       // Groups: the top-level container for connected play, and where a
       // campaign is created — a campaign belongs to exactly one group.
       // `groupHistory` is its chronicle: copies admitted on purpose, the
       // group-Hob boundary's data half.
       "groupHistory",
-      // The explicit Library share layer — grants to copy, never widened
-      // predicates. The 2026-09-01 Library decision's surface.
+      // The explicit Library share layer — grants to use, never widened
+      // predicates. The 2026-09-01 Library decision's surface, and since the
+      // 2026-09-02 instancing decision the one act that puts an original in
+      // front of a group's campaigns.
       "groupLibrary",
       "groupMembers",
       "groups",
@@ -149,20 +154,20 @@ describe("the API declaration", () => {
       "invitePreview",
       "invites",
       "join",
-      // The Library: the shared corpus, read with no campaign in the path. The
-      // second group that names none, and it is behind `Authorization` like
-      // every other — the reach rule it implements is *authenticated*, which is
-      // a thing only the middleware above it can make true.
+      // The Library: where every corpus original is authored and managed, read
+      // with no campaign in the path. The campaign-scoped spells / equipment /
+      // magic-items / compendium / feats groups are gone with the copy model —
+      // those corpora have no per-campaign consumer, so the Library is their
+      // whole surface now.
       "library",
       "live",
-      "magicItems",
       "me",
       "members",
       "notes",
       // A campaign's rules vocabulary: the classes, races and backgrounds a
-      // character at that table is built from. Campaign-scoped for `creatures`'
-      // reason — the path is the only thing gating the bundled rows — and the
-      // one list in the product a *player* reads to fill in a picker.
+      // character at that table is built from. Campaign-scoped because the
+      // group-share disjunct needs a campaign to resolve through — and the one
+      // list in the product a *player* reads to fill in a picker.
       "options",
       // The party: the seats at one campaign's table, each a join to a shared
       // account-owned character. It replaced the campaign-scoped `characters`
@@ -170,11 +175,9 @@ describe("the API declaration", () => {
       "party",
       "prep",
       "recap",
-      "ruleArticles",
       "runs",
       "search",
       "sessions",
-      "spells",
       // What is live at one table, to a player: the read behind the character
       // sheet's banner. Its own group for the reason `recap` is one — it is
       // neither a session nor a run, and its answer is narrower than either.

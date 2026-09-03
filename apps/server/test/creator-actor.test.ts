@@ -390,7 +390,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates seventeen methods and leaves the other ninety-six actor-scoped reads and writes alone", () => {
+  it("gates twenty methods and leaves every other actor-scoped read and write alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -618,7 +618,13 @@ describe("the scope, counted", () => {
     // And stage 6's three: `LibraryShares.list`/`share`/`unshare` — the
     // grant is the resource owner's act over their own original, checked in
     // the statement, and the reads are any live member's.
-    expect(ungated).toBe(162);
+    // The count fell by forty when the campaign-copy management methods went
+    // with the instancing decision of 2026-09-02: the seven corpora lost their
+    // campaign-scoped list/create/update/remove/derive surface, and what
+    // replaced it — the internal instancing inside `EncounterCreatures.create`
+    // — lives in a method that was already counted. None of the removals was
+    // gated, so `gated` did not move.
+    expect(ungated).toBe(122);
   });
 });
 

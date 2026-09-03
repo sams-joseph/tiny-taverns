@@ -23,7 +23,7 @@ import {
   type ProvenanceColumns,
   setClause,
 } from "./rows.js";
-import { corpusRowReadable, ensureCampaignReadable, ownCharacter } from "./visibility.js";
+import { ensureCampaignReadable, ownCharacter, usableInCampaign } from "./visibility.js";
 
 /**
  * The character: **account-owned, top-level, one copy of playable state** —
@@ -135,7 +135,9 @@ const staleVersion = (expected: number, actual: number): Conflict =>
 
 /**
  * Resolve a race/subrace pair against one campaign's vocabulary — the same
- * check the create form and Hob make, composed over `corpusRowReadable`.
+ * check the create form and Hob make, composed over `usableInCampaign` — the
+ * same predicate `Options.list` fills the pickers from, so what is pickable is
+ * exactly what validates.
  * Answers whether it resolved rather than failing, so a shared character can
  * be checked against every table it sits at.
  */
@@ -151,7 +153,7 @@ const subraceResolves = (
       select name, body from character_option
       where kind = 'race'
         and lower(name) = lower(${race})
-        and ${corpusRowReadable(sql, "character_option", campaignId, actor)}
+        and ${usableInCampaign(sql, "character_option", campaignId, actor)}
     `.pipe(Effect.orDie);
     return rows.some((row) =>
       row.body.subraces.some((candidate) => candidate.name.toLowerCase() === subrace.toLowerCase()),

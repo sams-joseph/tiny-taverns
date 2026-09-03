@@ -1,4 +1,4 @@
-import { Actor, CurrentActor, NotFound, type SpellCreate } from "@taverns/api";
+import { Actor, CurrentActor, type SpellCreate } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -11,8 +11,7 @@ import { importSystemEquipment } from "../src/equipment/import.js";
 import { Spells } from "../src/repo/Spells.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells, type ImportSpellsResult } from "../src/spells/import.js";
-import { SPELL_RAW } from "../src/spells/systemSpells.js";
-import { aPlayerAt, createCampaign } from "./support/actors.js";
+import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_spells");
@@ -27,14 +26,6 @@ const run = <A, E>(
     Accounts | Campaigns | Groups | Invites | Spells | SqlClient.SqlClient
   >,
 ) => runtime.runPromise(effect.pipe(Effect.orDie));
-
-const attempt = <A, E>(
-  effect: Effect.Effect<
-    A,
-    E,
-    Accounts | Campaigns | Groups | Invites | Spells | SqlClient.SqlClient
-  >,
-) => runtime.runPromise(Effect.result(effect));
 
 const sql = <A>(effect: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
   run(Effect.flatMap(SqlClient.SqlClient, effect));
@@ -62,15 +53,6 @@ const dmCampaign = (name: string) =>
 
 const withActor = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R>) =>
   Effect.provideService(effect, CurrentActor, actor);
-
-const firstSpellNamed = (name: string) =>
-  Effect.flatMap(Spells, (spells) =>
-    Effect.map(spells.library({ q: name, sort: "name", limit: 5 }), (page) => {
-      const match = page.items.find((spell) => spell.name === name);
-      if (match === undefined) throw new Error(`expected ${name}`);
-      return match;
-    }),
-  );
 
 const customSpell = (name: string, classIndex = "wizard"): SpellCreate => ({
   name,
@@ -161,12 +143,12 @@ describe("2014 SRD spells", () => {
   });
 
   it("filters in SQL by one-value arrays and spell-specific booleans", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Spell Road"));
+    const { actor } = await run(dmCampaign("The Spell Road"));
     const page = await run(
       withActor(
         actor,
         Effect.flatMap(Spells, (spells) =>
-          spells.list(campaign.id, {
+          spells.library({
             q: "explosion of flame",
             levels: ["3"],
             schools: ["evocation"],
@@ -187,27 +169,11 @@ describe("2014 SRD spells", () => {
     expect(page.items.every((spell) => !spell.ritual && !spell.concentration)).toBe(true);
   });
 
-  it("does not let a stranger read bundled spells through a campaign they cannot reach", async () => {
-    const { campaign } = await run(dmCampaign("The Gated Spellbook"));
-    const issued = await run(
-      Effect.flatMap(Accounts, (accounts) => accounts.issue("Spell Stranger")),
-    );
-    const stranger = new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
-
-    const result = await attempt(
-      withActor(
-        stranger,
-        Effect.flatMap(Spells, (spells) => spells.list(campaign.id, { q: "Fireball", limit: 5 })),
-      ),
-    );
-
-    expect(result._tag).toBe("Failure");
-    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
-    expect(result._tag === "Failure" && (result.failure as NotFound).resource).toBe("campaign");
-  });
-
-  it("keeps Library originals out of campaign lists until they are copied", async () => {
-    const { actor: firstDm, campaign } = await run(dmCampaign("The Private Grimoire"));
+  it("scopes the Library per reader: originals and the bundle, nobody else's", async () => {
+    // The Library is the whole spell surface since the instancing decision of
+    // 2026-09-02 — there is no campaign spell list to gate, copy into, or
+    // share from, so what is left to pin is the Library boundary itself.
+    const { actor: firstDm } = await run(dmCampaign("The Private Grimoire"));
     const { actor: secondDm } = await run(dmCampaign("The Other Grimoire"));
 
     const original = await run(
@@ -217,113 +183,21 @@ describe("2014 SRD spells", () => {
       ),
     );
 
-    const beforeCopy = await run(
+    const mine = await run(
       withActor(
         firstDm,
-        Effect.flatMap(Spells, (spells) => spells.list(campaign.id, { q: "Fen's Private Bolt" })),
+        Effect.flatMap(Spells, (spells) => spells.library({ q: "Fen's Private Bolt" })),
       ),
     );
-    const strangerLibrary = await run(
+    const theirs = await run(
       withActor(
         secondDm,
         Effect.flatMap(Spells, (spells) => spells.library({ q: "Fen's Private Bolt" })),
       ),
     );
 
-    expect(beforeCopy.items).toEqual([]);
-    expect(strangerLibrary.items).toEqual([]);
-
-    const copy = await run(
-      withActor(
-        firstDm,
-        Effect.flatMap(Spells, (spells) => spells.derive(campaign.id, original.id, {})),
-      ),
-    );
-    const afterCopy = await run(
-      withActor(
-        firstDm,
-        Effect.flatMap(Spells, (spells) => spells.list(campaign.id, { q: "Fen's Private Bolt" })),
-      ),
-    );
-
-    expect(copy.campaignId).toBe(campaign.id);
-    expect(copy.accountId).toBeNull();
-    expect(copy.derivedFrom).toBe(original.id);
-    expect(afterCopy.items.map((spell) => spell.id)).toEqual([copy.id]);
-  });
-
-  it("copies a spell as a campaign snapshot and does not follow later source updates", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Snapshot Spellbook"));
-    const source = await run(withActor(actor, firstSpellNamed("Magic Missile")));
-    const copy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(Spells, (spells) =>
-          spells.derive(campaign.id, source.id, { name: "Salt Road Missile" }),
-        ),
-      ),
-    );
-
-    const raw = SPELL_RAW.find((spell) => spell.index === "magic-missile");
-    if (raw === undefined) throw new Error("expected raw Magic Missile");
-    await run(importSystemSpells([{ ...raw, name: "Magic Missile, Revised" }]));
-
-    const copiedAgain = await run(
-      withActor(
-        actor,
-        Effect.flatMap(Spells, (spells) => spells.findById(campaign.id, copy.id)),
-      ),
-    );
-    const revisedSource = await run(withActor(actor, firstSpellNamed("Magic Missile, Revised")));
-
-    expect(copiedAgain.name).toBe("Salt Road Missile");
-    expect(copiedAgain.spell.desc).toEqual(source.spell.desc);
-    expect(revisedSource.id).toBe(source.id);
-  }, 60_000);
-
-  it("lets a player read shared spell rows but not a campaign's DM-only copy", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Shared Spellbook"));
-    const player = await run(aPlayerAt(campaign.id, "Spell Player"));
-    const source = await run(withActor(actor, firstSpellNamed("Cure Wounds")));
-    const dmOnlyCopy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(Spells, (spells) =>
-          spells.derive(campaign.id, source.id, { name: "Quiet Cure" }),
-        ),
-      ),
-    );
-
-    const playerBeforeShare = await run(
-      withActor(
-        player,
-        Effect.flatMap(Spells, (spells) => spells.list(campaign.id, { q: "Quiet Cure" })),
-      ),
-    );
-    expect(playerBeforeShare.items).toEqual([]);
-
-    const playerSystem = await run(
-      withActor(
-        player,
-        Effect.flatMap(Spells, (spells) => spells.list(campaign.id, { q: "Cure Wounds" })),
-      ),
-    );
-    expect(playerSystem.items.map((spell) => spell.name)).toContain("Cure Wounds");
-
-    await run(
-      withActor(
-        actor,
-        Effect.flatMap(Spells, (spells) =>
-          spells.update(campaign.id, dmOnlyCopy.id, { visibility: "shared" }),
-        ),
-      ),
-    );
-    const playerAfterShare = await run(
-      withActor(
-        player,
-        Effect.flatMap(Spells, (spells) => spells.list(campaign.id, { q: "Quiet Cure" })),
-      ),
-    );
-    expect(playerAfterShare.items.map((spell) => spell.name)).toEqual(["Quiet Cure"]);
+    expect(mine.items.map((spell) => spell.id)).toEqual([original.id]);
+    expect(original.campaignId).toBeNull();
+    expect(theirs.items).toEqual([]);
   });
 });

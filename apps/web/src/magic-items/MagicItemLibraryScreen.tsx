@@ -125,7 +125,6 @@ export function MagicItemLibraryScreen() {
       {opening !== undefined && (
         <MagicItemDialog
           magicItem={opening}
-          campaigns={shown?.campaigns ?? []}
           onClose={() => setOpened(undefined)}
           onNavigateToName={navigateToName}
         />

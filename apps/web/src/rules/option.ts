@@ -43,10 +43,12 @@ export const numbersOf = (option: CharacterOption): string => {
 
 export type OptionOwner = "bundle" | "library" | "campaign";
 
+/**
+ * `campaign` survives as an owner only for inert rows in old data — nothing
+ * lists or edits a campaign copy since the instancing decision of 2026-09-02.
+ */
 export const ownerOf = (option: CharacterOption): OptionOwner =>
   option.accountId !== null ? "library" : option.campaignId !== null ? "campaign" : "bundle";
-
-export const isCampaignCopy = (option: CharacterOption): boolean => ownerOf(option) === "campaign";
 
 export const isLibraryOriginal = (option: CharacterOption): boolean =>
   ownerOf(option) === "library";

@@ -4,6 +4,7 @@ import {
   type CampaignId,
   type CharacterOption,
   CurrentActor,
+  type GroupId,
   type HobEvent,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
@@ -18,6 +19,7 @@ import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
+import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { Options } from "../src/repo/Options.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
@@ -66,6 +68,7 @@ const services = Layer.mergeAll(
   CampaignCreatorActors.layer,
   HobThreads.layer,
   Invites.layer,
+  LibraryShares.layer,
   Options.layer,
   Recap.layer,
   Search.layer,
@@ -98,30 +101,38 @@ const BUNDLED_CLASSES = 12;
  * writes `OptionDialog` makes in one `submit`, and the only way a row gets into
  * a campaign's vocabulary.
  *
- * `visibility: "shared"` on the copy is load-bearing and is the copy-in
- * dialog's own out-loud answer: `corpusRowReadable` ends in
- * `isDm OR visibility = 'shared'`, so an unshared class is one no player can
- * pick and — since this slice — one Hob cannot offer them either.
+ * The **group share** is load-bearing and is the explicit act the instancing
+ * decision of 2026-09-02 leaves: `usableInCampaign` offers a player the shared
+ * bundle plus what is shared to the table's group, so a class nobody has
+ * shared is one no player can pick and one Hob cannot offer them either —
+ * `"kept"` here means authored and left unshared.
  */
 const homebrewClass = (
-  campaignId: CampaignId,
+  campaign: { readonly id: CampaignId; readonly groupId: GroupId },
   name: string,
   hitDie: number,
-  visibility: "dm" | "shared" = "shared",
-): Effect.Effect<CharacterOption, never, Options | CurrentActor> =>
+  reach: "kept" | "shared" = "shared",
+): Effect.Effect<CharacterOption, never, Options | LibraryShares | CurrentActor> =>
   Effect.gen(function* () {
     const options = yield* Options;
+    const shares = yield* LibraryShares;
     const original = yield* options.libraryCreate({
       kind: "class",
       name,
       body: { hitDie, unarmouredAc: ["DEX"] },
     });
-    return yield* options.derive(campaignId, original.id, { visibility });
+    if (reach === "shared") {
+      yield* shares.share(campaign.groupId, {
+        kind: "character_option",
+        resourceId: original.id,
+      });
+    }
+    return original;
   }).pipe(Effect.orDie);
 
 /** A homebrew 2014 background. Its grants are display data, not ability-score seed data. */
 const homebrewBackground = (
-  campaignId: CampaignId,
+  campaign: { readonly id: CampaignId; readonly groupId: GroupId },
   name: string,
   body: BackgroundBody = {
     proficiencies: ["Athletics"],
@@ -131,15 +142,20 @@ const homebrewBackground = (
     feature: { name: "Riverwise", text: "You know who watches the crossings." },
     choices: [],
   },
-): Effect.Effect<CharacterOption, never, Options | CurrentActor> =>
+): Effect.Effect<CharacterOption, never, Options | LibraryShares | CurrentActor> =>
   Effect.gen(function* () {
     const options = yield* Options;
+    const shares = yield* LibraryShares;
     const original = yield* options.libraryCreate({
       kind: "background",
       name,
       body,
     });
-    return yield* options.derive(campaignId, original.id, { visibility: "shared" });
+    yield* shares.share(campaign.groupId, {
+      kind: "character_option",
+      resourceId: original.id,
+    });
+    return original;
   }).pipe(Effect.orDie);
 
 /**
@@ -165,16 +181,16 @@ const makeFixture = Effect.gen(function* () {
   const otherTable = yield* as(createCampaign({ name: "Sixpence", visibility: "shared" }));
   const longList = yield* as(createCampaign({ name: "The long list", visibility: "shared" }));
 
-  yield* as(homebrewClass(campaign.id, "Bloodsworn", 10));
-  yield* as(homebrewBackground(campaign.id, "Salt-runner"));
-  yield* as(homebrewClass(campaign.id, "Hedgewise", 6, "dm"));
-  yield* as(homebrewClass(otherTable.id, "Saltcaller", 8));
+  yield* as(homebrewClass(campaign, "Bloodsworn", 10));
+  yield* as(homebrewBackground(campaign, "Salt-runner"));
+  yield* as(homebrewClass(campaign, "Hedgewise", 6, "kept"));
+  yield* as(homebrewClass(otherTable, "Saltcaller", 8));
 
   // Enough to push one kind over the cap: twelve bundled plus thirty is
   // forty-two, so `classes` is over and `race` — nine bundled — is not.
   // Deliberately asymmetric, because "either kind over the cap" is the rule.
   for (let index = 0; index < ENUM_CAP - BUNDLED_CLASSES + 1; index += 1) {
-    yield* as(homebrewClass(longList.id, `Guild Adept ${String(index)}`, 8));
+    yield* as(homebrewClass(longList, `Guild Adept ${String(index)}`, 8));
   }
 
   return {
@@ -676,7 +692,7 @@ describe("a homebrew name is untrusted text, and is handled as such", () => {
     const campaign = await runtime.runPromise(
       Effect.gen(function* () {
         const made = yield* createCampaign({ name: "The odd table", visibility: "shared" });
-        yield* homebrewClass(made.id, nasty, 8);
+        yield* homebrewClass(made, nasty, 8);
         return made;
       }).pipe(withActor(fixture.dm), Effect.orDie),
     );

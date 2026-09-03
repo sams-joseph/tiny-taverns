@@ -1,4 +1,4 @@
-import type { CampaignId, CharacterOption, ClassLevel, Feature } from "@taverns/api";
+import type { CharacterOption, ClassLevel, Feature } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -12,7 +12,7 @@ import {
 import { useApiAtom } from "../api/atoms";
 import { DetailBody, DetailSection } from "../ui/detail";
 import { FailureNotice, Loading } from "../ui/states";
-import { campaignOptionProgressionAtom, libraryOptionProgressionAtom } from "./load";
+import { libraryOptionProgressionAtom } from "./load";
 
 const levelLabel = (level: ClassLevel): string =>
   level.subclassId === null
@@ -26,18 +26,12 @@ const featureLine = (feature: Feature, levels: ReadonlyArray<ClassLevel>): strin
 
 export function ClassProgressionDialog({
   option,
-  campaignId,
   onClose,
 }: {
   readonly option: CharacterOption;
-  readonly campaignId?: CampaignId;
   readonly onClose: () => void;
 }) {
-  const [resource, reload] = useApiAtom(
-    campaignId === undefined
-      ? libraryOptionProgressionAtom(option.id)
-      : campaignOptionProgressionAtom({ campaignId, optionId: option.id }),
-  );
+  const [resource, reload] = useApiAtom(libraryOptionProgressionAtom(option.id));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -45,8 +39,7 @@ export function ClassProgressionDialog({
         <DialogHeader>
           <DialogTitle>{option.name} progression</DialogTitle>
           <DialogDescription>
-            Concrete 2014 subclasses, levels and features for this class row. A campaign copy is a
-            snapshot of the original.
+            Concrete 2014 subclasses, levels and features for this class row.
           </DialogDescription>
         </DialogHeader>
 

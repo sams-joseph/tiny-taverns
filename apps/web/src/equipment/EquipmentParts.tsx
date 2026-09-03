@@ -1,4 +1,4 @@
-import type { Campaign, Equipment, EquipmentCreate, EquipmentUpdate } from "@taverns/api";
+import type { Equipment, EquipmentCreate, EquipmentUpdate } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -19,7 +19,6 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { CopyIntoCampaignSection } from "../library/CopyIn";
 import {
   FilterBar,
   FilterMultiSelect,
@@ -28,7 +27,6 @@ import {
   type FilterOption,
 } from "../library/filters";
 import type { ListQuery } from "../library/query";
-import { routes, router } from "../routes";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { SaveFailure, Textarea } from "../ui/form";
 import type { EquipmentQuery } from "./load";
@@ -190,11 +188,9 @@ export function EquipmentGrid({
 
 export function EquipmentDialog({
   equipment,
-  campaigns,
   onClose,
 }: {
   readonly equipment: Equipment;
-  readonly campaigns?: ReadonlyArray<Campaign>;
   readonly onClose: () => void;
 }) {
   return (
@@ -286,34 +282,6 @@ export function EquipmentDialog({
                   <p key={index}>{line}</p>
                 ))}
               </div>
-            </DetailSection>
-          )}
-          {campaigns !== undefined && (
-            <DetailSection>
-              <CopyIntoCampaignSection
-                noun="item"
-                campaigns={campaigns}
-                derive={(campaignId) => (client) =>
-                  client.equipment.derive({
-                    params: { campaignId, equipmentId: equipment.id },
-                    payload: {},
-                  })
-                }
-                readsChanged={(campaignId) => [reads.equipment(campaignId)]}
-                copiedLink={(campaign) => (
-                  <a
-                    className="text-link hover:text-link-hover"
-                    href={router.history.createHref(
-                      router.buildLocation({
-                        to: routes.equipment.to,
-                        params: { campaignId: campaign.id },
-                      }).publicHref,
-                    )}
-                  >
-                    Open its equipment
-                  </a>
-                )}
-              />
             </DetailSection>
           )}
         </DetailBody>
@@ -467,11 +435,6 @@ export function EquipmentFormDialog({
             placeholder="Description"
             aria-label="Description"
           />
-          {equipment !== undefined && (
-            <p className="text-label leading-label text-faint">
-              Copies already in your campaigns stay where they are.
-            </p>
-          )}
         </div>
         <DialogFooter>
           {mutation.failure !== undefined && <SaveFailure failure={mutation.failure} />}

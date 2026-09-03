@@ -151,7 +151,7 @@ describe("when the optimistic value and the server disagree", () => {
     serverRows([brannoc, { ...goblinBoss, hpCurrent: 16 }]);
     server.emit(sessionEvent(31, "combatant-damaged", goblinBoss.id));
     await waitFor(() => expect(logRows()).toHaveLength(1));
-    await waitFor(() => expect(countOf("GET", "/combatants")).toBe(2));
+    await waitFor(() => expect(countOf("GET", "/combatants")).toBe(3));
 
     expect(within(rowFor("Goblin Boss")).getByText("16/21")).toBeInTheDocument();
 
@@ -252,7 +252,7 @@ describe("the doorbell", () => {
       expect(within(rowFor("Goblin Boss")).getByText("9/21")).toBeInTheDocument(),
     );
 
-    // Two requests, not five: the campaign, the session and the whole bestiary
+    // Two requests, not five: the campaign, the session and the stat blocks
     // are read once by the screen and never again by a hit.
     expect(countOf("GET", `/runs/${goblinBoss.encounterRunId}`)).toBe(before.run + 1);
     expect(countOf("GET", "/combatants")).toBe(before.combatants + 1);
@@ -261,7 +261,9 @@ describe("the doorbell", () => {
 
   it("collapses a burst of rings into one more re-read rather than a queue", async () => {
     await openFight();
-    expect(countOf("GET", "/combatants")).toBe(1);
+    // Two: the frame's own read (which stat blocks does this fight need) and
+    // the live state's.
+    expect(countOf("GET", "/combatants")).toBe(2);
 
     // Six goblins seeded, or a DM holding the space bar. Six identical requests
     // whose answers could land out of order would put an older list on screen
@@ -271,13 +273,13 @@ describe("the doorbell", () => {
       server.emit(sessionEvent(seq, "combatant-damaged", goblinBoss.id));
     }
     await waitFor(() => expect(logRows()).toHaveLength(5));
-    await waitFor(() => expect(countOf("GET", "/combatants")).toBe(2));
+    await waitFor(() => expect(countOf("GET", "/combatants")).toBe(3));
     release();
 
     // One in flight, at most one behind it — whatever the doorbell did.
-    await waitFor(() => expect(countOf("GET", "/combatants")).toBe(3));
+    await waitFor(() => expect(countOf("GET", "/combatants")).toBe(4));
     await new Promise((resume) => setTimeout(resume, 150));
-    expect(countOf("GET", "/combatants")).toBe(3);
+    expect(countOf("GET", "/combatants")).toBe(4);
   });
 
   it("never lets an older answer win over a newer one", async () => {

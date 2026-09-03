@@ -1,33 +1,22 @@
-import type {
-  Campaign,
-  CampaignId,
-  Creature,
-  CreatureFacets,
-  CreatureSort,
-  PageCursor,
-} from "@taverns/api";
+import type { Creature, CreatureFacets, CreatureSort, PageCursor } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
 /**
- * What the two creature lists ask the server for, and what they work out for
- * themselves.
+ * What the Library's creature shelf asks the server for, and what it works out
+ * for itself.
  *
  * One Effect per screen, the same rule `campaign/load.ts` follows: everything a
  * screen draws loads together, concurrently, so it has three states rather than
  * nine.
  *
- * **Two lists over one table, asking different questions.** The campaign
- * bestiary is `GET /campaigns/:c/creatures` — that campaign's own rows plus the
- * bundle, with the path doing the gating; what it holds is **copies**. The
- * Library is `GET /library/creatures` — the **originals**: the bundle plus what
- * this account authored, with no campaign in the path at all. Neither list can
- * show the other's rows, and that is the captain's model rather than a filter
- * either screen applies.
- *
- * They take the same filter (`LibraryFilter` is spread into `CreatureFilter`)
- * and both come back as `Creature`, which is why everything below this line is
- * shared.
+ * **The Library is the only creature list a screen draws now.** The campaign
+ * bestiary screen went with the instancing decision of 2026-09-02 — a campaign
+ * holds no managed creature collection, and what it *uses* of the corpus shows
+ * up inside encounters and fights. `GET /campaigns/:c/creatures` still exists
+ * as the encounter picker's read (`campaign/CreaturePicker.tsx`), answering
+ * what that campaign can build from; it shares the wire filter with this shelf,
+ * which is why the query helpers below are exported.
  */
 
 /**
@@ -167,74 +156,23 @@ export interface CorpusView {
   readonly facets: CreatureFacets;
 }
 
-export interface BestiaryView extends CorpusView {
-  readonly campaign: Campaign;
-}
-
-export const loadBestiary =
-  (campaignId: CampaignId, query: CorpusQuery) => (client: TavernsClient) =>
-    Effect.gen(function* () {
-      const [campaign, page, facets] = yield* Effect.all(
-        [
-          client.campaigns.findById({ params: { campaignId } }),
-          client.creatures.list({ params: { campaignId }, query: asQuery(query, undefined) }),
-          client.creatures.facets({ params: { campaignId } }),
-        ],
-        { concurrency: "unbounded" },
-      );
-
-      return {
-        campaign,
-        creatures: page.items,
-        nextCursor: page.nextCursor,
-        vocabulary: facets.environments,
-        facets,
-      } satisfies BestiaryView;
-    });
-
-/** The page after the one in hand. See `corpus.ts` for where the cursor lives. */
-export const moreOfBestiary =
-  (campaignId: CampaignId, query: CorpusQuery, cursor: PageCursor<CreatureSort>) =>
-  (client: TavernsClient) =>
-    client.creatures.list({ params: { campaignId }, query: asQuery(query, cursor) });
-
-export interface LibraryView extends CorpusView {
-  /**
-   * The tables this account **runs**, for the one action on this screen that
-   * needs a campaign: copying an entity into one.
-   *
-   * A `Campaign` and never a name-only map, because the copy control needs the
-   * id to send and the name to show. Filtered to `dm` here rather than in the
-   * control: `derive` writes through `rowWritable`, which requires `isDm`, so a
-   * table this account only plays at is not a place a copy can land and offering
-   * it would be a control that exists and then errors.
-   */
-  readonly campaigns: ReadonlyArray<Campaign>;
-}
+export type LibraryView = CorpusView;
 
 /**
  * The Library, and the one read on `creature` that names no campaign.
  *
- * Two calls in one round, neither of which can fail: there is no parent in the
- * path to be missing, so an account that has authored nothing gets the bundle
- * and an account at no table gets `[]` campaigns — both legitimate steady
- * states rather than errors. Same shape, and the same reasoning, as
- * `loadMyCharacters`.
- *
- * **The second call is for the copy action and nothing else.** It used to be
- * here to turn a row's `campaignId` into a table's name, back when this list
- * gathered campaign copies; under the model there is no campaign row in the
- * answer to name. Kept, repurposed, and worth stating so that nobody removes it
- * as a leftover.
+ * Neither call can fail: there is no parent in the path to be missing, so an
+ * account that has authored nothing gets the bundle — a legitimate steady
+ * state rather than an error. Same shape, and the same reasoning, as
+ * `loadMyCharacters`. There is no membership read here any more: it existed to
+ * feed the copy-into-campaign control, and that control went with the
+ * instancing decision — using a creature in a campaign happens where it is
+ * used, in the encounter dialog.
  */
 export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [page, facets, memberships] = yield* Effect.all(
-      [
-        client.library.list({ query: asQuery(query, undefined) }),
-        client.library.creatureFacets(),
-        client.me.campaigns(),
-      ],
+    const [page, facets] = yield* Effect.all(
+      [client.library.list({ query: asQuery(query, undefined) }), client.library.creatureFacets()],
       { concurrency: "unbounded" },
     );
 
@@ -243,15 +181,6 @@ export const loadLibrary = (query: CorpusQuery) => (client: TavernsClient) =>
       nextCursor: page.nextCursor,
       vocabulary: facets.environments,
       facets,
-      // `role === "dm"` and nothing else: `derive` writes through `rowWritable`,
-      // so a table you only sit at is not somewhere a copy can land. There is no
-      // `archivedAt === null` filter beside it any more — `GET /me/campaigns` is
-      // the live shelf by the URL it is, and `repo/Memberships.ts` holds that
-      // clause once. The filter that used to be here answered a question the
-      // server had already answered, which is how a second answer starts.
-      campaigns: memberships
-        .filter((membership) => membership.relation === "creator")
-        .map((membership) => membership.campaign),
     } satisfies LibraryView;
   });
 

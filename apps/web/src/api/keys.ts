@@ -136,50 +136,20 @@ export const reads = {
   /** The group's chronicle — entries and the accepted summary, one key. */
   groupHistory: (groupId: GroupId): ReadKey => key`group-history:${groupId}`,
 
-  /** This campaign's bestiary: its own creatures, plus the bundle. */
+  /**
+   * What this campaign can build an encounter from: the bundle, the caller's
+   * own Library, and the group's shares — the encounter picker's read. Never a
+   * campaign instance; those are internal rows the instancing decision of
+   * 2026-09-02 keeps off every list.
+   */
   creatures: (campaignId: CampaignId): ReadKey => key`creatures:${campaignId}`,
 
-  /** This campaign's spellbook: copied spells, plus the 2014 SRD bundle. */
-  spells: (campaignId: CampaignId): ReadKey => key`spells:${campaignId}`,
-
-  /** This campaign's mundane equipment: copied rows, plus the 2014 SRD bundle. */
-  equipment: (campaignId: CampaignId): ReadKey => key`equipment:${campaignId}`,
-
-  /** This campaign's magic items: copied rows, plus the 2014 SRD bundle. */
-  magicItems: (campaignId: CampaignId): ReadKey => key`magic-items:${campaignId}`,
-
-  /** This campaign's reference compendium: copied rules plus the pinned 2014 rules. */
-  ruleArticles: (campaignId: CampaignId): ReadKey => key`rule-articles:${campaignId}`,
-
-  /** This campaign's copied feats plus the pinned 2014 feat baseline. */
-  feats: (campaignId: CampaignId): ReadKey => key`feats:${campaignId}`,
-
-  /** One campaign feat and its prerequisite rows. */
-  feat: (campaignId: CampaignId, featId: FeatId): ReadKey => key`feats:${campaignId}:${featId}`,
-
-  /** One campaign compendium article and its ordered sections. */
-  ruleArticle: (campaignId: CampaignId, articleId: RuleArticleId): ReadKey =>
-    key`rule-articles:${campaignId}:${articleId}`,
-
   /**
-   * This campaign's rules vocabulary: the classes, races and backgrounds copied
-   * into it, plus the bundle.
-   *
-   * **Two screens read it and neither of them is the one that writes it most.**
-   * The Rules screen is the DM's; the create form's two pickers are a player's,
-   * and a copy landing shared is what makes a class appear in one of them. So a
-   * write here is one of the few in the product whose effect is on a screen its
-   * author is not looking at — which is precisely what naming a resource
-   * reaches and calling a screen's `reload` does not.
+   * This campaign's rules vocabulary: the shared bundle, the reader's own
+   * Library, and originals shared to the campaign's group — the create form's
+   * picker, and the one campaign-scoped list a *player* reads.
    */
   options: (campaignId: CampaignId): ReadKey => key`options:${campaignId}`,
-
-  /** Concrete abilities, languages, skills, proficiencies and traits attachable at this campaign. */
-  optionVocabulary: (campaignId: CampaignId): ReadKey => key`options:${campaignId}:vocabulary`,
-
-  /** One campaign class's concrete subclass, level and feature rows. */
-  optionProgression: (campaignId: CampaignId, optionId: CharacterOptionId): ReadKey =>
-    key`options:${campaignId}:progression:${optionId}`,
 
   // ----------------------------------------------------------------- a night
 

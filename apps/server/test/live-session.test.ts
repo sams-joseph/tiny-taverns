@@ -111,7 +111,7 @@ const makeFixture = Effect.gen(function* () {
   );
 
   const archer = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Goblin Archer",
       size: "Small",
       type: "Humanoid",
@@ -121,7 +121,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const hag = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Marsh Hag",
       size: "Medium",
       type: "Fey",
@@ -140,8 +140,13 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   // Six of one and one of the other — the fixture's "6 creatures" card
-  // (`data.js:10`) plus the boss the runner has a stat block open for.
-  yield* as(roster.create(campaign.id, encounter.id, { creatureId: archer.id, count: 6 }));
+  // (`data.js:10`) plus the boss the runner has a stat block open for. The
+  // sources are Library originals, so each roster line points at the internal
+  // campaign instance the add minted — the instancing decision of 2026-09-02 —
+  // and the lines' own `creatureId` is what a combatant will carry.
+  const archerLine = yield* as(
+    roster.create(campaign.id, encounter.id, { creatureId: archer.id, count: 6 }),
+  );
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: hag.id, count: 1 }));
 
   const session = yield* as(sessions.create(campaign.id, { number: 12, title: "The ford" }));
@@ -167,6 +172,8 @@ const makeFixture = Effect.gen(function* () {
     player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
     archer,
+    /** The internal instance the archer's roster line points at. */
+    archerCreatureId: archerLine.creatureId,
     hag,
     encounter,
     session,
@@ -227,7 +234,7 @@ describe("starting a fight", () => {
     // must not touch the others.
     const archers = list.filter((c) => c.displayName === "Goblin Archer");
     expect(new Set(archers.map((c) => c.id)).size).toBe(6);
-    expect(archers.every((c) => c.creatureId === fixture.archer.id)).toBe(true);
+    expect(archers.every((c) => c.creatureId === fixture.archerCreatureId)).toBe(true);
   });
 
   it("snapshots the display fields rather than joining them", async () => {

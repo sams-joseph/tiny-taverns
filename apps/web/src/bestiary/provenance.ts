@@ -56,7 +56,7 @@ export const provenanceOf = (creature: Creature): Provenance => {
   const reskin =
     creature.derivedFrom === null
       ? []
-      : ["It started as a copy of another creature, and the changes since are yours."];
+      : ["It started from another creature, and the changes since are yours."];
 
   // The bundle first, and by owner rather than by origin — the two agree
   // (`creature_system_is_unowned` makes them the same statement), and reading
@@ -65,7 +65,7 @@ export const provenanceOf = (creature: Creature): Provenance => {
     return {
       badge: "Shared corpus",
       lines: [
-        "Bundled with Tiny Taverns. It belongs to no campaign and to no account — the same creature is in every Library and reachable from every table — so it is not yours to edit. Changing it means keeping a copy of your own.",
+        "Bundled with Tiny Taverns. It belongs to nobody — the same creature is in every Library and reachable from every table — so it is not yours to edit. Write your own version to change it.",
         ...reskin,
       ],
     };
@@ -94,7 +94,7 @@ export const provenanceOf = (creature: Creature): Provenance => {
         badge: undefined,
         lines: [
           library
-            ? "Yours. It lives in your Library and in no campaign until you copy it into one."
+            ? "Yours. It lives in your Library, ready to use at any of your tables."
             : "Yours, written for this campaign.",
           ...reskin,
         ],

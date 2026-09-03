@@ -106,7 +106,7 @@ const makeFixture = Effect.gen(function* () {
   const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence" }));
 
   const croaker = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Bullywug Croaker",
       type: "humanoid",
       size: "Medium",
@@ -115,8 +115,11 @@ const makeFixture = Effect.gen(function* () {
       hp: 11,
     }),
   );
-  const elsewhere = yield* as(
-    creatures.create(otherTable.id, {
+  // A creature the campaign cannot use: another account's Library original.
+  // Nothing has shared it anywhere, so a proposal naming it must be refused.
+  const strangerAccount = yield* anAccount("Bo");
+  const elsewhere = yield* withActor(strangerAccount)(
+    creatures.libraryCreate({
       name: "Sixpence Gull",
       type: "beast",
       cr: "1/8",
@@ -413,7 +416,12 @@ describe("accepting one", () => {
       ).pipe(withActor(fixture.dm), Effect.orDie),
     );
     expect(roster).toHaveLength(1);
-    expect(roster[0]?.creatureId).toBe(fixture.croaker.id);
+    // The source was the DM's Library original, so the accept minted the
+    // campaign's internal instance and pointed the line at it — the instancing
+    // decision of 2026-09-02. The instance is the plumbing, the name is what
+    // the line carries.
+    expect(roster[0]?.creatureId).not.toBe(fixture.croaker.id);
+    expect(roster[0]?.name).toBe("Bullywug Croaker");
     expect(roster[0]?.count).toBe(6);
     // The roster line carries the same trail — every row an accept writes does.
     expect(roster[0]?.origin).toBe("assistant");

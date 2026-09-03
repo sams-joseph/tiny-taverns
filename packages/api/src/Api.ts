@@ -9,52 +9,36 @@ import { OwnedCharacter, PartyJoin, PartySeat, PartySeatUpdate } from "./Party.j
 import {
   CharacterOption,
   ClassProgression,
-  OptionDerive,
   OptionFilter,
   OptionLibraryCreate,
   OptionLibraryUpdate,
-  OptionUpdate,
   OptionVocabulary,
 } from "./CharacterOption.js";
 import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
 import {
   Creature,
-  CreatureCreate,
   CreatureFacets,
   CreatureFilter,
   CreatureLibraryCreate,
   CreatureLibraryUpdate,
   CreatureSort,
-  CreatureUpdate,
   LibraryFilter,
 } from "./Creature.js";
 import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
-import {
-  Feat,
-  FeatDerive,
-  FeatFilter,
-  FeatLibraryCreate,
-  FeatLibraryUpdate,
-  FeatSort,
-  FeatUpdate,
-} from "./Feat.js";
+import { Feat, FeatFilter, FeatLibraryCreate, FeatLibraryUpdate, FeatSort } from "./Feat.js";
 import {
   Equipment,
-  EquipmentCreate,
   EquipmentFilter,
   EquipmentLibraryCreate,
   EquipmentLibraryUpdate,
   EquipmentSort,
-  EquipmentUpdate,
 } from "./Equipment.js";
 import {
   MagicItem,
-  MagicItemCreate,
   MagicItemFilter,
   MagicItemLibraryCreate,
   MagicItemLibraryUpdate,
   MagicItemSort,
-  MagicItemUpdate,
 } from "./MagicItem.js";
 import {
   HobAccepted,
@@ -136,25 +120,15 @@ import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
 import {
   RuleArticle,
-  RuleArticleDerive,
   RuleArticleDetail,
   RuleArticleFilter,
   RuleArticleLibraryCreate,
   RuleArticleLibraryUpdate,
   RuleArticleSort,
-  RuleArticleUpdate,
 } from "./RuleArticle.js";
 import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
-import {
-  Spell,
-  SpellCreate,
-  SpellFilter,
-  SpellLibraryCreate,
-  SpellLibraryUpdate,
-  SpellSort,
-  SpellUpdate,
-} from "./Spell.js";
+import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
 /** Liveness. The one endpoint with no actor and no campaign. */
@@ -970,24 +944,26 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
   .middleware(Authorization) {}
 
 /**
- * The bestiary: the campaign's own creatures *and* the global `system` corpus,
- * in one list.
+ * The creatures a campaign can **use** — the picker behind encounter building,
+ * and nothing else.
  *
- * **Campaign-scoped in the path, even though half the rows it returns are
- * global.** The report sketched a top-level `/creatures`, but the same report
- * settles that an authored or imported creature belongs to a campaign
- * (§1.3) — so a top-level list would have to union across every campaign the
- * credential reaches and then explain what a write to it meant. Hanging the
- * group off the campaign makes the reachable set exactly "this campaign's
- * creatures plus the shared corpus", which is what `Bestiary.jsx` renders and
- * what an encounter roster may point at. The path is also the *only* thing that
- * gates the global rows: a system creature is reachable through a campaign this
- * actor can read, and through nothing else.
+ * **Campaign copies are plumbing now, not a collection** (captain's decision,
+ * 2026-09-02). A campaign still holds internal instances of Library creatures —
+ * an encounter roster points at one so later Library edits cannot rewrite a
+ * built encounter — but the user never manages them: no campaign create, no
+ * edit, no delete, no derive. The instance materialises inside
+ * `encounterCreatures.create` at the point of use.
  *
- * `derive` is the reskin. A DM cannot edit a `system` creature — the write
- * predicate needs `campaign_id` to equal the campaign in the path, and a global
- * row's is null — so `derive` copies it into this campaign as an `authored` row
- * with `derivedFrom` set, applying the patch in the same request.
+ * So `list` answers **what this campaign can build from**: the bundle (under
+ * the same row-visibility rule as always), the caller's own Library, and
+ * originals explicitly shared to this campaign's group — `usableInCampaign` in
+ * `repo/visibility.ts`. It never returns a campaign instance, which is what
+ * keeps the copies invisible.
+ *
+ * `findById` is wider on purpose: it also resolves the internal instances a
+ * roster or a fight names (`copyableIntoCampaign`), because a stat block of a
+ * creature already on the table has to render whatever list it came from. An
+ * id is not an enumeration; nothing offers these rows as a collection.
  */
 class CreaturesGroup extends HttpApiGroup.make("creatures")
   .add(
@@ -997,69 +973,8 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
       success: pageOf(Creature, CreatureSort),
       error: NotFound,
     }),
-    /**
-     * Every environment the creatures this list can reach are tagged with.
-     *
-     * Its own read rather than a field on the page, because the chip row is a
-     * fact about **the corpus** and a page is a fact about fifty rows of it.
-     * Derived from the answers instead, a chip would exist only for an
-     * environment that happened to be on the first page — and pressing one
-     * narrows the query now, so later pages are narrower still and the row could
-     * never grow back. A control that can filter itself out of existence is the
-     * shape this codebase refuses.
-     *
-     * Same predicate as `list`, so a chip cannot name something the list will
-     * not return.
-     */
-    HttpApiEndpoint.get("environments", "/environments", {
-      params: { campaignId: CampaignId },
-      success: Schema.Array(Schema.String),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("facets", "/facets", {
-      params: { campaignId: CampaignId },
-      success: CreatureFacets,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("create", "/", {
-      params: { campaignId: CampaignId },
-      payload: CreatureCreate,
-      success: Creature,
-      error: NotFound,
-    }),
     HttpApiEndpoint.get("findById", "/:creatureId", {
       params: { campaignId: CampaignId, creatureId: CreatureId },
-      success: Creature,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.patch("update", "/:creatureId", {
-      params: { campaignId: CampaignId, creatureId: CreatureId },
-      payload: CreatureUpdate,
-      success: Creature,
-      error: NotFound,
-    }),
-    /**
-     * `Conflict` when the creature is still on an encounter's roster —
-     * deleting it would silently change what that encounter contains.
-     */
-    HttpApiEndpoint.delete("remove", "/:creatureId", {
-      params: { campaignId: CampaignId, creatureId: CreatureId },
-      success: HttpApiSchema.NoContent,
-      error: [NotFound, Conflict],
-    }),
-    /**
-     * Copy a creature into this campaign, edits applied, origin trail kept —
-     * **the third statement of the Library model**: using a monster in a
-     * campaign copies it in, and what the campaign then holds is copied state.
-     * Editing the original afterwards does not reach the copy.
-     *
-     * The source may be this campaign's own bestiary, the bundle, or **the
-     * caller's own Library**, and nothing else — `copyableIntoCampaign` in
-     * `repo/visibility.ts`. Copying between a DM's own tables is still refused.
-     */
-    HttpApiEndpoint.post("derive", "/:creatureId/derive", {
-      params: { campaignId: CampaignId, creatureId: CreatureId },
-      payload: CreatureUpdate,
       success: Creature,
       error: NotFound,
     }),
@@ -1123,35 +1038,17 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
  * A campaign's **rules vocabulary**: the classes, races and backgrounds a
  * character at this table can be built from.
  *
- * The bundle, plus whatever this campaign has copied in — which is
- * `corpusRowReadable`, the same predicate and the same shape as the bestiary
- * one path up. It is campaign-scoped in the path for the identical reason: the
- * path is the *only* thing gating the bundled rows, and a top-level list would
- * have nothing to read them through.
- *
- * ### The two readers, and why one of them is a player
- *
- * This is where character options stop resembling monsters. A creature list is
- * the DM's; **this list is the create form's picker**, and the create form is a
- * player's screen. `libraryRowReadable` compares `account_id` to the *reader's*
- * account, so a player can never see their DM's Library — which is exactly why
- * a homebrew class has to be copied into the campaign before it can be picked,
- * and why this list rather than the Library one is what the picker reads.
- *
- * The consequence to hold on to: **`corpusRowReadable` ends in
- * `isDm OR visibility = 'shared'`**, so a copy the DM has not shared is a class
- * no player can choose. That is the seam working rather than a gap, and it is
- * answered by the copy-in dialog sending `shared` out loud — see
- * `OptionUpdate.visibility`.
- *
- * ### There is no `create` here, and that absence is the model
- *
- * The captain's second statement is that **authoring happens in the Library**;
- * a campaign row created directly would be copied state with no original behind
- * it. `POST /campaigns/:c/creatures` still exists and `AGENTS.md` already names
- * it as the one endpoint that contradicts the model — so this group does not
- * inherit the contradiction. A campaign gets an option by `derive` and by
- * nothing else.
+ * **This list is the create form's picker**, and the create form is a player's
+ * screen. It answers `usableInCampaign` (`repo/visibility.ts`): the bundle
+ * under the row-visibility rule the importer relies on (`shared` bundle rows
+ * reach players), the caller's own Library, and originals **explicitly shared
+ * to this campaign's group** — which is how a homebrew class reaches the
+ * players at a table now that campaign copies are internal plumbing (captain's
+ * decision, 2026-09-02). The old path — copy it into the campaign, then share
+ * the copy — is gone with the copy-management surface; the group share is the
+ * one explicit act, and it exposes the original itself, as a vocabulary entry
+ * only. A character seeded from one is still a snapshot: class, race and
+ * background live on the character as labels, never as pointers.
  *
  * ### Not paged, on purpose
  *
@@ -1162,17 +1059,10 @@ class CreaturesGroup extends HttpApiGroup.make("creatures")
  */
 class CharacterOptionsGroup extends HttpApiGroup.make("options")
   .add(
-    HttpApiEndpoint.get("vocabulary", "/vocabulary", {
-      params: { campaignId: CampaignId },
-      success: OptionVocabulary,
-      error: NotFound,
-    }),
     /**
-     * Every option this campaign offers — all three kinds unless `kind` narrows it.
-     *
-     * One request rather than three is the common case and is why `kind` is a
-     * query parameter: the create form wants classes, races *and* backgrounds,
-     * and so does the Rules screen.
+     * Every option this campaign offers — all three kinds unless `kind` narrows
+     * it. One request rather than three is the common case and is why `kind` is
+     * a query parameter: the create form wants classes, races *and* backgrounds.
      */
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
@@ -1180,262 +1070,8 @@ class CharacterOptionsGroup extends HttpApiGroup.make("options")
       success: Schema.Array(CharacterOption),
       error: NotFound,
     }),
-    HttpApiEndpoint.get("findById", "/:optionId", {
-      params: { campaignId: CampaignId, optionId: CharacterOptionId },
-      success: CharacterOption,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("progression", "/:optionId/progression", {
-      params: { campaignId: CampaignId, optionId: CharacterOptionId },
-      success: ClassProgression,
-      error: NotFound,
-    }),
-    /**
-     * Edit this campaign's copy — **including whether the players can see it**,
-     * which is the one field a copy has that an original does not.
-     *
-     * A bundled option lands here readable and not writable, and the refusal is
-     * the ordinary `NotFound`: `rowWritable` needs `campaign_id` to equal the
-     * campaign in the path, and a bundled row's is null.
-     */
-    HttpApiEndpoint.patch("update", "/:optionId", {
-      params: { campaignId: CampaignId, optionId: CharacterOptionId },
-      payload: OptionUpdate,
-      success: CharacterOption,
-      error: [NotFound, Conflict],
-    }),
-    /**
-     * Take this campaign's copy back off the table.
-     *
-     * **No `Conflict`, and nothing refuses it**, which is the snapshot working
-     * rather than an oversight: a character stores its class as a *label*, so
-     * removing the option leaves every character made from it standing with the
-     * numbers they are playing. What they lose is a class the next character
-     * can be built from.
-     */
-    HttpApiEndpoint.delete("remove", "/:optionId", {
-      params: { campaignId: CampaignId, optionId: CharacterOptionId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
-    /**
-     * **Bring an option into this campaign** — the copy, and the only way a row
-     * gets here.
-     *
-     * The source is `copyableIntoCampaign`: this campaign's own options, the
-     * bundle, or the caller's own Library. Exactly the creature rule, and the
-     * Library half is what makes authoring-then-using a path at all.
-     *
-     * The copy is a **snapshot**. Nothing is read through `derivedFrom`, so
-     * editing the original afterwards does not reach it and deleting the
-     * original leaves it standing — which is the single most surprising thing
-     * about this feature and is why the dialog over it says so in words. A body
-     * whose shape contradicts the source kind is a `Conflict`, the same
-     * backstop `update` uses.
-     */
-    HttpApiEndpoint.post("derive", "/:optionId/derive", {
-      params: { campaignId: CampaignId, optionId: CharacterOptionId },
-      payload: OptionDerive,
-      success: CharacterOption,
-      error: [NotFound, Conflict],
-    }),
   )
   .prefix("/campaigns/:campaignId/options")
-  .middleware(Authorization) {}
-
-/**
- * A campaign's spellbook: this campaign's copied spells plus the bundled 2014
- * SRD spell corpus. Unlike character options it is paged and filterable, and
- * unlike the Library shelf it answers what this campaign can reach.
- */
-class SpellsGroup extends HttpApiGroup.make("spells")
-  .add(
-    HttpApiEndpoint.get("list", "/", {
-      params: { campaignId: CampaignId },
-      query: SpellFilter,
-      success: pageOf(Spell, SpellSort),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("findById", "/:spellId", {
-      params: { campaignId: CampaignId, spellId: SpellId },
-      success: Spell,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("create", "/", {
-      params: { campaignId: CampaignId },
-      payload: SpellCreate,
-      success: Spell,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.patch("update", "/:spellId", {
-      params: { campaignId: CampaignId, spellId: SpellId },
-      payload: SpellUpdate,
-      success: Spell,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.delete("remove", "/:spellId", {
-      params: { campaignId: CampaignId, spellId: SpellId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("derive", "/:spellId/derive", {
-      params: { campaignId: CampaignId, spellId: SpellId },
-      payload: SpellUpdate,
-      success: Spell,
-      error: NotFound,
-    }),
-  )
-  .prefix("/campaigns/:campaignId/spells")
-  .middleware(Authorization) {}
-
-/** A campaign's mundane equipment copies plus the bundled 2014 SRD equipment corpus. */
-class EquipmentGroup extends HttpApiGroup.make("equipment")
-  .add(
-    HttpApiEndpoint.get("list", "/", {
-      params: { campaignId: CampaignId },
-      query: EquipmentFilter,
-      success: pageOf(Equipment, EquipmentSort),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("findById", "/:equipmentId", {
-      params: { campaignId: CampaignId, equipmentId: EquipmentId },
-      success: Equipment,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("create", "/", {
-      params: { campaignId: CampaignId },
-      payload: EquipmentCreate,
-      success: Equipment,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.patch("update", "/:equipmentId", {
-      params: { campaignId: CampaignId, equipmentId: EquipmentId },
-      payload: EquipmentUpdate,
-      success: Equipment,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.delete("remove", "/:equipmentId", {
-      params: { campaignId: CampaignId, equipmentId: EquipmentId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("derive", "/:equipmentId/derive", {
-      params: { campaignId: CampaignId, equipmentId: EquipmentId },
-      payload: EquipmentUpdate,
-      success: Equipment,
-      error: NotFound,
-    }),
-  )
-  .prefix("/campaigns/:campaignId/equipment")
-  .middleware(Authorization) {}
-
-/** A campaign's magic item copies plus the bundled 2014 SRD magic item corpus. */
-class MagicItemsGroup extends HttpApiGroup.make("magicItems")
-  .add(
-    HttpApiEndpoint.get("list", "/", {
-      params: { campaignId: CampaignId },
-      query: MagicItemFilter,
-      success: pageOf(MagicItem, MagicItemSort),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("findById", "/:magicItemId", {
-      params: { campaignId: CampaignId, magicItemId: MagicItemId },
-      success: MagicItem,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("create", "/", {
-      params: { campaignId: CampaignId },
-      payload: MagicItemCreate,
-      success: MagicItem,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.patch("update", "/:magicItemId", {
-      params: { campaignId: CampaignId, magicItemId: MagicItemId },
-      payload: MagicItemUpdate,
-      success: MagicItem,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.delete("remove", "/:magicItemId", {
-      params: { campaignId: CampaignId, magicItemId: MagicItemId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("derive", "/:magicItemId/derive", {
-      params: { campaignId: CampaignId, magicItemId: MagicItemId },
-      payload: MagicItemUpdate,
-      success: MagicItem,
-      error: NotFound,
-    }),
-  )
-  .prefix("/campaigns/:campaignId/magic-items")
-  .middleware(Authorization) {}
-/** A campaign's copied rules compendium articles plus the bundled 2014 rules reference. */
-class RuleArticlesGroup extends HttpApiGroup.make("ruleArticles")
-  .add(
-    HttpApiEndpoint.get("list", "/", {
-      params: { campaignId: CampaignId },
-      query: RuleArticleFilter,
-      success: pageOf(RuleArticle, RuleArticleSort),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("findById", "/:ruleArticleId", {
-      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
-      success: RuleArticleDetail,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.patch("update", "/:ruleArticleId", {
-      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
-      payload: RuleArticleUpdate,
-      success: RuleArticleDetail,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.delete("remove", "/:ruleArticleId", {
-      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("derive", "/:ruleArticleId/derive", {
-      params: { campaignId: CampaignId, ruleArticleId: RuleArticleId },
-      payload: RuleArticleDerive,
-      success: RuleArticleDetail,
-      error: NotFound,
-    }),
-  )
-  .prefix("/campaigns/:campaignId/compendium")
-  .middleware(Authorization) {}
-
-class FeatsGroup extends HttpApiGroup.make("feats")
-  .add(
-    HttpApiEndpoint.get("list", "/", {
-      params: { campaignId: CampaignId },
-      query: FeatFilter,
-      success: pageOf(Feat, FeatSort),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.get("findById", "/:featId", {
-      params: { campaignId: CampaignId, featId: FeatId },
-      success: Feat,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.patch("update", "/:featId", {
-      params: { campaignId: CampaignId, featId: FeatId },
-      payload: FeatUpdate,
-      success: Feat,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.delete("remove", "/:featId", {
-      params: { campaignId: CampaignId, featId: FeatId },
-      success: HttpApiSchema.NoContent,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("derive", "/:featId/derive", {
-      params: { campaignId: CampaignId, featId: FeatId },
-      payload: FeatDerive,
-      success: Feat,
-      error: NotFound,
-    }),
-  )
-  .prefix("/campaigns/:campaignId/feats")
   .middleware(Authorization) {}
 
 class LibraryGroup extends HttpApiGroup.make("library")
@@ -2287,11 +1923,6 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(CreaturesGroup)
-  .add(SpellsGroup)
-  .add(EquipmentGroup)
-  .add(MagicItemsGroup)
-  .add(RuleArticlesGroup)
-  .add(FeatsGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
   .add(EncounterCreaturesGroup)

@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   bodyOf,
-  campaignId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -15,7 +14,6 @@ import {
   goblin,
   hag,
   libraryFacets,
-  otherCampaignId,
   owlbear,
   renderLibrary,
   sexton,
@@ -360,77 +358,29 @@ describe("LibraryScreen", () => {
     });
   });
 
-  describe("copying into a campaign", () => {
-    it("names the campaign, sends the copy there, and says what a copy is", async () => {
-      server.routes.set(`POST /campaigns/${otherCampaignId}/creatures/${owlbear.id}/derive`, {
-        status: 200,
-        body: { ...owlbear, id: bandit.id, campaignId: otherCampaignId, accountId: null },
-      });
+  describe("no copy control anywhere", () => {
+    // The instancing decision of 2026-09-02: using a creature in a campaign
+    // happens where it is used — the encounter dialog picks it, and the
+    // campaign's internal instance is the server's business. So the stat-block
+    // reader offers nothing to copy and nothing that names a campaign.
+    it("opens the stat block with no copy-into-campaign control", async () => {
       await renderLibrary(mintingSession());
       await screen.findByText("Bog Owlbear");
 
       await userEvent.click(screen.getByRole("button", { name: "Stat block for Bog Owlbear" }));
+      expect(await screen.findByRole("dialog", { name: /Bog Owlbear/ })).toBeInTheDocument();
 
-      // The sentence that has to be on screen before the press, not after it.
-      expect(
-        await screen.findByText(/The campaign gets a copy of this creature as it is now/),
-      ).toBeInTheDocument();
-
-      await userEvent.click(screen.getByRole("combobox", { name: "Copy into" }));
-      await userEvent.click(await screen.findByRole("option", { name: "The Hag's Bargain" }));
-      await userEvent.click(screen.getByRole("button", { name: /Copy in/ }));
-
-      await waitFor(() =>
-        expect(
-          server.calls.some(
-            (call) =>
-              call.method === "POST" &&
-              call.pathname === `/campaigns/${otherCampaignId}/creatures/${owlbear.id}/derive`,
-          ),
-        ).toBe(true),
-      );
-      // The other consequence the captain confirmed: nothing refuses a second
-      // copy, so the screen says so rather than looking idempotent.
-      expect(await screen.findByText(/Copying again makes a second copy/)).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Open its bestiary" })).toHaveAttribute(
-        "href",
-        `/#/campaigns/${otherCampaignId}/bestiary`,
-      );
-    });
-
-    it("offers the tables this account runs, and copies a bundled creature too", async () => {
-      server.routes.set(`POST /campaigns/${campaignId}/creatures/${goblin.id}/derive`, {
-        status: 200,
-        body: { ...goblin, id: bandit.id, campaignId, origin: "authored" },
-      });
-      await renderLibrary(mintingSession());
-      await screen.findByText("Goblin Boss");
-
-      await userEvent.click(screen.getByRole("button", { name: "Stat block for Goblin Boss" }));
-      // A bundled row cannot be edited and can absolutely be used — which is
-      // what "changing it means keeping a copy of your own" has always meant.
-      await userEvent.click(await screen.findByRole("button", { name: /Copy in/ }));
-
-      await waitFor(() =>
-        expect(
-          server.calls.some(
-            (call) => call.pathname === `/campaigns/${campaignId}/creatures/${goblin.id}/derive`,
-          ),
-        ).toBe(true),
-      );
-    });
-
-    it("says so plainly when there is no table to copy into", async () => {
-      // An account can have a Library and no campaign — authoring is not an act
-      // inside one — so this is a real state rather than an edge case.
-      server.routes.set("GET /me/campaigns", { status: 200, body: [] });
-      await renderLibrary(mintingSession());
-      await screen.findByText("Bog Owlbear");
-
-      await userEvent.click(screen.getByRole("button", { name: "Stat block for Bog Owlbear" }));
-
-      expect(await screen.findByText(/not running a table yet/)).toBeInTheDocument();
       expect(screen.queryByRole("combobox", { name: "Copy into" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Copy in/ })).toBeNull();
+      expect(screen.queryByText(/copy of this creature/)).toBeNull();
+    });
+
+    it("reads the Library without asking for the account's campaigns at all", async () => {
+      // The membership read existed to feed the copy select and went with it.
+      await renderLibrary(mintingSession());
+      await screen.findByText("Bog Owlbear");
+
+      expect(server.calls.some((call) => call.pathname === "/me/campaigns")).toBe(false);
     });
   });
 

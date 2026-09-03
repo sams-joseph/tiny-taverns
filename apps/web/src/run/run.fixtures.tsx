@@ -10,9 +10,7 @@ import {
   campaignId,
   goblin,
   goblinBoss,
-  hag,
   liveRun,
-  page,
   runId as runIdRaw,
   session,
   sessionId as sessionIdRaw,
@@ -79,7 +77,10 @@ export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET ${base}`, { status: 200, body: campaign }],
     [`GET ${base}/sessions/${sessionIdRaw}`, { status: 200, body: runningSession }],
-    [`GET ${base}/creatures`, { status: 200, body: page([goblin, hag]) }],
+    // The frame resolves each combatant's creature by id — the instancing
+    // decision of 2026-09-02 took campaign instances off the corpus list, so
+    // only the by-id read reaches what a fight's rows point at.
+    [`GET ${base}/creatures/${goblin.id}`, { status: 200, body: goblin }],
     [`GET ${runBase}`, { status: 200, body: liveRun }],
     [`GET ${runBase}/combatants`, { status: 200, body: [brannoc, goblinBoss] }],
     // Damage is a delta, so the answer a test wants back depends on the test.

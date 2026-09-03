@@ -38,8 +38,11 @@ import { membershipsAtom } from "../campaign/load";
  *
  * **There is one Library section.** `/library` and its shelves all light
  * *Library* on the global row and let the screen's own tabs say which shelf is
- * open. The campaign-scoped bestiary is still a route with no item and falls
- * through to its campaign's Overview, exactly as a fight does.
+ * open. Since the instancing decision of 2026-09-02 a campaign has no corpus
+ * screens at all — creatures, rules, spells, equipment, magic items and the
+ * compendium are Library shelves, and what a campaign *uses* of them shows up
+ * inside encounters, fights and the create form rather than on rows of its
+ * nav.
  */
 export type Section =
   /* The global row: everything above a campaign. */
@@ -52,11 +55,6 @@ export type Section =
   | "encounters"
   | "notes"
   | "party"
-  | "rules"
-  | "compendium"
-  | "spells"
-  | "equipment"
-  | "magicItems"
   | "chronicle";
 
 export function useSection(): Section {
@@ -71,14 +69,9 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
-  if (matchRoute({ to: "/campaigns/$campaignId/rules" })) return "rules";
-  if (matchRoute({ to: "/campaigns/$campaignId/compendium" })) return "compendium";
-  if (matchRoute({ to: "/campaigns/$campaignId/spells" })) return "spells";
-  if (matchRoute({ to: "/campaigns/$campaignId/equipment" })) return "equipment";
-  if (matchRoute({ to: "/campaigns/$campaignId/magic-items" })) return "magicItems";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
-  // a fight, the bestiary, the character create form, and the splat a
-  // half-typed section falls back through.
+  // a fight, the character create form, and the splat a half-typed section
+  // falls back through.
   if (matchRoute({ to: "/campaigns/$campaignId", fuzzy: true })) return "overview";
   // Groups is home, and it is also where everything else falls back to.
   return "groups";

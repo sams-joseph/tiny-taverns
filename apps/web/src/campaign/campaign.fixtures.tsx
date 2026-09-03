@@ -628,24 +628,26 @@ const bundledBackgrounds = ["Acolyte", "Sage", "Soldier", "Wayfarer"].map((name,
 export const druidOption = { ...bundledClasses[3]!, id: druidOptionId };
 export const elfOption = { ...bundledRace[2]!, id: elfOptionId };
 
-/** *Bloodsworn, d10, unarmoured AC DEX + CON* — this table's copy of its DM's own. */
+/**
+ * *Bloodsworn, d10, unarmoured AC DEX + CON* — the DM's own original, reaching
+ * this table's vocabulary through the group share (the instancing decision of
+ * 2026-09-02: a table's homebrew offering is shared originals, never campaign
+ * copies).
+ */
 export const bloodswornOption = {
   ...bundledOption,
   id: bloodswornOptionId,
-  campaignId,
-  derivedFrom: bloodswornOriginalId,
+  accountId: ilseAccountId,
   origin: "authored",
   kind: "class",
   name: "Bloodsworn",
   body: { hitDie: 10, unarmouredAc: ["DEX", "CON"], summary: "Sworn to the marsh." },
 };
 
-/** A copy the DM has **not** shared, so no player can pick it. */
+/** A second shared original, a race. */
 export const marshfolkOption = {
   ...bloodswornOption,
   id: marshfolkOptionId,
-  derivedFrom: marshfolkOriginalId,
-  visibility: "dm",
   kind: "race",
   name: "Marshfolk",
   body: raceBody([{ ability: "CON", amount: 2 }], {
@@ -657,8 +659,7 @@ export const marshfolkOption = {
 export const saltRunnerOption = {
   ...bundledOption,
   id: saltRunnerOptionId,
-  campaignId,
-  derivedFrom: saltRunnerOriginalId,
+  accountId: ilseAccountId,
   origin: "authored",
   kind: "background",
   name: "Salt-runner",
@@ -836,11 +837,17 @@ export const goblinBoss = {
   conditions: ["Hostile"],
 };
 
-/** A roster line: this creature, this many times. */
+/**
+ * A roster line: this creature, this many times. `name` is the server's join
+ * against the creature row — the roster is drawn from its own rows since the
+ * instancing decision of 2026-09-02, because a line may point at an internal
+ * campaign instance no corpus list returns.
+ */
 export const rosterRow = {
   id: rosterRowId,
   encounterId,
   creatureId: goblinId,
+  name: "Goblin Boss",
   count: 6,
   visibility: "dm",
   ...provenance,
@@ -1047,31 +1054,16 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /groups/${groupId}/history`, { status: 200, body: [] }],
     [`GET /groups/${groupId}/history/summary`, { status: 200, body: null }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
-    [`GET /campaigns/${campaignId}/creatures/environments`, { status: 200, body: ["Marsh"] }],
-    [`GET /campaigns/${campaignId}/spells`, { status: 200, body: page([fireball]) }],
-    [`GET /campaigns/${campaignId}/equipment`, { status: 200, body: page([hempRope]) }],
-    [`GET /campaigns/${campaignId}/magic-items`, { status: 200, body: page([lanternRing]) }],
-    [`GET /campaigns/${campaignId}/compendium`, { status: 200, body: page([combatRuleArticle]) }],
-    [`GET /campaigns/${campaignId}/feats`, { status: 200, body: page(campaignFeats) }],
-    [
-      `GET /campaigns/${campaignId}/compendium/${ruleArticleId}`,
-      { status: 200, body: combatRuleDetail },
-    ],
     ["GET /library/spells", { status: 200, body: page([fireball]) }],
     ["GET /library/equipment", { status: 200, body: page([hempRope]) }],
     ["GET /library/magic-items", { status: 200, body: page([lanternRing]) }],
     ["GET /library/compendium", { status: 200, body: page([combatRuleArticle]) }],
     ["GET /library/feats", { status: 200, body: page(libraryFeats) }],
     [`GET /library/compendium/${ruleArticleId}`, { status: 200, body: combatRuleDetail }],
-    // The rules vocabulary this table builds characters from — the Rules
-    // screen's list, and the create form's two pickers. A bundled class, a
-    // bundled race, and one of each this table has copied in, so a test can
-    // see which rows are editable without re-aiming anything. The Library
-    // behind it is the copy control's source and is deliberately a superset:
-    // the same original the campaign copy came from is still there, which is
-    // the model — a copy is a separate row.
+    // The rules vocabulary this table builds characters from — the create
+    // form's pickers: the shared bundle plus what reaches this table through
+    // its group. The Library list beside it is this account's originals.
     [`GET /campaigns/${campaignId}/options`, { status: 200, body: campaignOptions }],
-    [`GET /campaigns/${campaignId}/options/vocabulary`, { status: 200, body: optionVocabulary }],
     ["GET /library/options", { status: 200, body: libraryOptions }],
     ["GET /library/options/vocabulary", { status: 200, body: optionVocabulary }],
     [

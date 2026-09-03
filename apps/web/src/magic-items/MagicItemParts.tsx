@@ -1,4 +1,4 @@
-import type { Campaign, MagicItem, MagicItemCreate, MagicItemUpdate } from "@taverns/api";
+import type { MagicItem, MagicItemCreate, MagicItemUpdate } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -19,7 +19,6 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { CopyIntoCampaignSection } from "../library/CopyIn";
 import {
   FilterBar,
   FilterMultiSelect,
@@ -28,7 +27,6 @@ import {
   type FilterOption,
 } from "../library/filters";
 import type { ListQuery } from "../library/query";
-import { routes, router } from "../routes";
 import { DetailBody, DetailFacts, DetailSection } from "../ui/detail";
 import { SaveFailure, Textarea } from "../ui/form";
 import type { MagicItemQuery } from "./load";
@@ -208,12 +206,10 @@ export function MagicItemGrid({
 
 export function MagicItemDialog({
   magicItem,
-  campaigns,
   onClose,
   onNavigateToName,
 }: {
   readonly magicItem: MagicItem;
-  readonly campaigns?: ReadonlyArray<Campaign>;
   readonly onClose: () => void;
   readonly onNavigateToName?: (name: string) => void;
 }) {
@@ -278,37 +274,8 @@ export function MagicItemDialog({
                 ))}
               </div>
               <p className="text-caption leading-body text-faint">
-                Variant links come from the source graph; a campaign copy is a snapshot and does not
-                borrow a base item from the bundle.
+                Variant links come from the source graph.
               </p>
-            </DetailSection>
-          )}
-          {campaigns !== undefined && (
-            <DetailSection>
-              <CopyIntoCampaignSection
-                noun="magic item"
-                campaigns={campaigns}
-                derive={(campaignId) => (client) =>
-                  client.magicItems.derive({
-                    params: { campaignId, magicItemId: magicItem.id },
-                    payload: {},
-                  })
-                }
-                readsChanged={(campaignId) => [reads.magicItems(campaignId)]}
-                copiedLink={(campaign) => (
-                  <a
-                    className="text-link hover:text-link-hover"
-                    href={router.history.createHref(
-                      router.buildLocation({
-                        to: routes.magicItems.to,
-                        params: { campaignId: campaign.id },
-                      }).publicHref,
-                    )}
-                  >
-                    Open its magic items
-                  </a>
-                )}
-              />
             </DetailSection>
           )}
         </DetailBody>
@@ -470,8 +437,7 @@ export function MagicItemFormDialog({
           />
           {magicItem !== undefined && (
             <p className="text-label leading-label text-faint">
-              Copies already in your campaigns stay where they are. Variant links are source data;
-              your own item is saved as a standalone original.
+              Variant links are source data; your own item is saved as a standalone original.
             </p>
           )}
         </div>

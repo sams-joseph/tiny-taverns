@@ -101,10 +101,13 @@ const makeFixture = Effect.gen(function* () {
   yield* admittedTo(sixpence.id, pim, "Pim again");
   yield* admittedTo(marsh.id, pim, "Pim in the marsh");
 
+  // Pim's own Library race: since the instancing decision of 2026-09-02 the
+  // vocabulary a player is validated against is `usableInCampaign` — the
+  // bundle, their own Library and the group's shares — never a campaign row.
   yield* sql`
-    insert into character_option (campaign_id, kind, name, body, visibility)
+    insert into character_option (account_id, kind, name, body, visibility)
     values (
-      ${saltRoad.id},
+      ${pim.accountId},
       'race',
       'Elf',
       ${JSON.stringify({

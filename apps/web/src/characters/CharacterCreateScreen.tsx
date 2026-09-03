@@ -232,11 +232,11 @@ export function CharacterCreateScreen() {
    * The classes, races and backgrounds **this table** offers — the three
    * pickers, and the three entries the seed reads.
    *
-   * It used to be `Ruleset`'s global starter list. A campaign can have its own
-   * now, so the vocabulary is a read: the bundle every campaign shares,
-   * plus whatever this table's DM has copied in and **shared**. That last word
-   * is the server's, not this screen's — `corpusRowReadable` ends in
-   * `isDm OR visibility = 'shared'`, so an unshared class is simply not in this
+   * It used to be `Ruleset`'s global starter list. A table can have its own
+   * now, so the vocabulary is a read: the shared bundle, the reader's own
+   * Library, and whatever has been **shared to this table's group**. The
+   * narrowing is the server's, not this screen's — `usableInCampaign` in
+   * `repo/visibility.ts` — so a class nobody shared is simply not in this
    * answer and there is no client-side filter that could disagree with it.
    *
    * `[]` while the read is in flight, which is the honest state rather than a
@@ -578,10 +578,10 @@ export function CharacterCreateScreen() {
                       "Circle of the Moon Druid" carries none.
 
                       What is offered is what the server answered, narrowed by
-                      `corpusRowReadable`: the bundle, plus the classes this
-                      table's DM has copied in *and shared*. A DM who has
-                      written one and not shared it is not in this list, which
-                      is the row-level toggle doing its ordinary job.
+                      `usableInCampaign`: the shared bundle, your own Library,
+                      and what is shared to this table's group. A class nobody
+                      has shared is not in this list, which is the seam doing
+                      its ordinary job.
 
                       `Select.Value` is written out rather than left to Base UI:
                       with neither `items` nor children it serialises the value,

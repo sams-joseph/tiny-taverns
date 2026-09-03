@@ -130,7 +130,7 @@ const makeFixture = Effect.gen(function* () {
     { seatVisibility: "shared" },
   );
   const goblin = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Marsh Hag",
       size: "Medium",
       type: "Fey",

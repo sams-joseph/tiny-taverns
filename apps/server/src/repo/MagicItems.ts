@@ -4,14 +4,12 @@ import {
   CurrentActor,
   MagicItem,
   type MagicItemBody,
-  type MagicItemCreate,
   type MagicItemFilterValues,
   type MagicItemId,
   type MagicItemLibraryCreate,
   type MagicItemLibraryUpdate,
   type MagicItemReference,
   type MagicItemSort,
-  type MagicItemUpdate,
   NotFound,
   type Page,
 } from "@taverns/api";
@@ -34,15 +32,7 @@ import {
   pageOfRows,
   timeColumn,
 } from "./paging.js";
-import {
-  copyableIntoCampaign,
-  corpusRowReadable,
-  ensureCampaignReadable,
-  ensureCampaignWritable,
-  libraryRowReadable,
-  libraryRowWritable,
-  rowWritable,
-} from "./visibility.js";
+import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
 interface MagicItemRow extends ProvenanceColumns {
   readonly id: MagicItemId;
@@ -116,7 +106,7 @@ const RARITY_SORT: Record<string, number> = {
 
 const sourceRef = (index: string, name: string): MagicItemReference => ({ index, name });
 
-const defaultBody = (payload: MagicItemCreate | MagicItemLibraryCreate): MagicItemBody => {
+const defaultBody = (payload: MagicItemLibraryCreate): MagicItemBody => {
   const category = payload.equipmentCategory;
   const rarity = payload.rarity;
   const requires = payload.requiresAttunement ?? payload.magicItem?.requiresAttunement ?? false;
@@ -163,10 +153,7 @@ const storedBody = (
   baseItem: undefined,
 });
 
-const createColumns = (
-  payload: MagicItemCreate | MagicItemLibraryCreate,
-  owner: Record<string, unknown>,
-) => {
+const createColumns = (payload: MagicItemLibraryCreate, owner: Record<string, unknown>) => {
   const category = payload.equipmentCategory;
   const rarity = payload.rarity;
   const body = defaultBody(payload);
@@ -199,9 +186,7 @@ const createColumns = (
   });
 };
 
-const updateColumns = (
-  patch: MagicItemUpdate | MagicItemLibraryUpdate,
-): Record<string, unknown> => {
+const updateColumns = (patch: MagicItemLibraryUpdate): Record<string, unknown> => {
   const body = patch.magicItem;
   const name = patch.name ?? body?.item.name;
   const category = patch.equipmentCategory ?? body?.equipmentCategory;
@@ -341,35 +326,26 @@ const selectExtras = (
   ), '{}'::text[]) as variant_names
 `;
 
+/**
+ * The 2014 SRD magic-item hoard, plus an account's own originals.
+ *
+ * | method           | predicate            |
+ * | ---------------- | -------------------- |
+ * | `library`        | `libraryRowReadable` |
+ * | `libraryFindById`| `libraryRowReadable` |
+ * | `libraryCreate`  | owner from the actor |
+ * | `libraryUpdate`  | `libraryRowWritable` |
+ * | `libraryRemove`  | `libraryRowWritable` |
+ *
+ * The Library is this corpus's entire surface. Campaign copies became internal
+ * plumbing with the instancing decision of 2026-09-02 — creature instancing
+ * lives in `EncounterCreatures.create`, and magic items have no per-campaign
+ * consumer at all — so the campaign-scoped methods (`list`, `findById`,
+ * `create`, `update`, `remove`, `derive`) are gone with their endpoints.
+ */
 export class MagicItems extends Context.Service<
   MagicItems,
   {
-    readonly list: (
-      campaignId: CampaignId,
-      filter: MagicItemFilterValues,
-    ) => Effect.Effect<Page<MagicItem, MagicItemSort>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: MagicItemId,
-    ) => Effect.Effect<MagicItem, NotFound, CurrentActor>;
-    readonly create: (
-      campaignId: CampaignId,
-      payload: MagicItemCreate,
-    ) => Effect.Effect<MagicItem, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: MagicItemId,
-      patch: MagicItemUpdate,
-    ) => Effect.Effect<MagicItem, NotFound, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: MagicItemId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
-    readonly derive: (
-      campaignId: CampaignId,
-      id: MagicItemId,
-      patch: MagicItemUpdate,
-    ) => Effect.Effect<MagicItem, NotFound, CurrentActor>;
     readonly library: (
       filter: MagicItemFilterValues,
     ) => Effect.Effect<Page<MagicItem, MagicItemSort>, never, CurrentActor>;
@@ -393,172 +369,10 @@ export class MagicItems extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      const campaignExtras = (
-        campaignId: CampaignId,
-        actor: Parameters<typeof corpusRowReadable>[3],
-      ) => selectExtras(sql, corpusRowReadable(sql, "magic_item_variant", campaignId, actor));
       const libraryExtras = (actor: Parameters<typeof libraryRowReadable>[2]) =>
         selectExtras(sql, libraryRowReadable(sql, "magic_item_variant", actor));
 
-      const readable = (campaignId: CampaignId, id: MagicItemId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<MagicItemRow>`
-            select ${campaignExtras(campaignId, actor)}
-            from magic_item
-            left join magic_item magic_item_base
-              on magic_item_base.id = magic_item.base_item_id
-             and ${corpusRowReadable(sql, "magic_item_base", campaignId, actor)}
-            where magic_item.id = ${id}
-              and ${corpusRowReadable(sql, "magic_item", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-          return rows[0]!;
-        });
-
-      const copyable = (campaignId: CampaignId, id: MagicItemId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<MagicItemRow>`
-            select ${selectExtras(sql, copyableIntoCampaign(sql, "magic_item_variant", campaignId, actor))}
-            from magic_item
-            left join magic_item magic_item_base
-              on magic_item_base.id = magic_item.base_item_id
-             and ${copyableIntoCampaign(sql, "magic_item_base", campaignId, actor)}
-            where magic_item.id = ${id}
-              and ${copyableIntoCampaign(sql, "magic_item", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-          return rows[0]!;
-        });
-
       return {
-        list: (campaignId, filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<MagicItemRow>`
-                select ${campaignExtras(campaignId, actor)}
-                from magic_item
-                left join magic_item magic_item_base
-                  on magic_item_base.id = magic_item.base_item_id
-                 and ${corpusRowReadable(sql, "magic_item_base", campaignId, actor)}
-                where ${sql.and([
-                  corpusRowReadable(sql, "magic_item", campaignId, actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toMagicItem);
-            }),
-          ),
-
-        findById: (campaignId, id) =>
-          dieOnSqlError(Effect.map(readable(campaignId, id), toMagicItem)),
-
-        create: (campaignId, payload) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const rows = yield* sql<MagicItemRow>`
-                  insert into magic_item ${sql.insert(createColumns(payload, { campaign_id: campaignId }))}
-                  returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
-                `;
-                return toMagicItem(rows[0]!);
-              }),
-            ),
-          ),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<MagicItemRow>`
-                update magic_item set ${setClause(sql, updateColumns(patch))}
-                where magic_item.id = ${id}
-                  and ${rowWritable(sql, "magic_item", campaignId, actor)}
-                returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-              return toMagicItem(rows[0]!);
-            }),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: MagicItemId }>`
-                delete from magic_item
-                where magic_item.id = ${id}
-                  and ${rowWritable(sql, "magic_item", campaignId, actor)}
-                returning magic_item.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-            }),
-          ),
-
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                const body = patch.magicItem ?? source.body;
-                const category = patch.equipmentCategory ?? body.equipmentCategory;
-                const rarity = patch.rarity ?? body.rarity;
-                const requiresAttunement =
-                  patch.requiresAttunement ?? body.requiresAttunement ?? false;
-                const attunementRequirement = requiresAttunement
-                  ? (patch.attunementRequirement ?? body.attunementRequirement)
-                  : undefined;
-                const name = patch.name ?? source.name;
-                const stored = storedBody(body, {
-                  name,
-                  category,
-                  rarity,
-                  requiresAttunement,
-                  attunementRequirement,
-                  desc: patch.desc ?? body.desc,
-                  image: patch.image ?? body.image,
-                });
-                const rows = yield* sql<MagicItemRow>`
-                  insert into magic_item ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      derived_from: source.id,
-                      source_corpus: source.source_corpus,
-                      source_family: source.source_family,
-                      source_key: source.source_key,
-                      name,
-                      category_index: category.index,
-                      category_name: category.name,
-                      rarity_index: rarity.index,
-                      rarity_name: rarity.name,
-                      rarity_sort: RARITY_SORT[rarity.index] ?? source.rarity_sort,
-                      requires_attunement: requiresAttunement,
-                      attunement_requirement: attunementRequirement,
-                      is_variant: false,
-                      variant_count: 0,
-                      image: stored.image,
-                      body: encodeBody(stored),
-                      visibility: patch.visibility,
-                    }),
-                  )}
-                  returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
-                `;
-                return toMagicItem(rows[0]!);
-              }),
-            ),
-          ),
-
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {

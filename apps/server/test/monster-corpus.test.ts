@@ -10,6 +10,8 @@ import { importSystemEquipment } from "../src/equipment/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
+import { Encounters } from "../src/repo/Encounters.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
 import { createCampaign } from "./support/actors.js";
@@ -20,7 +22,8 @@ const services = servicesOver(database);
 const runtime = ManagedRuntime.make(services.pipe(Layer.provideMerge(database)));
 afterAll(() => runtime.dispose());
 
-type Requirements = Accounts | Campaigns | Groups | Creatures | SqlClient.SqlClient;
+type Requirements =
+  Accounts | Campaigns | EncounterCreatures | Encounters | Groups | Creatures | SqlClient.SqlClient;
 
 const run = <A, E>(effect: Effect.Effect<A, E, Requirements>) =>
   runtime.runPromise(effect.pipe(Effect.orDie));
@@ -233,42 +236,36 @@ describe("2014 SRD monsters", () => {
     expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
   });
 
-  it("copies an SRD monster as a campaign snapshot that does not follow source updates", async () => {
+  it("uses an SRD monster in an encounter by direct reference, updated in place", async () => {
+    // Since the instancing decision of 2026-09-02 a bundled row is referenced
+    // directly by a roster — the bundle is immutable to users and updated only
+    // by the pinned importer, so a re-import reaches the prep that names it,
+    // which is a version upgrade doing its job. What history is immune to is
+    // guarded one level down: a fight's combatants snapshot at seed time.
     const campaign = await run(
       asActor(createCampaign({ name: "The Snapshot Gate", visibility: "shared" })),
     );
     const sourcePage = await run(
       asActor(
         Effect.flatMap(Creatures, (creatures) =>
-          creatures.library({ q: "Adult Red Dragon", sort: "name", limit: 5 }),
+          creatures.list(campaign.id, { q: "Adult Red Dragon", sort: "name", limit: 5 }),
         ),
       ),
     );
     const source = sourcePage.items.find((creature) => creature.name === "Adult Red Dragon");
     if (source === undefined) throw new Error("expected Adult Red Dragon source row");
 
-    const copy = await run(
+    const line = await run(
       asActor(
-        Effect.flatMap(Creatures, (creatures) => creatures.derive(campaign.id, source.id, {})),
+        Effect.gen(function* () {
+          const encounters = yield* Encounters;
+          const roster = yield* EncounterCreatures;
+          const encounter = yield* encounters.create(campaign.id, { name: "The gate opens" });
+          return yield* roster.create(campaign.id, encounter.id, { creatureId: source.id });
+        }),
       ),
     );
-    const lineage = await sql(
-      (client) => client<{
-        readonly id: string;
-        readonly source_corpus: string;
-        readonly source_family: string;
-        readonly source_key: string;
-      }>`
-        select id::text, source_corpus, source_family, source_key
-        from creature
-        where id = any(${[source.id, copy.id]})
-      `,
-    );
-    const sourceLineage = lineage.find((row) => row.id === source.id);
-    const copyLineage = lineage.find((row) => row.id === copy.id);
-    if (sourceLineage === undefined || copyLineage === undefined) {
-      throw new Error("expected source and copied creature rows");
-    }
+    expect(line.creatureId).toBe(source.id);
 
     const changed = {
       ...rawNamed("adult-red-dragon"),
@@ -281,26 +278,16 @@ describe("2014 SRD monsters", () => {
       updated: 1,
     });
 
+    // One row, updated in place — reachable at the campaign under its new
+    // name, with the roster still pointing at it.
     const reread = await run(
-      asActor(Effect.flatMap(Creatures, (creatures) => creatures.findById(campaign.id, copy.id))),
-    );
-    const originalPage = await run(
       asActor(
-        Effect.flatMap(Creatures, (creatures) =>
-          creatures.library({ q: "Adult Red Dragon, Revised", sort: "name", limit: 5 }),
-        ),
+        Effect.flatMap(Creatures, (creatures) => creatures.findById(campaign.id, line.creatureId)),
       ),
     );
-
-    expect(reread.name).toBe("Adult Red Dragon");
-    expect(reread.hp).toBe(256);
-    expect(reread.derivedFrom).toBe(source.id);
-    expect(copyLineage.source_corpus).toBe(sourceLineage.source_corpus);
-    expect(copyLineage.source_family).toBe(sourceLineage.source_family);
-    expect(copyLineage.source_key).toBe(sourceLineage.source_key);
-    expect(
-      originalPage.items.find((creature) => creature.name === "Adult Red Dragon, Revised")?.hp,
-    ).toBe(333);
+    expect(reread.id).toBe(source.id);
+    expect(reread.name).toBe("Adult Red Dragon, Revised");
+    expect(reread.hp).toBe(333);
   }, 60_000);
 
   it("uses source identity for updates, so a source rename updates one row", async () => {

@@ -27,8 +27,14 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
   id: EncounterCreatureId,
   encounterId: EncounterId,
   /**
-   * Points at a creature the actor could reach in this encounter's campaign —
-   * either one of the campaign's own or one from the global `system` corpus.
+   * Points at a creature row: one of the campaign's own internal instances, or
+   * one from the global `system` corpus.
+   *
+   * **A campaign instance is plumbing, not a collection** (captain's decision,
+   * 2026-09-02): a Library or group-shared creature put on a roster is
+   * instanced into the campaign behind the scenes by `encounterCreatures.create`,
+   * so the id here may name a row no list ever returns. That is why `name`
+   * rides on the row — a client draws the roster without dereferencing ids.
    *
    * Unlike `note.encounter_id`, this cannot be a composite foreign key: half
    * the rows it may legally point at are global and have no campaign to name.
@@ -36,6 +42,12 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
    * read predicate every other creature read uses.
    */
   creatureId: CreatureId,
+  /**
+   * The creature row's display name, resolved server-side at read time. The
+   * roster is drawn from its own rows rather than by joining a corpus list in
+   * the client — the corpus list no longer contains campaign instances.
+   */
+  name: Schema.String,
   count: Schema.Int,
   visibility: Visibility,
   ...provenanceFields,

@@ -1,4 +1,4 @@
-import type { Campaign, CampaignId, PageCursor, Spell, SpellSort } from "@taverns/api";
+import type { PageCursor, Spell, SpellSort } from "@taverns/api";
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -41,51 +41,17 @@ export const spellQueryParams = (query: SpellQuery, cursor: PageCursor<SpellSort
 export interface SpellLibraryView {
   readonly spells: ReadonlyArray<Spell>;
   readonly nextCursor: PageCursor<SpellSort> | null;
-  readonly campaigns: ReadonlyArray<Campaign>;
 }
 
 export const loadSpellLibrary = (query: SpellQuery) => (client: TavernsClient) =>
-  Effect.gen(function* () {
-    const [page, memberships] = yield* Effect.all(
-      [client.library.spells({ query: spellQueryParams(query, undefined) }), client.me.campaigns()],
-      { concurrency: "unbounded" },
-    );
-    return {
-      spells: page.items,
-      nextCursor: page.nextCursor,
-      campaigns: memberships
-        .filter((membership) => membership.relation === "creator")
-        .map((membership) => membership.campaign),
-    } satisfies SpellLibraryView;
-  });
-
-export interface CampaignSpellsView {
-  readonly spells: ReadonlyArray<Spell>;
-  readonly nextCursor: PageCursor<SpellSort> | null;
-}
-
-export const loadCampaignSpells =
-  (campaignId: CampaignId, query: SpellQuery) => (client: TavernsClient) =>
-    Effect.map(
-      client.spells.list({
-        params: { campaignId },
-        query: spellQueryParams(query, undefined),
-      }),
-      (page) =>
-        ({
-          spells: page.items,
-          nextCursor: page.nextCursor,
-        }) satisfies CampaignSpellsView,
-    );
+  Effect.map(
+    client.library.spells({ query: spellQueryParams(query, undefined) }),
+    (page) => ({ spells: page.items, nextCursor: page.nextCursor }) satisfies SpellLibraryView,
+  );
 
 export const loadMoreLibrarySpells =
   (query: SpellQuery, cursor: PageCursor<SpellSort>) => (client: TavernsClient) =>
     client.library.spells({ query: spellQueryParams(query, cursor) });
-
-export const loadMoreCampaignSpells =
-  (campaignId: CampaignId, query: SpellQuery, cursor: PageCursor<SpellSort>) =>
-  (client: TavernsClient) =>
-    client.spells.list({ params: { campaignId }, query: spellQueryParams(query, cursor) });
 
 /** True when anything besides the search narrows a spell list. */
 export const spellNarrows = (query: SpellQuery): boolean =>

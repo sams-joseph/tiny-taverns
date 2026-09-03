@@ -66,9 +66,6 @@ export type FeatLibraryUpdate = typeof FeatLibraryUpdate.Type;
 export const FeatUpdate = Schema.Struct({ ...featPatch, visibility: Schema.optional(Visibility) });
 export type FeatUpdate = typeof FeatUpdate.Type;
 
-export const FeatDerive = FeatUpdate;
-export type FeatDerive = typeof FeatDerive.Type;
-
 export const FeatSort = Schema.Literals(["name", "recent"]);
 export type FeatSort = typeof FeatSort.Type;
 

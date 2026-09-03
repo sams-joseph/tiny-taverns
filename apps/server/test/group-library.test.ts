@@ -11,6 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
+import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
+import { Encounters } from "../src/repo/Encounters.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
@@ -35,6 +37,8 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Creatures.layer,
+    EncounterCreatures.layer,
+    Encounters.layer,
     Groups.layer,
     Invites.layer,
     LibraryShares.layer,
@@ -143,18 +147,27 @@ describe("the grant", () => {
     expect(refused).toBeInstanceOf(NotFound);
   });
 
-  it("refuses a campaign copy: only Library originals can be granted", async () => {
-    const copy = await run(
+  it("refuses a campaign instance: only Library originals can be granted", async () => {
+    // The one way a campaign row is minted now is the roster's internal
+    // instancing — and even its owner cannot grant it to the group.
+    const line = await run(
       withActor(fixture.jo)(
-        Effect.flatMap(Creatures, (creatures) =>
-          creatures.derive(fixture.saltRoad.id, fixture.owlbear.id, {}),
-        ),
+        Effect.gen(function* () {
+          const encounters = yield* Encounters;
+          const roster = yield* EncounterCreatures;
+          const encounter = yield* encounters.create(fixture.saltRoad.id, {
+            name: "For the share test",
+          });
+          return yield* roster.create(fixture.saltRoad.id, encounter.id, {
+            creatureId: fixture.owlbear.id,
+          });
+        }),
       ),
     );
     const refused = await run(
       withActor(fixture.jo)(
         Effect.flatMap(LibraryShares, (s) =>
-          s.share(fixture.groupId, { kind: "creature", resourceId: copy.id as string }),
+          s.share(fixture.groupId, { kind: "creature", resourceId: line.creatureId as string }),
         ),
       ).pipe(Effect.flip),
     );
@@ -172,20 +185,42 @@ describe("the grant", () => {
 });
 
 describe("what a grant grants — and the never-widen pin", () => {
-  it("makes the original a derive source for the group's campaigns, as a snapshot", async () => {
-    // Wren — who does not own the owlbear and could not copy it yesterday —
-    // derives Jo's shared original into their own campaign.
-    const copy = await run(
+  it("makes the original usable in the group's campaigns, as a snapshot at use", async () => {
+    // Wren — who does not own the owlbear and could not use it yesterday —
+    // sees it in their campaign's usable list and builds with it; the campaign
+    // takes its internal instance at that moment.
+    const usable = await run(
+      withActor(fixture.wren)(
+        Effect.flatMap(Creatures, (creatures) => creatures.list(fixture.hagsBargain.id, {})),
+      ),
+    );
+    expect(usable.items.map((creature) => creature.id)).toContain(fixture.owlbear.id);
+
+    const line = await run(
+      withActor(fixture.wren)(
+        Effect.gen(function* () {
+          const encounters = yield* Encounters;
+          const roster = yield* EncounterCreatures;
+          const encounter = yield* encounters.create(fixture.hagsBargain.id, {
+            name: "The owlbear at the bargain",
+          });
+          return yield* roster.create(fixture.hagsBargain.id, encounter.id, {
+            creatureId: fixture.owlbear.id,
+          });
+        }),
+      ),
+    );
+    const instance = await run(
       withActor(fixture.wren)(
         Effect.flatMap(Creatures, (creatures) =>
-          creatures.derive(fixture.hagsBargain.id, fixture.owlbear.id, {}),
+          creatures.findById(fixture.hagsBargain.id, line.creatureId),
         ),
       ),
     );
-    expect(copy.campaignId).toBe(fixture.hagsBargain.id);
-    expect(copy.accountId).toBeNull();
-    expect(copy.derivedFrom).toBe(fixture.owlbear.id);
-    expect(copy.origin).toBe("authored");
+    expect(instance.campaignId).toBe(fixture.hagsBargain.id);
+    expect(instance.accountId).toBeNull();
+    expect(instance.derivedFrom).toBe(fixture.owlbear.id);
+    expect(instance.origin).toBe("authored");
 
     // A snapshot: Jo's later edit does not reach it.
     await run(
@@ -198,7 +233,7 @@ describe("what a grant grants — and the never-widen pin", () => {
     const after = await run(
       withActor(fixture.wren)(
         Effect.flatMap(Creatures, (creatures) =>
-          creatures.findById(fixture.hagsBargain.id, copy.id),
+          creatures.findById(fixture.hagsBargain.id, line.creatureId),
         ),
       ),
     );
@@ -217,26 +252,29 @@ describe("what a grant grants — and the never-widen pin", () => {
     expect(names.some((name) => name.startsWith("Bog Owlbear"))).toBe(false);
   });
 
-  it("does not put the original in the campaign corpus: a share is not a copy", async () => {
-    const bargainBestiary = await run(
+  it("offers the original itself, and never the instances made from it", async () => {
+    // The usable list is the picker: the shared original is in it (edited name
+    // and all — a share is a live offer, not a copy), and the internal
+    // instance the roster minted above is not, because instances are plumbing
+    // no list returns.
+    const bargainUsable = await run(
       withActor(fixture.wren)(
         Effect.flatMap(Creatures, (creatures) => creatures.list(fixture.hagsBargain.id, {})),
       ),
     );
-    // The copy Wren derived is there; the *original* is not — it enters a
-    // campaign by snapshot and no other way.
-    const owlbears = bargainBestiary.items.filter((creature) =>
+    const owlbears = bargainUsable.items.filter((creature) =>
       creature.name.startsWith("Bog Owlbear"),
     );
     expect(owlbears).toHaveLength(1);
-    expect(owlbears[0]?.id).not.toBe(fixture.owlbear.id);
+    expect(owlbears[0]?.id).toBe(fixture.owlbear.id);
+    expect(owlbears[0]?.name).toBe("Bog Owlbear (fixed)");
   });
 
-  it("stops at the group: another group's creator cannot derive it", async () => {
+  it("stops at the group: another group's creator cannot reach it", async () => {
     const refused = await run(
       withActor(fixture.fen)(
         Effect.flatMap(Creatures, (creatures) =>
-          creatures.derive(fixture.elsewhere.id, fixture.owlbear.id, {}),
+          creatures.findById(fixture.elsewhere.id, fixture.owlbear.id),
         ),
       ).pipe(Effect.flip),
     );
@@ -244,12 +282,12 @@ describe("what a grant grants — and the never-widen pin", () => {
   });
 
   it("an unshared groupmate original is still unreachable — membership grants nothing", async () => {
-    // Wren never shared the Reed Witch, so Jo cannot derive it whatever group
+    // Wren never shared the Reed Witch, so Jo cannot reach it whatever group
     // they share: the row's absence is the refusal.
     const refused = await run(
       withActor(fixture.jo)(
         Effect.flatMap(Creatures, (creatures) =>
-          creatures.derive(fixture.saltRoad.id, fixture.witch.id, {}),
+          creatures.findById(fixture.saltRoad.id, fixture.witch.id),
         ),
       ).pipe(Effect.flip),
     );
@@ -269,19 +307,26 @@ describe("withdrawing the grant", () => {
     const refused = await run(
       withActor(fixture.wren)(
         Effect.flatMap(Creatures, (creatures) =>
-          creatures.derive(fixture.hagsBargain.id, fixture.owlbear.id, {}),
+          creatures.findById(fixture.hagsBargain.id, fixture.owlbear.id),
         ),
       ).pipe(Effect.flip),
     );
     expect(refused).toBeInstanceOf(NotFound);
 
-    // …and the copy already made is a snapshot and stands.
-    const bargainBestiary = await run(
+    // …and the instance already minted is a snapshot: the built encounter
+    // still names it, under the name it was shared as.
+    const lines = await run(
       withActor(fixture.wren)(
-        Effect.flatMap(Creatures, (creatures) => creatures.list(fixture.hagsBargain.id, {})),
+        Effect.gen(function* () {
+          const encounters = yield* Encounters;
+          const roster = yield* EncounterCreatures;
+          const all = yield* encounters.list(fixture.hagsBargain.id, {});
+          const encounter = all.items.find((row) => row.name === "The owlbear at the bargain")!;
+          return yield* roster.list(fixture.hagsBargain.id, encounter.id);
+        }),
       ),
     );
-    expect(bargainBestiary.items.some((creature) => creature.name === "Bog Owlbear")).toBe(true);
+    expect(lines.map((line) => line.name)).toContain("Bog Owlbear");
   });
 
   it("is the owner's act too: a groupmate's unshare is the ordinary NotFound", async () => {

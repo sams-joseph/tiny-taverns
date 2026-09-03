@@ -107,12 +107,14 @@ const makeFixture = Effect.gen(function* () {
   const night = yield* as(sessions.create(campaign.id, { number: 12, visibility: "shared" }));
 
   for (let index = 0; index < COUNT; index++) {
-    // Alternating visibility, so a player's view of every one of these lists is
-    // a strict subset with gaps in it — which is what a page boundary has to
-    // survive.
+    // Alternating visibility, so a player's view of the three campaign lists
+    // below is a strict subset with gaps in it — which is what a page boundary
+    // has to survive. The creatures are the DM's Library originals: since the
+    // instancing decision of 2026-09-02 that is what `creatures.list` pages
+    // for a campaign, and the walks below are the DM's own.
     const visibility = index % 2 === 0 ? "shared" : "dm";
     yield* as(
-      creatures.create(campaign.id, {
+      creatures.libraryCreate({
         name: NAMES[index]!,
         type: "Beast",
         cr: RATINGS[index]!,
@@ -121,7 +123,6 @@ const makeFixture = Effect.gen(function* () {
         // Every third one lives in a cave, so a filter narrows to a number that
         // is neither everything nor nothing.
         environments: index % 3 === 0 ? ["Cave"] : ["Marsh"],
-        visibility,
       }),
     );
     yield* as(notes.create(campaign.id, { title: `Note ${String(index)}`, visibility }));
@@ -230,7 +231,7 @@ describe("walking a paged list", () => {
         const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
         const first = yield* list("name", 4, undefined);
         yield* withActor(fixture.dm)(
-          creatures.create(fixture.campaign.id, {
+          creatures.libraryCreate({
             // Sorts first by name, so an offset walk would repeat a row here.
             name: "Aardvark",
             type: "Beast",
@@ -247,7 +248,7 @@ describe("walking a paged list", () => {
                 repo.list(fixture.campaign.id, { q: "Aardvark", limit: 1 }),
               ).pipe(
                 Effect.flatMap((page) =>
-                  withActor(fixture.dm)(repo.remove(fixture.campaign.id, page.items[0]!.id)),
+                  withActor(fixture.dm)(repo.libraryRemove(page.items[0]!.id)),
                 ),
                 Effect.orDie,
               ),
@@ -267,11 +268,13 @@ describe("walking a paged list", () => {
 });
 
 describe("visibility on a paged read", () => {
-  it("gives a player the shared rows only, in full pages", async () => {
-    // **The clause is inside the predicate, not applied to the answer.** Half
-    // this corpus is `dm`, so a page narrowed afterwards would come back with
-    // two or three rows in it and the DM's rows would have been read to produce
-    // them. Full pages are the evidence that the database did the narrowing.
+  it("gives a player none of the DM's Library, and the DM the whole of it", async () => {
+    // The campaign creature list is `usableInCampaign` since the instancing
+    // decision of 2026-09-02: the bundle under its visibility rule, the
+    // *reader's* own Library, and the group's shares. This corpus is the DM's
+    // Library with nothing shared to the group, so the DM pages through all of
+    // it and a member at the same table honestly reads nothing — the
+    // per-reader half of the predicate, not a filter on the answer.
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const list = yield* creaturesOf(fixture.player, fixture.campaign.id);
@@ -282,14 +285,8 @@ describe("visibility on a paged read", () => {
       }),
     );
 
-    const shared = seen.whole.items.filter((creature) => creature.visibility === "shared");
-    expect(seen.walked.rows.map((creature) => creature.name)).toEqual(
-      shared.map((creature) => creature.name),
-    );
-    expect(seen.walked.rows.every((creature) => creature.visibility === "shared")).toBe(true);
-    // Six shared rows at two a page: 2, 2, 2 — never a page cut short by rows
-    // that were read and then dropped.
-    expect(seen.walked.sizes).toEqual([2, 2, 2]);
+    expect(seen.whole.items.length).toBe(COUNT);
+    expect(seen.walked.rows).toEqual([]);
   }, 60_000);
 
   it("holds for notes, encounters and beats too", async () => {
@@ -407,25 +404,24 @@ describe("the filters, against the paged query", () => {
   }, 60_000);
 
   it("offers the chip vocabulary over the same predicate the list uses", async () => {
+    // The campaign environments read went with the campaign bestiary screen;
+    // the Library's is the one chip vocabulary left, and it is per reader
+    // exactly as the list is: the DM's Library wears both tags, and a player
+    // whose Library holds nothing gets an honest empty row.
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const creatures = yield* Creatures;
         return {
-          dm: yield* withActor(fixture.dm)(creatures.environments(fixture.campaign.id)).pipe(
+          dm: yield* withActor(fixture.dm)(creatures.libraryEnvironments()).pipe(Effect.orDie),
+          player: yield* withActor(fixture.player)(creatures.libraryEnvironments()).pipe(
             Effect.orDie,
           ),
-          player: yield* withActor(fixture.player)(
-            creatures.environments(fixture.campaign.id),
-          ).pipe(Effect.orDie),
         };
       }),
     );
 
     expect(seen.dm).toEqual(["Cave", "Marsh"]);
-    // The player sees both too, because both are worn by a `shared` row here —
-    // what matters is that it is the same predicate, which the next assertion
-    // is the real test of: it never names something the list cannot return.
-    expect(seen.player.every((environment) => seen.dm.includes(environment))).toBe(true);
+    expect(seen.player).toEqual([]);
   }, 60_000);
 });
 

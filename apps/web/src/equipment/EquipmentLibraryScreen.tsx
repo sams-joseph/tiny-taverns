@@ -118,11 +118,7 @@ export function EquipmentLibraryScreen() {
         </div>
       )}
       {opening !== undefined && (
-        <EquipmentDialog
-          equipment={opening}
-          campaigns={shown?.campaigns ?? []}
-          onClose={() => setOpened(undefined)}
-        />
+        <EquipmentDialog equipment={opening} onClose={() => setOpened(undefined)} />
       )}
       {editing === "new" && <EquipmentFormDialog onClose={() => setEditing(undefined)} />}
       {editingItem !== undefined && (

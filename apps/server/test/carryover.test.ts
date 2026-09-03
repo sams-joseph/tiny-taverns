@@ -104,7 +104,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const hag = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Marsh Hag",
       size: "Medium",
       type: "Fey",

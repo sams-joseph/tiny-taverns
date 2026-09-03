@@ -11,7 +11,6 @@ import { listCount } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { CopyIntoCampaign } from "./CopyIntoCampaign";
 import { CreatureFilters, CreatureGrid } from "./CorpusParts";
 import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
@@ -43,9 +42,11 @@ import { isLibraryEntity } from "./provenance";
  * 2. **Authoring happens here.** *Write a creature* in the filter row, *Edit* on
  *    every row you own, and delete inside the form — `CreatureForm`, the only
  *    authoring surface over `creature` in the product.
- * 3. **Using one copies it in.** `CopyIntoCampaign`, in the stat block dialog,
- *    which is also where the two things about a copy that surprise people are
- *    said out loud.
+ * 3. **Using one happens where it is used.** Since the instancing decision of
+ *    2026-09-02 there is no copy control anywhere: the encounter dialog picks
+ *    straight from what a campaign can reach — this Library, the bundle, the
+ *    group's shares — and the campaign's internal instance is the server's
+ *    business.
  * 4. **Originals only.** Nothing on this screen filters for that and nothing
  *    should: `libraryRowReadable` is anchored on `campaign_id is null`, so a
  *    campaign's copy is not in the answer. A client-side "only originals" would
@@ -98,7 +99,6 @@ export function LibraryScreen() {
   const corpus = useCorpus(libraryAtom, more);
 
   const opening = corpus.creatures.find((creature) => creature.id === opened);
-  const campaigns = corpus.shown?.campaigns ?? [];
   // No campaign in view, so no campaign for Hob's tools to hang off — the panel
   // says so rather than offering a composer with nowhere to send. Same as the
   // campaign list, and for the same reason.
@@ -206,12 +206,7 @@ export function LibraryScreen() {
       )}
 
       {opening !== undefined && (
-        <CreatureDialog
-          key={opening.id}
-          creature={opening}
-          actions={<CopyIntoCampaign creature={opening} campaigns={campaigns} />}
-          onClose={() => setOpened(undefined)}
-        />
+        <CreatureDialog key={opening.id} creature={opening} onClose={() => setOpened(undefined)} />
       )}
 
       {editing !== undefined && (

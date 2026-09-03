@@ -6,14 +6,12 @@ import {
   type Page,
   Spell,
   type SpellBody,
-  type SpellCreate,
   type SpellFilterValues,
   type SpellId,
   type SpellLibraryCreate,
   type SpellLibraryUpdate,
   type SpellReference,
   type SpellSort,
-  type SpellUpdate,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
@@ -34,15 +32,7 @@ import {
   pageOfRows,
   timeColumn,
 } from "./paging.js";
-import {
-  copyableIntoCampaign,
-  corpusRowReadable,
-  ensureCampaignReadable,
-  ensureCampaignWritable,
-  libraryRowReadable,
-  libraryRowWritable,
-  rowWritable,
-} from "./visibility.js";
+import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
 interface SpellRow extends ProvenanceColumns {
   readonly id: SpellId;
@@ -97,7 +87,7 @@ const compactReferences = (
   references: ReadonlyArray<SpellReference> | undefined,
 ): ReadonlyArray<SpellReference> => references ?? [];
 
-const defaultBody = (payload: SpellCreate | SpellLibraryCreate): SpellBody =>
+const defaultBody = (payload: SpellLibraryCreate): SpellBody =>
   payload.spell ?? {
     desc: [],
     components: [],
@@ -112,10 +102,7 @@ const indexesOf = (references: ReadonlyArray<SpellReference>): ReadonlyArray<str
 const namesOf = (references: ReadonlyArray<SpellReference>): ReadonlyArray<string> =>
   references.map((reference) => reference.name);
 
-const createColumns = (
-  payload: SpellCreate | SpellLibraryCreate,
-  owner: Record<string, unknown>,
-) => {
+const createColumns = (payload: SpellLibraryCreate, owner: Record<string, unknown>) => {
   const body = defaultBody(payload);
   const school = payload.school;
   const classes = compactReferences(payload.classes ?? body.classes);
@@ -140,7 +127,7 @@ const createColumns = (
   });
 };
 
-const updateColumns = (patch: SpellUpdate | SpellLibraryUpdate): Record<string, unknown> => {
+const updateColumns = (patch: SpellLibraryUpdate): Record<string, unknown> => {
   const school = patch.school ?? patch.spell?.school;
   const classes = patch.classes ?? patch.spell?.classes;
   const subclasses = patch.subclasses ?? patch.spell?.subclasses;
@@ -218,35 +205,26 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<SpellSort, Ordering<Spell
   };
 };
 
+/**
+ * The 2014 SRD spell corpus, plus an account's own originals.
+ *
+ * | method           | predicate            |
+ * | ---------------- | -------------------- |
+ * | `library`        | `libraryRowReadable` |
+ * | `libraryFindById`| `libraryRowReadable` |
+ * | `libraryCreate`  | owner from the actor |
+ * | `libraryUpdate`  | `libraryRowWritable` |
+ * | `libraryRemove`  | `libraryRowWritable` |
+ *
+ * The Library is this corpus's entire surface. Campaign copies became internal
+ * plumbing with the instancing decision of 2026-09-02 — creature instancing
+ * lives in `EncounterCreatures.create`, and spells have no per-campaign
+ * consumer at all — so the campaign-scoped methods (`list`, `findById`,
+ * `create`, `update`, `remove`, `derive`) are gone with their endpoints.
+ */
 export class Spells extends Context.Service<
   Spells,
   {
-    readonly list: (
-      campaignId: CampaignId,
-      filter: SpellFilterValues,
-    ) => Effect.Effect<Page<Spell, SpellSort>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: SpellId,
-    ) => Effect.Effect<Spell, NotFound, CurrentActor>;
-    readonly create: (
-      campaignId: CampaignId,
-      payload: SpellCreate,
-    ) => Effect.Effect<Spell, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: SpellId,
-      patch: SpellUpdate,
-    ) => Effect.Effect<Spell, NotFound, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: SpellId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
-    readonly derive: (
-      campaignId: CampaignId,
-      id: SpellId,
-      patch: SpellUpdate,
-    ) => Effect.Effect<Spell, NotFound, CurrentActor>;
     readonly library: (
       filter: SpellFilterValues,
     ) => Effect.Effect<Page<Spell, SpellSort>, never, CurrentActor>;
@@ -270,153 +248,7 @@ export class Spells extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      const readable = (campaignId: CampaignId, id: SpellId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<SpellRow>`
-          select * from spell
-          where spell.id = ${id}
-            and ${corpusRowReadable(sql, "spell", campaignId, actor)}
-        `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-          return rows[0]!;
-        });
-
-      const copyable = (campaignId: CampaignId, id: SpellId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<SpellRow>`
-          select * from spell
-          where spell.id = ${id}
-            and ${copyableIntoCampaign(sql, "spell", campaignId, actor)}
-        `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-          return rows[0]!;
-        });
-
       return {
-        list: (campaignId, filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<SpellRow>`
-              select * from spell
-              where ${sql.and([
-                corpusRowReadable(sql, "spell", campaignId, actor),
-                ...narrowedBy(sql, filter),
-                ...pageClauses(sql, ordering, filter.cursor),
-              ])}
-              order by ${orderClause(sql, ordering)}
-              limit ${pageLimit(filter.limit)}
-            `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toSpell);
-            }),
-          ),
-
-        findById: (campaignId, id) => dieOnSqlError(Effect.map(readable(campaignId, id), toSpell)),
-
-        create: (campaignId, payload) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const rows = yield* sql<SpellRow>`
-                insert into spell ${sql.insert(createColumns(payload, { campaign_id: campaignId }))}
-                returning *
-              `;
-                return toSpell(rows[0]!);
-              }),
-            ),
-          ),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<SpellRow>`
-              update spell set ${setClause(sql, updateColumns(patch))}
-              where spell.id = ${id}
-                and ${rowWritable(sql, "spell", campaignId, actor)}
-              returning *
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-              return toSpell(rows[0]!);
-            }),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: SpellId }>`
-              delete from spell
-              where spell.id = ${id}
-                and ${rowWritable(sql, "spell", campaignId, actor)}
-              returning spell.id
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-            }),
-          ),
-
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                const school = patch.school ??
-                  patch.spell?.school ?? {
-                    index: source.school_index,
-                    name: source.school_name,
-                  };
-                const classes = patch.classes ?? patch.spell?.classes ?? source.body.classes;
-                const subclasses =
-                  patch.subclasses ?? patch.spell?.subclasses ?? source.body.subclasses;
-                const body = patch.spell ?? source.body;
-                const rows = yield* sql<SpellRow>`
-                insert into spell ${sql.insert(
-                  defined({
-                    campaign_id: campaignId,
-                    derived_from: source.id,
-                    source_corpus: source.source_corpus,
-                    source_family: source.source_family,
-                    source_key: source.source_key,
-                    name: patch.name ?? source.name,
-                    level: patch.level ?? source.level,
-                    school_index: school.index,
-                    school_name: school.name,
-                    ritual: patch.ritual ?? source.ritual,
-                    concentration: patch.concentration ?? source.concentration,
-                    casting_time: patch.castingTime ?? source.casting_time,
-                    spell_range: patch.range ?? source.spell_range,
-                    duration: patch.duration ?? source.duration,
-                    class_indexes: indexesOf(classes),
-                    class_names: namesOf(classes),
-                    subclass_indexes: indexesOf(subclasses),
-                    subclass_names: namesOf(subclasses),
-                    body: encodeBody({ ...body, school, classes, subclasses }),
-                    visibility: patch.visibility,
-                  }),
-                )}
-                returning *
-              `;
-                const copy = rows[0]!;
-                yield* sql`
-                  insert into spell_subclass (spell_id, subclass_id, ordinal)
-                  select ${copy.id}, subclass_id, ordinal
-                  from spell_subclass
-                  where spell_id = ${source.id}
-                  on conflict do nothing
-                `;
-                return toSpell(copy);
-              }),
-            ),
-          ),
-
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {

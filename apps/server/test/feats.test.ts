@@ -8,7 +8,7 @@ import { Groups } from "../src/repo/Groups.js";
 import { Feats } from "../src/repo/Feats.js";
 import { importSystemFeats } from "../src/ruleset/import.js";
 import { SYSTEM_FEATS } from "../src/ruleset/systemFeats.js";
-import { anAccount, createCampaign } from "./support/actors.js";
+import { anAccount } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -39,9 +39,8 @@ describe("2014 feats", () => {
       Effect.gen(function* () {
         const imported = yield* importSystemFeats();
         const account = yield* anAccount("Feat DM");
-        const campaign = yield* withActor(account)(createCampaign({ name: "The Feat Table" }));
         const feats = yield* withActor(account)(
-          items(Effect.flatMap(Feats, (repo) => repo.list(campaign.id, {}))),
+          items(Effect.flatMap(Feats, (repo) => repo.library({}))),
         );
         const second = yield* importSystemFeats();
         return { imported, second, feats };
@@ -64,14 +63,17 @@ describe("2014 feats", () => {
     ]);
   });
 
-  it("authors custom feats and keeps campaign copies stable across later system imports", async () => {
+  it("authors custom feats and keeps them apart from later system imports", async () => {
+    // The Library is the whole feat surface since the instancing decision of
+    // 2026-09-02 — there is no campaign feat list and no copy-in. What is left
+    // to pin is that an authored original and the pinned system row never
+    // rewrite each other.
     const outcome = await runtime.runPromise(
       Effect.gen(function* () {
         yield* importSystemFeats();
         const account = yield* anAccount("Copy DM");
         const as = withActor(account);
         const feats = yield* Feats;
-        const campaign = yield* as(createCampaign({ name: "Snapshot Table" }));
         const str = yield* strengthId;
 
         const custom = yield* as(
@@ -81,7 +83,6 @@ describe("2014 feats", () => {
             prerequisites: [{ abilityScoreId: str as never, minimumScore: 11 }],
           }),
         );
-        const copy = yield* as(feats.derive(campaign.id, custom.id, { visibility: "shared" }));
         yield* as(
           feats.libraryUpdate(custom.id, {
             name: "Chair Wrestler Revised",
@@ -96,18 +97,14 @@ describe("2014 feats", () => {
             prerequisites: [{ abilityIndex: "str", minimumScore: 14 }],
           },
         ]);
-        const copied = yield* as(feats.findById(campaign.id, copy.id));
         const original = yield* as(feats.libraryFindById(custom.id));
         const system = yield* as(
-          items(Effect.flatMap(Feats, (repo) => repo.list(campaign.id, { q: "Changed" }))),
+          items(Effect.flatMap(Feats, (repo) => repo.library({ q: "Changed" }))),
         );
-        return { copied, original, system };
+        return { original, system };
       }),
     );
 
-    expect(outcome.copied.name).toBe("Chair Wrestler");
-    expect(outcome.copied.description).toEqual(["You know where to put your weight."]);
-    expect(outcome.copied.prerequisites[0]?.minimumScore).toBe(11);
     expect(outcome.original.name).toBe("Chair Wrestler Revised");
     expect(outcome.original.prerequisites[0]?.minimumScore).toBe(15);
     expect(outcome.system[0]?.name).toBe("Grappler");

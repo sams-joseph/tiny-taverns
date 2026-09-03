@@ -5,14 +5,12 @@ import {
   Equipment,
   type EquipmentBody,
   type EquipmentCost,
-  type EquipmentCreate,
   type EquipmentFilterValues,
   type EquipmentId,
   type EquipmentLibraryCreate,
   type EquipmentLibraryUpdate,
   type EquipmentReference,
   type EquipmentSort,
-  type EquipmentUpdate,
   NotFound,
   type Page,
 } from "@taverns/api";
@@ -35,15 +33,7 @@ import {
   pageOfRows,
   timeColumn,
 } from "./paging.js";
-import {
-  copyableIntoCampaign,
-  corpusRowReadable,
-  ensureCampaignReadable,
-  ensureCampaignWritable,
-  libraryRowReadable,
-  libraryRowWritable,
-  rowWritable,
-} from "./visibility.js";
+import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
 interface EquipmentRow extends ProvenanceColumns {
   readonly id: EquipmentId;
@@ -160,7 +150,7 @@ const compactReferences = (
   references: ReadonlyArray<EquipmentReference> | undefined,
 ): ReadonlyArray<EquipmentReference> => references ?? [];
 
-const defaultBody = (payload: EquipmentCreate | EquipmentLibraryCreate): EquipmentBody =>
+const defaultBody = (payload: EquipmentLibraryCreate): EquipmentBody =>
   payload.equipment ??
   (defined({
     equipmentCategory: payload.equipmentCategory,
@@ -184,10 +174,7 @@ const defaultBody = (payload: EquipmentCreate | EquipmentLibraryCreate): Equipme
     desc: [],
   }) as EquipmentBody);
 
-const createColumns = (
-  payload: EquipmentCreate | EquipmentLibraryCreate,
-  owner: Record<string, unknown>,
-) => {
+const createColumns = (payload: EquipmentLibraryCreate, owner: Record<string, unknown>) => {
   const body = defaultBody(payload);
   const category = payload.equipmentCategory;
   const cost = payload.cost;
@@ -260,9 +247,7 @@ const createColumns = (
   });
 };
 
-const updateColumns = (
-  patch: EquipmentUpdate | EquipmentLibraryUpdate,
-): Record<string, unknown> => {
+const updateColumns = (patch: EquipmentLibraryUpdate): Record<string, unknown> => {
   const body = patch.equipment;
   const category = patch.equipmentCategory ?? body?.equipmentCategory;
   const cost = patch.cost ?? body?.cost;
@@ -411,35 +396,26 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<EquipmentSort, Ordering<E
   };
 };
 
+/**
+ * The 2014 mundane equipment corpus, plus an account's own originals.
+ *
+ * | method           | predicate            |
+ * | ---------------- | -------------------- |
+ * | `library`        | `libraryRowReadable` |
+ * | `libraryFindById`| `libraryRowReadable` |
+ * | `libraryCreate`  | owner from the actor |
+ * | `libraryUpdate`  | `libraryRowWritable` |
+ * | `libraryRemove`  | `libraryRowWritable` |
+ *
+ * The Library is this corpus's entire surface. Campaign copies became internal
+ * plumbing with the instancing decision of 2026-09-02 — creature instancing
+ * lives in `EncounterCreatures.create`, and equipment has no per-campaign
+ * consumer at all — so the campaign-scoped methods (`list`, `findById`,
+ * `create`, `update`, `remove`, `derive`) are gone with their endpoints.
+ */
 export class EquipmentRepo extends Context.Service<
   EquipmentRepo,
   {
-    readonly list: (
-      campaignId: CampaignId,
-      filter: EquipmentFilterValues,
-    ) => Effect.Effect<Page<Equipment, EquipmentSort>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: EquipmentId,
-    ) => Effect.Effect<Equipment, NotFound, CurrentActor>;
-    readonly create: (
-      campaignId: CampaignId,
-      payload: EquipmentCreate,
-    ) => Effect.Effect<Equipment, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: EquipmentId,
-      patch: EquipmentUpdate,
-    ) => Effect.Effect<Equipment, NotFound, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: EquipmentId,
-    ) => Effect.Effect<void, NotFound, CurrentActor>;
-    readonly derive: (
-      campaignId: CampaignId,
-      id: EquipmentId,
-      patch: EquipmentUpdate,
-    ) => Effect.Effect<Equipment, NotFound, CurrentActor>;
     readonly library: (
       filter: EquipmentFilterValues,
     ) => Effect.Effect<Page<Equipment, EquipmentSort>, never, CurrentActor>;
@@ -463,189 +439,7 @@ export class EquipmentRepo extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      const readable = (campaignId: CampaignId, id: EquipmentId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<EquipmentRow>`
-          select * from equipment
-          where equipment.id = ${id}
-            and ${corpusRowReadable(sql, "equipment", campaignId, actor)}
-        `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-          return rows[0]!;
-        });
-
-      const copyable = (campaignId: CampaignId, id: EquipmentId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<EquipmentRow>`
-          select * from equipment
-          where equipment.id = ${id}
-            and ${copyableIntoCampaign(sql, "equipment", campaignId, actor)}
-        `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-          return rows[0]!;
-        });
-
       return {
-        list: (campaignId, filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<EquipmentRow>`
-              select * from equipment
-              where ${sql.and([
-                corpusRowReadable(sql, "equipment", campaignId, actor),
-                ...narrowedBy(sql, filter),
-                ...pageClauses(sql, ordering, filter.cursor),
-              ])}
-              order by ${orderClause(sql, ordering)}
-              limit ${pageLimit(filter.limit)}
-            `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toEquipment);
-            }),
-          ),
-
-        findById: (campaignId, id) =>
-          dieOnSqlError(Effect.map(readable(campaignId, id), toEquipment)),
-
-        create: (campaignId, payload) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const rows = yield* sql<EquipmentRow>`
-                insert into equipment ${sql.insert(createColumns(payload, { campaign_id: campaignId }))}
-                returning *
-              `;
-                return toEquipment(rows[0]!);
-              }),
-            ),
-          ),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<EquipmentRow>`
-              update equipment set ${setClause(sql, updateColumns(patch))}
-              where equipment.id = ${id}
-                and ${rowWritable(sql, "equipment", campaignId, actor)}
-              returning *
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-              return toEquipment(rows[0]!);
-            }),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: EquipmentId }>`
-              delete from equipment
-              where equipment.id = ${id}
-                and ${rowWritable(sql, "equipment", campaignId, actor)}
-              returning equipment.id
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-            }),
-          ),
-
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                const body = patch.equipment ?? source.body;
-                const category = patch.equipmentCategory ?? body.equipmentCategory;
-                const cost = patch.cost ?? body.cost;
-                const gear = patch.gearCategory ?? body.gearCategory;
-                const armor = patch.armorClass ?? body.armorClass;
-                const damage = patch.damage ?? body.damage;
-                const twoHanded = patch.twoHandedDamage ?? body.twoHandedDamage;
-                const range = patch.range ?? body.range;
-                const throwRange = patch.throwRange ?? body.throwRange;
-                const properties = compactReferences(patch.properties ?? body.properties);
-                const weight = patch.weight ?? body.weight;
-                const storedBody = {
-                  ...body,
-                  equipmentCategory: category,
-                  cost,
-                  weight,
-                  gearCategory: gear,
-                  armorCategory: patch.armorCategory ?? body.armorCategory,
-                  armorClass: armor,
-                  categoryRange: patch.categoryRange ?? body.categoryRange,
-                  damage,
-                  properties,
-                  range,
-                  stealthDisadvantage: patch.stealthDisadvantage ?? body.stealthDisadvantage,
-                  strMinimum: patch.strMinimum ?? body.strMinimum,
-                  throwRange,
-                  toolCategory: patch.toolCategory ?? body.toolCategory,
-                  twoHandedDamage: twoHanded,
-                  vehicleCategory: patch.vehicleCategory ?? body.vehicleCategory,
-                  weaponCategory: patch.weaponCategory ?? body.weaponCategory,
-                  weaponRange: patch.weaponRange ?? body.weaponRange,
-                } satisfies EquipmentBody;
-                const rows = yield* sql<EquipmentRow>`
-                insert into equipment ${sql.insert(
-                  defined({
-                    campaign_id: campaignId,
-                    derived_from: source.id,
-                    source_corpus: source.source_corpus,
-                    source_family: source.source_family,
-                    source_key: source.source_key,
-                    name: patch.name ?? source.name,
-                    category_index: category.index,
-                    category_name: category.name,
-                    cost_quantity: cost.quantity,
-                    cost_unit: cost.unit,
-                    cost_gp: costGp(cost),
-                    weight,
-                    weight_sort: weight ?? 0,
-                    gear_category_index: gear?.index,
-                    gear_category_name: gear?.name,
-                    armor_category: patch.armorCategory ?? body.armorCategory,
-                    weapon_category: patch.weaponCategory ?? body.weaponCategory,
-                    weapon_range: patch.weaponRange ?? body.weaponRange,
-                    category_range: patch.categoryRange ?? body.categoryRange,
-                    tool_category: patch.toolCategory ?? body.toolCategory,
-                    vehicle_category: patch.vehicleCategory ?? body.vehicleCategory,
-                    armor_class_base: armor?.base,
-                    armor_class_dex_bonus: armor?.dexBonus,
-                    armor_class_max_bonus: armor?.maxBonus,
-                    strength_minimum: patch.strMinimum ?? body.strMinimum,
-                    stealth_disadvantage: patch.stealthDisadvantage ?? body.stealthDisadvantage,
-                    damage_dice: damage?.damageDice,
-                    damage_type_index: damage?.damageType.index,
-                    damage_type_name: damage?.damageType.name,
-                    two_handed_damage_dice: twoHanded?.damageDice,
-                    two_handed_damage_type_index: twoHanded?.damageType.index,
-                    two_handed_damage_type_name: twoHanded?.damageType.name,
-                    range_normal: range?.normal,
-                    range_long: range?.long,
-                    throw_range_normal: throwRange?.normal,
-                    throw_range_long: throwRange?.long,
-                    property_indexes: indexesOf(properties),
-                    property_names: namesOf(properties),
-                    body: encodeBody(storedBody),
-                    visibility: patch.visibility,
-                  }),
-                )}
-                returning *
-              `;
-                return toEquipment(rows[0]!);
-              }),
-            ),
-          ),
-
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {

@@ -127,8 +127,7 @@ beforeAll(async () => {
         hpMax: 52,
       },
     });
-    const goblin = yield* api.creatures.create({
-      params: { campaignId: campaign.id },
+    const goblin = yield* api.library.create({
       payload: { name: "Goblin Archer", size: "Small", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
     });
     const encounter = yield* api.encounters.create({

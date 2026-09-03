@@ -1,17 +1,13 @@
 import {
   type AccountId,
   type CampaignId,
-  Conflict,
   Creature,
-  type CreatureCreate,
   CreatureFacets,
   type CreatureFilterValues,
   type CreatureId,
   type CreatureLibraryCreate,
   type CreatureLibraryUpdate,
-  type CreatureScope,
   type CreatureSort,
-  type CreatureUpdate,
   CurrentActor,
   type LibraryFilterValues,
   NotFound,
@@ -19,7 +15,7 @@ import {
   type StatBlock,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
 import {
   defined,
   dieOnSqlError,
@@ -38,13 +34,11 @@ import {
   timeColumn,
 } from "./paging.js";
 import {
-  copyableIntoCampaign,
   corpusRowReadable,
+  usableInCampaign,
   ensureCampaignReadable,
-  ensureCampaignWritable,
   libraryRowReadable,
   libraryRowWritable,
-  rowWritable,
 } from "./visibility.js";
 
 interface CreatureRow extends ProvenanceColumns {
@@ -151,21 +145,6 @@ const matchesQuery = (sql: SqlClient.SqlClient, query: string): Statement.Fragme
     sql`creature.name ilike ${likeContains(query)}`,
     sql`creature.search @@ websearch_to_tsquery('english', ${query})`,
   ]);
-
-/**
- * `all` is the default because `Site.jsx:86` — "Save your own creatures next to
- * the official ones" — describes one list, not two tabs.
- */
-const inScope = (sql: SqlClient.SqlClient, scope: CreatureScope): Statement.Fragment => {
-  switch (scope) {
-    case "campaign":
-      return sql`creature.campaign_id is not null`;
-    case "system":
-      return sql`creature.campaign_id is null`;
-    case "all":
-      return sql`true`;
-  }
-};
 
 /**
  * The clauses the search box and the environment chips contribute — everything
@@ -409,73 +388,47 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<CreatureSort, Ordering<Cr
 const encodeStatBlock = (statBlock: StatBlock): string => JSON.stringify(statBlock);
 
 /**
- * A `ConstraintError` here means the roster still points at this creature.
+ * The Library — where monsters are authored — **and the two campaign reads
+ * that consume it**.
  *
- * `encounter_creature.creature_id` refuses the delete rather than cascading, so
- * losing a creature an encounter contains is a 409 instead of a roster that
- * quietly got shorter. The DM finds out now, not by recounting the card later.
- */
-const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | Conflict, R> =>
-  Effect.catch(effect, (error): Effect.Effect<A, E | Conflict> =>
-    SqlError.isSqlError(error) && error.reason._tag === "ConstraintError"
-      ? Effect.fail(new Conflict({ message: "that creature is still on an encounter's roster" }))
-      : Effect.fail(error),
-  );
-
-/**
- * The bestiary **and** the Library — one table, two worlds, and one mapper.
+ * A creature belongs to a campaign (an internal instance), or to an account (a
+ * Library entity), or to nobody (the bundle). Since the instancing decision of
+ * 2026-09-02 the campaign instances are plumbing: nothing here creates, edits,
+ * removes or enumerates one. What is left splits so:
  *
- * A creature belongs to a campaign, or to an account (a Library entity, which is
- * where monsters are authored), or to nobody (the bundle). The methods split the
- * same way, and each half has its own pair of predicates:
+ * | method              | reads through           | writes through        |
+ * | ------------------- | ----------------------- | --------------------- |
+ * | `list`              | `usableInCampaign`      |                       |
+ * | `findById`          | `corpus OR usable`      |                       |
+ * | `library*`          | `libraryRowReadable`    | `libraryRowWritable`  |
  *
- * | method                   | reads through           | writes through        |
- * | ------------------------ | ----------------------- | --------------------- |
- * | `list` / `findById`      | `corpusRowReadable`     |                       |
- * | `create` / `update` / `remove` | `corpusRowReadable` | `rowWritable`       |
- * | `library*`               | `libraryRowReadable`    | `libraryRowWritable`  |
- * | `derive`                 | `copyableIntoCampaign`  | `rowWritable`         |
+ * `list` is the encounter picker: the bundle, the caller's own Library, and
+ * group-shared originals — never a campaign instance. `findById` is wider
+ * because a roster or a fight already names instances, and the stat block of a
+ * creature on the table has to resolve whatever list it came from; an id is
+ * not an enumeration. The instances themselves are minted by
+ * `EncounterCreatures.create` at the point of use and by nothing else.
  *
- * **The bundle is immutable and no line here says so.** Both write predicates
- * compare an ownership column to a value the request carries — `rowWritable` the
- * campaign in the path, `libraryRowWritable` the account the credential resolved
- * to — and a bundled row has neither, so a null is compared to a uuid and
- * matches nothing. `creature_system_is_unowned` (`0015`) is what makes "a
- * bundled row has no owner" a fact about the schema rather than about how the
- * importer happens to be written. So there is still no `origin = 'system'` check
- * anywhere in this file, and there still does not need to be one.
- *
- * Nothing here can *mint* a bundled row either: neither create sets `origin`, so
- * the column default (`authored`) decides, and both set an owner — which the
- * same check refuses to pair with `system`. The shared corpus is provisioned by
- * `pnpm -F server bestiary:import` — see `src/bestiary/import.ts`, which
- * explains why that is a shell command and not an endpoint.
- *
- * The two lists share every part a client varies (`narrowedBy`, `orderBy`), so a
- * search box cannot come to mean something different at `/library` than it does
- * inside a campaign. What they never share is a row: a campaign holds copies and
- * the Library holds originals, and `derive` is the one seam between them.
+ * **The bundle is immutable and no line here says so.** The write predicate
+ * compares `account_id` to the account the credential resolved to; a bundled
+ * row's is null, and a null never equals a uuid. `creature_system_is_unowned`
+ * (`0015`) makes "a bundled row has no owner" a fact about the schema. So
+ * there is still no `origin = 'system'` check anywhere in this file, and there
+ * still does not need to be one. The shared corpus is provisioned by
+ * `pnpm -F server bestiary:import` — see `src/bestiary/import.ts`.
  */
 export class Creatures extends Context.Service<
   Creatures,
   {
+    /**
+     * What this campaign can build an encounter from: the bundle, the caller's
+     * own Library, and group-shared originals (`usableInCampaign`) — never a
+     * campaign instance.
+     */
     readonly list: (
       campaignId: CampaignId,
       filter: CreatureFilterValues,
     ) => Effect.Effect<Page<Creature, CreatureSort>, NotFound, CurrentActor>;
-    /**
-     * Every environment the creatures this campaign can reach are tagged with.
-     *
-     * A read of its own because the chip row is a fact about the corpus and a
-     * page is a fact about fifty rows of it — see `Api.ts`. Same predicate as
-     * `list`, so a chip can never name something the list will not return.
-     */
-    readonly environments: (
-      campaignId: CampaignId,
-    ) => Effect.Effect<ReadonlyArray<string>, NotFound, CurrentActor>;
-    readonly facets: (
-      campaignId: CampaignId,
-    ) => Effect.Effect<CreatureFacets, NotFound, CurrentActor>;
     /**
      * The Library — **originals only**: the bundled corpus and the creatures
      * this account has authored, with no campaign in the path and no campaign
@@ -514,27 +467,13 @@ export class Creatures extends Context.Service<
       patch: CreatureLibraryUpdate,
     ) => Effect.Effect<Creature, NotFound, CurrentActor>;
     readonly libraryRemove: (id: CreatureId) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
+     * One creature this campaign context can name: anything `list` offers,
+     * plus the internal instances rosters and fights point at.
+     */
     readonly findById: (
       campaignId: CampaignId,
       id: CreatureId,
-    ) => Effect.Effect<Creature, NotFound, CurrentActor>;
-    readonly create: (
-      campaignId: CampaignId,
-      payload: CreatureCreate,
-    ) => Effect.Effect<Creature, NotFound, CurrentActor>;
-    readonly update: (
-      campaignId: CampaignId,
-      id: CreatureId,
-      patch: CreatureUpdate,
-    ) => Effect.Effect<Creature, NotFound, CurrentActor>;
-    readonly remove: (
-      campaignId: CampaignId,
-      id: CreatureId,
-    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
-    readonly derive: (
-      campaignId: CampaignId,
-      id: CreatureId,
-      patch: CreatureUpdate,
     ) => Effect.Effect<Creature, NotFound, CurrentActor>;
   }
 >()("Creatures") {
@@ -558,19 +497,7 @@ export class Creatures extends Context.Service<
         return [sort, orderings[sort]];
       };
 
-      const readable = (campaignId: CampaignId, id: CreatureId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<CreatureRow>`
-            select * from creature
-            where creature.id = ${id}
-              and ${corpusRowReadable(sql, "creature", campaignId, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-          return rows[0]!;
-        });
-
-      /** The same, for the Library: this account's own entities and the bundle. */
+      /** For the Library: this account's own entities and the bundle. */
       const inLibrary = (id: CreatureId) =>
         Effect.gen(function* () {
           const actor = yield* CurrentActor;
@@ -584,20 +511,28 @@ export class Creatures extends Context.Service<
         });
 
       /**
-       * What `derive` may copy: this campaign's bestiary, the bundle, or the
-       * caller's own Library — and nothing else.
+       * What a campaign context may name by id: anything the picker lists
+       * (`usableInCampaign`, which keeps the bundle's row-visibility rule and
+       * its campaign gate), plus the internal instances rosters and fights
+       * already point at (`corpusRowReadable`, campaign-gated and
+       * visibility-gated as it always was).
        *
-       * A separate reader rather than an argument to `readable`, so the wider
-       * predicate is reachable from exactly one method and a future read cannot
-       * pick it up by passing a flag.
+       * **Not `copyableIntoCampaign`**: its `libraryRowReadable` disjunct
+       * composes no campaign gate and no visibility test, which is right for a
+       * write that has already proven the creator (the roster add) and a leak
+       * on a read reached by path — a player would read a bundled stat block,
+       * and a stranger's campaign id would answer instead of 404ing.
        */
-      const copyable = (campaignId: CampaignId, id: CreatureId) =>
+      const reachable = (campaignId: CampaignId, id: CreatureId) =>
         Effect.gen(function* () {
           const actor = yield* CurrentActor;
           const rows = yield* sql<CreatureRow>`
             select * from creature
             where creature.id = ${id}
-              and ${copyableIntoCampaign(sql, "creature", campaignId, actor)}
+              and ${sql.or([
+                corpusRowReadable(sql, "creature", campaignId, actor),
+                usableInCampaign(sql, "creature", campaignId, actor),
+              ])}
           `;
           if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
           return rows[0]!;
@@ -609,7 +544,7 @@ export class Creatures extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               // A 404 rather than an empty list, so an unreachable campaign
-              // does not read as "your bestiary is empty".
+              // does not read as "nothing to pick from".
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const [sort, ordering] = orderingFor(filter);
               // Every one of these is a clause of the *same* `where`: the
@@ -618,8 +553,7 @@ export class Creatures extends Context.Service<
               // which is what makes a paged read neither a leak nor a short
               // page — see `repo/paging.ts`.
               const clauses = [
-                corpusRowReadable(sql, "creature", campaignId, actor),
-                inScope(sql, filter.scope ?? "all"),
+                usableInCampaign(sql, "creature", campaignId, actor),
                 ...narrowedBy(sql, filter),
                 ...pageClauses(sql, ordering, filter.cursor),
               ];
@@ -630,27 +564,6 @@ export class Creatures extends Context.Service<
                 limit ${pageLimit(filter.limit)}
               `;
               return pageOfRows(rows, filter.limit, ordering, sort, toCreature);
-            }),
-          ),
-
-        environments: (campaignId) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
-              return yield* environmentsIn(
-                sql,
-                corpusRowReadable(sql, "creature", campaignId, actor),
-              );
-            }),
-          ),
-
-        facets: (campaignId) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
-              return yield* facetsIn(sql, corpusRowReadable(sql, "creature", campaignId, actor));
             }),
           ),
 
@@ -805,179 +718,7 @@ export class Creatures extends Context.Service<
           ),
 
         findById: (campaignId, id) =>
-          dieOnSqlError(Effect.map(readable(campaignId, id), toCreature)),
-
-        create: (campaignId, payload) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const rows = yield* sql<CreatureRow>`
-                  insert into creature ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      name: payload.name,
-                      size: payload.size,
-                      type: payload.type,
-                      subtype: payload.subtype,
-                      alignment: payload.alignment,
-                      cr: payload.cr,
-                      cr_sort: payload.crSort ?? crSortFor(payload.cr),
-                      ac: payload.ac,
-                      hp: payload.hp,
-                      environments: payload.environments,
-                      damage_vulnerabilities: payload.damageVulnerabilities,
-                      damage_resistances: payload.damageResistances,
-                      damage_immunities: payload.damageImmunities,
-                      condition_immunities: payload.conditionImmunities,
-                      movement_modes: payload.movementModes,
-                      spellcaster: payload.spellcaster,
-                      legendary: payload.legendary,
-                      body: payload.statBlock && encodeStatBlock(payload.statBlock),
-                      visibility: payload.visibility,
-                    }),
-                  )}
-                  returning *
-                `;
-                return toCreature(rows[0]!);
-              }),
-            ),
-          ),
-
-        update: (campaignId, id, patch) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const columns = defined({
-                name: patch.name,
-                size: patch.size,
-                type: patch.type,
-                subtype: patch.subtype,
-                alignment: patch.alignment,
-                cr: patch.cr,
-                // A new rating re-derives the sort key unless the patch names
-                // one, so editing `"1"` to `"1/4"` cannot leave it sorting at 1.
-                cr_sort: patch.crSort ?? (patch.cr === undefined ? undefined : crSortFor(patch.cr)),
-                ac: patch.ac,
-                hp: patch.hp,
-                environments: patch.environments,
-                damage_vulnerabilities: patch.damageVulnerabilities,
-                damage_resistances: patch.damageResistances,
-                damage_immunities: patch.damageImmunities,
-                condition_immunities: patch.conditionImmunities,
-                movement_modes: patch.movementModes,
-                spellcaster: patch.spellcaster,
-                legendary: patch.legendary,
-                body: patch.statBlock && encodeStatBlock(patch.statBlock),
-                visibility: patch.visibility,
-              });
-              const rows = yield* sql<CreatureRow>`
-                update creature set ${setClause(sql, columns)}
-                where creature.id = ${id}
-                  and ${rowWritable(sql, "creature", campaignId, actor)}
-                returning *
-              `;
-              // A `system` creature lands here: readable, not writable, and the
-              // refusal says the same thing as "no such creature" on purpose.
-              if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-              return toCreature(rows[0]!);
-            }),
-          ),
-
-        remove: (campaignId, id) =>
-          dieOnSqlError(
-            asConflict(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<{ readonly id: CreatureId }>`
-                  delete from creature
-                  where creature.id = ${id}
-                    and ${rowWritable(sql, "creature", campaignId, actor)}
-                  returning creature.id
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-              }),
-            ),
-          ),
-
-        /**
-         * **Using a monster in a campaign: the copy.** A creature this actor may
-         * copy goes into this campaign, the edits are applied, and where it came
-         * from is remembered.
-         *
-         * This is the third of the captain's four statements, and the words that
-         * settle it are *copied state*: the campaign's row is a **snapshot**.
-         * Nothing is ever read through `derived_from`, so editing the original
-         * afterwards does not reach the copy and deleting the original leaves it
-         * standing with a null pointer. That is the same rule `combatant`
-         * already follows for a fight.
-         *
-         * The source is `copyableIntoCampaign` — this campaign's bestiary, the
-         * bundle, or the caller's own Library. The Library half is what makes
-         * authoring-then-using a real path; it is the *only* widening, and in
-         * particular a creature in another of this DM's own campaigns is still a
-         * 404 (see `AGENTS.md`).
-         *
-         * The copy is `authored` whatever the original was — the DM wrote the
-         * changes, so they are the author — and `campaign_id` is what makes it
-         * the campaign's rather than anybody's Library entity. `account_id` is
-         * not copied and could not be: `creature_one_owner` refuses a row that
-         * is a campaign's and an account's at once, which is the constraint
-         * saying "a copy has left the Library".
-         *
-         * Its visibility is **not** copied. It falls to the column default
-         * (`dm`) unless the patch names one, because a copy is a new row and a
-         * new row fails closed. Inheriting `shared` from the original would
-         * make the safe default depend on what you happened to derive from —
-         * and a Library entity has no visibility to inherit in the first place.
-         */
-        derive: (campaignId, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureCampaignWritable(sql, campaignId, actor);
-                const source = yield* copyable(campaignId, id);
-                const cr = patch.cr ?? source.cr;
-                const rows = yield* sql<CreatureRow>`
-                  insert into creature ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      derived_from: source.id,
-                      source_corpus: source.source_corpus,
-                      source_family: source.source_family,
-                      source_key: source.source_key,
-                      name: patch.name ?? source.name,
-                      size: patch.size === undefined ? source.size : patch.size,
-                      type: patch.type ?? source.type,
-                      subtype: patch.subtype === undefined ? source.subtype : patch.subtype,
-                      alignment: patch.alignment === undefined ? source.alignment : patch.alignment,
-                      cr,
-                      cr_sort:
-                        patch.crSort ?? (patch.cr === undefined ? source.cr_sort : crSortFor(cr)),
-                      ac: patch.ac ?? source.ac,
-                      hp: patch.hp ?? source.hp,
-                      environments: patch.environments ?? source.environments,
-                      damage_vulnerabilities:
-                        patch.damageVulnerabilities ?? source.damage_vulnerabilities,
-                      damage_resistances: patch.damageResistances ?? source.damage_resistances,
-                      damage_immunities: patch.damageImmunities ?? source.damage_immunities,
-                      condition_immunities:
-                        patch.conditionImmunities ?? source.condition_immunities,
-                      movement_modes: patch.movementModes ?? source.movement_modes,
-                      spellcaster: patch.spellcaster ?? source.spellcaster,
-                      legendary: patch.legendary ?? source.legendary,
-                      body: encodeStatBlock(patch.statBlock ?? source.body),
-                      visibility: patch.visibility,
-                    }),
-                  )}
-                  returning *
-                `;
-                return toCreature(rows[0]!);
-              }),
-            ),
-          ),
+          dieOnSqlError(Effect.map(reachable(campaignId, id), toCreature)),
       };
     }),
   );

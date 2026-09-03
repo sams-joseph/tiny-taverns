@@ -549,15 +549,14 @@ describe("the prep surface", () => {
 });
 
 describe("the bestiary", () => {
-  it("round-trips an authored creature, document and all", async () => {
+  it("round-trips an authored Library creature, document and all", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
         const campaign = yield* campaignVia(client, { name: "The Marsh" });
         const campaignId = campaign.id;
 
-        const creature = yield* client.creatures.create({
-          params: { campaignId },
+        const creature = yield* client.library.create({
           payload: {
             name: "Bullywug Croaker",
             size: "Medium",
@@ -583,6 +582,8 @@ describe("the bestiary", () => {
             },
           },
         });
+        // The campaign-scoped by-id read resolves the same original: authoring
+        // lives in the Library, and the campaign surface only ever *uses* it.
         const readBack = yield* client.creatures.findById({
           params: { campaignId, creatureId: creature.id },
         });
@@ -603,7 +604,7 @@ describe("the bestiary", () => {
     expect(seen.readBack.visibility).toBe("dm");
     expect(seen.readBack.origin).toBe("authored");
     expect(seen.readBack.derivedFrom).toBeNull();
-    expect(seen.readBack.campaignId).toBe(seen.creature.campaignId);
+    expect(seen.readBack.campaignId).toBeNull();
   }, 60_000);
 
   it("pages the bestiary over the wire, and refuses a cursor it did not mint", async () => {
@@ -615,16 +616,16 @@ describe("the bestiary", () => {
 
         const first = yield* client.creatures.list({
           params: { campaignId },
-          query: { scope: "system", sort: "name", limit: 2 },
+          query: { sort: "name", limit: 2 },
         });
         const second = yield* client.creatures.list({
           params: { campaignId },
-          query: { scope: "system", sort: "name", limit: 2, cursor: first.nextCursor ?? undefined },
+          query: { sort: "name", limit: 2, cursor: first.nextCursor ?? undefined },
         });
         // The chip vocabulary is its own route under the same prefix as
-        // `/:creatureId`. A static segment wins over a parameter in the router,
-        // and this is where that is checked rather than assumed.
-        const vocabulary = yield* client.creatures.environments({ params: { campaignId } });
+        // `/creatures/:creatureId`. A static segment wins over a parameter in
+        // the router, and this is where that is checked rather than assumed.
+        const vocabulary = yield* client.library.environments();
 
         // A cursor is base64url of a small JSON object, so a forged one fails
         // the *schema* — which is what keeps a bad cursor a 400 with no error
@@ -666,7 +667,7 @@ describe("the bestiary", () => {
 
         const byName = (yield* client.creatures.list({
           params: { campaignId },
-          query: { q: "gob", scope: "system" },
+          query: { q: "gob" },
         })).items;
         const byTrait = (yield* client.creatures.list({
           params: { campaignId },
@@ -686,7 +687,7 @@ describe("the bestiary", () => {
         })).items;
         const byNoEnvironment = (yield* client.creatures.list({
           params: { campaignId },
-          query: { environments: [], sort: "name", scope: "system" },
+          query: { environments: [], sort: "name" },
         })).items;
         const byUnknownEnvironment = (yield* client.creatures.list({
           params: { campaignId },
@@ -717,49 +718,59 @@ describe("the bestiary", () => {
     expect(seen.byUnknownEnvironment).toEqual([]);
   }, 60_000);
 
-  it("derives a campaign copy of a system creature, and refuses to edit the original", async () => {
+  it("instances a Library creature at the point of use, invisibly", async () => {
+    // The instancing decision of 2026-09-02, over the wire: putting a Library
+    // original on a roster mints the campaign's internal instance behind the
+    // scenes. The user-facing surface never lists it, edits it, or names the
+    // concept — the line just carries the creature's name.
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
         const campaign = yield* campaignVia(client, { name: "Reskins" });
         const campaignId = campaign.id;
 
-        const corpus = (yield* client.creatures.list({
+        const original = yield* client.library.create({
+          payload: { name: "Bog Owlbear", type: "Monstrosity", cr: "3", ac: 13, hp: 59 },
+        });
+        const encounter = yield* client.encounters.create({
           params: { campaignId },
-          query: { scope: "system", q: "Goblin Boss" },
+          payload: { name: "The bog at dusk" },
+        });
+        const line = yield* client.encounterCreatures.create({
+          params: { campaignId, encounterId: encounter.id },
+          payload: { creatureId: original.id, count: 2 },
+        });
+
+        // The Library edit afterwards does not reach the built encounter —
+        // the instance is a snapshot taken at the point of use.
+        yield* client.library.update({
+          params: { creatureId: original.id },
+          payload: { name: "Bog Owlbear (fixed)", hp: 72 },
+        });
+        const instance = yield* client.creatures.findById({
+          params: { campaignId, creatureId: line.creatureId },
+        });
+
+        // And no list ever surfaces it: the campaign's usable-creature list is
+        // the picker's — the bundle, the Library, the group's shares.
+        const listed = (yield* client.creatures.list({
+          params: { campaignId },
+          query: { q: "Bog Owlbear" },
         })).items;
-        const original = corpus[0]!;
 
-        const copy = yield* client.creatures.derive({
-          params: { campaignId, creatureId: original.id },
-          payload: { name: "Grask, Boss of the Reeds", environments: ["Marsh"] },
-        });
-        const tampered = yield* Effect.result(
-          client.creatures.update({
-            params: { campaignId, creatureId: original.id },
-            payload: { name: "tampered" },
-          }),
-        );
-        const stillThere = yield* client.creatures.findById({
-          params: { campaignId, creatureId: original.id },
-        });
-
-        return { original, copy, tampered, stillThere };
+        return { original, line, instance, listed };
       }).pipe(Effect.orDie),
     );
 
-    expect(seen.original.campaignId).toBeNull();
-    expect(seen.original.origin).toBe("system");
-    expect(seen.copy.derivedFrom).toBe(seen.original.id);
-    expect(seen.copy.campaignId).not.toBeNull();
-    expect(seen.copy.origin).toBe("authored");
-    expect(seen.copy.name).toBe("Grask, Boss of the Reeds");
-    // The document came across with it.
-    expect(seen.copy.statBlock.traits.map((trait) => trait.name)).toContain("Nimble Escape");
-    // The shared corpus is not the DM's to edit — and saying "no such creature"
-    // rather than "not yours" is the same refusal the rest of the surface gives.
-    expect(seen.tampered._tag).toBe("Failure");
-    expect(seen.stillThere.name).toBe("Goblin Boss");
+    expect(seen.line.creatureId).not.toBe(seen.original.id);
+    expect(seen.line.name).toBe("Bog Owlbear");
+    expect(seen.instance.name).toBe("Bog Owlbear");
+    expect(seen.instance.hp).toBe(59);
+    expect(seen.instance.campaignId).not.toBeNull();
+    expect(seen.instance.derivedFrom).toBe(seen.original.id);
+    // Only the edited original is listed — the instance is plumbing.
+    expect(seen.listed.map((creature) => creature.id)).toEqual([seen.original.id]);
+    expect(seen.listed[0]?.name).toBe("Bog Owlbear (fixed)");
   }, 60_000);
 
   it("puts creatures on an encounter and makes its creature count true", async () => {
@@ -777,10 +788,9 @@ describe("the bestiary", () => {
 
         const corpus = (yield* client.creatures.list({
           params: { campaignId },
-          query: { scope: "system", q: "Goblin Boss" },
+          query: { q: "Goblin Boss" },
         })).items;
-        const archer = yield* client.creatures.create({
-          params: { campaignId },
+        const archer = yield* client.library.create({
           payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
         });
 
@@ -797,15 +807,21 @@ describe("the bestiary", () => {
           params: { campaignId, encounterId },
         });
         const counted = yield* client.encounters.findById({ params: { campaignId, encounterId } });
+        // A repeat is the same 409 whether the source went on directly (the
+        // bundle) or through an instance (the Library): the duplicate rule
+        // sees through the instancing.
         const repeated = yield* Effect.result(
           client.encounterCreatures.create({
             params: { campaignId, encounterId },
             payload: { creatureId: archer.id },
           }),
         );
-        const stillUsed = yield* Effect.flip(
-          client.creatures.remove({ params: { campaignId, creatureId: archer.id } }),
-        );
+        // Deleting the Library original leaves the roster standing — the line
+        // points at the campaign's internal snapshot, not at the original.
+        yield* client.library.remove({ params: { creatureId: archer.id } });
+        const survives = yield* client.encounterCreatures.list({
+          params: { campaignId, encounterId },
+        });
         yield* client.encounterCreatures.remove({
           params: { campaignId, encounterId, encounterCreatureId: boss.id },
         });
@@ -813,7 +829,7 @@ describe("the bestiary", () => {
           params: { campaignId, encounterId },
         });
 
-        return { encounter, listed, counted, repeated, stillUsed, afterRemove };
+        return { encounter, listed, counted, repeated, survives, afterRemove };
       }).pipe(Effect.orDie),
     );
 
@@ -822,7 +838,7 @@ describe("the bestiary", () => {
     expect(seen.listed).toHaveLength(2);
     expect(seen.counted.creatureCount).toBe(6);
     expect(seen.repeated._tag).toBe("Failure");
-    expect(seen.stillUsed._tag).toBe("Conflict");
+    expect(seen.survives.map((line) => line.name)).toContain("Goblin Archer");
     expect(seen.afterRemove.creatureCount).toBe(5);
   }, 60_000);
 });

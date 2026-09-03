@@ -152,12 +152,15 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  // Two creatures at this table and one at the other, so `listCreatures` has
-  // something to answer *and* something it must not: the bestiary is the one
-  // read where "everything in the campaign" is the whole request, which is the
-  // shape a cross-campaign leak hides in most easily.
+  // Two creatures in this DM's Library and one in somebody else's, so
+  // `listCreatures` has something to answer *and* something it must not: the
+  // usable-creature read is the one where "everything this table can build
+  // from" is the whole request, which is the shape a cross-account leak hides
+  // in most easily. (A DM's own Library reaches all of their tables by design
+  // since the instancing decision of 2026-09-02 — the boundary is the account
+  // and the explicit group share, not the table.)
   const goblin = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Marsh Goblin",
       size: "Small",
       type: "Humanoid",
@@ -168,7 +171,7 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Reed Stalker",
       type: "Beast",
       cr: "2",
@@ -176,8 +179,9 @@ const makeFixture = Effect.gen(function* () {
       hp: 33,
     }),
   );
-  yield* as(
-    creatures.create(otherTable.id, {
+  const drakeOwner = yield* anAccount("A stranger with a drake");
+  yield* withActor(drakeOwner)(
+    creatures.libraryCreate({
       name: "Sixpence Drake",
       type: "Dragon",
       cr: "3",

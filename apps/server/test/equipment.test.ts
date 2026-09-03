@@ -1,17 +1,16 @@
-import { Actor, CurrentActor, NotFound, type EquipmentCreate } from "@taverns/api";
+import { Actor, CurrentActor, type EquipmentCreate } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { servicesOver } from "../src/app.js";
 import { importSystemEquipment, type ImportEquipmentResult } from "../src/equipment/import.js";
-import { EQUIPMENT_RAW } from "../src/equipment/systemEquipment.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { Invites } from "../src/repo/Invites.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
-import { aPlayerAt, createCampaign } from "./support/actors.js";
+import { createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const database = migratedDatabase("taverns_test_equipment");
@@ -190,12 +189,12 @@ describe("2014 SRD mundane equipment", () => {
   });
 
   it("preserves 2014's heterogeneous row and document shapes", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Equipment Table"));
+    const { actor } = await run(dmCampaign("The Equipment Table"));
     const page = await run(
       withActor(
         actor,
         Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.list(campaign.id, {
+          equipment.library({
             q: "restrained",
             categories: ["weapon"],
             weaponCategories: ["Martial"],
@@ -228,7 +227,7 @@ describe("2014 SRD mundane equipment", () => {
   });
 
   it("filters one and many values for every equipment list query array", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Filter Table"));
+    const { actor } = await run(dmCampaign("The Filter Table"));
     const cases = [
       { field: "categories", one: "weapon", two: "armor", names: ["Club", "Shield"] },
       {
@@ -260,7 +259,7 @@ describe("2014 SRD mundane equipment", () => {
         withActor(
           actor,
           Effect.flatMap(EquipmentRepo, (equipment) =>
-            equipment.list(campaign.id, { [item.field]: [item.one], limit: 200 }),
+            equipment.library({ [item.field]: [item.one], limit: 200 }),
           ),
         ),
       );
@@ -273,7 +272,7 @@ describe("2014 SRD mundane equipment", () => {
         withActor(
           actor,
           Effect.flatMap(EquipmentRepo, (equipment) =>
-            equipment.list(campaign.id, { [item.field]: [item.one, item.two], limit: 200 }),
+            equipment.library({ [item.field]: [item.one, item.two], limit: 200 }),
           ),
         ),
       );
@@ -284,10 +283,13 @@ describe("2014 SRD mundane equipment", () => {
     }
   }, 60_000);
 
-  it("keeps Library originals out of other accounts, players and campaigns until copied", async () => {
-    const { actor: firstDm, campaign } = await run(dmCampaign("The Equipment Library"));
+  it("keeps Library originals per reader: another account and a player see nothing", async () => {
+    // The Library is the whole mundane-equipment surface since the instancing
+    // decision of 2026-09-02 — no campaign list, no copy-in. The boundary
+    // left to pin is the Library's own: originals are the writer's, and
+    // another account's Library never shows them.
+    const { actor: firstDm } = await run(dmCampaign("The Equipment Library"));
     const { actor: secondDm } = await run(dmCampaign("Another Equipment Library"));
-    const player = await run(aPlayerAt(campaign.id, "Equipment Player"));
 
     const original = await run(
       withActor(
@@ -298,15 +300,15 @@ describe("2014 SRD mundane equipment", () => {
       ),
     );
 
-    const campaignBeforeCopy = await run(
+    const mine = await run(
       withActor(
         firstDm,
         Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.list(campaign.id, { q: "Fen's Private Crowbar" }),
+          equipment.library({ q: "Fen's Private Crowbar" }),
         ),
       ),
     );
-    const strangerLibrary = await run(
+    const theirs = await run(
       withActor(
         secondDm,
         Effect.flatMap(EquipmentRepo, (equipment) =>
@@ -314,82 +316,17 @@ describe("2014 SRD mundane equipment", () => {
         ),
       ),
     );
-    const playerBeforeCopy = await run(
-      withActor(
-        player,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.list(campaign.id, { q: "Fen's Private Crowbar" }),
-        ),
-      ),
-    );
 
-    expect(campaignBeforeCopy.items).toEqual([]);
-    expect(strangerLibrary.items).toEqual([]);
-    expect(playerBeforeCopy.items).toEqual([]);
-
-    const copy = await run(
-      withActor(
-        firstDm,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.derive(campaign.id, original.id, {}),
-        ),
-      ),
-    );
-    const campaignAfterCopy = await run(
-      withActor(
-        firstDm,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.list(campaign.id, { q: "Fen's Private Crowbar" }),
-        ),
-      ),
-    );
-    const playerAfterDmOnlyCopy = await run(
-      withActor(
-        player,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.list(campaign.id, { q: "Fen's Private Crowbar" }),
-        ),
-      ),
-    );
-
-    expect(copy.campaignId).toBe(campaign.id);
-    expect(copy.accountId).toBeNull();
-    expect(copy.derivedFrom).toBe(original.id);
-    expect(campaignAfterCopy.items.map((item) => item.id)).toEqual([copy.id]);
-    expect(playerAfterDmOnlyCopy.items).toEqual([]);
+    expect(original.campaignId).toBeNull();
+    expect(mine.items.map((item) => item.id)).toEqual([original.id]);
+    expect(theirs.items).toEqual([]);
   });
 
-  it("rejects using a campaign copy as the source for another campaign", async () => {
-    const { actor, campaign: first } = await run(dmCampaign("The First Equipment Table"));
-    const campaigns = await run(
-      createCampaign({ name: "The Second Equipment Table", visibility: "shared" }).pipe(
-        Effect.provideService(CurrentActor, actor),
-      ),
-    );
-    const source = await run(withActor(actor, firstEquipmentNamed("Rope, hempen (50 feet)")));
-    const firstCopy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) => equipment.derive(first.id, source.id, {})),
-      ),
-    );
-
-    const result = await attempt(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.derive(campaigns.id, firstCopy.id, {}),
-        ),
-      ),
-    );
-
-    expect(result._tag).toBe("Failure");
-    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
-    expect(result._tag === "Failure" && (result.failure as NotFound).resource).toBe("equipment");
-  });
-
-  it("keeps system equipment immutable through both Library and campaign writes", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Immutable Equipment Table"));
+  it("keeps system equipment immutable through the one write path left", async () => {
+    // The Library is the only writable surface now, and a bundled row is
+    // owned by nobody: `libraryRowWritable` compares `account_id` to the
+    // credential's own, and a null never equals a uuid.
+    const { actor } = await run(dmCampaign("The Immutable Equipment Table"));
     const system = await run(withActor(actor, firstEquipmentNamed("Dagger")));
 
     const libraryUpdate = await attempt(
@@ -400,111 +337,15 @@ describe("2014 SRD mundane equipment", () => {
         ),
       ),
     );
-    const campaignUpdate = await attempt(
+    const libraryRemove = await attempt(
       withActor(
         actor,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.update(campaign.id, system.id, { name: "Dagger, but in a campaign" }),
-        ),
-      ),
-    );
-    const campaignRemove = await attempt(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) => equipment.remove(campaign.id, system.id)),
+        Effect.flatMap(EquipmentRepo, (equipment) => equipment.libraryRemove(system.id)),
       ),
     );
 
     expect(libraryUpdate._tag).toBe("Failure");
-    expect(campaignUpdate._tag).toBe("Failure");
-    expect(campaignRemove._tag).toBe("Failure");
-  });
-
-  it("copies equipment as a campaign snapshot and does not follow later source updates", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Equipment Snapshot"));
-    const source = await run(withActor(actor, firstEquipmentNamed("Dagger")));
-    const copy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.derive(campaign.id, source.id, { name: "Salt Road Dagger" }),
-        ),
-      ),
-    );
-
-    const revised = EQUIPMENT_RAW.map((item) =>
-      item.index === "dagger"
-        ? { ...item, name: "Dagger, Revised", desc: ["This source row changed."] }
-        : item,
-    );
-    await run(importSystemEquipment(revised));
-
-    const copiedAgain = await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) => equipment.findById(campaign.id, copy.id)),
-      ),
-    );
-    const revisedSource = await run(withActor(actor, firstEquipmentNamed("Dagger, Revised")));
-    const sourceKeys = await sql(
-      (client) => client<{
-        readonly copy_key: string;
-        readonly source_key: string;
-      }>`
-        select copy.source_key as copy_key,
-               system.source_key as source_key
-        from equipment copy
-        join equipment system
-          on system.source_corpus = copy.source_corpus
-         and system.source_family = copy.source_family
-         and system.source_key = copy.source_key
-        where copy.id = ${copy.id}
-          and system.campaign_id is null
-          and system.account_id is null
-      `,
-    );
-
-    expect(copiedAgain.name).toBe("Salt Road Dagger");
-    expect(copiedAgain.equipment.desc).toEqual(source.equipment.desc);
-    expect(revisedSource.id).toBe(source.id);
-    expect(sourceKeys).toEqual([{ copy_key: "dagger", source_key: "dagger" }]);
-  }, 60_000);
-
-  it("leaves a campaign copy standing when its Library original is deleted", async () => {
-    const { actor, campaign } = await run(dmCampaign("The Equipment Delete Snapshot"));
-    const original = await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.libraryCreate(customEquipment("Discarded Original Gear")),
-        ),
-      ),
-    );
-    const copy = await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) =>
-          equipment.derive(campaign.id, original.id, {}),
-        ),
-      ),
-    );
-
-    await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) => equipment.libraryRemove(original.id)),
-      ),
-    );
-
-    const stillThere = await run(
-      withActor(
-        actor,
-        Effect.flatMap(EquipmentRepo, (equipment) => equipment.findById(campaign.id, copy.id)),
-      ),
-    );
-
-    expect(stillThere.name).toBe("Discarded Original Gear");
-    expect(stillThere.derivedFrom).toBeNull();
+    expect(libraryRemove._tag).toBe("Failure");
   });
 
   it("resolves the 2014 background starting equipment references to real equipment source rows", async () => {

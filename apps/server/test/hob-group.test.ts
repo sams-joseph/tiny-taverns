@@ -134,7 +134,7 @@ const makeFixture = Effect.gen(function* () {
     beats.create(hagsBargain.id, played.id, { body: "CANONBEAT the hag took the lantern." }),
   );
   const marsh = yield* asWren(
-    creatures.create(hagsBargain.id, {
+    creatures.libraryCreate({
       name: "Reed Stalker",
       type: "Monstrosity",
       cr: "1",

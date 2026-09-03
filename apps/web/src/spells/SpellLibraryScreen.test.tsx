@@ -115,7 +115,7 @@ describe("SpellLibraryScreen", () => {
     expect(screen.queryByText(/spell:import/)).toBeNull();
   });
 
-  it("opens the reader with the standard facts, and the copy control in the body", async () => {
+  it("opens the reader with the standard facts, and no copy control anywhere", async () => {
     await renderSpells(mintingSession());
     await screen.findByText("Fireball");
 
@@ -125,10 +125,9 @@ describe("SpellLibraryScreen", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Casting")).toBeInTheDocument();
     expect(within(dialog).getByText("150 feet")).toBeInTheDocument();
-    // The copy control sits in the body beside the row it acts on — the
-    // `CreatureDialog` placement, now everyone's. This account runs a
-    // campaign, so it is the select and the verb rather than the empty answer.
-    expect(screen.getByRole("combobox", { name: "Copy into" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Copy in/ })).toBeInTheDocument();
+    // The instancing decision of 2026-09-02: a spell is not copied into a
+    // campaign from here or anywhere — the Library is the whole surface.
+    expect(screen.queryByRole("combobox", { name: "Copy into" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Copy in/ })).toBeNull();
   });
 });

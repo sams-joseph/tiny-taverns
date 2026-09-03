@@ -130,7 +130,7 @@ const makeFixture = Effect.gen(function* () {
   );
 
   const shade = yield* as(
-    creatures.create(campaign.id, {
+    creatures.libraryCreate({
       name: "Ferryman's Shade",
       size: "Medium",
       type: "Undead",
@@ -147,7 +147,6 @@ const makeFixture = Effect.gen(function* () {
         abilities: [],
         traits: [{ name: "Nimble Escape", text: "It disengages as a bonus action." }],
       },
-      visibility: "shared",
     }),
   );
 
@@ -421,9 +420,11 @@ describe("scoping — proven, not reasoned about", () => {
     const crate = await found(fixture.player, fixture.campaign.id, "crate");
     const elsewhere = await run(fixture.player, fixture.otherTable.id, { q: "ferryman" });
 
-    // The shared note, the shared beat and the shared creature — and not the
-    // DM-only ones, which is the row's own `visibility` applying inside every
-    // arm of the union.
+    // The shared note and the shared beat — and not the DM-only ones, which
+    // is the row's own `visibility` applying inside every arm of the union.
+    // (The shade is the DM's Library original now, so a player does not find
+    // it at all: `usableInCampaign`'s own-Library half is per reader, and
+    // nothing has been shared to the group.)
     expect(keys(here)).toContain(`note:${fixture.ferrymanNote.id}`);
     expect(keys(here)).toContain(`beat:${fixture.ferrymanBeat.id}`);
     expect(keys(crate)).not.toContain(`note:${fixture.crateNote.id}`);

@@ -361,6 +361,13 @@ const EncountersLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * What a campaign can use of the creature corpus — the encounter picker's
+ * list, and the by-id read that resolves internal instances a roster or a
+ * fight already names. The campaign-copy management endpoints are gone with
+ * the 2026-09-02 instancing decision; the instances are minted inside
+ * `EncounterCreatures.create` and managed by nobody.
+ */
 const CreaturesLive = HttpApiBuilder.group(
   TavernsApi,
   "creatures",
@@ -368,37 +375,7 @@ const CreaturesLive = HttpApiBuilder.group(
     const creatures = yield* Creatures;
     return handlers
       .handle("list", ({ params, query }) => creatures.list(params.campaignId, query))
-      .handle("environments", ({ params }) => creatures.environments(params.campaignId))
-      .handle("facets", ({ params }) => creatures.facets(params.campaignId))
-      .handle("create", ({ params, payload }) => creatures.create(params.campaignId, payload))
-      .handle("findById", ({ params }) => creatures.findById(params.campaignId, params.creatureId))
-      .handle("update", ({ params, payload }) =>
-        creatures.update(params.campaignId, params.creatureId, payload),
-      )
-      .handle("remove", ({ params }) => creatures.remove(params.campaignId, params.creatureId))
-      .handle("derive", ({ params, payload }) =>
-        creatures.derive(params.campaignId, params.creatureId, payload),
-      );
-  }),
-);
-
-/** A campaign's copied spells plus the bundled 2014 SRD spell corpus. */
-const SpellsLive = HttpApiBuilder.group(
-  TavernsApi,
-  "spells",
-  Effect.fnUntraced(function* (handlers) {
-    const spells = yield* Spells;
-    return handlers
-      .handle("list", ({ params, query }) => spells.list(params.campaignId, query))
-      .handle("findById", ({ params }) => spells.findById(params.campaignId, params.spellId))
-      .handle("create", ({ params, payload }) => spells.create(params.campaignId, payload))
-      .handle("update", ({ params, payload }) =>
-        spells.update(params.campaignId, params.spellId, payload),
-      )
-      .handle("remove", ({ params }) => spells.remove(params.campaignId, params.spellId))
-      .handle("derive", ({ params, payload }) =>
-        spells.derive(params.campaignId, params.spellId, payload),
-      );
+      .handle("findById", ({ params }) => creatures.findById(params.campaignId, params.creatureId));
   }),
 );
 
@@ -406,113 +383,18 @@ const SpellsLive = HttpApiBuilder.group(
  * A campaign's rules vocabulary — the classes, races and backgrounds a
  * character at this table is built from.
  *
- * **The only list in the product a *player* reads to fill in a control**, which
- * is what makes it different from the bestiary it is otherwise a copy of: the
- * create form's two pickers are this read, and a player can never reach their
- * DM's Library, so a homebrew class is unreachable until it is copied in. That
- * is all in the repository and in `repo/visibility.ts`; there is nothing on
- * this page but the campaign from the path and the payload.
- *
- * **There is no `create`.** Authoring happens in the Library — the captain's
- * second statement — so a campaign gets an option through `derive` and through
- * nothing else, and the group above it declares no such endpoint to handle.
+ * **The only list in the product a *player* reads to fill in a control.** The
+ * create form's pickers are this read: the shared bundle, the reader's own
+ * Library, and originals explicitly shared to the campaign's group. There is
+ * nothing else in the group — authoring lives in the Library, sharing lives on
+ * the group, and a campaign holds no managed copies.
  */
-const EquipmentLive = HttpApiBuilder.group(
-  TavernsApi,
-  "equipment",
-  Effect.fnUntraced(function* (handlers) {
-    const equipment = yield* EquipmentRepo;
-    return handlers
-      .handle("list", ({ params, query }) => equipment.list(params.campaignId, query))
-      .handle("findById", ({ params }) => equipment.findById(params.campaignId, params.equipmentId))
-      .handle("create", ({ params, payload }) => equipment.create(params.campaignId, payload))
-      .handle("update", ({ params, payload }) =>
-        equipment.update(params.campaignId, params.equipmentId, payload),
-      )
-      .handle("remove", ({ params }) => equipment.remove(params.campaignId, params.equipmentId))
-      .handle("derive", ({ params, payload }) =>
-        equipment.derive(params.campaignId, params.equipmentId, payload),
-      );
-  }),
-);
-
-const MagicItemsLive = HttpApiBuilder.group(
-  TavernsApi,
-  "magicItems",
-  Effect.fnUntraced(function* (handlers) {
-    const magicItems = yield* MagicItems;
-    return handlers
-      .handle("list", ({ params, query }) => magicItems.list(params.campaignId, query))
-      .handle("findById", ({ params }) =>
-        magicItems.findById(params.campaignId, params.magicItemId),
-      )
-      .handle("create", ({ params, payload }) => magicItems.create(params.campaignId, payload))
-      .handle("update", ({ params, payload }) =>
-        magicItems.update(params.campaignId, params.magicItemId, payload),
-      )
-      .handle("remove", ({ params }) => magicItems.remove(params.campaignId, params.magicItemId))
-      .handle("derive", ({ params, payload }) =>
-        magicItems.derive(params.campaignId, params.magicItemId, payload),
-      );
-  }),
-);
-
-const FeatsLive = HttpApiBuilder.group(
-  TavernsApi,
-  "feats",
-  Effect.fnUntraced(function* (handlers) {
-    const feats = yield* Feats;
-    return handlers
-      .handle("list", ({ params, query }) => feats.list(params.campaignId, query))
-      .handle("findById", ({ params }) => feats.findById(params.campaignId, params.featId))
-      .handle("update", ({ params, payload }) =>
-        feats.update(params.campaignId, params.featId, payload),
-      )
-      .handle("remove", ({ params }) => feats.remove(params.campaignId, params.featId))
-      .handle("derive", ({ params, payload }) =>
-        feats.derive(params.campaignId, params.featId, payload),
-      );
-  }),
-);
-
-const RuleArticlesLive = HttpApiBuilder.group(
-  TavernsApi,
-  "ruleArticles",
-  Effect.fnUntraced(function* (handlers) {
-    const articles = yield* RuleArticles;
-    return handlers
-      .handle("list", ({ params, query }) => articles.list(params.campaignId, query))
-      .handle("findById", ({ params }) =>
-        articles.findById(params.campaignId, params.ruleArticleId),
-      )
-      .handle("update", ({ params, payload }) =>
-        articles.update(params.campaignId, params.ruleArticleId, payload),
-      )
-      .handle("remove", ({ params }) => articles.remove(params.campaignId, params.ruleArticleId))
-      .handle("derive", ({ params, payload }) =>
-        articles.derive(params.campaignId, params.ruleArticleId, payload),
-      );
-  }),
-);
-
 const CharacterOptionsLive = HttpApiBuilder.group(
   TavernsApi,
   "options",
   Effect.fnUntraced(function* (handlers) {
     const options = yield* Options;
-    const progression = yield* ClassProgression;
-    return handlers
-      .handle("vocabulary", ({ params }) => options.vocabulary(params.campaignId))
-      .handle("list", ({ params, query }) => options.list(params.campaignId, query))
-      .handle("findById", ({ params }) => options.findById(params.campaignId, params.optionId))
-      .handle("progression", ({ params }) => progression.read(params.campaignId, params.optionId))
-      .handle("update", ({ params, payload }) =>
-        options.update(params.campaignId, params.optionId, payload),
-      )
-      .handle("remove", ({ params }) => options.remove(params.campaignId, params.optionId))
-      .handle("derive", ({ params, payload }) =>
-        options.derive(params.campaignId, params.optionId, payload),
-      );
+    return handlers.handle("list", ({ params, query }) => options.list(params.campaignId, query));
   }),
 );
 
@@ -1055,11 +937,6 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     NotesLive,
     EncountersLive,
     CreaturesLive,
-    SpellsLive,
-    EquipmentLive,
-    MagicItemsLive,
-    RuleArticlesLive,
-    FeatsLive,
     CharacterOptionsLive,
     LibraryLive,
     EncounterCreaturesLive,
