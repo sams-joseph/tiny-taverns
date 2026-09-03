@@ -4385,17 +4385,27 @@ the field-mode cross-match cap stays. **Match all / Match any** (`FilterInputVal
 `matchToggle`) renders only where the consumer honours OR — the client-filtered Encounters
 screen; the server-paged corpora can only AND their clauses, and the toggle (like the `not`
 operator) must not be offered where it would mean narrowing a page and calling it the list.
-**The box is always one line** (iteration 3): it grows to its consumer's width; when the pills
-stop fitting beside the reserved typing room, the _oldest_ collect into a `+N filters` chip —
-the filter just added stays visible — whose popover (a new lean `popover.tsx` port, pure Base
-UI) holds the collected pills with every segment live. The fit is a pure `visiblePillCount`
-over widths measured from an invisible `w-0 overflow-hidden` clone row (an absolute row wider
-than the box would otherwise inflate `scrollWidth`), recomputed per change and on resize; a
-zero-width container shows everything, so jsdom and `display: none` never overflow — overflow
-component tests drive the measurement through prototype `offsetWidth`/`clientWidth` getters and
-the `PILL_LAYOUT` constants. A consumer's fixed-width box must leave room for its own chrome:
-the chip + input reserve + add-filter (+ match toggle) — `w-64` clipped the Encounters toggle,
-`w-96` is its floor.
+**The box is always one line, and it is content-sized** (2026-09-03, replacing iteration 3's
+consumer-width box at the captain's ask): `w-fit` with a compact `min-w-48` (192px) empty
+default, growing with the text — the input is `field-sizing-content`, so typing widens and
+deleting narrows it with no JS in the loop — and with the pills, up to the **consumer's**
+`max-w-*` (the shelves' `max-w-3xl` via `FilterBox`; the campaign boxes' old fixed widths
+became the same values as maxes). At the max the overflow behaviour takes over: the _oldest_
+pills collect into a `+N filters` chip — the filter just added stays visible — whose popover (a
+lean `popover.tsx` port, pure Base UI) holds the collected pills with every segment live. The
+fit is a pure `visiblePillCount` over widths measured from an invisible `w-0 overflow-hidden`
+clone row (an absolute row wider than the box would otherwise inflate `scrollWidth`), fitted
+against the box's **limit** — its computed `max-width` bounded by its parent, never its
+`clientWidth`, because a content-sized box's current width depends on which pills are already
+hidden and the chip self-justifies (measured: one pill on a wide screen collected into its own
+chip and stayed there); a box with no pixel limit falls back to `clientWidth`, which is how the
+stubbed jsdom overflow tests still drive it through prototype getters and the `PILL_LAYOUT`
+constants. Two more invariants: the input's `min-w-30` (120px) equals
+`PILL_LAYOUT.inputReserve` so the box the fit promises is the box CSS lays out, and the
+component sets **no `max-w-*` of its own** — `tw-theme.ts`'s merge config knows only the named
+`measure` container scale, so a component default and a consumer's `max-w-3xl` would both
+survive the merge and CSS source order, not the consumer, would pick the winner (this shipped
+briefly and the ceiling silently never applied).
 `filter-input-model.ts` is the grammar, separately tested; `filter-input.tsx` wires it onto
 `combobox.tsx`, a port of the base-nova registry combobox onto Base UI (**not** shadcn's
 `command`, which is `cmdk` and cmdk is Radix — the lockfile must stay Radix-free). Keyboard is
@@ -4403,7 +4413,7 @@ the primitive's (ArrowLeft into pills, Backspace on empty input removes the last
 Enter commits the highlighted row; auto-highlight only mid-composition so a bare Enter on free
 text never commits a filter); the popup stays open across commits (close-on-select cancelled
 via `onOpenChange`) and never renders over plain text that suggests nothing.
-`apps/web/src/library/filters.tsx` (`FilterBar` + `FilterBox` + the sort-only `FilterSelect`) +
+`apps/web/src/library/filters.tsx` (`FilterBar` + `FilterBox` + the sort-only `SortMenu`) +
 `library/query.ts` (`useFilterQuery`: the value, the debounced `q`, and the
 `valuesOf`/`flagOf`/`rangeOf` readers — `valuesOf` reads only `in` conditions, `flagOf` is now
 `boolean | undefined` since booleans gained an honest is-not over the server's equality filter)
@@ -4433,7 +4443,12 @@ and the encounter `CreaturePicker` (facet-free). Where older prose below describ
   `actions` slot — their established placement, deliberately left where it was in the 2026-09-03
   conversion rather than re-laid-out.
 - **`FilterBar` is the first element of the content column on every Library tab**, in one order:
-  the `FilterBox`, a `Sort:` `FilterSelect` — then _Clear filters_ and a "Looking…" status, which
+  the `FilterBox`, then `SortMenu` — an `arrow-up-down` ghost icon button opening a radio
+  dropdown (`dropdown-menu.tsx`, a Base UI `Menu` port on `z-popup`; the captain's ask of
+  2026-09-03, replacing the labelled `FilterSelect`). The active order still reads unopened,
+  from the button's accessible name (`Sort — CR`); the radio items pass `closeOnClick` because
+  Base UI radio items stay open by default, and its `GroupLabel` must sit _inside_ the
+  `RadioGroup` or Base UI throws. Then _Clear filters_ and a "Looking…" status, which
   are the bar's own so no tab can forget them. Sort stays outside the box on purpose: a removable
   chip is the wrong shape for a control that always has an answer, and clearing keeps the sort —
   reordering is not filtering. `useFilterQuery` is the query-state hook for the plain tabs;
