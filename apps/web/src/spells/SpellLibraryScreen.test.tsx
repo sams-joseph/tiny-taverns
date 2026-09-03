@@ -79,10 +79,13 @@ describe("SpellLibraryScreen", () => {
     // the typed grammar are the same commit.
     await userEvent.click(box);
     await userEvent.click(await screen.findByRole("option", { name: "Level" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Level: Cantrip" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Cantrip" }));
     await waitFor(() => expect([...lastQuery().getAll("levels")].sort()).toEqual(["0", "3"]));
 
-    // A boolean facet is a ready token in the suggestions.
+    // The picker stayed on Level for further picks; leave it, then take the
+    // boolean from the field list — a ready condition.
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(box);
     await userEvent.click(await screen.findByRole("option", { name: "Ritual" }));
     await waitFor(() => expect(lastQuery().get("ritual")).toBe("true"));
     // The level facet is still on the same request — the facets combine.
@@ -102,15 +105,19 @@ describe("SpellLibraryScreen", () => {
     await userEvent.type(box, "fire");
     await waitFor(() => expect(lastQuery().get("q")).toBe("fire"));
     expect(lastQuery().getAll("schools")).toEqual(["evocation"]);
-    // The committed facet is a removable chip in the same box.
-    expect(screen.getByText("School: Evocation")).toBeInTheDocument();
+    // The committed facet is a segmented pill in the same box —
+    // field | operator | value | ×, each its own affordance.
+    expect(screen.getByRole("button", { name: "Edit School values" })).toHaveTextContent(
+      "Evocation",
+    );
+    expect(screen.getByRole("button", { name: "Remove filter School" })).toBeInTheDocument();
 
     await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     await waitFor(() => expect(lastQuery().get("q")).toBe(""));
     expect(lastQuery().getAll("schools")).toEqual([]);
     expect(box).toHaveValue("");
-    expect(screen.queryByText("School: Evocation")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove filter School" })).toBeNull();
   });
 
   it("tells the two empty silences apart", async () => {

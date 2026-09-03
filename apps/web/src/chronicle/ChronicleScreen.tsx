@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
+  conditionOf,
   EMPTY_FILTER_VALUE,
   FilterInput,
   Icon,
@@ -132,8 +133,7 @@ export function ChronicleScreen() {
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [q, setQ] = useState("");
   const scope: SearchScope =
-    (filter.tokens.find((token) => token.facet === "in")?.value as SearchScope | undefined) ??
-    "all";
+    (conditionOf(filter, "in")?.values[0] as SearchScope | undefined) ?? "all";
   const [readAloud, setReadAloud] = useState(false);
   /**
    * Which night is open. `undefined` means nobody has chosen yet, which resolves

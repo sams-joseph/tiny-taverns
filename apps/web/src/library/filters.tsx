@@ -109,6 +109,7 @@ export function FilterBox({
   label,
   list,
   facets = [],
+  matchToggle = false,
 }: {
   readonly label: string;
   readonly list: {
@@ -116,6 +117,8 @@ export function FilterBox({
     readonly onChange: (value: FilterInputValue) => void;
   };
   readonly facets?: ReadonlyArray<FilterInputFacet>;
+  /** Offer Match all / Match any — only where the consumer honours "any". */
+  readonly matchToggle?: boolean;
 }) {
   return (
     <FilterInput
@@ -123,6 +126,7 @@ export function FilterBox({
       onChange={list.onChange}
       facets={facets}
       label={label}
+      matchToggle={matchToggle}
       className="max-w-3xl min-w-64 shrink grow basis-80"
     />
   );

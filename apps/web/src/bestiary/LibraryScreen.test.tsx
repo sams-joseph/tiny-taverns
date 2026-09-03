@@ -182,7 +182,7 @@ describe("LibraryScreen", () => {
     server.routes.set(LIST, { status: 200, body: page([owlbear, sexton]) });
     await userEvent.click(screen.getByRole("combobox", { name: "Search the library" }));
     await userEvent.click(await screen.findByRole("option", { name: "Environment" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Environment: Barrow" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Barrow" }));
 
     await waitFor(() => expect(lastQuery().getAll("environments")).toEqual(["Barrow"]));
     await waitFor(() => expect(screen.queryByText("Goblin Boss")).toBeNull());

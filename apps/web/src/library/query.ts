@@ -1,8 +1,9 @@
 import {
+  conditionOf,
   EMPTY_FILTER_VALUE,
   rangeBoundsOf,
   searchTextOf,
-  tokenValuesOf,
+  valuesOf,
   type FilterInputFacet,
   type FilterInputValue,
 } from "@taverns/ui";
@@ -56,14 +57,17 @@ export interface FilterQuery {
   readonly onChange: (value: FilterInputValue) => void;
   /** The settled search text — the input minus any `facet:` composition. */
   readonly q: string;
-  /** Whether anything narrows: a settled search, or any token at all. */
+  /** Whether anything narrows: a settled search, or any condition at all. */
   readonly narrowed: boolean;
   readonly clear: () => void;
-  /** One enum facet's committed values — any-of, in commit order. */
+  /**
+   * One enum facet's inclusion list — any-of, in commit order, and empty for
+   * an exclusion condition, which a wire that can only include must not see.
+   */
   readonly valuesOf: (facetKey: string) => ReadonlyArray<string>;
-  /** A boolean facet: `true` when its chip is on, `undefined` otherwise. */
-  readonly flagOf: (facetKey: string) => true | undefined;
-  /** A range facet's two ends, `undefined` where an end (or the chip) is absent. */
+  /** A boolean facet: `true`/`false` per its pill, `undefined` when absent. */
+  readonly flagOf: (facetKey: string) => boolean | undefined;
+  /** A range facet's two ends, `undefined` where an end (or the pill) is absent. */
   readonly rangeOf: (facetKey: string) => {
     readonly min: string | undefined;
     readonly max: string | undefined;
@@ -86,14 +90,18 @@ export function useFilterQuery(facets: ReadonlyArray<FilterInputFacet>): FilterQ
     value,
     onChange: setValue,
     q,
-    narrowed: q.trim() !== "" || value.tokens.length > 0,
+    narrowed: q.trim() !== "" || value.filters.length > 0,
     clear,
-    valuesOf: (facetKey) => tokenValuesOf(value, facetKey),
-    flagOf: (facetKey) =>
-      value.tokens.some((token) => token.facet === facetKey) ? true : undefined,
+    valuesOf: (facetKey) => valuesOf(value, facetKey),
+    flagOf: (facetKey) => {
+      const condition = conditionOf(value, facetKey);
+      return condition === undefined ? undefined : condition.values[0] !== "false";
+    },
     rangeOf: (facetKey) => {
-      const token = value.tokens.find((candidate) => candidate.facet === facetKey);
-      return token === undefined ? { min: undefined, max: undefined } : rangeBoundsOf(token.value);
+      const condition = conditionOf(value, facetKey);
+      return condition === undefined
+        ? { min: undefined, max: undefined }
+        : rangeBoundsOf(condition);
     },
   };
 }

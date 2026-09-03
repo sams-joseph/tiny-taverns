@@ -79,6 +79,16 @@ function ComboboxContent({
   );
 }
 
+/**
+ * A button that toggles the popup — the add-filter affordance a token input
+ * wants beside its text entry. Bare: the caller supplies the icon.
+ */
+function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Props) {
+  return (
+    <ComboboxPrimitive.Trigger data-slot="combobox-trigger" className={cn(className)} {...props} />
+  );
+}
+
 function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
   return (
     <ComboboxPrimitive.List
@@ -240,4 +250,5 @@ export {
   ComboboxLabel,
   ComboboxList,
   ComboboxSeparator,
+  ComboboxTrigger,
 };

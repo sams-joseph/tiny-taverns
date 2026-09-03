@@ -6,7 +6,7 @@ import {
   FilterInput,
   Icon,
   searchTextOf,
-  tokenValuesOf,
+  type FilterCondition,
   type FilterInputFacet,
 } from "@taverns/ui";
 import { useState } from "react";
@@ -46,11 +46,15 @@ const encounterFacets = (encounters: ReadonlyArray<Encounter>): ReadonlyArray<Fi
     ...new Set(encounters.flatMap((encounter) => encounter.difficulty ?? [])),
   ].sort();
   const out: Array<FilterInputFacet> = [];
+  // Exclusion and Match any are offered here because the filter is the
+  // browser's own, over rows already in hand — the paged Library corpora
+  // cannot honour either without narrowing a page and calling it the list.
   if (tags.length > 0)
     out.push({
       kind: "enum",
       key: "tag",
       label: "Tag",
+      not: true,
       options: tags.map((tag) => ({ value: tag, label: tag })),
     });
   if (difficulties.length > 0)
@@ -58,9 +62,21 @@ const encounterFacets = (encounters: ReadonlyArray<Encounter>): ReadonlyArray<Fi
       kind: "enum",
       key: "difficulty",
       label: "Difficulty",
+      not: true,
       options: difficulties.map((band) => ({ value: band, label: band })),
     });
   return out;
+};
+
+/** Whether one encounter satisfies one pill — operator included. */
+const satisfies = (encounter: Encounter, condition: FilterCondition): boolean => {
+  const has =
+    condition.facet === "tag"
+      ? encounter.tags.some((tag) => condition.values.includes(tag))
+      : condition.facet === "difficulty"
+        ? encounter.difficulty !== null && condition.values.includes(encounter.difficulty)
+        : true;
+  return condition.operator === "not" ? !has : has;
 };
 
 export function EncountersScreen() {
@@ -84,6 +100,7 @@ export function EncountersScreen() {
             value={filter}
             onChange={setFilter}
             facets={encounterFacets(view.encounters)}
+            matchToggle
             className="min-h-control-sm w-64 py-0.5"
           />
           <Button
@@ -100,14 +117,14 @@ export function EncountersScreen() {
       {({ view, run }) => {
         const facets = encounterFacets(view.encounters);
         const search = searchTextOf(filter.text, facets);
-        const tags = tokenValuesOf(filter, "tag");
-        const difficulties = tokenValuesOf(filter, "difficulty");
+        // The search always narrows; the pills combine per the match toggle.
         const shown = view.encounters.filter(
           (encounter) =>
             matches(search, encounter.name, ...encounter.tags) &&
-            (tags.length === 0 || encounter.tags.some((tag) => tags.includes(tag))) &&
-            (difficulties.length === 0 ||
-              (encounter.difficulty !== null && difficulties.includes(encounter.difficulty))),
+            (filter.filters.length === 0 ||
+              (filter.match === "all"
+                ? filter.filters.every((condition) => satisfies(encounter, condition))
+                : filter.filters.some((condition) => satisfies(encounter, condition)))),
         );
 
         // Counted over every note, not the filtered encounters: a card's own

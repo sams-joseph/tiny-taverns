@@ -87,7 +87,7 @@ export function CreaturePicker({
     <div className="flex flex-col gap-2">
       <FilterInput
         label="Search the bestiary"
-        value={{ text: term, tokens: [] }}
+        value={{ text: term, filters: [], match: "all" }}
         onChange={(next) => setTerm(next.text)}
         facets={[]}
       />

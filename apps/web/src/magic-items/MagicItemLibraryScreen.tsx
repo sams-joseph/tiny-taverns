@@ -49,7 +49,7 @@ export function MagicItemLibraryScreen() {
   const opening = pages.magicItems.find((item) => item.id === opened);
   const editingItem = pages.magicItems.find((item) => item.id === editing);
   const navigateToName = (name: string) => {
-    list.onChange({ text: name, tokens: [] });
+    list.onChange({ text: name, filters: [], match: "all" });
     setOpened(undefined);
   };
 

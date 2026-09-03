@@ -64,28 +64,35 @@ export {
   ComboboxLabel,
   ComboboxList,
   ComboboxSeparator,
+  ComboboxTrigger,
 } from "./components/ui/combobox";
 export { FilterInput } from "./components/ui/filter-input";
 export {
   EMPTY_FILTER_VALUE,
   compositionOf,
+  conditionLabelOf,
+  conditionOf,
+  fieldLabelOf,
+  operatorLabelOf,
+  operatorsFor,
   rangeBoundsOf,
-  rangeValueOf,
-  sameToken,
+  rangeConditionOf,
   searchTextOf,
   suggestionsFor,
-  tokenLabelOf,
-  tokenValuesOf,
+  valuesLabelOf,
+  valuesOf,
   withComposition,
-  withToken,
-  withoutToken,
+  withNextOperator,
+  withValue,
+  withoutCondition,
 } from "./components/ui/filter-input-model";
 export type {
+  FilterCondition,
   FilterInputFacet,
   FilterInputOption,
   FilterInputSuggestion,
-  FilterInputToken,
   FilterInputValue,
+  FilterOperator,
 } from "./components/ui/filter-input-model";
 
 export {
