@@ -1,7 +1,6 @@
 import type {
   AbilityBonus,
   AbilityKey,
-  BackgroundBody,
   CampaignMembership,
   CharacterOption,
   CharacterOwnCreate,
@@ -10,15 +9,20 @@ import type {
   RaceBody,
   SheetIdentity,
   SubraceBody,
-  Trait,
 } from "@taverns/api";
 import {
+  asBackgroundOption,
+  asClassOption,
+  asRaceOption,
   bonusesLine,
   emptyCharacterSheet,
+  identityGrants,
   optionNamed,
   seedFor,
+  sheetGrantsFor,
   STARTING_LEVEL,
   subraceNamed,
+  withSavingThrows,
 } from "@taverns/api";
 import { abilitiesFrom, abilityDrafts, badScores, type AbilityDraft } from "./abilities";
 
@@ -149,30 +153,6 @@ const choiceFrom = (
     .map((ability) => allowed.get(ability)!);
 };
 
-const backgroundIn = (
-  draft: CharacterDraft,
-  options: ReadonlyArray<CharacterOption>,
-): BackgroundBody | undefined => {
-  const option = optionNamed(options, "background", draft.background);
-  return option?.kind === "background" ? option.body : undefined;
-};
-
-const backgroundProficiencies = (body: BackgroundBody | undefined): ReadonlyArray<string> =>
-  body === undefined ? [] : [...body.proficiencies, ...body.languages];
-
-const backgroundTraits = (body: BackgroundBody | undefined): ReadonlyArray<Trait> =>
-  body?.feature === undefined ? [] : [{ name: body.feature.name, text: body.feature.text }];
-
-const goldPieces = (body: BackgroundBody | undefined): number | undefined => {
-  const match = body?.gold?.trim().match(/^(\d+)\s*gp$/i);
-  if (match?.[1] === undefined) return undefined;
-  const value = Number(match[1]);
-  return Number.isSafeInteger(value) ? value : undefined;
-};
-
-const backgroundInventory = (body: BackgroundBody | undefined): ReadonlyArray<{ name: string }> =>
-  body === undefined ? [] : body.equipment.map((name) => ({ name }));
-
 export const selectedRaceBonuses = (
   draft: CharacterDraft,
   options: ReadonlyArray<CharacterOption>,
@@ -249,24 +229,36 @@ export const payloadFrom = (
   const background = draft.background.trim();
   const sheetUrl = draft.sheetUrl.trim();
   const notes = draft.notes.trim();
-  const abilities = seedOf(draft, options).abilities;
-  const backgroundBody = backgroundIn(draft, options);
-  const proficiencies = backgroundProficiencies(backgroundBody);
-  const traits = backgroundTraits(backgroundBody);
-  const inventory = backgroundInventory(backgroundBody);
-  const gp = goldPieces(backgroundBody);
+  // The corpora's half of the sheet, through the same `sheetGrantsFor` Hob's
+  // `proposeCharacter` composes — level-1 class features, racial traits, the
+  // three sources' proficiencies, the background's kit — so a hand-filled Hill
+  // Dwarf Fighter and a drafted one start on the same document.
+  const raceOption = raceIn(draft, options);
+  const subraceOption = subraceIn(draft, options);
+  const grants = sheetGrantsFor({
+    classOption: asClassOption(optionNamed(options, "class", draft.className)),
+    raceOption: asRaceOption(raceOption),
+    subraceName: subraceOption?.name ?? (subrace === "" ? undefined : subrace),
+    backgroundOption: asBackgroundOption(optionNamed(options, "background", draft.background)),
+  });
+  const abilities = withSavingThrows(
+    seedOf(draft, options).abilities,
+    grants.savingThrows,
+    grants.proficiencyBonus,
+  );
   const identity: SheetIdentity = {
+    ...identityGrants(grants),
     ...(background === "" ? {} : { background }),
   };
   const sheet: CharacterSheet = {
     ...emptyCharacterSheet,
     notes,
     abilities,
-    traits,
-    ...(background === "" ? {} : { identity }),
-    ...(proficiencies.length === 0 ? {} : { proficiencies }),
-    ...(inventory.length === 0 ? {} : { inventory }),
-    ...(gp === undefined ? {} : { currency: { gp } }),
+    traits: grants.traits,
+    ...(Object.keys(identity).length === 0 ? {} : { identity }),
+    ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
+    ...(grants.inventory.length === 0 ? {} : { inventory: grants.inventory }),
+    ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
   };
 
   return {
@@ -281,11 +273,11 @@ export const payloadFrom = (
     ...(sheetUrl === "" ? {} : { sheetUrl }),
     ...(notes === "" &&
     abilities.length === 0 &&
-    background === "" &&
-    proficiencies.length === 0 &&
-    traits.length === 0 &&
-    inventory.length === 0 &&
-    gp === undefined
+    Object.keys(identity).length === 0 &&
+    grants.proficiencies.length === 0 &&
+    grants.traits.length === 0 &&
+    grants.inventory.length === 0 &&
+    grants.gold === undefined
       ? {}
       : { sheet }),
   };

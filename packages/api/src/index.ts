@@ -33,6 +33,7 @@ export * from "./Recap.js";
 export * from "./RuleArticle.js";
 export * from "./Ruleset.js";
 export * from "./Search.js";
+export * from "./SheetGrants.js";
 export * from "./Session.js";
 export * from "./Spell.js";
 export * from "./SessionEvent.js";

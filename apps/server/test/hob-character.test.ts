@@ -6,6 +6,7 @@ import {
   CurrentActor,
   type HobEvent,
   NotFound,
+  signed,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { SqlClient } from "effect/unstable/sql";
@@ -197,6 +198,8 @@ const ask = (
     readonly text?: string;
     readonly threadId?: AssistantThreadId;
     readonly rounds?: ReadonlyArray<unknown>;
+    /** What the create screen's composer sends; absent is the panel. */
+    readonly intent?: "character";
   } = {},
 ): Promise<Asked> => {
   const model = scriptedModel({
@@ -211,6 +214,7 @@ const ask = (
       const stream = yield* hob.ask(fixture.campaign.id, {
         text: options.text ?? DESCRIBED,
         ...(options.threadId === undefined ? {} : { threadId: options.threadId }),
+        ...(options.intent === undefined ? {} : { intent: options.intent }),
       });
       const events = yield* Stream.runCollect(stream);
       return { events: Array.from(events), requests: model.requests() };
@@ -242,16 +246,20 @@ const said = (events: ReadonlyArray<HobEvent>): string => {
   return failed?.event === "failed" ? failed.data.message : "";
 };
 
+/**
+ * Accepts the way the handler does: the reach comes off the *thread's own
+ * shape* (`HobThreads.reachOf`), never off who is asking. Deriving it from the
+ * actor is exactly the assumption `intent` retired — a creator holds threads in
+ * both sets now, and their drafting thread is their own.
+ */
 const accept = (actor: Actor, threadId: AssistantThreadId, turnId: AssistantTurnId) =>
   runtime.runPromise(
-    Effect.flatMap(Proposals, (proposals) =>
-      proposals.accept(
-        actor.accountId === fixture.dm.accountId ? "dm" : "own",
-        fixture.campaign.id,
-        threadId,
-        turnId,
-      ),
-    ).pipe(withActor(actor), Effect.result),
+    Effect.gen(function* () {
+      const threads = yield* HobThreads;
+      const proposals = yield* Proposals;
+      const reach = yield* threads.reachOf(fixture.campaign.id, threadId);
+      return yield* proposals.accept(reach, fixture.campaign.id, threadId, turnId);
+    }).pipe(withActor(actor), Effect.result),
   );
 
 /** How many characters are at the table, whatever their visibility. */
@@ -490,7 +498,58 @@ describe("the accept makes a character, and it is the player's own", () => {
       "Medicine",
       "Survival",
     ]);
-    expect(character.sheet.proficiencies).toEqual(["Insight", "Religion", "Choose 2 languages"]);
+    // All three sources' grants in one list now — the class's armour, weapons
+    // and tools, the race's trait-attached skill and languages, then the
+    // background's — with the two instruction shapes filtered out: a
+    // `"Saving Throw: …"` line becomes the mark on the ability cell, and a
+    // `"Choose …"` line is a pick the player makes later. `sheetGrantsFor` is
+    // the one implementation, shared with the manual form.
+    expect(character.sheet.proficiencies).toEqual([
+      "Light Armor",
+      "Medium Armor",
+      "Shields",
+      "Clubs",
+      "Daggers",
+      "Javelins",
+      "Maces",
+      "Quarterstaffs",
+      "Sickles",
+      "Spears",
+      "Darts",
+      "Slings",
+      "Scimitars",
+      "Herbalism Kit",
+      "Skill: Perception",
+      "Common",
+      "Elvish",
+      "Insight",
+      "Religion",
+      "Choose 2 languages",
+    ]);
+    expect(character.sheet.proficiencies).not.toContain("Saving Throw: INT");
+    // The class's saving throws land as marks on the cells, with the save
+    // number read from the level-1 proficiency bonus the progression corpus
+    // supplies — WIS ranked first is 15 raised to nothing (Elf moves DEX), so
+    // `+2` modifier and `+4` save.
+    const wis = character.sheet.abilities.find((cell) => cell.label === "WIS");
+    expect(wis?.proficient).toBe(true);
+    expect(wis?.save).toBe(signed(Number(wis?.modifier) + 2));
+    expect(
+      character.sheet.abilities.find((cell) => cell.label === "STR")?.proficient,
+    ).toBeUndefined();
+    // Level-1 class features and the race's traits are on the sheet, off the
+    // progression and trait corpora — not just the background's feature.
+    const traitNames = character.sheet.traits.map((trait) => trait.name);
+    expect(traitNames).toContain("Druidic");
+    expect(traitNames).toContain("Spellcasting: Druid");
+    expect(traitNames).toContain("Darkvision");
+    expect(traitNames).toContain("Fey Ancestry");
+    // Granted features only: a choice under a parent feature stays a choice.
+    expect(traitNames.some((name) => name.startsWith("Fighting Style:"))).toBe(false);
+    // The identity keys the corpora answer: speed, proficiency bonus, hit dice.
+    expect(character.sheet.identity?.speed).toBe("30 ft.");
+    expect(character.sheet.identity?.proficiency).toBe("+2");
+    expect(character.sheet.identity?.hitDice).toBe("1/1 d8");
     expect(character.sheet.inventory?.map((item) => item.name)).toEqual([
       "1 × Clothes, common",
       "1 × Pouch",
@@ -500,7 +559,7 @@ describe("the accept makes a character, and it is the player's own", () => {
       "Herbalism kit",
     ]);
     expect(character.sheet.currency).toEqual({ gp: 15 });
-    expect(character.sheet.traits[0]?.name).toBe("Shelter of the Faithful");
+    expect(traitNames).toContain("Shelter of the Faithful");
     expect(character.sheet.identity?.subclass).toBe("Circle of the Land (Marsh)");
     expect(character.sheet.notes).toContain("Ashfen");
     // `descriptor` is a generated column over the three, so the drafted race
@@ -597,6 +656,124 @@ describe("the accept makes a character, and it is the player's own", () => {
 
     expect(accepted.success.character.name).toBe(proposed.proposal.name);
     expect(accepted.success.character.sheet).toEqual(proposed.proposal.sheet);
+  }, 60_000);
+});
+
+describe("the creator drafts too, and `intent` is what says so", () => {
+  /**
+   * The regression this block holds shut. The continuity decision made a
+   * campaign's creator a character author like anybody else, and the create
+   * screen's composer opened to them — but `Hob.ask` still read the
+   * `CampaignCreatorActor` proof as "the panel is asking" and answered the
+   * creator with the nine DM tools, which have no `proposeCharacter`. Measured
+   * in a real browser before the fix: the creator asked for a draft, the model
+   * fell back to prose (or a `proposeNote`), the screen said *"No sheet came
+   * back this time"* on every attempt, and the character description was filed
+   * into the campaign's shared thread for the panel to resume.
+   *
+   * `HobAsk.intent` is the fix: the drafting surface says what it is, and the
+   * proof only decides the panel's side.
+   */
+  it("offers the creator the drafting toolkit when the composer says so", async () => {
+    const { events, requests } = await ask(fixture.dm, { intent: "character" });
+
+    const names = (requests[0]?.tools ?? []).map(
+      (tool) => (tool.function as { name?: string } | undefined)?.name ?? "",
+    );
+    expect(names).toContain("proposeCharacter");
+    expect(names).not.toContain("proposeNote");
+
+    const proposed = proposedIn(events);
+    expect(proposed?.proposal.target).toBe("character");
+  }, 60_000);
+
+  it("keeps the panel exactly as it was: no intent, nine tools, no drafts", async () => {
+    const { requests } = await ask(fixture.dm, {
+      rounds: [textChunks("The marsh road is half reeds.")],
+    });
+
+    const names = (requests[0]?.tools ?? []).map(
+      (tool) => (tool.function as { name?: string } | undefined)?.name ?? "",
+    );
+    expect(names).toContain("proposeNote");
+    expect(names).not.toContain("proposeCharacter");
+  }, 60_000);
+
+  it("files the creator's draft in a thread of their own, off the panel's list", async () => {
+    const { events } = await ask(fixture.dm, { intent: "character" });
+    const { threadId } = begunIn(events);
+
+    const listed = await runtime.runPromise(
+      Effect.flatMap(HobThreads, (threads) => threads.list("dm", fixture.campaign.id)).pipe(
+        withActor(fixture.dm),
+        Effect.orDie,
+      ),
+    );
+    // The campaign's shared conversation never sees the character description —
+    // before the fix it was the thread the panel resumed next session.
+    expect(listed.map((thread) => thread.id)).not.toContain(threadId);
+
+    const own = await runtime.runPromise(
+      Effect.flatMap(HobThreads, (threads) => threads.list("own", fixture.campaign.id)).pipe(
+        withActor(fixture.dm),
+        Effect.orDie,
+      ),
+    );
+    expect(own.map((thread) => thread.id)).toContain(threadId);
+  }, 60_000);
+
+  it("lets the creator keep their own draft, through the thread-shaped reach", async () => {
+    const { events } = await ask(fixture.dm, { intent: "character" });
+    const { threadId, turnId } = begunIn(events);
+
+    // `reachOf` answers "own" for the creator's drafting thread; a reach
+    // derived from the proof would say "dm" and 404 the accept.
+    const accepted = await accept(fixture.dm, threadId, turnId);
+    expect(accepted._tag).toBe("Success");
+    if (accepted._tag !== "Success" || accepted.success.accepted !== "character") {
+      throw new Error("not a character");
+    }
+    const created = accepted.success.character;
+    expect(created.accountId).toBe(fixture.dm.accountId);
+    expect(created.origin).toBe("assistant");
+
+    // Seated at the table it was asked at, like any accepted draft.
+    const seat = (
+      await runtime.runPromise(
+        Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
+          withActor(fixture.dm),
+          Effect.orDie,
+        ),
+      )
+    ).find((row) => row.character?.id === created.id);
+    expect(seat?.seat.origin).toBe("assistant");
+  }, 60_000);
+
+  it("still refuses a stranger the drafting surface", async () => {
+    // `intent` widens nothing: an account with no reach into the campaign is
+    // the same 404 it always was, before a byte of stream exists.
+    const stranger = await runtime.runPromise(
+      Effect.gen(function* () {
+        const account = yield* anAccount("Nobody");
+        const hob = yield* Hob;
+        return yield* Effect.result(
+          hob
+            .ask(fixture.campaign.id, { text: DESCRIBED, intent: "character" })
+            .pipe(withActor(account)),
+        );
+      }).pipe(
+        Effect.provide(
+          Hob.layer({ model: "scripted-local" }).pipe(
+            Layer.provide(
+              scriptedModel({ model: "scripted-local", maxTokens: MAX_TOKENS, rounds: [] }).layer,
+            ),
+          ),
+        ),
+        Effect.orDie,
+      ),
+    );
+    expect(stranger._tag).toBe("Failure");
+    expect(stranger._tag === "Failure" && stranger.failure).toBeInstanceOf(NotFound);
   }, 60_000);
 });
 

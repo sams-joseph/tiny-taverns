@@ -253,9 +253,11 @@ describe("the route table", () => {
   });
 
   it("puts the create form under the campaign it creates at", () => {
-    // The campaign is step one: `character.campaign_id` is `not null`, so a
-    // character has nowhere to live until a table is picked, and the id in the
-    // URL is what makes that pick a thing you can bookmark and reload.
+    // The campaign is still step one: the character row is account-owned and
+    // top-level now, but the create seats it at a table in the same
+    // transaction and Hob's drafting thread is campaign-scoped, so a table is
+    // picked first and the id in the URL is what makes that pick a thing you
+    // can bookmark and reload.
     expect(landsOn(`/campaigns/${CAMPAIGN_ID}/characters/new`)).toEqual({
       at: "/campaigns/$campaignId/characters/new",
       params: { campaignId: CAMPAIGN_ID },

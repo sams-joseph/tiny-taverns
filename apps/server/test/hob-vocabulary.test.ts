@@ -368,7 +368,10 @@ describe("the grammar is this campaign's own vocabulary", () => {
       modifier: "+3",
     });
     expect(proposed.proposal.sheet.identity?.background).toBe("Salt-runner");
-    expect(proposed.proposal.sheet.proficiencies).toEqual(["Athletics", "River cant"]);
+    // The race's own concrete language grant leads, then the background's
+    // proficiencies and languages — `sheetGrantsFor` composes all three
+    // sources now, the same list the manual form writes.
+    expect(proposed.proposal.sheet.proficiencies).toEqual(["Common", "Athletics", "River cant"]);
     expect(proposed.proposal.sheet.inventory?.map((item) => item.name)).toEqual([
       "ferryman's token",
     ]);

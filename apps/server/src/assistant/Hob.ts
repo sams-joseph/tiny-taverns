@@ -260,9 +260,21 @@ export class Hob extends Context.Service<
                * replaces the refusal is a narrower surface rather than a
                * looser one — a two-tool toolkit, a thread of their own, and the
                * same row-level predicate underneath.
+               *
+               * **The proof alone stopped being enough when creators became
+               * character authors** (the continuity decision): the drafting
+               * composer is one surface everybody shares, so `ask.intent` says
+               * which surface is asking and the proof only decides the panel's
+               * side. A creator drafting a character is acting as themselves,
+               * not as the campaign — they get the drafting toolkit and a
+               * thread of their own, exactly as a player does, and the
+               * campaign's shared conversation never sees their character
+               * description. See `HobAsk` in `@taverns/api`.
                */
               const dm = yield* Effect.result(dmActors.of(campaignId));
-              const reach = Result.isSuccess(dm) ? ("dm" as const) : ("own" as const);
+              const creator =
+                Result.isSuccess(dm) && ask.intent !== "character" ? dm.success : undefined;
+              const reach = creator !== undefined ? ("dm" as const) : ("own" as const);
 
               // The conversation, resolved before a byte of stream exists — so
               // a thread this credential may not reach is a 404 exactly as an
@@ -325,9 +337,10 @@ export class Hob extends Context.Service<
                * `campaigns.findById` has already answered, but the shape is
                * what keeps that true if it ever could.
                */
-              const vocabulary: CharacterVocabulary = Result.isSuccess(dm)
-                ? NO_VOCABULARY
-                : vocabularyOf(yield* repositories.options.list(campaignId, {}));
+              const vocabulary: CharacterVocabulary =
+                creator !== undefined
+                  ? NO_VOCABULARY
+                  : vocabularyOf(yield* repositories.options.list(campaignId, {}));
 
               // Bound to *this* campaign and *this* actor, now — the stream
               // below is pulled after this effect has returned, so nothing may
@@ -359,23 +372,24 @@ export class Hob extends Context.Service<
                 HobEvent,
                 AiError.AiError | Schema.SchemaError,
                 LanguageModel.LanguageModel
-              > = Result.isSuccess(dm)
-                ? asked(
-                    Effect.flatMap(
-                      HobToolkit.toHandlers(dmHandlersFor(repositories, dm.success, proposal)),
-                      (bound) => Effect.provideContext(HobToolkit, bound),
-                    ),
-                    dmPrompt(campaign),
-                  )
-                : vocabulary.listed
+              > =
+                creator !== undefined
                   ? asked(
-                      playerBindListing(repositories, actor, campaignId, proposal, vocabulary),
-                      playerPrompt(campaign),
+                      Effect.flatMap(
+                        HobToolkit.toHandlers(dmHandlersFor(repositories, creator, proposal)),
+                        (bound) => Effect.provideContext(HobToolkit, bound),
+                      ),
+                      dmPrompt(campaign),
                     )
-                  : asked(
-                      playerBindOver(repositories, actor, campaignId, proposal, vocabulary),
-                      playerPrompt(campaign),
-                    );
+                  : vocabulary.listed
+                    ? asked(
+                        playerBindListing(repositories, actor, campaignId, proposal, vocabulary),
+                        playerPrompt(campaign),
+                      )
+                    : asked(
+                        playerBindOver(repositories, actor, campaignId, proposal, vocabulary),
+                        playerPrompt(campaign),
+                      );
 
               /**
                * Saves what Hob actually produced, however the stream ended.

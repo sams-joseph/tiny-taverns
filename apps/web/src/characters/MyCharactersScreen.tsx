@@ -30,10 +30,11 @@ import { Portrait, StatPill } from "./SheetParts";
  *   projection is step 12's decision and inventing one here would settle it by
  *   accident. So the banner is absent, and so is the button that goes to a
  *   screen that does not exist.
- * - **A character with no campaign.** The drawing has an *unassigned* card
- *   reading *"Not in a campaign yet"*. `character.campaign_id` is `not null`, so
- *   the state is not representable — bringing a character to a second table is a
- *   copy, shaped like `creatures/:id/derive`, and it is not built.
+ * - **A "Join a game" affordance on an unseated card.** A character is
+ *   account-owned and top-level since the continuity decision, so *"Not seated
+ *   at a table"* is an ordinary state this screen draws — and taking one to a
+ *   (second) table is a seat (`party.join`, `campaign_character`), not a copy.
+ *   No UI offers that verb yet; when one does it belongs here.
  * - **The join card** — paste a code, *Claim a seat*. Following an invitation is
  *   `#/join/<token>`, a screen that already exists and reads the invitation
  *   before anybody signs in. A second, weaker way in would be a second answer to

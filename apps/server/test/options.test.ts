@@ -353,6 +353,26 @@ describe("the bundle", () => {
       }),
     );
 
+    // A race's details never carry the two class-only keys — absent, not empty.
+    expect(dwarf?.details).not.toHaveProperty("levelOneFeatures");
+    expect(dwarf?.details).not.toHaveProperty("proficiencyBonus");
+
+    // A class option's details carry its level-1 grants off the progression
+    // domain: the top-level features (a `Fighting Style: …` pick under its
+    // parent stays a choice) and the level-1 proficiency bonus. This is what
+    // `sheetGrantsFor` builds a fresh sheet from, on both creation paths.
+    const fighter = (await optionsAt(fixture.jo.token, fixture.saltRoad.id, "class")).find(
+      (option) => option.name === "Fighter",
+    );
+    expect(fighter?.details?.levelOneFeatures?.map((feature) => feature.name)).toEqual([
+      "Fighting Style",
+      "Second Wind",
+    ]);
+    expect(fighter?.details?.proficiencyBonus).toBe(2);
+    expect(fighter?.details?.levelOneFeatures?.every((feature) => feature.desc.length > 0)).toBe(
+      true,
+    );
+
     const dragonborn = (await optionsAt(fixture.jo.token, fixture.saltRoad.id, "race")).find(
       (option) => option.name === "Dragonborn",
     );

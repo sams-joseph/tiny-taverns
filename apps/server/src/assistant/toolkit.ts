@@ -4,7 +4,9 @@ import {
   ABILITY_KEYS,
   AbilityKey,
   type Actor,
-  type BackgroundBody,
+  asBackgroundOption,
+  asClassOption,
+  asRaceOption,
   CampaignId,
   type CharacterOption,
   type CharacterSheet,
@@ -16,7 +18,6 @@ import {
   Difficulty,
   type HobProposal,
   type HobRosterLine,
-  isBackgroundOption,
   isClassOption,
   isRaceOption,
   modifierFor,
@@ -26,6 +27,9 @@ import {
   SearchHit,
   SearchSource,
   seedFor,
+  sheetGrantsFor,
+  identityGrants,
+  withSavingThrows,
   Session,
   SessionEvent,
   SessionId,
@@ -33,7 +37,6 @@ import {
   type Skill,
   type RaceEntry,
   type SubraceEntry,
-  type Trait,
   subraceNamed,
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
@@ -1527,25 +1530,6 @@ const raceChoiceBonuses = (
   return picked;
 };
 
-const backgroundBodyOf = (option: CharacterOption | undefined): BackgroundBody | undefined =>
-  option !== undefined && isBackgroundOption(option) ? option.body : undefined;
-
-const backgroundProficiencies = (body: BackgroundBody | undefined): ReadonlyArray<string> =>
-  body === undefined ? [] : [...body.proficiencies, ...body.languages];
-
-const backgroundTraits = (body: BackgroundBody | undefined): ReadonlyArray<Trait> =>
-  body?.feature === undefined ? [] : [{ name: body.feature.name, text: body.feature.text }];
-
-const backgroundInventory = (body: BackgroundBody | undefined): ReadonlyArray<{ name: string }> =>
-  body === undefined ? [] : body.equipment.map((name) => ({ name }));
-
-const goldPieces = (body: BackgroundBody | undefined): number | undefined => {
-  const match = body?.gold?.trim().match(/^(\d+)\s*gp$/i);
-  if (match?.[1] === undefined) return undefined;
-  const value = Number(match[1]);
-  return Number.isSafeInteger(value) ? value : undefined;
-};
-
 /**
  * A label the campaign does not have, refused where the model can hear it.
  *
@@ -1678,13 +1662,20 @@ export const playerHandlersFor = (
        * `sheet` below. A draft whose race raises constitution really does come
        * back with more hit points *and* a sheet whose constitution cell says so,
        * and there is no way to take one without the other.
+       *
+       * `sheetGrantsFor` is the other half of the corpus and is **shared with
+       * the manual form's `payloadFrom`** — level-1 class features, racial
+       * traits, the three sources' proficiencies, the background's kit — so
+       * the two creation paths cannot disagree about what a Hill Dwarf
+       * Fighter starts with. See `@taverns/api`'s `SheetGrants`.
        */
       const raceEntry = raceEntryOf(raceOption);
-      const backgroundBody = backgroundBodyOf(backgroundOption);
-      const proficiencies = backgroundProficiencies(backgroundBody);
-      const backgroundKit = backgroundInventory(backgroundBody);
-      const traits = backgroundTraits(backgroundBody);
-      const gp = goldPieces(backgroundBody);
+      const grants = sheetGrantsFor({
+        classOption: asClassOption(classOption),
+        raceOption: asRaceOption(raceOption),
+        subraceName: subraceOption?.name ?? namedSubrace,
+        backgroundOption: asBackgroundOption(backgroundOption),
+      });
       const seed = seedFor({
         classEntry: classEntryOf(classOption),
         raceEntry,
@@ -1692,8 +1683,14 @@ export const playerHandlersFor = (
         raceBonusChoices: raceChoiceBonuses(raceEntry, abilityOrder),
         abilities: abilitiesFrom(abilityOrder),
       });
+      const abilities = withSavingThrows(
+        seed.abilities,
+        grants.savingThrows,
+        grants.proficiencyBonus,
+      );
 
       const identity = {
+        ...identityGrants(grants),
         ...(blank(subclass) === undefined ? {} : { subclass: blank(subclass)! }),
         // The campaign's own spelling where it resolved, the model's where it
         // did not — the same rule the race and the class labels follow.
@@ -1707,7 +1704,7 @@ export const playerHandlersFor = (
         ...(blank(flaw) === undefined ? {} : { flaw: blank(flaw)! }),
       };
       const carried = [
-        ...backgroundKit.map((item) => item.name),
+        ...grants.inventory.map((item) => item.name),
         ...(kit ?? []).map((item) => item.trim()).filter((item) => item !== ""),
       ];
       /**
@@ -1722,15 +1719,16 @@ export const playerHandlersFor = (
         notes: blank(backstory) ?? "",
         // The seed's, not the ranking's: these are the cells with the race and
         // subrace bonuses applied, and they are the cells its armour class and
-        // hit points were read from.
-        abilities: seed.abilities,
-        traits,
+        // hit points were read from — with the class's saving throws marked on
+        // them, numbers only where the progression corpus supplied the bonus.
+        abilities,
+        traits: grants.traits,
         ...(Object.keys(identity).length === 0 ? {} : { identity }),
         ...(Object.keys(story).length === 0 ? {} : { story }),
         ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
-        ...(proficiencies.length === 0 ? {} : { proficiencies }),
+        ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
         ...(carried.length === 0 ? {} : { inventory: carried.map((name) => ({ name })) }),
-        ...(gp === undefined ? {} : { currency: { gp } }),
+        ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
       };
 
       return offer(

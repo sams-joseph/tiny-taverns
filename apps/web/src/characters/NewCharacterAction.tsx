@@ -89,8 +89,8 @@ export function NewCharacterAction({
             <DialogHeader>
               <DialogTitle>Which table?</DialogTitle>
               <DialogDescription>
-                A character belongs to one game. Pick the one they are playing in — bringing them to
-                a second table is not something this can do yet.
+                Pick the table this character starts at. They are yours wherever they go — a new
+                character takes a seat at one table first.
               </DialogDescription>
             </DialogHeader>
 

@@ -158,6 +158,23 @@ export const OptionChoiceGroup = Schema.Struct({
 });
 export type OptionChoiceGroup = typeof OptionChoiceGroup.Type;
 
+/**
+ * One class feature a fresh sheet starts with, projected off the progression
+ * domain — `feature` rows at level 1 with no subclass and no parent, so
+ * *Fighting Style* is granted and *Fighting Style: Archery* stays a choice the
+ * player makes later. It rides on `details` rather than needing the whole
+ * `ClassProgression` read because character creation is the reader: both
+ * composers (the create form's `payloadFrom` and Hob's `proposeCharacter`)
+ * already hold the hydrated option and nothing else.
+ */
+export const OptionFeatureGrant = Schema.Struct({
+  id: FeatureId,
+  index: Schema.NullOr(sourceKey),
+  name: sourceName,
+  desc: longTextList,
+});
+export type OptionFeatureGrant = typeof OptionFeatureGrant.Type;
+
 export const OptionDetails = Schema.Struct({
   subraces: Schema.Array(OptionSubraceDetail).check(Schema.isLengthBetween(0, 50)),
   abilityBonuses: Schema.Array(OptionAbilityGrant).check(Schema.isLengthBetween(0, 80)),
@@ -165,6 +182,14 @@ export const OptionDetails = Schema.Struct({
   proficiencies: Schema.Array(OptionProficiencyGrant).check(Schema.isLengthBetween(0, 160)),
   traits: Schema.Array(OptionTraitGrant).check(Schema.isLengthBetween(0, 80)),
   choices: Schema.Array(OptionChoiceGroup).check(Schema.isLengthBetween(0, 80)),
+  /** Class options only: what the class grants at level 1, absent elsewhere. */
+  levelOneFeatures: Schema.optional(
+    Schema.Array(OptionFeatureGrant).check(Schema.isLengthBetween(0, 50)),
+  ),
+  /** Class options only: the level-1 `class_level` row's proficiency bonus. */
+  proficiencyBonus: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 20 })),
+  ),
 });
 export type OptionDetails = typeof OptionDetails.Type;
 

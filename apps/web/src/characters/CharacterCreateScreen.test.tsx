@@ -11,6 +11,7 @@ import {
   draftedNothing,
   draftThreadId,
   draftTurnId,
+  hobRoutes,
   installCharacterServer,
   onlyDmTables,
   renderCreate,
@@ -135,7 +136,14 @@ describe("writing down a character of your own", () => {
       className: "Druid",
       ac: 14,
       hpMax: 9,
-      sheet: { notes: "Raised by the road.", abilities: [], traits: [] },
+      sheet: {
+        notes: "Raised by the road.",
+        abilities: [],
+        traits: [],
+        // The corpora's identity keys — the race answers the speed and the
+        // class the hit die, through the same `sheetGrantsFor` Hob composes.
+        identity: { speed: "30 ft.", hitDice: "1/1 d8" },
+      },
     });
     // The whole disclosure property in one assertion: the row comes out at its
     // column defaults because nothing here can say otherwise. There is no
@@ -196,7 +204,7 @@ describe("writing down a character of your own", () => {
       notes: "",
       abilities: [],
       traits: [{ name: "Riverwise", text: "You know who watches the crossings." }],
-      identity: { background: "Salt-runner" },
+      identity: { hitDice: "1/1 d8", background: "Salt-runner" },
       proficiencies: ["Athletics", "River cant"],
       inventory: [{ name: "Travel-stained clothes" }, { name: "ferryman's token" }],
       currency: { gp: 15 },
@@ -316,9 +324,14 @@ describe("writing down a character of your own", () => {
     // **The first question starts a thread and the second continues it**, which
     // is what lets `promptFor`'s `offered()` show the model the druid it wrote.
     // Without it, "make her a ranger instead" drafts a fresh person from the
-    // original paragraph — the failure §4.3 of the plan names.
+    // original paragraph — the failure §4.3 of the plan names. Both carry
+    // `intent`, because a redraft is the same surface asking.
     expect(asks[0]).not.toHaveProperty("threadId");
-    expect(asks[1]).toEqual({ threadId: draftThreadId, text: "Darker backstory" });
+    expect(asks[1]).toEqual({
+      threadId: draftThreadId,
+      text: "Darker backstory",
+      intent: "character",
+    });
   });
 
   it("never dead-ends when the model does not draft", async () => {
@@ -478,6 +491,34 @@ describe("writing down a character of your own", () => {
     expect(await screen.findByRole("button", { name: /Fill it in myself/i })).toBeTruthy();
     expect(screen.queryByText("You run this table")).toBeNull();
     expect(screen.queryByText("Not your table")).toBeNull();
+  });
+
+  it("drafts for the creator too, and names the surface in the ask", async () => {
+    // **The regression behind "Hob is not working through character
+    // creation."** The continuity inversion above opened this composer to the
+    // campaign's creator — but the server told the two Hob surfaces apart by
+    // the creator proof alone, so a creator's draft ask was answered with the
+    // panel's nine tools, none of which is `proposeCharacter`: prose, no card,
+    // *"No sheet came back"* every time, and the description filed into the
+    // campaign's shared thread. `intent: "character"` is the composer saying
+    // which surface is asking; the server answers it with the drafting toolkit
+    // and a thread of the asker's own whatever their relation
+    // (`apps/server/test/hob-character.test.ts` pins that half).
+    server.routes = onlyDmTables();
+    for (const [route, answer] of hobRoutes()) server.routes.set(route, answer);
+    await renderCreate();
+
+    await userEvent.type(
+      await screen.findByLabelText(/Describe your character/i),
+      "A gruff dwarf fighter, retired soldier, terrible at cards.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Have Hob draft the sheet/i }));
+
+    expect(await screen.findByText("Sorrel Ash")).toBeTruthy();
+    const asks = server.calls
+      .filter((call) => call.pathname === `/campaigns/${campaignId}/hob/ask`)
+      .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+    expect(asks[0]).toMatchObject({ intent: "character" });
   });
 
   it("says the server did not answer rather than drawing an empty form", async () => {

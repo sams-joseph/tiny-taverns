@@ -371,9 +371,12 @@ const runRoute = createRoute({
 
 /**
  * Writing down a character of your own — under the campaign it is created at,
- * because the campaign is *step one*: `character.campaign_id` is `not null`,
- * so a character has nowhere to live until a table is picked, and putting the
- * id in the URL is what makes that choice a thing you can bookmark and reload.
+ * because the campaign is still *step one*: the character row is account-owned
+ * and top-level now, but the create both seats it at a table
+ * (`campaign_character`, in the same transaction) and drafts against that
+ * table's own vocabulary, and Hob's drafting thread is campaign-scoped
+ * (`assistant_thread.campaign_id`). Putting the id in the URL is what makes
+ * that choice a thing you can bookmark and reload.
  *
  * Remounted on the campaign: a form half-typed for one table must not survive
  * into another.

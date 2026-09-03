@@ -304,7 +304,7 @@ describe("2014 backgrounds on the manual path", () => {
       notes: "",
       abilities: plainSheet?.abilities,
       traits: [{ name: "Riverwise", text: "You know who watches the crossings." }],
-      identity: { background: "Salt-runner" },
+      identity: { speed: "30 ft.", hitDice: "1/1 d8", background: "Salt-runner" },
       proficiencies: ["Athletics", "River cant"],
       inventory: [{ name: "ferryman's token" }],
       currency: { gp: 15 },

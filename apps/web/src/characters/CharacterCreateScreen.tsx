@@ -60,13 +60,13 @@ import { characterWritesAt, createOwnCharacter } from "./write";
  *
  * The drawing (`ui_kits/dm-screen/CharacterCreate.jsx`) puts *Find a table*
  * third, after describing the character and correcting a draft. It is
- * **reordered to first**, by the captain's decision of 2026-08-26, and the
- * reason is in the schema rather than in taste: `character.campaign_id` is
- * `not null` and so is `assistant_thread.campaign_id`, so neither the character
- * nor the conversation that would draft one has anywhere to live before a table
- * is picked. Every alternative is a migration plus a new reach rule in the one
- * model that has none — `0015` is what that cost for `creature`, and it bought a
- * state this product has already recorded as deliberately absent.
+ * **reordered to first**, by the captain's decision of 2026-08-26. The
+ * character row is account-owned and top-level since the continuity decision,
+ * so the schema half of the old argument is gone — what keeps the order is
+ * that the create seats the character at the table in the same transaction,
+ * the form's pickers read *that campaign's* vocabulary, and the conversation
+ * that drafts one is campaign-scoped (`assistant_thread.campaign_id` is the
+ * column that still has nowhere to live before a table is picked).
  *
  * The drawing also contradicts itself about it: its own showcase line has Hob
  * explaining a subclass by *"your DM's campaign is on the salt road and half of

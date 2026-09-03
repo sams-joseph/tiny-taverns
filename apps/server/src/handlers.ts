@@ -635,20 +635,28 @@ const HobLive = HttpApiBuilder.group(
     const dmActors = yield* CampaignCreatorActors;
 
     /**
-     * Whose conversations this request reaches — **one read, and the same
-     * question `Hob.ask` asks itself.**
+     * Whose conversations a *listing* reaches — **one read, and the same
+     * question `Hob.ask` asks itself for the panel.**
      *
-     * A DM reaches the campaign's own thread and a player their own, and the
-     * two sets are disjoint by predicate (`repo/visibility.ts`), so the reach
-     * is not a filter over one set — it is which set exists for this caller.
-     * It is derived from the `CampaignCreatorActor` proof rather than from a role on the
-     * actor, because `Actor` carries no role and cannot: a person is the DM of
-     * one table and a player at another on one credential.
+     * A DM's panel resumes the campaign's own thread and a player's their own,
+     * and the two sets are disjoint by predicate (`repo/visibility.ts`), so the
+     * reach is not a filter over one set — it is which set the panel shows this
+     * caller. It is derived from the `CampaignCreatorActor` proof rather than
+     * from a role on the actor, because `Actor` carries no role and cannot: a
+     * person is the DM of one table and a player at another on one credential.
      *
      * A failure is `"own"` rather than an error, and that is safe because it is
      * never the final answer: the predicate underneath refuses a caller who is
      * neither, with the ordinary `NotFound`. So a stranger's campaign is a 404
      * from the read, exactly as it was before there were two reaches.
+     *
+     * **`turns` and `accept` do not use it.** A creator holds threads in both
+     * sets now — the panel's, and drafting threads of their own (see
+     * `HobAsk.intent`) — so for an operation that *names* a thread, the thread's
+     * own shape is the answer and the proof is the wrong question:
+     * `threads.reachOf` reads it off the row, behind the disjunction of the two
+     * complete predicates. Derived-from-the-proof here, a creator could draft a
+     * character and then be refused the accept that keeps it.
      */
     const reachAt = (campaignId: CampaignId) =>
       Effect.map(Effect.result(dmActors.of(campaignId)), (proof) =>
@@ -664,12 +672,12 @@ const HobLive = HttpApiBuilder.group(
         ),
       )
       .handle("turns", ({ params }) =>
-        Effect.flatMap(reachAt(params.campaignId), (reach) =>
+        Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
           threads.turns(reach, params.campaignId, params.threadId),
         ),
       )
       .handle("accept", ({ params }) =>
-        Effect.flatMap(reachAt(params.campaignId), (reach) =>
+        Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
           proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
         ),
       );

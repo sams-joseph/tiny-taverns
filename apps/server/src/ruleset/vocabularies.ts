@@ -4,6 +4,7 @@ import type {
   CharacterOptionId,
   CharacterOptionSubraceId,
   OptionDetails,
+  OptionFeatureGrant,
   OptionRelationsInput,
   OptionVocabulary,
   RuleAbilityScore,
@@ -1369,5 +1370,44 @@ export const optionDetailsFor = (
       });
     }
 
-    return { subraces, abilityBonuses, languages, proficiencies, traits, choices };
+    /**
+     * The class's own level-1 grants, off the progression domain. Top-level
+     * only — a `parent_feature_id` names a pick inside a granted feature
+     * (*Fighting Style: Archery* under *Fighting Style*), which is the
+     * player's to make later, not the sheet's to start with. Empty for races
+     * and backgrounds by construction, and absent from the wire when empty so
+     * a non-class option's `details` does not grow two keys that mean nothing.
+     */
+    const levelOneFeatures = yield* sql<OptionFeatureGrant>`
+      select feature.id::text,
+             feature.source_key as index,
+             feature.name,
+             coalesce(feature.body -> 'desc', '[]'::jsonb) as desc
+      from feature
+      where feature.class_option_id = ${optionId}
+        and feature.level = 1
+        and feature.subclass_id is null
+        and feature.parent_feature_id is null
+      order by lower(feature.name)
+    `;
+    const levelOne = yield* sql<{ readonly proficiency_bonus: number | null }>`
+      select class_level.proficiency_bonus
+      from class_level
+      where class_level.class_option_id = ${optionId}
+        and class_level.level = 1
+        and class_level.subclass_id is null
+      limit 1
+    `;
+    const proficiencyBonus = levelOne[0]?.proficiency_bonus ?? null;
+
+    return {
+      subraces,
+      abilityBonuses,
+      languages,
+      proficiencies,
+      traits,
+      choices,
+      ...(levelOneFeatures.length === 0 ? {} : { levelOneFeatures }),
+      ...(proficiencyBonus === null ? {} : { proficiencyBonus }),
+    };
   });

@@ -123,7 +123,7 @@ export type HobRosterLine = typeof HobRosterLine.Type;
 /**
  * What Hob is offering to add, if the person who asked says yes.
  *
- * **Four members, because there are four accept targets**, and each is one
+ * **One member per accept target**, five now with the group chronicle, each one
  * shipped table: a `note` (prep prose or read-aloud), a `beat` (the DM's line
  * about what happened), an `encounter` (a template and its roster), and a
  * `character` (a player's own, drafted for them). The union is discriminated on
@@ -132,14 +132,15 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * nullable field the client renders anyway is the failure this schema style
  * exists to prevent.
  *
- * **Which of the four can be offered is decided by which toolkit answered, not
- * by anything here.** A DM's Hob has `proposeNote`, `proposeBeat` and
- * `proposeEncounter`; a player's has `proposeCharacter` and nothing else. So the
- * two halves of this union are reachable from disjoint conversations, and the
- * shape that would otherwise need guarding — a DM accepting a character into
- * their own ownership, a player accepting an encounter into a campaign they
- * cannot write — is not a check anywhere, it is a pair of threads neither can
- * reach. See `assistant/toolkit.ts` and `repo/visibility.ts`'s
+ * **Which of these can be offered is decided by which toolkit answered, not by
+ * anything here.** The panel's Hob has `proposeNote`, `proposeBeat` and
+ * `proposeEncounter`; the drafting surface's has `proposeCharacter` and nothing
+ * else (`HobAsk.intent` is what picks it, for creator and player alike). So the
+ * halves of this union are reachable from disjoint conversations: a character
+ * proposal only ever lives in the asker's *own* thread and materialises into
+ * their own ownership, and a member who cannot write the campaign holds no
+ * thread an encounter could be accepted from. That is a pair of predicates,
+ * not a check anywhere. See `assistant/toolkit.ts` and `repo/visibility.ts`'s
  * `conversationReachable`.
  *
  * It is deliberately **not** a general artifact framework. The delivered
@@ -321,10 +322,29 @@ export class HobTurn extends Schema.Class<HobTurn>("HobTurn")({
  *
  * `threadId` absent starts a new thread — which is what the panel's *New thread*
  * button does, and what a first question does.
+ *
+ * ### `intent` is which surface is asking, and it exists for the creator
+ *
+ * Two surfaces share this endpoint: the docked panel (the campaign's own
+ * conversation, the creator's toolkit) and the character-drafting composer on
+ * the create screen. They used to be told apart by the caller's relation —
+ * only a player could reach the composer, and only a creator held the panel —
+ * so the server could infer the surface from the `CampaignCreatorActor` proof.
+ * The continuity decision broke that inference: a creator writes their own
+ * characters like anybody else, so the same account now legitimately asks from
+ * both surfaces, and a proof cannot say which one is open.
+ *
+ * `intent: "character"` is the drafting composer saying so. The server answers
+ * it with the drafting toolkit (`proposeCharacter` + `searchCampaign`) and a
+ * thread of the *asker's own*, whatever their relation to the campaign — for a
+ * player that is what they already got, and for a creator it is what keeps a
+ * character description out of the campaign's shared conversation. Absent
+ * means the panel, which keeps its old behaviour exactly.
  */
 export const HobAsk = Schema.Struct({
   threadId: Schema.optional(AssistantThreadId),
   text: turnText,
+  intent: Schema.optional(Schema.Literal("character")),
 });
 export type HobAsk = typeof HobAsk.Type;
 
@@ -464,7 +484,7 @@ export const HobAccepted = Schema.Union([
    * `origin: "assistant"`.
    *
    * The whole row, like the three above, and here it earns its keep twice over:
-   * the screen navigates straight to `#/play/characters/:id` on the id, and
+   * the screen navigates straight to `#/characters/:id` on the id, and
    * every correction from that moment on is an ordinary `PATCH
    * /me/characters/:id` against exactly this value.
    */

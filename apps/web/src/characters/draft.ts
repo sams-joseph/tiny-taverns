@@ -268,7 +268,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
             return;
           case "proposal":
             setActivity(undefined);
-            // The union is four wide on the wire and this surface can only ever
+            // The union is several targets wide on the wire and this surface can only ever
             // be offered one member of it — the player toolkit has one propose
             // tool. Narrowed rather than asserted, so a future member arriving
             // is an offer this screen ignores rather than a card it draws
@@ -301,7 +301,16 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
           // client encodes an absent optional as `null` and `Schema.optional`
           // refuses a null on the way back in, which is a 400 on the first
           // question of every conversation.
-          payload: continuing === undefined ? { text } : { threadId: continuing, text },
+          //
+          // `intent` is what makes this surface work for the campaign's
+          // creator too: without it the server reads the CampaignCreatorActor
+          // proof as "the panel is asking" and answers with the nine-tool DM
+          // toolkit, which has no `proposeCharacter` — a draft that can never
+          // arrive, and a description filed into the campaign's shared thread.
+          payload:
+            continuing === undefined
+              ? { text, intent: "character" }
+              : { threadId: continuing, text, intent: "character" },
         });
         yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
       }).pipe(
@@ -351,7 +360,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
     // client itself and has to classify. Classifying twice is silent: it lands
     // in the `unknown` arm and renders `[object Object]`.
     if (Result.isFailure(result)) return Result.fail(draftFailureFor(result.failure));
-    // Four accept targets on the wire; this endpoint can only ever answer one
+    // Several accept targets on the wire; this endpoint can only ever answer one
     // of them here, for the reason the proposal above can only ever be one.
     return result.success.accepted === "character"
       ? Result.succeed(result.success.character)

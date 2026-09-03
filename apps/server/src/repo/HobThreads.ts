@@ -139,6 +139,23 @@ export class HobThreads extends Context.Service<
       scopeId: CampaignId | GroupId,
       id: AssistantThreadId,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
+    /**
+     * Which reach a named campaign thread answers to, read off the row.
+     *
+     * A creator holds threads in **both** campaign sets now — the campaign's
+     * own conversation, and drafting threads of their own (see `HobAsk.intent`)
+     * — so a handler that derived one reach from the `CampaignCreatorActor`
+     * proof would 404 a creator's own thread. The thread's shape is the one
+     * answer that cannot be wrong: `account_id` null is the campaign's,
+     * an account's is its owner's. The row is only read through the disjunction
+     * of the two complete predicates, so an unreachable thread is still the
+     * ordinary `NotFound` and neither arm widens the other — the
+     * `copyableIntoCampaign` shape, one table across.
+     */
+    readonly reachOf: (
+      campaignId: CampaignId,
+      id: AssistantThreadId,
+    ) => Effect.Effect<"dm" | "own", NotFound, CurrentActor>;
     /** Starts one, named after the question that started it. */
     readonly start: (
       reach: ConversationReach,
@@ -193,6 +210,23 @@ export class HobThreads extends Context.Service<
                 return yield* new NotFound({ resource: "assistant_thread", id });
               }
               return toThread(rows[0]!);
+            }),
+          ),
+
+        reachOf: (campaignId, id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<Pick<ThreadRow, "id"> & { account_id: string | null }>`
+                select assistant_thread.id, assistant_thread.account_id from assistant_thread
+                where assistant_thread.id = ${id}
+                  and (${conversationReachable(sql, "assistant_thread", "dm", campaignId, actor)}
+                    or ${conversationReachable(sql, "assistant_thread", "own", campaignId, actor)})
+              `;
+              if (rows.length === 0) {
+                return yield* new NotFound({ resource: "assistant_thread", id });
+              }
+              return rows[0]!.account_id === null ? ("dm" as const) : ("own" as const);
             }),
           ),
 
