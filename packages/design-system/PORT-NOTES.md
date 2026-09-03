@@ -16,7 +16,7 @@ else. `packages/ui/src/styles.css` bridges these tokens into Tailwind's theme la
 | `assets/` | App icon exports + `assets/README.md`. |
 | `guidelines/` | The 20 specimen cards — the visual reference the ported components were checked against. |
 | `components/` | `.prompt.md` (intent + measurements), `.d.ts` (API contract), `.jsx` (visual spec), `*.card.html` (state sheets). |
-| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — the Hob chat panel, the Chronicle, the fourth delivery's player side (seats, characters, sheet, table view), and the sixth's two-tier navigation with the campaign view split into `CampaignScreens.jsx`. Reference for later screen work. |
+| `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — the Hob chat panel, the Chronicle, the fourth delivery's player side (seats, characters, sheet, table view), the sixth's two-tier navigation with the campaign view split into `CampaignScreens.jsx`, and the seventh's continuous character sheet (`CharacterSheetB.jsx`). Reference for later screen work. |
 | `readme.md`, `SKILL.md` | Guidance material. |
 | `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to ESLint in `packages/eslint-config/design-system.js`. |
 
@@ -90,6 +90,25 @@ whoever opened it next. The flag has always been in the command above; this is t
 update where it did any work, so check `git status` names the deletion after an rsync
 rather than assuming it did. Its check was again the same two files differing and nothing
 else, plus that one removal and one addition.
+
+**The seventh is the first delivery that did not arrive as a folder at all.** It came as one
+bundled HTML export (`Character Sheet.html`) — the designers' tool inlined the token CSS into a
+`<style>` block, rewrote every font and script `src` to a content-addressed blob name, and
+carried the JSX as `text/babel` scripts. Firstmate unpacked it; what came out was four files,
+of which **one is new**: `ui_kits/dm-screen/CharacterSheetB.jsx` (*"Variant B — one continuous
+sheet, no tabs"*), copied here byte for byte. `PlayerParts.jsx` and `player-data.js` were
+byte-identical to the vendored copies, and the bundle's `index.html` only composed the three
+with `AppShell role="player" chatDefault={false}`. Nothing else in this package moved, and
+the `rsync` above was **not** run — there was no folder to sync from, and the bundle's
+`AppShell.jsx` (not extracted) differs from the vendored sixth-delivery shell in two lines
+that are already shipped another way: the Library nav item is `{ id: "library", icon:
+"library" }` rather than `bestiary`/`footprints`, and `AppShell` grew a `chatDefault` prop.
+**The tokens were measured, not assumed, and did not change**: the bundle's inline `<style>`
+block, normalised to a set of declarations, differs from the concatenation of the eight
+`tokens/*.css` files in exactly two declarations — the two Alegreya `@font-face` `src` URLs,
+which the export rewrote to blob names. Every other declaration is identical. A future
+bundled export should be checked the same way, because there is no file-level `diff -rq`
+to run against a single HTML file.
 
 **The delivery folder is reused, so its path proves nothing about which delivery is in
 it.** The third export overwrote the folder the first arrived in. Diff the content before

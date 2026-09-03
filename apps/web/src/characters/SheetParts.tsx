@@ -1,7 +1,7 @@
 import type { Ability } from "@taverns/api";
-import { Badge, Card, cn } from "@taverns/ui";
-import type { ReactNode } from "react";
-import { hpFraction, initialsOf } from "./sheet";
+import { Badge, Card, cn, Icon } from "@taverns/ui";
+import { useEffect, useRef, type ReactNode, type Ref } from "react";
+import { hpFraction, initialsOf, type SheetSectionId, type SheetSectionSpec } from "./sheet";
 
 /**
  * `ui_kits/dm-screen/PlayerParts.jsx` in shipped components and theme names.
@@ -54,7 +54,9 @@ export function SheetSection({
 }) {
   return (
     <Card className={className}>
-      <div className="flex items-center gap-2.5 border-b border-hairline px-card py-2.5">
+      {/* `flex-wrap`, so a header carrying two actions drops them under the
+          title in a narrow column rather than squeezing the title against them. */}
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-card py-2.5">
         <h2 className="flex-1 text-label-s leading-none font-semibold tracking-caps uppercase text-muted-foreground">
           {title}
         </h2>
@@ -76,14 +78,19 @@ export function Portrait({
   size = "sm",
 }: {
   readonly name: string;
-  readonly size?: "sm" | "lg";
+  /** `xs` is the 40px plate of the narrow sheet's summary header. */
+  readonly size?: "xs" | "sm" | "lg";
 }) {
   return (
     <div
       aria-hidden="true"
       className={cn(
         "flex shrink-0 items-center justify-center border border-strong bg-accent-soft font-display leading-none font-semibold text-accent-ink",
-        size === "lg" ? "size-16 text-display-m" : "size-13 text-display-s",
+        size === "lg"
+          ? "size-16 text-display-m"
+          : size === "xs"
+            ? "size-10 text-title"
+            : "size-13 text-display-s",
       )}
     >
       {initialsOf(name)}
@@ -334,5 +341,130 @@ export function KeyVal({ k, v }: { readonly k: string; readonly v: string }) {
       </span>
       <span className="min-w-0 flex-1 text-body-s leading-body text-foreground">{v}</span>
     </div>
+  );
+}
+
+/**
+ * The spine — the continuous sheet's table of contents, and the one place the
+ * seventh delivery draws two controls for one job.
+ *
+ * `CharacterSheetB.jsx`'s `Spine` is a vertical list in the sticky right
+ * column; its `SpineRail` is a sticky horizontal row of pills under the summary
+ * header. **They are one `nav` here, restyled by the column's width**, and that
+ * is a jsdom decision as much as a layout one: two elements would put every
+ * section's button in the tree twice, and a test that asked for *Gear & coin*
+ * would find two of them with no way to say which is the drawn one. The
+ * accessible name is the long label either way (`aria-label`); the visible word
+ * is the short one on the rail, where seven long labels will not fit, and the
+ * long one on the spine.
+ *
+ * The container is the shell's `main`, so the same `@3xl` that turns the sheet
+ * into three columns turns this from a rail into a spine — one threshold, not
+ * two kept in step. Sticky in both shapes, at the top of the scroller the screen
+ * owns: on the rail that means a page-coloured band the document slides under
+ * (bled to the page edge, as the drawing does), on the spine it means the column
+ * stays put while the document scrolls beside it.
+ *
+ * `aria-current` says which section is lit; the screen's scroll-spy sets it and
+ * a press on an item asks the screen to scroll there. The nav writes nothing and
+ * scrolls nothing itself — `onGo` is the whole of what a press does — so the
+ * only measurement it makes is its own: it keeps the lit pill in view on the
+ * rail, which is a fact about this element and nothing outside it.
+ */
+export function SectionSpine({
+  sections,
+  active,
+  onGo,
+  ref,
+}: {
+  readonly sections: ReadonlyArray<SheetSectionSpec>;
+  readonly active: SheetSectionId;
+  readonly onGo: (id: SheetSectionId) => void;
+  /** The screen measures the rail's height to scroll a section clear of it. */
+  readonly ref?: Ref<HTMLElement>;
+}) {
+  const own = useRef<HTMLElement>(null);
+  // Keep the lit pill in view on the rail. Pure decoration on the spine, where
+  // nothing overflows, so the guard is "is there anything to scroll" rather than
+  // "which shape" — and it runs only when the marker moves, not on every render,
+  // so it never fights a thumb that is scrolling the rail by hand.
+  useEffect(() => {
+    const rail = own.current;
+    const lit = rail?.querySelector<HTMLElement>("[data-active]");
+    if (
+      rail === null ||
+      lit === null ||
+      lit === undefined ||
+      rail.scrollWidth <= rail.clientWidth ||
+      typeof rail.scrollTo !== "function"
+    ) {
+      return;
+    }
+    rail.scrollTo({
+      left: lit.offsetLeft - (rail.clientWidth - lit.clientWidth) / 2,
+      behavior: "smooth",
+    });
+  }, [active]);
+
+  return (
+    <nav
+      ref={(element) => {
+        own.current = element;
+        if (typeof ref === "function") ref(element);
+        else if (ref !== undefined && ref !== null) ref.current = element;
+      }}
+      aria-label="Sheet sections"
+      className={cn(
+        // The rail: a sticky band across the document column, bled to the page
+        // edge so the pills can scroll off it, on the page's own surface so the
+        // sheet visibly slides underneath.
+        // Second of the three flex items narrow (card, rail, document) and
+        // third wide (card, document, spine) — the drawing's two orders, held
+        // here so the document needs only its own pair.
+        "sticky top-0 z-chrome order-2 -mx-page-sm flex gap-1.5 overflow-x-auto border-b border-hairline bg-surface-page px-page-sm py-2 [scrollbar-width:none] sm:-mx-page sm:px-page",
+        // The spine: a plain column with no band and no bleed, sized as the
+        // delivery's third grid track.
+        "@3xl:z-auto @3xl:order-3 @3xl:mx-0 @3xl:w-46.5 @3xl:shrink-0 @3xl:flex-col @3xl:gap-px @3xl:overflow-visible @3xl:border-b-0 @3xl:bg-transparent @3xl:px-0 @3xl:py-0",
+      )}
+    >
+      {sections.map((section) => {
+        const lit = section.id === active;
+        return (
+          <button
+            key={section.id}
+            type="button"
+            aria-label={section.label}
+            aria-current={lit ? "true" : undefined}
+            data-active={lit ? "true" : undefined}
+            onClick={() => onGo(section.id)}
+            className={cn(
+              "flex shrink-0 cursor-pointer items-center gap-1.5 text-left text-caption leading-none transition-control focus-visible:outline-none focus-visible:ring-focus",
+              // A pill on the rail.
+              "min-h-8.5 rounded-pill border px-3",
+              lit
+                ? "border-accent bg-accent-soft font-medium text-accent-ink"
+                : "border-hairline bg-surface-sunken font-medium text-muted-foreground hover:text-foreground",
+              // A raised row on the spine, the lit one bordered by a hairline.
+              "@3xl:min-h-0 @3xl:rounded-none @3xl:px-2.25 @3xl:py-1.75",
+              lit
+                ? "@3xl:border-hairline @3xl:bg-surface-raised @3xl:font-semibold @3xl:text-heading"
+                : "@3xl:border-transparent @3xl:bg-transparent @3xl:font-normal @3xl:text-muted-foreground",
+            )}
+          >
+            <Icon
+              name={section.icon}
+              size={12}
+              className={cn("shrink-0", lit ? "text-accent-ink" : "text-faint")}
+            />
+            <span aria-hidden="true" className="@3xl:hidden">
+              {section.short}
+            </span>
+            <span aria-hidden="true" className="hidden @3xl:inline">
+              {section.label}
+            </span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }

@@ -1,19 +1,9 @@
 import type { Character, CharacterId, InventoryItem, OwnedCharacter, Trait } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  Icon,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@taverns/ui";
+import { Badge, Button, Card, CardContent, cn, Icon } from "@taverns/ui";
 
 import { Atom } from "effect/unstable/reactivity";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
@@ -28,7 +18,14 @@ import { IdentityDialog } from "./IdentityDialog";
 import { SkillsDialog } from "./SkillsDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { loadCharacterSheet } from "./load";
-import { coins, sheetTabs } from "./sheet";
+import {
+  coins,
+  drawnSections,
+  hitPoints,
+  sectionInView,
+  type SheetSectionId,
+  type SheetSectionSpec,
+} from "./sheet";
 import {
   AbilityCell,
   DeathSaveRow,
@@ -36,15 +33,40 @@ import {
   KeyVal,
   Mark,
   Portrait,
+  SectionSpine,
   SheetSection,
   StatPill,
 } from "./SheetParts";
 import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
 
 /**
- * One character, whole — `ui_kits/dm-screen/CharacterSheet.jsx` against the real
+ * One character, whole — `ui_kits/dm-screen/CharacterSheetB.jsx` (the seventh
+ * delivery's *"Variant B — one continuous sheet, no tabs"*) against the real
  * API, and **the one screen in the product where somebody who is not a DM
  * writes.**
+ *
+ * ### The shape: three columns, one document, and a spine
+ *
+ * Wide, the drawing is a `252px / minmax(0,1fr) / 186px` grid: a sticky
+ * identity card, one continuous column of sections, and a sticky **spine** — a
+ * table of contents whose lit item follows the reader's scroll and whose press
+ * scrolls the reader to a section. Narrow, the same single surface: the card
+ * collapses to a two-line summary that expands on a press, the spine flattens
+ * into a sticky rail of pills, and every two-column grid inside the document
+ * becomes one. The threshold is the app's container idiom rather than the
+ * drawing's `window.innerWidth < 900`: `main` is the `@container`, and `@3xl`
+ * is the step at which a 900px window's column (836px, inside the page gutter)
+ * is wide enough for the three tracks — the same step the tabbed sheet already
+ * used for its two. Inside the middle column the document is its **own**
+ * container, so a grid there turns over on the width the column actually has,
+ * which the Hob panel can take 400px out of without the window moving.
+ *
+ * The sheet scrolls in a scroller this screen owns rather than in the shell's
+ * column — `fill`, the runner's mode — because both sticky columns and the
+ * scroll-spy need a top edge that is *this screen's*: under the shell's
+ * scroller the sticky `TopBar` would park them, and its height is neither a
+ * token nor constant between screens (the Chronicle's aside is not sticky for
+ * exactly this reason). Owning the scroller is what makes `top-0` true.
  *
  * ### Where each thing on it comes from
  *
@@ -56,21 +78,55 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * once, under the name — never recomputed here, because a second implementation
  * of it is exactly what the generated column exists to prevent.
  *
+ * ### Which sections are drawn
+ *
+ * `drawnSections(sheet, true)` in `sheet.ts` — the tabbed sheet's `sheetTabs`
+ * rule, spelled over the seven sections the continuous sheet has. *Abilities &
+ * skills*, *Gear & coin* and *Story* are drawn on a writable sheet whether or
+ * not they hold anything, because each carries the affordance that creates its
+ * own contents; *Actions*, *Spellcasting*, *Features & traits* and *Level ups*
+ * appear only when the document fills them, because nothing here writes any of
+ * those. The spine lists exactly the drawn sections and nothing else.
+ *
  * ### What it writes, and where the boundary is
  *
- * Four surfaces, one endpoint — `PATCH /me/characters/:characterId` through
+ * Six surfaces, one endpoint — `PATCH /me/characters/:characterId` through
  * `write.ts`, which is where the endpoint is named once and where the
  * whole-document race is written down. The durable columns are the top bar's
- * *Edit*; the backstory and the carried list are their sections' own headers;
- * a death save is the pip itself. **Every one of them re-reads the screen
- * afterwards** rather than patching what it holds, because a write here changes
- * something it did not send: `descriptor` is a generated column, so editing the
- * level rewrites the line under the name.
+ * *Edit*; the six cells, the skill list, the backstory and the carried list are
+ * their sections' own header actions; a death save is the pip itself. **Every
+ * one of them re-reads the screen afterwards** rather than patching what it
+ * holds, because a write here changes something it did not send: `descriptor`
+ * is a generated column, so editing the level rewrites the line under the name.
  *
  * The boundary is not enforced here and must not be restated here. Which rows
  * is `ownRowWritable` on the server; which columns is `CharacterOwnUpdate`,
  * which has no field for `hpCurrent`, `tempHp`, `conditions`, `visibility` or
  * `accountId`. A control for one of those would not compile.
+ *
+ * ### Keeping your place across a write
+ *
+ * The tabbed sheet lifted the open tab above the resource because a re-read
+ * unmounted the body and an uncontrolled strip threw the reader back to Stats.
+ * The continuous sheet has the same hazard in a worse form — after *Add* → *Save
+ * gear* the reader must still be looking at Gear, not the top of the sheet —
+ * and it is answered in two layers, both deliberate:
+ *
+ * 1. **The previous document stays rendered while the re-read is in flight.**
+ *    `useApiAtom` holds the last value through a refresh (`ready` with
+ *    `refreshing: true`, `api/atoms.ts`), so the scroller, its sections and its
+ *    scroll position are never unmounted by a save; `Loading` is drawn only
+ *    when there is no document at all. Measured in Chromium: across a gear save
+ *    the scroller kept its `scrollTop` and its node identity, and the new line
+ *    drew in place.
+ * 2. **The lit section and the scroll position are held above the resource
+ *    anyway.** `active` is screen state, and the scroller's last `scrollTop` is
+ *    kept in a ref and restored by a layout effect whenever the document
+ *    (re)mounts — so the one case the atom cannot cover, a character id
+ *    changing under the same screen or a failure that really does replace the
+ *    body, lands the reader where they were rather than at the top. It is the
+ *    rule the campaign screens follow for a search term and an open dialog, and
+ *    the same reason: the state belongs to the screen, not to what it is showing.
  *
  * ### The live banner, and where it stops
  *
@@ -79,36 +135,31 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * `PlayerLiveTable`, a distinct schema on a distinct endpoint, which is the
  * rule `PlayerSessionRecap` set and the reason a monster's numbers cannot
  * arrive here even by mistake. What it says in each of its four states, and why
- * it draws nothing at all in the commonest of them, is `live.ts`.
- *
- * It is a **snapshot**, read with the rest of the screen and re-read whenever
- * the screen is. There is no stream behind it and that is deliberate: the live
- * stream is scoped to one run and what a player may watch of a fight is the
- * player fight view's decision, which a banner must not settle by accident.
- *
- * *Go to the table* goes to `/play/campaigns/:c`, the table's own screen, which
- * is the truthful destination this build has. When the player fight view ships
- * it is the one line here that changes.
+ * it draws nothing at all in the commonest of them, is `live.ts`. The drawing
+ * puts a campaign badge and a permanent *Go to the table* in the bar; neither
+ * is drawn here unless the state justifies it, which is `live.ts`'s call and
+ * not the layout's.
  *
  * ### What is still deliberately absent
  *
  * - **The live half of the row.** Current hit points, temporary hit points and
  *   conditions are drawn and are not editable — they are `0014`'s live trio and
  *   the DM's to move, which is why the payload has no field for any of them.
- * - **Rolling, spending, preparing, uploading, journalling.** A check rolled
- *   "to your DM's dice tray" has no endpoint at all; a spent spell slot, a
- *   prepared spell, a portrait and a journal entry are document keys with no
- *   drawn control behind them in this build. They are drawn as the values they
- *   are — the same call `bestiary/StatBlock.tsx` made about a rollable trait.
- * - **A tab with nothing to read *and* nothing to write.** Stats, Actions and
- *   Log are still drawn only when the document fills them. Gear and Story are
- *   always drawn, because each carries the affordance that creates its own
- *   contents — see `sheetTabs`.
+ * - **Rolling, spending, preparing, uploading, journalling — and the roll log.**
+ *   A check rolled "to your DM's dice tray" has no endpoint at all, so the
+ *   drawing's dice buttons, its toast and its *Your rolls* panel are not built;
+ *   the right column is the spine alone. A spent spell slot, a prepared spell, a
+ *   portrait and a journal entry are document keys with no drawn control behind
+ *   them in this build. They are drawn as the values they are — the same call
+ *   `bestiary/StatBlock.tsx` made about a rollable trait.
  */
+
+/** How far below the scroller's top edge the reading line sits, in CSS pixels. */
+const SPY_SLACK = 60;
 
 function Attack({ attack }: { readonly attack: Trait }) {
   return (
-    <div className="flex flex-wrap items-center gap-2.5 border border-hairline bg-surface-sunken px-2.5 py-2">
+    <div className="flex min-h-10 flex-wrap items-center gap-2.5 border border-hairline bg-surface-sunken px-2.5 py-2">
       <div className="min-w-0 flex-1">
         <p className="text-body-s leading-snug font-semibold text-heading">{attack.name}</p>
         {attack.text !== "" && (
@@ -155,7 +206,10 @@ function Feature({ trait }: { readonly trait: Trait }) {
 function InventoryLine({ item, first }: { readonly item: InventoryItem; readonly first: boolean }) {
   return (
     <div
-      className={`flex min-h-row flex-wrap items-center gap-2.5 py-1 ${first ? "" : "border-t border-hairline"}`}
+      className={cn(
+        "flex min-h-10 flex-wrap items-center gap-2.5 py-1",
+        first ? "" : "border-t border-hairline",
+      )}
     >
       <Icon
         name={item.equipped === true ? "shield" : "package"}
@@ -176,29 +230,87 @@ function InventoryLine({ item, first }: { readonly item: InventoryItem; readonly
   );
 }
 
-function SheetBody({
+/** A hairline-ruled run inside a section — the drawing's `borderTop` rows. */
+function Ruled({
+  children,
+  className,
+}: {
+  readonly children: ReactNode;
+  readonly className?: string;
+}) {
+  return <div className={cn("mt-4 border-t border-hairline pt-3", className)}>{children}</div>;
+}
+
+/**
+ * One section of the document: the anchor target the spine scrolls to, and the
+ * element the scroll-spy measures.
+ *
+ * The `id` is the drawn section's own, so `#sheet-gear` is a real anchor and a
+ * press on the spine and a link from elsewhere land in the same place.
+ */
+function DocumentSection({
+  section,
+  register,
+  aside,
+  action,
+  children,
+}: {
+  readonly section: SheetSectionSpec;
+  readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
+  readonly aside?: ReactNode;
+  readonly action?: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div id={`sheet-${section.id}`} ref={(element) => register(section.id, element)}>
+      <SheetSection title={section.label} aside={aside} action={action}>
+        {children}
+      </SheetSection>
+    </div>
+  );
+}
+
+/**
+ * A section's write, in its header. The visible word is what it edits — the
+ * abilities header carries two of these side by side, and two buttons both
+ * reading *Edit* is the ambiguity the tabbed sheet's backstory *Edit* had to be
+ * labelled out of. The accessible name is *Edit …*, so anything driving by the
+ * verb still finds it and the bar's own *Edit* stays the only bare one.
+ */
+const EditButton = ({
+  what,
+  onClick,
+  bare = false,
+}: {
+  readonly what: string;
+  readonly onClick: () => void;
+  /** Read *Edit* on the face, as the backstory's always has. */
+  readonly bare?: boolean;
+}) => (
+  <Button variant="outline" size="sm" aria-label={`Edit ${what}`} onClick={onClick}>
+    <Icon name="pencil" size={13} />
+    {bare ? "Edit" : what.charAt(0).toUpperCase() + what.slice(1)}
+  </Button>
+);
+
+function SheetDocument({
   character,
-  open,
-  onOpen,
+  sections,
+  register,
   onEditAbilities,
   onEditBackstory,
   onEditGear,
   onEditSkills,
 }: {
   readonly character: Character;
-  /** Which tab is open, held above the screen's own resource — see `onOpen`. */
-  readonly open: string | undefined;
-  readonly onOpen: (tab: string) => void;
+  readonly sections: ReadonlyArray<SheetSectionSpec>;
+  readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
   readonly onEditAbilities: () => void;
   readonly onEditBackstory: () => void;
   readonly onEditGear: () => void;
   readonly onEditSkills: () => void;
 }) {
   const sheet = character.sheet;
-  // Writable, so Gear and Story are drawn whether or not they hold anything —
-  // otherwise the affordance that fills a tab would live behind the tab it
-  // fills, and a sheet nobody has written could never be started.
-  const tabs = sheetTabs(sheet, true);
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
   const storyLines: ReadonlyArray<{ readonly label: string; readonly value: string }> = [
@@ -208,268 +320,200 @@ function SheetBody({
     { label: "Flaw", value: story?.flaw },
   ].flatMap(({ label, value }) => (value === undefined || value === "" ? [] : [{ label, value }]));
   const purse = sheet.currency === undefined ? [] : coins(sheet.currency);
+  const drawn = (id: SheetSectionId) => sections.find((section) => section.id === id);
 
-  // The first tab that exists. The value must name a tab that is rendered, or
-  // the strip opens on nothing — which is also why the lifted value falls back
-  // here rather than being trusted: a tab can stop being drawn between renders.
-  const drawn = (["stats", "actions", "gear", "story", "log"] as const).filter(
-    (name) => tabs[name],
-  );
-  const first = drawn[0] ?? "story";
-  const value = open !== undefined && drawn.some((name) => name === open) ? open : first;
+  const abilities = drawn("abilities");
+  const actions = drawn("actions");
+  const magic = drawn("magic");
+  const features = drawn("features");
+  const gear = drawn("gear");
+  const storySection = drawn("story");
+  const log = drawn("log");
 
   return (
-    /**
-     * **Controlled, and the value is held above the resource.** Every write
-     * here re-reads, and a re-read passes through `loading` — which unmounts
-     * this subtree, so an uncontrolled strip would throw the reader back to
-     * Stats every time they saved. Measured: *Add*, then *Save gear*, landed on
-     * Stats with the new line one click away and invisible. It is the same rule
-     * the campaign screens follow for a search term and an open dialog, and the
-     * same reason: the state belongs to the screen, not to what it is showing.
-     */
-    <Tabs value={value} onValueChange={(next) => onOpen(String(next))}>
-      <TabsList className="mb-gutter">
-        {tabs.stats && (
-          <TabsTrigger value="stats">
-            <Icon name="hexagon" size={13} />
-            Stats
-          </TabsTrigger>
-        )}
-        {tabs.actions && (
-          <TabsTrigger value="actions">
-            <Icon name="swords" size={13} />
-            Actions
-          </TabsTrigger>
-        )}
-        {tabs.gear && (
-          <TabsTrigger value="gear">
-            <Icon name="backpack" size={13} />
-            Gear
-          </TabsTrigger>
-        )}
-        {tabs.story && (
-          <TabsTrigger value="story">
-            <Icon name="scroll-text" size={13} />
-            Story
-          </TabsTrigger>
-        )}
-        {tabs.log && (
-          <TabsTrigger value="log">
-            <Icon name="history" size={13} />
-            Log
-          </TabsTrigger>
-        )}
-      </TabsList>
+    /* **The document is its own `@container`**, so every grid inside it turns
+       over on the width this column actually has — which at 1440 is ~900px and
+       beside an open Hob panel is 400 less — rather than on the shell's. The
+       `@md`/`@lg` steps below are the column's, never `main`'s. */
+    <div className="@container order-3 flex min-w-0 flex-1 flex-col gap-gutter @3xl:order-2">
+      {abilities !== undefined && (
+        /* **Drawn on a writable sheet whether or not it holds anything**: the six
+            cells are where a score is typed a first time, so a section that
+            appeared only once it had one would be a value nobody could write. */
+        <DocumentSection
+          section={abilities}
+          register={register}
+          action={
+            <>
+              <EditButton what="abilities" onClick={onEditAbilities} />
+              <EditButton what="skills" onClick={onEditSkills} />
+            </>
+          }
+        >
+          {sheet.abilities.length === 0 ? (
+            <p className="text-caption leading-body text-muted-foreground">
+              Six scores. Take the standard array, or roll for them.
+            </p>
+          ) : (
+            /* Six in a row where the column allows it, three otherwise — the
+               drawing's `repeat(6,1fr)` / `repeat(3,1fr)`, decided by the
+               document's width rather than the window's. */
+            <div className="grid grid-cols-3 gap-1.5 @sm:grid-cols-6">
+              {sheet.abilities.map((ability) => (
+                <AbilityCell key={ability.label} ability={ability} />
+              ))}
+            </div>
+          )}
 
-      {tabs.stats && (
-        <TabsContent value="stats" className="flex flex-col gap-gutter">
-          {/* **Drawn on a writable sheet whether or not it holds anything**, and
-              that is the whole of what the editors changed here: the six cells
-              are where a score is typed a first time, so a section that
-              appeared only once it had one would be a value nobody could
-              write. The *Edit* says what it edits — the bar carries one too,
-              and two buttons with one name on one screen is the ambiguity the
-              backstory's already had to be labelled out of. */}
-          <SheetSection
-            title="Abilities"
-            action={
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label="Edit abilities"
-                onClick={onEditAbilities}
-              >
-                <Icon name="pencil" size={13} />
-                Edit
-              </Button>
-            }
-          >
-            {sheet.abilities.length === 0 ? (
+          <Ruled>
+            {sheet.skills === undefined || sheet.skills.length === 0 ? (
               <p className="text-caption leading-body text-muted-foreground">
-                Six scores. Take the standard array, or roll for them.
+                What you are proficient in, and what you add.
               </p>
             ) : (
-              <div className="grid grid-cols-3 gap-2 @2xl:grid-cols-6">
-                {sheet.abilities.map((ability) => (
-                  <AbilityCell key={ability.label} ability={ability} />
+              <div className="grid grid-cols-1 gap-x-gutter @sm:grid-cols-2 @2xl:grid-cols-3">
+                {sheet.skills.map((skill) => (
+                  <div key={skill.name} className="flex min-h-7 items-center gap-2">
+                    <Mark on={skill.proficient === true} />
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 text-body-s leading-none",
+                        skill.proficient === true ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {skill.name}
+                    </span>
+                    {skill.ability !== undefined && (
+                      <span className="text-micro leading-none text-faint">{skill.ability}</span>
+                    )}
+                    {skill.bonus !== undefined && (
+                      <span
+                        className={cn(
+                          "min-w-7 text-right font-mono text-mono leading-none font-medium",
+                          skill.proficient === true ? "text-accent-ink" : "text-muted-foreground",
+                        )}
+                      >
+                        {skill.bonus}
+                      </span>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
-          </SheetSection>
+          </Ruled>
 
-          <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            <SheetSection
-              title="Skills"
-              className="min-w-0 flex-1"
-              action={
-                <Button variant="outline" size="sm" aria-label="Edit skills" onClick={onEditSkills}>
-                  <Icon name="pencil" size={13} />
-                  Edit
-                </Button>
-              }
-            >
-              {sheet.skills === undefined || sheet.skills.length === 0 ? (
-                <p className="text-caption leading-body text-muted-foreground">
-                  What you are proficient in, and what you add.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 gap-x-gutter @xl:grid-cols-2">
-                  {sheet.skills.map((skill) => (
-                    <div key={skill.name} className="flex min-h-7 items-center gap-2">
-                      <Mark on={skill.proficient === true} />
-                      <span
-                        className={
-                          skill.proficient === true
-                            ? "min-w-0 flex-1 text-body-s leading-none text-foreground"
-                            : "min-w-0 flex-1 text-body-s leading-none text-muted-foreground"
-                        }
-                      >
-                        {skill.name}
-                      </span>
-                      {skill.ability !== undefined && (
-                        <span className="text-micro leading-none text-faint">{skill.ability}</span>
-                      )}
-                      {skill.bonus !== undefined && (
-                        <span
-                          className={
-                            skill.proficient === true
-                              ? "min-w-7 text-right font-mono text-mono leading-none font-medium text-accent-ink"
-                              : "min-w-7 text-right font-mono text-mono leading-none font-medium text-muted-foreground"
-                          }
-                        >
-                          {skill.bonus}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SheetSection>
-
-            <div className="flex min-w-0 flex-1 flex-col gap-gutter">
-              {sheet.proficiencies !== undefined && sheet.proficiencies.length > 0 && (
-                <SheetSection title="Proficiencies &amp; languages">
-                  <div className="flex flex-wrap gap-1.5">
-                    {sheet.proficiencies.map((proficiency) => (
-                      <Badge key={proficiency} variant="outline">
-                        {proficiency}
-                      </Badge>
-                    ))}
-                  </div>
-                </SheetSection>
-              )}
-              {sheet.traits.length > 0 && (
-                <SheetSection title="Features &amp; traits">
-                  <div className="flex flex-col gap-3">
-                    {sheet.traits.map((trait) => (
-                      <Feature key={trait.name} trait={trait} />
-                    ))}
-                  </div>
-                </SheetSection>
-              )}
-            </div>
-          </div>
-        </TabsContent>
+          {sheet.proficiencies !== undefined && sheet.proficiencies.length > 0 && (
+            <Ruled className="flex flex-wrap gap-1.5">
+              {sheet.proficiencies.map((proficiency) => (
+                <Badge key={proficiency} variant="outline">
+                  {proficiency}
+                </Badge>
+              ))}
+            </Ruled>
+          )}
+        </DocumentSection>
       )}
 
-      {tabs.actions && (
-        <TabsContent value="actions">
-          <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            {sheet.attacks !== undefined && sheet.attacks.length > 0 && (
-              <SheetSection title="Attacks" className="min-w-0 flex-1">
-                <div className="flex flex-col gap-2">
-                  {sheet.attacks.map((attack) => (
-                    <Attack key={attack.name} attack={attack} />
-                  ))}
-                </div>
-              </SheetSection>
-            )}
+      {actions !== undefined && (
+        <DocumentSection section={actions} register={register}>
+          <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2">
+            {(sheet.attacks ?? []).map((attack) => (
+              <Attack key={attack.name} attack={attack} />
+            ))}
+          </div>
+        </DocumentSection>
+      )}
 
-            {spellcasting !== undefined && (
-              <SheetSection
-                title="Spellcasting"
-                className="min-w-0 flex-1"
-                aside={
-                  <span className="text-micro leading-none text-faint">
-                    {[
-                      spellcasting.ability,
-                      spellcasting.save === undefined ? undefined : `save ${spellcasting.save}`,
-                      spellcasting.attack === undefined ? undefined : `atk ${spellcasting.attack}`,
-                    ]
-                      .filter((part): part is string => part !== undefined && part !== "")
-                      .join(" · ")}
+      {magic !== undefined && spellcasting !== undefined && (
+        <DocumentSection
+          section={magic}
+          register={register}
+          aside={
+            <span className="text-micro leading-none text-faint">
+              {[
+                spellcasting.ability,
+                spellcasting.save === undefined ? undefined : `save ${spellcasting.save}`,
+                spellcasting.attack === undefined ? undefined : `atk ${spellcasting.attack}`,
+              ]
+                .filter((part): part is string => part !== undefined && part !== "")
+                .join(" · ")}
+            </span>
+          }
+        >
+          {spellcasting.slots !== undefined && spellcasting.slots.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2.5 border-b border-hairline pb-3">
+              {spellcasting.slots.map((slot) => (
+                <div key={slot.level} className="flex items-center gap-2">
+                  <span className="text-micro leading-none text-muted-foreground">
+                    L{slot.level}
                   </span>
-                }
-              >
-                {spellcasting.slots !== undefined && spellcasting.slots.length > 0 && (
-                  <div className="mb-3 flex flex-col gap-2 border-b border-hairline pb-3">
-                    {spellcasting.slots.map((slot) => (
-                      <div key={slot.level} className="flex items-center gap-2">
-                        <span className="w-14 text-micro leading-none text-muted-foreground">
-                          Level {slot.level}
-                        </span>
-                        {/* Pips, not buttons: spending one is a write, and a
-                            player has none. The count is said in words beside
-                            them so the marks are decoration. */}
-                        <span className="flex gap-1" aria-hidden="true">
-                          {Array.from({ length: Math.max(0, slot.total) }, (_, index) => (
-                            <span
-                              key={index}
-                              className={
-                                index < slot.used
-                                  ? "size-3.5 rotate-45 border border-strong bg-transparent"
-                                  : "size-3.5 rotate-45 border border-magic bg-magic"
-                              }
-                            />
-                          ))}
-                        </span>
-                        <span className="text-micro leading-none text-faint">
-                          {Math.max(0, slot.total - slot.used)} of {slot.total} left
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  {(spellcasting.known ?? []).map((spell) => (
-                    <div key={spell.name} className="flex min-h-8 items-center gap-2">
-                      <Mark on={spell.prepared === true} tone="magic" />
+                  {/* Pips, not buttons: spending one is a write, and a player
+                      has none. The count is said in words beside them so the
+                      marks are decoration. */}
+                  <span className="flex gap-1" aria-hidden="true">
+                    {Array.from({ length: Math.max(0, slot.total) }, (_, index) => (
                       <span
+                        key={index}
                         className={
-                          spell.prepared === true
-                            ? "min-w-0 flex-1 text-body-s leading-none text-foreground"
-                            : "min-w-0 flex-1 text-body-s leading-none text-muted-foreground"
+                          index < slot.used
+                            ? "size-3.5 rotate-45 border border-strong bg-transparent"
+                            : "size-3.5 rotate-45 border border-magic bg-magic"
                         }
-                      >
-                        {spell.name}
-                      </span>
-                      {spell.note !== undefined && spell.note !== "" && (
-                        <span className="text-micro leading-none text-faint">{spell.note}</span>
-                      )}
-                      {spell.level !== undefined && <Badge variant="outline">L{spell.level}</Badge>}
-                    </div>
-                  ))}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-micro leading-none text-faint">
+                    {Math.max(0, slot.total - slot.used)} of {slot.total} left
+                  </span>
                 </div>
-              </SheetSection>
-            )}
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-x-gutter @md:grid-cols-2">
+            {(spellcasting.known ?? []).map((spell) => (
+              <div key={spell.name} className="flex min-h-10 items-center gap-2">
+                <Mark on={spell.prepared === true} tone="magic" />
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 text-body-s leading-none",
+                    spell.prepared === true ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {spell.name}
+                </span>
+                {spell.note !== undefined && spell.note !== "" && (
+                  <span className="text-micro leading-none text-faint">{spell.note}</span>
+                )}
+                {spell.level !== undefined && <Badge variant="outline">L{spell.level}</Badge>}
+              </div>
+            ))}
           </div>
-        </TabsContent>
+        </DocumentSection>
       )}
 
-      {tabs.gear && (
-        <TabsContent value="gear">
-          <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            <SheetSection
-              title="Carried"
-              className="min-w-0 flex-1"
-              action={
-                <Button variant="outline" size="sm" onClick={onEditGear}>
-                  <Icon name="plus" size={13} />
-                  Add
-                </Button>
-              }
-            >
+      {features !== undefined && (
+        <DocumentSection section={features} register={register}>
+          <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
+            {sheet.traits.map((trait) => (
+              <Feature key={trait.name} trait={trait} />
+            ))}
+          </div>
+        </DocumentSection>
+      )}
+
+      {gear !== undefined && (
+        <DocumentSection
+          section={gear}
+          register={register}
+          action={
+            <Button variant="outline" size="sm" onClick={onEditGear}>
+              <Icon name="plus" size={13} />
+              Add
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-gutter @md:flex-row @md:items-start">
+            <div className="min-w-0 flex-1">
               {sheet.inventory === undefined || sheet.inventory.length === 0 ? (
                 <p className="text-caption leading-body text-muted-foreground">
                   A rope, a lantern, the thing you were given last session.
@@ -479,133 +523,133 @@ function SheetBody({
                   <InventoryLine key={item.name} item={item} first={index === 0} />
                 ))
               )}
-            </SheetSection>
+            </div>
             {purse.length > 0 && (
-              <SheetSection title="Coin" className="@3xl:w-aside @3xl:shrink-0">
-                <div className="flex flex-col gap-2">
-                  {purse.map((pile) => (
-                    <div key={pile.label} className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 text-micro leading-none tracking-caps uppercase text-muted-foreground">
-                        {pile.label}
-                      </span>
-                      <span className="font-mono text-mono leading-none font-medium text-heading">
-                        {pile.amount}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </SheetSection>
+              /* The drawing's 168px coin box: a column beside the list where
+                 the document is wide enough, a wrapping row under it where it
+                 is not. */
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 border border-hairline bg-surface-sunken p-3 @md:w-42 @md:shrink-0 @md:flex-col">
+                {purse.map((pile) => (
+                  <div key={pile.label} className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 text-micro leading-none tracking-caps uppercase text-muted-foreground">
+                      {pile.label}
+                    </span>
+                    <span className="font-mono text-mono leading-none font-medium text-heading">
+                      {pile.amount}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        </TabsContent>
+        </DocumentSection>
       )}
 
-      {tabs.story && (
-        <TabsContent value="story">
-          <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-            <div className="flex min-w-0 flex-1 flex-col gap-gutter">
-              <SheetSection
-                title="Backstory"
-                action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    /* The bar carries an *Edit* too, for the columns. Two
-                       buttons with one name on one screen is a real ambiguity
-                       and not only a test's problem, so this one says what it
-                       edits — with the visible word kept as the prefix, so
-                       anything driving by the label it can see still matches. */
-                    aria-label="Edit backstory"
-                    onClick={onEditBackstory}
+      {storySection !== undefined && (
+        <DocumentSection
+          section={storySection}
+          register={register}
+          action={<EditButton what="backstory" onClick={onEditBackstory} bare />}
+        >
+          <div className="flex flex-col gap-gutter @lg:flex-row @lg:items-start">
+            <div className="min-w-0 flex-1">
+              {sheet.notes.trim() === "" ? (
+                <p className="text-caption leading-body text-muted-foreground">
+                  Where they came from, and what they are still carrying about it.
+                </p>
+              ) : (
+                sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
+                  <p
+                    key={paragraph.slice(0, 32) + String(index)}
+                    className={cn(
+                      "max-w-measure font-serif text-body-l leading-loose text-slate-300 italic",
+                      index === 0 ? "" : "mt-3",
+                    )}
                   >
-                    <Icon name="pencil" size={13} />
-                    Edit
-                  </Button>
-                }
-              >
-                {sheet.notes.trim() === "" ? (
-                  <p className="text-caption leading-body text-muted-foreground">
-                    Where they came from, and what they are still carrying about it.
+                    {paragraph}
                   </p>
-                ) : (
-                  sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
-                    <p
-                      key={paragraph.slice(0, 32) + String(index)}
-                      className={
-                        index === 0
-                          ? "max-w-measure font-serif text-body-l leading-loose text-slate-300 italic"
-                          : "mt-3 max-w-measure font-serif text-body-l leading-loose text-slate-300 italic"
-                      }
-                    >
-                      {paragraph}
-                    </p>
-                  ))
-                )}
-              </SheetSection>
+                ))
+              )}
               {sheet.journal !== undefined && sheet.journal.length > 0 && (
-                <SheetSection title="Journal">
-                  <div className="flex flex-col gap-4">
-                    {sheet.journal.map((entry, index) => (
-                      <div key={entry.text.slice(0, 32) + String(index)}>
-                        {entry.session !== undefined && (
-                          <Badge variant="secondary">Session {entry.session}</Badge>
-                        )}
-                        <p className="mt-1.5 max-w-measure text-body-s leading-loose text-muted-foreground">
-                          {entry.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </SheetSection>
+                <Ruled className="flex flex-col gap-4">
+                  {sheet.journal.map((entry, index) => (
+                    <div key={entry.text.slice(0, 32) + String(index)}>
+                      {entry.session !== undefined && (
+                        <Badge variant="secondary">Session {entry.session}</Badge>
+                      )}
+                      <p className="mt-1.5 max-w-measure text-body-s leading-loose text-muted-foreground">
+                        {entry.text}
+                      </p>
+                    </div>
+                  ))}
+                </Ruled>
               )}
             </div>
             {storyLines.length > 0 && (
-              <SheetSection title="Bonds, ideals, flaws" className="min-w-0 flex-1">
-                <div className="flex flex-col gap-3">
-                  {storyLines.map((line) => (
-                    <KeyVal key={line.label} k={line.label} v={line.value} />
-                  ))}
-                </div>
-              </SheetSection>
+              /* The drawing's 240px aside, docked where the document allows. */
+              <div className="flex flex-col gap-3 border border-hairline bg-surface-sunken p-3 @lg:w-60 @lg:shrink-0">
+                {storyLines.map((line) => (
+                  <KeyVal key={line.label} k={line.label} v={line.value} />
+                ))}
+              </div>
             )}
           </div>
-        </TabsContent>
+        </DocumentSection>
       )}
 
-      {tabs.log && (
-        <TabsContent value="log">
-          <SheetSection title="Level ups">
-            {(sheet.levelUps ?? []).map((levelUp, index) => (
-              <div
-                key={levelUp.level}
-                className={`flex gap-4 py-3 ${index === 0 ? "" : "border-t border-hairline"}`}
-              >
-                <div className="flex w-11 shrink-0 flex-col items-center gap-0.5">
-                  <span className="font-display text-display-s leading-none font-semibold text-accent-ink">
-                    {levelUp.level}
-                  </span>
-                  <span className="text-micro leading-none text-faint">level</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  {levelUp.session !== undefined && (
-                    <Badge variant="outline">Session {levelUp.session}</Badge>
-                  )}
-                  {levelUp.note !== undefined && levelUp.note !== "" && (
-                    <p className="mt-1.5 max-w-measure text-body-s leading-body text-foreground">
-                      {levelUp.note}
-                    </p>
-                  )}
-                </div>
+      {log !== undefined && (
+        <DocumentSection section={log} register={register}>
+          {(sheet.levelUps ?? []).map((levelUp, index) => (
+            <div
+              key={levelUp.level}
+              className={cn("flex gap-4 py-3", index === 0 ? "" : "border-t border-hairline")}
+            >
+              <div className="flex w-11 shrink-0 flex-col items-center gap-0.5">
+                <span className="font-display text-display-s leading-none font-semibold text-accent-ink">
+                  {levelUp.level}
+                </span>
+                <span className="text-micro leading-none text-faint">level</span>
               </div>
-            ))}
-          </SheetSection>
-        </TabsContent>
+              <div className="min-w-0 flex-1">
+                {levelUp.session !== undefined && (
+                  <Badge variant="outline">Session {levelUp.session}</Badge>
+                )}
+                {levelUp.note !== undefined && levelUp.note !== "" && (
+                  <p className="mt-1.5 max-w-measure text-body-s leading-body text-foreground">
+                    {levelUp.note}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </DocumentSection>
       )}
-    </Tabs>
+    </div>
   );
 }
 
-function IdentityColumn({ owned }: { readonly owned: OwnedCharacter }) {
+/**
+ * The identity card — the drawing's sticky left rail wide, and its two-line
+ * summary header narrow.
+ *
+ * **One card, restyled by the column's width, and never two.** The drawing
+ * draws two components and picks one by window width; here the summary button
+ * is drawn only under `@3xl` and the full head only at it, while everything the
+ * two share — the hit-point track, the pills, the experience bar, the death
+ * saves — is drawn once and shown narrow only when the summary is expanded.
+ * That is what keeps every death-save pip in the tree exactly once, which is
+ * what a test (and a screen reader) asking for *Successes 1* needs.
+ */
+function IdentityCard({
+  owned,
+  open,
+  onToggle,
+}: {
+  readonly owned: OwnedCharacter;
+  /** Whether the narrow summary is expanded — screen state, above the resource. */
+  readonly open: boolean;
+  readonly onToggle: () => void;
+}) {
   const character = owned.character;
   const identity = character.sheet.identity;
   // Absent is nought up and nought down, and on a writable sheet the row is
@@ -652,29 +696,77 @@ function IdentityColumn({ owned }: { readonly owned: OwnedCharacter }) {
   ].flatMap((pill) =>
     pill.value === undefined || pill.value === "" ? [] : [{ ...pill, value: pill.value }],
   );
+  /* The summary's second line — `44 / 52 hp · AC 18 · +1 init` — from the same
+     columns the track and the pills read, so it cannot say a different number. */
+  const hp = hitPoints(character.hpCurrent, character.hpMax);
+  const summary = [
+    hp === undefined ? undefined : `${hp} hp`,
+    character.ac === null ? undefined : `AC ${String(character.ac)}`,
+    identity?.initiative === undefined || identity.initiative === ""
+      ? undefined
+      : `${identity.initiative} init`,
+  ].filter((part): part is string => part !== undefined);
+  const detailsId = `vitals-${character.id}`;
 
   return (
-    <div className="flex flex-col gap-gutter">
+    <div className="order-1 @3xl:sticky @3xl:top-0 @3xl:w-63 @3xl:shrink-0">
       <Card>
-        <CardContent className="flex flex-col gap-4 pt-card">
-          <div className="flex items-start gap-3">
-            <Portrait name={character.name} size="lg" />
-            <div className="min-w-0">
-              <p className="font-display text-body leading-tight font-semibold text-heading">
-                {character.name}
+        {/* Narrow: the two-line summary, and the press that opens the rest. */}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={detailsId}
+          // Named for what it does rather than for what it shows: the name and
+          // the numbers inside it are content, and a control called
+          // *"BD Brannoc Duskharrow 44 / 52 hp…"* says nothing about the press.
+          aria-label={open ? "Hide vitals" : "Show vitals"}
+          onClick={onToggle}
+          className="flex w-full cursor-pointer items-center gap-2.75 p-2.75 text-left transition-control focus-visible:outline-none focus-visible:ring-focus @3xl:hidden"
+        >
+          <Portrait name={character.name} size="xs" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-body-s leading-tight font-semibold text-heading">
+              {character.name}
+            </p>
+            {summary.length > 0 && (
+              <p className="mt-1 font-mono text-mono leading-none text-muted-foreground">
+                {summary.join(" · ")}
               </p>
+            )}
+          </div>
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            size={16}
+            className="shrink-0 text-faint"
+          />
+        </button>
+
+        <CardContent
+          id={detailsId}
+          className={cn(
+            "flex-col gap-4 px-2.75 pb-3.25 @3xl:flex @3xl:px-card @3xl:pt-card @3xl:pb-card",
+            open ? "flex" : "hidden",
+          )}
+        >
+          {/* Wide: the portrait plate and the name over the card. */}
+          <div className="hidden items-start gap-3 @3xl:flex">
+            <Portrait name={character.name} size="lg" />
+            <p className="min-w-0 font-display text-body leading-tight font-semibold text-heading">
+              {character.name}
+            </p>
+          </div>
+          {(meta.length > 0 || (character.playerName !== null && character.playerName !== "")) && (
+            <div>
               {meta.length > 0 && (
-                <p className="mt-1 text-micro leading-body text-muted-foreground">
-                  {meta.join(" · ")}
-                </p>
+                <p className="text-micro leading-body text-muted-foreground">{meta.join(" · ")}</p>
               )}
               {character.playerName !== null && character.playerName !== "" && (
-                <p className="mt-1 text-micro leading-body text-faint">
+                <p className="text-micro leading-body text-faint">
                   Played by {character.playerName}
                 </p>
               )}
             </div>
-          </div>
+          )}
 
           <HpTrack
             current={character.hpCurrent}
@@ -694,7 +786,8 @@ function IdentityColumn({ owned }: { readonly owned: OwnedCharacter }) {
           )}
 
           {pills.length > 0 && (
-            <div className="flex gap-1.5">
+            /* Four across narrow, the drawing's 2×2 wide. */
+            <div className="grid grid-cols-4 gap-1.5 @3xl:grid-cols-2">
               {pills.map((pill) => (
                 <StatPill
                   key={pill.label}
@@ -736,42 +829,43 @@ function IdentityColumn({ owned }: { readonly owned: OwnedCharacter }) {
               The sheet they keep elsewhere
             </a>
           )}
+
+          <div className="flex flex-col gap-2 border-t border-hairline pt-3">
+            <p className="text-micro leading-none tracking-caps uppercase text-faint">
+              Death saves
+            </p>
+            <DeathSaveRow
+              label="Successes"
+              count={deathSaves.successes}
+              tone="success"
+              busy={busy}
+              onMark={(next) => void mark("successes", next)}
+            />
+            <DeathSaveRow
+              label="Failures"
+              count={deathSaves.failures}
+              tone="danger"
+              busy={busy}
+              onMark={(next) => void mark("failures", next)}
+            />
+            {/* **The drawing's promise, corrected rather than repeated.**
+                `CharacterSheet.jsx` says these "show on your DM's initiative row
+                straight away" and nothing reads them: no delivery of the runner
+                draws a death save, which is exactly why they are a document key
+                and not a column. Saying so here is the honest version of the
+                same line, and the DM-side read is a separate piece of work. */}
+            {failure === undefined ? (
+              <p className="mt-1 text-micro leading-body text-faint">
+                Kept on your sheet. Your DM&rsquo;s screen does not show these yet.
+              </p>
+            ) : (
+              <div className="mt-1">
+                <SaveFailure failure={failure} />
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
-
-      <SheetSection title="Death saves">
-        <div className="flex flex-col gap-2">
-          <DeathSaveRow
-            label="Successes"
-            count={deathSaves.successes}
-            tone="success"
-            busy={busy}
-            onMark={(next) => void mark("successes", next)}
-          />
-          <DeathSaveRow
-            label="Failures"
-            count={deathSaves.failures}
-            tone="danger"
-            busy={busy}
-            onMark={(next) => void mark("failures", next)}
-          />
-          {/* **The drawing's promise, corrected rather than repeated.**
-              `CharacterSheet.jsx` says these "show on your DM's initiative row
-              straight away" and nothing reads them: no delivery of the runner
-              draws a death save, which is exactly why they are a document key
-              and not a column. Saying so here is the honest version of the
-              same line, and the DM-side read is a separate piece of work. */}
-          {failure === undefined ? (
-            <p className="mt-1 text-micro leading-body text-faint">
-              Kept on your sheet. Your DM&rsquo;s screen does not show these yet.
-            </p>
-          ) : (
-            <div className="mt-1">
-              <SaveFailure failure={failure} />
-            </div>
-          )}
-        </div>
-      </SheetSection>
     </div>
   );
 }
@@ -808,6 +902,148 @@ function LiveTableBanner({ banner }: { readonly banner: LiveBanner }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The scroller, the three columns and the scroll-spy — everything that has to
+ * know where the reader is.
+ *
+ * It owns the scroll container so `offsetTop`s are measured against it
+ * (`relative`), restores the position it was last at when it mounts, and asks
+ * `sectionInView` which section is lit on every scroll. A press on the spine
+ * **pins** its section until the reader scrolls by hand (wheel, touch or key):
+ * a smooth scroll fires the same events as a thumb does, and a short last
+ * section that cannot reach the reading line would otherwise be lit for a
+ * frame and then lose the marker to the section above it.
+ */
+function SheetScroller({
+  owned,
+  banner,
+  active,
+  onActive,
+  vitalsOpen,
+  onToggleVitals,
+  scrollTopRef,
+  onEdit,
+}: {
+  readonly owned: OwnedCharacter;
+  readonly banner: LiveBanner | undefined;
+  readonly active: SheetSectionId;
+  readonly onActive: (id: SheetSectionId) => void;
+  readonly vitalsOpen: boolean;
+  readonly onToggleVitals: () => void;
+  readonly scrollTopRef: { current: number };
+  readonly onEdit: (what: "abilities" | "skills" | "backstory" | "gear") => void;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const spine = useRef<HTMLElement>(null);
+  const sectionElements = useRef(new Map<SheetSectionId, HTMLElement>());
+  const pinned = useRef<SheetSectionId | undefined>(undefined);
+  // Writable, so the three starting sections are drawn whether or not they hold
+  // anything — otherwise the affordance that fills a section would live behind
+  // the section it fills, and a sheet nobody has written could never be started.
+  const sections = drawnSections(owned.character.sheet, true);
+
+  const register = (id: SheetSectionId, element: HTMLElement | null) => {
+    if (element === null) sectionElements.current.delete(id);
+    else sectionElements.current.set(id, element);
+  };
+
+  // Where the reader was, restored when the document (re)mounts — see the
+  // screen's doc comment for why this is the second layer and not the first.
+  useLayoutEffect(() => {
+    const element = scroller.current;
+    if (element !== null && scrollTopRef.current > 0) element.scrollTop = scrollTopRef.current;
+  }, [scrollTopRef]);
+
+  /**
+   * The rail's height, when the nav is the rail — the amount a section has to
+   * be scrolled clear of so its heading is not under the band. On the wide
+   * layout the spine is a column beside the document and takes no headroom at
+   * all. The two shapes are told apart by the nav's own flex direction, which
+   * the same `@3xl` that lays the sheet out decides — a second copy of the
+   * breakpoint would drift, and **position cannot be used instead**: Chromium
+   * reports a stuck element's `offsetTop` at its stuck position, so a rail the
+   * reader has scrolled under looks as though it sits below the sections
+   * (measured: *Story* pressed at 390 landed at 0, under the rail, with the
+   * position test).
+   */
+  const headroom = () => {
+    const nav = spine.current;
+    if (nav === null) return 0;
+    return getComputedStyle(nav).flexDirection === "row" ? nav.offsetHeight : 0;
+  };
+
+  const onScroll = () => {
+    const element = scroller.current;
+    if (element === null) return;
+    scrollTopRef.current = element.scrollTop;
+    const room = headroom();
+    const tops = sections.flatMap((section) => {
+      const node = sectionElements.current.get(section.id);
+      return node === undefined ? [] : [{ id: section.id, top: node.offsetTop - room }];
+    });
+    const atEnd = element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+    const spied = sectionInView(tops, element.scrollTop, SPY_SLACK, atEnd);
+    if (spied === undefined) return;
+    if (pinned.current !== undefined) {
+      // The smooth scroll has arrived when the spy agrees with the press.
+      if (spied === pinned.current) pinned.current = undefined;
+      return;
+    }
+    onActive(spied);
+  };
+
+  const go = (id: SheetSectionId) => {
+    const element = scroller.current;
+    const target = sectionElements.current.get(id);
+    onActive(id);
+    if (element === null || target === undefined) return;
+    pinned.current = id;
+    const top = Math.max(0, target.offsetTop - headroom());
+    if (typeof element.scrollTo === "function") element.scrollTo({ top, behavior: "smooth" });
+    else element.scrollTop = top;
+  };
+
+  const unpin = () => {
+    pinned.current = undefined;
+  };
+
+  return (
+    <div
+      ref={scroller}
+      onScroll={onScroll}
+      onWheel={unpin}
+      onTouchMove={unpin}
+      onKeyDown={unpin}
+      /* The scroller takes the page gutter back from `main` so the sticky
+         columns and the rail meet its top edge — `top-0` is measured against
+         this box — and so the scrollbar sits at the page edge rather than a
+         gutter in from it. */
+      className="relative -mx-page-sm -my-gutter min-h-0 flex-1 overflow-auto px-page-sm py-gutter sm:-mx-page sm:px-page"
+    >
+      {banner !== undefined && <LiveTableBanner banner={banner} />}
+      {/* The drawing's `252px / minmax(0,1fr) / 186px` grid as a flex row: the
+          card and the spine are fixed tracks that stick, the document is the
+          one that gives. `items-start` is what lets a flex item be sticky.
+          Narrow, the same three stack — card, rail, document — which the
+          `order-*` pair on the rail and the document arranges without a second
+          copy of either. */}
+      <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
+        <IdentityCard owned={owned} open={vitalsOpen} onToggle={onToggleVitals} />
+        <SectionSpine ref={spine} sections={sections} active={active} onGo={go} />
+        <SheetDocument
+          character={owned.character}
+          sections={sections}
+          register={register}
+          onEditAbilities={() => onEdit("abilities")}
+          onEditBackstory={() => onEdit("backstory")}
+          onEditGear={() => onEdit("gear")}
+          onEditSkills={() => onEdit("skills")}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -876,13 +1112,27 @@ export function CharacterSheetScreen() {
   const [editing, setEditing] = useState<
     "identity" | "abilities" | "skills" | "backstory" | "gear" | "delete" | undefined
   >();
-  /** Which tab is open — above the resource, for the reason `SheetBody` gives. */
-  const [openTab, setOpenTab] = useState<string | undefined>();
+  /**
+   * Which section is lit, whether the narrow summary is open, and where the
+   * scroller was — all three above the resource, for the reason the screen's
+   * doc comment gives under *Keeping your place across a write*.
+   */
+  const [active, setActive] = useState<SheetSectionId>("abilities");
+  const [vitalsOpen, setVitalsOpen] = useState(false);
+  const scrollTop = useRef(0);
   const close = () => setEditing(undefined);
   const navigate = useNavigate();
+  // The lit section must be a drawn one — a section can stop being drawn
+  // between renders — so the held value falls back to the first rather than
+  // being trusted.
+  const drawn = character === undefined ? [] : drawnSections(character.sheet, true);
+  const lit = drawn.some((section) => section.id === active)
+    ? active
+    : (drawn[0]?.id ?? "abilities");
 
   return (
     <AppShell
+      fill
       topBar={
         <TopBar
           title={character?.name ?? "A character"}
@@ -970,35 +1220,21 @@ export function CharacterSheetScreen() {
       )}
 
       {view !== undefined &&
-        (character === undefined ? (
+        (owned === undefined ? (
           <div className="max-w-3xl">
             <FailureNotice failure={{ kind: "missing", resource: "character" }} />
           </div>
         ) : (
-          <>
-            {banner !== undefined && <LiveTableBanner banner={banner} />}
-            {/* The delivery's 260px identity column beside the sheet body, and
-                `--rail-w` is that measurement — the token the rail used to
-                spend, still bridged. A container query rather than a breakpoint:
-                `main` is the container, and the Hob panel takes 400px out of it
-                without the window moving. */}
-            <div className="flex flex-col gap-gutter @3xl:flex-row @3xl:items-start">
-              <div className="@3xl:w-rail @3xl:shrink-0">
-                <IdentityColumn owned={owned!} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <SheetBody
-                  character={character}
-                  open={openTab}
-                  onOpen={setOpenTab}
-                  onEditAbilities={() => setEditing("abilities")}
-                  onEditBackstory={() => setEditing("backstory")}
-                  onEditGear={() => setEditing("gear")}
-                  onEditSkills={() => setEditing("skills")}
-                />
-              </div>
-            </div>
-          </>
+          <SheetScroller
+            owned={owned}
+            banner={banner}
+            active={lit}
+            onActive={setActive}
+            vitalsOpen={vitalsOpen}
+            onToggleVitals={() => setVitalsOpen((current) => !current)}
+            scrollTopRef={scrollTop}
+            onEdit={setEditing}
+          />
         ))}
 
       {owned !== undefined && editing === "identity" && (

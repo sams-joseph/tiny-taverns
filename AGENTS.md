@@ -605,6 +605,33 @@ Reported rather than invented, the rule this project has held since the first de
   `/play/characters/$characterId` — so it stays on the global row, which is also what "nothing
   appears on both rows" requires.
 
+### The seventh delivery: one bundled HTML, one new file, and the sheet loses its tabs
+
+The first delivery to arrive as **a single bundled HTML export** (`Character Sheet.html`) rather
+than a folder — the designers' tool inlined the token CSS, blob-named every asset and carried the
+JSX as `text/babel` scripts. Unpacked, it was four files, and **one is new**:
+`ui_kits/dm-screen/CharacterSheetB.jsx`, _"Variant B — one continuous sheet, no tabs"_, copied
+into the kit byte for byte. `PlayerParts.jsx` and `player-data.js` were byte-identical to the
+vendored copies; the bundle's `index.html` only composed the three. The bundle's `AppShell.jsx`
+differs from the vendored one in two lines and neither was acted on: the Library nav item is
+`{ id: "library", icon: "library" }` (shipped as _Library_ already) and `AppShell` grew a
+`chatDefault` prop (the shipped shell's `useHobPanel({ initialOpen: false })`).
+
+**Not one token changed, and this time that was measured against CSS rather than files**: the
+bundle's inline `<style>` block, normalised to a declaration set, differs from the eight
+concatenated `tokens/*.css` in exactly the two Alegreya `@font-face` `src` URLs the export
+rewrote to blob names. `PORT-NOTES.md` records the method, because there is no `diff -rq` to run
+against one HTML file. No theme-bridge work; `packages/ui`'s icon table grew by **zero** — every
+glyph the drawing names (`hexagon`, `swords`, `sparkles`, `scroll-text`, `backpack`, `book-open`,
+`history`, `chevron-down`/`-up`, `dices`) was already in it.
+
+**What it replaced is written down where the sheet is** — see "The player's character screens"
+below, which now describes the continuous sheet, the section rule that replaced tab gating, and
+how the reader keeps their place across a write. What the drawing asks for that the rule about
+absent controls refuses is listed there too: the dice on every attack and ability, the roll toast
+and the _Your rolls_ log, the portrait upload, spent slots and prepared-spell toggles, and a
+permanent _Go to the table_ in the bar.
+
 ## Overlay layering: one scale, and where a new overlay goes on it
 
 **Every z-index in this product comes from the scale in `packages/ui/src/styles.css` §3.**
@@ -2309,7 +2336,7 @@ twice:
 | abilities, with saving throws                                                                  | `sheet.abilities` — the bestiary's `Ability`, which grew `save` and `proficient` |
 | skills, proficiencies & languages                                                              | `sheet.skills`, `sheet.proficiencies`                                            |
 | attacks (Actions tab)                                                                          | `sheet.attacks` — `Trait`s, which grew `hit` and `note`                          |
-| features & traits (Stats tab)                                                                  | `sheet.traits` — the same `Trait`, the key that was already there                |
+| features & traits (its own section since the seventh delivery)                                 | `sheet.traits` — the same `Trait`, the key that was already there                |
 | spellcasting, slots and known spells                                                           | `sheet.spellcasting`                                                             |
 | inventory and coin                                                                             | `sheet.inventory`, `sheet.currency`                                              |
 | backstory                                                                                      | `sheet.notes` — where `0012` put it; there is no second `backstory` key          |
@@ -4478,8 +4505,9 @@ and the encounter `CreaturePicker` (facet-free). Where older prose below describ
   one consistent in-content placement for the tab's write verb(s) — do not hand-roll either per
   screen. The campaign row and the global row are **navigation tiers, not tabs** (the sixth
   delivery's two-row nav — already their own rows, and _Start session_ belongs to the whole
-  campaign), and the character sheet's `Tabs` already conforms (TabsList its own row inside the
-  content, per-tab edit buttons inside each `TabsContent`).
+  campaign). The character sheet has **no tabs since the seventh delivery** — it is one continuous
+  document with a spine (see "The player's character screens") — and its section writes follow
+  the second half of the rule: each lives in its own section's header, never in the bar.
 - **The top bar holds the title and the count on the Library shelves — never a filter, a tab, or
   a tab's action.** Three tabs proved the bar cannot fit a filter row without breaking its own
   layout. The campaign screens (Encounters, Notes, Chronicle) keep their box in `CampaignChrome`'s
@@ -4883,11 +4911,41 @@ width.
 
 ### The player's character screens, and the sheet they can write
 
-`apps/web/src/characters/` is `ui_kits/dm-screen/MyCharacters.jsx` and `CharacterSheet.jsx` against
-the real API — `#/play/characters` and `#/play/characters/:characterId`, with a `user` nav item in
-player mode. `PlayerParts.jsx` becomes `SheetParts.tsx`; `sheet.ts` is the pure half and is
-separately tested, the way `chronicle/fight.ts` is, because everything decided in it is wrong
+`apps/web/src/characters/` is `ui_kits/dm-screen/MyCharacters.jsx` and — since the seventh delivery
+— **`CharacterSheetB.jsx`, the continuous sheet**, against the real API: `#/characters` and
+`#/characters/:characterId`, with a `user` nav item. `PlayerParts.jsx` becomes `SheetParts.tsx`,
+which also holds the seventh delivery's new primitives (`SectionSpine`, the `xs` portrait);
+`sheet.ts` is the pure half — the section rule, the section list, the scroll-spy arithmetic — and
+is separately tested, the way `chronicle/fight.ts` is, because everything decided in it is wrong
 silently.
+
+- **The sheet is three columns wide and one column narrow, and there are no tabs.** Wide: a
+  sticky 252px identity card, one continuous column of `SheetSection`s in the delivery's order
+  (Abilities & skills, Actions, Spellcasting, Features & traits, Gear & coin, Story, Level ups),
+  and a sticky 186px **spine** whose lit item follows the reader's scroll and whose press scrolls
+  to a section. Narrow: the card collapses to a two-line summary that expands on a press, the
+  spine flattens into a sticky rail of pills, and every two-column grid inside the document
+  becomes one. The threshold is `@3xl` on `main` (the drawing's 900px window is an 836px column
+  inside the page gutter); **the document is its own `@container`**, so the grids inside it turn
+  over on the width the column actually has. `CharacterSheetScreen.tsx`'s doc comment is where
+  the layout decisions live, including why the screen owns its scroller (`fill`, the runner's
+  mode): both sticky columns and the scroll-spy need a top edge that is this screen's, not the
+  shell's sticky `TopBar`, whose height is neither a token nor constant.
+- **The spine and the rail are one `nav`, restyled by width, never two** — two would put every
+  section's button in the accessibility tree twice. Its accessible name is the long label
+  either way; the short one is only the pill's face. A press **pins** its section until the reader
+  scrolls by hand, because a smooth scroll fires the same events a thumb does and a short last
+  section would otherwise lose the marker on arrival. The rail's height is what a section is
+  scrolled clear of, and the rail is told from the spine by its **flex direction**, not its
+  position: Chromium reports a stuck element's `offsetTop` at its stuck position (measured —
+  _Story_ pressed at 390 landed under the rail with the position test).
+- **Keeping your place across a write is two layers.** `useApiAtom` holds the last value through
+  a refresh (`ready` + `refreshing`), so a save never unmounts the scroller — measured in
+  Chromium across a gear save: `scrollTop` 1078 before and after, the same scroller and section
+  nodes, zero frames of _Reading the sheet…_ in 140 sampled, the new line drawn in place. The
+  lit section and the last `scrollTop` are held above the resource anyway and restored on a
+  remount, for the one case the atom cannot cover. `CharacterSheetScreen.test.tsx` pins the node
+  identity; the tabbed sheet's "controlled tabs above the resource" is this rule's ancestor.
 
 - **Both routes name no campaign, and both screens are one `loadMyCharacters`.**
   `GET /me/characters` is the one read on `character` with no campaign in its path, so the roster
@@ -4897,16 +4955,22 @@ silently.
   through the wider `ownedRowReadable` rather than the `ownRowReadable` narrowing. So _"this
   character is not in the answer"_ and _"it is not yours"_ are the same fact, and the screen says
   `NotFound`'s own sentence about it.
-- **A tab is drawn when the document fills it _or_ when there is somewhere to write.**
-  Thirteen optional keys, and a character written through `CharacterDialog` has none of them; five
-  empty tabs would claim the data exists and is blank. `sheetTabs(sheet, writable)` is the whole
-  rule, and `writable` is the sheet screen's own: Stats, Gear and Story are drawn either way,
-  because each carries the affordance that creates its own contents and a tab that appeared only
-  once its contents existed would be a first line of backstory nobody could type. **Stats joined
-  the other two when the abilities and skills editors landed**, and the reason it was out before
-  was the right one at the time — nothing wrote an ability cell then. Actions and Log stay
-  content-driven for that same test, which is what keeps the flag meaning something rather than
-  being `writable` spelled twice: nothing here writes an attack, a spell slot or a level-up.
+- **A section is drawn when the document fills it _or_ when there is somewhere to write, and
+  the spine lists exactly the drawn ones.** Thirteen optional keys, and a character written
+  through `CharacterDialog` has none of them; seven empty sections would claim the data exists
+  and is blank. `sheetSections(sheet, writable)` / `drawnSections` in `sheet.ts` is the whole rule
+  — the tabbed sheet's `sheetTabs` spelled over seven names, with _Stats_ split into abilities
+  and features and _Actions_ into attacks and spellcasting. `writable` is the sheet screen's own:
+  Abilities & skills, Gear & coin and Story are drawn either way, because each carries the
+  affordance that creates its own contents and a section that appeared only once its contents
+  existed would be a first line of backstory nobody could type. Actions, Spellcasting, Features &
+  traits and Level ups stay content-driven for that same test, which is what keeps the flag
+  meaning something rather than being `writable` spelled twice: nothing here writes an attack, a
+  spell slot, a feature or a level-up. **Controls exist only where a write exists, and the
+  seventh delivery draws far more than that** — dice on every attack and ability with a toast and
+  a _Your rolls_ log, spell pips that spend, a prepared-spell toggle, a portrait upload, a
+  permanent _Go to the table_. None is built; the right column is the spine alone, and
+  `CharacterSheetScreen.test.tsx` enumerates every pressable thing on the sheet.
 - **The empty roster tells its two silences apart** — invited nowhere, or at a table with nothing
   handed to you — off `tableCount`, which is why the load reads memberships even when the campaign
   names are not needed. Neither is papered over with a friendlier sentence.
@@ -5081,7 +5145,7 @@ the viewport at every width, with the action hit-testable at 760.
 
 **`PATCH /me/characters/:characterId` — six surfaces, one endpoint, named once in
 `apps/web/src/characters/write.ts`.** The top bar's _Edit_ is the durable columns
-(`IdentityDialog`); the Stats tab's two are the six cells and the skill list (`AbilitiesDialog`,
+(`IdentityDialog`); the Abilities & skills section's two are the six cells and the skill list (`AbilitiesDialog`,
 `SkillsDialog` — see below); the Story tab's _Edit_ is the backstory (`BackstoryDialog`,
 `sheet.notes`); the Gear tab's _Add_ is the carried list (`GearDialog`, `sheet.inventory`, opening
 with a blank line and editing the whole array the way `CreatureForm`'s trait editor does); and a
@@ -5129,7 +5193,7 @@ control for `hpCurrent`, `tempHp`, `conditions`, `visibility` or `accountId` doe
 `sheet.abilities` and `sheet.skills` were the last two halves of the drawn sheet nothing in the
 product could write, and the gap was not Hob's: `campaign/CharacterDialog.tsx` writes no ability
 cell either, so **every character this product has ever made had six cells with no first value
-typeable into them.** `AbilitiesDialog` and `SkillsDialog` close it off the Stats tab's own header
+typeable into them.** `AbilitiesDialog` and `SkillsDialog` close it off the Abilities & skills section's own header
 slot, in the shipped dialog idiom, through the same `saveOwnCharacter` + `sheetWith` as the other
 four. `abilities.ts` and `skills.ts` are the pure halves and are separately tested, for the reason
 `chronicle/fight.ts` is: everything decided in them is wrong _silently_.

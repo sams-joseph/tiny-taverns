@@ -165,8 +165,12 @@ describe("writing down a character of your own", () => {
     // dialogs work on it unchanged. `findAllByText` because the sheet draws the
     // name in its bar and in its identity column both.
     await screen.findAllByText("Brannoc Duskharrow");
-    // The sheet's own tabs, which is the thing a second editor would not have.
-    expect((await screen.findAllByRole("tab")).map((tab) => tab.textContent)).toContain("Story");
+    // The sheet's own spine, which the create form never draws.
+    expect(
+      within(await screen.findByRole("navigation", { name: "Sheet sections" }))
+        .getAllByRole("button")
+        .map((item) => item.getAttribute("aria-label")),
+    ).toContain("Story");
     // And the form is gone rather than layered under it.
     expect(screen.queryByRole("button", { name: /Create character/i })).toBeNull();
     // `replace: true`, so *Back* from the sheet goes to wherever the player

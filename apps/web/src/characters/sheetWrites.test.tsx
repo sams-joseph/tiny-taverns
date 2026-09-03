@@ -1,5 +1,5 @@
 import type { CampaignId, CharacterOwnUpdate, OwnedCharacter } from "@taverns/api";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -47,9 +47,19 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const tab = async (name: string) => {
-  await userEvent.click(screen.getByRole("tab", { name }));
+/**
+ * The continuous sheet has no tabs: every section is on screen at once, so
+ * "open the tab" is now "wait for the section", and the spine's lit item is what
+ * says where the reader is.
+ */
+const section = async (name: string) => {
+  await screen.findByRole("heading", { name });
 };
+const lit = () =>
+  within(screen.getByRole("navigation", { name: "Sheet sections" }))
+    .getAllByRole("button")
+    .find((node) => node.getAttribute("aria-current") === "true")
+    ?.getAttribute("aria-label");
 
 const sent = () => bodyOf(server, "PATCH", patchPath) as Record<string, unknown> | undefined;
 
@@ -166,8 +176,7 @@ describe("editing the durable columns", () => {
 
 describe("editing the abilities", () => {
   const openAbilities = async () => {
-    await screen.findByRole("tab", { name: /Stats/ });
-    await tab("Stats");
+    await section("Abilities & skills");
     await userEvent.click(screen.getByRole("button", { name: "Edit abilities" }));
     await screen.findByRole("button", { name: "Save abilities" });
   };
@@ -356,22 +365,19 @@ describe("editing the abilities", () => {
     expect(abilities[3]).toEqual({ label: "INT", score: "18", modifier: "+4" });
   });
 
-  it("leaves the reader on Stats after the save", async () => {
+  it("leaves the reader on Abilities after the save", async () => {
     await renderSheet();
     await openAbilities();
     await userEvent.click(screen.getByRole("button", { name: "Save abilities" }));
 
     await waitFor(() => expect(sent()).toBeDefined());
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /Stats/ }).getAttribute("aria-selected")).toBe("true"),
-    );
+    await waitFor(() => expect(lit()).toBe("Abilities & skills"));
   });
 });
 
 describe("editing the skills", () => {
   const openSkills = async () => {
-    await screen.findByRole("tab", { name: /Stats/ });
-    await tab("Stats");
+    await section("Abilities & skills");
     await userEvent.click(screen.getByRole("button", { name: "Edit skills" }));
     await screen.findByRole("button", { name: "Save skills" });
   };
@@ -455,8 +461,7 @@ describe("editing the skills", () => {
 describe("editing the backstory", () => {
   it("sends the whole document with the prose replaced", async () => {
     await renderSheet();
-    await screen.findByRole("tab", { name: /Story/ });
-    await tab("Story");
+    await section("Story");
     await userEvent.click(screen.getByRole("button", { name: "Edit backstory" }));
 
     const box = await screen.findByRole("textbox", { name: "Backstory" });
@@ -480,8 +485,7 @@ describe("editing the backstory", () => {
   it("offers the backstory on a sheet nobody has written yet", async () => {
     server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
     await renderSheet(sorrelId);
-    await screen.findByRole("tab", { name: /Story/ });
-    await tab("Story");
+    await section("Story");
     await userEvent.click(screen.getByRole("button", { name: "Edit backstory" }));
 
     await userEvent.type(
@@ -500,9 +504,14 @@ describe("editing the backstory", () => {
 
 describe("adding gear", () => {
   const openGear = async () => {
-    await screen.findByRole("tab", { name: /Gear/ });
-    await tab("Gear");
-    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    await section("Gear & coin");
+    // Where a reader who pressed *Add* is: on Gear, by way of the spine.
+    await userEvent.click(
+      within(screen.getByRole("navigation", { name: "Sheet sections" })).getByRole("button", {
+        name: "Gear & coin",
+      }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^Add$/ }));
   };
 
   it("appends a line and leaves the ones already carried alone", async () => {
@@ -541,22 +550,20 @@ describe("adding gear", () => {
   });
 
   /**
-   * **The tab survives the save**, which it did not until the strip was
-   * controlled from above the resource: a write re-reads, a re-read passes
-   * through `loading`, and the subtree unmounts — so an uncontrolled strip
-   * dropped the reader back on Stats with the line they had just added one
-   * click away and invisible.
+   * **The section survives the save.** The tabbed sheet lost the open tab to the
+   * re-read a write makes until the strip was controlled from above the
+   * resource; the continuous sheet holds the lit section the same way, and the
+   * document under it stays mounted through the refresh — so the line just
+   * added draws where the reader is looking rather than one scroll away.
    */
-  it("leaves the reader on the tab they saved from", async () => {
+  it("leaves the reader on the section they saved from", async () => {
     await renderSheet();
     await openGear();
     await screen.findByRole("button", { name: "Save gear" });
     await userEvent.click(screen.getByRole("button", { name: "Save gear" }));
 
     await waitFor(() => expect(sent()).toBeDefined());
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /Gear/ }).getAttribute("aria-selected")).toBe("true"),
-    );
+    await waitFor(() => expect(lit()).toBe("Gear & coin"));
   });
 
   it("removes a line that is no longer carried", async () => {

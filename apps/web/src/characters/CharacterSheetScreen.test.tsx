@@ -1,21 +1,50 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  bodyOf,
+  brannoc,
   brannocId,
   installCharacterServer,
   renderSheet,
+  savedAs,
   sorrelId,
   strangerId,
 } from "./characters.fixtures";
+
+/**
+ * The player's sheet *reading* — the seventh delivery's continuous sheet against
+ * the fixture document, and the controls it must and must not offer.
+ *
+ * There are no tabs to walk any more, so what these tests walk is the
+ * **sections**: each is a heading in the document and an item in the spine,
+ * and the spine lists exactly the drawn ones. jsdom computes no layout, so
+ * nothing here can see the three columns, the sticky rail or the scroll-spy
+ * moving — those are the browser pass — but it can see which sections exist,
+ * which one is lit, and whether a save keeps the reader where they were.
+ */
 
 const server = installCharacterServer();
 
 beforeEach(() => server.reset());
 afterEach(() => document.body.replaceChildren());
 
-const tab = async (name: string) => {
-  await userEvent.click(screen.getByRole("tab", { name }));
+const spine = () => screen.getByRole("navigation", { name: "Sheet sections" });
+const spineItems = () =>
+  within(spine())
+    .getAllByRole("button")
+    .map((node) => node.getAttribute("aria-label"));
+const lit = () =>
+  within(spine())
+    .getAllByRole("button")
+    .find((node) => node.getAttribute("aria-current") === "true")
+    ?.getAttribute("aria-label");
+const section = (name: string) => screen.getByRole("heading", { name });
+/** One section's own box, so a word the fixture uses twice is found once. */
+const inSection = (id: string) => {
+  const box = document.getElementById(`sheet-${id}`);
+  if (box === null) throw new Error(`no section #sheet-${id}`);
+  return within(box);
 };
 
 describe("a character sheet", () => {
@@ -32,6 +61,7 @@ describe("a character sheet", () => {
       screen.getByText("The Salt Road · Level 5 Half-orc Paladin · Oath of the Open Road"),
     ).toBeTruthy();
     expect(screen.getByText("Temple foundling · Lawful neutral")).toBeTruthy();
+    expect(screen.getByText("Played by Ilse")).toBeTruthy();
     expect(screen.getByText("/ 52 hp")).toBeTruthy();
     expect(screen.getByText("+3 temp")).toBeTruthy();
     expect(screen.getByText("Blessed")).toBeTruthy();
@@ -41,6 +71,25 @@ describe("a character sheet", () => {
     expect(
       screen.getByRole("link", { name: "The sheet they keep elsewhere" }).getAttribute("href"),
     ).toBe("https://example.invalid/brannoc");
+  });
+
+  /**
+   * The narrow layout's two-line summary — drawn from the same columns the
+   * track and the pills read, so it cannot say a different number — and the
+   * press that opens the rest of the card. jsdom cannot tell which layout is
+   * showing, so what is asserted is the sentence and the toggle's state.
+   */
+  it("summarises the vitals on one line and expands them on a press", async () => {
+    await renderSheet();
+    await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
+
+    expect(screen.getByText("44 / 52 hp · AC 18 · +1 init")).toBeTruthy();
+    const toggle = screen.getByRole("button", { name: /Show vitals/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(toggle);
+    expect(screen.getByRole("button", { name: /Hide vitals/ }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
   });
 
   /**
@@ -67,52 +116,83 @@ describe("a character sheet", () => {
     expect(screen.getByText(/does not show these yet/)).toBeTruthy();
   });
 
-  it("draws the tabs the document fills, and only those", async () => {
+  /**
+   * **The spine lists exactly the drawn sections, in the delivery's order**, and
+   * every one of them is a heading in the document. The full fixture fills all
+   * seven; the section rule is `sheet.test.ts`'s, and this is that rule reaching
+   * the screen.
+   */
+  it("draws the sections the document fills, and a spine that lists exactly those", async () => {
     await renderSheet();
-    await screen.findByRole("tab", { name: /Stats/ });
+    await screen.findByRole("navigation", { name: "Sheet sections" });
 
-    expect(screen.getAllByRole("tab").map((node) => node.textContent)).toEqual([
-      "Stats",
+    const all = [
+      "Abilities & skills",
       "Actions",
-      "Gear",
+      "Spellcasting",
+      "Features & traits",
+      "Gear & coin",
       "Story",
-      "Log",
-    ]);
+      "Level ups",
+    ];
+    expect(spineItems()).toEqual(all);
+    for (const name of all) expect(section(name)).toBeTruthy();
+    // Each section is an anchor target the spine (or a link) can land on.
+    expect(document.getElementById("sheet-gear")).not.toBeNull();
+    // The first section is lit until the reader scrolls.
+    expect(lit()).toBe("Abilities & skills");
   });
 
-  it("reads the document's own halves under each tab", async () => {
+  it("lights the section a spine press asks for", async () => {
     await renderSheet();
-    await screen.findByRole("tab", { name: /Stats/ });
+    await screen.findByRole("navigation", { name: "Sheet sections" });
 
-    // Stats: the bestiary's `Ability`, grown a save and a proficiency mark.
+    await userEvent.click(within(spine()).getByRole("button", { name: "Gear & coin" }));
+    expect(lit()).toBe("Gear & coin");
+    await userEvent.click(within(spine()).getByRole("button", { name: "Story" }));
+    expect(lit()).toBe("Story");
+  });
+
+  it("reads the document's own halves in one continuous column", async () => {
+    await renderSheet();
+    await screen.findByRole("navigation", { name: "Sheet sections" });
+
+    // Abilities & skills: the bestiary's `Ability`, grown a save and a
+    // proficiency mark; the skills; the proficiency badges.
     expect(screen.getByText("+4")).toBeTruthy();
     expect(screen.getByText("save +7")).toBeTruthy();
     expect(screen.getByText("Athletics")).toBeTruthy();
     expect(screen.getByText("All armour")).toBeTruthy();
-    expect(screen.getByText("Lay on Hands")).toBeTruthy();
 
-    await tab("Actions");
-    expect(screen.getByText("Halberd")).toBeTruthy();
-    expect(screen.getByText("1d10+4")).toBeTruthy();
+    // Actions: the attack and its notation, shown and not rolled. (The fixture
+    // carries a halberd too, so the word is on the sheet twice now that every
+    // section is on screen at once.)
+    expect(inSection("actions").getByText("Halberd")).toBeTruthy();
+    expect(inSection("actions").getByText("1d10+4")).toBeTruthy();
+
+    // Spellcasting: the header aside, the slots as pips plus a sentence
+    // (because the pips are decoration), the known list.
     expect(screen.getByText("CHA · save 14 · atk +6")).toBeTruthy();
-    // Slots are pips plus a sentence, because the pips are decoration.
     expect(screen.getByText("3 of 4 left")).toBeTruthy();
     expect(screen.getByText("Bless")).toBeTruthy();
 
-    await tab("Gear");
+    // Features & traits, their own section on the continuous sheet.
+    expect(screen.getByText("Lay on Hands")).toBeTruthy();
+
+    // Gear & coin: the list and the purse. An absent pile is absent, not a zero.
+    expect(inSection("gear").getByText("Halberd")).toBeTruthy();
     expect(screen.getByText("Ferryman's token, unspent")).toBeTruthy();
     expect(screen.getByText("From session 11")).toBeTruthy();
     expect(screen.getByText("gp")).toBeTruthy();
     expect(screen.getByText("84")).toBeTruthy();
-    // An absent pile is absent, not a zero.
     expect(screen.queryByText("pp")).toBeNull();
 
-    await tab("Story");
+    // Story: the backstory, the journal under it, the aside beside it.
     expect(screen.getByText(/The temple on the salt road/)).toBeTruthy();
     expect(screen.getByText("Session 11")).toBeTruthy();
     expect(screen.getByText("A road is a promise between two towns.")).toBeTruthy();
 
-    await tab("Log");
+    // Level ups.
     expect(screen.getByText(/Took the oath at the ferry crossing/)).toBeTruthy();
   });
 
@@ -121,50 +201,61 @@ describe("a character sheet", () => {
    * still not there.** `CharacterOwnUpdate` names the durable columns and the
    * document; everything the drawing offers beyond that either has no endpoint
    * at all (rolling into the DM's dice tray) or is somebody else's to say
-   * (`0014`'s live trio). A control that looks live and does nothing is worse
-   * than an absent one, which was the rule when the screen was read-only and is
-   * the rule that decided which affordances landed.
+   * (`0014`'s live trio). The seventh delivery draws more of those than the
+   * fourth did — dice on every attack and ability, spell pips that spend, a
+   * prepared toggle, a portrait upload, a roll log — and none of them is here,
+   * which is the rule that decided which affordances landed and has not moved.
    */
   it("offers no control the payload cannot carry", async () => {
     await renderSheet();
-    await screen.findByRole("tab", { name: /Stats/ });
+    await screen.findByRole("navigation", { name: "Sheet sections" });
 
     const pressable = () =>
       screen
         .queryAllByRole("button")
-        .map((node) => node.textContent ?? "")
-        .filter((text) => text !== "" && !text.includes("Characters"));
+        .map((node) => node.getAttribute("aria-label") ?? node.textContent ?? "")
+        .filter(
+          (text) =>
+            text !== "" &&
+            !text.includes("Characters") &&
+            // The spine is navigation, not a write; the seven are counted
+            // above and are not what this test is about.
+            !spineItems().includes(text),
+        );
 
-    // Stats: six ability cells and a skill list. Neither rolls a check into a
-    // dice tray — there is still no endpoint for that — but both are writable
-    // now, so the two *Edit*s here are the payload carrying what it can rather
-    // than a control it cannot. The bar's *Edit* is the third, and *Delete* is
-    // the fourth: `DELETE /me/characters/:id` shipped with the create and got
-    // its first caller when Hob could draft a character somebody then abandons.
-    await tab("Stats");
     // *Ask Hob* is the shell's own chrome on every campaign-less screen — the
-    // bar the designers drew, with no handler here — not a sheet control.
-    expect(pressable()).toEqual(["Ask Hob⌘K", "Delete", "Edit", "Edit", "Edit"]);
-    expect(screen.getByRole("button", { name: "Edit abilities" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
-    // The cell is still not a roll button, which is what the drawing makes it.
-    expect(screen.queryByRole("button", { name: /STR check/i })).toBeNull();
+    // bar the designers drew, with no handler here — not a sheet control. The
+    // vitals toggle opens the narrow summary and writes nothing. Everything
+    // else is a write the payload carries: the bar's *Edit* and *Delete*, the
+    // four section actions, and the six death-save pips.
+    expect(pressable()).toEqual([
+      "Ask Hob⌘K",
+      "Delete Brannoc Duskharrow",
+      "Edit",
+      "Show vitals",
+      "Successes 1",
+      "Successes 2",
+      "Successes 3",
+      "Failures 1",
+      "Failures 2",
+      "Failures 3",
+      "Edit abilities",
+      "Edit skills",
+      "Add",
+      "Edit backstory",
+    ]);
 
-    // Actions: attacks and spell pips. Nothing rolls and nothing is spent.
-    await tab("Actions");
-    expect(pressable()).toEqual(["Ask Hob⌘K", "Delete", "Edit"]);
-
-    // Log: level-ups are a document key with no drawn control behind it.
-    await tab("Log");
-    expect(pressable()).toEqual(["Ask Hob⌘K", "Delete", "Edit"]);
-
-    // Story: the backstory is writable; the journal beside it is not, and the
-    // four bond/ideal/flaw lines are still read-only.
-    await tab("Story");
-    expect(
-      pressable().filter((text) => text !== "Edit" && text !== "Delete" && text !== "Ask Hob⌘K"),
-    ).toEqual([]);
+    // The cell is still not a roll button, which is what the drawing makes it,
+    // and neither is the attack row.
+    expect(screen.queryByRole("button", { name: /STR/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /1d10/ })).toBeNull();
+    // Nothing spends a slot or prepares a spell.
+    expect(screen.queryByRole("button", { name: /Slot/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
+    // No portrait upload, no journal entry, no roll log.
+    expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
+    expect(screen.queryByText(/Your rolls/)).toBeNull();
 
     // The live half of the row is drawn and is nobody's to change here.
     expect(screen.queryByRole("button", { name: /temp/i })).toBeNull();
@@ -174,7 +265,8 @@ describe("a character sheet", () => {
     // running**, which is the fixture's default and the common case. They have a
     // read behind them now — see `liveBanner.test.tsx`, which drives the state
     // where they appear — so this is the quiet half of that pair rather than a
-    // feature that does not exist.
+    // feature that does not exist. The drawing's permanent campaign badge in
+    // the bar is not drawn either; the campaign is on the subtitle.
     expect(screen.queryByRole("button", { name: /Go to the table/i })).toBeNull();
     expect(screen.queryByText(/playing right now/i)).toBeNull();
   });
@@ -195,38 +287,76 @@ describe("a character sheet", () => {
    *
    * That sentence is the wrong answer now: a player can write, so the empty
    * sheet has to be the place they start rather than a notice about somebody
-   * else. Stats, Gear and Story are drawn on an empty document for exactly
-   * that reason — each carries the affordance that creates its own contents.
-   * Actions and Log are not, because nothing on this screen writes an attack,
-   * a spell slot or a level-up.
+   * else. Abilities & skills, Gear & coin and Story are drawn on an empty
+   * document for exactly that reason — each carries the affordance that creates
+   * its own contents. Actions, Spellcasting, Features and Level ups are not,
+   * because nothing on this screen writes an attack, a spell slot, a feature or
+   * a level-up — and the spine lists only the three.
    */
-  it("gives an unwritten sheet somewhere to start, and no tab it cannot fill", async () => {
+  it("gives an unwritten sheet somewhere to start, and no section it cannot fill", async () => {
     await renderSheet(sorrelId);
     await screen.findByRole("heading", { name: "Sorrel Ash" });
 
-    expect(screen.getAllByRole("tab").map((node) => node.textContent)).toEqual([
-      "Stats",
-      "Gear",
-      "Story",
-    ]);
-    // Stats is the first drawn tab now, so it is the one the sheet opens on.
+    expect(spineItems()).toEqual(["Abilities & skills", "Gear & coin", "Story"]);
+    expect(screen.queryByRole("heading", { name: "Actions" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Spellcasting" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Features & traits" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Level ups" })).toBeNull();
+
     // The six cells are where a score is typed a first time, so the section is
     // there with a sentence rather than a grid of nothing.
     expect(screen.getByRole("button", { name: "Edit abilities" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
     expect(screen.getByText(/Take the standard array, or roll for them/)).toBeTruthy();
     expect(screen.getByText(/What you are proficient in/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Add/ })).toBeTruthy();
+    expect(screen.getByText(/A rope, a lantern/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit backstory" })).toBeTruthy();
+    expect(screen.getByText(/Where they came from/)).toBeTruthy();
     // And nothing is drawn as a value that is not one: no cell with an empty
     // modifier under it, no `undefined` where a bonus would be.
     expect(screen.queryByText("undefined")).toBeNull();
     expect(screen.queryByText("NaN")).toBeNull();
 
-    await tab("Gear");
-    expect(screen.getByRole("button", { name: /Add/ })).toBeTruthy();
-    // A character with no maximum has no bar and no invented pair.
+    // A character with no maximum has no bar, no pills and no invented pair —
+    // and no summary line, because there is nothing to summarise.
     expect(screen.queryByText(/hp/)).toBeNull();
+    expect(screen.queryByText(/AC /)).toBeNull();
     // And death saves are markable from nought, which is where they start.
     expect(screen.getByText("0 of 3 successes")).toBeTruthy();
+  });
+
+  /**
+   * **Keeping your place across a write.** A save re-reads the screen, and the
+   * tabbed sheet used to lose the open tab to that re-read. The continuous sheet
+   * must not lose the lit section or the document under it: the atom holds the
+   * last value through the refresh, so the section nodes stay the same nodes,
+   * and the lit section is screen state above the resource. Measured in jsdom
+   * as node identity, and in Chromium as `scrollTop` — see the screen's doc.
+   */
+  it("keeps the reader on the section they saved from", async () => {
+    server.routes.set(`PATCH /me/characters/${brannocId}`, savedAs(brannoc));
+    await renderSheet();
+    await screen.findByRole("navigation", { name: "Sheet sections" });
+
+    await userEvent.click(within(spine()).getByRole("button", { name: "Gear & coin" }));
+    const gearBefore = document.getElementById("sheet-gear");
+    const reads = () => server.calls.filter((call) => call.pathname === "/me/characters").length;
+    const before = reads();
+
+    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    await screen.findByRole("button", { name: "Save gear" });
+    await userEvent.click(screen.getByRole("button", { name: "Save gear" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/me/characters/${brannocId}`)).toBeDefined(),
+    );
+    // The write re-read the sheet…
+    await waitFor(() => expect(reads()).toBe(before + 1));
+    // …and the reader is still looking at Gear, in the same document.
+    expect(lit()).toBe("Gear & coin");
+    expect(document.getElementById("sheet-gear")).toBe(gearBefore);
+    expect(screen.queryByText("Reading the sheet…")).toBeNull();
   });
 
   /**

@@ -1,13 +1,24 @@
 import type { CharacterSheet } from "@taverns/api";
 import { emptyCharacterSheet } from "@taverns/api";
 import { describe, expect, it } from "vitest";
-import { coins, hitPoints, hpFraction, initialsOf, rosterSummary, sheetTabs } from "./sheet";
+import {
+  coins,
+  drawnSections,
+  hitPoints,
+  hpFraction,
+  initialsOf,
+  rosterSummary,
+  sectionInView,
+  SHEET_SECTIONS,
+  sheetSections,
+} from "./sheet";
 
 /**
  * The decisions that are wrong silently.
  *
- * A tab drawn empty, a hit point invented out of a null, a plate showing three
- * letters — none of them throws, and all three read as fine on a screenshot.
+ * A section drawn empty, a hit point invented out of a null, a plate showing
+ * three letters — none of them throws, and all three read as fine on a
+ * screenshot.
  */
 
 describe("initials", () => {
@@ -59,61 +70,132 @@ describe("coin", () => {
   });
 });
 
-describe("which tabs the document can fill", () => {
+describe("which sections the document can fill", () => {
+  const only = (part: Partial<CharacterSheet>): CharacterSheet => ({
+    ...emptyCharacterSheet,
+    ...part,
+  });
+
   /**
    * The state every character written through `CharacterDialog` is in: three
-   * required keys, all empty. Five tabs over that would say the data exists and
-   * is blank, when what is true is that nobody has written it.
+   * required keys, all empty. Seven sections over that would say the data
+   * exists and is blank, when what is true is that nobody has written it.
    */
-  it("draws no tab at all for a sheet nobody has written", () => {
-    expect(sheetTabs(emptyCharacterSheet)).toEqual({
-      stats: false,
+  it("draws no section at all for a sheet nobody has written", () => {
+    expect(sheetSections(emptyCharacterSheet)).toEqual({
+      abilities: false,
       actions: false,
+      magic: false,
+      features: false,
       gear: false,
       story: false,
       log: false,
       empty: true,
     });
+    expect(drawnSections(emptyCharacterSheet)).toEqual([]);
   });
 
-  it("opens a tab as soon as one key under it is filled", () => {
-    const only = (part: Partial<CharacterSheet>): CharacterSheet => ({
-      ...emptyCharacterSheet,
-      ...part,
-    });
-
-    expect(sheetTabs(only({ skills: [{ name: "Athletics" }] })).stats).toBe(true);
-    expect(sheetTabs(only({ attacks: [{ name: "Halberd", text: "" }] })).actions).toBe(true);
+  it("opens a section as soon as one key under it is filled", () => {
+    expect(sheetSections(only({ skills: [{ name: "Athletics" }] })).abilities).toBe(true);
+    expect(sheetSections(only({ proficiencies: ["Orcish"] })).abilities).toBe(true);
+    expect(sheetSections(only({ attacks: [{ name: "Halberd", text: "" }] })).actions).toBe(true);
     // Spellcasting with nothing but a save DC is still spellcasting.
-    expect(sheetTabs(only({ spellcasting: { save: "14" } })).actions).toBe(true);
-    expect(sheetTabs(only({ currency: { gp: 3 } })).gear).toBe(true);
-    expect(sheetTabs(only({ story: { bond: "The road marker." } })).story).toBe(true);
-    expect(sheetTabs(only({ notes: "A temple foundling." })).story).toBe(true);
-    expect(sheetTabs(only({ levelUps: [{ level: 5 }] })).log).toBe(true);
+    expect(sheetSections(only({ spellcasting: { save: "14" } })).magic).toBe(true);
+    // The continuous sheet gives features their own section, where the tabbed
+    // one folded them under Stats.
+    expect(sheetSections(only({ traits: [{ name: "Extra Attack", text: "" }] })).features).toBe(
+      true,
+    );
+    expect(sheetSections(only({ currency: { gp: 3 } })).gear).toBe(true);
+    expect(sheetSections(only({ story: { bond: "The road marker." } })).story).toBe(true);
+    expect(sheetSections(only({ notes: "A temple foundling." })).story).toBe(true);
+    expect(sheetSections(only({ levelUps: [{ level: 5 }] })).log).toBe(true);
   });
 
   /**
-   * **Which tabs carry an affordance rather than a value**, and the line
-   * between them is *is there a write behind it*. Stats crossed that line with
-   * the abilities and skills editors; Actions and Log have not, because nothing
-   * on the sheet writes an attack, a spell slot or a level-up — which is what
-   * keeps the flag meaning something rather than being `true` spelled twice.
+   * **Which sections carry an affordance rather than a value**, and the line
+   * between them is *is there a write behind it*. Abilities crossed that line
+   * with the abilities and skills editors; Actions, Spellcasting, Features and
+   * Level ups have not, because nothing on the sheet writes an attack, a spell
+   * slot, a feature or a level-up — which is what keeps the flag meaning
+   * something rather than being `true` spelled twice.
    */
   it("draws the three a player can start from, on a sheet nobody has written", () => {
-    expect(sheetTabs(emptyCharacterSheet, true)).toEqual({
-      stats: true,
+    expect(sheetSections(emptyCharacterSheet, true)).toEqual({
+      abilities: true,
       actions: false,
+      magic: false,
+      features: false,
       gear: true,
       story: true,
       log: false,
       empty: false,
     });
+    expect(drawnSections(emptyCharacterSheet, true).map((section) => section.id)).toEqual([
+      "abilities",
+      "gear",
+      "story",
+    ]);
   });
 
   it("counts an empty spellcasting block and blank prose as nothing", () => {
-    expect(sheetTabs({ ...emptyCharacterSheet, spellcasting: {} }).actions).toBe(false);
-    expect(sheetTabs({ ...emptyCharacterSheet, notes: "   " }).story).toBe(false);
-    expect(sheetTabs({ ...emptyCharacterSheet, currency: {} }).gear).toBe(false);
+    expect(sheetSections(only({ spellcasting: {} })).magic).toBe(false);
+    expect(sheetSections(only({ notes: "   " })).story).toBe(false);
+    expect(sheetSections(only({ currency: {} })).gear).toBe(false);
+  });
+
+  /**
+   * The spine lists the drawn sections **in the delivery's order**, whatever
+   * order the document's keys happen to be in — so a sheet with a log and no
+   * attacks still reads abilities, then gear, then story, then the log.
+   */
+  it("lists the drawn sections in the drawn order", () => {
+    const sheet = only({ levelUps: [{ level: 5 }], attacks: [{ name: "Halberd", text: "" }] });
+    expect(drawnSections(sheet, true).map((section) => section.id)).toEqual([
+      "abilities",
+      "actions",
+      "gear",
+      "story",
+      "log",
+    ]);
+    expect(SHEET_SECTIONS.map((section) => section.id)).toEqual([
+      "abilities",
+      "actions",
+      "magic",
+      "features",
+      "gear",
+      "story",
+      "log",
+    ]);
+  });
+});
+
+describe("which section is in view", () => {
+  const tops = [
+    { id: "abilities", top: 0 },
+    { id: "gear", top: 400 },
+    { id: "story", top: 900 },
+  ] as const;
+
+  it("names the last section whose top has passed the reading line", () => {
+    expect(sectionInView(tops, 0, 60, false)).toBe("abilities");
+    expect(sectionInView(tops, 300, 60, false)).toBe("abilities");
+    // The slack lights a section just before its top reaches the edge.
+    expect(sectionInView(tops, 350, 60, false)).toBe("gear");
+    expect(sectionInView(tops, 880, 60, false)).toBe("story");
+  });
+
+  /**
+   * A short last section never reaches the reading line on its own, so the
+   * bottom of the sheet hands it the marker rather than leaving the section
+   * above it lit for ever.
+   */
+  it("gives the last section the marker at the bottom of the sheet", () => {
+    expect(sectionInView(tops, 700, 60, true)).toBe("story");
+  });
+
+  it("has nothing to say about a sheet with no sections", () => {
+    expect(sectionInView([], 0, 60, false)).toBeUndefined();
   });
 });
 

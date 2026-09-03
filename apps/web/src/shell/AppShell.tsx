@@ -532,8 +532,14 @@ export function TopBar({
 }) {
   return (
     <header className="sticky top-0 z-chrome border-b border-hairline bg-surface-card">
-      <div className="flex items-center gap-gutter px-page-sm py-3.5 sm:px-page">
-        <div className="min-w-0 flex-1">
+      {/* `flex-wrap` with a floor under the title: on a phone-width column the
+          action cluster drops under the title rather than squeezing the subtitle
+          into a one-word column beside three buttons. A `min-w-0` title would
+          never wrap anything — it fits any line at zero width — so the floor is
+          what makes the wrap reachable. Measured at 390 on the character sheet;
+          at 760 and above no screen's bar wraps. */}
+      <div className="flex flex-wrap items-center gap-gutter px-page-sm py-3.5 sm:px-page">
+        <div className="min-w-48 flex-1">
           <h1 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
             {title}
           </h1>

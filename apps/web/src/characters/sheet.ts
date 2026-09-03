@@ -1,4 +1,5 @@
 import type { CharacterSheet, Currency, OwnedCharacter } from "@taverns/api";
+import type { IconName } from "@taverns/ui";
 
 /**
  * What the sheet screens work out before they draw anything.
@@ -62,39 +63,77 @@ export const coins = (
   });
 
 /**
- * Which tabs the document can fill.
+ * The sections of the continuous sheet, in the order the seventh delivery draws
+ * them (`ui_kits/dm-screen/CharacterSheetB.jsx`'s `B_SECTIONS`).
  *
- * **A tab is drawn when it has something in it, or somewhere to write** — the
- * screens rule (*do not render a field the API does not have*) applied to a
+ * One list, read by three things: the document draws a section per entry, the
+ * spine lists them, and `sheetSections` decides which are drawn. It lives here
+ * rather than in the screen so the spine and the document cannot disagree about
+ * what a section is called or which glyph it wears — the delivery's short label
+ * is the narrow rail's, the long one the wide spine's, and the icon is by name so
+ * `packages/ui`'s table is the one place a glyph is bound.
+ */
+export type SheetSectionId =
+  "abilities" | "actions" | "magic" | "features" | "gear" | "story" | "log";
+
+export interface SheetSectionSpec {
+  readonly id: SheetSectionId;
+  /** *Abilities & skills* — the wide spine's label and the section's heading. */
+  readonly label: string;
+  /** *Abilities* — the narrow rail's pill, where seven long labels will not fit. */
+  readonly short: string;
+  readonly icon: IconName;
+}
+
+export const SHEET_SECTIONS: ReadonlyArray<SheetSectionSpec> = [
+  { id: "abilities", label: "Abilities & skills", short: "Abilities", icon: "hexagon" },
+  { id: "actions", label: "Actions", short: "Actions", icon: "swords" },
+  { id: "magic", label: "Spellcasting", short: "Spells", icon: "sparkles" },
+  { id: "features", label: "Features & traits", short: "Features", icon: "scroll-text" },
+  { id: "gear", label: "Gear & coin", short: "Gear", icon: "backpack" },
+  { id: "story", label: "Story", short: "Story", icon: "book-open" },
+  { id: "log", label: "Level ups", short: "Log", icon: "history" },
+];
+
+/**
+ * Which sections the document can fill.
+ *
+ * **A section is drawn when it has something in it, or somewhere to write** —
+ * the screens rule (*do not render a field the API does not have*) applied to a
  * container, and then relaxed by exactly the amount the player write bought.
  * The sheet is thirteen optional keys on one `jsonb` document and a character
- * created through `CharacterDialog` has none of them, so five empty tabs over
- * an empty sheet would say the data exists and is blank when what is true is
- * that nobody has written it.
+ * created through `CharacterDialog` has none of them, so seven empty sections
+ * over an empty sheet would say the data exists and is blank when what is true
+ * is that nobody has written it.
  *
- * `writable` is what the player's own sheet passes. Under it Stats, Gear and
- * Story are drawn whether or not they hold anything, because each carries an
- * affordance that *creates* the thing the tab is for — and a tab that appears
- * only once its contents exist is a first line of backstory nobody can type.
+ * `writable` is what the player's own sheet passes. Under it *Abilities &
+ * skills*, *Gear & coin* and *Story* are drawn whether or not they hold
+ * anything, because each carries an affordance that *creates* the thing the
+ * section is for — and a section that appears only once its contents exist is a
+ * first line of backstory nobody can type. The other four stay content-driven
+ * for exactly the same test — nothing on the sheet writes an attack, a spell
+ * slot, a feature or a level-up — which is what keeps the flag meaning
+ * something rather than being *writable* spelled twice.
  *
- * **Stats joined them when the abilities and skills editors landed**, and the
- * reason it was not there before was the right one at the time: nothing on the
- * screen wrote an ability cell, so an empty Stats tab was a promise with
- * nothing behind it. There is a write behind it now. Actions and Log stay
- * content-driven for exactly the same test — nothing here writes an attack, a
- * spell slot or a level-up — which is what keeps this flag meaning something
- * rather than being *writable* spelled twice.
+ * This was `sheetTabs` while the sheet was tabbed, with the same semantics over
+ * five tabs; the seventh delivery's continuous sheet split *Stats* into
+ * abilities and features and *Actions* into attacks and spellcasting, so the
+ * rule is spelled over seven names now and the spine lists exactly the drawn
+ * ones. The pure half of `chronicle/fight.ts`'s reason applies: an empty section
+ * renders perfectly well, which is why this is decided here and tested.
  */
-export interface SheetTabs {
-  readonly stats: boolean;
+export interface SheetSections {
+  readonly abilities: boolean;
   readonly actions: boolean;
+  readonly magic: boolean;
+  readonly features: boolean;
   readonly gear: boolean;
   readonly story: boolean;
   readonly log: boolean;
   /**
    * Nothing in the document at all — the state every row written before it is
-   * in, and one a writable sheet is never in: Stats, Gear and Story are always
-   * drawn there, so there is always somewhere to start.
+   * in, and one a writable sheet is never in: three sections are always drawn
+   * there, so there is always somewhere to start.
    */
   readonly empty: boolean;
 }
@@ -104,25 +143,21 @@ const some = (list: ReadonlyArray<unknown> | undefined): boolean =>
 
 const written = (text: string | undefined): boolean => text !== undefined && text.trim() !== "";
 
-export const sheetTabs = (sheet: CharacterSheet, writable = false): SheetTabs => {
+export const sheetSections = (sheet: CharacterSheet, writable = false): SheetSections => {
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
 
-  const tabs = {
-    stats:
-      writable ||
-      some(sheet.abilities) ||
-      some(sheet.skills) ||
-      some(sheet.proficiencies) ||
-      some(sheet.traits),
-    actions:
-      some(sheet.attacks) ||
-      (spellcasting !== undefined &&
-        (some(spellcasting.slots) ||
-          some(spellcasting.known) ||
-          written(spellcasting.ability) ||
-          written(spellcasting.save) ||
-          written(spellcasting.attack))),
+  const sections = {
+    abilities: writable || some(sheet.abilities) || some(sheet.skills) || some(sheet.proficiencies),
+    actions: some(sheet.attacks),
+    magic:
+      spellcasting !== undefined &&
+      (some(spellcasting.slots) ||
+        some(spellcasting.known) ||
+        written(spellcasting.ability) ||
+        written(spellcasting.save) ||
+        written(spellcasting.attack)),
+    features: some(sheet.traits),
     gear:
       writable ||
       some(sheet.inventory) ||
@@ -136,7 +171,51 @@ export const sheetTabs = (sheet: CharacterSheet, writable = false): SheetTabs =>
     log: some(sheet.levelUps),
   };
 
-  return { ...tabs, empty: !Object.values(tabs).some(Boolean) };
+  return { ...sections, empty: !Object.values(sections).some(Boolean) };
+};
+
+/** The drawn sections, in the delivery's order — what the spine lists. */
+export const drawnSections = (
+  sheet: CharacterSheet,
+  writable = false,
+): ReadonlyArray<SheetSectionSpec> => {
+  const drawn = sheetSections(sheet, writable);
+  return SHEET_SECTIONS.filter((section) => drawn[section.id]);
+};
+
+/**
+ * Which section the reader is looking at — the spine's scroll-spy, as
+ * arithmetic over positions the screen measured.
+ *
+ * The last section whose top has scrolled up past the reading line is the
+ * active one; `slack` is how far below the top edge that line sits, so a
+ * section becomes active a little before it reaches the edge rather than a
+ * little after. Two edges the plain rule gets wrong, both decided here:
+ *
+ * - **At the very top nothing has passed the line yet**, and the answer is the
+ *   first section rather than none — a spine with nothing lit reads as broken.
+ * - **At the very bottom the last section may never reach the line** when it is
+ *   shorter than the viewport, so `atEnd` hands it the marker: a reader who has
+ *   scrolled as far as the sheet goes is reading the last thing on it.
+ *
+ * Pure, because the browser half — `offsetTop`, `scrollTop`, a sticky rail's
+ * height — is exactly the part jsdom cannot see, and the decisions are the part
+ * that is wrong silently.
+ */
+export const sectionInView = <Id extends string>(
+  tops: ReadonlyArray<{ readonly id: Id; readonly top: number }>,
+  scrollTop: number,
+  slack: number,
+  atEnd: boolean,
+): Id | undefined => {
+  const first = tops[0];
+  if (first === undefined) return undefined;
+  if (atEnd) return tops[tops.length - 1]?.id ?? first.id;
+  let active = first.id;
+  for (const section of tops) {
+    if (section.top <= scrollTop + slack) active = section.id;
+  }
+  return active;
 };
 
 /**
