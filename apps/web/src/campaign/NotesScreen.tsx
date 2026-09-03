@@ -1,6 +1,6 @@
 import type { Note } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
-import { Button, Icon, Input } from "@taverns/ui";
+import { Button, EMPTY_FILTER_VALUE, FilterInput, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { EmptyState } from "../ui/states";
 import { CampaignChrome } from "./CampaignChrome";
@@ -22,7 +22,8 @@ import { NotesList } from "./NotesList";
  */
 export function NotesScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
+  const search = filter.text;
   const [editing, setEditing] = useState<{ readonly note: Note | undefined }>();
 
   return (
@@ -32,12 +33,12 @@ export function NotesScreen() {
       subtitle={() => "Read-aloud text, secrets and loose ends"}
       actions={() => (
         <>
-          <Input
-            aria-label="Search notes"
-            placeholder="Search notes"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="h-control-sm w-44"
+          <FilterInput
+            label="Search notes"
+            value={filter}
+            onChange={setFilter}
+            facets={[]}
+            className="min-h-control-sm w-52 py-0.5"
           />
           <Button variant="secondary" size="sm" onClick={() => setEditing({ note: undefined })}>
             <Icon name="plus" size={14} />

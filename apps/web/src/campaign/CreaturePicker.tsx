@@ -1,5 +1,5 @@
 import type { CampaignId, CreatureId } from "@taverns/api";
-import { Badge, Button, Icon, Input } from "@taverns/ui";
+import { Badge, Button, FilterInput, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -85,11 +85,11 @@ export function CreaturePicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <Input
-        aria-label="Search the bestiary"
-        placeholder="Search the bestiary"
-        value={term}
-        onChange={(event) => setTerm(event.target.value)}
+      <FilterInput
+        label="Search the bestiary"
+        value={{ text: term, tokens: [] }}
+        onChange={(next) => setTerm(next.text)}
+        facets={[]}
       />
 
       {resource.state === "loading" && <Loading label="Reading the bestiary…" />}

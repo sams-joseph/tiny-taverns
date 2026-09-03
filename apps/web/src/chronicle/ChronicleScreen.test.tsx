@@ -135,13 +135,8 @@ describe("searching the record", () => {
     await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
     await screen.findByText("Beat");
 
-    // Base UI's select is keyboard-driven; a synthesised click on an option
-    // does not land. Same route the runner's tests take.
-    const trigger = screen.getByLabelText("Search in");
-    trigger.focus();
-    await userEvent.keyboard("{ArrowDown}");
-    const option = await screen.findByRole("option", { name: "Beats" });
-    await userEvent.click(option);
+    // The scope is the unified box's one facet — composed as a token.
+    await userEvent.type(screen.getByLabelText("Search the record"), " in:beats{Enter}");
 
     await waitFor(() => {
       const scoped = server.calls.filter(

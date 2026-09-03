@@ -1,6 +1,14 @@
 import type { Encounter } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
-import { Button, Icon, Input } from "@taverns/ui";
+import {
+  Button,
+  EMPTY_FILTER_VALUE,
+  FilterInput,
+  Icon,
+  searchTextOf,
+  tokenValuesOf,
+  type FilterInputFacet,
+} from "@taverns/ui";
 import { useState } from "react";
 import { EmptyState } from "../ui/states";
 import { CampaignChrome } from "./CampaignChrome";
@@ -27,9 +35,39 @@ import { matches } from "./load";
  * can do on a list this size. Its counterpart on the Chronicle is the server's
  * because full text over a stat block is not something a browser has.
  */
+/**
+ * The facets this list can offer, from what the frame already loaded — the
+ * filter is client-side over the campaign's own encounters, so its vocabulary
+ * is what those rows carry.
+ */
+const encounterFacets = (
+  encounters: ReadonlyArray<Encounter>,
+): ReadonlyArray<FilterInputFacet> => {
+  const tags = [...new Set(encounters.flatMap((encounter) => encounter.tags))].sort();
+  const difficulties = [
+    ...new Set(encounters.flatMap((encounter) => encounter.difficulty ?? [])),
+  ].sort();
+  const out: Array<FilterInputFacet> = [];
+  if (tags.length > 0)
+    out.push({
+      kind: "enum",
+      key: "tag",
+      label: "Tag",
+      options: tags.map((tag) => ({ value: tag, label: tag })),
+    });
+  if (difficulties.length > 0)
+    out.push({
+      kind: "enum",
+      key: "difficulty",
+      label: "Difficulty",
+      options: difficulties.map((band) => ({ value: band, label: band })),
+    });
+  return out;
+};
+
 export function EncountersScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [editing, setEditing] = useState<{ readonly encounter: Encounter | undefined }>();
 
   return (
@@ -41,14 +79,14 @@ export function EncountersScreen() {
           view.encounters.length === 1 ? "encounter" : "encounters"
         } built for ${view.campaign.name}`
       }
-      actions={() => (
+      actions={({ view }) => (
         <>
-          <Input
-            aria-label="Search encounters"
-            placeholder="Search encounters"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="h-control-sm w-44"
+          <FilterInput
+            label="Search encounters"
+            value={filter}
+            onChange={setFilter}
+            facets={encounterFacets(view.encounters)}
+            className="min-h-control-sm w-64 py-0.5"
           />
           <Button
             variant="secondary"
@@ -62,8 +100,16 @@ export function EncountersScreen() {
       )}
     >
       {({ view, run }) => {
-        const shown = view.encounters.filter((encounter) =>
-          matches(search, encounter.name, ...encounter.tags),
+        const facets = encounterFacets(view.encounters);
+        const search = searchTextOf(filter.text, facets);
+        const tags = tokenValuesOf(filter, "tag");
+        const difficulties = tokenValuesOf(filter, "difficulty");
+        const shown = view.encounters.filter(
+          (encounter) =>
+            matches(search, encounter.name, ...encounter.tags) &&
+            (tags.length === 0 || encounter.tags.some((tag) => tags.includes(tag))) &&
+            (difficulties.length === 0 ||
+              (encounter.difficulty !== null && difficulties.includes(encounter.difficulty))),
         );
 
         // Counted over every note, not the filtered encounters: a card's own
@@ -91,8 +137,7 @@ export function EncountersScreen() {
                 </EmptyState>
               ) : shown.length === 0 ? (
                 <EmptyState icon="search" title="Nothing matches">
-                  Nothing here answers to &ldquo;{search.trim()}&rdquo;. Loosen the search, or clear
-                  it.
+                  Nothing here answers to that. Loosen the search or a filter, or clear them.
                 </EmptyState>
               ) : (
                 <div className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3">

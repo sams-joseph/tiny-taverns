@@ -3,14 +3,12 @@ import { useParams } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
+  EMPTY_FILTER_VALUE,
+  FilterInput,
   Icon,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  searchTextOf,
   Toggle,
+  type FilterInputFacet,
 } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
@@ -71,12 +69,23 @@ import { SessionEntry } from "./SessionEntry";
 /** Long enough that typing a name is one request rather than eight — see the bestiary. */
 const SEARCH_SETTLE_MS = 250;
 
-const SCOPES: ReadonlyArray<{ readonly value: SearchScope; readonly label: string }> = [
-  { value: "all", label: "Everything" },
-  { value: "beat", label: "Beats" },
-  { value: "note", label: "Notes" },
-  { value: "creature", label: "Bestiary" },
-  { value: "character", label: "Party" },
+/**
+ * The one facet of the record search — `in:notes`. Its absence is "everything",
+ * which is what removing the chip means, so there is no "all" row.
+ */
+const SEARCH_FACETS: ReadonlyArray<FilterInputFacet> = [
+  {
+    kind: "enum",
+    key: "in",
+    label: "Search in",
+    multiple: false,
+    options: [
+      { value: "beat", label: "Beats" },
+      { value: "note", label: "Notes" },
+      { value: "creature", label: "Bestiary" },
+      { value: "character", label: "Party" },
+    ],
+  },
 ];
 
 /**
@@ -120,9 +129,11 @@ const spineAtom = Atom.family((campaignId: CampaignId) =>
 
 export function ChronicleScreen() {
   const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
-  const [term, setTerm] = useState("");
+  const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState<SearchScope>("all");
+  const scope: SearchScope =
+    (filter.tokens.find((token) => token.facet === "in")?.value as SearchScope | undefined) ??
+    "all";
   const [readAloud, setReadAloud] = useState(false);
   /**
    * Which night is open. `undefined` means nobody has chosen yet, which resolves
@@ -132,6 +143,7 @@ export function ChronicleScreen() {
    */
   const [openId, setOpenId] = useState<SessionId | null | undefined>(undefined);
 
+  const term = searchTextOf(filter.text, SEARCH_FACETS);
   useEffect(() => {
     const timer = setTimeout(() => setQ(term), SEARCH_SETTLE_MS);
     return () => clearTimeout(timer);
@@ -177,31 +189,13 @@ export function ChronicleScreen() {
       }
       actions={() => (
         <>
-          <Input
-            aria-label="Search the record"
-            placeholder="Search the record"
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            className="h-control-sm w-52"
+          <FilterInput
+            label="Search the record"
+            value={filter}
+            onChange={setFilter}
+            facets={SEARCH_FACETS}
+            className="min-h-control-sm w-64 py-0.5"
           />
-          {searching && (
-            <Select value={scope} onValueChange={(value) => setScope(value as SearchScope)}>
-              <SelectTrigger aria-label="Search in" className="h-control-sm w-36">
-                {/* Written out: `Select.Value` with neither `items` nor children
-                    serialises the value, which would put `beat` on screen. */}
-                <SelectValue>
-                  {(value) => SCOPES.find((entry) => entry.value === value)?.label ?? "Everything"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {SCOPES.map((entry) => (
-                  <SelectItem key={entry.value} value={entry.value}>
-                    {entry.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           <Toggle size="sm" pressed={readAloud} onPressedChange={setReadAloud}>
             <Icon name="megaphone" size={13} />
             Read aloud
@@ -219,7 +213,7 @@ export function ChronicleScreen() {
           openId={openId}
           onOpen={setOpenId}
           onClearSearch={() => {
-            setTerm("");
+            setFilter(EMPTY_FILTER_VALUE);
             setQ("");
           }}
         />

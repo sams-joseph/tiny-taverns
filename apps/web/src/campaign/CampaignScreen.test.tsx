@@ -205,7 +205,7 @@ describe("CampaignScreen", () => {
     // list are different questions, and the delivery gives each its own box.
     await renderEncounters(mintingSession());
 
-    const search = await screen.findByRole("textbox", { name: "Search encounters" });
+    const search = await screen.findByRole("combobox", { name: "Search encounters" });
     await userEvent.type(search, "crate");
 
     expect(screen.queryByText("Ambush in the reeds")).not.toBeInTheDocument();
@@ -216,7 +216,7 @@ describe("CampaignScreen", () => {
 
     // Searching to nothing is not the same state as having nothing, and says so.
     expect(await screen.findByText("Nothing matches")).toBeInTheDocument();
-    expect(screen.getByText(/Loosen the search, or clear it/)).toBeInTheDocument();
+    expect(screen.getByText(/Loosen the search or a filter/)).toBeInTheDocument();
   });
 
   it("hands a player the screen that works, rather than drawing the DM's over their data", async () => {
