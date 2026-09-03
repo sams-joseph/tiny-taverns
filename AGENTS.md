@@ -149,6 +149,49 @@ wins.** The group architecture section above still wins over both where they tou
   is the whole of how a class reaches a player", the campaign shelves under the screens
   sections) is historical context for those files' evolution, not the shipped surface.
 
+## Character creation after the split, 2026-09-03: the intent fork, and the corpus-built sheet
+
+The two rewrites above broke Hob-driven character creation for exactly one relation, and the fix
+plus the "fresh look" both landed together. **Where anything below (the old player-write tables,
+`ownRowWritable`-on-character prose, "a character belongs to one campaign") disagrees with this,
+this wins.**
+
+- **`Hob.ask` cannot infer the surface from the creator proof any more, and `HobAsk.intent` is
+  what replaced the inference.** The continuity decision opened the create screen's drafting
+  composer to creators, but the proof-only fork answered a creator with the panel's nine tools —
+  no `proposeCharacter`, so prose, no card, _"No sheet came back this time"_ every attempt, and
+  the description filed into the campaign's shared thread. Players were unaffected, which is why
+  it read as "Hob is broken" rather than as a relation gate. `intent: "character"` on the ask
+  (sent by `characters/draft.ts`, always) selects the drafting toolkit and a thread of the
+  _asker's own_ for creator and player alike; absent keeps the panel exactly as it was.
+  `hob-character.test.ts`'s "the creator drafts too" block is the regression pin.
+- **A creator holds threads in both campaign sets now, so thread-naming operations read the reach
+  off the thread, never off the proof.** `HobThreads.reachOf` (the disjunction of the two
+  complete predicates, `copyableIntoCampaign`'s shape) answers `turns` and `accept`;
+  `threads.list` stays proof-derived because the panel's listing genuinely is "which set does the
+  panel show". Derive-from-proof on an accept and a creator can draft a character they are then
+  refused the keeping of.
+- **`sheetGrantsFor` (`packages/api/src/SheetGrants.ts`) is the one implementation of "the
+  corpora drive the starting sheet"**, the `seedFor` pattern one module over: both composers —
+  the form's `payloadFrom` and Hob's `proposeCharacter` handler — call it, so the two paths
+  cannot disagree about what a Hill Dwarf Fighter starts with. It reads the resolved
+  `CharacterOption`s only: level-1 class features (via `OptionDetails.levelOneFeatures`, hydrated
+  by `optionDetailsFor` from the progression domain — top-level grants only, a
+  `parent_feature_id` names a pick the player makes later), race/subrace-scoped trait grants,
+  three-source proficiencies (minus `"Saving Throw: …"`, which becomes the mark on the ability
+  cell via `withSavingThrows`, and `"Choose …"` instruction lines), the background's kit and
+  gold, and the identity keys the corpora answer (`speed`, `proficiency`, `hitDice` — see
+  `identityGrants`). The save _number_ is written only when the level-1 `class_level` row
+  supplied the proficiency bonus; a homebrew class without progression rows still gets the mark.
+  **Feats are deliberately not consulted** — no 2014 SRD feat applies at level 1.
+- **Corpus import order matters on a fresh database**: `equipment:import` before
+  `ruleset:import` (option equipment references), and `ruleset:import` before `spell:import`
+  (`spell_subclass` needs `subclass`). Wrong order fails loudly; re-running settles it.
+- **Known gaps, reported rather than built**: `party.join` (seat an existing character at a
+  second table) still has no client caller, and spellcasting slots for level-1 casters are in
+  `class_level.body.spellcasting` but nothing writes `sheet.spellcasting` yet — choosing known
+  spells is its own picker domain.
+
 ## The design system: what is canonical, and how it reaches Tailwind
 
 `packages/design-system` is the designers' delivered Tiny Taverns system, copied in whole.
