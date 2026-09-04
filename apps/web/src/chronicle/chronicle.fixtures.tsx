@@ -96,6 +96,7 @@ const run = (id: string, sessionId: string, round: number) => ({
   startedAt: "2026-07-19T20:00:00.000Z",
   endedAt: null,
   endedReason: "resolved",
+  allowHobDirectWrites: false,
   continuedFrom: null,
   visibility: "dm",
   ...provenance,

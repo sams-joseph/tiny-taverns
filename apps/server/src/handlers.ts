@@ -31,6 +31,7 @@ import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
+import { HobDirectWrites } from "./repo/HobDirectWrites.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
@@ -750,6 +751,7 @@ const RunsLive = HttpApiBuilder.group(
   "runs",
   Effect.fnUntraced(function* (handlers) {
     const runs = yield* EncounterRuns;
+    const direct = yield* HobDirectWrites;
     const dm = yield* asDmOf;
     return handlers
       .handle("list", ({ params }) =>
@@ -772,6 +774,14 @@ const RunsLive = HttpApiBuilder.group(
       )
       .handle("end", ({ params }) =>
         dm(params.campaignId, (as) => runs.end(as, params.sessionId, params.runId)),
+      )
+      .handle("hobDirectUpdates", ({ params }) =>
+        dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),
+      )
+      .handle("undoHobDirectUpdate", ({ params }) =>
+        dm(params.campaignId, (as) =>
+          direct.undo(as, params.sessionId, params.runId, params.updateId),
+        ),
       );
   }),
 );

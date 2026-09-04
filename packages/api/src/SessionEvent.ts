@@ -50,6 +50,10 @@ export const SessionEventKind = Schema.Literals([
    * `apps/server/src/repo/vitals.ts`.
    */
   "character-updated",
+  /** Hob spent one of a character's existing resources through the fight's direct-write switch. */
+  "hob-resource-spent",
+  /** The DM undid one of Hob's direct resource spends. */
+  "hob-resource-undone",
   /**
    * The DM jotted a line about what just happened — see `Beat`.
    *

@@ -1,6 +1,6 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
-import { EncounterRunId, SessionId } from "@taverns/api";
+import { EncounterRunId, HobDirectResourceUpdateId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
@@ -44,6 +44,9 @@ export {
 
 export const sessionId = Schema.decodeSync(SessionId)(sessionIdRaw);
 export const runId = Schema.decodeSync(EncounterRunId)(runIdRaw);
+export const directUpdateId = Schema.decodeSync(HobDirectResourceUpdateId)(
+  "2b1f2a1e-0000-4000-8000-000000000f81",
+);
 
 const base = `/campaigns/${campaignId}`;
 const runBase = `${base}/sessions/${sessionIdRaw}/runs/${runIdRaw}`;
@@ -72,6 +75,24 @@ export const sessionEvent = (
   ...stamps,
 });
 
+export const directUpdate = {
+  id: directUpdateId,
+  sessionId: sessionIdRaw,
+  encounterRunId: runIdRaw,
+  combatantId: brannoc.id,
+  characterId: brannoc.characterId,
+  characterName: "Brannoc",
+  resourceId: "lay-on-hands",
+  resourceName: "Lay on Hands",
+  resourceMax: 15,
+  amount: 1,
+  beforeUsed: 2,
+  afterUsed: 3,
+  assistantTurnId: "2b1f2a1e-0000-4000-8000-000000000f91",
+  undoneAt: null,
+  createdAt: "2026-08-04T19:05:00.000Z",
+};
+
 /** Everything a fight on the table answers, before a test re-aims it. */
 export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -84,6 +105,7 @@ export const liveFight = (): Map<string, Answer> =>
     [`GET ${runBase}`, { status: 200, body: liveRun }],
     [`GET ${runBase}/combatants`, { status: 200, body: [brannoc, goblinBoss] }],
     [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
+    [`GET ${runBase}/hob-direct-updates`, { status: 200, body: [] }],
     // Damage is a delta, so the answer a test wants back depends on the test.
     // The default takes five off the goblin, matching the prototype's button.
     [

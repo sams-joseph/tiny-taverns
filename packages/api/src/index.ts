@@ -15,6 +15,7 @@ export * from "./Equipment.js";
 export * from "./Errors.js";
 export * from "./Feat.js";
 export * from "./Hob.js";
+export * from "./HobDirectResourceUpdate.js";
 export * from "./Ids.js";
 export * from "./Group.js";
 export * from "./GroupHistory.js";

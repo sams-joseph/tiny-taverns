@@ -1,9 +1,11 @@
 import {
   type Actor,
+  type AssistantTurnId,
   type CampaignId,
   type CombatantId,
   type EncounterRunId,
   NotFound,
+  type Origin,
   SessionEvent,
   type SessionEventId,
   type SessionEventKind,
@@ -78,6 +80,9 @@ export interface AppendEvent {
    * somewhere other than the predicate.
    */
   readonly visibility?: Visibility | undefined;
+  /** Assistant-authored log rows name the turn that caused them. */
+  readonly origin?: Origin | undefined;
+  readonly assistantTurnId?: AssistantTurnId | undefined;
 }
 
 /**
@@ -103,6 +108,8 @@ export const appendEvent = (
         payload: event.payload === undefined ? undefined : JSON.stringify(event.payload),
         request_id: event.requestId,
         visibility: event.visibility,
+        origin: event.origin,
+        assistant_turn_id: event.assistantTurnId,
       }),
     )}
     returning *

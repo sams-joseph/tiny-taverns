@@ -2,6 +2,8 @@ import {
   type Ability,
   type AbilityBonus,
   ABILITY_KEYS,
+  type AssistantThreadId,
+  type AssistantTurnId,
   AbilityKey,
   type Actor,
   asBackgroundOption,
@@ -52,6 +54,11 @@ import { Tool, Toolkit } from "effect/unstable/ai";
 import type { Creatures } from "../repo/Creatures.js";
 import type { GroupHistory, PlayedNight } from "../repo/GroupHistory.js";
 import type { Groups } from "../repo/Groups.js";
+import type {
+  HobDirectResourceContext,
+  HobDirectResourceTarget,
+  HobDirectWrites,
+} from "../repo/HobDirectWrites.js";
 import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
 import type { Options } from "../repo/Options.js";
 import type { Recap } from "../repo/Recap.js";
@@ -74,12 +81,12 @@ import type { Spells } from "../repo/Spells.js";
  * and the second one is where the visibility seam gets re-derived slightly
  * wrong.
  *
- * **Nothing here writes to the campaign, including the four `propose*`
+ * **Nothing here creates campaign content, including the four `propose*`
  * tools.** A proposal is stashed in a `Ref` and saved on the conversation turn;
  * a note, a beat, an encounter or a character appears only when a human accepts
- * it, in `repo/Proposals.ts`. There is no write repository in this directory to
- * reach for — which is the captain's *generate with approval* decision made
- * structural rather than remembered.
+ * it, in `repo/Proposals.ts`. The one direct write Hob may make is slice 6's
+ * audited spend of an existing resource counter, and that tool appears only
+ * when the DM has turned on the current fight's switch.
  *
  * ### Two toolkits, because there are two people who may ask
  *
@@ -1077,6 +1084,53 @@ export const ListStartingSpells = Tool.make("listStartingSpells", {
  * are listed in `apps/server/test/hob.test.ts`, so a tenth tool is a visible
  * edit — and so is a third one on {@link PlayerToolkit}.
  */
+const DirectResourceSpendResult = Schema.Struct({ message: Schema.NonEmptyString });
+
+const directTargetSummary = (target: HobDirectResourceTarget): string =>
+  `${target.key}: ${quoted(target.characterName)} — ${quoted(target.resourceName)} ` +
+  `(${String(target.max - target.used)} of ${String(target.max)} left)`;
+
+/**
+ * Hob's direct-write extension for a live fight whose DM explicitly enabled it.
+ *
+ * Built from the current resource rows so the model gets an enum, not a free
+ * text resource id. The target values are opaque handles for this request; the
+ * handler maps them back to combatant, character and resource ids and then the
+ * repository re-checks the live fight and the switch before moving anything.
+ */
+export const directResourceToolkitOver = (context: HobDirectResourceContext) => {
+  const targetKeys = context.targets.map((target) => target.key) as [string, ...Array<string>];
+  const SpendCharacterResource = Tool.make("spendCharacterResource", {
+    description:
+      "Spend an existing character resource during the live fight, only when the DM asks for it. " +
+      "Use this for counters like Second Wind, Lay on Hands, Divine Sense, spell slots or hit dice; " +
+      "do not use it for hit points, notes, new content, or guesses. Pick one of these exact targets: " +
+      context.targets.map(directTargetSummary).join("; "),
+    parameters: Schema.Struct({
+      target: Schema.Literals(targetKeys),
+      amount: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10000 })),
+    }),
+    success: DirectResourceSpendResult,
+    failure: toolFailure,
+    failureMode: "return" as const,
+  });
+
+  return Toolkit.make(
+    SearchCampaign,
+    ListSessions,
+    ListCreatures,
+    ReadRecap,
+    GetCreature,
+    ReadSessionLog,
+    SearchGroupHistory,
+    ReadGroupSummary,
+    ProposeNote,
+    ProposeBeat,
+    ProposeEncounter,
+    SpendCharacterResource,
+  );
+};
+
 export const HobToolkit = Toolkit.make(
   SearchCampaign,
   ListSessions,
@@ -1166,13 +1220,15 @@ export const playerToolkitOver = (vocabulary: CharacterVocabulary) =>
 export const playerToolkitListing = (vocabulary: CharacterVocabulary) =>
   Toolkit.make(SearchCampaign, ListOptions, ListStartingSpells, proposeCharacterOver(vocabulary));
 
-/** The repositories a Hob tool call may reach. **Read-only, every one.** */
+/** The repositories a DM Hob tool call may reach — read-only, except the conditional direct counter writer. */
 export interface HobRepositories {
   readonly search: (typeof Search)["Service"];
   readonly sessions: (typeof Sessions)["Service"];
   readonly recap: (typeof Recap)["Service"];
   readonly creatures: (typeof Creatures)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
+  /** Slice 6's audited direct counter write, reached only by the conditional DM toolkit. */
+  readonly directWrites?: (typeof HobDirectWrites)["Service"] | undefined;
   /**
    * The campaign's classes, races and backgrounds.
    *
@@ -1461,15 +1517,64 @@ export const dmHandlersFor = (
 };
 
 /**
- * Bind the group toolkit to one group and one actor.
+ * Bind the DM toolkit plus the direct spend tool for the one live fight that
+ * enabled it.
  *
- * The group is the path segment the request was routed on, closed over here —
- * not a tool parameter, for exactly the campaign's reason: a model that
- * hallucinated another group's id has nowhere to put it. The actor is a plain
- * member; there is no proof to take, because nothing here diverges by role —
- * the chronicle and the canonical timeline answer every live member alike, and
- * the one offer is accepted by any member too.
+ * The direct targets are closed over from the repository read above, not passed
+ * as ids in tool parameters. The model sees opaque handles and an amount; the
+ * handler maps the handle back to the combatant, character and resource rows,
+ * and the repository re-checks the live fight and the switch before writing.
  */
+export const dmBindWithDirect = (
+  repositories: HobRepositories,
+  dm: CampaignCreatorActor,
+  proposal: ProposalSlot,
+  context: HobDirectResourceContext,
+  threadId: AssistantThreadId,
+  turnId: AssistantTurnId,
+  touchedDirect: Ref.Ref<boolean>,
+) => {
+  const directWrites = repositories.directWrites;
+  if (directWrites === undefined) {
+    return Effect.die(new Error("direct writes were enabled without a repository"));
+  }
+  const toolkit = directResourceToolkitOver(context);
+  const targetByKey = new Map(context.targets.map((target) => [target.key, target] as const));
+  return Effect.flatMap(
+    toolkit.toHandlers(
+      toolkit.of({
+        ...dmHandlersFor(repositories, dm, proposal),
+        spendCharacterResource: (params, call) => {
+          const { target, amount } = params as { readonly target: string; readonly amount: number };
+          const resolved = targetByKey.get(target);
+          if (resolved === undefined) {
+            return Effect.fail(new NotFound({ resource: "character_resource", id: target }));
+          }
+          return Effect.map(
+            Effect.tap(
+              directWrites.spendResource(dm, {
+                threadId,
+                turnId,
+                toolCallId: call.toolCallId,
+                sessionId: resolved.sessionId,
+                runId: resolved.runId,
+                combatantId: resolved.combatantId,
+                characterId: resolved.characterId,
+                characterName: resolved.characterName,
+                resourceId: resolved.resourceId,
+                amount,
+              }),
+              () => Ref.set(touchedDirect, true),
+            ),
+            ({ message }) => ({ message }),
+          );
+        },
+      }),
+    ),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
 export const groupHandlersFor = (
   repositories: GroupHobRepositories,
   actor: Actor,

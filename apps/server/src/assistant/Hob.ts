@@ -19,7 +19,7 @@ import {
   HobUnavailable,
   type NotFound,
 } from "@taverns/api";
-import { Cause, Context, Effect, Layer, Ref, Result, Schema, Stream } from "effect";
+import { Cause, Context, Effect, Layer, Option, Ref, Result, Schema, Stream } from "effect";
 import {
   AiError,
   Chat,
@@ -34,6 +34,7 @@ import { GroupHistory } from "../repo/GroupHistory.js";
 import { Groups } from "../repo/Groups.js";
 import { Creatures } from "../repo/Creatures.js";
 import { CampaignCreatorActors } from "../repo/CreatorActor.js";
+import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirectWrites.js";
 import { HobThreads } from "../repo/HobThreads.js";
 import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
@@ -43,6 +44,7 @@ import { Sessions } from "../repo/Sessions.js";
 import { Spells } from "../repo/Spells.js";
 import {
   type CharacterVocabulary,
+  dmBindWithDirect,
   dmHandlersFor,
   groupHandlersFor,
   GroupToolkit,
@@ -213,6 +215,7 @@ export class Hob extends Context.Service<
           recap: yield* Recap,
           creatures: yield* Creatures,
           events: yield* SessionEvents,
+          directWrites: Option.getOrUndefined(yield* Effect.serviceOption(HobDirectWrites)),
           // The seventh, and the one no tool handler calls: a campaign's
           // classes, races and backgrounds decide the *shape* of
           // `proposeCharacter`, so they are read before the toolkit exists
@@ -304,6 +307,7 @@ export class Hob extends Context.Service<
               const answerId = yield* freshTurnId;
 
               const written = yield* Ref.make("");
+              const touchedDirect = yield* Ref.make(false);
               const broke = yield* Ref.make(false);
               /**
                * Whether a build tool was *reached for* — as opposed to reached.
@@ -345,6 +349,10 @@ export class Hob extends Context.Service<
                 creator !== undefined
                   ? NO_VOCABULARY
                   : vocabularyOf(yield* repositories.options.list(campaignId, {}));
+              const directContext =
+                creator === undefined || repositories.directWrites === undefined
+                  ? undefined
+                  : yield* repositories.directWrites.currentTargets(creator);
 
               // Bound to *this* campaign and *this* actor, now — the stream
               // below is pulled after this effect has returned, so nothing may
@@ -378,13 +386,26 @@ export class Hob extends Context.Service<
                 LanguageModel.LanguageModel
               > =
                 creator !== undefined
-                  ? asked(
-                      Effect.flatMap(
-                        HobToolkit.toHandlers(dmHandlersFor(repositories, creator, proposal)),
-                        (bound) => Effect.provideContext(HobToolkit, bound),
-                      ),
-                      dmPrompt(campaign),
-                    )
+                  ? directContext === undefined || directContext.targets.length === 0
+                    ? asked(
+                        Effect.flatMap(
+                          HobToolkit.toHandlers(dmHandlersFor(repositories, creator, proposal)),
+                          (bound) => Effect.provideContext(HobToolkit, bound),
+                        ),
+                        dmPrompt(campaign),
+                      )
+                    : asked(
+                        dmBindWithDirect(
+                          repositories,
+                          creator,
+                          proposal,
+                          directContext,
+                          thread.id,
+                          answerId,
+                          touchedDirect,
+                        ),
+                        dmPrompt(campaign, directContext),
+                      )
                   : vocabulary.listed
                     ? asked(
                         playerBindListing(repositories, actor, campaignId, proposal, vocabulary),
@@ -411,7 +432,8 @@ export class Hob extends Context.Service<
               const save = Effect.gen(function* () {
                 const text = yield* Ref.get(written);
                 const offered = yield* Ref.get(proposal);
-                if (text === "" && offered === undefined) return;
+                const touched = yield* Ref.get(touchedDirect);
+                if (text === "" && offered === undefined && !touched) return;
                 yield* threads.append(reach, campaignId, thread.id, {
                   id: answerId,
                   who: "hob",
@@ -451,8 +473,9 @@ export class Hob extends Context.Service<
                     Ref.get(broke),
                     Ref.get(written),
                     Ref.get(reachedForOne),
+                    Ref.get(touchedDirect),
                   ]),
-                  ([offered, reason, failed, text, reached]) =>
+                  ([offered, reason, failed, text, reached, touched]) =>
                     Stream.fromIterable<HobEvent>([
                       ...(offered === undefined
                         ? []
@@ -464,7 +487,7 @@ export class Hob extends Context.Service<
                           ]),
                       ...(failed
                         ? []
-                        : text === "" && offered === undefined
+                        : text === "" && offered === undefined && !touched
                           ? [silence]
                           : offered === undefined &&
                               !reached &&
@@ -1416,7 +1439,7 @@ const note = (
  * material: it lets Hob say "the Salt Road" instead of "this campaign", and it
  * is already in the request path.
  */
-const dmPrompt = (campaign: Campaign): string =>
+const dmPrompt = (campaign: Campaign, direct?: HobDirectResourceContext): string =>
   [
     "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for the person",
     `running a tabletop roleplaying game. You are helping them run "${campaign.name}".`,
@@ -1438,6 +1461,14 @@ const dmPrompt = (campaign: Campaign): string =>
     "",
     "You can see this one campaign and only what this credential is allowed to read.",
     "That is not a restriction you can work around, and you should not try.",
+    ...(direct === undefined
+      ? []
+      : [
+          "",
+          "The DM has turned on Hob direct resource spending for the live fight. Only spend",
+          "an existing character resource when the DM asks you to; never use it for hit points,",
+          "new content or guesses, and say plainly what counter moved.",
+        ]),
   ].join("\n");
 
 /**

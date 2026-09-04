@@ -49,6 +49,7 @@ export interface EncounterRunRow extends ProvenanceColumns {
   readonly started_at: Date;
   readonly ended_at: Date | null;
   readonly ended_reason: EncounterRunEndedReason;
+  readonly allow_hob_direct_writes: boolean;
   readonly continued_from: EncounterRunId | null;
 }
 
@@ -63,6 +64,7 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
     startedAt: DateTime.fromDateUnsafe(row.started_at),
     endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
     endedReason: row.ended_reason,
+    allowHobDirectWrites: row.allow_hob_direct_writes,
     continuedFrom: row.continued_from,
     ...provenanceOf(row),
   });
@@ -665,6 +667,7 @@ export class EncounterRuns extends Context.Service<
                     round: patch.round,
                     active_combatant_id: patch.activeCombatantId,
                     visibility: patch.visibility,
+                    allow_hob_direct_writes: patch.allowHobDirectWrites,
                   });
                   const rows = yield* sql<EncounterRunRow>`
                     update encounter_run set ${setClause(sql, columns)}

@@ -35,6 +35,7 @@ import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
+import { HobDirectWrites } from "./repo/HobDirectWrites.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { GroupHistory } from "./repo/GroupHistory.js";
 import { LibraryShares } from "./repo/LibraryShares.js";
@@ -227,6 +228,7 @@ export const servicesOver = <E>(
   | Feats
   | Health
   | Hob
+  | HobDirectWrites
   | HobThreads
   | Invites
   | LiveEvents
@@ -292,6 +294,9 @@ export const servicesOver = <E>(
     // repository — it is here rather than under `assistant` because the panel
     // reads a thread back over HTTP whether or not a model is configured.
     HobThreads.layer,
+    // Hob's direct resource writes are ordinary repository writes behind a
+    // per-fight switch, not SQL inside the assistant loop.
+    HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
     // Invitations, and the membership they grant. `Invites` writes no
     // `campaign_member` SQL of its own — it calls `repo/Memberships.ts`, which
     // with `repo/visibility.ts` is still the only pair of modules in `src` that
@@ -378,6 +383,7 @@ export const servicesOver = <E>(
         Groups.layer,
         GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
         HobThreads.layer,
+        HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of
         // `proposeCharacter`, so the player's toolkit is built per request.
@@ -431,6 +437,7 @@ export const applicationOver = <E>(
     | Feats
     | Health
     | Hob
+    | HobDirectWrites
     | HobThreads
     | Invites
     | LiveEvents

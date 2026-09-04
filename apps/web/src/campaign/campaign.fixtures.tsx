@@ -912,6 +912,7 @@ export const liveRun = {
   // for the next night sets `endedAt` *and* `endedReason: "carried"` — the
   // database refuses the second without the first.
   endedReason: "resolved",
+  allowHobDirectWrites: false,
   continuedFrom: null,
   visibility: "dm",
   ...provenance,

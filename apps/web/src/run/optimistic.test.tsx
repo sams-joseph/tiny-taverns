@@ -26,8 +26,8 @@ import { brannoc, goblinBoss, installRunServer, renderRunner, sessionEvent } fro
  *  4. **A failure clears it with nothing to replace it**, and says so.
  *
  * Plus the two things the doorbell owes the screen: a ring costs exactly one
- * re-read of the two live rows and no more, a burst of rings collapses rather
- * than queueing, and a re-read that failed heals on its own.
+ * re-read of the live slice and no more, a burst of rings collapses rather than
+ * queueing, and a re-read that failed heals on its own.
  *
  * The window between a write leaving and its answer landing is the whole
  * subject, so the stub server can hold an answer open — see `hold` in
@@ -238,11 +238,12 @@ describe("when the optimistic value and the server disagree", () => {
 });
 
 describe("the doorbell", () => {
-  it("costs exactly one re-read of the two live rows, and nothing else", async () => {
+  it("costs exactly one re-read of the live slice, and nothing else", async () => {
     await openFight();
     const before = {
       run: countOf("GET", `/runs/${goblinBoss.encounterRunId}`),
       combatants: countOf("GET", "/combatants"),
+      directUpdates: countOf("GET", "/hob-direct-updates"),
       creatures: countOf("GET", "/creatures"),
     };
 
@@ -252,10 +253,11 @@ describe("the doorbell", () => {
       expect(within(rowFor("Goblin Boss")).getByText("9/21")).toBeInTheDocument(),
     );
 
-    // Two requests, not five: the campaign, the session and the stat blocks
-    // are read once by the screen and never again by a hit.
+    // The live slice, not the campaign frame: the campaign, the session and the
+    // stat blocks are read once by the screen and never again by a hit.
     expect(countOf("GET", `/runs/${goblinBoss.encounterRunId}`)).toBe(before.run + 1);
     expect(countOf("GET", "/combatants")).toBe(before.combatants + 1);
+    expect(countOf("GET", "/hob-direct-updates")).toBe(before.directUpdates + 1);
     expect(countOf("GET", "/creatures")).toBe(before.creatures);
   });
 

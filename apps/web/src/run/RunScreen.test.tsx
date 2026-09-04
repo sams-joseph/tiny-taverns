@@ -5,6 +5,7 @@ import {
   bodyOf,
   brannoc,
   campaignId,
+  directUpdate,
   goblinBoss,
   installRunServer,
   liveRun,
@@ -47,6 +48,9 @@ const reaim = (fragment: string, answer: { status: number; body: unknown }) => {
     if (key.includes(fragment)) server.routes.set(key, answer);
   }
 };
+
+const serverRunBase = () =>
+  `/campaigns/${campaignId}/sessions/${liveRun.sessionId}/runs/${liveRun.id}`;
 
 const damage = async (name: string, amount: string) => {
   const row = rowFor(name);
@@ -168,7 +172,7 @@ describe("the runner", () => {
     // Both levels default to `dm` on the server, deliberately.
     expect(within(listCard()).getByText(/DM only — nothing here is on the players/)).toBeVisible();
 
-    await userEvent.click(screen.getByRole("switch"));
+    await userEvent.click(screen.getByRole("switch", { name: "Share" }));
     expect(bodyOf(server, "PATCH", `/runs/${liveRun.id}`)).toEqual({ visibility: "shared" });
 
     // Every row is still `dm`. Saying "shared" and leaving it there would imply
@@ -221,6 +225,71 @@ describe("the runner", () => {
     reaim("/rolls", { status: 200, body: [next, roll] });
     server.emit(sessionEvent(4, "roll-made"));
     await waitFor(() => expect(tray.getByText("24")).toBeTruthy());
+  });
+
+  it("keeps Hob's spending switch off by default and writes only that switch when toggled", async () => {
+    server.routes.set(`PATCH ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, allowHobDirectWrites: true },
+    });
+
+    await renderRunner();
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
+
+    const hobSwitch = screen.getByRole("switch", { name: "Hob spends" });
+    expect(hobSwitch).toHaveAttribute("aria-checked", "false");
+
+    await userEvent.click(hobSwitch);
+
+    expect(bodyOf(server, "PATCH", `/runs/${liveRun.id}`)).toEqual({
+      allowHobDirectWrites: true,
+    });
+    await waitFor(() => expect(hobSwitch).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("loads Hob's audited spends and can undo one", async () => {
+    server.routes.set(`GET ${serverRunBase()}/hob-direct-updates`, {
+      status: 200,
+      body: [directUpdate],
+    });
+    server.routes.set(`POST ${serverRunBase()}/hob-direct-updates/${directUpdate.id}/undo`, {
+      status: 200,
+      body: { ...directUpdate, undoneAt: "2026-08-04T19:06:00.000Z" },
+    });
+
+    await renderRunner();
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
+    await screen.findByRole("region", { name: "Hob's direct spends" });
+    expect(screen.getByText("Brannoc spent 1 Lay on Hands")).toBeInTheDocument();
+    expect(screen.getByText("12 of 15 left")).toBeInTheDocument();
+
+    server.routes.set(`GET ${serverRunBase()}/hob-direct-updates`, {
+      status: 200,
+      body: [{ ...directUpdate, undoneAt: "2026-08-04T19:06:00.000Z" }],
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Undo Lay on Hands for Brannoc" }));
+
+    expect(bodyOf(server, "POST", `/hob-direct-updates/${directUpdate.id}/undo`)).toEqual({});
+    await screen.findByText("12 of 15 left · undone");
+    expect(screen.queryByRole("button", { name: "Undo Lay on Hands for Brannoc" })).toBeNull();
+  });
+
+  it("keeps the audit row when undo is refused, and says the counter moved", async () => {
+    server.routes.set(`GET ${serverRunBase()}/hob-direct-updates`, {
+      status: 200,
+      body: [directUpdate],
+    });
+    server.routes.set(`POST ${serverRunBase()}/hob-direct-updates/${directUpdate.id}/undo`, {
+      status: 409,
+      body: { _tag: "Conflict", message: "resource changed" },
+    });
+
+    await renderRunner();
+    await screen.findByText("Brannoc spent 1 Lay on Hands");
+    await userEvent.click(screen.getByRole("button", { name: "Undo Lay on Hands for Brannoc" }));
+
+    await screen.findByText("Hob's spend was not undone");
+    expect(screen.getByText("12 of 15 left")).toBeInTheDocument();
   });
 
   it("re-reads the fight when the stream rings, rather than trusting the payload", async () => {

@@ -68,6 +68,9 @@ const NOT_CONTENT = [
   // it names keeps its own tail exactly where it always was.
   "group_library_share",
   "group_member",
+  // Audit of Hob moving an existing resource counter. The character remains the
+  // content row; this is a log/inverse tied to a live run and an assistant turn.
+  "hob_direct_resource_update",
   "language",
   "magic_item_rarity",
   "magic_item_variant",

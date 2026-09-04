@@ -1,4 +1,10 @@
-import type { Combatant, CombatantId, Roll, SessionEvent } from "@taverns/api";
+import type {
+  Combatant,
+  CombatantId,
+  HobDirectResourceUpdate,
+  Roll,
+  SessionEvent,
+} from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -42,7 +48,8 @@ import { useLiveStream } from "./stream";
  * **The initial load and the live updates are separate, and the split is where
  * the atoms are cut.** `runFrameAtom` reads the campaign, the night and the
  * bestiary once; `liveStateAtom` is the fight, and is the only thing the
- * doorbell re-reads — which is why a hit costs two requests and not five.
+ * doorbell re-reads — which is why a hit costs the live slice and not the
+ * campaign frame.
  * `runViewAtom` derives this screen's one value from both, and never puts the
  * screen back into "Loading…": an initiative list that blinks away every time a
  * goblin takes a hit would be unusable, and a failed *re*-read leaves the last
@@ -144,6 +151,65 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target.closest("button, input, textarea, select, [role='switch'], [contenteditable='true']") !==
     null;
 
+function HobDirectUpdates({
+  updates,
+  busy,
+  onUndo,
+}: {
+  readonly updates: ReadonlyArray<HobDirectResourceUpdate>;
+  readonly busy: boolean;
+  readonly onUndo: (update: HobDirectResourceUpdate) => void;
+}) {
+  if (updates.length === 0) return null;
+  return (
+    <section
+      aria-label="Hob's direct spends"
+      className="rounded-card border border-hairline bg-surface-card shadow-1"
+    >
+      <div className="border-b border-hairline px-card py-3">
+        <p className="flex items-center gap-2 text-label font-semibold uppercase tracking-label text-muted-foreground">
+          <Icon name="sparkles" size={13} />
+          Hob's direct spends
+        </p>
+      </div>
+      <div className="divide-y divide-hairline">
+        {updates.map((update) => {
+          const spent = update.afterUsed - update.beforeUsed;
+          const left = update.resourceMax - update.afterUsed;
+          return (
+            <article
+              key={update.id}
+              className="flex items-start justify-between gap-3 px-card py-3"
+            >
+              <div className="min-w-0 space-y-1">
+                <p className="text-body-s font-semibold leading-body text-foreground">
+                  {update.characterName} spent {spent} {update.resourceName}
+                </p>
+                <p className="text-body-xs leading-body text-muted-foreground">
+                  {left} of {update.resourceMax} left
+                  {update.undoneAt === null ? "" : " · undone"}
+                </p>
+              </div>
+              {update.undoneAt === null && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onUndo(update)}
+                  aria-label={`Undo ${update.resourceName} for ${update.characterName}`}
+                >
+                  <Icon name="refresh-cw" size={13} />
+                  Undo
+                </Button>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function RunScreen() {
   const { campaignId, sessionId, runId } = useParams({
     from: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
@@ -172,6 +238,7 @@ export function RunScreen() {
 
   const turn = useMutation();
   const share = useMutation();
+  const direct = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -285,6 +352,35 @@ export function RunScreen() {
     if (Result.isSuccess(saved)) controller.applyRun(saved.success);
   };
 
+  const setHobDirectWrites = async (allowed: boolean) => {
+    if (state === undefined) return;
+    const saved = await direct.submit(
+      (client) => client.runs.update({ params: path, payload: { allowHobDirectWrites: allowed } }),
+      [],
+    );
+    if (Result.isSuccess(saved)) controller.applyRun(saved.success);
+  };
+
+  const undoDirectUpdate = async (update: HobDirectResourceUpdate) => {
+    const undone = await direct.submit(
+      (client) =>
+        client.runs.undoHobDirectUpdate({
+          params: { ...path, updateId: update.id },
+          payload: {},
+        }),
+      [],
+    );
+    if (Result.isSuccess(undone)) {
+      refresh();
+      return;
+    }
+    toast.add({
+      type: "destructive",
+      title: "Hob's spend was not undone",
+      description: "The counter changed since Hob moved it. Adjust it on the sheet instead.",
+    });
+  };
+
   const setActive = async (combatant: Combatant) => {
     const saved = await share.submit(
       (client) =>
@@ -385,6 +481,15 @@ export function RunScreen() {
                   />
                   <Label htmlFor="run-share">Share</Label>
                 </span>
+                <span className="flex items-center gap-2">
+                  <Switch
+                    id="run-hob-direct-writes"
+                    checked={state.run.allowHobDirectWrites}
+                    disabled={direct.busy}
+                    onCheckedChange={(next) => void setHobDirectWrites(next)}
+                  />
+                  <Label htmlFor="run-hob-direct-writes">Hob spends</Label>
+                </span>
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -471,6 +576,11 @@ export function RunScreen() {
                   onTheirTurn={() => selected !== undefined && void setActive(selected)}
                   onEdit={() => setEditing(selected)}
                   onFollow={() => setSelectedId(undefined)}
+                />
+                <HobDirectUpdates
+                  updates={state.directUpdates}
+                  busy={direct.busy}
+                  onUndo={(update) => void undoDirectUpdate(update)}
                 />
                 <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
                 <SessionLog

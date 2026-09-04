@@ -13,6 +13,7 @@ import { type CampaignCreatorActor, CampaignCreatorActors } from "../src/repo/Cr
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { HobDirectWrites } from "../src/repo/HobDirectWrites.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Memberships } from "../src/repo/Memberships.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -25,16 +26,17 @@ import { migratedDatabase } from "./support/database.js";
  * The DM gate: **the wide reads cannot be reached without a proof, and the
  * proof cannot be made without the membership check.**
  *
- * Five repositories now. The three live ones came first; `Recap.read` joined
- * them when the player projection landed, and `Memberships.list` arrived gated
- * on the day the endpoint did — which is the standing rule working — *when a
- * table's player projection diverges from its DM projection, its DM repository
- * takes a `CampaignCreatorActor` in the same change.*
+ * Six repositories now. The three live ones came first; `Recap.read` joined
+ * them when the player projection landed, `Memberships.list` arrived gated on
+ * the day the endpoint did, and `HobDirectWrites` is the direct-write seam for
+ * the one live fight whose creator enabled it — which is the standing rule
+ * working — *when a table's player projection diverges from its DM projection,
+ * its DM repository takes a `CampaignCreatorActor` in the same change.*
  *
- * The fifth is the one where the player projection is *nothing*: a member list
- * is other people's account names and the shape of somebody's table. So unlike
- * `Recap` there is no narrow method beside the gated one, and unlike the live
- * three the thing being kept back is not a number but the roster itself.
+ * `Memberships` is the one where the player projection is *nothing*: a member
+ * list is other people's account names and the shape of somebody's table. So
+ * unlike `Recap` there is no narrow method beside the gated one, and unlike the
+ * live three the thing being kept back is not a number but the roster itself.
  *
  * This lands before the invite that mints the first player actor, deliberately.
  * A boundary put in afterwards would leave one release in which player actors
@@ -220,13 +222,24 @@ describe("the compiler carries it", () => {
       readonly mine: false;
     } = { list: true, mine: false };
 
+    // `HobDirectWrites` is the sixth and is wholly gated: even its target
+    // vocabulary is a fact about the creator's current live fight, and spend
+    // and undo are writes on that same seam.
+    const direct: GatedOn<(typeof HobDirectWrites)["Service"]> = {
+      currentTargets: true,
+      list: true,
+      spendResource: true,
+      undo: true,
+    };
+
     expect([
       Object.keys(combatants).length,
       Object.keys(runs).length,
       Object.keys(events).length,
       Object.keys(recap).length,
       Object.keys(memberships).length,
-    ]).toEqual([5, 7, 3, 2, 2]);
+      Object.keys(direct).length,
+    ]).toEqual([5, 7, 3, 2, 2, 4]);
   });
 });
 
@@ -390,7 +403,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates twenty methods and leaves every other actor-scoped read and write alone", () => {
+  it("gates twenty-four methods and leaves every other actor-scoped read and write alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -432,7 +445,11 @@ describe("the scope, counted", () => {
     // the group's chronicle is the campaign creator's act, so it takes the
     // proof the recap itself requires rather than a campaign id a caller
     // could aim.
-    expect(gated).toBe(20);
+    // Twenty-one through twenty-four are Hob's direct-write seam: current
+    // targets, the audit list, the spend and the undo all take the creator
+    // proof for the live fight rather than a campaign id a model or client can
+    // aim.
+    expect(gated).toBe(24);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

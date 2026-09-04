@@ -75,6 +75,16 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    */
   endedReason: EncounterRunEndedReason,
   /**
+   * Whether Hob may spend existing character resources directly during this live fight.
+   *
+   * This is deliberately a per-run switch rather than a campaign preference:
+   * direct writes are only expressible while one fight is live, and the DM has to
+   * turn the capability on for the fight they are watching. The default is
+   * `false`, and turning it off mid-fight makes the tool disappear on the next
+   * question and makes any in-flight tool call fail at write time.
+   */
+  allowHobDirectWrites: Schema.Boolean,
+  /**
    * The fight this one continues, for a run created by `resume`.
    *
    * **Provenance, never an access path** — the same status as
@@ -152,6 +162,8 @@ export const EncounterRunUpdate = Schema.Struct({
   activeCombatantId: Schema.optional(Schema.NullOr(CombatantId)),
   /** The `Share` switch. */
   visibility: Schema.optional(Visibility),
+  /** The per-fight direct-write switch for the DM's Hob. */
+  allowHobDirectWrites: Schema.optional(Schema.Boolean),
 });
 export type EncounterRunUpdate = typeof EncounterRunUpdate.Type;
 

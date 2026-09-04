@@ -6,6 +6,7 @@ import type {
   CreatureId,
   EncounterRun,
   EncounterRunId,
+  HobDirectResourceUpdate,
   Roll,
   Session,
   SessionId,
@@ -19,11 +20,11 @@ import { reads, type Invalidation } from "../api/keys";
 /**
  * What the runner reads, split by how often it changes — and the atoms over it.
  *
- * The campaign, the night and the bestiary are read once; only the two rows a
- * fight *changes* are re-read afterwards. That split is the whole reason this
- * file has two Effects rather than one: the doorbell rings on every hit, every
- * turn and every condition, and re-reading the campaign and the bestiary each
- * time would be six requests where two will do.
+ * The campaign, the night and the bestiary are read once; only the live run,
+ * its combatants and Hob's audit rows are re-read afterwards. That split is the
+ * whole reason this file has two Effects rather than one: the doorbell rings on
+ * every hit, every turn and every condition, and re-reading the campaign and
+ * the bestiary each time would be six requests where the live slice will do.
  *
  * **The split is an atom boundary now, not only an Effect one.** It used to be
  * one `runViewAtom` over all five endpoints, with the live half re-read
@@ -44,6 +45,8 @@ export interface RunPath {
 /** The half of the screen that a fight changes. */
 export interface LiveState {
   readonly run: EncounterRun;
+  /** Hob's audited direct resource spends for this fight, newest first. */
+  readonly directUpdates: ReadonlyArray<HobDirectResourceUpdate>;
   /**
    * In the order the server returned them, which is initiative order —
    * `initiative desc, created_at asc, id asc`. The client does not re-sort:
@@ -77,25 +80,26 @@ export interface RunFrame {
 export interface RunView extends RunFrame, LiveState {}
 
 /**
- * The two rows a fight writes, re-read after every change.
+ * The live slice a fight writes, re-read after every change.
  *
- * Concurrent, because neither depends on the other, and both because a turn
- * advance moves a pointer on the run *and* nothing on the combatants while a
- * hit moves hit points on a combatant and nothing on the run — a client that
- * guessed which had changed would be wrong on the third kind of event.
+ * Concurrent, because none depends on the other, and all three because a turn
+ * advance moves a pointer on the run, a hit moves hit points on a combatant,
+ * and Hob's direct spend adds an audit row — a client that guessed which had
+ * changed would be wrong on the third kind of event.
  */
 export const loadLiveState =
   ({ campaignId, sessionId, runId }: RunPath) =>
   (client: TavernsClient) =>
     Effect.gen(function* () {
-      const [run, combatants] = yield* Effect.all(
+      const [run, combatants, directUpdates] = yield* Effect.all(
         [
           client.runs.findById({ params: { campaignId, sessionId, runId } }),
           client.combatants.list({ params: { campaignId, sessionId, runId } }),
+          client.runs.hobDirectUpdates({ params: { campaignId, sessionId, runId } }),
         ],
         { concurrency: "unbounded" },
       );
-      return { run, combatants } satisfies LiveState;
+      return { run, combatants, directUpdates } satisfies LiveState;
     });
 
 /**
@@ -154,12 +158,12 @@ export const loadRunFrame = (path: RunPath) => (client: TavernsClient) =>
  * The campaign, the night and the bestiary, read once and never again by a hit.
  *
  * It names no reads for the reason every write in `run/` names none: what a
- * fight changes is the fight, and the two rows that hold it are the atom below.
+ * fight changes is the fight, and the live rows that hold it are the atom below.
  */
 export const runFrameAtom = Atom.family((path: RunPath) => apiAtom(loadRunFrame(path), []));
 
 /**
- * The fight itself — the one place the run and its combatants live.
+ * The fight itself — the one place the run, its combatants and Hob's audit live.
  *
  * **Writable, which is what makes it the one place.** The runner learns what it
  * just did from its own write's answer rather than from the doorbell (that is

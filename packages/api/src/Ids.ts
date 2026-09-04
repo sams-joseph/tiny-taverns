@@ -201,3 +201,7 @@ export type AssistantThreadId = typeof AssistantThreadId.Type;
  */
 export const AssistantTurnId = id("AssistantTurnId");
 export type AssistantTurnId = typeof AssistantTurnId.Type;
+
+/** One audited resource counter Hob moved directly during a live fight. */
+export const HobDirectResourceUpdateId = id("HobDirectResourceUpdateId");
+export type HobDirectResourceUpdateId = typeof HobDirectResourceUpdateId.Type;

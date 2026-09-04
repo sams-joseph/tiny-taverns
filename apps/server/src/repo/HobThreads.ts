@@ -1,4 +1,5 @@
 import {
+  type Actor,
   type AssistantThreadId,
   type AssistantTurnId,
   type CampaignId,
@@ -318,6 +319,10 @@ export class HobThreads extends Context.Service<
                         : {}),
                     }),
                   )}
+                  on conflict (id) do update
+                  set body = excluded.body,
+                      proposal = excluded.proposal,
+                      updated_at = now()
                   returning *
                 `;
                 // A thread's `updated_at` is what orders the list, so it has to
@@ -347,6 +352,28 @@ export class HobThreads extends Context.Service<
  * cheaper than the partial unique index `combatant.damage` needed, because
  * there is exactly one thing a turn can produce.
  */
+export const reserveHobTurn = (
+  sql: SqlClient.SqlClient,
+  reach: ConversationReach,
+  scopeId: CampaignId | GroupId,
+  threadId: AssistantThreadId,
+  turnId: AssistantTurnId,
+  actor: Actor,
+) =>
+  Effect.gen(function* () {
+    yield* ensureConversationReachable(sql, "assistant_thread", reach, threadId, scopeId, actor);
+    yield* sql`
+      insert into assistant_turn (id, thread_id, who, body, origin, assistant_turn_id)
+      values (${turnId}, ${threadId}, 'hob', '', 'assistant', ${turnId})
+      on conflict (id) do nothing
+    `;
+    yield* sql`
+      update assistant_thread set updated_at = now()
+      where assistant_thread.id = ${threadId}
+        and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
+    `;
+  });
+
 export const lockTurnForAccept = (
   sql: SqlClient.SqlClient,
   reach: ConversationReach,

@@ -9,12 +9,13 @@ import { campaignWritable } from "./visibility.js";
  * — carried in the type.
  *
  * `CurrentActor` makes an unscoped read impossible; this is the same idea one
- * level down. Five repositories — `Combatants`, `EncounterRuns`,
- * `SessionEvents`, `Recap` and `Memberships` — return rows whose **player
- * projection differs from their creator projection**: exact hit points on a
- * `shared` combatant, the whole initiative order, the combat log, the night
- * assembled out of all three, and the roster of who else is at the table.
- * Those five take a `CampaignCreatorActor` instead of reading `CurrentActor`,
+ * level down. Six repositories — `Combatants`, `EncounterRuns`,
+ * `SessionEvents`, `Recap`, `Memberships` and `HobDirectWrites` — return rows
+ * or perform writes whose **player projection differs from their creator
+ * projection**: exact hit points on a `shared` combatant, the whole initiative
+ * order, the combat log, the night assembled out of all three, the roster of
+ * who else is at the table, and Hob's direct resource-spend seam.
+ * Those six take a `CampaignCreatorActor` instead of reading `CurrentActor`,
  * so a method that skipped the check has no way to obtain one and does not
  * compile.
  *

@@ -816,6 +816,7 @@ describe("a stranger reads nothing", () => {
               'character_resource_request',
               'group_invite',
               'group_member',
+              'hob_direct_resource_update',
               'play_group',
               'character_option_ability_bonus',
               'character_option_equipment_reference',

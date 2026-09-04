@@ -56,6 +56,7 @@ import {
   HobTurn,
   HobUnavailable,
 } from "./Hob.js";
+import { HobDirectResourceUpdate } from "./HobDirectResourceUpdate.js";
 import {
   EncounterCreature,
   EncounterCreatureCreate,
@@ -103,6 +104,7 @@ import {
   FeatId,
   GroupId,
   GroupInviteId,
+  HobDirectResourceUpdateId,
   MagicItemId,
   RuleArticleId,
   RollId,
@@ -1801,6 +1803,24 @@ class RunsGroup extends HttpApiGroup.make("runs")
       payload: Schema.Struct({}),
       success: EncounterRun,
       error: NotFound,
+    }),
+    /** Audit rows for Hob's direct resource spends in this fight, newest first. */
+    HttpApiEndpoint.get("hobDirectUpdates", "/:runId/hob-direct-updates", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.Array(HobDirectResourceUpdate),
+      error: NotFound,
+    }),
+    /** Undo one direct resource spend, if the counter still holds Hob's after value. */
+    HttpApiEndpoint.post("undoHobDirectUpdate", "/:runId/hob-direct-updates/:updateId/undo", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        updateId: HobDirectResourceUpdateId,
+      },
+      payload: Schema.Struct({}),
+      success: HobDirectResourceUpdate,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/sessions/:sessionId/runs")

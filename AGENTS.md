@@ -250,6 +250,18 @@ with slice 0 folded in. Pointer-style; the files carry the arguments.
   **refuse while the character is in any live fight**. The continuous sheet's pips and feature uses
   are controls now; dice rolls, prepared/known spell picking and level-up recomputation are still
   later slices.
+- **Slice 6, Hob's direct resource spends, is on**: the live fight's creator-only switch is
+  `encounter_run.allow_hob_direct_writes`, default false and revocable mid-answer; when it is off
+  Hob's provider-facing DM toolkit is byte-for-byte the old one. When it is on and there are live
+  PC resource counters, the DM toolkit gets exactly one extra tool, `spendCharacterResource`, whose
+  parameters are an opaque request-local target enum plus an amount — no ids, no campaign, no prose.
+  The write itself lives in `repo/HobDirectWrites.ts` (assistant files stay SQL-free), re-checks the
+  creator proof, active live run, switch, combatant and resource at write time, locks the reserved
+  Hob turn for `tool_call_id` idempotency, mutates `character.body.resources[*].used`, appends
+  `hob-resource-spent` and records `hob_direct_resource_update`. The runner lists those audit rows
+  and `POST .../hob-direct-updates/:id/undo` is the DM's inverse, safe only while the counter still
+  holds Hob's after value; the undo appends `hob-resource-undone`. Player and group Hob toolkits are
+  unchanged.
 
 ## The design system: what is canonical, and how it reaches Tailwind
 

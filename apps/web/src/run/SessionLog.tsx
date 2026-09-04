@@ -41,6 +41,8 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   // taken *in* initiative is a `combatant-damaged` line and nothing else, so
   // this never doubles up with one.
   "character-updated": (who) => `${who ?? "Someone in the party"} changed`,
+  "hob-resource-spent": (who) => `Hob spent ${who ?? "someone's"} resource`,
+  "hob-resource-undone": (who) => `Hob's resource spend for ${who ?? "someone"} was undone`,
   // The prose is a `beat` row, not this event's payload — see `Beat`. The log
   // says only that one was jotted, and at what point in the fight.
   "beat-added": () => "A beat was jotted down",

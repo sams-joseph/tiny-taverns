@@ -177,6 +177,7 @@ describe("migrations", () => {
       "group_invite",
       "group_library_share",
       "group_member",
+      "hob_direct_resource_update",
       "language",
       "magic_item",
       "magic_item_rarity",
@@ -245,6 +246,7 @@ describe("migrations", () => {
       { migration_id: 32, name: "group_library_share" },
       { migration_id: 33, name: "character_resource_requests" },
       { migration_id: 34, name: "rolls" },
+      { migration_id: 35, name: "hob_direct_resource_writes" },
     ]);
   }, 60_000);
 
@@ -288,6 +290,7 @@ describe("migrations", () => {
       { migration_id: 32, name: "group_library_share" },
       { migration_id: 33, name: "character_resource_requests" },
       { migration_id: 34, name: "rolls" },
+      { migration_id: 35, name: "hob_direct_resource_writes" },
     ]);
   }, 60_000);
 });

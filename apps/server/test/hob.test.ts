@@ -9,6 +9,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
@@ -22,10 +23,15 @@ import {
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { Characters } from "../src/repo/Characters.js";
+import { Combatants } from "../src/repo/Combatants.js";
+import { EncounterRuns } from "../src/repo/EncounterRuns.js";
+import { Encounters } from "../src/repo/Encounters.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
+import { HobDirectWrites } from "../src/repo/HobDirectWrites.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
@@ -73,6 +79,11 @@ const services = Layer.mergeAll(
   GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
+  Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
+  EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Encounters.layer,
+  HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
@@ -401,6 +412,118 @@ describe("answering", () => {
       (tool) => (tool.function as { name?: string } | undefined)?.name === "listCreatures",
     )?.function as { parameters?: { properties?: object } } | undefined;
     expect(listCreatures?.parameters?.properties ?? {}).toEqual({});
+  }, 60_000);
+
+  it("adds the direct resource spend tool only when this live fight enables it", async () => {
+    const direct = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const characters = yield* Characters;
+        const encounters = yield* Encounters;
+        const runs = yield* EncounterRuns;
+        const sessions = yield* Sessions;
+
+        const dm = yield* anAccount("Direct Hob DM");
+        const as = withActor(dm);
+        const campaign = yield* as(
+          createCampaign({ name: "The Direct Road", visibility: "shared" }),
+        );
+        const player = yield* aPlayerAt(campaign.id, "Brannoc");
+        const character = yield* withActor(player)(
+          characters.createOwn(campaign.id, {
+            name: "Brannoc",
+            playerName: "Pim",
+            level: 3,
+            className: "Fighter",
+            ac: 18,
+            hpMax: 31,
+            sheet: {
+              notes: "",
+              abilities: [],
+              traits: [],
+              resources: [
+                {
+                  id: "res:second-wind",
+                  name: "Second Wind",
+                  used: 0,
+                  max: 1,
+                  recharge: "short",
+                },
+              ],
+            },
+          }),
+        );
+        const session = yield* as(
+          sessions.create(campaign.id, { number: 1, visibility: "shared" }),
+        );
+        yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
+        const encounter = yield* as(
+          encounters.create(campaign.id, { name: "The Direct Fight", visibility: "shared" }),
+        );
+        const proof = yield* asDm(dm, campaign.id);
+        const run = yield* runs.start(proof, session.id, {
+          encounterId: encounter.id,
+          includeParty: true,
+          visibility: "shared",
+        });
+        const enabled = yield* runs.update(proof, session.id, run.id, {
+          allowHobDirectWrites: true,
+        });
+        return { dm, campaign, session, run: enabled, character };
+      }).pipe(Effect.orDie),
+    );
+
+    const { events, requests } = await ask(direct.dm, direct.campaign.id, {
+      text: "Spend Brannoc's Second Wind.",
+      rounds: [
+        toolCallChunks("spendCharacterResource", { target: "target:1", amount: 1 }, "call_spend"),
+        textChunks("Second Wind is spent."),
+      ] as never,
+    });
+
+    const tools = requests[0]?.tools ?? [];
+    const names = tools.map((tool) => (tool.function as { name?: string } | undefined)?.name);
+    expect(names).toContain("spendCharacterResource");
+    const spend = tools.find(
+      (tool) => (tool.function as { name?: string } | undefined)?.name === "spendCharacterResource",
+    )?.function as { parameters?: unknown } | undefined;
+    const schema = JSON.stringify(spend?.parameters ?? {});
+    expect(schema).toContain("target:1");
+    expect(schema).toContain("enum");
+    expect(schema).not.toContain("campaignId");
+
+    expect(
+      events.flatMap((event) =>
+        event.event === "tool" ? [`${event.data.name}:${event.data.phase}`] : [],
+      ),
+    ).toEqual(["spendCharacterResource:called", "spendCharacterResource:answered"]);
+
+    const checked = await runtime.runPromise(
+      Effect.gen(function* () {
+        const writes = yield* HobDirectWrites;
+        const proof = yield* asDm(direct.dm, direct.campaign.id);
+        const updates = yield* writes.list(proof, direct.session.id, direct.run.id);
+        const sql = yield* SqlClient.SqlClient;
+        const rows = yield* sql<{ readonly used: number }>`
+          select (resource.value ->> 'used')::integer as used
+          from character
+          cross join lateral jsonb_array_elements(character.body -> 'resources') as resource(value)
+          where character.id = ${direct.character.id}
+            and resource.value ->> 'id' = 'res:second-wind'
+        `;
+        return { updates, used: rows[0]?.used };
+      }).pipe(withActor(direct.dm), Effect.orDie),
+    );
+
+    expect(checked.used).toBe(1);
+    expect(checked.updates).toHaveLength(1);
+    expect(checked.updates[0]).toMatchObject({
+      characterName: "Brannoc",
+      resourceId: "res:second-wind",
+      resourceName: "Second Wind",
+      beforeUsed: 0,
+      afterUsed: 1,
+    });
   }, 60_000);
 
   it("reports a model that answers with nothing but tool calls", async () => {
