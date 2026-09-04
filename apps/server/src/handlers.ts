@@ -132,6 +132,7 @@ const MeLive = HttpApiBuilder.group(
     const accounts = yield* Accounts;
     const memberships = yield* Memberships;
     const characters = yield* Characters;
+    const spells = yield* Spells;
     return (
       handlers
         // The whole handler, and there is nothing for it to pass: `identity`
@@ -144,6 +145,7 @@ const MeLive = HttpApiBuilder.group(
         .handle("campaigns", () => memberships.mine("live"))
         .handle("archivedCampaigns", () => memberships.mine("archived"))
         .handle("characters", () => characters.mine)
+        .handle("characterSpells", ({ params }) => spells.forCharacter(params.characterId))
         .handle("updateCharacter", ({ params, payload }) =>
           characters.updateOwn(params.characterId, payload),
         )

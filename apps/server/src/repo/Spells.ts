@@ -1,6 +1,11 @@
 import {
   type AccountId,
+  type Actor,
   type CampaignId,
+  type CharacterSpellbook,
+  type CharacterId,
+  type ClassBody,
+  type ClassLevelSpellcasting,
   CurrentActor,
   NotFound,
   type Page,
@@ -32,7 +37,12 @@ import {
   pageOfRows,
   timeColumn,
 } from "./paging.js";
-import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
+import {
+  libraryRowReadable,
+  libraryRowWritable,
+  ownCharacter,
+  usableInCampaign,
+} from "./visibility.js";
 
 interface SpellRow extends ProvenanceColumns {
   readonly id: SpellId;
@@ -205,6 +215,150 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<SpellSort, Ordering<Spell
   };
 };
 
+interface CharacterSpellRow {
+  readonly id: CharacterId;
+  readonly class_name: string | null;
+  readonly level: number | null;
+  readonly body: {
+    readonly abilities?: ReadonlyArray<{ readonly label: string; readonly modifier: string }>;
+    readonly identity?: { readonly subclass?: string };
+    readonly spellcasting?: {
+      readonly slots?: ReadonlyArray<{ readonly level: number; readonly total: number }>;
+    };
+  };
+}
+
+interface CharacterClassRow {
+  readonly id: string;
+  readonly name: string;
+  readonly body: ClassBody;
+}
+
+interface CharacterClassLevelRow {
+  readonly body: { readonly spellcasting?: Record<string, unknown> };
+}
+
+const selectedCampaigns = (
+  sql: SqlClient.SqlClient,
+  characterId: CharacterId,
+  accountId: AccountId,
+): Effect.Effect<ReadonlyArray<CampaignId>> =>
+  sql<{ readonly campaign_id: CampaignId }>`
+    select campaign_id from campaign_character
+    where character_id = ${characterId}
+      and account_id = ${accountId}
+      and left_at is null
+  `.pipe(
+    Effect.map((rows) => rows.map((row) => row.campaign_id)),
+    Effect.orDie,
+  );
+
+const usableForAnySeat = (
+  sql: SqlClient.SqlClient,
+  table: string,
+  seats: ReadonlyArray<CampaignId>,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.or([
+    libraryRowReadable(sql, table, actor),
+    ...seats.map((campaignId) => usableInCampaign(sql, table, campaignId, actor)),
+  ]);
+
+const modifierOf = (character: CharacterSpellRow, ability: string | undefined): number => {
+  if (ability === undefined) return 0;
+  const raw = character.body.abilities?.find(
+    (entry) => entry.label.trim().toUpperCase() === ability.trim().toUpperCase(),
+  )?.modifier;
+  const parsed = Number.parseInt(raw ?? "0", 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const numberAt = (record: Record<string, unknown> | undefined, key: string): number => {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+};
+
+const classSpellcasting = (
+  raw: Record<string, unknown> | undefined,
+): ClassLevelSpellcasting | undefined => {
+  if (raw === undefined) return undefined;
+  const explicit = Array.isArray(raw.slots)
+    ? raw.slots.filter((v): v is number => typeof v === "number")
+    : [];
+  const slots =
+    explicit.length > 0
+      ? explicit
+      : Array.from({ length: 9 }, (_, index) =>
+          numberAt(raw, `spell_slots_level_${String(index + 1)}`),
+        );
+  while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
+  const cantripsKnown = numberAt(raw, "cantrips_known") || numberAt(raw, "cantripsKnown");
+  const spellsKnown = numberAt(raw, "spells_known") || numberAt(raw, "spellsKnown");
+  return {
+    ...(cantripsKnown === 0 ? {} : { cantripsKnown }),
+    ...(spellsKnown === 0 ? {} : { spellsKnown }),
+    slots,
+  };
+};
+
+const highestSlot = (spellcasting: ClassLevelSpellcasting | undefined): number => {
+  const slots = spellcasting?.slots ?? [];
+  for (let index = slots.length - 1; index >= 0; index -= 1) {
+    if ((slots[index] ?? 0) > 0) return index + 1;
+  }
+  return 0;
+};
+
+const highestSheetSlot = (character: CharacterSpellRow): number =>
+  Math.max(
+    0,
+    ...(character.body.spellcasting?.slots ?? []).map((slot) => (slot.total > 0 ? slot.level : 0)),
+  );
+
+const spellMode = (className: string | undefined): CharacterSpellbook["mode"] => {
+  switch ((className ?? "").trim().toLowerCase()) {
+    case "cleric":
+    case "druid":
+    case "paladin":
+      return "prepared";
+    case "wizard":
+      return "spellbook";
+    case "bard":
+    case "ranger":
+    case "sorcerer":
+    case "warlock":
+      return "known";
+    default:
+      return "none";
+  }
+};
+
+const preparedLimit = (
+  mode: CharacterSpellbook["mode"],
+  className: string | undefined,
+  level: number,
+  modifier: number,
+): number | undefined => {
+  if (mode !== "prepared" && mode !== "spellbook") return undefined;
+  const base = (className ?? "").trim().toLowerCase() === "paladin" ? Math.floor(level / 2) : level;
+  return Math.max(1, base + modifier);
+};
+
+const wizardKnownLimit = (level: number): number => Math.max(6, 6 + (Math.max(1, level) - 1) * 2);
+
+const matchesClassList = (sql: SqlClient.SqlClient, className: string): Statement.Fragment => sql`
+  exists (select 1 from unnest(spell.class_names) as class_name
+          where lower(class_name) = lower(${className}))
+`;
+
+const matchesSubclassList = (
+  sql: SqlClient.SqlClient,
+  subclassName: string,
+): Statement.Fragment => sql`
+  exists (select 1 from unnest(spell.subclass_names) as subclass_name
+          where lower(subclass_name) = lower(${subclassName}))
+`;
+
 /**
  * The 2014 SRD spell corpus, plus an account's own originals.
  *
@@ -228,6 +382,9 @@ export class Spells extends Context.Service<
     readonly library: (
       filter: SpellFilterValues,
     ) => Effect.Effect<Page<Spell, SpellSort>, never, CurrentActor>;
+    readonly forCharacter: (
+      id: CharacterId,
+    ) => Effect.Effect<CharacterSpellbook, NotFound, CurrentActor>;
     readonly libraryFindById: (id: SpellId) => Effect.Effect<Spell, NotFound, CurrentActor>;
     readonly libraryCreate: (
       payload: SpellLibraryCreate,
@@ -265,6 +422,133 @@ export class Spells extends Context.Service<
               limit ${pageLimit(filter.limit)}
             `;
               return pageOfRows(rows, filter.limit, ordering, sort, toSpell);
+            }),
+          ),
+
+        forCharacter: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const characterRows = yield* sql<CharacterSpellRow>`
+                select id, class_name, level, body from character
+                where character.id = ${id} and ${ownCharacter(sql, actor)}
+              `;
+              const character = characterRows[0];
+              if (character === undefined)
+                return yield* new NotFound({ resource: "character", id });
+              const level = Math.max(1, character.level ?? 1);
+              const className = character.class_name?.trim();
+              if (className === undefined || className === "") {
+                return {
+                  characterId: id,
+                  level,
+                  highestSlotLevel: 0,
+                  mode: "none" as const,
+                  limits: {},
+                  spells: [],
+                };
+              }
+
+              const seats = yield* selectedCampaigns(sql, id, actor.accountId);
+              const classRows = yield* sql<CharacterClassRow>`
+                select id, name, body from character_option
+                where kind = 'class'
+                  and lower(name) = lower(${className})
+                  and ${usableForAnySeat(sql, "character_option", seats, actor)}
+                order by case when account_id is null and campaign_id is null then 0 else 1 end,
+                         created_at asc, id asc
+                limit 1
+              `;
+              const classOption = classRows[0];
+              const classLevelRows =
+                classOption === undefined
+                  ? []
+                  : yield* sql<CharacterClassLevelRow>`
+                      select body from class_level
+                      where class_option_id = ${classOption.id}
+                        and subclass_id is null
+                        and level <= ${level}
+                      order by level desc
+                      limit 1
+                    `;
+              const table = classSpellcasting(classLevelRows[0]?.body.spellcasting);
+              const highestSlotLevel = Math.max(highestSlot(table), highestSheetSlot(character));
+              const mode = spellMode(classOption?.name ?? className);
+              const modifier = modifierOf(character, classOption?.body.spellcastingAbility);
+              const limits = {
+                ...(table?.cantripsKnown === undefined
+                  ? {}
+                  : { cantripsKnown: table.cantripsKnown }),
+                ...(mode === "spellbook"
+                  ? { spellsKnown: wizardKnownLimit(level) }
+                  : table?.spellsKnown === undefined
+                    ? {}
+                    : { spellsKnown: table.spellsKnown }),
+                ...(preparedLimit(mode, classOption?.name ?? className, level, modifier) ===
+                undefined
+                  ? {}
+                  : {
+                      prepared: preparedLimit(
+                        mode,
+                        classOption?.name ?? className,
+                        level,
+                        modifier,
+                      ),
+                    }),
+              };
+              if (
+                mode === "none" ||
+                (highestSlotLevel === 0 && (table?.cantripsKnown ?? 0) === 0)
+              ) {
+                return {
+                  characterId: id,
+                  className: classOption?.name ?? className,
+                  ...(character.body.identity?.subclass === undefined
+                    ? {}
+                    : { subclassName: character.body.identity.subclass }),
+                  level,
+                  highestSlotLevel,
+                  mode,
+                  limits,
+                  spells: [],
+                };
+              }
+
+              const subclassName = character.body.identity?.subclass?.trim();
+              const spellRows = yield* sql<SpellRow>`
+                select * from spell
+                where ${sql.and([
+                  usableForAnySeat(sql, "spell", seats, actor),
+                  sql`(spell.level = 0 or spell.level <= ${highestSlotLevel})`,
+                  subclassName === undefined || subclassName === ""
+                    ? matchesClassList(sql, classOption?.name ?? className)
+                    : sql.or([
+                        matchesClassList(sql, classOption?.name ?? className),
+                        matchesSubclassList(sql, subclassName),
+                      ]),
+                ])}
+                order by spell.level asc, spell.name asc, spell.id asc
+              `;
+              return {
+                characterId: id,
+                className: classOption?.name ?? className,
+                ...(subclassName === undefined || subclassName === "" ? {} : { subclassName }),
+                level,
+                highestSlotLevel,
+                mode,
+                limits,
+                spells: spellRows.map((row) => {
+                  const subclass =
+                    subclassName !== undefined &&
+                    row.subclass_names.some(
+                      (name) => name.toLowerCase() === subclassName.toLowerCase(),
+                    );
+                  return {
+                    spell: toSpell(row),
+                    list: subclass ? ("subclass" as const) : ("class" as const),
+                  };
+                }),
+              };
             }),
           ),
 

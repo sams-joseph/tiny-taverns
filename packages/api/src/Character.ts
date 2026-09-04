@@ -98,6 +98,8 @@ export type SpellSlot = typeof SpellSlot.Type;
 export const SpellKnown = Schema.Struct({
   name: Schema.NonEmptyString,
   level: Schema.optional(Schema.Int),
+  /** Stable provenance for the picker and for derived spell action lines. */
+  spellId: Schema.optional(Schema.NullOr(SpellId)),
   /** `"Concentration · 1 min"` */
   note: Schema.optional(Schema.String),
   prepared: Schema.optional(Schema.Boolean),

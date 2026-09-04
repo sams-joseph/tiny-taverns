@@ -1,5 +1,6 @@
 import type {
   CampaignId,
+  CharacterId,
   CharacterOptionId,
   FeatId,
   RuleArticleId,
@@ -189,6 +190,9 @@ export const reads = {
 
   /** The characters this account plays, across every table. */
   myCharacters: "me:characters" as ReadKey,
+
+  /** One character's bounded spell vocabulary. */
+  characterSpells: (characterId: CharacterId): ReadKey => key`me:characters:${characterId}:spells`,
 
   /** The account's Library: the creatures it authored, plus the bundle. */
   library: "library" as ReadKey,

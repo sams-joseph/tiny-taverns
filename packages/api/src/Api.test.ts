@@ -100,16 +100,17 @@ describe("the API declaration", () => {
     // path that names an account.**
     //
     // Asserted as the path shape rather than as "only one endpoint has params",
-    // because that weaker form has already been outgrown twice. Five endpoints
-    // take a parameter now — a character of the caller's own, four times, and
+    // because that weaker form has already been outgrown twice. Six endpoints
+    // take a parameter now — a character of the caller's own, five times, and
     // the campaign a new one goes into, which an insert has no row to derive.
-    // None of the five is an account, and an `:accountId` appearing under `/me`
+    // None of the six is an account, and an `:accountId` appearing under `/me`
     // would be the second answer to `members.list` that this test exists to
     // prevent, whether or not it arrived alone.
     const parameterised = endpointsOf(me as GroupShape).filter(
       (endpoint) => endpoint.params !== undefined,
     );
     expect(parameterised.map((endpoint) => endpoint.identifier).sort()).toEqual([
+      "characterSpells",
       "createCharacter",
       "deleteCharacter",
       "restCharacter",
@@ -121,6 +122,7 @@ describe("the API declaration", () => {
       "/me/characters/:characterId",
       "/me/characters/:characterId",
       "/me/characters/:characterId/rest",
+      "/me/characters/:characterId/spells",
       "/me/characters/:characterId/spend",
     ]);
   });

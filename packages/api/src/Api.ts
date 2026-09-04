@@ -136,6 +136,7 @@ import {
 import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
+import { CharacterSpellbook } from "./Spellbook.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
 /** Liveness. The one endpoint with no actor and no campaign. */
@@ -389,6 +390,12 @@ class MeGroup extends HttpApiGroup.make("me")
      */
     HttpApiEndpoint.get("characters", "/characters", {
       success: Schema.Array(OwnedCharacter),
+    }),
+    /** The bounded spell vocabulary for one owned character's picker. */
+    HttpApiEndpoint.get("characterSpells", "/characters/:characterId/spells", {
+      params: { characterId: CharacterId },
+      success: CharacterSpellbook,
+      error: NotFound,
     }),
     /**
      * **The first write in the product a player may make**, and the only

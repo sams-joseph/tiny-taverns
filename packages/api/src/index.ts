@@ -37,4 +37,5 @@ export * from "./Search.js";
 export * from "./SheetGrants.js";
 export * from "./Session.js";
 export * from "./Spell.js";
+export * from "./Spellbook.js";
 export * from "./SessionEvent.js";

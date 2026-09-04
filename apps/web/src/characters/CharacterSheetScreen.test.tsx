@@ -275,7 +275,7 @@ describe("a character sheet", () => {
     // bar the designers drew, with no handler here — not a sheet control. The
     // vitals toggle opens the narrow summary and writes nothing. Everything
     // else is a write the payload carries: the bar's *Edit* and *Delete*, the
-    // resource spend/rest controls, the four section actions, and the six
+    // resource spend/rest controls, the five section actions, and the six
     // death-save pips.
     expect(pressable()).toEqual([
       "Ask Hob⌘K",
@@ -306,6 +306,7 @@ describe("a character sheet", () => {
       "Roll Halberd attack +7",
       "Roll Halberd dice 1d10+4",
       "Roll Divine Smite dice 2d8",
+      "Edit spells",
       "Recover level 1 spell slot 1",
       "Spend level 1 spell slot 2",
       "Spend level 1 spell slot 3",
@@ -321,7 +322,8 @@ describe("a character sheet", () => {
     // The cell and attack row roll locally.
     expect(screen.getByRole("button", { name: "Roll STR check" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Roll Halberd dice 1d10+4" })).toBeTruthy();
-    // Rolls and slots can be pressed now; prepared spells still have no write.
+    // Rolls and slots can be pressed now; preparing spells is a picker action,
+    // not an inline toggle on the sheet.
     expect(screen.getAllByRole("button", { name: /spell slot/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
     // No portrait upload and no journal entry. The roll log is present, and its

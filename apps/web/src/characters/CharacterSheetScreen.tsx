@@ -24,6 +24,7 @@ import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { GearDialog } from "./GearDialog";
 import { IdentityDialog } from "./IdentityDialog";
 import { SkillsDialog } from "./SkillsDialog";
+import { SpellPickerDialog } from "./SpellPickerDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { loadCharacterSheet } from "./load";
 import {
@@ -112,16 +113,19 @@ import {
  * skills*, *Gear & coin* and *Story* are drawn on a writable sheet whether or
  * not they hold anything, because each carries the affordance that creates its
  * own contents; *Actions*, *Spellcasting*, *Features & traits* and *Level ups*
- * appear only when the document fills them, because nothing here writes any of
- * those. The spine lists exactly the drawn sections and nothing else.
+ * appear only when the document fills them. Spellcasting is editable once it
+ * exists because the authoritative picker needs the class context already on
+ * the row; the others remain content-driven. The spine lists exactly the drawn
+ * sections and nothing else.
  *
  * ### What it writes, and where the boundary is
  *
- * Six surfaces, one endpoint — `PATCH /me/characters/:characterId` through
- * `write.ts`, which is where the endpoint is named once and where the
+ * Seven durable surfaces, one endpoint — `PATCH /me/characters/:characterId`
+ * through `write.ts`, which is where the endpoint is named once and where the
  * whole-document race is written down. The durable columns are the top bar's
- * *Edit*; the six cells, the skill list, the backstory and the carried list are
- * their sections' own header actions; a death save is the pip itself. **Every
+ * *Edit*; the six cells, the skill list, spell preparation, the backstory and
+ * the carried list are their sections' own header actions; a death save is the
+ * pip itself. **Every
  * one of them re-reads the screen afterwards** rather than patching what it
  * holds, because a write here changes something it did not send: `descriptor`
  * is a generated column, so editing the level rewrites the line under the name.
@@ -174,9 +178,10 @@ import {
  *   the DM's to move, which is why the payload has no field for any of them.
  * - **Rolling is browser-local.** A check rolled "to your DM's dice tray" has
  *   no endpoint at all, so dice buttons write only the ephemeral *Your rolls*
- *   panel and its feedback says that truth. A prepared spell, a portrait and a
- *   journal entry are document keys with no drawn control behind them in this
- *   build. They are drawn as the values they are.
+ *   panel and its feedback says that truth. Preparing a spell is a picker over
+ *   the authoritative spell domain; a portrait and a journal entry are document
+ *   keys with no drawn control behind them in this build. They are drawn as the
+ *   values they are.
  */
 
 /** How far below the scroller's top edge the reading line sits, in CSS pixels. */
@@ -584,6 +589,7 @@ function SheetDocument({
   onEditBackstory,
   onEditGear,
   onEditSkills,
+  onEditSpells,
 }: {
   readonly owned: OwnedCharacter;
   readonly sections: ReadonlyArray<SheetSectionSpec>;
@@ -592,6 +598,7 @@ function SheetDocument({
   readonly onEditBackstory: () => void;
   readonly onEditGear: () => void;
   readonly onEditSkills: () => void;
+  readonly onEditSpells: () => void;
 }) {
   const character = owned.character;
   const sheet = character.sheet;
@@ -759,6 +766,7 @@ function SheetDocument({
         <DocumentSection
           section={magic}
           register={register}
+          action={<EditButton what="spells" onClick={onEditSpells} />}
           aside={
             <span className="text-micro leading-none text-faint">
               {[
@@ -1367,7 +1375,7 @@ function SheetScroller({
   readonly vitalsOpen: boolean;
   readonly onToggleVitals: () => void;
   readonly scrollTopRef: { current: number };
-  readonly onEdit: (what: "abilities" | "skills" | "backstory" | "gear") => void;
+  readonly onEdit: (what: "abilities" | "skills" | "spells" | "backstory" | "gear") => void;
   readonly onReload: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -1480,6 +1488,7 @@ function SheetScroller({
           onEditBackstory={() => onEdit("backstory")}
           onEditGear={() => onEdit("gear")}
           onEditSkills={() => onEdit("skills")}
+          onEditSpells={() => onEdit("spells")}
         />
       </div>
     </div>
@@ -1549,7 +1558,7 @@ export function CharacterSheetScreen() {
    * be closed by its own success.
    */
   const [editing, setEditing] = useState<
-    "identity" | "abilities" | "skills" | "backstory" | "gear" | "delete" | undefined
+    "identity" | "abilities" | "skills" | "spells" | "backstory" | "gear" | "delete" | undefined
   >();
   /**
    * Which section is lit, whether the narrow summary is open, and where the
@@ -1695,6 +1704,14 @@ export function CharacterSheetScreen() {
       )}
       {owned !== undefined && editing === "skills" && (
         <SkillsDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
+      )}
+      {owned !== undefined && editing === "spells" && (
+        <SpellPickerDialog
+          owned={owned}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
       )}
       {owned !== undefined && editing === "backstory" && (
         <BackstoryDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />

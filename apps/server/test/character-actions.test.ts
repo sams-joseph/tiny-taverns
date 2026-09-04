@@ -24,6 +24,7 @@ import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
+import { importSystemSpells } from "../src/spells/import.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
@@ -82,6 +83,7 @@ beforeAll(async () => {
   // kit lines resolve equipment rows in the same transaction.
   await runtime.runPromise(importSystemEquipment().pipe(Effect.orDie));
   await runtime.runPromise(importSystemOptions().pipe(Effect.orDie));
+  await runtime.runPromise(importSystemSpells().pipe(Effect.orDie));
   campaignId = (
     await as(token, (client) =>
       campaignVia(client, { name: "The Salt Road", visibility: "shared" }),
@@ -349,4 +351,120 @@ describe("a Fighter 1, written down through the real create endpoint", () => {
     });
     expect(created.descriptor).toBe("Level 1 Human Fighter");
   }, 60_000);
+});
+
+describe("the character spell picker and level-up recompute", () => {
+  it("answers class spells, saves selected spell ids, and rewrites derived slots on level-up", async () => {
+    const made = await as(token, (client) =>
+      client.me.createCharacter({
+        params: { campaignId: campaignId as never },
+        payload: {
+          name: "Mira",
+          level: 1,
+          className: "Wizard",
+          sheet: {
+            ...emptyCharacterSheet,
+            abilities: [{ label: "INT", score: "16", modifier: "+3" }],
+            spellcasting: {
+              ability: "INT",
+              save: "13",
+              attack: "+5",
+              slots: [{ level: 1, used: 1, total: 2 }],
+              known: [],
+            },
+            resources: [
+              {
+                id: "slot:1",
+                name: "1st-level slots",
+                used: 1,
+                max: 2,
+                recharge: "long",
+                derived: true,
+              },
+              {
+                id: "focus",
+                name: "Arcane focus charge",
+                used: 1,
+                max: 1,
+                recharge: "short",
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    const book = await as(token, (client) =>
+      client.me.characterSpells({ params: { characterId: made.id } }),
+    );
+    expect(book).toMatchObject({ className: "Wizard", mode: "spellbook", highestSlotLevel: 1 });
+    expect(book.limits).toMatchObject({ cantripsKnown: 3, spellsKnown: 6, prepared: 4 });
+    expect(book.spells.some((row) => row.spell.name === "Magic Missile")).toBe(true);
+    expect(book.spells.some((row) => row.spell.name === "Fire Bolt")).toBe(true);
+    expect(book.spells.some((row) => row.spell.name === "Fireball")).toBe(false);
+
+    const magicMissile = book.spells.find((row) => row.spell.name === "Magic Missile")!;
+    const withSpell = await as(token, (client) =>
+      client.me.updateCharacter({
+        params: { characterId: made.id },
+        payload: {
+          expectedVersion: made.version,
+          sheet: {
+            ...made.sheet,
+            spellcasting: {
+              ...made.sheet.spellcasting,
+              known: [
+                {
+                  name: magicMissile.spell.name,
+                  level: magicMissile.spell.level,
+                  spellId: magicMissile.spell.id,
+                  prepared: true,
+                },
+              ],
+            },
+            actions: [
+              ...(made.sheet.actions ?? []),
+              {
+                id: `spell:${magicMissile.spell.id}`,
+                name: magicMissile.spell.name,
+                source: "spell",
+                spellId: magicMissile.spell.id,
+                resource: "slot:1",
+                derived: true,
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect(withSpell.sheet.spellcasting?.known?.[0]?.spellId).toBe(magicMissile.spell.id);
+
+    const leveled = await as(token, (client) =>
+      client.me.updateCharacter({
+        params: { characterId: made.id },
+        payload: { expectedVersion: withSpell.version, level: 3 },
+      }),
+    );
+
+    expect(leveled.level).toBe(3);
+    expect(leveled.sheet.spellcasting?.known?.map((spell) => spell.name)).toEqual([
+      "Magic Missile",
+    ]);
+    expect(leveled.sheet.resources?.find((resource) => resource.id === "slot:1")).toMatchObject({
+      max: 4,
+      used: 1,
+      derived: true,
+    });
+    expect(leveled.sheet.resources?.find((resource) => resource.id === "slot:2")).toMatchObject({
+      max: 2,
+      used: 0,
+      derived: true,
+    });
+    expect(leveled.sheet.resources?.find((resource) => resource.id === "focus")).toMatchObject({
+      max: 1,
+      used: 1,
+    });
+    const action = leveled.sheet.actions?.find((row) => row.spellId === magicMissile.spell.id);
+    expect(action).toMatchObject({ name: "Magic Missile", resource: "slot:1", derived: true });
+  });
 });

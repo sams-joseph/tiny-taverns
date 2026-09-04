@@ -3,6 +3,7 @@ import type {
   CampaignMembership,
   CharacterId,
   CharacterOption,
+  CharacterSpellbook,
   OwnedCharacter,
   PlayerLiveTable,
 } from "@taverns/api";
@@ -107,6 +108,14 @@ export const loadMyCharacters = (client: TavernsClient) =>
  * one.
  */
 export const myCharactersAtom = apiAtom(loadMyCharacters, [reads.myCharacters]);
+
+export const characterSpellsAtom = Atom.family((characterId: CharacterId) =>
+  apiAtom(
+    (client): Effect.Effect<CharacterSpellbook, unknown> =>
+      client.me.characterSpells({ params: { characterId } }),
+    [reads.characterSpells(characterId)],
+  ),
+);
 
 /**
  * The sheet's own view: the roster's, plus what is live at that character's

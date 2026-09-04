@@ -139,6 +139,7 @@ export const characterWritesAt = (campaignId: CampaignId): Invalidation => [
  */
 export const ownCharacterWrites = (owned: OwnedCharacter): Invalidation => [
   reads.myCharacters,
+  reads.characterSpells(owned.character.id),
   ...owned.seats.map((seat) => reads.party(seat.campaignId)),
 ];
 

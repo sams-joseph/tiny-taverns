@@ -578,6 +578,84 @@ describe("editing the backstory", () => {
   });
 });
 
+describe("editing spells", () => {
+  it("loads the authoritative spell vocabulary and saves selected spell ids as action rows", async () => {
+    const spellId = "2b1f2a1e-0000-4000-8000-00000000f1ee";
+    server.routes.set(`GET /me/characters/${brannocId}/spells`, {
+      status: 200,
+      body: {
+        characterId: brannocId,
+        className: "Paladin",
+        subclassName: "Oath of the Open Road",
+        level: 5,
+        highestSlotLevel: 2,
+        mode: "prepared",
+        limits: { cantripsKnown: 0, prepared: 6 },
+        spells: [
+          {
+            list: "class",
+            spell: {
+              id: spellId,
+              campaignId: null,
+              accountId: null,
+              derivedFrom: null,
+              name: "Shield",
+              level: 1,
+              schoolIndex: "enchantment",
+              schoolName: "Enchantment",
+              ritual: false,
+              concentration: true,
+              castingTime: "1 action",
+              range: "30 feet",
+              duration: "Up to 1 minute",
+              classIndexes: ["paladin"],
+              classNames: ["Paladin"],
+              subclassIndexes: [],
+              subclassNames: [],
+              spell: {
+                desc: ["An invisible barrier of magical force appears and protects you."],
+                components: ["V", "S", "M"],
+                school: { index: "enchantment", name: "Enchantment" },
+                classes: [{ index: "paladin", name: "Paladin" }],
+                subclasses: [],
+              },
+              visibility: "shared",
+              origin: "system",
+              assistantTurnId: null,
+              createdAt: "2026-07-01T10:00:00.000Z",
+              updatedAt: "2026-07-01T10:00:00.000Z",
+            },
+          },
+        ],
+      },
+    });
+
+    await renderSheet();
+    await userEvent.click(await screen.findByRole("button", { name: "Edit spells" }));
+    await screen.findByRole("dialog", { name: "Choose spells" });
+    expect(screen.getByRole("checkbox", { name: /Prepare Shield/ })).toBeTruthy();
+    await userEvent.click(screen.getByRole("checkbox", { name: /Prepare Shield/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save spells" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const body = sent() as {
+      readonly sheet?: {
+        readonly spellcasting?: { readonly known?: Array<Record<string, unknown>> };
+        readonly actions?: Array<Record<string, unknown>>;
+      };
+    };
+    expect(body.sheet?.spellcasting?.known).toEqual([
+      expect.objectContaining({ name: "Shield", spellId, prepared: true }),
+    ]);
+    expect(body.sheet?.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Shield", spellId, source: "spell", resource: "slot:1" }),
+      ]),
+    );
+    carriesNothingRefused();
+  });
+});
+
 describe("adding gear", () => {
   const openGear = async () => {
     await section("Gear & coin");
@@ -748,9 +826,10 @@ describe("what a player still cannot reach", () => {
    * DM's party strip and party screen both draw it — a different account, in a
    * different browser, on a screen this dialog has never heard of. Naming the
    * *resource* is what reaches it, so what is asserted is that the resource is
-   * named: `reads.myCharacters` is this screen's own, and `reads.party` is one
-   * per table the character is seated at — plural since the continuity
-   * decision let one shared character sit at several.
+   * named: `reads.myCharacters` is this screen's own, `reads.characterSpells`
+   * is the picker vocabulary that depends on the same level/class pair, and
+   * `reads.party` is one per table the character is seated at — plural since
+   * the continuity decision let one shared character sit at several.
    *
    * It is a unit assertion because the two halves are two accounts and cannot
    * be on screen at once. The mechanism the name relies on is pinned in
@@ -767,7 +846,12 @@ describe("what a player still cannot reach", () => {
           { campaignId: otherTable, joinedAt: "2026-07-02T10:00:00.000Z" },
         ],
       } as unknown as OwnedCharacter),
-    ).toEqual([reads.myCharacters, reads.party(table), reads.party(otherTable)]);
+    ).toEqual([
+      reads.myCharacters,
+      reads.characterSpells(brannocId),
+      reads.party(table),
+      reads.party(otherTable),
+    ]);
   });
 
   it("offers nothing to edit on a character that is not yours", async () => {
