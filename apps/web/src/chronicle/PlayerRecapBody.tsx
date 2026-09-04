@@ -44,12 +44,14 @@ import { Facet, RecapDocument } from "./recapParts";
  * reports a night rather than offering to act on it.
  */
 const BAND: Record<
-  "healthy" | "bloodied" | "down",
+  "unhurt" | "hurt" | "bloodied" | "down" | "unknown",
   { readonly label: string; readonly icon: IconName; readonly tone: string }
 > = {
-  healthy: { label: "Healthy", icon: "heart-pulse", tone: "text-muted-foreground" },
+  unhurt: { label: "Unhurt", icon: "heart-pulse", tone: "text-muted-foreground" },
+  hurt: { label: "Hurt", icon: "heart-pulse", tone: "text-muted-foreground" },
   bloodied: { label: "Bloodied", icon: "droplet", tone: "text-danger-ink" },
   down: { label: "Down", icon: "skull", tone: "text-crimson-200" },
+  unknown: { label: "Unknown", icon: "help-circle", tone: "text-faint" },
 };
 
 function Vitals({ combatant }: { readonly combatant: PlayerCombatant }) {

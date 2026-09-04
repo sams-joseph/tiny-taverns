@@ -476,10 +476,10 @@ Two smaller things the follow-on work will need:
   and it cost no migration**: every one of those is an optional key on `body`, and the rule that
   decided so is unchanged. See "What the character sheet reads, and where each part of it lives",
   which is also where the drawn things the data cannot supply are listed.
-- **`PlayerTable.jsx` is the player projection of a fight**, which the server has never built —
-  its own header comment states the contract (no monster hit points, no initiative editing, only
-  what the DM shares plus your own turn). That is the projection the `DmActor` gate exists to
-  make possible; see "The actor and visibility contract".
+- **`PlayerTable.jsx` is the player projection of a fight**, and it is built now at
+  `#/campaigns/:c/table`: no monster AC or exact HP, no initiative editing, contentless ticks,
+  and only the browser-submitted rolls of this account's own seated character. See "The live
+  table" below.
 
 **`packages/ui`'s icon table grew by sixteen and that is again the only change outside the
 vendored tree** — `arrow-big-up-dash`, `backpack`, `copy`, `corner-down-right`, `crown`,
@@ -5080,10 +5080,9 @@ sideways at 1440 or 900. Clerk was unconfigured throughout, which is the support
 ### The live table: what a player may know about a fight in progress
 
 `GET /campaigns/:campaignId/table` → `PlayerLiveTable | null` (`packages/api/src/PlayerLive.ts`,
-`apps/server/src/repo/PlayerTable.ts`, group `table`). The read behind the character sheet's live
-banner — _"The Salt Road is playing right now · session 12 · round 3 · it's your turn"_ — and the
-_Go to the table_ action beside it. Both had been drawn since the fourth delivery with nothing
-behind either.
+`apps/server/src/repo/PlayerTable.ts`, group `table`), with the shipped screen at
+`#/campaigns/:c/table` (`apps/web/src/play/PlayerTableScreen.tsx`). It is the read behind both the
+character-sheet live banner and the live table itself.
 
 **It is the second instance of the distinct-schema-on-a-distinct-path rule**, after
 `PlayerSessionRecap`, and the rule is the same captain's decision of 2026-08-12: never a field
@@ -5094,41 +5093,48 @@ happening.
 **What it carries, and the test each field passed** — the brief's: _a player must not learn from
 this anything they could not learn sitting at the table_.
 
-| field                                     | why it is safe to say                                   |
-| ----------------------------------------- | ------------------------------------------------------- |
-| `campaignId`, `sessionId`                 | join keys for rows the caller already reaches           |
-| `sessionNumber`                           | the DM opened the night, for the people at it           |
-| `fight.id`, `fight.round`                 | the round is read out every time it turns over          |
-| `fight.upNext.{combatantId,displayName}`  | the name the DM is saying out loud                      |
-| `fight.seats[].{characterId,combatantId}` | **your own** characters in the fight, and nobody else's |
+| field                                                                   | why it is safe to say                                           |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `campaignId`, `sessionId`                                               | join keys for rows the caller already reaches                   |
+| `sessionNumber`                                                         | the DM opened the night, for the people at it                   |
+| `fight.id`, `fight.encounterId`, `fight.round`                          | the route/attachment keys and the round being read out          |
+| `fight.upNext.{combatantId,displayName}`                                | the shared row whose turn marker the DM is saying out loud      |
+| `fight.seats[].{characterId,campaignCharacterId,combatantId}`           | **your own active seats** in the fight, and nobody else's seats |
+| `fight.order[]` as `you                                                 | ally                                                            | npc` | the shared initiative order, already narrowed by the distinct schema |
+| `you.hpCurrent/hpMax/tempHp`; `npc.hpBand`; `ally` with **no HP total** | exact numbers for your own character only; NPCs get bands       |
 
 **What it deliberately leaves out**, each an absence rather than a nullable field:
 
-- exact hit points of anything, `hpMax`, `hpBand`, armour class, conditions, initiative;
+- NPC/monster armour class and exact hit-point totals;
+- ally hit-point totals, temp HP and max HP;
 - **the encounter's name.** `PlayerRecapFight.run` carries it for a night that is _over_, where the
   party lived through it. A fight _on the table_ is different: _"Ambush in the reeds"_ may be
-  something the DM has not said yet, and the banner does not ask for it;
-- **the rest of the initiative order.** That is the player fight view's decision to take
-  deliberately — a banner must not settle it by accident, which is the trap `Recap.read` was left
-  open for.
+  something the DM has not said yet, so the player table uses only `encounterId` for attachments;
+- any player write from the prototype beyond rolls — no Take 5, Heal 5, End my turn or initiative
+  mutation.
 
 **`null` is the ordinary success and the common case**, not a 404. The 404 is kept for the campaign
 being unreachable — a non-member, a revoked member, a mis-scoped credential — because a banner's
 absence must not be indistinguishable from a table that is not yours. Everything narrower is an
 absence: _"there is a session but you may not see it"_ is itself the disclosure.
 
+**Seat proof is first, and it is `campaign_character`, not `combatant.character_id`.** A member
+with no active seat gets `null`, a creator with no seat gets `null`, and a bad historical combatant
+pointing at an owned-but-unseated character is ignored. Another player's PC appears only through a
+shared active seat; your own seat may be private and still prove you are at the table.
+
 **Four queries, five shipped predicates, and no new rule.** `ensureCampaignReadable`, `rowReadable`,
-`nestedRowReadable`, `containedRowReadable` and `ownRowReadable`, each used exactly as its existing
-callers use it. The columns a player may not have are **not selected** — the discipline
-`repo/playerCombatant.ts` states — so the file never names `ac`, `hp_current` or `hp_max` at all.
+`nestedRowReadable`, `containedRowReadable` and the seat/owned predicates, each used exactly as its
+existing callers use it. The columns a player may not have are **not selected** — the discipline
+`repo/playerCombatant.ts` states — so the player table never selects NPC `ac` or exact NPC HP.
 Every layer of the seam then takes exactly one thing away and leaves the rest, and all three are
 fail-closed:
 
-| the DM's switch                   | what the player gets                            |
-| --------------------------------- | ----------------------------------------------- |
-| `session.visibility = 'dm'`       | `null` — no banner at all                       |
-| `encounter_run.visibility = 'dm'` | the night, and `fight: null`                    |
-| `combatant.visibility = 'dm'`     | the round; `upNext` null, and that seat dropped |
+| the DM's switch                   | what the player gets                                                  |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `session.visibility = 'dm'`       | `null` — no banner at all                                             |
+| `encounter_run.visibility = 'dm'` | the night, and `fight: null`                                          |
+| `combatant.visibility = 'dm'`     | the round; `upNext` null if it named that row, and the row is dropped |
 
 So **a DM who never shares a night has a player who never sees a banner** — the master toggle
 working, and the same answer the player Chronicle gives. The combatant rule applies to a player's
@@ -5150,16 +5156,27 @@ Three more things that are decisions rather than details:
 - **The campaign's _name_ is not on it.** `GET /me/campaigns` is the read that names campaigns —
   the rule `Character` already follows from the other side.
 
+**The stream is a contentless player doorbell.**
+`GET /campaigns/:c/table/sessions/:s/events` authorizes the same active-seat/current-shared-session
+context, then emits `tick` events with a cursor and no payload. `LiveEvents.SessionTouched` still
+carries only `sessionId`; the handler drains shared `session_event.seq`s and also emits an empty
+same-cursor tick when a share/hide mutation wrote no shared row, so the browser always re-reads the
+narrow table instead of interpreting event payloads. The own-character roll log is the separate
+`GET /campaigns/:c/table/sessions/:s/characters/:characterId/rolls`; there is no broad player log.
+
+**Rolls are browser-submitted and own-seat scoped.** `POST /campaigns/:c/rolls` stores the faces the
+browser sent, stamps `session_event.character_id`, rings the same doorbell, and refuses a player
+roll when there is no active seat or no shared current session. The server never rolls dice and a
+player never sees another character's roll history through the table endpoint.
+
 **Measured over real HTTP** against the real application and a real Postgres, with a DM and a player
-minted through a real invitation: the player's answer carried `round 3` and `"Brannoc Duskharrow"`
-and **no `ac`, `hpCurrent`, `hpMax` or band anywhere**, while the DM's read of the same fight
-returned `Marsh Hag ac 17 hp 41/82`; unsharing the night took the whole answer to `null` while the
-DM still read it; hiding the player's own combatant emptied `seats`; a campaign the credential is
-not a member of answered `404 campaign`; and a campaign on no night answered `null`.
-`apps/server/test/player-table.test.ts` pins all of it, including a **numeric-leaf** assertion —
-every number in the serialised answer, at any depth, must be exactly the session number and the
-round — which is the strongest available form of _"no hit points"_ and the thing to extend rather
-than replace if the schema grows.
+minted through a real invitation: the player's answer carried `round 3`, the shared initiative order
+and `"Brannoc Duskharrow"` as `you`, with the hag as `Bloodied` and **no NPC `ac`, exact NPC HP or
+encounter name anywhere**; unsharing the night took the whole answer to `null` while the DM still
+read it; hiding a seat dropped the ally, hiding a combatant dropped the row; a campaign the
+credential is not a member of answered `404 campaign`; and a campaign on no night answered `null`.
+`apps/server/test/player-table.test.ts`, `rolls.test.ts` and `apps/web/src/play/PlayerTableScreen.test.tsx`
+pin the projection, contentless ticks, own roll log and no-auto-seat boundary.
 
 #### The banner on the sheet, and the way to the table
 
@@ -5186,24 +5203,21 @@ picking the wrong one reads as a working banner. Four states, and the first is b
   (`CharacterSheet.jsx:90`), where this screen's actions already live. Both would be two controls
   with one name and one destination on one screen — the ambiguity the backstory's _Edit_ had to be
   labelled out of.
-- **It is a snapshot, re-read with the screen.** No stream: `live.events` is scoped to one run and
-  what a player may watch of a fight is the player fight view's decision.
+- **It is a snapshot, re-read with the screen.** The live table screen has the stream; the banner
+  itself does not hold one.
 - **`loadCharacterSheet` is two rounds**, because the live read hangs off `/campaigns/:campaignId`
   and which campaign that is arrives in the first — the same cost `campaign/load.ts` pays. A
   `NotFound` from the second **fails the screen** rather than degrading to `null`: the first round
   already answered a character in that campaign, so a refusal means the membership went away
   between them, and that is worth saying rather than hiding behind a banner that stops appearing.
 
-**_Go to the table_ goes to `/play/campaigns/:c`** — the table's own screen, which is the truthful
-destination this build has. **When the player fight view ships it is the one line that changes**
-(`LiveTableBanner`'s sibling in `CharacterSheetScreen.tsx`'s top bar).
-
-Measured in Chromium at 1440/1200/1024/900/760 against a real server and a real Postgres, signed in
-as a real player: all three live states rendered with the right sentence; the action is a real `<a>`
-with `href="/#/play/campaigns/<id>"` whose click landed on the player's campaign screen; the other
-character's quiet table drew neither card nor action; unsharing the night made both disappear on
-reload with the sheet untouched, and re-sharing brought them back; and `document.scrollWidth` equals
-the viewport at every width, with the action hit-testable at 760.
+**_Go to the table_ goes to `/#/campaigns/:c/table`** — the real player live table. Measured in
+Chromium at 1440/1200/1024/900/760 against a real server and a real Postgres, signed in as a real
+player: all three live states rendered with the right sentence; the action is a real button-styled
+link with `href="/#/campaigns/<id>/table"`; the other character's quiet table drew neither card nor
+action; unsharing the night made both disappear on reload with the sheet untouched, and re-sharing
+brought them back; and `document.scrollWidth` equals the viewport at every width, with the action
+hit-testable at 760.
 
 #### The sheet writes, and the one thing about it that is not obvious
 

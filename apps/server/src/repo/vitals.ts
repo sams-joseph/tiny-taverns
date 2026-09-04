@@ -334,11 +334,11 @@ export const characterUpdated = (args: {
   kind: "character-updated",
   encounterRunId: args.live?.runId,
   combatantId: args.live?.combatantId,
-  // `characterId` is in the payload rather than in a column of its own because
-  // nothing filters the log by character — the two id columns exist because the
-  // stream and the recap filter on them, and this is the human-legible
-  // remainder the schema documents.
+  characterId: args.characterId,
+  // Kept in the payload too for the old human-readable log; the player stream
+  // filters on the column and sends only a contentless tick.
   payload: { characterId: args.characterId, ...args.detail },
+  visibility: "shared",
   requestId: args.requestId,
 });
 

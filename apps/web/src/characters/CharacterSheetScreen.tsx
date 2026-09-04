@@ -1744,7 +1744,10 @@ export function CharacterSheetScreen() {
               size="sm"
               nativeButton={false}
               render={
-                <Link to="/campaigns/$campaignId" params={{ campaignId: firstSeat.campaignId }} />
+                <Link
+                  to="/campaigns/$campaignId/table"
+                  params={{ campaignId: firstSeat.campaignId }}
+                />
               }
             >
               <Icon name="swords" size={14} />

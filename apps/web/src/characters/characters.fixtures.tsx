@@ -334,8 +334,10 @@ export const playing = (
     readonly upNext?: { readonly combatantId: string; readonly displayName: string } | null;
     readonly seats?: ReadonlyArray<{
       readonly characterId: string;
+      readonly campaignCharacterId: string;
       readonly combatantId: string;
     }>;
+    readonly order?: ReadonlyArray<Record<string, unknown>>;
     readonly round?: number;
   } | null = {},
 ): [string, Answer] => [
@@ -356,7 +358,29 @@ export const playing = (
                 fight.upNext === undefined
                   ? { combatantId: yourCombatantId, displayName: "Brannoc Duskharrow" }
                   : fight.upNext,
-              seats: fight.seats ?? [{ characterId: brannocId, combatantId: yourCombatantId }],
+              seats: fight.seats ?? [
+                {
+                  characterId: brannocId,
+                  campaignCharacterId: brannocSeatRef.campaignCharacterId,
+                  combatantId: yourCombatantId,
+                },
+              ],
+              encounterId: null,
+              order: fight.order ?? [
+                {
+                  kind: "you",
+                  combatantId: yourCombatantId,
+                  characterId: brannocId,
+                  campaignCharacterId: brannocSeatRef.campaignCharacterId,
+                  displayName: "Brannoc Duskharrow",
+                  subtitle: "Level 5 Half-orc Paladin",
+                  initiative: 16,
+                  hpCurrent: 44,
+                  hpMax: 52,
+                  tempHp: 3,
+                  conditions: ["Blessed"],
+                },
+              ],
             },
     },
   },

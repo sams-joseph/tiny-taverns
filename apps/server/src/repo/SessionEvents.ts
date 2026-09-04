@@ -2,6 +2,7 @@ import {
   type Actor,
   type AssistantTurnId,
   type CampaignId,
+  type CharacterId,
   type CombatantId,
   type EncounterRunId,
   NotFound,
@@ -42,6 +43,7 @@ interface SessionEventRow extends ProvenanceColumns {
   readonly kind: SessionEventKind;
   readonly encounter_run_id: EncounterRunId | null;
   readonly combatant_id: CombatantId | null;
+  readonly character_id: CharacterId | null;
   readonly payload: unknown;
   readonly request_id: string | null;
 }
@@ -67,17 +69,14 @@ export interface AppendEvent {
   readonly kind: SessionEventKind;
   readonly encounterRunId?: EncounterRunId | undefined;
   readonly combatantId?: CombatantId | undefined;
+  readonly characterId?: CharacterId | undefined;
   readonly payload?: Record<string, unknown> | undefined;
   /** Set on the mutations a client may safely repeat. See `session_event_request_id_key`. */
   readonly requestId?: string | undefined;
   /**
-   * Left to the column default (`dm`) by every caller today.
-   *
-   * The consequence is deliberate and worth being explicit about: with no
-   * player credential in existence, a player's stream is empty. Deciding per
-   * kind which events a player may see is a real product decision that belongs
-   * with the player view, and guessing it now would put a visibility rule
-   * somewhere other than the predicate.
+   * Left to the column default (`dm`) unless the mutation has a player-safe
+   * doorbell to ring. The player table stream still returns no payload — it
+   * reads only shared event `seq`s and re-reads its narrow endpoints.
    */
   readonly visibility?: Visibility | undefined;
   /** Assistant-authored log rows name the turn that caused them. */
@@ -105,6 +104,7 @@ export const appendEvent = (
         kind: event.kind,
         encounter_run_id: event.encounterRunId,
         combatant_id: event.combatantId,
+        character_id: event.characterId,
         payload: event.payload === undefined ? undefined : JSON.stringify(event.payload),
         request_id: event.requestId,
         visibility: event.visibility,
@@ -185,12 +185,13 @@ export const sessionRequestAlreadyApplied = (
  * replay path that only executes when something has already gone wrong and
  * therefore only rots when nobody is looking.
  *
- * **All three reads take a `CampaignCreatorActor`.** The log is the DM's own record of a
- * fight — `session_event.visibility` defaults to `dm` and nothing sets it, so
- * "what a player is told about a fight" is an undecided product question rather
- * than a narrower version of this. Note that `pollForRun` is gated too: it is
- * the *streaming* spelling of `listForRun` and a grep for `CurrentActor>`
- * misses it, which would have left the gate on the other two decorative.
+ * **All three reads take a `CampaignCreatorActor`.** The log is still the
+ * creator's own record of a fight, even though some rows are now also shared as
+ * player-table doorbells. A player never receives these payloads through this
+ * repository; their stream reads shared `seq`s only and re-reads a distinct
+ * projection. Note that `pollForRun` is gated too: it is the *streaming*
+ * spelling of `listForRun` and a grep for `CurrentActor>` misses it, which
+ * would have left the gate on the other two decorative.
  */
 export class SessionEvents extends Context.Service<
   SessionEvents,

@@ -493,6 +493,7 @@ export class EncounterRuns extends Context.Service<
                         encounterName: encounter.name,
                         combatants: seeded.length,
                       },
+                      visibility: run.visibility,
                     });
 
                     return toEncounterRun(started[0]!);
@@ -648,6 +649,7 @@ export class EncounterRuns extends Context.Service<
                         round: from.round,
                         combatants: copies.length,
                       },
+                      visibility: run.visibility,
                     });
 
                     return toEncounterRun(resumed[0]!);
@@ -678,13 +680,15 @@ export class EncounterRuns extends Context.Service<
                   if (rows.length === 0) {
                     return yield* new NotFound({ resource: "encounter_run", id });
                   }
+                  const run = toEncounterRun(rows[0]!);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-updated",
                     encounterRunId: id,
                     payload: { ...patch },
+                    visibility: run.visibility,
                   });
-                  return toEncounterRun(rows[0]!);
+                  return run;
                 }),
               )
               .pipe(
@@ -741,6 +745,7 @@ export class EncounterRuns extends Context.Service<
                     where encounter_run.id = ${id}
                     returning *
                   `;
+                  const run = toEncounterRun(rows[0]!);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "turn-advanced",
@@ -748,8 +753,9 @@ export class EncounterRuns extends Context.Service<
                     combatantId: activeCombatantId,
                     payload: { round, wrapped },
                     requestId: payload.requestId,
+                    visibility: run.visibility,
                   });
-                  return toEncounterRun(rows[0]!);
+                  return run;
                 }),
               )
               .pipe(
@@ -804,6 +810,7 @@ export class EncounterRuns extends Context.Service<
                     kind: "run-ended",
                     encounterRunId: id,
                     payload: { round: current.round },
+                    visibility: current.visibility,
                   });
                   return toEncounterRun(rows[0]!);
                 }),

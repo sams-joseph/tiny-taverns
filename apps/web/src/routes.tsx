@@ -23,6 +23,7 @@ import { GroupScreen } from "./group/GroupScreen";
 import { GroupsScreen } from "./group/GroupsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
+import { PlayerTableScreen } from "./play/PlayerTableScreen";
 import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
 import { RunScreen } from "./run/RunScreen";
 import { SpellLibraryScreen } from "./spells/SpellLibraryScreen";
@@ -243,7 +244,7 @@ const campaignSplatRoute = createRoute({
 
 /**
  * The Library: where a monster is authored, and **the first route outside
- * `/play/characters` that names no campaign.**
+ * `/characters` that names no campaign.**
  *
  * That is the model's shape rather than a routing preference. Since
  * `0015_library_creatures.ts` a creature can belong to an **account** and sit in
@@ -344,6 +345,14 @@ const partyRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "party",
   component: PartyScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/** The player-safe view of a live table, reached only when this account has a seat. */
+const playerTableRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "table",
+  component: PlayerTableScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -500,6 +509,7 @@ export const routeTree = rootRoute.addChildren([
     notesRoute,
     chronicleRoute,
     partyRoute,
+    playerTableRoute,
     characterCreateRoute,
     runRoute,
     campaignSplatRoute,

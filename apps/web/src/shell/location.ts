@@ -55,7 +55,8 @@ export type Section =
   | "encounters"
   | "notes"
   | "party"
-  | "chronicle";
+  | "chronicle"
+  | "table";
 
 export function useSection(): Section {
   const matchRoute = useMatchRoute();
@@ -66,6 +67,7 @@ export function useSection(): Section {
   if (matchRoute({ to: "/library", fuzzy: true })) return "library";
   if (matchRoute({ to: "/characters", fuzzy: true })) return "characters";
   if (matchRoute({ to: "/campaigns/$campaignId/chronicle" })) return "chronicle";
+  if (matchRoute({ to: "/campaigns/$campaignId/table" })) return "table";
   if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";

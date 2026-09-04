@@ -10,11 +10,11 @@ import { Session } from "./Session.js";
 /**
  * How hurt something is, to somebody who is not running it.
  *
- * `healthy` above half, `bloodied` at half or below, `down` at zero — the
- * vocabulary the architecture report's §2.2(d) named, and the same three words
- * a table already says out loud. It is deliberately the *whole* answer for a
- * monster: "the hag is bloodied" is what sharing hit-point bars means, and
- * "the hag has 41 of 82" is the thing the product promises to keep to the DM.
+ * `unhurt` at full, `hurt` above half, `bloodied` at half or below,
+ * `down` at zero and `unknown` when a row has no maximum — the vocabulary the
+ * player table uses too. It is deliberately the *whole* answer for a monster:
+ * "the hag is bloodied" is what sharing hit-point bars means, and "the hag has
+ * 41 of 82" is the thing the product promises to keep to the DM.
  *
  * **Derived in SQL, in the same statement that declines to select the numbers**
  * (`repo/playerCombatant.ts`), so a monster's exact hit points are never in a
@@ -22,7 +22,7 @@ import { Session } from "./Session.js";
  * a wide row would be the post-filtering pattern `repo/visibility.ts` exists to
  * prevent, one type further along.
  */
-export const HpBand = Schema.Literals(["healthy", "bloodied", "down"]);
+export const HpBand = Schema.Literals(["unhurt", "hurt", "bloodied", "down", "unknown"]);
 export type HpBand = typeof HpBand.Type;
 
 const shared = {

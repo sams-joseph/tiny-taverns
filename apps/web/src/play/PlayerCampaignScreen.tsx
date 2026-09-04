@@ -9,31 +9,29 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
 
 /**
- * A table you sit at — **the first screen in the product that is not the DM's.**
+ * A table you sit at, in the player projection of one campaign.
  *
- * It exists because the role switch is a mode rather than a filter, and a mode
- * means the two sides may diverge freely: this owes nothing to
- * `CampaignScreen`, is not that screen with rows hidden, and shares no component
- * with it. What it shares is the shell, the load rule and the three states.
+ * Navigation has no global mode now: this screen is chosen by the reader's
+ * relation to the campaign in the URL, and it is not the DM screen with rows
+ * hidden. What it shares is the shell, the load rule and the three states.
  *
  * **Nothing on it can fail for the audience it is for.** Every read behind it is
  * one a player may make (see `load.ts`); there is no tab a player cannot open,
- * no control that would 404, and no *Ask Hob* — the shell drops that in player
- * mode, because asking is a write and the captain settled that players do not.
+ * no control that would 404, and no docked *Ask Hob* panel — a player's Hob
+ * surface is the character-drafting composer, not the DM's session-writing
+ * chat.
  *
- * It is deliberately small. The character sheet, the record and the player's
- * live table are three screens with three steps of their own; drawing a
+ * It is deliberately small. The character sheet, the Chronicle and the live
+ * table are separate screens with their own narrow projections; drawing a
  * placeholder for any of them here would be the stubbed field the screens rule
- * forbids. What a player has today is who is at the table and what the DM chose
- * to share, so that is what this says, and it says so in as many words.
+ * forbids. What this overview has is who the DM shared with the table and what
+ * prose the DM chose to share, so that is what this says.
  *
- * **One control writes, and it is the second door into the create flow.** *New
- * character* goes to `#/campaigns/:c/characters/new` — this screen is
- * already at one table, so unlike the roster's it needs no picker and is a plain
- * link. It is here rather than only on the roster because this is where somebody
- * lands the moment they accept an invitation: `JoinScreen` sends a new player
- * straight to their table, and the first thing they want is to be in the party
- * they are looking at.
+ * **One control writes, and it is only the door into the create flow.** *New
+ * character* goes to `#/campaigns/:c/characters/new` because this screen is
+ * already at one table. Creating the character does **not** seat it here; table
+ * presence is the explicit `campaign_character` row created by the party-join
+ * flow, so this link makes an owned character and nothing more.
  */
 
 /**

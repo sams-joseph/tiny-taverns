@@ -49,7 +49,7 @@ describe("when the table is playing", () => {
     // draws this screen and what keeps two identical controls off it.
     const links = screen.getAllByRole("button", { name: /Go to the table/i });
     expect(links).toHaveLength(1);
-    expect(links[0]?.getAttribute("href")).toBe(`/#/campaigns/${campaignId}`);
+    expect(links[0]?.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/table`);
   });
 
   it("reads the campaign the character is in, and no other", async () => {
@@ -152,7 +152,7 @@ describe("when nothing is running", () => {
     // names no campaign in its route, so this is the only thing that says the
     // join was made from the right row.
     expect(screen.getByText("The Hag's Bargain is playing right now")).toBeTruthy();
-    expect(toTheTable()?.getAttribute("href")).toBe(`/#/campaigns/${otherCampaignId}`);
+    expect(toTheTable()?.getAttribute("href")).toBe(`/#/campaigns/${otherCampaignId}/table`);
   });
 
   it("asks nothing at all for a character that is not this account's", async () => {

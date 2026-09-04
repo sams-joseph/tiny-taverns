@@ -169,6 +169,7 @@ export class Sessions extends Context.Service<
                 kind: "run-carried",
                 encounterRunId: run.id,
                 payload: { round: run.round, encounterName: run.encounter_name },
+                visibility: row.visibility,
               });
               return true;
             });
@@ -258,11 +259,11 @@ export class Sessions extends Context.Service<
                   }),
                 )
                 .pipe(
-                  // The doorbell, after the commit and only when there was a
-                  // fight to take off the table — a runner open in another tab
-                  // learns the night ended under it the same way it learns
-                  // everything else.
-                  Effect.tap(({ carried }) => (carried ? live.touched(id) : Effect.void)),
+                  // The doorbell, after the commit. A carried fight still has
+                  // a log row, but a visibility/title change may not; the
+                  // player table stream is contentless, so the tick simply
+                  // tells the browser to re-read the narrow table.
+                  Effect.tap(() => live.touched(id)),
                   Effect.map(({ session }) => session),
                 ),
             ),

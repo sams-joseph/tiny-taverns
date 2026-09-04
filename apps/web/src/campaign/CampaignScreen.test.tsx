@@ -252,11 +252,11 @@ describe("CampaignScreen", () => {
     // a leak: it is a function of the route and the mode, both known before
     // anything loads, which is what keeps the bar from changing height under a
     // reader mid-load. By now it is the *player's* row — the destination's —
-    // and it offers the two screens a player has.
+    // and it offers the three screens a player has.
     expect(
       within(screen.getByRole("navigation", { name: "This campaign" }))
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Overview", "Chronicle"]);
+    ).toEqual(["Overview", "Table", "Chronicle"]);
   });
 });

@@ -330,11 +330,9 @@ export const servicesOver = <E>(
     // Feats are the final 2014 rules-corpus slice: own table, same
     // Library/campaign-copy predicates as the other copyable corpora.
     Feats.layer,
-    // What is live at one table, to a player — the character sheet's banner.
-    // A view over three tables and a writer of none, so it needs no
-    // `LiveEvents` for the reason `Recap` does not: reading a night's state
-    // does not change it.
-    PlayerTable.layer,
+    // What is live at one table, to a player. Its read writes nothing, but its
+    // stream subscribes to the same contentless doorbell as the DM runner.
+    PlayerTable.layer.pipe(Layer.provide(LiveEvents.layer)),
     PrepItems.layer,
     // The accept path: the only writer of `origin = 'assistant'`. It composes
     // the ordinary create methods, so an accepted row is made by the same

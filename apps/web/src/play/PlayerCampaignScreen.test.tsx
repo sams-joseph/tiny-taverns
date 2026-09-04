@@ -14,13 +14,13 @@ import {
 } from "../campaign/campaign.fixtures";
 
 /**
- * A table you sit at — the first screen in the product that is not the DM's.
+ * A table you sit at, chosen by this account's relation to the campaign.
  *
- * Much of what is under test is what it does *not* do. A mode means the two
- * sides may diverge freely, and the reason this screen exists at all is that
- * the DM's composes `runs.list`, which the `DmActor` gate refuses a player. So
- * the assertions are: which endpoints it reaches (only ones a player may call),
- * and that no DM chrome is on it.
+ * Much of what is under test is what it does *not* do. The player and creator
+ * projections may diverge freely, and the reason this screen exists at all is
+ * that the creator's load composes reads a player may not call. So the
+ * assertions are: which endpoints it reaches (only ones a player may call), and
+ * that no creator chrome is on it.
  *
  * The fixtures are the campaign screen's, for the reason that file gives — they
  * are the JSON the server sends, so a field the contract renames fails here
@@ -60,9 +60,9 @@ describe("a table you sit at", () => {
     // with the continuity decision.
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/party`);
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/notes`);
-    // The DM's load composes these, and the `DmActor` gate refuses a player the
-    // first of them — which is the whole reason this screen is not that screen
-    // narrowed. The other two are screens of their own with steps of their own.
+    // The creator's load composes these, and the creator gate refuses a player
+    // the first of them — which is the whole reason this screen is not that
+    // screen narrowed. The other two are screens of their own.
     expect(pathsCalled().some((path) => path.endsWith("/runs"))).toBe(false);
     expect(pathsCalled().some((path) => path.endsWith("/prep"))).toBe(false);
     expect(pathsCalled().some((path) => path.includes("/recap"))).toBe(false);
@@ -76,9 +76,8 @@ describe("a table you sit at", () => {
     expect(screen.getByText(readAloud.body)).toBeTruthy();
     // Read-only, and structurally so: nothing here renders an editor.
     expect(screen.queryByRole("button", { name: /Edit/ })).toBeNull();
-    // Asking is a write, and the captain settled that players do not talk to
-    // Hob. The shell drops the button in player mode rather than opening a
-    // panel that can only apologise.
+    // A player talks to Hob only from the character-drafting composer. The DM's
+    // docked session-writing panel is not offered on this overview.
     expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();
   });
 
@@ -86,9 +85,8 @@ describe("a table you sit at", () => {
     await renderScreen();
 
     expect(await screen.findByRole("link", { name: /Groups/ })).toBeTruthy();
-    // The bestiary and the party are the DM's — `members.list` is gated and a
-    // player's projection of a roster is nothing at all — and a nav item that
-    // goes nowhere is the same lie as a stubbed field.
+    // Bestiary and the DM party-management screen are not player destinations;
+    // a nav item that goes nowhere is the same lie as a stubbed field.
     expect(screen.queryByRole("link", { name: /Bestiary/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Party/ })).toBeNull();
 

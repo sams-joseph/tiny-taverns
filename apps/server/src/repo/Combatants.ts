@@ -245,7 +245,9 @@ export class Combatants extends Context.Service<
                     kind: "combatant-added",
                     encounterRunId: runId,
                     combatantId: combatant.id,
+                    characterId: combatant.characterId ?? undefined,
                     payload: { displayName: combatant.displayName, kind: combatant.kind },
+                    visibility: combatant.visibility,
                   });
                   return combatant;
                 }),
@@ -283,7 +285,9 @@ export class Combatants extends Context.Service<
                     kind: "combatant-updated",
                     encounterRunId: runId,
                     combatantId: id,
+                    characterId: combatant.characterId ?? undefined,
                     payload: { ...patch },
+                    visibility: combatant.visibility,
                   });
                   // Only what the patch actually named. A PATCH that renamed a
                   // combatant must not write the fight's hit points back over a
@@ -344,12 +348,14 @@ export class Combatants extends Context.Service<
                     kind: "combatant-damaged",
                     encounterRunId: runId,
                     combatantId: id,
+                    characterId: combatant.characterId ?? undefined,
                     payload: {
                       amount: payload.amount,
                       hpCurrent: combatant.hpCurrent,
                       hpMax: combatant.hpMax,
                     },
                     requestId: payload.requestId,
+                    visibility: combatant.visibility,
                   });
                   yield* writeThrough(campaignId, actor, combatant, {
                     hpCurrent: combatant.hpCurrent,
@@ -407,13 +413,19 @@ export class Combatants extends Context.Service<
                     `;
                   }
 
-                  const rows = yield* sql<{ readonly id: CombatantId }>`
+                  const rows = yield* sql<{
+                    readonly id: CombatantId;
+                    readonly character_id: CharacterId | null;
+                    readonly visibility: "dm" | "shared";
+                  }>`
                     delete from combatant
                     where combatant.id = ${id}
                       and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    returning combatant.id
+                    returning combatant.id, combatant.character_id, combatant.visibility
                   `;
-                  if (rows.length === 0) return yield* new NotFound({ resource: "combatant", id });
+                  const removed = rows[0];
+                  if (removed === undefined)
+                    return yield* new NotFound({ resource: "combatant", id });
                   // `combatant_id` on the log is `on delete set null`, so this
                   // event is written *after* the delete and deliberately keeps
                   // the name in its payload: the log has to still say who left.
@@ -421,7 +433,9 @@ export class Combatants extends Context.Service<
                     sessionId,
                     kind: "combatant-removed",
                     encounterRunId: runId,
+                    characterId: removed.character_id ?? undefined,
                     payload: { combatantId: id },
+                    visibility: removed.visibility,
                   });
                 }),
               )

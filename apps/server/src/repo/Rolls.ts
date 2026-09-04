@@ -19,7 +19,12 @@ import { SqlClient, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
-import { campaignReadable, campaignWritableById, ensureCampaignReadable } from "./visibility.js";
+import {
+  campaignReadable,
+  campaignWritableById,
+  ensureCampaignReadable,
+  rowReadable,
+} from "./visibility.js";
 
 interface RollRow extends ProvenanceColumns {
   readonly id: RollId;
@@ -104,6 +109,12 @@ export class Rolls extends Context.Service<
       sessionId: SessionId,
       rollId: RollId,
     ) => Effect.Effect<Roll, NotFound, CurrentActor>;
+    readonly listForCharacter: (
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      characterId: CharacterId,
+      filter: RollListFilterValues,
+    ) => Effect.Effect<ReadonlyArray<Roll>, NotFound, CurrentActor>;
   }
 >()("Rolls") {
   static readonly layer = Layer.effect(this)(
@@ -189,8 +200,16 @@ export class Rolls extends Context.Service<
                     if (!night.may_dm_roll) {
                       return yield* new NotFound({ resource: "character", id: "dm-roll" });
                     }
-                  } else if (!(yield* canRollCharacter(campaignId, payload.characterId, actor))) {
-                    return yield* new NotFound({ resource: "character", id: payload.characterId });
+                  } else {
+                    if (!night.may_dm_roll && night.session_visibility !== "shared") {
+                      return yield* noOpenNight;
+                    }
+                    if (!(yield* canRollCharacter(campaignId, payload.characterId, actor))) {
+                      return yield* new NotFound({
+                        resource: "character",
+                        id: payload.characterId,
+                      });
+                    }
                   }
 
                   if (payload.requestId !== undefined) {
@@ -242,6 +261,7 @@ export class Rolls extends Context.Service<
                     sessionId: night.session_id,
                     kind: "roll-made",
                     encounterRunId: night.run_id ?? undefined,
+                    characterId: payload.characterId,
                     payload: { rollId: roll.id, total: roll.total },
                     visibility: roll.visibility,
                   });
@@ -267,6 +287,47 @@ export class Rolls extends Context.Service<
                 select ${selectRoll}
                 where character_roll.session_id = ${sessionId}
                   and ${rollReadable(sql, campaignId, actor)}
+                order by character_roll.created_at desc, character_roll.id desc
+                limit ${filter.limit ?? 12}
+              `;
+              return rows.map(toRoll);
+            }),
+          ),
+
+        listForCharacter: (campaignId, sessionId, characterId, filter) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const seats = yield* sql<{ readonly id: string }>`
+                select campaign_character.id
+                from campaign_character
+                where campaign_character.campaign_id = ${campaignId}
+                  and campaign_character.character_id = ${characterId}
+                  and campaign_character.account_id = ${actor.accountId}
+                  and campaign_character.left_at is null
+                limit 1
+              `;
+              if (seats.length === 0) {
+                return yield* new NotFound({ resource: "character", id: characterId });
+              }
+              const sessions = yield* sql<{ readonly id: SessionId }>`
+                select session.id from session
+                join campaign on campaign.current_session_id = session.id
+                where campaign.id = ${campaignId}
+                  and session.id = ${sessionId}
+                  and ${rowReadable(sql, "session", campaignId, actor)}
+                limit 1
+              `;
+              if (sessions.length === 0) {
+                return yield* new NotFound({ resource: "session", id: sessionId });
+              }
+              const rows = yield* sql<RollRow>`
+                select ${selectRoll}
+                where character_roll.campaign_id = ${campaignId}
+                  and character_roll.session_id = ${sessionId}
+                  and character_roll.character_id = ${characterId}
+                  and character_roll.account_id = ${actor.accountId}
                 order by character_roll.created_at desc, character_roll.id desc
                 limit ${filter.limit ?? 12}
               `;

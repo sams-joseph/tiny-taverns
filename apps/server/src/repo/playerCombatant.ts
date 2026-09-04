@@ -55,12 +55,10 @@ export interface PlayerCombatantRow {
 /**
  * The select list, banded in SQL.
  *
- * `down` at zero, `bloodied` at half or below, `healthy` above it — integer
- * arithmetic (`hp_current * 2 <= hp_max`) rather than a division, so there is
- * no rounding rule to get wrong and a creature at exactly half is bloodied,
- * which is what the word has always meant at a table. A combatant with
- * `hp_max = 0` reads `down`, which is the honest answer for a row nobody gave
- * hit points to.
+ * `down` at zero, `bloodied` at half or below, `hurt` above half, `unhurt` at
+ * full, and `unknown` when the row has no maximum — integer arithmetic
+ * (`hp_current * 2 <= hp_max`) rather than a division, so there is no rounding
+ * rule to get wrong and a creature at exactly half is bloodied.
  */
 export const playerCombatantColumns = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
   combatant.id, combatant.encounter_run_id, combatant.display_name,
@@ -70,9 +68,11 @@ export const playerCombatantColumns = (sql: SqlClient.SqlClient): Statement.Frag
   case when combatant.kind = 'pc' then combatant.hp_max end as hp_max,
   case
     when combatant.kind = 'pc' then null
+    when combatant.hp_max <= 0 then 'unknown'
     when combatant.hp_current <= 0 then 'down'
+    when combatant.hp_current >= combatant.hp_max then 'unhurt'
     when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
-    else 'healthy'
+    else 'hurt'
   end as hp_band
 `;
 
@@ -95,5 +95,5 @@ export const toPlayerCombatant = (row: PlayerCombatantRow): PlayerCombatant => {
   };
   return row.kind === "pc"
     ? { kind: "pc" as const, ...shared, hpCurrent: row.hp_current ?? 0, hpMax: row.hp_max ?? 0 }
-    : { kind: "npc" as const, ...shared, hpBand: row.hp_band ?? "down" };
+    : { kind: "npc" as const, ...shared, hpBand: row.hp_band ?? "unknown" };
 };

@@ -1323,8 +1323,8 @@ export const renderNotes = async (hosted: HostedSession = noSession): Promise<vo
  * The list of campaigns — the way in, and where a campaign is shelved and
  * brought back.
  *
- * `"/play"` is the same screen answering the other question, which is what a
- * test of the player side renders.
+ * Group home is the only campaign directory now; campaign relation is derived
+ * per campaign instead of by a second `/play` route.
  */
 export const renderCampaigns = async (
   path: "/groups" | "/" = "/groups",

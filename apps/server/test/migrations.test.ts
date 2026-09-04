@@ -247,6 +247,7 @@ describe("migrations", () => {
       { migration_id: 33, name: "character_resource_requests" },
       { migration_id: 34, name: "rolls" },
       { migration_id: 35, name: "hob_direct_resource_writes" },
+      { migration_id: 36, name: "session_event_character" },
     ]);
   }, 60_000);
 
@@ -291,6 +292,7 @@ describe("migrations", () => {
       { migration_id: 33, name: "character_resource_requests" },
       { migration_id: 34, name: "rolls" },
       { migration_id: 35, name: "hob_direct_resource_writes" },
+      { migration_id: 36, name: "session_event_character" },
     ]);
   }, 60_000);
 });

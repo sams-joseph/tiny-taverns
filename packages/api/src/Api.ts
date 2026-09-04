@@ -124,7 +124,7 @@ import {
 import { CampaignMember, CampaignMemberAdd, CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
 import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
-import { PlayerLiveTable } from "./PlayerLive.js";
+import { PlayerLiveEvent, PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
 import { SessionRecap } from "./Recap.js";
@@ -1526,10 +1526,10 @@ class RecapGroup extends HttpApiGroup.make("recap")
  * `MyCharacters.jsx` from the fourth delivery onwards with nothing behind
  * either; this is what they read.
  *
- * **Its own group with one endpoint, for the reason `recap` is its own group**:
- * it is not a session and it is not a run. It answers *"is anything happening,
- * and what"* across three tables at once, and a client asking it is asking a
- * question neither row can answer alone.
+ * **Its own group, for the reason `recap` is its own group**: it is not a
+ * session and it is not a run. The table read answers *"is anything happening,
+ * and what"* across three tables at once, the events endpoint is a contentless
+ * player doorbell, and the rolls endpoint is the own-character log.
  *
  * **`null` is the ordinary success, not a failure.** Most of the time nobody is
  * playing, and a 404 for the common case would make the banner's absence
@@ -1554,6 +1554,18 @@ class PlayerTableGroup extends HttpApiGroup.make("table")
     HttpApiEndpoint.get("read", "/table", {
       params: { campaignId: CampaignId },
       success: Schema.NullOr(PlayerLiveTable),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("events", "/table/sessions/:sessionId/events", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      query: SessionLogFilter,
+      success: HttpApiSchema.StreamSse({ events: PlayerLiveEvent }),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("rolls", "/table/sessions/:sessionId/characters/:characterId/rolls", {
+      params: { campaignId: CampaignId, sessionId: SessionId, characterId: CharacterId },
+      query: RollListFilter,
+      success: Schema.Array(Roll),
       error: NotFound,
     }),
   )

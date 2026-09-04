@@ -84,8 +84,12 @@ describe("rolls", () => {
           rolls.create(f.campaign.id, payload(f.character.id, "swing-1")),
         );
         const listed = yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, { limit: 10 }));
+        const ownLog = yield* as(
+          f.player,
+          rolls.listForCharacter(f.campaign.id, f.sessionId, f.character.id, { limit: 10 }),
+        );
         const log = yield* events.list(dm, f.sessionId, { since: 0, limit: 10 });
-        return { first, repeat, listed, log };
+        return { first, repeat, listed, ownLog, log };
       }),
     );
 
@@ -95,6 +99,7 @@ describe("rolls", () => {
     expect(seen.first.accountName).toBe("Brannoc");
     expect(seen.first.characterName).toBe("Brannoc");
     expect(seen.first.visibility).toBe("shared");
+    expect(seen.ownLog.map((roll) => roll.id)).toEqual([seen.first.id]);
     expect(seen.log.map((event) => event.kind)).toEqual(["roll-made"]);
   });
 
@@ -116,8 +121,8 @@ describe("rolls", () => {
     expect(seen.roll.encounterRunId).toBe(seen.run.id);
   });
 
-  it("lets the roller and DM read a private-session roll, but not another player", async () => {
-    const seen = await runtime.runPromise(
+  it("refuses a player's table roll when the night is not shared", async () => {
+    const refused = await runtime.runPromise(
       Effect.gen(function* () {
         const campaigns = yield* Campaigns;
         const sessions = yield* Sessions;
@@ -125,25 +130,17 @@ describe("rolls", () => {
         const dm = yield* anAccount("Hob");
         const campaign = yield* aCampaignBy(dm, { name: "The Private Road", visibility: "shared" });
         const player = yield* aPlayerAt(campaign.id, "Mara");
-        const other = yield* aPlayerAt(campaign.id, "Pim");
         const { character } = yield* aCharacterAt(campaign.id, player, { name: "Mara" });
         const session = yield* as(
           dm,
           sessions.create(campaign.id, { number: 1, visibility: "dm" }),
         );
         yield* as(dm, campaigns.update(campaign.id, { currentSessionId: session.id }));
-        const roll = yield* as(player, rolls.create(campaign.id, payload(character.id)));
-        const mine = yield* as(player, rolls.list(campaign.id, session.id, { limit: 10 }));
-        const theirs = yield* as(other, rolls.list(campaign.id, session.id, { limit: 10 }));
-        const dmList = yield* as(dm, rolls.list(campaign.id, session.id, { limit: 10 }));
-        return { roll, mine, theirs, dmList };
+        return yield* as(player, Effect.flip(rolls.create(campaign.id, payload(character.id))));
       }),
     );
 
-    expect(seen.roll.visibility).toBe("dm");
-    expect(seen.mine.map((roll) => roll.id)).toEqual([seen.roll.id]);
-    expect(seen.dmList.map((roll) => roll.id)).toEqual([seen.roll.id]);
-    expect(seen.theirs).toEqual([]);
+    expect(refused).toBeInstanceOf(Conflict);
   });
 
   it("refuses no-open-night and somebody else's character", async () => {

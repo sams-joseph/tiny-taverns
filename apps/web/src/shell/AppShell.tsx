@@ -32,11 +32,10 @@ import { useCampaignId, useCampaignRelation, useSection, type Section } from "./
  *
  * **The campaign's name is the way home**, so the second row's title is a link
  * to the campaign index with the delivery's back-chevron beside it. The shell
- * builds that link itself from the route — it knows the id and the mode — and
- * takes only the name, which is data no router can supply. That replaced a
- * `NavContext` every campaign screen passed a hand-built `link` to: seven call
- * sites, seven chances to point the way home at the wrong route, and the player
- * screens had to remember to point at `/play/…`.
+ * builds that link itself from the route — it knows the id — and takes only the
+ * name, which is data no router can supply. That replaced a `NavContext` every
+ * campaign screen passed a hand-built `link` to: seven call sites, seven
+ * chances to point the way home at the wrong route.
  *
  * **The 260px rail is gone, and the width it took is still the point.** The
  * second delivery replaced it with one 56px row and gave the content the 260px
@@ -106,11 +105,12 @@ const globalNav: ReadonlyArray<NavItem> = [
  * account is at it** rather than from a global mode.
  *
  * The creator gets the full row — every campaign-scoped screen that exists.
- * A player gets the two screens whose player projections exist: the campaign's
- * Overview (the participant projection the same URL renders them) and the
- * Chronicle (whose screen reads `recap.readAsPlayer` for them). *Party* and
- * *Encounters* stay off the player's row because their reads are behind the
- * creator gate or answer creator-only content — a control that exists and then
+ * A player gets the three screens whose player projections exist: the campaign's
+ * Overview (the participant projection the same URL renders them), Table (the
+ * narrow live-fight projection), and Chronicle (whose screen reads
+ * `recap.readAsPlayer` for them). *Party* and *Encounters* stay off the
+ * player's row because their reads are behind the creator gate or answer
+ * creator-only content — a control that exists and then
  * errors is worse than one that is absent. The corpora are on nobody's row:
  * since the instancing decision of 2026-09-02 a campaign has no corpus screens
  * at all — the Library is where creatures, rules, spells, equipment, magic
@@ -132,6 +132,11 @@ const campaignNavFor = (
         label: "Overview",
         link: { to: "/campaigns/$campaignId", params: { campaignId } },
         section: "overview",
+      },
+      {
+        label: "Table",
+        link: { to: "/campaigns/$campaignId/table", params: { campaignId } },
+        section: "table",
       },
       {
         label: "Chronicle",
@@ -189,9 +194,9 @@ const navLinkProps = (active: boolean) =>
   ({
     // **`Link` marks itself active on a prefix by default, and this bar's
     // question is not that one.** `item.section` answers the broader one above;
-    // `Link` would additionally light *Tables* while a sheet is open, because
-    // `/play` is a prefix of the URL, and *Overview* on every screen inside a
-    // campaign, because the campaign index is a prefix of all of them. `exact`
+    // `Link` would additionally light *Characters* while a sheet is open, because
+    // `/characters` is a prefix of the URL, and *Overview* on every screen inside
+    // a campaign, because the campaign index is a prefix of all of them. `exact`
     // narrows its notion of active to "this is the page", which is always a case
     // `item.section` also calls active, so the two agree instead of fighting.
     // That matters because `Link` spreads its own `aria-current="page"` **after**
@@ -442,10 +447,9 @@ function TopNav({
  * the name is the way back to prep.
  *
  * **The shell builds the link, and the screen supplies only the name.** Where it
- * goes is a fact about the route — the id is in the URL and the mode decides
- * which of the two campaign screens is home — so there is nothing for a screen
- * to get wrong. It replaced a `link` prop that seven screens each passed by
- * hand, four of which had to remember the `/play/…` prefix.
+ * goes is a fact about the route — the id is in the URL — so there is nothing
+ * for a screen to get wrong. It replaced a `link` prop that seven screens each
+ * passed by hand.
  *
  * The name is data no router can supply, so it is a prop; while it is still
  * loading the chevron is drawn on its own rather than under a placeholder, which

@@ -1,10 +1,14 @@
 import {
+  type Actor,
   type CampaignId,
-  type CurrentActor,
+  CurrentActor,
   Heartbeat,
   type LiveEvent,
   type NotFound,
+  PlayerLiveHeartbeat,
+  type PlayerLiveEvent,
   type SessionEvent,
+  type SessionId,
   TavernsApi,
 } from "@taverns/api";
 import { Duration, Effect, Layer, Result, Schedule, Stream } from "effect";
@@ -599,7 +603,80 @@ const PlayerTableLive = HttpApiBuilder.group(
   "table",
   Effect.fnUntraced(function* (handlers) {
     const table = yield* PlayerTable;
-    return handlers.handle("read", ({ params }) => table.read(params.campaignId));
+    const rolls = yield* Rolls;
+    const live = yield* LiveEvents;
+    const heartbeat = Duration.seconds(yield* Effect.orDie(liveHeartbeatSeconds));
+
+    const tickStream = (
+      actor: Actor,
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      resume: number,
+    ) => {
+      let cursor = resume;
+      const pull = Effect.gen(function* () {
+        const drained: Array<number> = [];
+        for (;;) {
+          const page = yield* table.ticks(actor, campaignId, sessionId, cursor, PAGE);
+          if (page.length === 0) break;
+          cursor = page[page.length - 1]!;
+          drained.push(...page);
+          if (page.length < PAGE) break;
+        }
+        return drained;
+      });
+      const ticksFor = (rows: ReadonlyArray<number>): ReadonlyArray<PlayerLiveEvent> =>
+        rows.map((seq): PlayerLiveEvent => ({
+          id: String(seq),
+          event: "tick",
+          data: { tick: "session" },
+        }));
+      const asEvents = Stream.flatMap((rows: ReadonlyArray<number>) =>
+        Stream.fromIterable(ticksFor(rows)),
+      );
+      const body = Stream.concat(
+        Stream.fromEffect(Effect.orDie(pull)).pipe(asEvents),
+        live.subscribe(sessionId).pipe(
+          Stream.mapEffect(() => Effect.orDie(pull)),
+          Stream.flatMap((rows) =>
+            Stream.fromIterable(
+              rows.length === 0
+                ? [
+                    {
+                      id: String(cursor),
+                      event: "tick",
+                      data: { tick: "session" },
+                    } satisfies PlayerLiveEvent,
+                  ]
+                : ticksFor(rows),
+            ),
+          ),
+        ),
+      );
+      const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
+        Stream.map((): PlayerLiveEvent => ({
+          id: undefined,
+          event: "heartbeat",
+          data: new PlayerLiveHeartbeat({ seq: cursor }),
+        })),
+      );
+      return Stream.merge(body, heartbeats);
+    };
+
+    return handlers
+      .handle("read", ({ params }) => table.read(params.campaignId))
+      .handle("rolls", ({ params, query }) =>
+        rolls.listForCharacter(params.campaignId, params.sessionId, params.characterId, query),
+      )
+      .handle("events", ({ params, query, request }) =>
+        Effect.gen(function* () {
+          const actor = yield* CurrentActor;
+          const resume = query.since ?? Number(request.headers["last-event-id"] ?? Number.NaN);
+          const cursor = Number.isSafeInteger(resume) && resume >= 0 ? resume : 0;
+          yield* table.ticks(actor, params.campaignId, params.sessionId, cursor, 1);
+          return tickStream(actor, params.campaignId, params.sessionId, cursor);
+        }),
+      );
   }),
 );
 

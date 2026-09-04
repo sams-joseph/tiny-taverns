@@ -174,6 +174,9 @@ export const reads = {
   /** Browser-rolled dice filed under this night, newest first for the DM's tray. */
   rolls: (sessionId: SessionId): ReadKey => key`rolls:${sessionId}`,
 
+  /** The player-safe live table and this account's own live-table roll log. */
+  playerTable: (campaignId: CampaignId): ReadKey => key`player-table:${campaignId}`,
+
   // --------------------------------------------------------------- an account
 
   /**

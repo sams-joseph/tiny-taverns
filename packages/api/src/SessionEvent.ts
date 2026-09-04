@@ -108,24 +108,21 @@ export class SessionEvent extends Schema.Class<SessionEvent>("SessionEvent")({
   /**
    * The details, shaped by `kind`.
    *
-   * Deliberately untyped on the wire. The two ids a consumer actually filters
-   * on are columns above, and the state a consumer actually renders is read
-   * from the state tables — so this is the human-legible remainder ("12
-   * damage", "round 4"), not a contract anything branches on. Typing it as a
-   * tagged union of eight payload shapes would be a second declaration of the
-   * live surface to keep in step with the first, bought for a consumer that
-   * does not exist yet.
+   * Deliberately untyped on the wire. Filterable context lives in columns
+   * (`encounter_run_id`, `combatant_id`, and now `character_id` in the database),
+   * and the state a consumer actually renders is read from the state tables —
+   * so this is the human-legible remainder ("12 damage", "round 4"), not a
+   * contract anything branches on. Typing it as a tagged union of eight payload
+   * shapes would be a second declaration of the live surface to keep in step
+   * with the first, bought for a consumer that does not exist yet.
    */
   payload: Schema.Unknown,
   /**
    * Dm-only by default, like every other row in the product.
    *
-   * The consequence is worth stating plainly: with no player credential in
-   * existence, a player's event stream is empty. That is the fail-closed
-   * answer, and the alternative — inferring shareability per kind — is a
-   * visibility rule written somewhere other than the predicate, which is the
-   * thing `AGENTS.md` forbids. When the player view ships, someone decides
-   * per kind, in one place, on purpose.
+   * Some live mutations now set this to `shared`, but the player endpoint still
+   * never returns a `SessionEvent` payload. It reads the shared `seq`s as a
+   * contentless doorbell and re-reads its own narrow projection.
    */
   visibility: Visibility,
   ...provenanceFields,

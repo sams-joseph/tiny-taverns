@@ -650,10 +650,10 @@ describe("the scope, counted", () => {
     // that the caller runs a campaign would answer the wrong question. Hob's
     // draft spell rules add two more: the persisted owner picker and the
     // pre-accept proposal grammar share a campaign-readable spellbook answer,
-    // and neither has a DM projection to prove. Rolls add three more: create,
-    // list and findById answer a session's player-safe dice tray, not a DM
-    // projection of the runner.
-    expect(ungated).toBe(130);
+    // and neither has a DM projection to prove. Rolls add four more: create,
+    // list, findById and the own-character log answer a session's player-safe
+    // dice tray, not a DM projection of the runner.
+    expect(ungated).toBe(131);
   });
 });
 

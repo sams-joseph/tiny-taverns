@@ -1,11 +1,16 @@
 import {
+  type Actor,
+  type CampaignCharacterId,
   type CampaignId,
   type CharacterId,
   type CombatantId,
   CurrentActor,
+  type EncounterId,
   type EncounterRunId,
-  type NotFound,
+  NotFound,
   PlayerLiveTable,
+  type PlayerLiveCombatant,
+  type PlayerLiveHpBand,
   type PlayerLiveSeat,
   type PlayerLiveTurn,
   type SessionId,
@@ -18,91 +23,125 @@ import {
   containedRowReadable,
   ensureCampaignReadable,
   nestedRowReadable,
-  ownCharacter,
   rowReadable,
 } from "./visibility.js";
+
+interface ActiveSeatRow {
+  readonly id: CampaignCharacterId;
+  readonly character_id: CharacterId;
+}
+
+interface LiveCombatantRow {
+  readonly id: CombatantId;
+  readonly character_id: CharacterId | null;
+  readonly campaign_character_id: CampaignCharacterId | null;
+  readonly own_campaign_character_id: CampaignCharacterId | null;
+  readonly display_name: string;
+  readonly subtitle: string | null;
+  readonly player_name: string | null;
+  readonly initiative: number;
+  readonly kind: "pc" | "npc";
+  readonly conditions: ReadonlyArray<string>;
+  readonly hp_current: number;
+  readonly hp_max: number;
+  readonly temp_hp: number;
+  readonly hp_band: PlayerLiveHpBand;
+}
 
 /**
  * What is on one table right now, to somebody sitting at it.
  *
- * The read behind the live banner on the player's character sheet and the
- * *Go to the table* action beside it. `PlayerLiveTable` is the contract and is
- * where the decision about **what a player may be told** is written down; this
- * file is where the decision about **which rows exist to tell them about** is
- * composed, and it composes nothing new.
- *
- * ### Four queries, four shipped predicates, and no new rule
- *
- * `ensureCampaignReadable`, `rowReadable`, `nestedRowReadable`,
- * `containedRowReadable` and `ownCharacter` — every one of them already in
- * `repo/visibility.ts` and every one of them used exactly as its existing
- * callers use it. There is no predicate here, no `.filter` after a read, and
- * nothing that turns a wide row into a narrow one in TypeScript: the columns a
- * player may not have are **not selected**, which is the rule
- * `repo/playerCombatant.ts` states one level down and the reason this file
- * never mentions `ac`, `hp_current` or `hp_max` at all.
- *
- * ### What each layer of the seam does to the answer, and why each is right
- *
- * Narrowing is by *field* in the schema and by *row* here, and the row half is
- * the shipped one working rather than anything this feature decided:
- *
- * - **the campaign** — a non-member, a revoked member, a credential minted for
- *   another table and a campaign the DM has not shared each get the ordinary
- *   `NotFound`. That is `ensureCampaignReadable`, and it is why the endpoint
- *   answers a 404 rather than `null` for them: `null` means *"nothing is
- *   happening at your table"*, and saying that to somebody who has no table
- *   would be a different lie.
- * - **the night** — `session.visibility`. A DM who has not shared tonight has a
- *   player who sees no banner. Fail-closed, and the same answer the player
- *   Chronicle gives to the same campaign.
- * - **the fight** — `encounter_run.visibility`, the runner's own *Share*
- *   switch. Off, and the player is told the night and nothing about the table.
- * - **the row whose turn it is** — `combatant.visibility`, the runner's *Hide
- *   from players*. Hidden, and `upNext` is `null`: the banner says the round
- *   and stops rather than naming a row the DM took off the board.
- *
- * ### The one thing here that is `me`-shaped
- *
- * `seats` is this account's **own** characters in the fight, and the ownership
- * comparison is `ownCharacter`'s rather than one written here. That is the
- * rule `repo/Characters.ts` follows and for the same reason: a repository that
- * spelled `account_id = <the actor>` in its own `WHERE` would be the second
- * place the ownership rule lives, and the day the two disagree the wrong one is
- * the one nobody is reading.
- *
- * ### Why it is a repository read rather than a client composition
- *
- * `AGENTS.md`'s rule is one `Effect` per screen, and a screen composing three
- * reads is the usual answer. It cannot be composed here: two of the three reads
- * this needs — the session a campaign is currently on, and the live run under
- * it — have **no player-reachable endpoint**. `sessions.list` would hand a
- * player every shared night to find one, `runs.list` is behind the `CampaignCreatorActor`
- * gate and answers them nothing, and `campaign.currentSessionId` is on
- * `Campaign`, which `campaigns.findById` answers whole. So the choice was a
- * repository read or three new endpoints, and three would each have had to
- * settle their own projection.
+ * A campaign membership is eligibility. **An active `campaign_character` row is
+ * table presence**, and that is why this endpoint returns `null` to a member
+ * with no seat instead of treating `combatant.character_id` as enough. Every
+ * combatant in the player order is either an NPC row the DM shared or a PC row
+ * that still has an active seat in this campaign.
  */
 export class PlayerTable extends Context.Service<
   PlayerTable,
   {
-    /**
-     * The night this campaign is on and the fight on it, as far as this actor
-     * is entitled to know — or `null`, which is the common answer.
-     *
-     * `NotFound` names the **campaign**, and only the campaign: every narrower
-     * refusal below it is an absence rather than an error, because *"there is a
-     * session but you may not see it"* is a disclosure and *"nothing is
-     * happening"* is what the banner would render either way.
-     */
     readonly read: (
       campaignId: CampaignId,
     ) => Effect.Effect<PlayerLiveTable | null, NotFound, CurrentActor>;
+    /**
+     * Contentless player live ticks. The cursor is `session_event.seq`; the
+     * event payload is deliberately not returned, and clients re-read the
+     * table/log through narrow endpoints.
+     */
+    readonly ticks: (
+      actor: Actor,
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      since: number,
+      limit: number,
+    ) => Effect.Effect<ReadonlyArray<number>, NotFound>;
   }
 >()("PlayerTable") {
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+
+      const activeSeats = (campaignId: CampaignId, actor: Actor) =>
+        sql<ActiveSeatRow>`
+          select campaign_character.id, campaign_character.character_id
+          from campaign_character
+          where campaign_character.campaign_id = ${campaignId}
+            and campaign_character.account_id = ${actor.accountId}
+            and campaign_character.left_at is null
+            and campaign_character.character_id is not null
+          order by campaign_character.joined_at asc, campaign_character.id asc
+        `.pipe(Effect.orDie);
+
+      const currentReadableSession = (campaignId: CampaignId, sessionId: SessionId, actor: Actor) =>
+        sql<{ readonly id: SessionId }>`
+          select session.id from session
+          join campaign on campaign.current_session_id = session.id
+          where campaign.id = ${campaignId}
+            and session.id = ${sessionId}
+            and ${rowReadable(sql, "session", campaignId, actor)}
+          limit 1
+        `.pipe(Effect.orDie);
+
+      const toOrder = (row: LiveCombatantRow): PlayerLiveCombatant | undefined => {
+        if (row.kind === "pc" && row.character_id === null) return undefined;
+        if (row.kind === "pc" && row.campaign_character_id === null) return undefined;
+        if (row.kind === "pc" && row.own_campaign_character_id !== null) {
+          return {
+            kind: "you",
+            combatantId: row.id,
+            characterId: row.character_id!,
+            campaignCharacterId: row.own_campaign_character_id,
+            displayName: row.display_name,
+            subtitle: row.subtitle,
+            initiative: row.initiative,
+            hpCurrent: row.hp_current,
+            hpMax: row.hp_max,
+            tempHp: row.temp_hp,
+            conditions: row.conditions,
+          };
+        }
+        if (row.kind === "pc") {
+          return {
+            kind: "ally",
+            combatantId: row.id,
+            characterId: row.character_id!,
+            displayName: row.display_name,
+            subtitle: row.subtitle,
+            playerName: row.player_name,
+            initiative: row.initiative,
+            conditions: row.conditions,
+          };
+        }
+        return {
+          kind: "npc",
+          combatantId: row.id,
+          displayName: row.display_name,
+          subtitle: row.subtitle,
+          initiative: row.initiative,
+          hpBand: row.hp_band,
+          conditions: row.conditions,
+        };
+      };
 
       return {
         read: (campaignId) =>
@@ -111,21 +150,9 @@ export class PlayerTable extends Context.Service<
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
 
-              /**
-               * The night the campaign is on, if this actor may see it.
-               *
-               * `campaign.current_session_id` is the whole of what *"during a
-               * session"* means — the same resolution `vitals.ts`'s
-               * `currentSessionOf` uses, and it cannot name a finished night
-               * because `0006_session_finished.ts` makes that unrepresentable.
-               * This is not that helper: `currentSessionOf` composes
-               * `campaignWritableById` and therefore answers a player nothing,
-               * which `AGENTS.md` already records as the reason the doorbell
-               * does not ring for them. The pointer is read in a scalar
-               * subquery whose own scope contains its `campaign`, and the row
-               * it names still has to pass `rowReadable` on its own terms — so
-               * the unpredicated subquery decides nothing.
-               */
+              const ownSeats = yield* activeSeats(campaignId, actor);
+              if (ownSeats.length === 0) return null;
+
               const sessions = yield* sql<{
                 readonly id: SessionId;
                 readonly number: number;
@@ -140,23 +167,13 @@ export class PlayerTable extends Context.Service<
               const session = sessions[0];
               if (session === undefined) return null;
 
-              /**
-               * The fight on the table.
-               *
-               * Found as *the unended run of this night* rather than by
-               * following `session.active_encounter_run_id`, which is the same
-               * answer by the partial unique index
-               * (`encounter_run_one_live_per_session`) and one query fewer —
-               * the choice `campaign/load.ts` already makes from the client
-               * side. `limit 1` is the index restated, not a tiebreak anybody
-               * should rely on.
-               */
               const runs = yield* sql<{
                 readonly id: EncounterRunId;
+                readonly encounter_id: EncounterId | null;
                 readonly round: number;
                 readonly active_combatant_id: CombatantId | null;
               }>`
-                select encounter_run.id, encounter_run.round,
+                select encounter_run.id, encounter_run.encounter_id, encounter_run.round,
                        encounter_run.active_combatant_id
                 from encounter_run
                 where encounter_run.ended_at is null
@@ -174,72 +191,103 @@ export class PlayerTable extends Context.Service<
                 });
               }
 
-              /**
-               * Whose turn it is — the name, and nothing else on the row.
-               *
-               * The predicate is the same containment chain the runner reads a
-               * combatant through, so a row the DM hid comes back as no row and
-               * `upNext` is `null`. `display_name` is the only column selected:
-               * a query that fetched the row and picked a field would be the
-               * post-filtering pattern the seam exists to prevent, with an
-               * exact hit-point total sitting in memory.
-               */
-              const turns =
-                run.active_combatant_id === null
-                  ? []
-                  : yield* sql<{
-                      readonly id: CombatantId;
-                      readonly display_name: string;
-                    }>`
-                      select combatant.id, combatant.display_name from combatant
-                      where combatant.id = ${run.active_combatant_id}
-                        and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-                    `;
-              const turn = turns[0];
-              const upNext: PlayerLiveTurn | null =
-                turn === undefined
-                  ? null
-                  : { combatantId: turn.id, displayName: turn.display_name };
-
-              /**
-               * This account's own characters in the fight.
-               *
-               * Two predicates, and neither is redundant: the combatant has to
-               * be one this actor may see at all, *and* the character it was
-               * seeded from has to be theirs. `ownCharacter` is the second —
-               * the same fragment `GET /me/characters` composes over the
-               * shared, account-owned row — so every id returned here is one
-               * the caller already holds and could read in full, and there is
-               * no shape of request that asks for anybody else's. The campaign
-               * gate is the combatant's own predicate above; the character
-               * carries none, because it is campaign-scoped nowhere.
-               */
-              const seatRows = yield* sql<{
-                readonly id: CombatantId;
-                readonly character_id: CharacterId;
-              }>`
-                select combatant.id, combatant.character_id from combatant
+              const rows = yield* sql<LiveCombatantRow>`
+                select combatant.id,
+                       combatant.character_id,
+                       seated.id as campaign_character_id,
+                       own_seated.id as own_campaign_character_id,
+                       combatant.display_name,
+                       combatant.subtitle,
+                       combatant.player_name,
+                       combatant.initiative,
+                       combatant.kind,
+                       combatant.conditions,
+                       combatant.hp_current,
+                       combatant.hp_max,
+                       coalesce(character.temp_hp, 0) as temp_hp,
+                       case
+                         when combatant.kind = 'pc' then 'unknown'
+                         when combatant.hp_max <= 0 then 'unknown'
+                         when combatant.hp_current <= 0 then 'down'
+                         when combatant.hp_current >= combatant.hp_max then 'unhurt'
+                         when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
+                         else 'hurt'
+                       end as hp_band
+                from combatant
+                left join character on character.id = combatant.character_id
+                left join campaign_character seated
+                  on seated.campaign_id = ${campaignId}
+                 and seated.character_id = combatant.character_id
+                 and seated.left_at is null
+                 and (seated.visibility = 'shared' or seated.account_id = ${actor.accountId})
+                left join campaign_character own_seated
+                  on own_seated.campaign_id = ${campaignId}
+                 and own_seated.character_id = combatant.character_id
+                 and own_seated.account_id = ${actor.accountId}
+                 and own_seated.left_at is null
                 where combatant.encounter_run_id = ${run.id}
-                  and combatant.character_id is not null
                   and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-                  and exists (
-                    select 1 from character
-                    where character.id = combatant.character_id
-                      and ${ownCharacter(sql, actor)}
-                  )
-                order by combatant.id asc
+                  and (combatant.kind = 'npc' or seated.id is not null)
+                order by combatant.initiative desc, combatant.created_at asc, combatant.id asc
               `;
-              const seats: ReadonlyArray<PlayerLiveSeat> = seatRows.map((row) => ({
-                characterId: row.character_id,
-                combatantId: row.id,
-              }));
+              const order = rows.flatMap((row) => {
+                const combatant = toOrder(row);
+                return combatant === undefined ? [] : [combatant];
+              });
+              const upNextRow = order.find((row) => row.combatantId === run.active_combatant_id);
+              const upNext: PlayerLiveTurn | null =
+                upNextRow === undefined
+                  ? null
+                  : { combatantId: upNextRow.combatantId, displayName: upNextRow.displayName };
+              const seats: ReadonlyArray<PlayerLiveSeat> = order.flatMap((row) =>
+                row.kind === "you"
+                  ? [
+                      {
+                        characterId: row.characterId,
+                        campaignCharacterId: row.campaignCharacterId,
+                        combatantId: row.combatantId,
+                      },
+                    ]
+                  : [],
+              );
 
               return new PlayerLiveTable({
                 campaignId,
                 sessionId: session.id,
                 sessionNumber: session.number,
-                fight: { id: run.id, round: run.round, upNext, seats },
+                fight: {
+                  id: run.id,
+                  encounterId: run.encounter_id,
+                  round: run.round,
+                  upNext,
+                  seats,
+                  order,
+                },
               });
+            }),
+          ),
+
+        ticks: (actor, campaignId, sessionId, since, limit) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const ownSeats = yield* activeSeats(campaignId, actor);
+              if (ownSeats.length === 0) {
+                return yield* new NotFound({ resource: "session", id: sessionId });
+              }
+              const readable = yield* currentReadableSession(campaignId, sessionId, actor);
+              if (readable.length === 0) {
+                return yield* new NotFound({ resource: "session", id: sessionId });
+              }
+              const rows = yield* sql<{ readonly seq: string }>`
+                select session_event.seq from session_event
+                where session_event.session_id = ${sessionId}
+                  and session_event.seq > ${since}
+                  and session_event.visibility = 'shared'
+                order by session_event.seq asc
+                limit ${limit}
+              `;
+              return rows.map((row) => Number(row.seq));
             }),
           ),
       };
