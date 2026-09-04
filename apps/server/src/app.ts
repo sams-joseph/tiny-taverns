@@ -133,6 +133,7 @@ export const assistantFromConfig: Layer.Layer<
   | Search
   | SessionEvents
   | Sessions
+  | Spells
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -203,6 +204,7 @@ export const servicesOver = <E>(
     | Search
     | SessionEvents
     | Sessions
+    | Spells
   > = assistantFromConfig,
 ): Layer.Layer<
   | Accounts
@@ -379,6 +381,7 @@ export const servicesOver = <E>(
         Search.layer,
         SessionEvents.layer,
         Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+        Spells.layer,
       ]),
     ),
   ).pipe(Layer.provide(database));

@@ -25,6 +25,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { Spells } from "../src/repo/Spells.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
@@ -74,6 +75,7 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_vocabulary")));
 
 const runtime = ManagedRuntime.make(services);
@@ -496,7 +498,12 @@ describe("above the cap, the vocabulary is a tool call", () => {
       ],
     });
 
-    expect(toolNames(requests[0])).toEqual(["listOptions", "proposeCharacter", "searchCampaign"]);
+    expect(toolNames(requests[0])).toEqual([
+      "listOptions",
+      "listStartingSpells",
+      "proposeCharacter",
+      "searchCampaign",
+    ]);
     expect(enumOf(requests[0], "proposeCharacter", "className")).toBeUndefined();
     // Said out loud in the description, which is the design's own instruction:
     // a model cannot discover a tool it was not told to reach for.
@@ -627,6 +634,7 @@ describe("a campaign with nothing written down", () => {
     Search.layer,
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Spells.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_bare")));
 
   const bareRuntime = ManagedRuntime.make(bare);
@@ -660,7 +668,11 @@ describe("a campaign with nothing written down", () => {
       ),
     );
 
-    expect(toolNames(requests[0])).toEqual(["proposeCharacter", "searchCampaign"]);
+    expect(toolNames(requests[0])).toEqual([
+      "listStartingSpells",
+      "proposeCharacter",
+      "searchCampaign",
+    ]);
     expect(enumOf(requests[0], "proposeCharacter", "className")).toBeUndefined();
     expect(toolNamed(requests[0], "proposeCharacter")?.description).toContain(
       "no classes written down",

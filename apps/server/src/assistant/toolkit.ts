@@ -10,6 +10,7 @@ import {
   CampaignId,
   type CharacterOption,
   type CharacterSheet,
+  type CharacterSpellRules,
   type ClassEntry,
   Conflict,
   Creature,
@@ -28,7 +29,14 @@ import {
   SearchSource,
   seedFor,
   sheetGrantsFor,
+  sheetWithSpellSelection,
   identityGrants,
+  spellById,
+  spellKnownFor,
+  spellNoteFor,
+  spellSelectionProblems,
+  SpellId,
+  type SpellKnown,
   withSavingThrows,
   Session,
   SessionEvent,
@@ -50,6 +58,7 @@ import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
 import type { SessionEvents } from "../repo/SessionEvents.js";
 import type { Sessions } from "../repo/Sessions.js";
+import type { Spells } from "../repo/Spells.js";
 
 /**
  * What Hob can reach, and the only way it reaches anything.
@@ -86,7 +95,7 @@ import type { Sessions } from "../repo/Sessions.js";
  * `shared` notes and beats a player is entitled to and nothing else, and
  * `proposeCharacter`. `dmHandlersFor` takes a `CampaignCreatorActor`; `playerHandlersFor`
  * takes a plain `Actor` and the campaign, because there is no DM-ness to prove
- * and the two tools it binds need none. **The campaign is closed over in both**,
+ * and the player tools it binds need none. **The campaign is closed over in all of them**,
  * so the grounding property is untouched: it is still not a parameter of any
  * tool, and a model still cannot express a call into another campaign.
  *
@@ -952,6 +961,12 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
           Schema.isLengthBetween(0, 20),
         ),
       ),
+      /** Spell ids from listStartingSpells. Cantrips are always ready. */
+      cantrips: optional(Schema.Array(SpellId).check(Schema.isLengthBetween(0, 8))),
+      /** Leveled spell ids known, or in a wizard's spellbook. */
+      spells: optional(Schema.Array(SpellId).check(Schema.isLengthBetween(0, 20))),
+      /** Leveled spell ids prepared for prepared casters and wizards. */
+      preparedSpells: optional(Schema.Array(SpellId).check(Schema.isLengthBetween(0, 20))),
       /**
        * Why these choices — one short line each, the drawn *What Hob did* aside.
        *
@@ -1002,6 +1017,40 @@ export const ListOptions = Tool.make("listOptions", {
     "the shared bundle, plus what is shared to this table's group. Use it " +
     "before proposeCharacter, and copy a `name` back exactly as it came.",
   success: Schema.Array(OptionLine),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+const StartingSpellLine = Schema.Struct({
+  spellId: SpellId,
+  name: Schema.String,
+  level: Schema.Int,
+  school: Schema.String,
+  list: Schema.Literals(["class", "subclass"]),
+  ritual: Schema.Boolean,
+  concentration: Schema.Boolean,
+  note: Schema.String,
+});
+
+export const ListStartingSpells = Tool.make("listStartingSpells", {
+  description:
+    "List the cantrips and 1st-level spells this proposed level-1 class can start with, " +
+    "using the same campaign-visible spell list as the sheet picker. Call this before " +
+    "proposeCharacter for a caster, then copy spellId values into cantrips, spells and " +
+    "preparedSpells. The campaign is already chosen by the request; do not invent spell ids.",
+  parameters: Schema.Struct({
+    className: Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX)),
+    subclass: optionalText(80),
+  }),
+  success: Schema.Struct({
+    mode: Schema.Literals(["none", "known", "prepared", "spellbook"]),
+    limits: Schema.Struct({
+      cantripsKnown: Schema.optional(Schema.Int),
+      spellsKnown: Schema.optional(Schema.Int),
+      prepared: Schema.optional(Schema.Int),
+    }),
+    spells: Schema.Array(StartingSpellLine),
+  }),
   failure: NotFound,
   failureMode: "return",
 });
@@ -1111,11 +1160,11 @@ export const GroupToolkit = Toolkit.make(
  * other reason would fragment prompt caching for no gain.
  */
 export const playerToolkitOver = (vocabulary: CharacterVocabulary) =>
-  Toolkit.make(SearchCampaign, proposeCharacterOver(vocabulary));
+  Toolkit.make(SearchCampaign, ListStartingSpells, proposeCharacterOver(vocabulary));
 
-/** {@link playerToolkitOver} above the cap: the same two, plus the listing. */
+/** {@link playerToolkitOver} above the cap: the same three, plus the listing. */
 export const playerToolkitListing = (vocabulary: CharacterVocabulary) =>
-  Toolkit.make(SearchCampaign, ListOptions, proposeCharacterOver(vocabulary));
+  Toolkit.make(SearchCampaign, ListOptions, ListStartingSpells, proposeCharacterOver(vocabulary));
 
 /** The repositories a Hob tool call may reach. **Read-only, every one.** */
 export interface HobRepositories {
@@ -1139,6 +1188,8 @@ export interface HobRepositories {
    * exactly one the player could have picked by hand.
    */
   readonly options: (typeof Options)["Service"];
+  /** The same rules answer the manual spell picker uses, before a draft is accepted. */
+  readonly spells: (typeof Spells)["Service"];
   /**
    * The group's chronicle and summary — the two group-context reads on the
    * DM's toolkit, keyed on the proof's own `group`. Read-only like everything
@@ -1555,8 +1606,90 @@ const notASubrace = (race: string, subrace: string) =>
     message: `"${subrace}" is not a subrace of "${race}" in this campaign. Pick one contained by that race or leave subrace blank.`,
   });
 
+const unavailableSpell = (spellId: SpellId) =>
+  new Conflict({
+    message:
+      `spell ${spellId} is not available for this class at level 1. Call ` +
+      "listStartingSpells and copy spellId values from it.",
+  });
+
+const tooManySpells = (problems: ReadonlyArray<string>) =>
+  new Conflict({ message: problems.join(" ") });
+
+const dedupeSpellIds = (ids: ReadonlyArray<SpellId>): ReadonlyArray<SpellId> => {
+  const seen = new Set<string>();
+  const kept: Array<SpellId> = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    kept.push(id);
+  }
+  return kept;
+};
+
+const spellRowsFor = (
+  book: CharacterSpellRules,
+  picks: {
+    readonly cantrips?: ReadonlyArray<SpellId> | null;
+    readonly spells?: ReadonlyArray<SpellId> | null;
+    readonly preparedSpells?: ReadonlyArray<SpellId> | null;
+  },
+): Effect.Effect<ReadonlyArray<SpellKnown>, Conflict> => {
+  const byId = spellById(book);
+  const rowFor = (id: SpellId, prepared = false): Effect.Effect<SpellKnown, Conflict> => {
+    const option = byId.get(id);
+    if (option === undefined) return Effect.fail(unavailableSpell(id));
+    return Effect.succeed(spellKnownFor(option, prepared));
+  };
+
+  return Effect.gen(function* () {
+    if (book.mode === "none") return [];
+    const knownRows: Array<SpellKnown> = [];
+    for (const id of dedupeSpellIds(
+      (picks.cantrips ?? []).filter((id) => byId.get(id)?.spell.level === 0),
+    )) {
+      knownRows.push(yield* rowFor(id));
+    }
+
+    const leveled = dedupeSpellIds(
+      (picks.spells ?? []).filter((id) => byId.get(id)?.spell.level !== 0),
+    );
+    const prepared = dedupeSpellIds(
+      (picks.preparedSpells ?? []).filter((id) => byId.get(id)?.spell.level !== 0),
+    );
+    const preparedSet = new Set(prepared);
+
+    if (book.mode === "known") {
+      for (const id of leveled) knownRows.push(yield* rowFor(id));
+    } else if (book.mode === "prepared") {
+      for (const id of prepared.length === 0 ? leveled : prepared) {
+        knownRows.push(yield* rowFor(id, true));
+      }
+    } else if (book.mode === "spellbook") {
+      for (const id of dedupeSpellIds([...leveled, ...prepared])) {
+        knownRows.push(yield* rowFor(id, preparedSet.has(id)));
+      }
+    }
+
+    // Anything mentioned but filtered out by level still has to be reported;
+    // otherwise an invented level-4 id is silently ignored and the model thinks
+    // it made a choice. Use the same book the picker uses as the authority.
+    for (const id of [
+      ...(picks.cantrips ?? []),
+      ...(picks.spells ?? []),
+      ...(picks.preparedSpells ?? []),
+    ]) {
+      if (!byId.has(id)) return yield* unavailableSpell(id);
+    }
+
+    const problems = spellSelectionProblems(book, knownRows);
+    if (problems.length > 0) return yield* tooManySpells(problems);
+    return knownRows;
+  });
+};
+
 /**
- * The same idea for a player: one campaign, one plain `Actor`, two tools — and
+ * The same idea for a player: one campaign, one plain `Actor`, three tools — and
  * the campaign's own vocabulary, which is what one of the two is built from.
  *
  * **There is no proof to take, and none is missing.** A `CampaignCreatorActor` answers *is
@@ -1570,7 +1703,7 @@ const notASubrace = (race: string, subrace: string) =>
  * The campaign arrives the same way it does above — closed over from the path
  * segment the request was routed on, never a parameter — so the grounding
  * property holds identically on both sides. `Hob.ask` resolves *which* of the
- * two to build once per question, from the DM proof it already asks for.
+ * player toolkit to build once per question, from the DM proof it already asks for.
  *
  * **The vocabulary arrives already read**, for the reason `HobRepositories.options`
  * states: it decides the shape of a tool, so it cannot be read from inside one.
@@ -1600,6 +1733,32 @@ export const playerHandlersFor = (
         })),
       ),
 
+    listStartingSpells: ({ className, subclass }: Tool.Parameters<typeof ListStartingSpells>) =>
+      Effect.map(
+        as(
+          repositories.spells.forDraft(campaignId, {
+            className,
+            subclassName: blank(subclass),
+            level: 1,
+            sheet: { notes: "", abilities: [], traits: [] },
+          }),
+        ),
+        (book) => ({
+          mode: book.mode,
+          limits: book.limits,
+          spells: book.spells.map((option) => ({
+            spellId: option.spell.id,
+            name: option.spell.name,
+            level: option.spell.level,
+            school: option.spell.schoolName,
+            list: option.list,
+            ritual: option.spell.ritual,
+            concentration: option.spell.concentration,
+            note: spellNoteFor(option),
+          })),
+        }),
+      ),
+
     proposeCharacter: ({
       name,
       race,
@@ -1614,6 +1773,9 @@ export const playerHandlersFor = (
       ideal,
       flaw,
       kit,
+      cantrips,
+      spells,
+      preparedSpells,
       rationale,
     }: CharacterDraft) => {
       /**
@@ -1726,7 +1888,7 @@ export const playerHandlersFor = (
        * `skills: []` on it draws a Skills section that says nothing, where a
        * sheet without the key draws the section's own invitation to fill it in.
        */
-      const sheet: CharacterSheet = {
+      const baseSheet: CharacterSheet = {
         notes: blank(backstory) ?? "",
         // The seed's, not the ranking's: these are the cells with the race and
         // subrace bonuses applied, and they are the cells its armour class and
@@ -1748,30 +1910,50 @@ export const playerHandlersFor = (
         ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
       };
 
-      return offer(
-        {
-          target: "character",
-          name,
-          // The **campaign's own spelling** where it resolved, and the model's
-          // where it did not. The label is the entire link between a character
-          // and an option, so storing a lower-cased near-miss would put a word
-          // on the sheet that the picker would never have produced.
-          race: raceOption?.name ?? race,
-          ...(namedSubrace === undefined ? {} : { subrace: subraceOption?.name ?? namedSubrace }),
-          className: classOption?.name ?? className,
-          sheet,
-          level: seed.level,
-          ac: seed.ac,
-          // Absent only where the campaign has no class by that name and so no
-          // hit die to read — and optional on the wire because a proposal saved
-          // before this existed has no key at all.
-          ...(seed.hpMax === undefined ? {} : { hpMax: seed.hpMax }),
-          rationale: (rationale ?? []).map((line) => line.trim()).filter((line) => line !== ""),
-        },
-        `Offered ${name} to the player. They can keep them or ask for changes; ` +
-          "say one short line about the character and stop — the sheet is already " +
-          "on their screen.",
-      );
+      return Effect.gen(function* () {
+        const spellBook = yield* as(
+          repositories.spells.forDraft(campaignId, {
+            className: classOption?.name ?? className,
+            subclassName: blank(subclass),
+            level: seed.level,
+            sheet: baseSheet,
+          }),
+        );
+        const selectedSpells = yield* spellRowsFor(spellBook, {
+          cantrips: absent(cantrips),
+          spells: absent(spells),
+          preparedSpells: absent(preparedSpells),
+        });
+        const sheet =
+          selectedSpells.length === 0
+            ? baseSheet
+            : sheetWithSpellSelection(baseSheet, spellBook, selectedSpells);
+
+        return yield* offer(
+          {
+            target: "character",
+            name,
+            // The **campaign's own spelling** where it resolved, and the model's
+            // where it did not. The label is the entire link between a character
+            // and an option, so storing a lower-cased near-miss would put a word
+            // on the sheet that the picker would never have produced.
+            race: raceOption?.name ?? race,
+            ...(namedSubrace === undefined ? {} : { subrace: subraceOption?.name ?? namedSubrace }),
+            className: classOption?.name ?? className,
+            sheet,
+            level: seed.level,
+            ac: seed.ac,
+            // Absent only where the campaign has no class by that name and so no
+            // hit die to read — and optional on the wire because a proposal saved
+            // before this existed has no key at all.
+            ...(seed.hpMax === undefined ? {} : { hpMax: seed.hpMax }),
+            rationale: (rationale ?? []).map((line) => line.trim()).filter((line) => line !== ""),
+          },
+          `Offered ${name} to the player. They can keep them or ask for changes; ` +
+            "say one short line about the character and stop — the sheet is already " +
+            "on their screen.",
+        );
+      });
     },
   };
 };
@@ -1811,7 +1993,7 @@ export const playerBindOver = (
 };
 
 /**
- * The same, above {@link OPTION_ENUM_CAP}: three tools, one of which reads the
+ * The same, above {@link OPTION_ENUM_CAP}: four tools, one of which reads the
  * vocabulary out because it is too big to be in the grammar.
  *
  * A separate function rather than a flag because the tool records are different

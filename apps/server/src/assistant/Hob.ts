@@ -40,6 +40,7 @@ import { Recap } from "../repo/Recap.js";
 import { Search } from "../repo/Search.js";
 import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
+import { Spells } from "../repo/Spells.js";
 import {
   type CharacterVocabulary,
   dmHandlersFor,
@@ -197,6 +198,7 @@ export class Hob extends Context.Service<
     | Search
     | SessionEvents
     | Sessions
+    | Spells
   > =>
     Layer.effect(this)(
       Effect.gen(function* () {
@@ -216,6 +218,8 @@ export class Hob extends Context.Service<
           // `proposeCharacter`, so they are read before the toolkit exists
           // rather than from inside it.
           options: yield* Options,
+          // The spell picker rules are shared with Hob's draft through this repository.
+          spells: yield* Spells,
           // The group context: the chronicle and the summary for the DM's two
           // group tools, and the whole record for group Hob's.
           history: yield* GroupHistory,
@@ -1499,13 +1503,14 @@ const playerPrompt = (campaign: Campaign): string =>
     "",
     "They will describe a person in their own words. Read it, and offer them a whole",
     "character with proposeCharacter — a name, a race, a class, a background, the six abilities",
-    "ranked most important first, up to four skills, a starting kit and a short",
-    "backstory in their register rather than yours. Do not ask clarifying questions",
+    "ranked most important first, up to four skills, starting spells for a caster, a starting kit",
+    "and a short backstory in their register rather than yours. Do not ask clarifying questions",
     "first: draft something, and let them correct it. Nothing you offer is saved until",
     "they keep it.",
     "",
     "Do not write ability scores or modifiers. Rank the six and the standard array is",
-    "applied for you. Give a short reason for each real choice in `rationale` — the",
+    "applied for you. For a caster, call listStartingSpells first and choose spellId",
+    "values from that list; never invent a spell id. Give a short reason for each real choice in `rationale` — the",
     "player is shown those beside the sheet and they are what they will argue with.",
     "",
     "If they ask for a change — a different class, a harder background — offer a whole",

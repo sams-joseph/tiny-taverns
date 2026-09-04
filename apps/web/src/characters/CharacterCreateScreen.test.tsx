@@ -386,6 +386,8 @@ describe("writing down a character of your own", () => {
     expect(await screen.findByText("Sorrel Ash")).toBeTruthy();
     expect(screen.getByText(/Wood elf Druid · Circle of the Land \(Marsh\)/)).toBeTruthy();
     expect(screen.getByText("Nature")).toBeTruthy();
+    expect(screen.getByText(/Produce Flame · Cantrip/)).toBeTruthy();
+    expect(screen.getByText(/Cure Wounds · Prepared/)).toBeTruthy();
     expect(screen.getByText("Herbalism kit")).toBeTruthy();
     // `rationale` is a parameter of `proposeCharacter` and is on the proposal,
     // so this is Hob's own argument rather than something the screen derived.

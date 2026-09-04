@@ -52,6 +52,7 @@ export function DraftCard({
   const line = [lineage, draft.className].filter((part) => part !== null).join(" ");
   const kit = sheet.inventory ?? [];
   const skills = sheet.skills ?? [];
+  const spells = sheet.spellcasting?.known ?? [];
   const story = sheet.story;
 
   return (
@@ -129,6 +130,22 @@ export function DraftCard({
             {skills.map((skill) => (
               <Badge key={skill.name} variant="outline">
                 {skill.name}
+              </Badge>
+            ))}
+          </div>
+        </SheetSection>
+      )}
+
+      {spells.length > 0 && (
+        <SheetSection title="Starting spells" aside="Picked from this table's spell list">
+          <div className="flex flex-wrap gap-1.5">
+            {spells.map((spell) => (
+              <Badge
+                key={`${spell.spellId ?? spell.name}-${spell.prepared === true ? "prepared" : "known"}`}
+                variant="outline"
+              >
+                {spell.name}
+                {spell.level === 0 ? " · Cantrip" : spell.prepared === true ? " · Prepared" : ""}
               </Badge>
             ))}
           </div>

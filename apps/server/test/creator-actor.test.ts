@@ -630,8 +630,11 @@ describe("the scope, counted", () => {
     // reads through the disjunction of the two complete predicates and an
     // unreachable thread is the ordinary `NotFound`. Resource spending and
     // rests add two owner-only character methods for the same reason: a proof
-    // that the caller runs a campaign would answer the wrong question.
-    expect(ungated).toBe(125);
+    // that the caller runs a campaign would answer the wrong question. Hob's
+    // draft spell rules add two more: the persisted owner picker and the
+    // pre-accept proposal grammar share a campaign-readable spellbook answer,
+    // and neither has a DM projection to prove.
+    expect(ungated).toBe(127);
   });
 });
 

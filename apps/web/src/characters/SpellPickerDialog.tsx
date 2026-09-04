@@ -3,6 +3,8 @@ import {
   eligibleKnownSpells,
   selectedSpellCounts,
   sheetWithSpellSelection,
+  spellKnownFor,
+  spellNoteFor,
   spellSelectionProblems,
 } from "@taverns/api";
 import {
@@ -27,16 +29,6 @@ import { FailureNotice, Loading } from "../ui/states";
 import { characterSpellsAtom } from "./load";
 import { ownCharacterWrites, saveOwnCharacter } from "./write";
 
-const noteFor = (option: CharacterSpellbook["spells"][number]): string =>
-  [
-    option.spell.concentration ? "Concentration" : undefined,
-    option.spell.ritual ? "Ritual" : undefined,
-    option.spell.castingTime,
-    option.spell.range,
-  ]
-    .filter((part): part is string => part !== undefined && part !== "")
-    .join(" · ");
-
 const initialKnown = (
   book: CharacterSpellbook,
   current: ReadonlyArray<SpellKnown>,
@@ -53,15 +45,7 @@ const initialKnown = (
           ? byName.get(row.name.trim().toLowerCase())
           : byId.get(row.spellId);
       if (option === undefined) return [];
-      return [
-        {
-          name: option.spell.name,
-          level: option.spell.level,
-          spellId: option.spell.id,
-          note: noteFor(option),
-          ...(row.prepared === true ? { prepared: true } : {}),
-        },
-      ];
+      return [spellKnownFor(option, row.prepared === true)];
     }),
   );
 };
@@ -76,16 +60,7 @@ const replace = (
   const prepared = patch.prepared ?? existing?.prepared === true;
   const rest = selected.filter((row) => row.spellId !== option.spell.id);
   if (!known && !prepared) return rest;
-  return [
-    ...rest,
-    {
-      name: option.spell.name,
-      level: option.spell.level,
-      spellId: option.spell.id,
-      note: noteFor(option),
-      ...(prepared ? { prepared: true } : {}),
-    },
-  ];
+  return [...rest, spellKnownFor(option, prepared)];
 };
 
 function SpellPickerBody({
@@ -222,7 +197,7 @@ function SpellPickerBody({
                       {option.list === "subclass" && <Badge variant="secondary">Subclass</Badge>}
                     </div>
                     <p className="mt-1 text-micro leading-body text-faint">
-                      {[spell.schoolName, noteFor(option)].filter(Boolean).join(" · ")}
+                      {[spell.schoolName, spellNoteFor(option)].filter(Boolean).join(" · ")}
                     </p>
                     {spell.spell.desc[0] !== undefined && (
                       <p className="mt-1 max-w-measure text-caption leading-body text-muted-foreground">

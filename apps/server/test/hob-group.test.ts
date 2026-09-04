@@ -32,6 +32,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { Spells } from "../src/repo/Spells.js";
 import { anAccount, aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks, type ChatRequest } from "./support/model.js";
@@ -80,6 +81,7 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_group")));
 
 const runtime = ManagedRuntime.make(services);

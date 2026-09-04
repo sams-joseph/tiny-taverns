@@ -7,6 +7,7 @@ import {
   type HobEvent,
   NotFound,
   signed,
+  type SpellId,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { SqlClient } from "effect/unstable/sql";
@@ -34,7 +35,9 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { Spells } from "../src/repo/Spells.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
+import { importSystemSpells } from "../src/spells/import.js";
 import { aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
@@ -95,6 +98,7 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_character")));
 
 const runtime = ManagedRuntime.make(services);
@@ -122,6 +126,7 @@ const makeFixture = Effect.gen(function* () {
    */
   yield* importSystemEquipment();
   yield* importSystemOptions();
+  yield* importSystemSpells();
 
   const dm = yield* anAccount("Fen");
   const as = withActor(dm);
@@ -282,6 +287,20 @@ const characterCount = () =>
     ),
   );
 
+const spellIdNamed = (name: string): Promise<SpellId> =>
+  runtime.runPromise(
+    Effect.flatMap(SqlClient.SqlClient, (sql) =>
+      Effect.gen(function* () {
+        const rows = yield* sql<{ readonly id: SpellId }>`
+          select id from spell where name = ${name}
+        `;
+        const id = rows[0]?.id;
+        if (id === undefined) throw new Error(`missing spell ${name}`);
+        return id;
+      }),
+    ).pipe(Effect.orDie),
+  );
+
 const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify(requests);
 
 describe("what the tool takes, and what the server works out", () => {
@@ -377,6 +396,61 @@ describe("what the tool takes, and what the server works out", () => {
     // The description names all three lists as well, so the vocabulary is in
     // the prompt and not only in the grammar.
     expect(tools).toContain("spelled exactly like that");
+  }, 60_000);
+
+  it("resolves starting spells through the same picker rules and keeps their ids", async () => {
+    const produceFlame = await spellIdNamed("Produce Flame");
+    const cureWounds = await spellIdNamed("Cure Wounds");
+    const { events } = await ask(fixture.player, {
+      rounds: [
+        aDraft({
+          cantrips: [produceFlame],
+          spells: [cureWounds],
+          preparedSpells: [cureWounds],
+        }),
+        textChunks("She has the marsh's little fire and a healer's hands."),
+      ],
+    });
+    const proposed = proposedIn(events);
+    if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
+
+    const known = proposed.proposal.sheet.spellcasting?.known ?? [];
+    expect(known.map((spell) => [spell.name, spell.level, spell.spellId, spell.prepared])).toEqual([
+      ["Produce Flame", 0, produceFlame, undefined],
+      ["Cure Wounds", 1, cureWounds, true],
+    ]);
+    expect(proposed.proposal.sheet.actions?.map((action) => action.spellId)).toContain(
+      produceFlame,
+    );
+    expect(proposed.proposal.sheet.actions?.map((action) => action.spellId)).toContain(cureWounds);
+
+    const began = begunIn(events);
+    const accepted = await accept(fixture.player, began.threadId, began.turnId);
+    expect(accepted._tag).toBe("Success");
+    if (accepted._tag !== "Success" || accepted.success.accepted !== "character") {
+      throw new Error("character was not accepted");
+    }
+    expect(
+      accepted.success.character.sheet.spellcasting?.known?.map((spell) => [
+        spell.name,
+        spell.spellId,
+      ]),
+    ).toEqual([
+      ["Produce Flame", produceFlame],
+      ["Cure Wounds", cureWounds],
+    ]);
+  }, 60_000);
+
+  it("refuses invented spell ids where Hob can recover, instead of saving a fake spell", async () => {
+    const { events, requests } = await ask(fixture.player, {
+      rounds: [
+        aDraft({ cantrips: ["00000000-0000-0000-0000-000000000000" as SpellId] }),
+        textChunks("No fake spell."),
+      ],
+    });
+
+    expect(shownTo(requests.slice(1))).toContain("listStartingSpells");
+    expect(proposedIn(events)).toBeUndefined();
   }, 60_000);
 
   it("seeds hit points, armour class and level from the class and race", async () => {

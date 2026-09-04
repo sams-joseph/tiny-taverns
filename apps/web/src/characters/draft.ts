@@ -125,9 +125,10 @@ export interface CharacterDraft {
   readonly keeping: boolean;
 }
 
-/** What a tool step reads as. The player toolkit has two tools. */
+/** What a tool step reads as. The player toolkit has three tools. */
 const ACTIVITY: Record<string, string> = {
   searchCampaign: "Reading what your DM has shared",
+  listStartingSpells: "Reading starting spells",
   proposeCharacter: "Writing the sheet",
 };
 

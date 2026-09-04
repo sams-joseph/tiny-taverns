@@ -38,6 +38,17 @@ export const CharacterSpellbook = Schema.Struct({
 });
 export type CharacterSpellbook = typeof CharacterSpellbook.Type;
 
+/** The spell-selection rules shared by the persisted picker and Hob's draft. */
+export interface CharacterSpellRules {
+  readonly className?: string | undefined;
+  readonly subclassName?: string | undefined;
+  readonly level: number;
+  readonly highestSlotLevel: number;
+  readonly mode: SpellSelectionMode;
+  readonly limits: CharacterSpellLimits;
+  readonly spells: ReadonlyArray<CharacterSpellOption>;
+}
+
 const actionCost = (castingTime: string): SheetAction["cost"] | undefined => {
   switch (castingTime.trim().toLowerCase()) {
     case "1 action":
@@ -112,17 +123,37 @@ export const spellActionFor = (
   };
 };
 
-export const spellById = (book: CharacterSpellbook): ReadonlyMap<SpellId, CharacterSpellOption> =>
+export const spellById = (book: CharacterSpellRules): ReadonlyMap<SpellId, CharacterSpellOption> =>
   new Map(book.spells.map((option) => [option.spell.id, option]));
 
-export const cantripLimit = (book: CharacterSpellbook): number | undefined =>
+export const cantripLimit = (book: CharacterSpellRules): number | undefined =>
   book.limits.cantripsKnown;
-export const knownLimit = (book: CharacterSpellbook): number | undefined => book.limits.spellsKnown;
-export const preparedLimit = (book: CharacterSpellbook): number | undefined => book.limits.prepared;
+export const knownLimit = (book: CharacterSpellRules): number | undefined =>
+  book.limits.spellsKnown;
+export const preparedLimit = (book: CharacterSpellRules): number | undefined =>
+  book.limits.prepared;
+
+export const spellNoteFor = (option: CharacterSpellOption): string =>
+  [
+    option.spell.concentration ? "Concentration" : undefined,
+    option.spell.ritual ? "Ritual" : undefined,
+    option.spell.castingTime,
+    option.spell.range,
+  ]
+    .filter((part): part is string => part !== undefined && part !== "")
+    .join(" · ");
+
+export const spellKnownFor = (option: CharacterSpellOption, prepared = false): SpellKnown => ({
+  name: option.spell.name,
+  level: option.spell.level,
+  spellId: option.spell.id,
+  note: spellNoteFor(option),
+  ...(prepared ? { prepared: true } : {}),
+});
 
 /** Keep only selected spell ids the server still says are eligible. */
 export const eligibleKnownSpells = (
-  book: CharacterSpellbook,
+  book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
 ): ReadonlyArray<SpellKnown> => {
   const options = spellById(book);
@@ -132,7 +163,7 @@ export const eligibleKnownSpells = (
 };
 
 const spellActionsFromKnown = (
-  book: CharacterSpellbook,
+  book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
   sheet: CharacterSheet,
 ): ReadonlyArray<SheetAction> => {
@@ -205,7 +236,7 @@ export const sheetWithRecomputedDerived = (
 
 export const sheetWithSpellSelection = (
   sheet: CharacterSheet,
-  book: CharacterSpellbook,
+  book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
 ): CharacterSheet => ({
   ...sheet,
@@ -219,7 +250,7 @@ export const sheetWithSpellSelection = (
 });
 
 export const selectedSpellCounts = (
-  book: CharacterSpellbook,
+  book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
 ): { readonly cantrips: number; readonly known: number; readonly prepared: number } => {
   const options = spellById(book);
@@ -241,7 +272,7 @@ export const selectedSpellCounts = (
 };
 
 export const spellSelectionProblems = (
-  book: CharacterSpellbook,
+  book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
 ): ReadonlyArray<string> => {
   const counts = selectedSpellCounts(book, known);

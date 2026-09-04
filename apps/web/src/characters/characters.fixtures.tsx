@@ -467,6 +467,23 @@ export const characterProposal = {
       { name: "Nature", proficient: true },
       { name: "Perception", proficient: true },
     ],
+    spellcasting: {
+      known: [
+        {
+          name: "Produce Flame",
+          level: 0,
+          spellId: "00000000-0000-4000-8000-00000000f1a0",
+          note: "1 action · 30 feet",
+        },
+        {
+          name: "Cure Wounds",
+          level: 1,
+          spellId: "00000000-0000-4000-8000-00000000f1a1",
+          note: "1 action · Touch",
+          prepared: true,
+        },
+      ],
+    },
     inventory: [{ name: "Herbalism kit" }],
     story: { bond: "The herbal, half in a hand that is not hers." },
   },

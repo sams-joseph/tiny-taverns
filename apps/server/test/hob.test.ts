@@ -34,6 +34,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
+import { Spells } from "../src/repo/Spells.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import {
@@ -80,6 +81,7 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob")));
 
 const runtime = ManagedRuntime.make(services);
@@ -985,7 +987,7 @@ describe("the boundary — proven, not argued", () => {
     expect(shown).not.toContain(fixture.crateNote.id);
   }, 60_000);
 
-  it("answers a player, and offers them two tools rather than nine", async () => {
+  it("answers a player, and offers them three tools rather than nine", async () => {
     // The reversal, measured at the one place it is visible: the toolkit is
     // what the provider is *shown*, so a player who was bound to the DM's
     // handlers with a narrower predicate underneath would still be offered
@@ -996,7 +998,7 @@ describe("the boundary — proven, not argued", () => {
 
     expect(
       tools.map((tool) => (tool.function as { name: string } | undefined)?.name).sort(),
-    ).toEqual(["proposeCharacter", "searchCampaign"]);
+    ).toEqual(["listStartingSpells", "proposeCharacter", "searchCampaign"]);
     // The structural half of the boundary is identical on this side: the
     // campaign is still closed over from the request path.
     expect(JSON.stringify(tools).toLowerCase()).not.toContain("campaignid");
@@ -1591,7 +1593,7 @@ describe("the assistant seam", () => {
     ]);
   });
 
-  it("counts the player's two tools, and the one the cap adds", () => {
+  it("counts the player's three tools, and the one the cap adds", () => {
     // The player's toolkit is built per request now, so it cannot be counted as
     // a module constant — but the same property has to hold, and this is where
     // it does: a third capability offered to a player is an edit to this list.
@@ -1600,11 +1602,13 @@ describe("the assistant seam", () => {
     // constraint on itself: the schema may vary with the vocabulary and the
     // toolkit may not vary for anything else.
     expect(Object.keys(playerToolkitOver(NO_VOCABULARY).tools).sort()).toEqual([
+      "listStartingSpells",
       "proposeCharacter",
       "searchCampaign",
     ]);
     expect(Object.keys(playerToolkitListing(NO_VOCABULARY).tools).sort()).toEqual([
       "listOptions",
+      "listStartingSpells",
       "proposeCharacter",
       "searchCampaign",
     ]);
