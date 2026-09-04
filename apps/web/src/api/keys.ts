@@ -171,6 +171,9 @@ export const reads = {
    */
   recap: (sessionId: SessionId): ReadKey => key`recap:${sessionId}`,
 
+  /** Browser-rolled dice filed under this night, newest first for the DM's tray. */
+  rolls: (sessionId: SessionId): ReadKey => key`rolls:${sessionId}`,
+
   // --------------------------------------------------------------- an account
 
   /**

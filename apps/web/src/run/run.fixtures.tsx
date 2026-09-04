@@ -83,6 +83,7 @@ export const liveFight = (): Map<string, Answer> =>
     [`GET ${base}/creatures/${goblin.id}`, { status: 200, body: goblin }],
     [`GET ${runBase}`, { status: 200, body: liveRun }],
     [`GET ${runBase}/combatants`, { status: 200, body: [brannoc, goblinBoss] }],
+    [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
     // Damage is a delta, so the answer a test wants back depends on the test.
     // The default takes five off the goblin, matching the prototype's button.
     [

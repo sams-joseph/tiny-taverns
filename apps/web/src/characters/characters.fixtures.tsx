@@ -28,7 +28,13 @@ import {
  * path, so the fixture has to cross a campaign boundary or it proves nothing.
  */
 
-export { campaign, campaignId, campaignOptions, longswordRow } from "../campaign/campaign.fixtures";
+export {
+  campaign,
+  campaignId,
+  campaignOptions,
+  longswordRow,
+  sessionId,
+} from "../campaign/campaign.fixtures";
 
 export const brannocId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
 export const sorrelId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000902");

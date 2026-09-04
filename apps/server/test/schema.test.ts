@@ -166,6 +166,7 @@ describe("every content-bearing table", () => {
       // one, and until then the column is inert exactly as every other table's
       // was between `0001` and `0010`.
       "character_option",
+      "character_roll",
       "class_level",
       "combatant",
       "creature",

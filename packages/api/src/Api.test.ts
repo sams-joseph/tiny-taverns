@@ -16,6 +16,7 @@ import { MagicItem, MagicItemCreate } from "./MagicItem.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
+import { Roll, RollCreate } from "./Roll.js";
 import { RuleArticle, RuleArticleLibraryCreate } from "./RuleArticle.js";
 import { Session, SessionCreate } from "./Session.js";
 import { SessionEvent } from "./SessionEvent.js";
@@ -181,6 +182,7 @@ describe("the API declaration", () => {
       "party",
       "prep",
       "recap",
+      "rolls",
       "runs",
       "search",
       "sessions",
@@ -213,6 +215,7 @@ describe("every content schema", () => {
     EncounterCreature,
     EncounterRun,
     Combatant,
+    Roll,
     // Append-only, and still a content row: a log line can quote a DM-only
     // read-aloud, so it fails closed like everything else. There is
     // deliberately no `SessionEventCreate` — the log has no create payload
@@ -265,6 +268,7 @@ describe("every content schema", () => {
       EncounterCreatureCreate,
       EncounterRunStart,
       CombatantCreate,
+      RollCreate,
       BeatCreate,
     };
     // The minimum a create needs, per schema. Spelled out rather than merged
@@ -301,6 +305,15 @@ describe("every content schema", () => {
       EncounterCreatureCreate: { creatureId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       EncounterRunStart: { encounterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       CombatantCreate: { displayName: "x" },
+      RollCreate: {
+        label: "Shortsword",
+        notation: "1d6+3",
+        dice: [4],
+        kept: [4],
+        modifier: 3,
+        total: 7,
+        mode: "normal",
+      },
       BeatCreate: { body: "The ferryman is called Cazril." },
     };
 

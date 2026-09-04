@@ -36,6 +36,7 @@ import { Party } from "../src/repo/Party.js";
 import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { RuleArticles } from "../src/repo/RuleArticles.js";
+import { Rolls } from "../src/repo/Rolls.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
@@ -219,6 +220,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Memberships.ts",
       "repo/Options.ts",
       "repo/Party.ts",
+      "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
       "repo/visibility.ts",
@@ -287,6 +289,7 @@ const runtime = ManagedRuntime.make(
     Options.layer,
     PrepItems.layer,
     RuleArticles.layer,
+    Rolls.layer.pipe(Layer.provide(LiveEvents.layer)),
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     Spells.layer,
@@ -373,6 +376,19 @@ const makeFixture = Effect.gen(function* () {
     beats.create(campaign.id, session.id, { body: "The ferryman would not say his name." }),
   );
   yield* as(prep.create(campaign.id, session.id, { label: "Reread the ford" }));
+  yield* as(
+    Effect.flatMap(Rolls, (rolls) =>
+      rolls.create(campaign.id, {
+        label: "Lantern check",
+        notation: "1d20+2",
+        dice: [12],
+        kept: [12],
+        modifier: 2,
+        total: 14,
+        mode: "normal",
+      }),
+    ),
+  );
   yield* as(
     spells.libraryCreate({
       name: "Shield",
@@ -544,6 +560,7 @@ const READS: Record<
     | Party
     | PrepItems
     | RuleArticles
+    | Rolls
     | SessionEvents
     | Sessions
     | Spells
@@ -560,6 +577,7 @@ const READS: Record<
   note: (f) => items(Effect.flatMap(Notes, (r) => r.list(f.campaign.id, {}))),
   beat: (f) => items(Effect.flatMap(Beats, (r) => r.list(f.campaign.id, f.session.id, {}))),
   prep_item: (f) => Effect.flatMap(PrepItems, (r) => r.list(f.campaign.id, f.session.id)),
+  character_roll: (f) => Effect.flatMap(Rolls, (r) => r.list(f.campaign.id, f.session.id, {})),
   creature: (f) => items(Effect.flatMap(Creatures, (r) => r.list(f.campaign.id, {}))),
   // The campaign's rules vocabulary. It is `creature`'s shape over a second
   // table and needed no predicate of its own — `corpusRowReadable` takes a

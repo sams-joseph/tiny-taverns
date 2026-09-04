@@ -105,6 +105,7 @@ import {
   GroupInviteId,
   MagicItemId,
   RuleArticleId,
+  RollId,
   SpellId,
   NoteId,
   PrepItemId,
@@ -133,6 +134,7 @@ import {
   RuleArticleLibraryUpdate,
   RuleArticleSort,
 } from "./RuleArticle.js";
+import { Roll, RollCreate, RollListFilter } from "./Roll.js";
 import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
@@ -1883,6 +1885,29 @@ class CombatantsGroup extends HttpApiGroup.make("combatants")
  * `EventSource` sends by itself on its automatic reconnect, and honouring it is
  * what makes that reconnect correct for free rather than silently lossy.
  */
+class RollsGroup extends HttpApiGroup.make("rolls")
+  .add(
+    HttpApiEndpoint.post("create", "/rolls", {
+      params: { campaignId: CampaignId },
+      payload: RollCreate,
+      success: Roll,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("list", "/sessions/:sessionId/rolls", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      query: RollListFilter,
+      success: Schema.Array(Roll),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/sessions/:sessionId/rolls/:rollId", {
+      params: { campaignId: CampaignId, sessionId: SessionId, rollId: RollId },
+      success: Roll,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId")
+  .middleware(Authorization) {}
+
 class LiveGroup extends HttpApiGroup.make("live")
   .add(
     HttpApiEndpoint.get("log", "/log", {
@@ -1935,6 +1960,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(EncounterCreaturesGroup)
   .add(PrepGroup)
   .add(BeatsGroup)
+  .add(RollsGroup)
   .add(SearchGroup)
   .add(HobGroup)
   .add(RunsGroup)

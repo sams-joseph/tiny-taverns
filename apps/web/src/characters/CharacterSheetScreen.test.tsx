@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bodyOf,
   brannoc,
+  campaignId,
   brannocId,
   brannocSeatRef,
   installCharacterServer,
   legacySheet,
   ownedSorrel,
+  playing,
   renderSheet,
   savedAs,
+  sessionId,
   sorrelId,
   strangerId,
 } from "./characters.fixtures";
@@ -327,11 +330,11 @@ describe("a character sheet", () => {
     expect(screen.getAllByRole("button", { name: /spell slot/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
     // No portrait upload and no journal entry. The roll log is present, and its
-    // copy says the result stays local.
+    // copy says when a result can leave this browser.
     expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
     expect(screen.getByText(/Your rolls/)).toBeTruthy();
-    expect(screen.getByText(/not sent to the DM or table yet/i)).toBeTruthy();
+    expect(screen.getByText(/sends them to the table's dice tray/i)).toBeTruthy();
 
     // The live half of the row is drawn and is nobody's to change here.
     expect(screen.queryByRole("button", { name: /temp/i })).toBeNull();
@@ -357,14 +360,61 @@ describe("a character sheet", () => {
     const log = () => within(screen.getByRole("list", { name: "Your rolls log" }));
     expect(log().getByText("STR check")).toBeTruthy();
     expect(log().getByText(/1d20\+4 · dice \d+, \d+ · kept \d+ · \+4 · advantage/)).toBeTruthy();
-    expect(
-      screen.getByText(/Kept on this sheet only\. Rolls are not sent to the DM or table yet\./),
-    ).toBeTruthy();
+    expect(screen.getByText(/Kept here — no shared live table is active\./)).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "Roll Halberd dice 1d10+4" }));
     expect(log().getByText("Halberd")).toBeTruthy();
     expect(log().getByText(/1d10\+4 · dice \d+ · \+4 · normal/)).toBeTruthy();
     expect(server.calls).toHaveLength(before);
+  });
+
+  it("sends a browser roll to the table while a shared night is active", async () => {
+    server.routes.set(...playing(campaignId));
+    const rollAnswer = {
+      status: 200,
+      body: {
+        id: "2b1f2a1e-0000-4000-8000-00000000aa01",
+        campaignId,
+        sessionId,
+        encounterRunId: "2b1f2a1e-0000-4000-8000-000000000c09",
+        accountId: brannoc.accountId,
+        accountName: "Mara Voss",
+        characterId: brannocId,
+        characterName: "Brannoc Duskharrow",
+        label: "Halberd",
+        notation: "1d10+4",
+        dice: [6],
+        kept: [6],
+        modifier: 4,
+        total: 10,
+        mode: "normal",
+        critical: null,
+        requestId: "from-browser",
+        visibility: "shared",
+        origin: "authored",
+        assistantTurnId: null,
+        createdAt: "2026-07-02T10:00:00.000Z",
+        updatedAt: "2026-07-02T10:00:00.000Z",
+      },
+    };
+    server.routes.set(`POST /campaigns/${campaignId}/rolls`, rollAnswer);
+    server.routes.set(`POST /campaigns/${campaignId}/rolls/`, rollAnswer);
+    await renderSheet();
+    await screen.findByText(/playing right now/i);
+
+    await userEvent.click(screen.getByRole("button", { name: "Roll Halberd dice 1d10+4" }));
+
+    await waitFor(() => expect(screen.getByText("Sent to the table's dice tray.")).toBeTruthy());
+    const sent = server.calls.find(
+      (call) => call.method === "POST" && call.pathname.endsWith("/rolls"),
+    );
+    expect(sent?.pathname).toBe(`/campaigns/${campaignId}/rolls`);
+    expect(JSON.parse(sent?.body ?? "{}")).toMatchObject({
+      characterId: brannocId,
+      label: "Halberd",
+      notation: "1d10+4",
+      mode: "normal",
+    });
   });
 
   it("preserves non-rollable actions as read-only", async () => {

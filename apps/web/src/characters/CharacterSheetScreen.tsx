@@ -1,5 +1,6 @@
 import type {
   Ability,
+  CampaignId,
   CharacterId,
   InventoryItem,
   OwnedCharacter,
@@ -10,6 +11,7 @@ import type {
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, cn, Icon } from "@taverns/ui";
 
+import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -186,6 +188,19 @@ import {
 
 /** How far below the scroller's top edge the reading line sits, in CSS pixels. */
 const SPY_SLACK = 60;
+
+type LoggedRollState = "local" | "sending" | "sent" | "failed";
+interface LoggedRoll extends LocalRoll {
+  readonly localId: string;
+  readonly state: LoggedRollState;
+  readonly message: string;
+}
+
+const newRollRequestId = (): string =>
+  globalThis.crypto?.randomUUID?.() ?? `roll-${String(Date.now())}-${String(Math.random())}`;
+
+const criticalFrom = (roll: LocalRoll): "hit" | "miss" | undefined =>
+  roll.natural === 20 ? "hit" : roll.natural === 1 ? "miss" : undefined;
 
 /**
  * One line of the Actions section — `CharacterSheetB.jsx`'s `BAttack` row: the
@@ -443,7 +458,7 @@ function RollLog({
   mode,
   onMode,
 }: {
-  readonly rolls: ReadonlyArray<LocalRoll>;
+  readonly rolls: ReadonlyArray<LoggedRoll>;
   readonly mode: RollMode;
   readonly onMode: (mode: RollMode) => void;
 }) {
@@ -457,15 +472,16 @@ function RollLog({
       </div>
       <CardContent className="space-y-3 pt-card">
         <p className="text-caption leading-body text-muted-foreground">
-          Kept on this sheet only. Rolls are not sent to the DM or table yet.
+          Rolls appear here immediately. During an open night, this sheet also sends them to the
+          table's dice tray.
         </p>
         {rolls.length === 0 ? (
           <p className="text-caption leading-body text-faint">No rolls yet.</p>
         ) : (
           <ol className="space-y-1.5" aria-label="Your rolls log">
-            {rolls.map((roll, index) => (
+            {rolls.map((roll) => (
               <li
-                key={`${String(index)}:${roll.label}:${roll.total}`}
+                key={roll.localId}
                 className="flex min-h-10 flex-wrap items-center gap-2 border border-hairline bg-surface-sunken px-2.5 py-2"
               >
                 <span className="min-w-0 flex-1 text-body-s leading-snug font-semibold text-heading">
@@ -479,8 +495,22 @@ function RollLog({
                     nat {roll.natural}
                   </Badge>
                 )}
+                <Badge
+                  variant={
+                    roll.state === "sent"
+                      ? "success"
+                      : roll.state === "failed"
+                        ? "destructive"
+                        : "outline"
+                  }
+                >
+                  {roll.state === "sending" ? "sending" : roll.state === "sent" ? "sent" : "local"}
+                </Badge>
                 <span className="basis-full font-mono text-micro leading-snug text-muted-foreground">
                   {rollDetail(roll)}
+                </span>
+                <span className="basis-full text-micro leading-snug text-muted-foreground">
+                  {roll.message}
                 </span>
               </li>
             ))}
@@ -590,6 +620,7 @@ function SheetDocument({
   onEditGear,
   onEditSkills,
   onEditSpells,
+  rollCampaignId,
 }: {
   readonly owned: OwnedCharacter;
   readonly sections: ReadonlyArray<SheetSectionSpec>;
@@ -599,6 +630,7 @@ function SheetDocument({
   readonly onEditGear: () => void;
   readonly onEditSkills: () => void;
   readonly onEditSpells: () => void;
+  readonly rollCampaignId: CampaignId | undefined;
 }) {
   const character = owned.character;
   const sheet = character.sheet;
@@ -616,7 +648,7 @@ function SheetDocument({
   const { busy, failure, submit } = useMutation();
   const [pending, setPending] = useState<Record<string, number>>({});
   const [rollMode, setRollMode] = useState<RollMode>("normal");
-  const [rolls, setRolls] = useState<ReadonlyArray<LocalRoll>>([]);
+  const [rolls, setRolls] = useState<ReadonlyArray<LoggedRoll>>([]);
   const adjusted = (resource: SheetResource): SheetResource => ({
     ...resource,
     used: Math.max(0, Math.min(resource.max, resource.used + (pending[resource.id] ?? 0))),
@@ -643,7 +675,72 @@ function SheetDocument({
   };
   const recordRoll = (roll: LocalRoll | undefined) => {
     if (roll === undefined) return;
-    setRolls((current) => [roll, ...current].slice(0, 12));
+    const requestId = newRollRequestId();
+    const target = rollCampaignId;
+    const logged: LoggedRoll = {
+      ...roll,
+      localId: requestId,
+      state: target === undefined ? "local" : "sending",
+      message:
+        target === undefined
+          ? "Kept here — no shared live table is active."
+          : "Sending to the table…",
+    };
+    setRolls((current) => [logged, ...current].slice(0, 12));
+    if (target === undefined) return;
+
+    void submit(
+      (client) =>
+        client.rolls.create({
+          params: { campaignId: target },
+          payload: {
+            characterId: character.id,
+            label: roll.label,
+            notation: roll.notation,
+            dice: roll.dice,
+            kept: roll.kept,
+            modifier: roll.modifier,
+            total: roll.total,
+            mode: roll.mode,
+            requestId,
+            ...(criticalFrom(roll) === undefined ? {} : { critical: criticalFrom(roll) }),
+          },
+        }),
+      [],
+    ).then((result) => {
+      setRolls((current) =>
+        current.map((item) => {
+          if (item.localId !== requestId) return item;
+          if (Result.isSuccess(result)) {
+            return {
+              ...item,
+              total: result.success.total,
+              dice: result.success.dice,
+              kept: result.success.kept,
+              modifier: result.success.modifier,
+              mode: result.success.mode,
+              notation: result.success.notation,
+              natural:
+                result.success.critical === "hit"
+                  ? 20
+                  : result.success.critical === "miss"
+                    ? 1
+                    : undefined,
+              state: "sent",
+              message: "Sent to the table's dice tray.",
+            };
+          }
+          return {
+            ...item,
+            state: "failed",
+            message:
+              result.failure.kind === "conflict"
+                ? "Kept here — nobody is playing at that table right now."
+                : "Kept here — it could not be sent to the table.",
+          };
+        }),
+      );
+    });
   };
   const rollNotation = (label: string, notation: string, mode: RollMode | undefined = rollMode) => {
     recordRoll(rollDiceExpression(label, notation, mode));
@@ -1367,9 +1464,11 @@ function SheetScroller({
   scrollTopRef,
   onEdit,
   onReload,
+  rollCampaignId,
 }: {
   readonly owned: OwnedCharacter;
   readonly banner: LiveBanner | undefined;
+  readonly rollCampaignId: CampaignId | undefined;
   readonly active: SheetSectionId;
   readonly onActive: (id: SheetSectionId) => void;
   readonly vitalsOpen: boolean;
@@ -1489,6 +1588,7 @@ function SheetScroller({
           onEditGear={() => onEdit("gear")}
           onEditSkills={() => onEdit("skills")}
           onEditSpells={() => onEdit("spells")}
+          rollCampaignId={rollCampaignId}
         />
       </div>
     </div>
@@ -1693,6 +1793,7 @@ export function CharacterSheetScreen() {
             scrollTopRef={scrollTop}
             onEdit={setEditing}
             onReload={reload}
+            rollCampaignId={view.live?.campaignId}
           />
         ))}
 

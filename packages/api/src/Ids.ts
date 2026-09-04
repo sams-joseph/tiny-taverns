@@ -148,6 +148,10 @@ export type CombatantId = typeof CombatantId.Type;
 export const SessionEventId = id("SessionEventId");
 export type SessionEventId = typeof SessionEventId.Type;
 
+/** One browser-rolled character-sheet die result filed under a live night. */
+export const RollId = id("RollId");
+export type RollId = typeof RollId.Type;
+
 /**
  * One line of prose about what happened at the table. Unlike a `SessionEventId`
  * this names something the DM can go back and correct — which is the whole

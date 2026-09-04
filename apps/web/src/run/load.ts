@@ -6,6 +6,7 @@ import type {
   CreatureId,
   EncounterRun,
   EncounterRunId,
+  Roll,
   Session,
   SessionId,
 } from "@taverns/api";
@@ -178,6 +179,18 @@ export const runFrameAtom = Atom.family((path: RunPath) => apiAtom(loadRunFrame(
  */
 export const liveStateAtom = Atom.family((path: RunPath) =>
   writableApiAtom(loadLiveState(path), []),
+);
+
+/** The dice tray is a session read. The doorbell refreshes it; payloads do not. */
+export const rollsAtom = Atom.family((path: RunPath) =>
+  apiAtom(
+    (client): Effect.Effect<ReadonlyArray<Roll>, unknown> =>
+      client.rolls.list({
+        params: { campaignId: path.campaignId, sessionId: path.sessionId },
+        query: { limit: 12 },
+      }),
+    [reads.rolls(path.sessionId)],
+  ),
 );
 
 /**

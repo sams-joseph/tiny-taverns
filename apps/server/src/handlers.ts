@@ -41,6 +41,7 @@ import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
 import { RuleArticles } from "./repo/RuleArticles.js";
+import { Rolls } from "./repo/Rolls.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Spells } from "./repo/Spells.js";
@@ -601,6 +602,20 @@ const PlayerTableLive = HttpApiBuilder.group(
   }),
 );
 
+const RollsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "rolls",
+  Effect.fnUntraced(function* (handlers) {
+    const rolls = yield* Rolls;
+    return handlers
+      .handle("create", ({ params, payload }) => rolls.create(params.campaignId, payload))
+      .handle("list", ({ params, query }) => rolls.list(params.campaignId, params.sessionId, query))
+      .handle("findById", ({ params }) =>
+        rolls.findById(params.campaignId, params.sessionId, params.rollId),
+      );
+  }),
+);
+
 const SearchLive = HttpApiBuilder.group(
   TavernsApi,
   "search",
@@ -958,6 +973,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     EncounterCreaturesLive,
     PrepLive,
     BeatsLive,
+    RollsLive,
     SearchLive,
     HobLive,
     HobGroupLive,

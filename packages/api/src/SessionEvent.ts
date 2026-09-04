@@ -59,6 +59,8 @@ export const SessionEventKind = Schema.Literals([
    * payload, and the beat itself stays correctable, which a log row is not.
    */
   "beat-added",
+  /** A browser roll was persisted; consumers re-read `character_roll`, never this payload. */
+  "roll-made",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 

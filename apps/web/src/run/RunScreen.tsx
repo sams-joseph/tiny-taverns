@@ -1,4 +1,4 @@
-import type { Combatant, CombatantId, SessionEvent } from "@taverns/api";
+import type { Combatant, CombatantId, Roll, SessionEvent } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -24,7 +24,7 @@ import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { EndRunDialog } from "./EndRunDialog";
 import { InitiativeList } from "./InitiativeList";
-import { runViewAtom, type RunPath } from "./load";
+import { rollsAtom, runViewAtom, type RunPath } from "./load";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
@@ -65,6 +65,79 @@ import { useLiveStream } from "./stream";
  */
 const LOG_KEPT = 40;
 
+const rollFaces = (roll: Roll): string => {
+  const faces = roll.dice.join(", ");
+  const kept = roll.kept.length === roll.dice.length ? undefined : `kept ${roll.kept.join(", ")}`;
+  return [roll.notation, `dice ${faces}`, kept, roll.mode].filter(Boolean).join(" · ");
+};
+
+const rollByline = (roll: Roll): string =>
+  [roll.accountName, roll.characterName].filter((part) => part !== null && part !== "").join(" · ");
+
+function DiceTray({
+  rolls,
+  status,
+}: {
+  readonly rolls: ReadonlyArray<Roll>;
+  readonly status: string;
+}) {
+  return (
+    <section
+      className="rounded-card border border-hairline bg-surface-card shadow-1"
+      aria-label="Dice tray"
+    >
+      <div className="flex items-center gap-2 border-b border-hairline px-card py-2.5">
+        <h2 className="flex-1 text-label-s leading-none font-semibold tracking-caps uppercase text-muted-foreground">
+          Dice tray
+        </h2>
+        <Badge variant={status === "live" ? "success" : "outline"}>{status}</Badge>
+      </div>
+      <div className="space-y-2 p-card">
+        {rolls.length === 0 ? (
+          <p className="text-caption leading-body text-muted-foreground">
+            No table rolls yet. Sheet rolls appear here once a player sends them during this
+            session.
+          </p>
+        ) : (
+          <ol className="space-y-2" aria-label="Dice tray rolls">
+            {rolls.map((roll) => (
+              <li
+                key={roll.id}
+                className="rounded-control border border-hairline bg-surface-sunken px-2.5 py-2"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-body-s leading-snug font-semibold text-heading">
+                      {roll.label}
+                    </p>
+                    <p className="mt-0.5 truncate text-caption leading-snug text-muted-foreground">
+                      {rollByline(roll)}
+                    </p>
+                    <p className="mt-0.5 font-mono text-micro leading-snug text-muted-foreground">
+                      {rollFaces(roll)}
+                    </p>
+                  </div>
+                  <span className="font-display text-title leading-none font-semibold text-accent-ink">
+                    {roll.total}
+                  </span>
+                </div>
+                {roll.critical !== null && (
+                  <Badge
+                    className="mt-2"
+                    variant={roll.critical === "hit" ? "success" : "destructive"}
+                  >
+                    critical {roll.critical === "hit" ? "20" : "1"}
+                  </Badge>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Space advances the turn — the prototype's own shortcut (`:127`). */
 const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -81,7 +154,9 @@ export function RunScreen() {
   );
 
   const [resource, reload] = useApiAtom(runViewAtom(path));
+  const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
   const view = resource.state === "ready" ? resource.value : undefined;
+  const trayRolls = rollsResource.state === "ready" ? rollsResource.value : [];
 
   // The fight's own half, from the same atom the value above is built on — so
   // the rows the screen renders and the rows the controller writes into cannot
@@ -109,8 +184,9 @@ export function RunScreen() {
           : [event, ...current].slice(0, LOG_KEPT),
       );
       refresh();
+      reloadRolls();
     },
-    [refresh],
+    [refresh, reloadRolls],
   );
 
   const over = state !== undefined && state.run.endedAt !== null;
@@ -123,7 +199,10 @@ export function RunScreen() {
     // Catching up is two halves: the log resumes from the cursor, and the rows
     // are re-read. See `onReconnected` for why the second one is not implied by
     // the first.
-    onReconnected: refresh,
+    onReconnected: () => {
+      refresh();
+      reloadRolls();
+    },
   });
 
   const dialogOpen = adding || editing !== undefined || ending;
@@ -393,6 +472,7 @@ export function RunScreen() {
                   onEdit={() => setEditing(selected)}
                   onFollow={() => setSelectedId(undefined)}
                 />
+                <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
                 <SessionLog
                   events={log}
                   combatants={state.combatants}

@@ -49,6 +49,7 @@ import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
 import { RuleArticles } from "./repo/RuleArticles.js";
+import { Rolls } from "./repo/Rolls.js";
 import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
@@ -237,6 +238,7 @@ export const servicesOver = <E>(
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
   | Options
   | RuleArticles
+  | Rolls
   | Party
   | PlayerTable
   | PrepItems
@@ -308,6 +310,9 @@ export const servicesOver = <E>(
     // as creatures, but their ordered sections are copied with them so a
     // campaign snapshot remains coherent after a system re-import.
     RuleArticles.layer,
+    // Browser-submitted rolls are live session facts: the row and its marker
+    // commit together, then the same session doorbell refreshes the tray.
+    Rolls.layer.pipe(Layer.provide(LiveEvents.layer)),
     // Spells follow the same Library/campaign-copy ownership as creatures, but
     // write no live state and ring no doorbell.
     Spells.layer,
@@ -434,6 +439,7 @@ export const applicationOver = <E>(
     | Notes
     | Options
     | RuleArticles
+    | Rolls
     | Party
     | PlayerTable
     | PrepItems

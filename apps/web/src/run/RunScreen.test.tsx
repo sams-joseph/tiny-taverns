@@ -9,6 +9,7 @@ import {
   installRunServer,
   liveRun,
   renderRunner,
+  session,
   sessionEvent,
 } from "./run.fixtures";
 import { reads } from "../api/keys";
@@ -174,6 +175,52 @@ describe("the runner", () => {
     // the players can see two combatants they cannot.
     await within(listCard()).findByText(/every line in it is hidden from them/);
     expect(screen.getAllByLabelText("Hidden from players")).toHaveLength(2);
+  });
+
+  it("draws the persisted dice tray and re-reads it when the stream rings", async () => {
+    const roll = {
+      id: "2b1f2a1e-0000-4000-8000-00000000aa01",
+      campaignId,
+      sessionId: session.id,
+      encounterRunId: liveRun.id,
+      accountId: "2b1f2a1e-0000-4000-8000-0000000000a2",
+      accountName: "Mara Voss",
+      characterId: brannoc.characterId,
+      characterName: "Brannoc Duskharrow",
+      label: "Halberd",
+      notation: "1d20+7",
+      dice: [12],
+      kept: [12],
+      modifier: 7,
+      total: 19,
+      mode: "normal",
+      critical: null,
+      requestId: null,
+      visibility: "shared",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: "2026-08-04T19:04:00.000Z",
+      updatedAt: "2026-08-04T19:04:00.000Z",
+    };
+    reaim("/rolls", { status: 200, body: [roll] });
+    await renderRunner();
+
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
+    const tray = within(screen.getByRole("region", { name: "Dice tray" }));
+    expect(tray.getByText("Halberd")).toBeTruthy();
+    expect(tray.getByText("Mara Voss · Brannoc Duskharrow")).toBeTruthy();
+    expect(tray.getByText("19")).toBeTruthy();
+
+    const next = {
+      ...roll,
+      id: "2b1f2a1e-0000-4000-8000-00000000aa02",
+      total: 24,
+      dice: [17],
+      kept: [17],
+    };
+    reaim("/rolls", { status: 200, body: [next, roll] });
+    server.emit(sessionEvent(4, "roll-made"));
+    await waitFor(() => expect(tray.getByText("24")).toBeTruthy());
   });
 
   it("re-reads the fight when the stream rings, rather than trusting the payload", async () => {

@@ -44,6 +44,8 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   // The prose is a `beat` row, not this event's payload — see `Beat`. The log
   // says only that one was jotted, and at what point in the fight.
   "beat-added": () => "A beat was jotted down",
+  // The row is in `character_roll`; this marker is only the doorbell.
+  "roll-made": () => "A roll hit the tray",
 };
 
 /**
