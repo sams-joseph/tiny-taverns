@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bodyOf,
   brannoc,
@@ -30,7 +30,10 @@ import {
 const server = installCharacterServer();
 
 beforeEach(() => server.reset());
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.body.replaceChildren();
+});
 
 const spine = () => screen.getByRole("navigation", { name: "Sheet sections" });
 const spineItems = () =>
@@ -167,18 +170,22 @@ describe("a character sheet", () => {
     expect(screen.getByText("Athletics")).toBeTruthy();
     expect(screen.getByText("All armour")).toBeTruthy();
 
-    // Actions: read off `actions` — the attack with its notation, shown and
-    // not rolled, and **its cost as a badge and nothing ticked** (D6). (The
-    // fixture carries a halberd on the gear too, so the word is on the sheet
-    // twice now that every section is on screen at once.)
+    // Actions: read off `actions` — the attack and damage rolls are local-only,
+    // and **its cost as a badge and nothing ticked** (D6). (The fixture carries
+    // a halberd on the gear too, so the word is on the sheet twice now that
+    // every section is on screen at once.)
     expect(inSection("actions").getByText("Halberd")).toBeTruthy();
-    expect(inSection("actions").getByText("1d10+4")).toBeTruthy();
+    expect(
+      inSection("actions").getByRole("button", { name: "Roll Halberd dice 1d10+4" }),
+    ).toBeTruthy();
     expect(inSection("actions").getAllByText("1 action")).toHaveLength(2);
     expect(
       inSection("actions").getByText(/Heavy · Two-Handed · Attack ×2 · Slashing · Reach 10 ft\./),
     ).toBeTruthy();
-    // A feature with a roll and no cost draws the roll and no badge.
-    expect(inSection("actions").getByText("2d8")).toBeTruthy();
+    // A feature with a roll and no cost draws a roll button and no badge.
+    expect(
+      inSection("actions").getByRole("button", { name: "Roll Divine Smite dice 2d8" }),
+    ).toBeTruthy();
     expect(inSection("actions").getByText(/expend a spell slot/)).toBeTruthy();
 
     // Spellcasting: the header aside, the slots as pips plus a sentence
@@ -285,8 +292,20 @@ describe("a character sheet", () => {
       "Failures 1",
       "Failures 2",
       "Failures 3",
+      "Normal",
+      "Adv",
+      "Dis",
       "Edit abilities",
       "Edit skills",
+      "Roll STR check",
+      "Roll DEX check",
+      "Roll CON check",
+      "Roll INT check",
+      "Roll WIS check",
+      "Roll CHA check",
+      "Roll Halberd attack +7",
+      "Roll Halberd dice 1d10+4",
+      "Roll Divine Smite dice 2d8",
       "Recover level 1 spell slot 1",
       "Spend level 1 spell slot 2",
       "Spend level 1 spell slot 3",
@@ -299,17 +318,18 @@ describe("a character sheet", () => {
       "Edit backstory",
     ]);
 
-    // The cell is still not a roll button, which is what the drawing makes it,
-    // and neither is the attack row.
-    expect(screen.queryByRole("button", { name: /STR/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /1d10/ })).toBeNull();
-    // Slots can be spent now; prepared spells still have no write.
+    // The cell and attack row roll locally.
+    expect(screen.getByRole("button", { name: "Roll STR check" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Roll Halberd dice 1d10+4" })).toBeTruthy();
+    // Rolls and slots can be pressed now; prepared spells still have no write.
     expect(screen.getAllByRole("button", { name: /spell slot/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
-    // No portrait upload, no journal entry, no roll log.
+    // No portrait upload and no journal entry. The roll log is present, and its
+    // copy says the result stays local.
     expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
-    expect(screen.queryByText(/Your rolls/)).toBeNull();
+    expect(screen.getByText(/Your rolls/)).toBeTruthy();
+    expect(screen.getByText(/not sent to the DM or table yet/i)).toBeTruthy();
 
     // The live half of the row is drawn and is nobody's to change here.
     expect(screen.queryByRole("button", { name: /temp/i })).toBeNull();
@@ -323,6 +343,34 @@ describe("a character sheet", () => {
     // the bar is not drawn either; the campaign is on the subtitle.
     expect(screen.queryByRole("button", { name: /Go to the table/i })).toBeNull();
     expect(screen.queryByText(/playing right now/i)).toBeNull();
+  });
+
+  it("rolls abilities and actions into a local, truthful log", async () => {
+    await renderSheet();
+    await screen.findByRole("navigation", { name: "Sheet sections" });
+    const before = server.calls.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Adv" }));
+    await userEvent.click(screen.getByRole("button", { name: "Roll STR check" }));
+    const log = () => within(screen.getByRole("list", { name: "Your rolls log" }));
+    expect(log().getByText("STR check")).toBeTruthy();
+    expect(log().getByText(/1d20\+4 · dice \d+, \d+ · kept \d+ · \+4 · advantage/)).toBeTruthy();
+    expect(
+      screen.getByText(/Kept on this sheet only\. Rolls are not sent to the DM or table yet\./),
+    ).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Roll Halberd dice 1d10+4" }));
+    expect(log().getByText("Halberd")).toBeTruthy();
+    expect(log().getByText(/1d10\+4 · dice \d+ · \+4 · normal/)).toBeTruthy();
+    expect(server.calls).toHaveLength(before);
+  });
+
+  it("preserves non-rollable actions as read-only", async () => {
+    await renderSheet();
+    await screen.findByRole("navigation", { name: "Sheet sections" });
+
+    expect(inSection("actions").getByText("Lay on Hands")).toBeTruthy();
+    expect(inSection("actions").queryByRole("button", { name: /Lay on Hands/ })).toBeNull();
   });
 
   it("spends a slot and rests through the owner-only resource endpoints", async () => {

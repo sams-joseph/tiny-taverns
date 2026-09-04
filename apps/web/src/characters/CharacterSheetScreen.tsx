@@ -1,4 +1,5 @@
 import type {
+  Ability,
   CharacterId,
   InventoryItem,
   OwnedCharacter,
@@ -25,6 +26,15 @@ import { IdentityDialog } from "./IdentityDialog";
 import { SkillsDialog } from "./SkillsDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { loadCharacterSheet } from "./load";
+import {
+  notationForD20,
+  parseDiceExpression,
+  rollAbilityCheck,
+  rollDetail,
+  rollDiceExpression,
+  type LocalRoll,
+  type RollMode,
+} from "./rolls";
 import {
   actionRows,
   coins,
@@ -162,13 +172,11 @@ import {
  * - **The live half of the row.** Current hit points, temporary hit points and
  *   conditions are drawn and are not editable — they are `0014`'s live trio and
  *   the DM's to move, which is why the payload has no field for any of them.
- * - **Rolling, spending, preparing, uploading, journalling — and the roll log.**
- *   A check rolled "to your DM's dice tray" has no endpoint at all, so the
- *   drawing's dice buttons, its toast and its *Your rolls* panel are not built;
- *   the right column is the spine alone. A spent spell slot, a prepared spell, a
- *   portrait and a journal entry are document keys with no drawn control behind
- *   them in this build. They are drawn as the values they are — the same call
- *   `bestiary/StatBlock.tsx` made about a rollable trait.
+ * - **Rolling is browser-local.** A check rolled "to your DM's dice tray" has
+ *   no endpoint at all, so dice buttons write only the ephemeral *Your rolls*
+ *   panel and its feedback says that truth. A prepared spell, a portrait and a
+ *   journal entry are document keys with no drawn control behind them in this
+ *   build. They are drawn as the values they are.
  */
 
 /** How far below the scroller's top edge the reading line sits, in CSS pixels. */
@@ -183,13 +191,49 @@ const SPY_SLACK = 60;
  * says what a line costs and the sheet keeps no per-turn state. The badge wears
  * the `outline` variant rather than a variant of its own; the system ships none
  * for an economy and inventing a token is not this screen's to do. The dice are
- * still notation rather than a button: rolling is a later slice.
+ * rollable when the notation is parseable, and the result stays local to this
+ * browser until the table-roll slice exists.
  */
-function ActionLine({ action }: { readonly action: SheetAction }) {
+function RollButton({
+  label,
+  face,
+  onRoll,
+}: {
+  readonly label: string;
+  readonly face: string;
+  readonly onRoll: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      aria-label={label}
+      onClick={onRoll}
+      className="h-7 gap-1 px-1.5 font-mono text-micro leading-none"
+    >
+      <Icon name="dices" size={13} />
+      {face}
+    </Button>
+  );
+}
+
+function ActionLine({
+  action,
+  onRoll,
+}: {
+  readonly action: SheetAction;
+  readonly onRoll: (label: string, notation: string, mode?: RollMode) => void;
+}) {
   const cost = costLabel(action.cost);
   const kind = [action.text, action.damageType, action.range].filter(
     (part): part is string => part !== undefined && part !== "",
   );
+  const hit =
+    action.hit === undefined || action.hit === "" || action.hit === "—" ? undefined : action.hit;
+  const hitNotation = hit === undefined ? undefined : notationForD20(hit);
+  const dice = action.dice === undefined || action.dice === "" ? undefined : action.dice;
+  const diceRollable = dice !== undefined && parseDiceExpression(dice) !== undefined;
   return (
     <div className="flex min-h-10 flex-wrap items-center gap-2.5 border border-hairline bg-surface-sunken px-2.5 py-2">
       <div className="min-w-0 flex-1">
@@ -199,16 +243,28 @@ function ActionLine({ action }: { readonly action: SheetAction }) {
         )}
       </div>
       {cost !== undefined && <Badge variant="outline">{cost}</Badge>}
-      {action.hit !== undefined && action.hit !== "" && (
+      {hitNotation !== undefined && hit !== undefined && (
+        <RollButton
+          label={`Roll ${action.name} attack ${hit}`}
+          face={hit}
+          onRoll={() => onRoll(`${action.name} attack`, hitNotation, undefined)}
+        />
+      )}
+      {hit !== undefined && hitNotation === undefined && (
         <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
-          {action.hit}
+          {hit}
         </span>
       )}
-      {/* The notation, shown and not rolled — there is no dice tray behind a
-          button here, and `StatBlock.tsx` renders a monster's the same way. */}
-      {action.dice !== undefined && action.dice !== "" && (
+      {diceRollable && dice !== undefined && (
+        <RollButton
+          label={`Roll ${action.name} dice ${dice}`}
+          face={dice}
+          onRoll={() => onRoll(action.name, dice, "normal")}
+        />
+      )}
+      {dice !== undefined && !diceRollable && (
         <span className="rounded-xs bg-surface-raised px-1.5 py-px font-mono text-micro leading-snug text-accent-ink">
-          {action.dice}
+          {dice}
         </span>
       )}
     </div>
@@ -337,6 +393,99 @@ function Feature({
   );
 }
 
+function RollModeControl({
+  mode,
+  onMode,
+}: {
+  readonly mode: RollMode;
+  readonly onMode: (mode: RollMode) => void;
+}) {
+  const modes: ReadonlyArray<{ readonly mode: RollMode; readonly label: string }> = [
+    { mode: "normal", label: "Normal" },
+    { mode: "advantage", label: "Adv" },
+    { mode: "disadvantage", label: "Dis" },
+  ];
+  return (
+    <div
+      className="flex rounded-pill border border-hairline bg-surface-sunken p-0.5"
+      aria-label="D20 roll mode"
+    >
+      {modes.map((item) => {
+        const active = mode === item.mode;
+        return (
+          <button
+            key={item.mode}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onMode(item.mode)}
+            className={cn(
+              "rounded-pill px-2 py-1 text-micro leading-none font-medium transition-control focus-visible:outline-none focus-visible:ring-focus",
+              active
+                ? "bg-accent-soft text-accent-ink"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RollLog({
+  rolls,
+  mode,
+  onMode,
+}: {
+  readonly rolls: ReadonlyArray<LocalRoll>;
+  readonly mode: RollMode;
+  readonly onMode: (mode: RollMode) => void;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-card py-2.5">
+        <h2 className="flex-1 text-label-s leading-none font-semibold tracking-caps uppercase text-muted-foreground">
+          Your rolls
+        </h2>
+        <RollModeControl mode={mode} onMode={onMode} />
+      </div>
+      <CardContent className="space-y-3 pt-card">
+        <p className="text-caption leading-body text-muted-foreground">
+          Kept on this sheet only. Rolls are not sent to the DM or table yet.
+        </p>
+        {rolls.length === 0 ? (
+          <p className="text-caption leading-body text-faint">No rolls yet.</p>
+        ) : (
+          <ol className="space-y-1.5" aria-label="Your rolls log">
+            {rolls.map((roll, index) => (
+              <li
+                key={`${String(index)}:${roll.label}:${roll.total}`}
+                className="flex min-h-10 flex-wrap items-center gap-2 border border-hairline bg-surface-sunken px-2.5 py-2"
+              >
+                <span className="min-w-0 flex-1 text-body-s leading-snug font-semibold text-heading">
+                  {roll.label}
+                </span>
+                <span className="font-display text-title leading-none font-semibold text-accent-ink">
+                  {roll.total}
+                </span>
+                {roll.natural !== undefined && (
+                  <Badge variant={roll.natural === 20 ? "success" : "destructive"}>
+                    nat {roll.natural}
+                  </Badge>
+                )}
+                <span className="basis-full font-mono text-micro leading-snug text-muted-foreground">
+                  {rollDetail(roll)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function InventoryLine({ item, first }: { readonly item: InventoryItem; readonly first: boolean }) {
   return (
     <div
@@ -459,6 +608,8 @@ function SheetDocument({
   const drawn = (id: SheetSectionId) => sections.find((section) => section.id === id);
   const { busy, failure, submit } = useMutation();
   const [pending, setPending] = useState<Record<string, number>>({});
+  const [rollMode, setRollMode] = useState<RollMode>("normal");
+  const [rolls, setRolls] = useState<ReadonlyArray<LocalRoll>>([]);
   const adjusted = (resource: SheetResource): SheetResource => ({
     ...resource,
     used: Math.max(0, Math.min(resource.max, resource.used + (pending[resource.id] ?? 0))),
@@ -483,6 +634,16 @@ function SheetDocument({
     );
     return resource === undefined ? undefined : adjusted(resource);
   };
+  const recordRoll = (roll: LocalRoll | undefined) => {
+    if (roll === undefined) return;
+    setRolls((current) => [roll, ...current].slice(0, 12));
+  };
+  const rollNotation = (label: string, notation: string, mode: RollMode | undefined = rollMode) => {
+    recordRoll(rollDiceExpression(label, notation, mode));
+  };
+  const rollAbility = (ability: Ability) => {
+    recordRoll(rollAbilityCheck(`${ability.label} check`, ability.modifier, rollMode));
+  };
 
   const abilities = drawn("abilities");
   const actions = drawn("actions");
@@ -498,6 +659,7 @@ function SheetDocument({
        beside an open Hob panel is 400 less — rather than on the shell's. The
        `@md`/`@lg` steps below are the column's, never `main`'s. */
     <div className="@container order-3 flex min-w-0 flex-1 flex-col gap-gutter @3xl:order-2">
+      <RollLog rolls={rolls} mode={rollMode} onMode={setRollMode} />
       {failure !== undefined && (
         <Card className="border-danger">
           <CardContent className="pt-card">
@@ -529,7 +691,7 @@ function SheetDocument({
                document's width rather than the window's. */
             <div className="grid grid-cols-3 gap-1.5 @sm:grid-cols-6">
               {sheet.abilities.map((ability) => (
-                <AbilityCell key={ability.label} ability={ability} />
+                <AbilityCell key={ability.label} ability={ability} onRoll={rollAbility} />
               ))}
             </div>
           )}
@@ -587,7 +749,7 @@ function SheetDocument({
         <DocumentSection section={actions} register={register}>
           <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2">
             {actionRows(sheet).map((action) => (
-              <ActionLine key={action.id} action={action} />
+              <ActionLine key={action.id} action={action} onRoll={rollNotation} />
             ))}
           </div>
         </DocumentSection>

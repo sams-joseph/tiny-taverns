@@ -1,5 +1,5 @@
 import type { Ability } from "@taverns/api";
-import { Badge, Card, cn, Icon } from "@taverns/ui";
+import { Badge, Button, Card, cn, Icon } from "@taverns/ui";
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
 import { hpFraction, initialsOf, type SheetSectionId, type SheetSectionSpec } from "./sheet";
 
@@ -190,14 +190,19 @@ export function HpTrack({
  * One ability cell — the modifier big, the score under it, the saving throw
  * beneath that.
  *
- * A `<div>` and not the delivery's `<button>`: the press rolls a check into the
- * DM's dice tray, and there is no dice tray. `bestiary/StatBlock.tsx` made the
- * same call about a monster's rollable trait and for the same reason — the
- * notation is rendered as what it is, something you read.
+ * A button exactly when slice 4a has somewhere honest to put the result: the
+ * browser-local roll log on this sheet. It still sends nothing to the DM or the
+ * table, and the screen that owns the log supplies the callback.
  */
-export function AbilityCell({ ability }: { readonly ability: Ability }) {
-  return (
-    <div className="flex flex-col items-center gap-0.5 rounded-sm border border-hairline bg-surface-sunken px-1 pt-2.5 pb-2">
+export function AbilityCell({
+  ability,
+  onRoll,
+}: {
+  readonly ability: Ability;
+  readonly onRoll?: ((ability: Ability) => void) | undefined;
+}) {
+  const content = (
+    <>
       <span className="text-micro leading-none font-semibold tracking-caps text-muted-foreground">
         {ability.label}
       </span>
@@ -216,7 +221,22 @@ export function AbilityCell({ ability }: { readonly ability: Ability }) {
           save {ability.save}
         </span>
       )}
+    </>
+  );
+
+  return onRoll === undefined ? (
+    <div className="flex flex-col items-center gap-0.5 rounded-sm border border-hairline bg-surface-sunken px-1 pt-2.5 pb-2">
+      {content}
     </div>
+  ) : (
+    <Button
+      variant="ghost"
+      className="flex h-auto min-h-0 flex-col items-center gap-0.5 rounded-sm border border-hairline bg-surface-sunken px-1 pt-2.5 pb-2 hover:bg-surface-raised"
+      aria-label={`Roll ${ability.label} check`}
+      onClick={() => onRoll(ability)}
+    >
+      {content}
+    </Button>
   );
 }
 
