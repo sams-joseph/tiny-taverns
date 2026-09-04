@@ -252,12 +252,11 @@ describe("the route table", () => {
     expect(landsOn("/characters/not-a-uuid").at).toBe("/characters/$");
   });
 
-  it("puts the create form under the campaign it creates at", () => {
+  it("puts the create form under the campaign it uses as context", () => {
     // The campaign is still step one: the character row is account-owned and
-    // top-level now, but the create seats it at a table in the same
-    // transaction and Hob's drafting thread is campaign-scoped, so a table is
-    // picked first and the id in the URL is what makes that pick a thing you
-    // can bookmark and reload.
+    // top-level, and creation seats it nowhere, but the vocabulary and Hob's
+    // drafting thread are campaign-scoped, so a table is picked first and the
+    // id in the URL is what makes that pick a thing you can bookmark and reload.
     expect(landsOn(`/campaigns/${CAMPAIGN_ID}/characters/new`)).toEqual({
       at: "/campaigns/$campaignId/characters/new",
       params: { campaignId: CAMPAIGN_ID },

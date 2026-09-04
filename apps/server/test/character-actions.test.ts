@@ -394,6 +394,13 @@ describe("the character spell picker and level-up recompute", () => {
       }),
     );
 
+    await as(token, (client) =>
+      client.party.join({
+        params: { campaignId: campaignId as never },
+        payload: { characterId: made.id },
+      }),
+    );
+
     const book = await as(token, (client) =>
       client.me.characterSpells({ params: { characterId: made.id } }),
     );

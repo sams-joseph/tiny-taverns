@@ -100,6 +100,7 @@ const makeFixture = Effect.gen(function* () {
   const characters = yield* Characters;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
+  const party = yield* Party;
   const roster = yield* EncounterCreatures;
 
   const jo = yield* anAccount("Jo");
@@ -120,7 +121,9 @@ const makeFixture = Effect.gen(function* () {
       hpMax: 32,
     }),
   );
+  yield* withActor(pim)(party.join(table.id, { characterId: brannoc.id }));
   const sorrel = yield* withActor(marta)(characters.createOwn(table.id, { name: "Sorrel" }));
+  yield* withActor(marta)(party.join(table.id, { characterId: sorrel.id }));
 
   const goblin = yield* asJo(
     creatures.libraryCreate({
@@ -173,14 +176,15 @@ const asOwned = async (owner: Actor, id: CharacterId): Promise<Character> => {
   return found!.character;
 };
 
-/** A fresh character of the given owner's at the fixture table, plus its seat. */
+/** A fresh character of the given owner's at the fixture table, plus its explicit seat. */
 const aFresh = async (owner: Actor, name: string, hpMax = 30) => {
   const made = await runtime.runPromise(
     withActor(owner)(characters.createOwn(fixture.table.id, { name, hpMax })).pipe(Effect.orDie),
   );
-  const mine = await runtime.runPromise(withActor(owner)(characters.mine).pipe(Effect.orDie));
-  const seatId = mine.find((row) => row.character.id === made.id)!.seats[0]!.campaignCharacterId;
-  return { made, seatId };
+  const joined = await runtime.runPromise(
+    withActor(owner)(party.join(fixture.table.id, { characterId: made.id })).pipe(Effect.orDie),
+  );
+  return { made, seatId: joined.seat.id };
 };
 
 /** What a refusal actually said, for the record rather than only its tag. */
@@ -282,6 +286,7 @@ describe("the grant: the owner edits the shared sheet", () => {
         const made = yield* withActor(kofi)(
           characters.createOwn(scratch.id, { name: "Kofi's own" }),
         );
+        yield* withActor(kofi)(party.join(scratch.id, { characterId: made.id }));
 
         const issued = yield* asJo(invites.list(scratch.groupId));
         yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));

@@ -174,12 +174,12 @@ const subraceResolves = (
 
 /**
  * A named subrace must be contained by the named race in **some** campaign the
- * character can be checked against. At creation that is the one campaign the
- * seat goes into; on the shared sheet it is every table the character sits at,
- * because one character crossing campaigns cannot be bound to one table's
- * vocabulary — the continuity decision's own consequence. With no readable
- * campaign to check against, the label is free text, exactly as a race with no
- * vocabulary entry always was.
+ * character can be checked against. At creation that is the campaign whose
+ * rules vocabulary the form/Hob used — context only, not a seat; on the shared
+ * sheet it is every table the character sits at, because one character crossing
+ * campaigns cannot be bound to one table's vocabulary — the continuity
+ * decision's own consequence. With no readable campaign to check against, the
+ * label is free text, exactly as a race with no vocabulary entry always was.
  */
 const validateSubrace = (
   sql: SqlClient.SqlClient,
@@ -392,10 +392,11 @@ export class Characters extends Context.Service<
      */
     readonly mine: Effect.Effect<ReadonlyArray<OwnedCharacter>, never, CurrentActor>;
     /**
-     * Writing one down, campaign-first: the top-level character and its seat
-     * at the named campaign, one transaction. `ensureCampaignReadable` is the
-     * gate — a live participant at a shared table, or the creator — and the
-     * seat's deferred key holds the participation structurally underneath.
+     * Writing one down, with a campaign as rules/Hob context only. The row is
+     * top-level and account-owned; seating is the separate `party.join` act.
+     * `ensureCampaignReadable` is the gate — a live participant at a shared
+     * table, or the creator — so the context cannot be borrowed from a campaign
+     * the caller cannot read.
      */
     readonly createOwn: (
       campaignId: CampaignId,
@@ -726,6 +727,10 @@ export class Characters extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
+                // The campaign is context only: it proves the caller may read
+                // the table whose vocabulary/Hob prompt produced this sheet,
+                // and it bounds subrace validation. Seating is the explicit
+                // `Party.join` act and is not performed here.
                 yield* ensureCampaignReadable(sql, campaignId, actor);
                 yield* validateSubrace(sql, [campaignId], actor, payload.race, payload.subrace);
                 const rows = yield* sql<CharacterRow>`
@@ -747,26 +752,7 @@ export class Characters extends Context.Service<
                   )}
                   returning *
                 `;
-                const character = toCharacter(rows[0]!);
-                // The seat, in the same transaction: campaign-first means the
-                // character exists *at a table* from its first moment, exactly
-                // as the old campaign-scoped row did. The group id is read off
-                // the campaign's own row — never the payload — so the seat's
-                // composite key into `campaign` cannot be lied to, and the
-                // display name is snapshotted from what was just written. The
-                // deferred participation key underneath holds "seated means a
-                // live member (or the creator)" structurally at COMMIT.
-                yield* sql`
-                  insert into campaign_character
-                    (campaign_id, group_id, character_id, account_id,
-                     display_name, player_display_name, origin, assistant_turn_id)
-                  select ${campaignId}, campaign.group_id, ${character.id}, ${actor.accountId},
-                         ${character.name}, ${character.playerName},
-                         ${from === undefined ? "authored" : "assistant"},
-                         ${from?.assistantTurnId ?? null}
-                  from campaign where campaign.id = ${campaignId}
-                `;
-                return character;
+                return toCharacter(rows[0]!);
               }),
             ),
           ),

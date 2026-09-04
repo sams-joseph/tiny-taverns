@@ -15,6 +15,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Party } from "../src/repo/Party.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
@@ -54,6 +55,7 @@ const services = Layer.mergeAll(
   Encounters.layer,
   Invites.layer,
   Notes.layer,
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   PrepItems.layer,
   Recap.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -84,6 +86,7 @@ const makeFixture = Effect.gen(function* () {
   const encounters = yield* Encounters;
   const notes = yield* Notes;
   const prep = yield* PrepItems;
+  const party = yield* Party;
   const roster = yield* EncounterCreatures;
   const runs = yield* EncounterRuns;
   const sessions = yield* Sessions;
@@ -92,7 +95,7 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
-  yield* as(
+  const brannoc = yield* as(
     characters.createOwn(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
@@ -102,6 +105,7 @@ const makeFixture = Effect.gen(function* () {
       hpMax: 52,
     }),
   );
+  yield* as(party.join(campaign.id, { characterId: brannoc.id }));
   const goblin = yield* as(
     creatures.libraryCreate({
       name: "Goblin Archer",

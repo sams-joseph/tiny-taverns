@@ -187,10 +187,10 @@ this wins.**
 - **Corpus import order matters on a fresh database**: `equipment:import` before
   `ruleset:import` (option equipment references), and `ruleset:import` before `spell:import`
   (`spell_subclass` needs `subclass`). Wrong order fails loudly; re-running settles it.
-- **Known gaps, reported rather than built**: `party.join` (seat an existing character at a
-  second table) still has no client caller. Spell slots and the casting numbers are written now
+- **Known gaps, reported rather than built**: spell slots and the casting numbers are written now
   (see the actions section below); choosing known or prepared spells is still its own picker
-  domain and nothing writes `spellcasting.known`.
+  domain and nothing writes `spellcasting.known`. `party.join` does have a client caller now:
+  _Add to campaign_ on the character roster and sheet.
 
 ## Actions and resources on a fresh sheet, 2026-09-03: the corpus writes both
 
@@ -2104,24 +2104,23 @@ with `GET /me/characters` honestly `[]` in between. `apps/server/test/player-wri
 of it plus the revoked membership, the mis-scoped credential, and — row by row across the campaign —
 that nothing writable is unreadable and that the write is genuinely the narrower of the two.
 
-#### A player writes one down: campaign-first, and the shipped sheet is step two
+#### A player writes one down: campaign context first, then an explicit seat
 
 `POST /me/campaigns/:campaignId/characters` and `DELETE /me/characters/:characterId`, with
-`#/play/campaigns/:campaignId/characters/new` over them
-(`apps/web/src/characters/CharacterCreateScreen.tsx`, `create.ts`, `NewCharacterAction.tsx`).
-Before this, **a player at a shared table could not create a character at all** — `characters.create`
-composes `campaignWritable`, which requires `isDm` — so every row was typed by its DM and handed
-over with `CharacterAssign`. That door is unchanged and is still the DM's.
+`#/campaigns/:campaignId/characters/new` over create and _Add to campaign_ over the existing
+`party.join` endpoint (`apps/web/src/characters/CharacterCreateScreen.tsx`, `create.ts`,
+`NewCharacterAction.tsx`, `AddToCampaignDialog.tsx`). Before this, **a player at a shared table
+could not create a character at all** — `characters.create` composed `campaignWritable`, which
+requires creator-ness — so every row was typed by its creator. That door is gone with the group
+rewrite; creators write their own characters through the same owner path.
 
-**The table is step one, by the captain's decision of 2026-08-26** (`character-create-step-order`).
-`ui_kits/dm-screen/CharacterCreate.jsx` draws _Find a table_ **third**, after describing the
-character and correcting a draft, and that order is not buildable: `character.campaign_id` is
-`not null` and so is `assistant_thread.campaign_id`, so neither the character nor the conversation
-that would draft one has anywhere to live before a table is picked. Every alternative is a migration
-plus a new reach rule in the one model that has none — `0015` is what that cost for `creature`. The
-drawing also contradicts itself, since its own showcase line has Hob citing the campaign's setting
-two steps before the campaign is known, so the reorder is what makes the design's intent true.
-**The drawn _"Nowhere yet, keep her in my roster"_ option is dropped rather than stubbed.**
+**The campaign context is still step one, by the captain's decision of 2026-08-26**
+(`character-create-step-order`). The continuity rewrite made `character` top-level and
+account-owned, so a new character can exist before it is seated; creation now uses the campaign
+only for readable context — rules vocabulary, subrace validation and Hob's campaign-scoped drafting
+thread. The explicit seat is later: `party.join`, from _Add to campaign_ on the roster or sheet.
+So the old drawn _"Nowhere yet, keep her in my roster"_ state is built now: every manual or
+Hob-accepted character starts there.
 
 Six things that are decisions rather than details:
 
@@ -2130,19 +2129,19 @@ Six things that are decisions rather than details:
   created through this gate is readable and writable by its creator afterwards_ is one predicate
   doing both jobs rather than two that could drift. A player at a table the DM has not shared is
   refused with the same `NotFound` everything else there gives them.
-- **The campaign is the one thing a player's write ever names**, and only because an insert has no
-  row to derive it from. It is a claim, exactly as on every other create. `Api.test.ts`'s "nothing
-  in `me` could name an account" therefore asserts the **path shape** now rather than "only one
-  endpoint has params" — the property it was always proxying for.
+- **The campaign in the create path is context, not participation.** It is still a claim, exactly
+  as on every other create, and `ensureCampaignReadable` refuses a false one; it no longer writes
+  `campaign_character`.
 - **`account_id` is `CurrentActor`'s and there is nowhere on the wire to put one.** The guarantee
   `CharacterAssign` buys by being a separate DM-only endpoint is bought here by the payload's shape.
   Measured: a `POST` naming another account plus `hpCurrent`, `visibility` and `conditions` answered
-  `200` with the row owned by **the caller**, `dm`, `hpCurrent` null and no conditions.
+  `200` with the row owned by **the caller**, unseated, `hpCurrent` null and no conditions.
 - **`CharacterOwnCreate` is `CharacterOwnUpdate`'s shape with a required name.** `hpCurrent` is the
   one that would otherwise ride in on a good argument — `CharacterCreate` allows it because _a row
   that does not exist is in no fight_, which is true of this insert too — and it is out because how
   hurt somebody already is is the DM's to say. Everything absent falls to a column default, and
-  **`visibility` falling to `dm` is the whole disclosure property of the feature.**
+  **no seat existing is the whole disclosure property of the feature**: no campaign party can read
+  it until the owner joins it.
 - **Neither write rings the doorbell**, which is `updateOwn`'s answer rather than an omission:
   `currentSessionOf` composes `campaignWritableById` and answers a player nothing, so a bell would
   ring for a DM and stay silent for the audience the endpoints are for.
@@ -2152,11 +2151,13 @@ Six things that are decisions rather than details:
   own bar — **the product's first character delete on screen**, and the remedy for a Hob draft
   somebody keeps and then abandons. The DM's `characters.remove` still has no caller.
 
-**It lands on the shipped sheet, and that is the single biggest simplification campaign-first
+**It lands on the shipped sheet, and that is the single biggest simplification context-first
 buys.** There is no second editor: `IdentityDialog`, `BackstoryDialog`, `GearDialog` and the death
 saves all take a `Character` and go through `saveOwnCharacter`, so they work on the new row
 unchanged. A client-side draft would have meant refactoring all three from `(character, endpoint)`
-to `(value, onSave)` or writing a fourth copy of each.
+to `(value, onSave)` or writing a fourth copy of each. The sheet and roster now also offer _Add to
+campaign_, which lists memberships where the character does not already have a live seat and calls
+`party.join`; the mutation refreshes `reads.myCharacters`, `reads.campaign(c)` and `reads.party(c)`.
 
 **What the drawing asks for that this deliberately does not build** — reported, per the standing
 rule. Three of them have since landed: the **skills editor** went onto the _sheet_ so a shipped gap
@@ -2176,25 +2177,17 @@ questions already call a switch with nothing behind it.
   name by id, and which of them you _play_ at). `myCharactersAtom` moved into `characters/load.ts`
   beside it, the way `campaign/load.ts` holds its own, so the create screen shares the read and the
   picker **costs no request**.
-- **`tablesForNewCharacter` is `role === "player"` and nothing else**, and the create screen agrees
-  with it so a typed URL cannot reach a form the picker would never have offered.
-  `ensureCampaignReadable` _would_ let a DM through at their own table and that is harmless — but the
-  pill is a **mode**, so the two refusals are different sentences: _"Not your table"_ and _"You run
-  this table"_. The roster's empty state gained a third branch for the same reason; a plain
-  `memberships.length` check gets a DM-only account wrong.
+- **`tablesForNewCharacter` is every live membership**, creator or player. The create screen agrees
+  with it so a typed URL cannot reach a form the picker would never have offered; the campaign is
+  context only, and a creator is a player of their own characters too.
 
-**Measured end to end in Chromium** against a real server, a real Postgres and three accounts (a DM
-and two players minted through real invitations): a player joined a shared table, pressed _New
-character_ — a link, not a picker, because they were at one table — filled the form and landed on
-the shipped sheet with `descriptor` back as `"Level 1 Wood elf Druid"` and the sheet's own tabs.
-**The DM's party screen then showed them as `Playing` with the character on it, and the other player
-at the same shared table saw nothing of it on either the table screen or their own roster** — the
-acceptance criterion, with no change to `party/roster.ts` for the `no-character` → `playing` flip.
-Over HTTP: `[]` for that other player's read of the party, the row `dm`/`authored`/`hpCurrent` null,
-`404` for a create at a campaign the caller is not at, `404` for a delete of somebody else's and for
-the campaign's **own DM** through `/me`, and `200` for the owner's. With two tables the picker drew
-at `z-dialog` 110 over a scrim at `z-scrim` 100 with `elementFromPoint` inside it. No sideways
-scroll at 1440, 1024, 900 or 760.
+**Measured end to end in tests**: `createOwn` creates the owner row with zero active seats;
+Hob accept does the same, with `assistantTurnId` preserved. The DM's party and a tablemate see
+nothing until the owner presses _Add to campaign_, which posts `party.join`; only then does the
+party flip to `Playing`, with the new seat still `dm` by default. Over HTTP: `404` for a create at a
+campaign the caller is not at, `404` for a delete of somebody else's, and `200` for the owner's
+unseated row. With two tables the context picker and the add dialog both draw at `z-dialog` 110 over
+a scrim at `z-scrim` 100.
 
 #### The class and race vocabularies, and the three numbers they seed
 
@@ -5862,8 +5855,8 @@ it into The Salt Road as `shared`; the player's picker offered 13 classes and th
 wire carried the same 13 as an `enum` with the same 13 quoted in the description; the player
 described a character in prose and Hob offered **"Level 1 Human Bloodsworn · Oathkept"** at **12 hp
 and AC 13** — the homebrew's own die _and_ its own armour rule — in **two** provider round-trips;
-_Keep them_ landed on the shipped sheet with `origin: assistant`, `visibility: dm`, `hpCurrent` null
-and `assistantTurnId` set, with **no edit to the accept path**. A second table's schema carried
+_Keep them_ landed on the shipped sheet with `origin: assistant`, `hpCurrent` null,
+`assistantTurnId` set and no active seats. A second table's schema carried
 _Saltcaller_ and neither of the first's words, on the same DM's credential; an unshared _Hedgewise_
 reached neither the player's picker nor their grammar; the DM's own request still carried the nine
 tools and no vocabulary at all. A 42-class campaign swapped the class enum for `listOptions`, kept
@@ -5920,26 +5913,27 @@ would be a _Save to session_ button that means something else.
 
 **The delete got its first caller.** `DELETE /me/characters/:id` shipped with slice 1 with no UI;
 `DeleteCharacterDialog` is it, on the sheet's own bar. It is the remedy for a draft somebody keeps
-and then abandons — not a leak while it sits there, because a new character is `dm` by column
-default, but a real row in the DM's party list.
+and then abandons — not a leak while it sits there, because a new character is unseated and owned
+only by the caller until they add it to a campaign.
 
 **What the drawing asks for that this does not build**, reported per the standing rule: `DraftField`
 inline editing (a third editing idiom, and the accept-order argument above rules it out anyway); the
 portrait upload (the kit wires it to _"Not wired in this kit"_); _Roll again_ on the draft (the tool
 takes no numbers; the dice are on the sheet's abilities editor); the skills picker's _"N of 4
 picked"_ counter (a background, a feat and expertise all grant more — the call `SkillsDialog` already
-made); and the _"Nowhere yet, keep her in my roster"_ option, dropped rather than stubbed by the
-campaign-first decision.
+made). The old _"Nowhere yet, keep her in my roster"_ gap is closed: this is where every accepted
+draft starts, and _Add to campaign_ is the explicit later seat.
 
 **Measured end to end in Chromium** against a real server, a real Postgres, a scripted
 OpenAI-compatible endpoint and three real accounts (a DM and two players minted through real
 invitations): a player described a character, got a druid, asked _"make her a ranger instead"_ in the
 same thread and got a ranger with the race, subrace, background, abilities and skills kept, pressed _Keep
-them_ and landed on the shipped sheet with the row `origin: assistant`, `visibility: dm`, `hpCurrent`
-null and `assistantTurnId` set; corrected the name and level through the shipped identity dialog and
-reloaded to find it kept; and deleted it from the sheet's own bar. **The DM's party screen showed
-that player as `Playing` with the character on it, and the other player at the same shared table saw
-nothing of it on either their table screen or their roster.** The DM's threads did not include the
+them_ and landed on the shipped sheet with the row `origin: assistant`, `hpCurrent` null,
+`assistantTurnId` set and no active seats; corrected the name and level through the shipped identity
+dialog and reloaded to find it kept; added it to a campaign explicitly; and deleted it from the
+sheet's own bar. **Only after the join did the DM's party screen show that player as `Playing` with
+the character on it, and the other player at the same shared table still saw nothing of it on either
+their table screen or their roster.** The DM's threads did not include the
 player's and the player's did not include the DM's; the DM and the other player each got
 `404 assistant_turn` accepting the draft, and a second accept by its owner got `409`. The DM's
 request carried nine tools and the player's exactly two, with `campaignid` in neither. No sideways

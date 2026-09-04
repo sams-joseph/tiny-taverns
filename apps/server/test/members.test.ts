@@ -84,9 +84,9 @@ const makeFixture = Effect.gen(function* () {
   const playing = yield* aPlayerAt(campaign.id, "Ilse");
   const seated = yield* aPlayerAt(campaign.id, "Marta");
 
-  // Ilse writes her own character down, which seats it — the shipped path,
-  // and what the fourth block below needs: a member with a live seat beside
-  // one without.
+  // Ilse writes her own character down and explicitly seats it — the shipped
+  // path, and what the fourth block below needs: a member with a live seat
+  // beside one without.
   const brannoc = yield* aCharacterAt(campaign.id, playing, {
     name: "Brannoc",
     playerName: "Ilse",

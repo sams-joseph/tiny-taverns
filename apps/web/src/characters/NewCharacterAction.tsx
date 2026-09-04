@@ -14,15 +14,15 @@ import { useState } from "react";
 import { tablesForNewCharacter } from "./create";
 
 /**
- * *New character*, from the roster — **the picker, which is step one of the
- * flow rather than a control on the form.**
+ * *New character*, from the roster — **the context picker, which is step one
+ * of the flow rather than a control on the form.**
  *
- * The captain reordered the drawn wizard so that finding a table comes first
- * (`CharacterCreateScreen` says why at length), and this is the whole of that
- * step. It is here rather than on the create screen because the campaign is in
- * that screen's URL: choosing has to happen before the route exists, and a
- * second picker on the far side would let a reader change the answer without
- * the URL saying so.
+ * The captain reordered the drawn wizard so that choosing the campaign context
+ * comes first (`CharacterCreateScreen` says why at length), and this is the
+ * whole of that step. It is here rather than on the create screen because the
+ * campaign is in that screen's URL: choosing has to happen before the route
+ * exists, and a second picker on the far side would let a reader change the
+ * vocabulary/Hob context without the URL saying so.
  *
  * **It costs no read.** `GET /me/campaigns` is already in `MyCharactersView` —
  * the roster needs it to name each character's table and to tell its two
@@ -31,10 +31,11 @@ import { tablesForNewCharacter } from "./create";
  *
  * Three shapes, and the first two are the ones that matter at a real table:
  *
- * - **No table** — nothing at all. A character has to go somewhere, and the
- *   roster's empty state already says how to get somewhere: follow the link your
- *   DM sends. A button that opened a picker with nothing in it would be the
- *   control-that-goes-nowhere this product refuses everywhere else.
+ * - **No table** — nothing at all. A character needs a campaign context for
+ *   the rules vocabulary and Hob prompt, and the roster's empty state already
+ *   says how to get one: follow the link your DM sends. A button that opened a
+ *   picker with nothing in it would be the control-that-goes-nowhere this
+ *   product refuses everywhere else.
  * - **One table** — a link straight to it. Almost everybody, and asking them to
  *   confirm a choice with one option is a press that answers nothing.
  * - **Several** — a dialog. The choice is which table, and a dialog is what this
@@ -89,8 +90,8 @@ export function NewCharacterAction({
             <DialogHeader>
               <DialogTitle>Which table?</DialogTitle>
               <DialogDescription>
-                Pick the table this character starts at. They are yours wherever they go — a new
-                character takes a seat at one table first.
+                Pick the campaign whose rules and Hob context this character starts from. They are
+                yours and unseated until you add them to a campaign.
               </DialogDescription>
             </DialogHeader>
 

@@ -121,9 +121,9 @@ describe("writing down a character of your own", () => {
     await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
 
     const post = server.calls.find((call) => call.method === "POST");
-    // The campaign is a path segment — the one thing a player's write ever
-    // names, and only because an insert has no row to derive it from. It is a
-    // claim, and `ensureCampaignReadable` is what refuses a false one.
+    // The campaign is a path segment — context for the vocabulary and Hob
+    // thread, not an automatic seat. It is still a claim, and
+    // `ensureCampaignReadable` is what refuses a false one.
     expect(post?.pathname).toBe(createPath);
 
     const body = bodyOf(server, "POST", createPath) as Record<string, unknown>;
@@ -357,13 +357,13 @@ describe("writing down a character of your own", () => {
     expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(0);
   });
 
-  it("tells the player who will be able to read it", async () => {
+  it("tells the player it starts unseated", async () => {
     await renderCreate();
     await fillItIn();
-    // A new row is `dm` by column default and the form has no control to change
-    // that, so the answer is said before the press rather than discovered after
-    // it.
-    expect(await screen.findByText(/Only you and your DM can see them/)).toBeTruthy();
+    // Creation writes only the top-level owner row. The party seat is a later,
+    // explicit act, so the answer is said before the press rather than
+    // discovered on a DM's roster.
+    expect(await screen.findByText(/not on a party roster/i)).toBeTruthy();
   });
 
   it("draws Hob's draft and keeps it with an accept that carries no content", async () => {

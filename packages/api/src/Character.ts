@@ -591,18 +591,15 @@ export type CharacterOwnUpdate = typeof CharacterOwnUpdate.Type;
 
 /**
  * Writing down a character of your own — `POST /me/campaigns/:c/characters`,
- * which creates the top-level character **and its seat at the named campaign**
- * in one transaction. Campaign-first survives the split because a seat is
- * still where a new character is usually headed; a character with no seat is
- * reachable through the same shape by leaving later.
+ * which creates the top-level account-owned character only. The campaign in
+ * the path is rules/Hob vocabulary context and the boundary for validating a
+ * race/subrace pair; seating is the explicit `party.join` act.
  *
  * `accountId` is not here and there is nowhere it could go: the owner is
  * `CurrentActor`'s, taken server-side. The live trio and `visibility` are
  * absent for `CharacterOwnUpdate`'s reasons — a new character starts with
- * `hp_current` null (*nobody has said yet*) and a `dm` seat, which its owner
- * reads because they own the character and the campaign's creator reads
- * because they run the table, and nobody else does until the creator shares
- * the seat.
+ * `hp_current` null (*nobody has said yet*) and no campaign disclosure at all
+ * until its owner chooses a table to add it to.
  */
 export const CharacterOwnCreate = Schema.Struct({
   name: Schema.NonEmptyString,

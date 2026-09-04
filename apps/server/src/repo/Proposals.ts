@@ -28,7 +28,7 @@ import type { ConversationReach } from "./visibility.js";
  * ever written.
  *
  * The captain's decision is *generate with approval*: Hob may draft, and nothing
- * it drafts enters the campaign until a human says yes. This file is that yes.
+ * it drafts becomes a row until a human says yes. This file is that yes.
  * It is deliberately the whole of it — there is no other write path with
  * assistant provenance, because `assistantColumns` (`rows.ts`) is only
  * constructible from an `AssistantOrigin`, and only this file makes one.
@@ -187,7 +187,7 @@ export class Proposals extends Context.Service<
               // there is nowhere in a proposal to name anybody else.
               // `visibility` and the live trio stay absent for the reason
               // `CharacterOwnCreate` has no field for them: a drafted character
-              // is `dm` and unhurt by column default rather than by a value
+              // is unseated and unhurt by column default rather than by a value
               // this file chose.
               //
               // The three seeded numbers are **copied, not computed.**

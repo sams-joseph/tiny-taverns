@@ -263,6 +263,27 @@ export const sorrelSeatRef = {
 export const ownedBrannoc = { character: brannoc, seats: [brannocSeatRef] };
 export const ownedSorrel = { character: sorrel, seats: [sorrelSeatRef] };
 
+export const partySeatAnswer = (row: typeof brannoc, at: string = campaignId): Answer => ({
+  status: 200,
+  body: {
+    seat: {
+      id: "2b1f2a1e-0000-4000-8000-000000000963",
+      campaignId: at,
+      characterId: row.id,
+      accountId: row.accountId,
+      displayName: row.name,
+      playerDisplayName: row.playerName,
+      visibility: "dm",
+      origin: "authored",
+      assistantTurnId: null,
+      joinedAt: "2026-07-12T10:00:00.000Z",
+      createdAt: "2026-07-12T10:00:00.000Z",
+      updatedAt: "2026-07-12T10:00:00.000Z",
+    },
+    character: row,
+  },
+});
+
 const membership = (of: unknown, joinedAt: string, relation = "player") => ({
   campaign: of,
   relation,

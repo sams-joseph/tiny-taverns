@@ -280,14 +280,13 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * invited yet — and this is the read whose empty answer says so.
  *
  * `createCharacter` is the one endpoint here that does name one, and the
- * exception is worth reading rather than treating as drift: a PATCH asks the
- * predicate about the row's own `campaign_id`, so there is nothing for a caller
- * to claim; **an insert has no row to derive that from**, and where a new
- * character goes is genuinely the caller's to say. It is a claim, refused by
- * `ensureCampaignReadable` exactly as every other create in the product refuses
- * one. What the endpoint still does not let a caller name is the *account* — so
- * the group's real property is intact where it matters: nothing here answers
- * about, or writes for, anybody but the credential.
+ * exception is worth reading rather than treating as drift: creation still needs
+ * the campaign whose rules vocabulary and Hob thread shaped the sheet. It is a
+ * context claim, refused by `ensureCampaignReadable` exactly as every other
+ * create in the product refuses a false one, but it writes no seat. What the
+ * endpoint still does not let a caller name is the *account* — so the group's
+ * real property is intact where it matters: nothing here answers about, or
+ * writes for, anybody but the credential.
  *
  * No endpoint here is a second answer to a campaign-scoped one. `campaigns`
  * composes the identical predicate `campaigns.list` does (see
@@ -312,8 +311,8 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * / `CharacterOwnUpdate`, so what may move is a fact about which schema exists.
  *
  * - `createCharacter` — `CharacterOwnCreate`, gated by `ensureCampaignReadable`
- *   on the campaign it seats the character at, with `account_id` from
- *   `CurrentActor` and nowhere on the wire to put one.
+ *   on the campaign used as context, with `account_id` from `CurrentActor` and
+ *   nowhere on the wire to put one.
  * - `updateCharacter` — ownership plus `expectedVersion` over the shared state.
  * - `deleteCharacter` — the same clause, retiring the live seats with the row.
  */
@@ -440,20 +439,20 @@ class MeGroup extends HttpApiGroup.make("me")
      * character, no assignment and no re-pointing, and creators write their
      * own characters through this same door as everybody else.
      *
-     * ### The one endpoint here that names a campaign, and why it has to
+     * ### The one endpoint here that names a campaign, and what it means
      *
      * Everywhere else in this group the property is *it names no campaign, so
      * there is none for a caller to claim* — a character is account-owned and
-     * the predicate is ownership. **An insert is the one act where a campaign
-     * genuinely is the caller's to say**: the create seats the new character at
-     * a table, so which table is a path segment and therefore a claim, exactly
-     * as it is on every other create in the product.
+     * the predicate is ownership. **This insert still names a campaign only as
+     * context**: the form's pickers and Hob's drafting grammar are this
+     * campaign's vocabulary, and subrace validation is checked against that
+     * same vocabulary. Seating is a later, explicit `party.join`.
      *
-     * What refuses a false one is `ensureCampaignReadable` — a live membership,
-     * a credential that reaches this campaign, and creator-ness *or* a shared
-     * campaign. A member at a table whose creator has not shared it is refused
-     * here with the same `NotFound` everything else at that table gives them.
-     * **No new predicate.**
+     * What refuses a false context is `ensureCampaignReadable` — a live
+     * membership, a credential that reaches this campaign, and creator-ness
+     * *or* a shared campaign. A member at a table whose creator has not shared
+     * it is refused here with the same `NotFound` everything else at that table
+     * gives them. **No new predicate.**
      *
      * ### Whose it is, and where that is decided
      *
@@ -467,12 +466,10 @@ class MeGroup extends HttpApiGroup.make("me")
      *
      * ### It fails closed, and that is the column default rather than a choice
      *
-     * The create also seats the character at this campaign
-     * (`campaign_character`, in the same transaction), and
-     * `CharacterOwnCreate` has no `visibility` — disclosure lives on the seat,
-     * which falls to `dm`. Its owner reads the character because they own it
-     * and the creator reads the seat through the campaign; nobody else at the
-     * table does until it is shared.
+     * The create makes no `campaign_character` row. `CharacterOwnCreate` has no
+     * `visibility` because disclosure lives on the seat, and there is no seat
+     * until the owner intentionally adds the character to a campaign through
+     * `party.join`.
      */
     HttpApiEndpoint.post("createCharacter", "/campaigns/:campaignId/characters", {
       params: { campaignId: CampaignId },

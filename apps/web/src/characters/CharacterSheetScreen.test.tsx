@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -9,7 +9,9 @@ import {
   brannocSeatRef,
   installCharacterServer,
   legacySheet,
+  otherCampaignId,
   ownedSorrel,
+  partySeatAnswer,
   playing,
   renderSheet,
   savedAs,
@@ -35,6 +37,7 @@ const server = installCharacterServer();
 beforeEach(() => server.reset());
 afterEach(() => {
   vi.restoreAllMocks();
+  cleanup();
   document.body.replaceChildren();
 });
 
@@ -282,6 +285,7 @@ describe("a character sheet", () => {
     // death-save pips.
     expect(pressable()).toEqual([
       "Ask Hob⌘K",
+      "Add to campaign",
       "Delete Brannoc Duskharrow",
       "Edit",
       "Show vitals",
@@ -348,6 +352,33 @@ describe("a character sheet", () => {
     // the bar is not drawn either; the campaign is on the subtitle.
     expect(screen.queryByRole("button", { name: /Go to the table/i })).toBeNull();
     expect(screen.queryByText(/playing right now/i)).toBeNull();
+  });
+
+  it("seats the existing character from the sheet with the explicit party join", async () => {
+    server.routes.set(
+      `POST /campaigns/${otherCampaignId}/party`,
+      partySeatAnswer(brannoc, otherCampaignId),
+    );
+
+    await renderSheet();
+    await screen.findByRole("navigation", { name: "Sheet sections" });
+    await userEvent.click(screen.getByRole("button", { name: /Add to campaign/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Add to campaign" });
+    expect(within(dialog).queryByRole("button", { name: /Add to The Salt Road/i })).toBeNull();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /Add to The Hag's Bargain/i }),
+    );
+
+    expect(bodyOf(server, "POST", `/campaigns/${otherCampaignId}/party`)).toEqual({
+      characterId: brannocId,
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Add to campaign" })).toBeNull(),
+    );
+    expect(
+      server.calls.filter((call) => call.pathname === "/me/characters").length,
+    ).toBeGreaterThan(1);
   });
 
   it("rolls abilities and actions into a local, truthful log", async () => {
@@ -489,7 +520,7 @@ describe("a character sheet", () => {
     expect(screen.getByRole("button", { name: "Edit skills" })).toBeTruthy();
     expect(screen.getByText(/Take the standard array, or roll for them/)).toBeTruthy();
     expect(screen.getByText(/What you are proficient in/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Add/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
     expect(screen.getByText(/A rope, a lantern/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit backstory" })).toBeTruthy();
     expect(screen.getByText(/Where they came from/)).toBeTruthy();
@@ -524,7 +555,7 @@ describe("a character sheet", () => {
     const reads = () => server.calls.filter((call) => call.pathname === "/me/characters").length;
     const before = reads();
 
-    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await screen.findByRole("button", { name: "Save gear" });
     await userEvent.click(screen.getByRole("button", { name: "Save gear" }));
 

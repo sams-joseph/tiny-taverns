@@ -24,8 +24,8 @@ import { migratedDatabase } from "./support/database.js";
  * row discloses, under the continuity decision of 2026-09-01.
  *
  * A character is an account-owned, top-level row now, and `createOwn` is the
- * only way one comes into being: the owner writes the shared row *and its
- * seat at the named campaign* in one transaction. There is no DM-typed
+ * only way one comes into being: the owner writes the shared row and nothing
+ * at any table until an explicit `party.join`. There is no DM-typed
  * character any more — the state this file used to guard against ("a row the
  * DM made and assigned") is not representable, and several of the old pins
  * are therefore **inverted on purpose** rather than lost:
@@ -37,16 +37,17 @@ import { migratedDatabase } from "./support/database.js";
  *   now it does not, because the row is campaign-scoped nowhere;
  * - "a character nobody owns" is gone as a case: `account_id` is `not null`.
  *
- * What is *not* inverted: creation is still campaign-first and still gated by
- * `ensureCampaignReadable` — where a new character may go is the campaign's
- * question even though what it becomes is the owner's.
+ * What is *not* inverted: creation still takes a campaign context and is still
+ * gated by `ensureCampaignReadable` — whose vocabulary/Hob context a new sheet
+ * may use is the campaign's question even though where it sits is the owner's
+ * later `party.join`.
  *
  * In order —
  *
- *   1. the grant: an owner creates a character, seated at their table
+ *   1. the grant: an owner creates a character, unseated by default
  *   2. the owner: it is theirs, from the credential and from nowhere else
- *   3. the campaign gate: every refusal on the way in
- *   4. the disclosure: the creator sees the seat, the rest of the table does not
+ *   3. the campaign-context gate: every refusal on the way in
+ *   4. the disclosure: nobody at the table sees anything until `party.join`
  *   5. the delete: your own row; the creator's remedy is the seat
  */
 
@@ -113,6 +114,12 @@ const rosterNames = (viewer: Actor, campaignId: CampaignId) =>
     ),
   );
 
+/** Seat a character through the explicit owner-owned join path. */
+const joinOwn = (actor: Actor, campaignId: CampaignId, characterId: CharacterId) =>
+  runtime.runPromise(
+    withActor(actor)(party.join(campaignId, { characterId })).pipe(Effect.result, Effect.orDie),
+  );
+
 /** One refusal shape, so a test cannot pass by matching a different failure. */
 const refusal = (result: { readonly _tag: string; readonly failure?: unknown }) =>
   result._tag === "Failure"
@@ -134,7 +141,7 @@ beforeAll(async () => {
 }, 60_000);
 
 describe("an owner creating their character", () => {
-  it("writes the row, and it comes out theirs — seated at the table they named", async () => {
+  it("writes the row, and it comes out theirs — unseated from the table context", async () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, {
         name: "Brannoc",
@@ -160,7 +167,8 @@ describe("an owner creating their character", () => {
       withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
     );
     const owned = mine.find((row) => row.character.id === made.id);
-    expect(owned?.seats.map((seat) => seat.campaignId)).toEqual([fixture.table.id]);
+    expect(owned?.seats).toEqual([]);
+    expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Brannoc");
   });
 
   it("leaves the live trio at its defaults, and carries no disclosure toggle at all", async () => {
@@ -172,9 +180,9 @@ describe("an owner creating their character", () => {
     expect(made.hpCurrent).toBeNull();
     expect(made.tempHp).toBe(0);
     expect(made.conditions).toEqual([]);
-    // Who at a table may see them is the SEAT's question now
-    // (`campaign_character.visibility`, `dm` by default) — the shared
-    // character has no visibility field for a payload to have set.
+    // Who at a table may see them is the SEAT's question now. Creation creates
+    // no seat, and the shared character has no visibility field for a payload
+    // to have set.
     expect("visibility" in made).toBe(false);
     // Not the assistant's. `repo/Proposals.ts` is still the only writer of
     // `assistant`.
@@ -215,15 +223,16 @@ describe("an owner creating their character", () => {
     // thing the caller asked about and could not have is the table.
     expect(refusal(result)).toEqual({ _tag: "NotFound", resource: "campaign" });
 
-    // And nothing was written — no character, and no seat for that table's
-    // creator to be looking at.
+    // And no campaign-side row was written for that table's creator to be
+    // looking at.
     expect(await rosterNames(fixture.fen, fixture.elsewhere.id)).not.toContain("Trespasser");
   });
 
   it("is refused at a table the creator has not shared, and allowed the moment they do", async () => {
-    // The master toggle. Creation is campaign-first, so this is the one place
-    // the campaign still gets a say over the owner's write: not whether the
-    // character may exist, but whether it may be seated *here*.
+    // The master toggle. Creation is campaign-contextual, so this is the one
+    // place the campaign still gets a say over the owner's write: not whether
+    // the character may exist, but whether its vocabulary/Hob context is
+    // readable.
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
         const campaigns = yield* Campaigns;
@@ -251,9 +260,9 @@ describe("an owner creating their character", () => {
   it("stops at a revoked membership — and the character already made survives it", async () => {
     // **Inverted from the campaign-scoped model, deliberately.** Withdrawing
     // the invitation used to take the character with the membership; under the
-    // continuity decision it retires the *seat* (in the same transaction as
-    // the revoke) and the character stays its owner's, because it was never
-    // the campaign's to take. Only the next create at that table is refused.
+    // continuity decision the character stays its owner's, because it was never
+    // the campaign's to take. Only the next create using that table's context
+    // is refused.
     const measured = await runtime.runPromise(
       Effect.gen(function* () {
         const invites = yield* Invites;
@@ -267,7 +276,7 @@ describe("an owner creating their character", () => {
         );
 
         // The shipped path: withdrawing the invitation revokes the membership
-        // it granted, in one transaction — seats included.
+        // it granted; any seats would be retired in the same transaction.
         const issued = yield* asJo(invites.list(scratch.groupId));
         yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
 
@@ -288,7 +297,7 @@ describe("an owner creating their character", () => {
     );
 
     expect(measured.after).toEqual({ _tag: "NotFound", resource: "campaign" });
-    // The seat retired with the membership, so the creator's roster is empty…
+    // There never was an automatic seat, so the creator's roster is empty…
     expect(measured.roster).toEqual([]);
     // …and the character outlived the table, seatless.
     expect(measured.kept).toBeDefined();
@@ -298,8 +307,8 @@ describe("an owner creating their character", () => {
   it("does not survive a credential minted for another table", async () => {
     // Membership and credential scope narrow independently, and the campaign
     // gate applies both. Pim's own account, scoped to Fen's campaign, cannot
-    // seat a character at the table Pim is really at — and cannot at Fen's
-    // either, where the account is not a member.
+    // use the Salt Road's character context — and cannot at Fen's either,
+    // where the account is not a member.
     const misScoped = await runtime.runPromise(
       admittedTo(fixture.elsewhere.id, fixture.pim, "Pim, elsewhere"),
     );
@@ -312,10 +321,10 @@ describe("an owner creating their character", () => {
     ).toBe("Success");
   });
 
-  it("seats the character at the campaign it named and at no other", async () => {
+  it("uses the named campaign as context and seats nowhere automatically", async () => {
     // The path segment is a claim and the gate is what makes it safe, so the
     // interesting case is an account the gate would let through twice: naming
-    // one table must not seat anything at the other.
+    // one table must not seat anything at any table.
     const second = await runtime.runPromise(
       withActor(fixture.fen)(
         createCampaign({ name: "The Hag's Bargain", visibility: "shared" }),
@@ -328,20 +337,18 @@ describe("an owner creating their character", () => {
       withActor(accountWide(fixture.pim))(characters.mine).pipe(Effect.orDie),
     );
     const owned = mine.find((row) => row.character.id === made.id);
-    expect(owned?.seats.map((seat) => seat.campaignId)).toEqual([second.id]);
+    expect(owned?.seats).toEqual([]);
     expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Second table");
+    expect(await rosterNames(fixture.fen, second.id)).not.toContain("Second table");
   }, 60_000);
 });
 
 describe("what the new character discloses, and to whom", () => {
   /**
-   * The acceptance criterion of the player-create slice, restated on the seat:
-   * a new seat is `dm`, so its owner reads it (they own the character), the
-   * campaign's creator reads it (they run the table), and a second player at
-   * the same shared table reads nothing of it until the creator shares the
-   * seat.
+   * Creation is now only the top-level account row. The campaign creator and
+   * the rest of the table see nothing until the owner explicitly joins.
    */
-  it("reaches its owner and the creator, and nobody else at the table", async () => {
+  it("reaches its owner and nobody at the table until an explicit join", async () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, { name: "Only ours", hpMax: 11 }),
     );
@@ -350,18 +357,27 @@ describe("what the new character discloses, and to whom", () => {
       withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
     );
     expect(mine.map((row) => row.character.id)).toContain(made.id);
+    expect(mine.find((row) => row.character.id === made.id)?.seats).toEqual([]);
 
-    // The creator's roster shows the seat, snapshot and all.
+    expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Only ours");
+    expect(await rosterNames(fixture.marta, fixture.table.id)).not.toContain("Only ours");
+  }, 60_000);
+
+  it("appears on the campaign only after party.join, with the seat still private", async () => {
+    const made = succeeded(
+      await createOwn(fixture.pim, fixture.table.id, { name: "Joined ours", hpMax: 11 }),
+    );
+    const joined = await joinOwn(fixture.pim, fixture.table.id, made.id);
+    expect(joined._tag).toBe("Success");
+
     const creatorSees = await runtime.runPromise(
       withActor(fixture.jo)(party.list(fixture.table.id)).pipe(Effect.orDie),
     );
     const seat = creatorSees.find((row) => row.character?.id === made.id);
     expect(seat).toBeDefined();
-    expect(seat!.seat.displayName).toBe("Only ours");
+    expect(seat!.seat.displayName).toBe("Joined ours");
     expect(seat!.seat.visibility).toBe("dm");
-
-    // The other player at the same shared table sees no trace of it.
-    expect(await rosterNames(fixture.marta, fixture.table.id)).not.toContain("Only ours");
+    expect(await rosterNames(fixture.marta, fixture.table.id)).not.toContain("Joined ours");
   }, 60_000);
 
   it("is writable by its owner afterwards — and would be with no table at all", async () => {
@@ -384,8 +400,10 @@ describe("what the new character discloses, and to whom", () => {
 });
 
 describe("an owner throwing their character away", () => {
-  it("removes it, and the roster line it retires stays retired", async () => {
+  it("removes it, and any roster line it had stays retired", async () => {
     const made = succeeded(await createOwn(fixture.pim, fixture.table.id, { name: "Regretted" }));
+    expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Regretted");
+    await joinOwn(fixture.pim, fixture.table.id, made.id);
     expect(await rosterNames(fixture.jo, fixture.table.id)).toContain("Regretted");
 
     expect((await removeOwn(fixture.pim, made.id))._tag).toBe("Success");
@@ -394,14 +412,16 @@ describe("an owner throwing their character away", () => {
       withActor(fixture.pim)(characters.mine).pipe(Effect.orDie),
     );
     expect(mine.map((row) => row.character.name)).not.toContain("Regretted");
-    // Gone from the creator's roster too — the delete retires the seats in
-    // its own transaction. (That the retired row *survives* underneath, as
-    // campaign history with the pointer nulled, is `party.test.ts`'s pin.)
+    // Gone from the creator's roster too — the delete retires the explicit
+    // seats in its own transaction. (That the retired row *survives*
+    // underneath, as campaign history with the pointer nulled, is
+    // `party.test.ts`'s pin.)
     expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Regretted");
   }, 60_000);
 
   it("is refused on somebody else's, even one whose seat the whole table can see", async () => {
     const martas = succeeded(await createOwn(fixture.marta, fixture.table.id, { name: "Sorrel" }));
+    await joinOwn(fixture.marta, fixture.table.id, martas.id);
     // The creator shares the SEAT — the disclosure control that replaced the
     // old row-level toggle — so Sorrel is a character Pim can see at this
     // table. Seeing is not holding.
@@ -434,6 +454,7 @@ describe("an owner throwing their character away", () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, { name: "The creator's go" }),
     );
+    await joinOwn(fixture.pim, fixture.table.id, made.id);
     expect(refusal(await removeOwn(fixture.jo, made.id))).toEqual({
       _tag: "NotFound",
       resource: "character",

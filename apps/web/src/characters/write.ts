@@ -64,13 +64,10 @@ export const saveOwnCharacter = (
 /**
  * Writing one down for the first time — `POST /me/campaigns/:c/characters`.
  *
- * **The campaign is the one thing a player's write ever names**, and only
- * because an insert has nothing else to name it with: a PATCH asks the
- * predicate about the row's own `campaign_id`, and there is no row yet. It is a
- * claim, refused by `ensureCampaignReadable` if it is a false one, which is why
- * this function takes it as an argument rather than reaching for a "current"
- * table — inventing one would silently write a character into a table nobody
- * chose.
+ * **The campaign is context now, not a seat.** The insert needs a campaign for
+ * the rules vocabulary and Hob thread that shaped the payload, and the server
+ * refuses a false claim with `ensureCampaignReadable`; it no longer writes a
+ * campaign-character row. Seating is the separate `party.join` call below.
  *
  * There is still nothing to guard here. Whose it is comes from the credential
  * on the server, and `CharacterOwnCreate` has no field for an account, a live
@@ -82,6 +79,13 @@ export const createOwnCharacter = (
   campaignId: CampaignId,
   payload: CharacterOwnCreate,
 ) => client.me.createCharacter({ params: { campaignId }, payload });
+
+/** Seat an existing owned character at one campaign, by the explicit party join. */
+export const joinCharacterToCampaign = (
+  client: TavernsClient,
+  campaignId: CampaignId,
+  character: Character,
+) => client.party.join({ params: { campaignId }, payload: { characterId: character.id } });
 
 export const spendResource = (
   client: TavernsClient,
@@ -126,8 +130,12 @@ export const restOwnCharacter = (
  * death save) all change the same things, and copies of a key list are chances
  * for one of them to fall behind.
  */
-export const characterWritesAt = (campaignId: CampaignId): Invalidation => [
+export const characterCreateWrites: Invalidation = [reads.myCharacters];
+
+/** The explicit seat write: the owned roster gets a seat ref and the table updates. */
+export const characterJoinWritesAt = (campaignId: CampaignId): Invalidation => [
   reads.myCharacters,
+  reads.campaign(campaignId),
   reads.party(campaignId),
 ];
 

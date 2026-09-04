@@ -22,13 +22,13 @@ import { ownCharacterWrites } from "./write";
  * in the product deleted a character at all. That was defensible while every
  * `character` row was typed by a DM who could already remove it in `psql`.
  * It stopped being defensible the moment Hob could draft one: a player who
- * describes somebody, keeps the draft and then changes their mind leaves a real
- * row in their DM's party list, and the honest remedy is a way to take it back
- * rather than an apology in a comment.
+ * describes somebody, keeps the draft and then changes their mind owns a real
+ * row, and the honest remedy is a way to take it back rather than an apology
+ * in a comment.
  *
  * **It is not a leak while it sits there**, which is why this is a remedy and
- * not a fix: a new character is `visibility: 'dm'` by column default, so its
- * author and their DM read it and nobody else at the table does.
+ * not a fix: a new character is unseated, so no campaign party reads it until
+ * the owner explicitly adds it to a campaign.
  *
  * ### Really deleted, and the dialog says so
  *

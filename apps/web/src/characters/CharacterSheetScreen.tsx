@@ -21,6 +21,8 @@ import { AppShell, TopBar } from "../shell/AppShell";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { AbilitiesDialog } from "./AbilitiesDialog";
+import { AddToCampaignDialog } from "./AddToCampaignDialog";
+import { campaignsAvailableToJoin } from "./join";
 import { BackstoryDialog } from "./BackstoryDialog";
 import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { GearDialog } from "./GearDialog";
@@ -1650,6 +1652,8 @@ export function CharacterSheetScreen() {
     character === undefined || view === undefined
       ? undefined
       : liveBanner(view.live, character, campaignName);
+  const joinOptions =
+    owned === undefined ? [] : campaignsAvailableToJoin(owned, view?.memberships ?? []);
 
   /**
    * Which write is open — one at a time, and above the sheet rather than inside
@@ -1658,7 +1662,15 @@ export function CharacterSheetScreen() {
    * be closed by its own success.
    */
   const [editing, setEditing] = useState<
-    "identity" | "abilities" | "skills" | "spells" | "backstory" | "gear" | "delete" | undefined
+    | "identity"
+    | "abilities"
+    | "skills"
+    | "spells"
+    | "backstory"
+    | "gear"
+    | "join"
+    | "delete"
+    | undefined
   >();
   /**
    * Which section is lit, whether the narrow summary is open, and where the
@@ -1739,11 +1751,17 @@ export function CharacterSheetScreen() {
               Go to the table
             </Button>
           )}
+          {owned !== undefined && joinOptions.length > 0 && (
+            <Button variant="secondary" size="sm" onClick={() => setEditing("join")}>
+              <Icon name="user-plus" size={14} />
+              Add to campaign
+            </Button>
+          )}
           {/* **The product's first character delete on screen**, and it is here
               because Hob drafting one is what made an unwanted character cheap:
               a player who describes somebody, keeps the draft and changes their
-              mind leaves a real row in their DM's party list. It is a confirm
-              rather than a press, because a character really goes — there is no
+              mind owns a real row. It is a confirm rather than a press,
+              because a character really goes — there is no
               archive for one the way there is for a campaign. See
               `DeleteCharacterDialog`. */}
           {character !== undefined && (
@@ -1819,6 +1837,14 @@ export function CharacterSheetScreen() {
       )}
       {owned !== undefined && editing === "gear" && (
         <GearDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
+      )}
+      {owned !== undefined && view !== undefined && editing === "join" && (
+        <AddToCampaignDialog
+          owned={owned}
+          memberships={view.memberships}
+          onClose={close}
+          onJoined={reload}
+        />
       )}
       {owned !== undefined && editing === "delete" && (
         <DeleteCharacterDialog

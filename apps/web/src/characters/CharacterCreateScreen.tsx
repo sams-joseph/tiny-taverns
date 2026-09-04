@@ -48,7 +48,7 @@ import { DraftCard } from "./DraftCard";
 import { ABILITY_KEYS, type AbilityKey, type EquipmentId } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
-import { characterWritesAt, createOwnCharacter } from "./write";
+import { characterCreateWrites, createOwnCharacter } from "./write";
 
 /**
  * A player writing down a character of their own —
@@ -61,29 +61,26 @@ import { characterWritesAt, createOwnCharacter } from "./write";
  * reason it had no create control, and half of the reason went when
  * `ownRowWritable` landed.
  *
- * ### The table is step one, and that is the captain's decision
+ * ### The campaign context is step one, and that is still the route
  *
  * The drawing (`ui_kits/dm-screen/CharacterCreate.jsx`) puts *Find a table*
  * third, after describing the character and correcting a draft. It is
- * **reordered to first**, by the captain's decision of 2026-08-26. The
- * character row is account-owned and top-level since the continuity decision,
- * so the schema half of the old argument is gone — what keeps the order is
- * that the create seats the character at the table in the same transaction,
- * the form's pickers read *that campaign's* vocabulary, and the conversation
- * that drafts one is campaign-scoped (`assistant_thread.campaign_id` is the
- * column that still has nowhere to live before a table is picked).
+ * **reordered to first**, by the captain's decision of 2026-08-26. Creation no
+ * longer seats the character there: the campaign now supplies the form's
+ * vocabulary and the campaign-scoped Hob thread only. Seating is the later
+ * explicit *Add to campaign* / `party.join` act.
  *
  * The drawing also contradicts itself about it: its own showcase line has Hob
  * explaining a subclass by *"your DM's campaign is on the salt road and half of
  * it is marsh"*, which is not producible two steps before the campaign is
  * known. Campaign-first is what makes the design's own intent true.
  *
- * **So the campaign is the route's, and this screen has no picker.** Choosing
- * happens on the way in — `MyCharactersScreen`'s *New character*, which folds
- * the memberships this screen also reads, or `PlayerCampaignScreen`, which is
- * already at one table. A picker here would be a second answer to a question
- * the URL has already settled, and it would let a reader change the answer
- * without the URL saying so.
+ * **So the campaign context is the route's, and this screen has no picker.**
+ * Choosing happens on the way in — `MyCharactersScreen`'s *New character*,
+ * which folds the memberships this screen also reads, or a campaign page that
+ * already has one context. A picker here would be a second answer to a
+ * question the URL has already settled, and it would let a reader change the
+ * vocabulary/Hob context without the URL saying so.
  *
  * ### What is deliberately not on it
  *
@@ -119,10 +116,10 @@ import { characterWritesAt, createOwnCharacter } from "./write";
  *
  * `visibility`, `hpCurrent` and who owns it are not fields on
  * `CharacterOwnCreate`, so there is no control for any of them and one would not
- * compile. The row comes out `dm` — read by its author and by their DM and by
- * nobody else at the table — with hit points at *nobody has said yet*. The form
- * says which of those matters out loud, because a player pressing *Create* is
- * entitled to know who is about to be able to read it.
+ * compile. The row comes out unseated, read by its owner and by nobody through
+ * a campaign, with hit points at *nobody has said yet*. The form says that out
+ * loud, because a player pressing *Create* is entitled to know it is not being
+ * placed on a party roster yet.
  */
 
 /**
@@ -296,9 +293,9 @@ export function CharacterCreateScreen() {
       setKept(made.failure);
       return;
     }
-    // The same two reads the form's own create names, and for the same reason:
-    // the row appears on the DM's party list, which this write has never seen.
-    invalidate(characterWritesAt(campaignId));
+    // The same read the form's own create names: only the owned-character list
+    // changes. The campaign's party does not until the explicit join.
+    invalidate(characterCreateWrites);
     await navigate({
       to: "/characters/$characterId",
       params: { characterId: made.success.id },
@@ -315,10 +312,9 @@ export function CharacterCreateScreen() {
       // are the *seed's*: race and subrace bonuses are applied before the
       // armour class in the box beside them is worked out. See `payloadFrom`.
       (client) => createOwnCharacter(client, campaignId, payloadFrom(draft, options)),
-      // What moved that this write never sent: the roster it will appear on, and
-      // the campaign's party list — a DM's screen, which this write has never
-      // seen and reaches by naming the resource rather than the screen.
-      characterWritesAt(campaignId),
+      // What moved that this write never sent: the owned-character roster. The
+      // campaign's party list is untouched until the explicit join.
+      characterCreateWrites,
     );
 
     if (Result.isSuccess(made)) {
@@ -336,7 +332,7 @@ export function CharacterCreateScreen() {
       topBar={
         <TopBar
           title="New character"
-          subtitle={writable ? `Who you are playing at ${membership.campaign.name}.` : undefined}
+          subtitle={writable ? `Using ${membership.campaign.name} as rules context.` : undefined}
         >
           <Button
             variant="secondary"
@@ -1015,16 +1011,14 @@ export function CharacterCreateScreen() {
               </CardContent>
             </Card>
 
-            {/* Said before the press rather than discovered after it. A new
-                character is `dm` by column default — its author reads it because
-                they own it, its DM because `isDm` is the other disjunct — and
-                that is the whole answer to "who can see this", which a player
-                has no control on this screen to change. */}
+            {/* Said before the press rather than discovered after it. Creation
+                writes only the account-owned character. No DM, player or
+                campaign roster reads it until the owner adds it to a campaign. */}
             <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
               <Icon name="lock" size={14} className="mt-0.5 shrink-0 text-faint" />
               <span>
-                Only you and your DM can see them. Whether the rest of the table can is your
-                DM&rsquo;s to decide.
+                They start on your character list, not on a party roster. Add them to a campaign
+                when you are ready.
               </span>
             </p>
 

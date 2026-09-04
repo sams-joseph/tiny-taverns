@@ -1,9 +1,12 @@
 import type { CampaignId, OwnedCharacter } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
+import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { AddToCampaignDialog } from "./AddToCampaignDialog";
+import { campaignsAvailableToJoin } from "./join";
 import { myCharactersAtom, type MyCharactersView } from "./load";
 import { NewCharacterAction } from "./NewCharacterAction";
 import { hitPoints, rosterSummary } from "./sheet";
@@ -30,11 +33,12 @@ import { Portrait, StatPill } from "./SheetParts";
  *   projection is step 12's decision and inventing one here would settle it by
  *   accident. So the banner is absent, and so is the button that goes to a
  *   screen that does not exist.
- * - **A "Join a game" affordance on an unseated card.** A character is
- *   account-owned and top-level since the continuity decision, so *"Not seated
- *   at a table"* is an ordinary state this screen draws — and taking one to a
- *   (second) table is a seat (`party.join`, `campaign_character`), not a copy.
- *   No UI offers that verb yet; when one does it belongs here.
+ * - **A generic "Join a game" code box.** A character is account-owned and
+ *   top-level since the continuity decision, so *"Not seated at a table"* is
+ *   an ordinary state this screen draws — and taking one to a campaign is a
+ *   seat (`party.join`, `campaign_character`), not a copy. The explicit
+ *   *Add to campaign* action below is that verb; it uses existing memberships,
+ *   not an invitation-code flow.
  * - **The join card** — paste a code, *Claim a seat*. Following an invitation is
  *   `#/join/<token>`, a screen that already exists and reads the invitation
  *   before anybody signs in. A second, weaker way in would be a second answer to
@@ -53,32 +57,35 @@ import { Portrait, StatPill } from "./SheetParts";
  *
  * What did not change is who owns what. A character created here is the
  * creator's — `account_id` is `CurrentActor`'s, server-side, and there is
- * nowhere on `CharacterOwnCreate` to name an account — and its **seat** is `dm`
- * by column default, so their DM sees it and the rest of the table does not
- * until the DM shares the seat. There is no DM-typed character any more: the
- * continuity decision of 2026-09-01 made every character its player's own, and
- * the dialog a DM used to type one up in went with it.
+ * nowhere on `CharacterOwnCreate` to name an account — and it has **no seat**
+ * until the owner explicitly adds it to a campaign. There is no DM-typed
+ * character any more: the continuity decision of 2026-09-01 made every
+ * character its player's own, and the dialog a DM used to type one up in went
+ * with it.
  *
  * The button is `NewCharacterAction`, which is *step one of the flow* rather
  * than a control on the form — the captain's reordering puts finding a table
  * first, and it folds the memberships this screen already read rather than
  * asking for them again.
  *
- * A *Playing* badge goes too, and for the list's own rule rather than the data's:
- * every character here is in a campaign, so a badge on all of them would say
- * nothing. Same reason the `Player` badge left the campaign rows when the role
- * became a mode.
+ * A *Playing* badge goes too: seating is now a list of campaign names on the
+ * card, and an unseated character says so in the same place rather than wearing
+ * a badge for a state that changes per campaign.
  */
 
 function CharacterCard({
   owned,
   campaignNames,
+  memberships,
 }: {
   readonly owned: OwnedCharacter;
   readonly campaignNames: ReadonlyMap<CampaignId, string>;
+  readonly memberships: MyCharactersView["memberships"];
 }) {
   const character = owned.character;
   const hp = hitPoints(character.hpCurrent, character.hpMax);
+  const [joining, setJoining] = useState(false);
+  const joinOptions = campaignsAvailableToJoin(owned, memberships);
   // The tables this character is seated at, named. A seat whose campaign the
   // membership read cannot name (a table this account has since left the
   // group of) gets the honest fallback rather than a blank.
@@ -130,15 +137,30 @@ function CharacterCard({
           </span>
         </div>
 
-        <Button
-          className="mt-auto w-full"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/characters/$characterId" params={{ characterId: character.id }} />}
-        >
-          Open sheet
-        </Button>
+        <div className="mt-auto flex flex-col gap-2">
+          {joinOptions.length > 0 && (
+            <Button variant="secondary" size="sm" onClick={() => setJoining(true)}>
+              <Icon name="user-plus" size={14} />
+              Add to campaign
+            </Button>
+          )}
+          <Button
+            className="w-full"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/characters/$characterId" params={{ characterId: character.id }} />}
+          >
+            Open sheet
+          </Button>
+        </div>
       </CardContent>
+      {joining && (
+        <AddToCampaignDialog
+          owned={owned}
+          memberships={memberships}
+          onClose={() => setJoining(false)}
+        />
+      )}
     </Card>
   );
 }
@@ -166,8 +188,8 @@ function NothingYet({ view }: { readonly view: MyCharactersView }) {
 
   return (
     <EmptyState icon="user" title="No characters yet">
-      Write one down for any table you are at — the ones you run included. It appears here, and on
-      that table&rsquo;s party screen.
+      Write one down using any table&rsquo;s rules — the ones you run included. It appears here
+      first; add it to a campaign when you are ready.
     </EmptyState>
   );
 }
@@ -211,6 +233,7 @@ export function MyCharactersScreen() {
                 key={owned.character.id}
                 owned={owned}
                 campaignNames={view.campaignNames}
+                memberships={view.memberships}
               />
             ))}
           </div>

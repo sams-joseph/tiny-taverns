@@ -97,7 +97,7 @@ export const aCampaignBy = (
     return yield* Effect.provideService(campaigns.create(groupId, payload), CurrentActor, actor);
   }).pipe(Effect.orDie);
 
-/** A character and the seat `createOwn` gave it — what most fixtures want back. */
+/** A character and the explicit party seat most fixtures want back. */
 export interface SeatedCharacter {
   readonly character: Character;
   readonly seatId: CampaignCharacterId;
@@ -105,10 +105,10 @@ export interface SeatedCharacter {
 
 /**
  * A character seated at a campaign, through the shipped path: the **owner's**
- * `createOwn`, which writes the shared account-owned row and its seat in one
- * transaction. There is no DM-typed character any more — a table's creator
- * seats their own characters exactly as a player does — so this is the one
- * spelling every fixture uses, whoever the owner is.
+ * `createOwn`, followed by the explicit `party.join` act. There is no DM-typed
+ * character any more — a table's creator seats their own characters exactly as
+ * a player does — so this is the one spelling every fixture uses, whoever the
+ * owner is.
  *
  * The seat starts `dm` (the column default, fail-closed). Pass
  * `seatVisibility: "shared"` to have the campaign's **creator** share it
@@ -131,15 +131,12 @@ export const aCharacterAt = (
       CurrentActor,
       owner,
     );
-    // The seat id is a fact lookup, like `ownerOf`: the row `createOwn` just
-    // wrote, found by the pair the partial unique index makes unique.
-    const seats = yield* sql<{ readonly id: CampaignCharacterId }>`
-      select campaign_character.id from campaign_character
-      where campaign_character.campaign_id = ${campaignId}
-        and campaign_character.character_id = ${character.id}
-        and campaign_character.left_at is null
-    `;
-    const seatId = seats[0]!.id;
+    const joined = yield* Effect.provideService(
+      party.join(campaignId, { characterId: character.id }),
+      CurrentActor,
+      owner,
+    );
+    const seatId = joined.seat.id;
     if (options?.seatVisibility !== undefined && options.seatVisibility !== "dm") {
       const creators = yield* sql<{ readonly creator_account_id: AccountId }>`
         select campaign.creator_account_id from campaign where campaign.id = ${campaignId}

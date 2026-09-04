@@ -14,6 +14,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Party } from "../src/repo/Party.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
@@ -39,6 +40,7 @@ const runtime = ManagedRuntime.make(
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
     Invites.layer,
+    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     SessionEvents.layer,
     // Finishing a night now carries a fight still on the table, which
     // appends to the log and rings the doorbell — so `Sessions` is a live
@@ -79,36 +81,37 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
-  yield* as(
-    characters.createOwn(campaign.id, {
-      name: "Brannoc",
-      playerName: "Ilse",
-      race: "Half-orc",
-      className: "Paladin",
-      ac: 18,
-      hpMax: 52,
-    }),
-  );
-  yield* as(
-    characters.createOwn(campaign.id, {
-      name: "Wren",
-      playerName: "Kofi",
-      race: "Tiefling",
-      className: "Bard",
-      ac: 14,
-      hpMax: 31,
-    }),
-  );
-  yield* as(
-    characters.createOwn(campaign.id, {
-      name: "Sister Pell",
-      playerName: "Dara",
-      race: "Human",
-      className: "Cleric",
-      ac: 16,
-      hpMax: 33,
-    }),
-  );
+  const party = yield* Party;
+  const seatOwn = (payload: Parameters<typeof characters.createOwn>[1]) =>
+    Effect.gen(function* () {
+      const character = yield* as(characters.createOwn(campaign.id, payload));
+      yield* as(party.join(campaign.id, { characterId: character.id }));
+      return character;
+    });
+  yield* seatOwn({
+    name: "Brannoc",
+    playerName: "Ilse",
+    race: "Half-orc",
+    className: "Paladin",
+    ac: 18,
+    hpMax: 52,
+  });
+  yield* seatOwn({
+    name: "Wren",
+    playerName: "Kofi",
+    race: "Tiefling",
+    className: "Bard",
+    ac: 14,
+    hpMax: 31,
+  });
+  yield* seatOwn({
+    name: "Sister Pell",
+    playerName: "Dara",
+    race: "Human",
+    className: "Cleric",
+    ac: 16,
+    hpMax: 33,
+  });
 
   const archer = yield* as(
     creatures.libraryCreate({

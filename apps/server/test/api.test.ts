@@ -128,6 +128,10 @@ describe("campaign, session, character and note CRUD", () => {
             hpMax: 21,
           },
         });
+        yield* client.party.join({
+          params: { campaignId },
+          payload: { characterId: character.id },
+        });
         const party = yield* client.party.list({ params: { campaignId } });
 
         const readBack = yield* client.notes.findById({ params: { campaignId, noteId: note.id } });
@@ -147,8 +151,8 @@ describe("campaign, session, character and note CRUD", () => {
     // Derived by the generated column from the three that were sent, and
     // writable through none of them — see `0012_character_sheet.ts`.
     expect(seen.character.descriptor).toBe("Level 3 Half-orc Paladin");
-    // The seat `createCharacter` wrote in the same transaction, with the
-    // display name snapshotted from the character at join time.
+    // The explicit party join's seat, with the display name snapshotted from
+    // the character at join time.
     expect(seen.party.map((row) => row.character?.id)).toContain(seen.character.id);
     expect(
       seen.party.find((row) => row.character?.id === seen.character.id)?.seat.displayName,

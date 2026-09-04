@@ -22,6 +22,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
+import { Party } from "../src/repo/Party.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
@@ -64,6 +65,7 @@ const services = Layer.mergeAll(
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
   Invites.layer,
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_carryover")));
@@ -85,15 +87,16 @@ const makeFixture = Effect.gen(function* () {
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
   const roster = yield* EncounterCreatures;
+  const party = yield* Party;
   const sessions = yield* Sessions;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road" }));
-  // The creator's own character, seated by `createOwn`'s own transaction —
-  // the seat is what the fight seeds a combatant from.
-  yield* as(
+  // The creator's own character, explicitly joined to the party — the seat is
+  // what the fight seeds a combatant from.
+  const brannoc = yield* as(
     characters.createOwn(campaign.id, {
       name: "Brannoc",
       playerName: "Ilse",
@@ -103,6 +106,7 @@ const makeFixture = Effect.gen(function* () {
       hpMax: 52,
     }),
   );
+  yield* as(party.join(campaign.id, { characterId: brannoc.id }));
   const hag = yield* as(
     creatures.libraryCreate({
       name: "Marsh Hag",

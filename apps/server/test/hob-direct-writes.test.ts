@@ -19,6 +19,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobDirectWrites } from "../src/repo/HobDirectWrites.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
+import { Party } from "../src/repo/Party.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
@@ -52,6 +53,7 @@ const seed = Effect.gen(function* () {
   const combatants = yield* Combatants;
   const encounters = yield* Encounters;
   const runs = yield* EncounterRuns;
+  const party = yield* Party;
   const sessions = yield* Sessions;
 
   const dm = yield* anAccount("Direct Write DM");
@@ -82,6 +84,7 @@ const seed = Effect.gen(function* () {
       },
     }),
   );
+  yield* withActor(player)(party.join(campaign.id, { characterId: character.id }));
   const session = yield* as(sessions.create(campaign.id, { number: 1, visibility: "shared" }));
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
   const encounter = yield* as(

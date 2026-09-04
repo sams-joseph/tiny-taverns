@@ -86,6 +86,7 @@ const setup = Effect.gen(function* () {
   const character = yield* withActor(player)(
     characters.createOwn(table.id, { name: "Brannoc", hpMax: 30, sheet }),
   );
+  yield* withActor(player)(party.join(table.id, { characterId: character.id }));
   const [seat] = yield* withActor(dm)(party.list(table.id));
   if (seat === undefined) throw new Error("expected a party seat");
   const creator = yield* withActor(dm)(asDm(dm, table.id));

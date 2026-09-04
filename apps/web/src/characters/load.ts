@@ -48,9 +48,10 @@ export interface MyCharactersView {
    * Three screens fold it three ways and none of them wants the same shape: the
    * roster asks *how many tables at all* to tell its two silences apart, the
    * sheet asks *what is this one called*, and the create form asks *which of
-   * these am I a player at*, because that is the set a character of your own can
-   * go into. Carrying the list is one read; three folds of it in the screens
-   * that want them is no reads at all.
+   * these can supply rules context*. The Add-to-campaign dialog asks the same
+   * list which campaigns the character is not already seated at. Carrying the
+   * list is one read; three folds of it in the screens that want them is no
+   * reads at all.
    *
    * `role` is why it has to be the memberships rather than the campaigns: it is
    * a fact about the pair and has nowhere on a `Campaign` to live.
@@ -167,7 +168,7 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
 
 /**
  * What the create form reads: the roster's own value, plus **the vocabulary of
- * the one table this character is being made at.**
+ * the one campaign this character is being drafted against.**
  *
  * Two atoms rather than a third call inside `loadMyCharacters`, and the split
  * is what each is keyed on: the roster names no campaign (`GET /me/characters`
@@ -211,7 +212,7 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
  */
 export interface NewCharacterView extends MyCharactersView {
   /**
-   * The classes, races and backgrounds this table offers, as a player sees them.
+   * The classes, races and backgrounds this campaign context offers, as the account sees them.
    *
    * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, so what
    * arrives here is already narrowed by the server — there is no client-side
@@ -250,7 +251,7 @@ export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
       }
 
       /**
-       * At a table this account does not **play** at, the vocabulary's answer
+       * At a campaign this account is not a member of, the vocabulary's answer
        * is dropped rather than shown.
        *
        * `options.list` composes `ensureCampaignReadable`, so at a table this
@@ -265,9 +266,8 @@ export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
        * is a form whose class picker is silently empty. So the failure passes
        * straight through in the one case where the form is drawn.
        *
-       * A DM's own table takes this branch too, and `options.list` would have
-       * succeeded there — `isDm` is a disjunct of `campaignReadable`. The form
-       * is still not drawn, because the pill is a mode.
+       * A DM's own table is a membership now, because a creator can write and
+       * later seat their own characters too.
        */
       const membership = roster.value.memberships.find((row) => row.campaign.id === campaignId);
       if (membership === undefined) {

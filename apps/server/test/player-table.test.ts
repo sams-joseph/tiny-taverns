@@ -103,9 +103,9 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
-  // The players first, because a character is theirs from its first moment
-  // now: created through the owner's `createOwn`, which seats it at the table
-  // in the same transaction. There is no DM-typed character to assign.
+  // The players first, because a character is theirs from its first moment now:
+  // created through the owner's `createOwn`, then explicitly seated with
+  // `party.join`. There is no DM-typed character to assign.
   const player = yield* aPlayerAt(campaign.id, "Pim");
   const other = yield* aPlayerAt(campaign.id, "Wren");
   const { character: brannoc } = yield* aCharacterAt(

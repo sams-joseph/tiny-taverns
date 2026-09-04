@@ -36,6 +36,7 @@ import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Options } from "../src/repo/Options.js";
+import { Party } from "../src/repo/Party.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
@@ -88,6 +89,7 @@ const services = Layer.mergeAll(
   Invites.layer,
   Notes.layer,
   Options.layer,
+  Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Recap.layer,
   Search.layer,
   SessionEvents.layer,
@@ -421,6 +423,7 @@ describe("answering", () => {
         const characters = yield* Characters;
         const encounters = yield* Encounters;
         const runs = yield* EncounterRuns;
+        const party = yield* Party;
         const sessions = yield* Sessions;
 
         const dm = yield* anAccount("Direct Hob DM");
@@ -453,6 +456,7 @@ describe("answering", () => {
             },
           }),
         );
+        yield* withActor(player)(party.join(campaign.id, { characterId: character.id }));
         const session = yield* as(
           sessions.create(campaign.id, { number: 1, visibility: "shared" }),
         );

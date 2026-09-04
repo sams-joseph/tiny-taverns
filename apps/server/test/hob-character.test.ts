@@ -267,20 +267,30 @@ const accept = (actor: Actor, threadId: AssistantThreadId, turnId: AssistantTurn
     }).pipe(withActor(actor), Effect.result),
   );
 
-/** How many characters are at the table, whatever their visibility. */
+/** How many character rows exist at all; accepting a draft is the only mover here. */
 const characterCount = () =>
   runtime.runPromise(
     Effect.flatMap(
       SqlClient.SqlClient,
       (sql) =>
-        // Both halves of what an accept writes now: the shared character and
-        // its seat at this table. A proposal that moved either would fail this.
         sql<{
           readonly count: string;
-        }>`select ((select count(*) from character)
-                 + (select count(*) from campaign_character
-                    where campaign_id = ${fixture.campaign.id}
-                      and left_at is null))::text as count`,
+        }>`select count(*)::text as count from character`,
+    ).pipe(
+      Effect.map((rows) => Number(rows[0]?.count ?? "0")),
+      Effect.orDie,
+    ),
+  );
+
+const activeSeatCount = (characterId: string) =>
+  runtime.runPromise(
+    Effect.flatMap(
+      SqlClient.SqlClient,
+      (sql) =>
+        sql<{ readonly count: string }>`
+          select count(*)::text as count from campaign_character
+          where character_id = ${characterId} and left_at is null
+        `,
     ).pipe(
       Effect.map((rows) => Number(rows[0]?.count ?? "0")),
       Effect.orDie,
@@ -540,21 +550,17 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.origin).toBe("assistant");
     expect(character.assistantTurnId).toBe(turnId);
     // Every default the payload cannot say. Disclosure moved to the seat with
-    // the split: the shared character carries no `visibility`, and the
-    // campaign's word on who may see it is `campaign_character.visibility` —
-    // the accept seats the draft at the table it was asked at, and the seat
-    // falls to `dm`, so a drafted character fails closed exactly as a typed
-    // one does.
-    const seat = (
-      await runtime.runPromise(
-        Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
-          withActor(fixture.dm),
-          Effect.orDie,
-        ),
-      )
-    ).find((row) => row.character?.id === character.id);
-    expect(seat?.seat.visibility).toBe("dm");
-    expect(seat?.seat.origin).toBe("assistant");
+    // the split, and accept creates no seat: the shared character carries no
+    // `visibility`, and the campaign's word on who may see it does not exist
+    // until the owner explicitly joins.
+    expect(await activeSeatCount(character.id)).toBe(0);
+    const seats = await runtime.runPromise(
+      Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
+        withActor(fixture.dm),
+        Effect.orDie,
+      ),
+    );
+    expect(seats.find((row) => row.character?.id === character.id)).toBeUndefined();
     expect(character.hpCurrent).toBeNull();
     // **The three seeded numbers**, copied off the proposal rather than worked
     // out here — a druid's d8, constitution at rank two (`CON 14`, `+2`), the
@@ -685,7 +691,7 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.descriptor).toBe("Level 1 Elf Druid");
   }, 60_000);
 
-  it("is an ordinary character afterwards: the player reads it, the DM reads it, nobody else does", async () => {
+  it("is an ordinary unseated character afterwards: the player reads it, the table does not", async () => {
     const { events } = await ask(fixture.player);
     const { threadId, turnId } = begunIn(events);
     const accepted = await accept(fixture.player, threadId, turnId);
@@ -699,19 +705,17 @@ describe("the accept makes a character, and it is the player's own", () => {
     );
     expect(mine.map((owned) => owned.character.id)).toContain(id);
 
-    // The campaign-side read is the party now: the creator reads every seat,
-    // so the drafted character is on their roster the moment it is kept.
+    // The campaign-side read is the party now: there is no campaign row until
+    // the owner explicitly joins, so the creator sees nothing yet.
     const dmSees = await runtime.runPromise(
       Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
         withActor(fixture.dm),
         Effect.orDie,
       ),
     );
-    expect(dmSees.map((row) => row.character?.id)).toContain(id);
+    expect(dmSees.map((row) => row.character?.id)).not.toContain(id);
 
-    // The seat is `dm` by column default, and the other player at the same
-    // shared table does not own it — so neither the seat nor the character
-    // behind it is theirs to see.
+    // The other player at the same shared table does not own it either.
     const otherSees = await runtime.runPromise(
       Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
         withActor(fixture.otherPlayer),
@@ -855,16 +859,9 @@ describe("the creator drafts too, and `intent` is what says so", () => {
     expect(created.accountId).toBe(fixture.dm.accountId);
     expect(created.origin).toBe("assistant");
 
-    // Seated at the table it was asked at, like any accepted draft.
-    const seat = (
-      await runtime.runPromise(
-        Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)).pipe(
-          withActor(fixture.dm),
-          Effect.orDie,
-        ),
-      )
-    ).find((row) => row.character?.id === created.id);
-    expect(seat?.seat.origin).toBe("assistant");
+    // Unseated like any accepted draft; the campaign was Hob/vocabulary
+    // context only.
+    expect(await activeSeatCount(created.id)).toBe(0);
   }, 60_000);
 
   it("still refuses a stranger the drafting surface", async () => {

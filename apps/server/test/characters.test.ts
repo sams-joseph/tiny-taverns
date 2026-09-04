@@ -39,8 +39,8 @@ import { migratedDatabase } from "./support/database.js";
  *   `account_id` to the actor's own account — no campaign, no membership, no
  *   master toggle, no credential scope. A character is campaign-scoped
  *   nowhere, so there is nothing for any of those to be about; the one place
- *   a campaign still appears is `createOwn`'s gate, because creation is
- *   campaign-first.
+ *   a campaign still appears is `createOwn`'s gate, because creation uses that
+ *   campaign's vocabulary context.
  * - **concurrency is explicit.** Every write bumps `version`; a caller that
  *   read the sheet may send `expectedVersion` back and is refused with a
  *   `Conflict` when the row moved on — which, with one character shared
@@ -174,10 +174,10 @@ describe("mine: what an account owns, wherever it sits", () => {
     // per-table narrowing was a fact about a campaign-scoped read that no
     // longer exists.
     const here = await run(aCharacterAt(fixture.saltRoad.id, fixture.pim, { name: "Here" }));
-    // The *write* at Sixpence needs a credential that reaches Sixpence —
-    // `createOwn` is campaign-first and its gate honours scope — so the second
-    // character is written with the account-wide credential. The read under
-    // test is then made with the narrow one.
+    // The helper explicitly joins at Sixpence, and that write needs a
+    // credential that reaches Sixpence — so the second character is written
+    // with the account-wide credential. The read under test is then made with
+    // the narrow one.
     const there = await run(
       aCharacterAt(fixture.sixpence.id, accountWide(fixture.pim), { name: "There" }),
     );
@@ -190,7 +190,7 @@ describe("mine: what an account owns, wherever it sits", () => {
   });
 });
 
-describe("createOwn: campaign-first, and the gate", () => {
+describe("createOwn: campaign context, and the gate", () => {
   it("refuses a campaign this account is not a member of", async () => {
     // Fen is a stranger to the Salt Road. `NotFound`, not `Forbidden`: "it
     // exists but is not yours" is itself a disclosure.
@@ -204,10 +204,10 @@ describe("createOwn: campaign-first, and the gate", () => {
   });
 
   it("refuses a player at a campaign its creator has not shared", async () => {
-    // The master toggle still gates *creation*, because creation is
-    // campaign-first: the seat has to land at a table this credential can
-    // read, and an unshared table reads as nothing to a player — the same
-    // answer everything else there gives them.
+    // The master toggle still gates the context: a player cannot use a table's
+    // vocabulary/Hob prompt before that table is shared, so an unshared table
+    // reads as nothing to a player — the same answer everything else there
+    // gives them.
     const refused = await run(
       withActor(fixture.pim)(characters.createOwn(fixture.marsh.id, { name: "Mott" })).pipe(
         Effect.flip,
@@ -216,7 +216,7 @@ describe("createOwn: campaign-first, and the gate", () => {
     expect(refused).toBeInstanceOf(NotFound);
   });
 
-  it("writes the character and its seat in one act, owned by the credential", async () => {
+  it("writes only the character row, owned by the credential", async () => {
     const character = await run(
       withActor(fixture.pim)(
         characters.createOwn(fixture.saltRoad.id, {
@@ -240,25 +240,18 @@ describe("createOwn: campaign-first, and the gate", () => {
     expect(character.version).toBe(1);
     expect(character.origin).toBe("authored");
 
-    // The seat, snapshotted from what was just written, `dm` by default: a
-    // new seat fails closed until the table's creator shares it.
+    // The campaign was context only. Seating is the explicit `party.join` act,
+    // so creation creates no campaign row to disclose.
     const seats = await run(
       Effect.flatMap(
         SqlClient.SqlClient,
-        (sql) => sql<{
-          readonly display_name: string;
-          readonly visibility: string;
-          readonly left_at: Date | null;
-        }>`
-          select display_name, visibility, left_at from campaign_character
+        (sql) => sql<{ readonly count: string }>`
+          select count(*)::text as count from campaign_character
           where campaign_id = ${fixture.saltRoad.id} and character_id = ${character.id}
         `,
       ),
     );
-    expect(seats).toHaveLength(1);
-    expect(seats[0]!.display_name).toBe("Brannoc");
-    expect(seats[0]!.visibility).toBe("dm");
-    expect(seats[0]!.left_at).toBeNull();
+    expect(Number(seats[0]!.count)).toBe(0);
   });
 
   it("reads back the empty document when no sheet was written", async () => {

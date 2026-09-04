@@ -2,6 +2,8 @@ import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  bodyOf,
+  brannoc,
   brannocId,
   campaignId,
   installCharacterServer,
@@ -10,6 +12,7 @@ import {
   onlyDmTables,
   oneTable,
   otherCampaignId,
+  partySeatAnswer,
   renderRoster,
   sorrelId,
 } from "./characters.fixtures";
@@ -94,15 +97,14 @@ describe("your characters", () => {
     ]);
   });
 
-  it("offers exactly one control that writes, and it is the create flow's first step", async () => {
+  it("offers create and the explicit seat write, without dead invitation controls", async () => {
     await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
 
-    // *New character* is here since `POST /me/campaigns/:c/characters` shipped,
-    // and it is the only thing on this screen that leads to a write. It is a
-    // control rather than a link because this account is at two tables, so the
-    // first step of the flow is choosing which — see `NewCharacterAction`.
+    // *New character* creates the top-level row. *Add to campaign* is the
+    // later seat write, because creation no longer puts anything on a party.
     expect(screen.getByRole("button", { name: /New character/i })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Add to campaign/i })).toHaveLength(2);
 
     // The other three still have nothing behind them: there is no approval
     // queue and no column for one, no asset store, and following an invitation
@@ -111,12 +113,37 @@ describe("your characters", () => {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     // Nothing is typed *here*. The form is a screen of its own, at a URL that
-    // names the table, because the table is step one.
+    // names the campaign context, because context is step one.
     expect(screen.queryByRole("textbox")).toBeNull();
-    // The live banner has no read behind it — the player projection of a fight
-    // does not exist — so nothing here says a table is playing right now.
+    // The live banner belongs on the sheet, not the roster.
     expect(screen.queryByText(/playing right now/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /Take your turn/i })).toBeNull();
+  });
+
+  it("seats an existing character with the explicit party join", async () => {
+    server.routes.set(
+      `POST /campaigns/${otherCampaignId}/party`,
+      partySeatAnswer(brannoc, otherCampaignId),
+    );
+
+    await renderRoster();
+    const card = (await screen.findByText("Brannoc Duskharrow")).closest("div[data-slot=card]");
+    await userEvent.click(
+      within(card as HTMLElement).getByRole("button", { name: /Add to campaign/i }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add to campaign" });
+    expect(within(dialog).getByText(/The character stays yours/)).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: /Add to The Salt Road/i })).toBeNull();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /Add to The Hag's Bargain/i }),
+    );
+
+    expect(bodyOf(server, "POST", `/campaigns/${otherCampaignId}/party`)).toEqual({
+      characterId: brannocId,
+    });
+    expect(screen.queryByRole("dialog", { name: "Add to campaign" })).toBeNull();
+    expect(server.calls.filter((call) => call.pathname === "/me/characters")).toHaveLength(2);
   });
 
   it("tells the two empty rosters apart, and a run table now counts", async () => {
@@ -126,7 +153,7 @@ describe("your characters", () => {
     await renderRoster();
 
     await screen.findByText("No characters yet");
-    expect(screen.getByText(/Write one down for any table you are at/)).toBeTruthy();
+    expect(screen.getByText(/Write one down using any table/)).toBeTruthy();
     expect(screen.getByText("Ilse Vantar · no characters yet, at 2 tables.")).toBeTruthy();
     expect(screen.getByRole("button", { name: /New character/i })).toBeTruthy();
 
@@ -151,7 +178,7 @@ describe("your characters", () => {
     await renderRoster();
 
     await screen.findByText("No characters yet");
-    expect(screen.getByText(/Write one down for any table you are at/)).toBeTruthy();
+    expect(screen.getByText(/Write one down using any table/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /New character/i })).toBeTruthy();
   });
 
