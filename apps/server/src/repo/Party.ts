@@ -312,22 +312,34 @@ export class Party extends Context.Service<
                     const characterId = rows[0]!.character_id;
                     // Conditions are the live write-through: the shared
                     // character and every live combatant of *this* campaign
-                    // move in this transaction, or none of them do. A seat
-                    // whose character has been deleted has nothing live to
-                    // write, and the seat edit stands alone.
+                    // move in this transaction, or none of them do. Temporary
+                    // hit points are live on the shared character only — there
+                    // is deliberately no combatant copy — and ride the same
+                    // creator-owned seat PATCH. A seat whose character has
+                    // been deleted has nothing live to write, and the seat edit
+                    // stands alone.
                     let sessionId: SessionId | undefined = undefined;
-                    if (patch.conditions !== undefined && characterId !== null) {
+                    if (
+                      (patch.conditions !== undefined || patch.tempHp !== undefined) &&
+                      characterId !== null
+                    ) {
+                      const characterColumns = defined({
+                        conditions: patch.conditions,
+                        temp_hp: patch.tempHp,
+                      });
                       yield* sql`
-                        update character set conditions = ${patch.conditions}, updated_at = now()
+                        update character set ${sql.update(characterColumns)}, updated_at = now()
                         where character.id = ${characterId}
                       `;
-                      yield* writeThroughToLiveCombatants(
-                        sql,
-                        characterId,
-                        campaignId,
-                        actor,
-                        patch.conditions,
-                      );
+                      if (patch.conditions !== undefined) {
+                        yield* writeThroughToLiveCombatants(
+                          sql,
+                          characterId,
+                          campaignId,
+                          actor,
+                          patch.conditions,
+                        );
+                      }
                       const inFight = yield* liveCombatantOf(sql, characterId, campaignId, actor);
                       sessionId =
                         inFight?.sessionId ?? (yield* currentSessionOf(sql, campaignId, actor));
@@ -336,7 +348,12 @@ export class Party extends Context.Service<
                           sessionId,
                           characterId,
                           live: inFight,
-                          detail: { conditions: patch.conditions },
+                          detail: {
+                            ...(patch.conditions === undefined
+                              ? {}
+                              : { conditions: patch.conditions }),
+                            ...(patch.tempHp === undefined ? {} : { tempHp: patch.tempHp }),
+                          },
                         });
                       }
                     }

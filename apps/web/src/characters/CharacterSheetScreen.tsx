@@ -1,9 +1,9 @@
 import type {
-  Character,
   CharacterId,
   InventoryItem,
   OwnedCharacter,
   SheetAction,
+  SheetResource,
   Trait,
 } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
@@ -48,7 +48,13 @@ import {
   SheetSection,
   StatPill,
 } from "./SheetParts";
-import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
+import {
+  ownCharacterWrites,
+  restOwnCharacter,
+  saveOwnCharacter,
+  sheetWith,
+  spendResource,
+} from "./write";
 
 /**
  * One character, whole — `ui_kits/dm-screen/CharacterSheetB.jsx` (the seventh
@@ -209,15 +215,119 @@ function ActionLine({ action }: { readonly action: SheetAction }) {
   );
 }
 
-function Feature({ trait, note }: { readonly trait: Trait; readonly note?: string | undefined }) {
+const resourceLeft = (resource: SheetResource): number => Math.max(0, resource.max - resource.used);
+
+function PipButton({
+  spent,
+  label,
+  disabled,
+  onClick,
+}: {
+  readonly spent: boolean;
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "size-4 rotate-45 border transition-control focus-visible:outline-none focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50",
+        spent ? "border-strong bg-transparent" : "border-magic bg-magic",
+      )}
+    />
+  );
+}
+
+function ResourceControls({
+  resource,
+  busy,
+  onSpend,
+}: {
+  readonly resource: SheetResource;
+  readonly busy: boolean;
+  readonly onSpend: (resource: SheetResource, amount: number) => void;
+}) {
+  const left = resourceLeft(resource);
+  const recharge =
+    resource.recharge === "short"
+      ? "short rest"
+      : resource.recharge === "long"
+        ? "long rest"
+        : resource.recharge;
+  const count = `${String(left)}/${String(resource.max)}${resource.unit === undefined ? "" : ` ${resource.unit}`}`;
+  const pipCount = Math.min(resource.max, 12);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="text-micro leading-none text-accent-ink">
+        {count} · {recharge}
+      </span>
+      {pipCount > 0 && resource.unit !== "hp" ? (
+        <span className="flex gap-1">
+          {Array.from({ length: pipCount }, (_, index) => {
+            const spent = index < resource.used;
+            return (
+              <PipButton
+                key={index}
+                spent={spent}
+                disabled={busy}
+                label={`${spent ? "Recover" : "Spend"} ${resource.name} ${String(index + 1)}`}
+                onClick={() => onSpend(resource, spent ? -1 : 1)}
+              />
+            );
+          })}
+        </span>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || resource.used <= 0}
+            onClick={() => onSpend(resource, -1)}
+          >
+            Recover
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || left <= 0}
+            onClick={() => onSpend(resource, 1)}
+          >
+            Spend
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Feature({
+  trait,
+  note,
+  resource,
+  busy,
+  onSpend,
+}: {
+  readonly trait: Trait;
+  readonly note?: string | undefined;
+  readonly resource?: SheetResource | undefined;
+  readonly busy: boolean;
+  readonly onSpend: (resource: SheetResource, amount: number) => void;
+}) {
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-body-s leading-snug font-semibold text-heading">{trait.name}</span>
-        {note !== undefined && note !== "" && (
+        {note !== undefined && note !== "" && resource === undefined && (
           <span className="text-micro leading-none text-accent-ink">{note}</span>
         )}
       </div>
+      {resource !== undefined && (
+        <ResourceControls resource={resource} busy={busy} onSpend={onSpend} />
+      )}
       {trait.text !== "" && (
         <p className="mt-1 max-w-measure text-caption leading-body text-muted-foreground">
           {trait.text}
@@ -318,7 +428,7 @@ const EditButton = ({
 );
 
 function SheetDocument({
-  character,
+  owned,
   sections,
   register,
   onEditAbilities,
@@ -326,7 +436,7 @@ function SheetDocument({
   onEditGear,
   onEditSkills,
 }: {
-  readonly character: Character;
+  readonly owned: OwnedCharacter;
   readonly sections: ReadonlyArray<SheetSectionSpec>;
   readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
   readonly onEditAbilities: () => void;
@@ -334,6 +444,7 @@ function SheetDocument({
   readonly onEditGear: () => void;
   readonly onEditSkills: () => void;
 }) {
+  const character = owned.character;
   const sheet = character.sheet;
   const spellcasting = sheet.spellcasting;
   const slots = slotRows(sheet);
@@ -346,6 +457,32 @@ function SheetDocument({
   ].flatMap(({ label, value }) => (value === undefined || value === "" ? [] : [{ label, value }]));
   const purse = sheet.currency === undefined ? [] : coins(sheet.currency);
   const drawn = (id: SheetSectionId) => sections.find((section) => section.id === id);
+  const { busy, failure, submit } = useMutation();
+  const [pending, setPending] = useState<Record<string, number>>({});
+  const adjusted = (resource: SheetResource): SheetResource => ({
+    ...resource,
+    used: Math.max(0, Math.min(resource.max, resource.used + (pending[resource.id] ?? 0))),
+  });
+  const spend = (resource: SheetResource, amount: number) => {
+    setPending((current) => ({ ...current, [resource.id]: (current[resource.id] ?? 0) + amount }));
+    void submit(
+      (client) => spendResource(client, character, resource.id, amount),
+      ownCharacterWrites(owned),
+    ).finally(() => {
+      setPending((current) => ({
+        ...current,
+        [resource.id]: (current[resource.id] ?? 0) - amount,
+      }));
+    });
+  };
+  const resourceFor = (trait: Trait): SheetResource | undefined => {
+    const wanted = trait.name.trim().toLowerCase();
+    const resource = (sheet.resources ?? []).find(
+      (candidate) =>
+        !candidate.id.startsWith("slot:") && candidate.name.trim().toLowerCase() === wanted,
+    );
+    return resource === undefined ? undefined : adjusted(resource);
+  };
 
   const abilities = drawn("abilities");
   const actions = drawn("actions");
@@ -361,6 +498,13 @@ function SheetDocument({
        beside an open Hob panel is 400 less — rather than on the shell's. The
        `@md`/`@lg` steps below are the column's, never `main`'s. */
     <div className="@container order-3 flex min-w-0 flex-1 flex-col gap-gutter @3xl:order-2">
+      {failure !== undefined && (
+        <Card className="border-danger">
+          <CardContent className="pt-card">
+            <SaveFailure failure={failure} />
+          </CardContent>
+        </Card>
+      )}
       {abilities !== undefined && (
         /* **Drawn on a writable sheet whether or not it holds anything**: the six
             cells are where a score is typed a first time, so a section that
@@ -470,31 +614,54 @@ function SheetDocument({
         >
           {slots.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2.5 border-b border-hairline pb-3">
-              {slots.map((slot) => (
-                <div key={slot.level} className="flex items-center gap-2">
-                  <span className="text-micro leading-none text-muted-foreground">
-                    L{slot.level}
-                  </span>
-                  {/* Pips, not buttons: spending one is a write, and a player
-                      has none. The count is said in words beside them so the
-                      marks are decoration. */}
-                  <span className="flex gap-1" aria-hidden="true">
-                    {Array.from({ length: Math.max(0, slot.total) }, (_, index) => (
-                      <span
-                        key={index}
-                        className={
-                          index < slot.used
-                            ? "size-3.5 rotate-45 border border-strong bg-transparent"
-                            : "size-3.5 rotate-45 border border-magic bg-magic"
-                        }
-                      />
-                    ))}
-                  </span>
-                  <span className="text-micro leading-none text-faint">
-                    {Math.max(0, slot.total - slot.used)} of {slot.total} left
-                  </span>
-                </div>
-              ))}
+              {slots.map((slot) => {
+                const resource = (sheet.resources ?? []).find(
+                  (candidate) => candidate.id === `slot:${String(slot.level)}`,
+                );
+                const shown =
+                  resource === undefined
+                    ? slot
+                    : {
+                        level: slot.level,
+                        used: adjusted(resource).used,
+                        total: adjusted(resource).max,
+                      };
+                const used = Math.min(shown.used, shown.total);
+                return (
+                  <div key={slot.level} className="flex items-center gap-2">
+                    <span className="text-micro leading-none text-muted-foreground">
+                      L{slot.level}
+                    </span>
+                    <span className="flex gap-1">
+                      {Array.from({ length: Math.max(0, shown.total) }, (_, index) => {
+                        const spent = index < used;
+                        return resource === undefined ? (
+                          <span
+                            key={index}
+                            aria-hidden="true"
+                            className={
+                              spent
+                                ? "size-3.5 rotate-45 border border-strong bg-transparent"
+                                : "size-3.5 rotate-45 border border-magic bg-magic"
+                            }
+                          />
+                        ) : (
+                          <PipButton
+                            key={index}
+                            spent={spent}
+                            disabled={busy}
+                            label={`${spent ? "Recover" : "Spend"} level ${String(slot.level)} spell slot ${String(index + 1)}`}
+                            onClick={() => spend(resource, spent ? -1 : 1)}
+                          />
+                        );
+                      })}
+                    </span>
+                    <span className="text-micro leading-none text-faint">
+                      {Math.max(0, shown.total - used)} of {shown.total} left
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
           <div className="grid grid-cols-1 gap-x-gutter @md:grid-cols-2">
@@ -522,16 +689,19 @@ function SheetDocument({
       {features !== undefined && (
         <DocumentSection section={features} register={register}>
           <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
-            {sheet.traits.map((trait) => (
-              /* A feature with a counter on `resources` wears it as its note —
-                 *2/2 · short rest* — read-only; the spend is a later slice. A
-                 note the trait already carries wins, being the player's own. */
-              <Feature
-                key={trait.name}
-                trait={trait}
-                note={trait.note ?? usesNote(trait, sheet.resources)}
-              />
-            ))}
+            {sheet.traits.map((trait) => {
+              const resource = resourceFor(trait);
+              return (
+                <Feature
+                  key={trait.name}
+                  trait={trait}
+                  resource={resource}
+                  busy={busy}
+                  onSpend={spend}
+                  note={trait.note ?? usesNote(trait, sheet.resources)}
+                />
+              );
+            })}
           </div>
         </DocumentSection>
       )}
@@ -695,6 +865,10 @@ function IdentityCard({
   // be able to mark the first save on the night they do.
   const deathSaves = character.sheet.deathSaves ?? { successes: 0, failures: 0 };
   const { busy, failure, submit } = useMutation();
+  const [hitDiceToSpend, setHitDiceToSpend] = useState(0);
+  const hitDiceResource = character.sheet.resources?.find((resource) => resource.id === "hit-dice");
+  const availableHitDice =
+    hitDiceResource === undefined ? 0 : Math.max(0, hitDiceResource.max - hitDiceResource.used);
 
   /**
    * One mark, written straight through — **not optimistic, and deliberately.**
@@ -715,6 +889,15 @@ function IdentityCard({
       ownCharacterWrites(owned),
     );
   };
+  const rest = async (kind: "short" | "long") => {
+    await submit(
+      (client) =>
+        restOwnCharacter(client, character, kind, kind === "short" ? hitDiceToSpend : undefined),
+      ownCharacterWrites(owned),
+    );
+    setHitDiceToSpend(0);
+  };
+
   const meta = [identity?.background, identity?.alignment].filter(
     (part): part is string => part !== undefined && part !== "",
   );
@@ -812,6 +995,55 @@ function IdentityCard({
             temp={character.tempHp}
             hitDice={identity?.hitDice}
           />
+
+          {hitDiceResource !== undefined && (
+            <div className="flex flex-col gap-2 border border-hairline bg-surface-sunken p-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 text-micro leading-none text-muted-foreground">
+                  Hit dice: {String(availableHitDice)} of {String(hitDiceResource.max)} left
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || hitDiceToSpend <= 0}
+                  onClick={() => setHitDiceToSpend((value) => Math.max(0, value - 1))}
+                >
+                  −
+                </Button>
+                <span className="w-6 text-center font-mono text-mono leading-none text-heading">
+                  {hitDiceToSpend}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || hitDiceToSpend >= availableHitDice}
+                  onClick={() =>
+                    setHitDiceToSpend((value) => Math.min(availableHitDice, value + 1))
+                  }
+                >
+                  +
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void rest("short")}
+                >
+                  Short rest
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void rest("long")}
+                >
+                  Long rest
+                </Button>
+              </div>
+            </div>
+          )}
 
           {character.conditions.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -1079,7 +1311,7 @@ function SheetScroller({
         />
         <SectionSpine ref={spine} sections={sections} active={active} onGo={go} />
         <SheetDocument
-          character={owned.character}
+          owned={owned}
           sections={sections}
           register={register}
           onEditAbilities={() => onEdit("abilities")}

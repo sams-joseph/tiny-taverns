@@ -795,6 +795,7 @@ describe("a stranger reads nothing", () => {
               'ability_score',
               'account',
               'campaign_member',
+              'character_resource_request',
               'group_invite',
               'group_member',
               'play_group',

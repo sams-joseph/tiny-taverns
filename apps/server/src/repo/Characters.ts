@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import {
   type Actor,
   type CampaignId,
@@ -5,15 +6,22 @@ import {
   type CharacterId,
   type CharacterOwnCreate,
   type CharacterOwnUpdate,
+  type CharacterResourceSpend,
   CharacterSeatRef,
+  type CharacterRest,
   type CharacterSheet,
+  type CombatantId,
   Conflict,
   CurrentActor,
+  type EncounterRunId,
   NotFound,
   OwnedCharacter,
   type RaceBody,
+  type SessionId,
+  type SheetResource,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer, Option } from "effect";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { SqlClient } from "effect/unstable/sql";
 import {
   type AssistantOrigin,
@@ -23,6 +31,7 @@ import {
   type ProvenanceColumns,
   setClause,
 } from "./rows.js";
+import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
 import { ensureCampaignReadable, ownCharacter, usableInCampaign } from "./visibility.js";
 
 /**
@@ -210,6 +219,80 @@ interface SeatRefRow {
   readonly joined_at: Date;
 }
 
+interface OpenSeatSessionRow {
+  readonly session_id: SessionId;
+  readonly combatant_id: CombatantId | null;
+  readonly run_id: EncounterRunId | null;
+}
+
+interface LiveFightRow {
+  readonly campaign_name: string;
+}
+
+const resourceMissing = (resourceId: string): NotFound =>
+  new NotFound({ resource: "character_resource", id: resourceId });
+
+const restWhileFighting = (campaignName: string): Conflict =>
+  new Conflict({
+    message: `Rest after the fight at ${campaignName}; this character is on the table there.`,
+  });
+
+const conModifier = (sheet: CharacterSheet): number => {
+  const raw = sheet.abilities.find((ability) => ability.label.toUpperCase() === "CON")?.modifier;
+  const parsed = Number.parseInt(raw ?? "0", 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const hitDieSides = (resource: SheetResource | undefined, sheet: CharacterSheet): number => {
+  const raw =
+    [resource?.unit, sheet.identity?.hitDice].find(
+      (value): value is string => value !== undefined && /d\d+/i.test(value),
+    ) ?? "";
+  const parsed = /d(\d+)/i.exec(raw)?.[1];
+  const sides = Number.parseInt(parsed ?? "0", 10);
+  return Number.isFinite(sides) && sides > 0 ? sides : 0;
+};
+
+const rollHitDiceHealing = (count: number, sides: number, constitution: number): number => {
+  if (count <= 0 || sides <= 0) return 0;
+  let total = 0;
+  for (let i = 0; i < count; i += 1) total += Math.max(0, randomInt(1, sides + 1) + constitution);
+  return total;
+};
+
+const restsOnLong = (resource: SheetResource): boolean =>
+  resource.recharge === "short" || resource.recharge === "long";
+
+const nextResourcesForRest = (
+  resources: ReadonlyArray<SheetResource>,
+  kind: CharacterRest["kind"],
+  hitDiceRequested: number,
+): { readonly resources: ReadonlyArray<SheetResource>; readonly hitDiceSpent: number } => {
+  const hitDice = resources.find((resource) => resource.id === "hit-dice");
+  const availableHitDice = hitDice === undefined ? 0 : Math.max(0, hitDice.max - hitDice.used);
+  const hitDiceSpent =
+    kind === "short" ? Math.min(Math.max(0, hitDiceRequested), availableHitDice) : 0;
+
+  return {
+    hitDiceSpent,
+    resources: resources.map((resource) => {
+      if (resource.id === "hit-dice") {
+        if (kind === "long") {
+          return { ...resource, used: Math.max(0, resource.used - Math.ceil(resource.max / 2)) };
+        }
+        return { ...resource, used: Math.min(resource.max, resource.used + hitDiceSpent) };
+      }
+      if (kind === "short") {
+        return resource.recharge === "short" ? { ...resource, used: 0 } : resource;
+      }
+      return restsOnLong(resource) ? { ...resource, used: 0 } : resource;
+    }),
+  };
+};
+
+const withoutConcentration = (conditions: ReadonlyArray<string>): ReadonlyArray<string> =>
+  conditions.filter((condition) => !condition.trim().toLowerCase().startsWith("concentrating"));
+
 export class Characters extends Context.Service<
   Characters,
   {
@@ -243,6 +326,16 @@ export class Characters extends Context.Service<
       id: CharacterId,
       patch: CharacterOwnUpdate,
     ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
+    /** Move one counted resource by an atomic, idempotent delta. */
+    readonly spendResource: (
+      id: CharacterId,
+      payload: CharacterResourceSpend,
+    ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
+    /** Reset resources and rules-defined rest healing for the owner. */
+    readonly rest: (
+      id: CharacterId,
+      payload: CharacterRest,
+    ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     /**
      * Deleting a character retires its live seats in the same transaction —
      * the deferred participation key allows a retired seat to keep standing —
@@ -255,6 +348,108 @@ export class Characters extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* Effect.serviceOption(LiveEvents);
+
+      const claimRequest = (
+        characterId: CharacterId,
+        requestId: string | undefined,
+      ): Effect.Effect<boolean> =>
+        requestId === undefined
+          ? Effect.succeed(true)
+          : sql<{ readonly request_id: string }>`
+              insert into character_resource_request (character_id, request_id)
+              values (${characterId}, ${requestId})
+              on conflict do nothing
+              returning request_id
+            `.pipe(
+              Effect.map((rows) => rows.length === 1),
+              Effect.orDie,
+            );
+
+      const readOwn = (id: CharacterId, actor: Actor): Effect.Effect<CharacterRow, NotFound> =>
+        sql<CharacterRow>`
+          select * from character where character.id = ${id} and ${ownCharacter(sql, actor)}
+        `.pipe(
+          Effect.orDie,
+          Effect.flatMap((rows) =>
+            rows.length === 0
+              ? new NotFound({ resource: "character", id })
+              : Effect.succeed(rows[0]!),
+          ),
+        );
+
+      const openSeatSessions = (
+        characterId: CharacterId,
+        actor: Actor,
+      ): Effect.Effect<ReadonlyArray<OpenSeatSessionRow>> =>
+        sql<OpenSeatSessionRow>`
+          select campaign.current_session_id as session_id,
+                 combatant.id as combatant_id,
+                 encounter_run.id as run_id
+          from campaign_character
+          join campaign on campaign.id = campaign_character.campaign_id
+          left join session on session.id = campaign.current_session_id
+          left join encounter_run on encounter_run.id = session.active_encounter_run_id
+          left join combatant on combatant.encounter_run_id = encounter_run.id
+                             and combatant.character_id = ${characterId}
+          where campaign_character.character_id = ${characterId}
+            and campaign_character.account_id = ${actor.accountId}
+            and campaign_character.left_at is null
+            and campaign.current_session_id is not null
+        `.pipe(Effect.orDie);
+
+      const ringSessions = (sessions: ReadonlyArray<OpenSeatSessionRow>) =>
+        Option.match(live, {
+          onNone: () => Effect.void,
+          onSome: (events) =>
+            Effect.forEach(
+              [...new Set(sessions.map((session) => session.session_id))],
+              (sessionId) => events.touched(sessionId),
+              { discard: true },
+            ),
+        });
+
+      const appendTouched = (
+        characterId: CharacterId,
+        sessions: ReadonlyArray<OpenSeatSessionRow>,
+        detail: Record<string, unknown>,
+        requestId: string | undefined,
+      ): Effect.Effect<void> =>
+        Effect.forEach(
+          sessions,
+          (session) =>
+            appendCharacterUpdated(sql, {
+              sessionId: session.session_id,
+              characterId,
+              live:
+                session.combatant_id === null || session.run_id === null
+                  ? undefined
+                  : {
+                      combatantId: session.combatant_id,
+                      runId: session.run_id,
+                      sessionId: session.session_id,
+                    },
+              detail,
+              requestId,
+            }),
+          { discard: true },
+        );
+
+      const liveFightOf = (characterId: CharacterId): Effect.Effect<string | undefined> =>
+        sql<LiveFightRow>`
+          select campaign.name as campaign_name
+          from combatant
+          join encounter_run on encounter_run.id = combatant.encounter_run_id
+          join session on session.id = encounter_run.session_id
+          join campaign on campaign.id = session.campaign_id
+          where combatant.character_id = ${characterId}
+            and encounter_run.ended_at is null
+          order by encounter_run.created_at desc, encounter_run.id desc
+          limit 1
+        `.pipe(
+          Effect.map((rows) => rows[0]?.campaign_name),
+          Effect.orDie,
+        );
 
       return {
         mine: dieOnSqlError(
@@ -410,6 +605,134 @@ export class Characters extends Context.Service<
                 return yield* new NotFound({ resource: "character", id });
               }
               return toCharacter(rows[0]!);
+            }),
+          ),
+
+        spendResource: (id, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              return yield* sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    yield* readOwn(id, actor);
+                    const claimed = yield* claimRequest(id, payload.requestId);
+                    if (!claimed) {
+                      return { character: toCharacter(yield* readOwn(id, actor)), sessions: [] };
+                    }
+
+                    const rows = yield* sql<CharacterRow>`
+                      with located as (
+                        select character.id,
+                               (resource.value ->> 'used')::integer as used,
+                               (resource.value ->> 'max')::integer as max,
+                               resource.ordinality - 1 as index
+                        from character
+                        cross join lateral jsonb_array_elements(coalesce(character.body -> 'resources', '[]'::jsonb))
+                          with ordinality as resource(value, ordinality)
+                        where character.id = ${id}
+                          and ${ownCharacter(sql, actor)}
+                          and resource.value ->> 'id' = ${payload.resourceId}
+                      )
+                      update character
+                      set body = jsonb_set(
+                            character.body,
+                            array['resources', located.index::text, 'used'],
+                            to_jsonb(greatest(0, least(located.max, located.used + ${payload.amount}))),
+                            false
+                          ),
+                          version = character.version + 1,
+                          updated_at = now()
+                      from located
+                      where character.id = located.id
+                      returning character.*
+                    `;
+                    if (rows.length === 0) return yield* resourceMissing(payload.resourceId);
+                    const sessions = yield* openSeatSessions(id, actor);
+                    yield* appendTouched(
+                      id,
+                      sessions,
+                      { resourceId: payload.resourceId, amount: payload.amount },
+                      payload.requestId,
+                    );
+                    return { character: toCharacter(rows[0]!), sessions };
+                  }),
+                )
+                .pipe(
+                  Effect.tap(({ sessions }) => ringSessions(sessions)),
+                  Effect.map(({ character }) => character),
+                );
+            }),
+          ),
+
+        rest: (id, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              return yield* sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    const before = yield* readOwn(id, actor);
+                    const liveFight = yield* liveFightOf(id);
+                    if (liveFight !== undefined) return yield* restWhileFighting(liveFight);
+                    const claimed = yield* claimRequest(id, payload.requestId);
+                    if (!claimed) {
+                      return { character: toCharacter(yield* readOwn(id, actor)), sessions: [] };
+                    }
+
+                    const resources = before.body.resources ?? [];
+                    const { resources: nextResources, hitDiceSpent } = nextResourcesForRest(
+                      resources,
+                      payload.kind,
+                      payload.hitDice ?? 0,
+                    );
+                    const hitDiceResource = resources.find(
+                      (resource) => resource.id === "hit-dice",
+                    );
+                    const healing =
+                      payload.kind === "short"
+                        ? rollHitDiceHealing(
+                            hitDiceSpent,
+                            hitDieSides(hitDiceResource, before.body),
+                            conModifier(before.body),
+                          )
+                        : 0;
+                    const nextSheet: CharacterSheet = { ...before.body, resources: nextResources };
+                    const nextConditions =
+                      payload.kind === "long"
+                        ? withoutConcentration(before.conditions)
+                        : before.conditions;
+                    const hpCurrent =
+                      payload.kind === "long"
+                        ? sql`character.hp_max`
+                        : clampedCharacterHp(sql, healing > 0 ? -healing : 0);
+                    const tempHp = payload.kind === "long" ? sql`0` : sql`character.temp_hp`;
+                    const rows = yield* sql<CharacterRow>`
+                      update character
+                      set body = ${encodeSheet(nextSheet)}::jsonb,
+                          hp_current = ${hpCurrent},
+                          temp_hp = ${tempHp},
+                          conditions = ${nextConditions},
+                          version = character.version + 1,
+                          updated_at = now()
+                      where character.id = ${id}
+                        and ${ownCharacter(sql, actor)}
+                      returning *
+                    `;
+                    const sessions = yield* openSeatSessions(id, actor);
+                    yield* appendTouched(
+                      id,
+                      sessions,
+                      { rest: payload.kind, hitDiceSpent, healing },
+                      payload.requestId,
+                    );
+                    return { character: toCharacter(rows[0]!), sessions };
+                  }),
+                )
+                .pipe(
+                  Effect.tap(({ sessions }) => ringSessions(sessions)),
+                  Effect.map(({ character }) => character),
+                );
             }),
           ),
 

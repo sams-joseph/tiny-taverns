@@ -83,6 +83,8 @@ export type PartyJoin = typeof PartyJoin.Type;
 export const PartySeatUpdate = Schema.Struct({
   visibility: Schema.optional(Visibility),
   playerDisplayName: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Temporary hit points are live character state, but they have no combatant copy. */
+  tempHp: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }))),
   /**
    * The live condition set, written through to the shared character and to
    * every live combatant in *this* campaign — the out-of-fight condition edit

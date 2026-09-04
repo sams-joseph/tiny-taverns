@@ -147,6 +147,12 @@ const MeLive = HttpApiBuilder.group(
         .handle("updateCharacter", ({ params, payload }) =>
           characters.updateOwn(params.characterId, payload),
         )
+        .handle("spendCharacterResource", ({ params, payload }) =>
+          characters.spendResource(params.characterId, payload),
+        )
+        .handle("restCharacter", ({ params, payload }) =>
+          characters.rest(params.characterId, payload),
+        )
         // The one handler in this group whose path names a campaign, because an
         // insert has no row to derive one from. There is still nothing to check
         // here: `ensureCampaignReadable` refuses a campaign this credential does

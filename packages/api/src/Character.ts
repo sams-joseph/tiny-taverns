@@ -241,9 +241,8 @@ export type ResourceRecharge = typeof ResourceRecharge.Type;
  *
  * **`used` is live and in the document by the same argument `SpellSlot` made**:
  * nothing else holds it — the DM's runner draws no slot and no use — so there
- * is no second copy to keep in step. It is read-only on this slice; the spend
- * and the rest that move it are their own endpoints in a later one, and until
- * then it is written at creation and moved by nothing.
+ * is no second copy to keep in step. Spend and rest move it through their own
+ * owner-only endpoints, rather than through a whole-sheet PATCH.
  */
 export const SheetResource = Schema.Struct({
   /** `"slot:1"` … `"slot:9"`, `"hit-dice"`, `"res:<feature index>"`. */
@@ -641,3 +640,37 @@ export const CharacterDamage = Schema.Struct({
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
 });
 export type CharacterDamage = typeof CharacterDamage.Type;
+
+/**
+ * Spend or recover one counted sheet resource — spell slots, feature uses,
+ * pools and hit dice — through an owner-only patch grain.
+ *
+ * Positive amounts mark uses spent; negative amounts recover them. The server
+ * applies the delta to exactly one `sheet.resources[*].used` field and clamps
+ * it within `[0,max]`, so a double press cannot push a counter past either
+ * edge. `requestId` is the same retry guard the hit-point delta carries: a
+ * repeated request is answered from the row without applying the delta again.
+ */
+export const CharacterResourceSpend = Schema.Struct({
+  resourceId: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
+  amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+});
+export type CharacterResourceSpend = typeof CharacterResourceSpend.Type;
+
+export const RestKind = Schema.Literals(["short", "long"]);
+export type RestKind = typeof RestKind.Type;
+
+/**
+ * A rules-bounded rest for this owned character. A short rest may spend hit
+ * dice; the owner names only how many dice, never an arbitrary hit-point total.
+ * Long rests reset recoverable counters, restore hit dice by the 2014 rule,
+ * fully heal, clear concentration and zero temporary hit points.
+ */
+export const CharacterRest = Schema.Struct({
+  kind: RestKind,
+  /** Number of hit dice to spend during a short rest. Ignored for a long rest. */
+  hitDice: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+});
+export type CharacterRest = typeof CharacterRest.Type;

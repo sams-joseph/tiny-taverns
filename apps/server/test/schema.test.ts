@@ -41,6 +41,7 @@ const NOT_CONTENT = [
   "character_option_proficiency",
   "character_option_subrace",
   "character_option_trait",
+  "character_resource_request",
   "condition",
   "creature_armor_equipment",
   "creature_condition_immunity",

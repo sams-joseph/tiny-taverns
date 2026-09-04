@@ -65,6 +65,7 @@ function SeatActions({ seat }: { readonly seat: PartySeat }) {
     campaignId: seat.seat.campaignId,
     campaignCharacterId: seat.seat.id,
   };
+  const tempHp = seat.character?.tempHp ?? 0;
 
   return (
     <>
@@ -88,6 +89,32 @@ function SeatActions({ seat }: { readonly seat: PartySeat }) {
         <Icon name={shared ? "lock" : "users"} size={13} />
         {shared ? "Hide" : "Share"}
       </Button>
+      {seat.character !== null && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-my-1 shrink-0"
+          disabled={busy}
+          aria-label={
+            tempHp > 0
+              ? `Clear ${name}'s temporary hit points`
+              : `Give ${name} 5 temporary hit points`
+          }
+          onClick={() =>
+            void submit(
+              (client) =>
+                client.party.update({
+                  params,
+                  payload: { tempHp: tempHp > 0 ? 0 : 5 },
+                }),
+              [reads.party(seat.seat.campaignId)],
+            )
+          }
+        >
+          <Icon name="sparkles" size={13} />
+          {tempHp > 0 ? "Temp 0" : "Temp +5"}
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"

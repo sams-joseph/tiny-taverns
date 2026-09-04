@@ -123,7 +123,7 @@ export const clampedCombatantHp = (sql: SqlClient.SqlClient, amount: number): St
  * own bound where there is not — a character with no maximum can still be hurt
  * and healed, it just has nothing to be restored *to*.
  */
-const clampedCharacterHp = (sql: SqlClient.SqlClient, amount: number): Statement.Fragment =>
+export const clampedCharacterHp = (sql: SqlClient.SqlClient, amount: number): Statement.Fragment =>
   sql`greatest(0, least(coalesce(character.hp_max, 10000),
                         coalesce(character.hp_current, character.hp_max, 0) - ${amount}))`;
 

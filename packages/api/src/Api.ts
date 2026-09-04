@@ -4,7 +4,14 @@ import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
-import { Character, CharacterDamage, CharacterOwnCreate, CharacterOwnUpdate } from "./Character.js";
+import {
+  Character,
+  CharacterDamage,
+  CharacterOwnCreate,
+  CharacterOwnUpdate,
+  CharacterResourceSpend,
+  CharacterRest,
+} from "./Character.js";
 import { OwnedCharacter, PartyJoin, PartySeat, PartySeatUpdate } from "./Party.js";
 import {
   CharacterOption,
@@ -459,6 +466,19 @@ class MeGroup extends HttpApiGroup.make("me")
     HttpApiEndpoint.post("createCharacter", "/campaigns/:campaignId/characters", {
       params: { campaignId: CampaignId },
       payload: CharacterOwnCreate,
+      success: Character,
+      error: [NotFound, Conflict],
+    }),
+    /** Owner-only resource grains: one counter spend, and one rules-bounded rest. */
+    HttpApiEndpoint.post("spendCharacterResource", "/characters/:characterId/spend", {
+      params: { characterId: CharacterId },
+      payload: CharacterResourceSpend,
+      success: Character,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("restCharacter", "/characters/:characterId/rest", {
+      params: { characterId: CharacterId },
+      payload: CharacterRest,
       success: Character,
       error: [NotFound, Conflict],
     }),

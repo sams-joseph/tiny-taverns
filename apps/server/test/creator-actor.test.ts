@@ -624,12 +624,14 @@ describe("the scope, counted", () => {
     // replaced it — the internal instancing inside `EncounterCreatures.create`
     // — lives in a method that was already counted. None of the removals was
     // gated, so `gated` did not move.
-    // `HobThreads.reachOf` is the one hundred and twenty-third: it answers
+    // `HobThreads.reachOf` was the one hundred and twenty-third: it answers
     // which set a named thread is in *because* a creator now holds threads in
     // both (`HobAsk.intent`), so a proof is exactly the wrong instrument — it
     // reads through the disjunction of the two complete predicates and an
-    // unreachable thread is the ordinary `NotFound`.
-    expect(ungated).toBe(123);
+    // unreachable thread is the ordinary `NotFound`. Resource spending and
+    // rests add two owner-only character methods for the same reason: a proof
+    // that the caller runs a campaign would answer the wrong question.
+    expect(ungated).toBe(125);
   });
 });
 

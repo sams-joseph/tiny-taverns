@@ -241,10 +241,15 @@ with slice 0 folded in. Pointer-style; the files carry the arguments.
 - **Slice 0, the stale-save guard, is on**: `saveOwnCharacter` sends `expectedVersion` with every
   write, the server's `Conflict` sentence renders in `SaveFailure` with a _Reload_ action (offered
   for a conflict only), and `sheetWrites.test.tsx` pins both.
-- **Deliberately absent, pending later slices**: no spend, no rest, no roll — the pips, the uses
-  notes (`2/2 · short rest`, matched to a feature by name) and the dice are read-only text, and
-  the sheet's rule that a control is drawn only where a write exists is unchanged. No known or
-  prepared spell is chosen (slice 3), and a level-up does not yet recompute derived lines.
+- **Slice 2, spend and rest, is on**: `POST /me/characters/:id/spend` moves one
+  `sheet.resources[*].used` counter atomically and idempotently (positive spends, negative
+  recovers, clamped to `[0,max]`); `POST /me/characters/:id/rest` resets short/long-rest counters,
+  spends hit dice on short rests, heals in SQL through `vitals.ts`'s clamp, and on a long rest fills
+  HP, zeros temp HP and clears concentration. Both are owner-only, carry optional request ids backed
+  by `character_resource_request`, append/ring `character-updated` for every open seat session, and
+  **refuse while the character is in any live fight**. The continuous sheet's pips and feature uses
+  are controls now; dice rolls, prepared/known spell picking and level-up recomputation are still
+  later slices.
 
 ## The design system: what is canonical, and how it reaches Tailwind
 

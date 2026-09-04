@@ -258,10 +258,10 @@ export const servicesOver = <E>(
     GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
     // The group's shared Library shelf — grants to copy, never content.
     LibraryShares.layer,
-    // The owner's half of the shared character. It rings no doorbell — the
-    // durable sheet is not live state, and the live trio moved to the party —
-    // so it takes no `LiveEvents`.
-    Characters.layer,
+    // The owner's half of the shared character. Most durable sheet writes do
+    // not ring, but resource spends and rests are live table facts when a night
+    // is open, so the repository takes the same doorbell the party uses.
+    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
     // The campaign's half: the seats. The condition write-through and the
     // delta are live writes, so this is a live repository the way the old
     // campaign-scoped `Characters` was.

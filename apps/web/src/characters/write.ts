@@ -83,6 +83,32 @@ export const createOwnCharacter = (
   payload: CharacterOwnCreate,
 ) => client.me.createCharacter({ params: { campaignId }, payload });
 
+export const spendResource = (
+  client: TavernsClient,
+  character: Character,
+  resourceId: string,
+  amount: number,
+) =>
+  client.me.spendCharacterResource({
+    params: { characterId: character.id },
+    payload: { resourceId, amount, requestId: crypto.randomUUID() },
+  });
+
+export const restOwnCharacter = (
+  client: TavernsClient,
+  character: Character,
+  kind: "short" | "long",
+  hitDice?: number,
+) =>
+  client.me.restCharacter({
+    params: { characterId: character.id },
+    payload: {
+      kind,
+      ...(hitDice === undefined ? {} : { hitDice }),
+      requestId: crypto.randomUUID(),
+    },
+  });
+
 /**
  * What a player's write to their own sheet changes — the owner's roster, and
  * **every table the character is seated at.**

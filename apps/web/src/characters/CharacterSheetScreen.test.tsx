@@ -268,12 +268,17 @@ describe("a character sheet", () => {
     // bar the designers drew, with no handler here — not a sheet control. The
     // vitals toggle opens the narrow summary and writes nothing. Everything
     // else is a write the payload carries: the bar's *Edit* and *Delete*, the
-    // four section actions, and the six death-save pips.
+    // resource spend/rest controls, the four section actions, and the six
+    // death-save pips.
     expect(pressable()).toEqual([
       "Ask Hob⌘K",
       "Delete Brannoc Duskharrow",
       "Edit",
       "Show vitals",
+      "−",
+      "+",
+      "Short rest",
+      "Long rest",
       "Successes 1",
       "Successes 2",
       "Successes 3",
@@ -282,6 +287,14 @@ describe("a character sheet", () => {
       "Failures 3",
       "Edit abilities",
       "Edit skills",
+      "Recover level 1 spell slot 1",
+      "Spend level 1 spell slot 2",
+      "Spend level 1 spell slot 3",
+      "Spend level 1 spell slot 4",
+      "Spend level 2 spell slot 1",
+      "Spend level 2 spell slot 2",
+      "Recover",
+      "Spend",
       "Add",
       "Edit backstory",
     ]);
@@ -290,8 +303,8 @@ describe("a character sheet", () => {
     // and neither is the attack row.
     expect(screen.queryByRole("button", { name: /STR/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /1d10/ })).toBeNull();
-    // Nothing spends a slot or prepares a spell.
-    expect(screen.queryByRole("button", { name: /Slot/i })).toBeNull();
+    // Slots can be spent now; prepared spells still have no write.
+    expect(screen.getAllByRole("button", { name: /spell slot/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
     // No portrait upload, no journal entry, no roll log.
     expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull();
@@ -310,6 +323,32 @@ describe("a character sheet", () => {
     // the bar is not drawn either; the campaign is on the subtitle.
     expect(screen.queryByRole("button", { name: /Go to the table/i })).toBeNull();
     expect(screen.queryByText(/playing right now/i)).toBeNull();
+  });
+
+  it("spends a slot and rests through the owner-only resource endpoints", async () => {
+    server.routes.set(`POST /me/characters/${brannocId}/spend`, savedAs(brannoc));
+    server.routes.set(`POST /me/characters/${brannocId}/rest`, savedAs(brannoc));
+    await renderSheet();
+    await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Spend level 1 spell slot 2" }));
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/me/characters/${brannocId}/spend`)).toMatchObject({
+        resourceId: "slot:1",
+        amount: 1,
+        requestId: expect.any(String),
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "+" }));
+    await userEvent.click(screen.getByRole("button", { name: "Short rest" }));
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/me/characters/${brannocId}/rest`)).toMatchObject({
+        kind: "short",
+        hitDice: 1,
+        requestId: expect.any(String),
+      }),
+    );
   });
 
   it("goes back to the roster through a real link", async () => {

@@ -146,6 +146,7 @@ describe("migrations", () => {
       "character_option_proficiency",
       "character_option_subrace",
       "character_option_trait",
+      "character_resource_request",
       "class_level",
       "combatant",
       "condition",
@@ -241,6 +242,7 @@ describe("migrations", () => {
       { migration_id: 30, name: "group_history" },
       { migration_id: 31, name: "group_threads" },
       { migration_id: 32, name: "group_library_share" },
+      { migration_id: 33, name: "character_resource_requests" },
     ]);
   }, 60_000);
 
@@ -282,6 +284,7 @@ describe("migrations", () => {
       { migration_id: 30, name: "group_history" },
       { migration_id: 31, name: "group_threads" },
       { migration_id: 32, name: "group_library_share" },
+      { migration_id: 33, name: "character_resource_requests" },
     ]);
   }, 60_000);
 });
