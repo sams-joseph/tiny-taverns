@@ -119,7 +119,7 @@ export class NpcMemories extends Context.Service<
             const threads = yield* sql<{ readonly id: NpcThreadId }>`
               select npc_thread.id from npc_thread
               where npc_thread.id = ${sourceThreadId}
-                and npc_thread.channel = 'rehearsal'
+                and npc_thread.channel in ('rehearsal', 'session_shared')
                 and npc_thread.account_id is null
                 and ${containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor)}
             `;
@@ -132,7 +132,7 @@ export class NpcMemories extends Context.Service<
               select npc_turn.id from npc_turn
               join npc_thread on npc_thread.id = npc_turn.thread_id
               where npc_turn.id = ${sourceTurnId}
-                and npc_thread.channel = 'rehearsal'
+                and npc_thread.channel in ('rehearsal', 'session_shared')
                 and npc_thread.account_id is null
                 and ${containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor)}
             `;

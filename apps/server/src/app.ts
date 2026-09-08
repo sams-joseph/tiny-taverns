@@ -48,6 +48,7 @@ import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
+import { NpcProposals } from "./repo/NpcProposals.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -214,7 +215,7 @@ export const assistantFromConfig: Layer.Layer<
 export const npcAgentFromConfig: Layer.Layer<
   NpcAgent,
   Config.ConfigError,
-  Npcs | NpcKnowledge | NpcMemories | NpcThreads | CampaignCreatorActors
+  Npcs | NpcKnowledge | NpcMemories | NpcThreads | NpcProposals | CampaignCreatorActors
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -280,7 +281,7 @@ export const servicesOver = <E>(
   npcAgent: Layer.Layer<
     NpcAgent,
     E | Config.ConfigError,
-    Npcs | NpcKnowledge | NpcMemories | NpcThreads | CampaignCreatorActors
+    Npcs | NpcKnowledge | NpcMemories | NpcThreads | NpcProposals | CampaignCreatorActors
   > = npcAgentFromConfig,
 ): Layer.Layer<
   | Accounts
@@ -312,6 +313,7 @@ export const servicesOver = <E>(
   | NpcAgent
   | NpcKnowledge
   | NpcMemories
+  | NpcProposals
   | Npcs
   | NpcThreads
   // A campaign's rules vocabulary, and the Library originals behind it. An
@@ -390,15 +392,33 @@ export const servicesOver = <E>(
     Npcs.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
+    NpcProposals.layer.pipe(
+      Layer.provide([
+        Campaigns.layer,
+        Notes.layer,
+        Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+        NpcMemories.layer,
+        NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
+      ]),
+    ),
     NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
-    // The NPC rehearsal loop: no tools, no writes, one model call over a
-    // versioned prompt. It reads the NPC, its transcript, and this NPC's
-    // explicit facts/approved memories — no campaign-wide repositories.
+    // The NPC rehearsal loop: proposal tools write only review rows, never
+    // destination campaign state. It reads the NPC, its transcript, and this
+    // NPC's explicit facts/approved memories — no campaign-wide repositories.
     npcAgent.pipe(
       Layer.provide([
         Npcs.layer,
         NpcKnowledge.layer,
         NpcMemories.layer,
+        NpcProposals.layer.pipe(
+          Layer.provide([
+            Campaigns.layer,
+            Notes.layer,
+            Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+            NpcMemories.layer,
+            NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
+          ]),
+        ),
         NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
         CampaignCreatorActors.layer,
       ]),
@@ -544,6 +564,7 @@ export const applicationOver = <E>(
     | NpcAgent
     | NpcKnowledge
     | NpcMemories
+    | NpcProposals
     | Npcs
     | NpcThreads
     | Options

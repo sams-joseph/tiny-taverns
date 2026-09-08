@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,6 +10,7 @@ import {
   HobUnavailable,
   type NpcEvent,
   type NpcId,
+  type NpcTurnId,
   NotFound,
   type SessionId,
 } from "@taverns/api";
@@ -20,6 +22,7 @@ import { npcAgentFromConfig } from "../src/app.js";
 import { NpcAgent } from "../src/assistant/NpcAgent.js";
 import { NPC_PROMPT_TEMPLATE_VERSION } from "../src/assistant/npcPrompt.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -29,6 +32,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { NpcProposals } from "../src/repo/NpcProposals.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
@@ -44,10 +48,12 @@ import {
 import { migratedDatabase } from "./support/database.js";
 import {
   type ChatRequest,
+  type Round,
   reasoningChunks,
   refused,
   scriptedModel,
   textChunks,
+  toolCallChunks,
 } from "./support/model.js";
 
 /**
@@ -73,6 +79,7 @@ import {
 
 const services = Layer.mergeAll(
   Accounts.layer,
+  Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   LiveEvents.layer,
   Groups.layer,
@@ -84,6 +91,15 @@ const services = Layer.mergeAll(
   Npcs.layer,
   NpcKnowledge.layer,
   NpcMemories.layer,
+  NpcProposals.layer.pipe(
+    Layer.provide([
+      Campaigns.layer,
+      Notes.layer,
+      Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+      NpcMemories.layer,
+      NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
+    ]),
+  ),
   NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -362,7 +378,7 @@ const rehearse = (
   campaignId: CampaignId,
   npcId: NpcId,
   options?: {
-    readonly rounds?: ReadonlyArray<ReturnType<typeof textChunks> | ReturnType<typeof refused>>;
+    readonly rounds?: ReadonlyArray<Round>;
     readonly text?: string;
     readonly threadId?: Parameters<(typeof NpcAgent)["Service"]["rehearse"]>[2]["threadId"];
   },
@@ -390,6 +406,10 @@ const rehearse = (
 };
 
 const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify(requests);
+const requestToolNames = (request: ChatRequest | undefined): ReadonlyArray<string> | undefined =>
+  (
+    request?.tools as ReadonlyArray<{ readonly function: { readonly name: string } }> | undefined
+  )?.map((tool) => tool.function.name);
 const texts = (events: ReadonlyArray<NpcEvent>): ReadonlyArray<string> =>
   events.flatMap((event) => (event.event === "delta" ? [event.data.text] : []));
 const apologies = (events: ReadonlyArray<NpcEvent>): ReadonlyArray<string> =>
@@ -399,13 +419,15 @@ const begunIn = (events: ReadonlyArray<NpcEvent>) => {
   if (began?.event !== "began") throw new Error("no began event");
   return began.data;
 };
+const proposalsIn = (events: ReadonlyArray<NpcEvent>) =>
+  events.flatMap((event) => (event.event === "proposal" ? [event.data.proposal] : []));
 
 const talk = (
   actor: Actor,
   campaignId: CampaignId,
   npcId: NpcId,
   options?: {
-    readonly rounds?: ReadonlyArray<ReturnType<typeof textChunks> | ReturnType<typeof refused>>;
+    readonly rounds?: ReadonlyArray<Round>;
     readonly text?: string;
     readonly threadId?: Parameters<(typeof NpcAgent)["Service"]["talk"]>[2]["threadId"];
     readonly perPlayerPerMinute?: number;
@@ -448,7 +470,7 @@ const sessionTalk = (
   sessionId: SessionId,
   npcId: NpcId,
   options?: {
-    readonly rounds?: ReadonlyArray<ReturnType<typeof textChunks> | ReturnType<typeof refused>>;
+    readonly rounds?: ReadonlyArray<Round>;
     readonly text?: string;
     readonly requestId?: string;
   },
@@ -701,7 +723,11 @@ describe("shared live-session NPC chat", () => {
     expect(began.templateVersion).toBe(NPC_PROMPT_TEMPLATE_VERSION);
     expect(texts(events)).toEqual(["The reeds bow back."]);
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.tools).toBeUndefined();
+    expect(requestToolNames(requests[0])).toEqual([
+      "proposeNpcMemory",
+      "proposeCampaignNote",
+      "proposeCampaignBeat",
+    ]);
     expect(shown).toContain("AUDIENCE: shared live-session table chat");
     expect(shown).toContain("Session 78: Lanterns in the rain");
     expect(shown).toContain("No shared fight is on the table");
@@ -801,9 +827,14 @@ describe("rehearsing", () => {
     const { requests } = await rehearse(fixture.dm, fixture.campaign.id, fixture.cazril.id);
     const shown = shownTo(requests);
 
-    // One request, one round: there is no toolkit and no loop.
+    // One request when no tool is called; proposals are bounded review tools,
+    // not direct campaign writes.
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.tools).toBeUndefined();
+    expect(requestToolNames(requests[0])).toEqual([
+      "proposeNpcMemory",
+      "proposeCampaignNote",
+      "proposeCampaignBeat",
+    ]);
     expect(requests[0]?.max_tokens).toBe(MAX_TOKENS);
 
     // Present: the persona, the creator-only material, and only explicit
@@ -890,6 +921,148 @@ describe("rehearsing", () => {
   }, 60_000);
 });
 
+describe("NPC proposals", () => {
+  it("records a tool offer as a review row, and accepting a memory keeps approval governance", async () => {
+    const { events, requests } = await rehearse(
+      fixture.dm,
+      fixture.campaign.id,
+      fixture.cazril.id,
+      {
+        rounds: [
+          toolCallChunks("proposeNpcMemory", { body: "Remember that Mara paid in pearls." }),
+          textChunks("I will keep that ready for your review."),
+        ],
+      },
+    );
+    const offered = proposalsIn(events);
+
+    expect(requests).toHaveLength(2);
+    expect(events.some((event) => event.event === "tool")).toBe(true);
+    expect(offered).toHaveLength(1);
+    expect(offered[0]).toMatchObject({ kind: "memory", state: "pending" });
+
+    const accepted = await runtime.runPromise(
+      Effect.flatMap(NpcProposals, (repo) =>
+        repo.accept(fixture.creator, fixture.cazril.id, offered[0]!.id),
+      ).pipe(withActor(fixture.dm)),
+    );
+    expect(accepted.state).toBe("accepted");
+    expect(accepted.acceptedMemoryId).not.toBeNull();
+
+    const memories = await runtime.runPromise(
+      Effect.flatMap(NpcMemories, (repo) => repo.list(fixture.creator, fixture.cazril.id)),
+    );
+    expect(memories.find((memory) => memory.id === accepted.acceptedMemoryId)).toMatchObject({
+      body: "Remember that Mara paid in pearls.",
+      status: "draft",
+    });
+  }, 60_000);
+
+  it("accepts notes and beats from immutable stored content, and refuses repeat decisions", async () => {
+    const made = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const sessions = yield* Sessions;
+        const threads = yield* NpcThreads;
+        const proposals = yield* NpcProposals;
+        const thread = yield* threads.start(
+          fixture.creator,
+          fixture.cazril.id,
+          "What should I save?",
+        );
+        const session = yield* sessions.create(fixture.campaign.id, { number: 103 });
+        yield* campaigns.update(fixture.campaign.id, { currentSessionId: session.id });
+        const noteTurn = randomUUID() as NpcTurnId;
+        yield* threads.append(fixture.creator, fixture.cazril.id, thread.id, {
+          id: noteTurn,
+          who: "npc",
+          text: "A note may help.",
+        });
+        const note = yield* proposals.record(
+          fixture.campaign.id,
+          fixture.cazril.id,
+          thread.id,
+          noteTurn,
+          { kind: "note", title: "Cazril's price", body: "Pearls sink first.", noteKind: "note" },
+        );
+
+        const beatTurn = randomUUID() as NpcTurnId;
+        yield* threads.append(fixture.creator, fixture.cazril.id, thread.id, {
+          id: beatTurn,
+          who: "npc",
+          text: "A beat may help.",
+        });
+        const beat = yield* proposals.record(
+          fixture.campaign.id,
+          fixture.cazril.id,
+          thread.id,
+          beatTurn,
+          { kind: "beat", body: "Cazril named pearls as the safe toll." },
+        );
+
+        const rejectedTurn = randomUUID() as NpcTurnId;
+        yield* threads.append(fixture.creator, fixture.cazril.id, thread.id, {
+          id: rejectedTurn,
+          who: "npc",
+          text: "This one is rejected.",
+        });
+        const rejected = yield* proposals.record(
+          fixture.campaign.id,
+          fixture.cazril.id,
+          thread.id,
+          rejectedTurn,
+          { kind: "memory", body: "Forget this immediately." },
+        );
+        return { note, beat, rejected, session };
+      }).pipe(withActor(fixture.dm)),
+    );
+
+    const accepted = await runtime.runPromise(
+      Effect.gen(function* () {
+        const proposals = yield* NpcProposals;
+        const note = yield* proposals.accept(fixture.creator, fixture.cazril.id, made.note.id);
+        const beat = yield* proposals.accept(fixture.creator, fixture.cazril.id, made.beat.id);
+        const secondAccept = yield* Effect.result(
+          proposals.accept(fixture.creator, fixture.cazril.id, made.note.id),
+        );
+        const rejected = yield* proposals.reject(
+          fixture.creator,
+          fixture.cazril.id,
+          made.rejected.id,
+          {
+            reason: "Not canon.",
+          },
+        );
+        const secondReject = yield* Effect.result(
+          proposals.reject(fixture.creator, fixture.cazril.id, made.rejected.id, {}),
+        );
+        return { note, beat, secondAccept, rejected, secondReject };
+      }).pipe(withActor(fixture.dm)),
+    );
+
+    expect(accepted.note.acceptedNoteId).not.toBeNull();
+    expect(accepted.beat.acceptedBeatId).not.toBeNull();
+    expect(accepted.secondAccept._tag).toBe("Failure");
+    expect(accepted.rejected).toMatchObject({ state: "rejected", rejectionReason: "Not canon." });
+    expect(accepted.secondReject._tag).toBe("Failure");
+
+    const noteRows = await runtime.runPromise(
+      Effect.map(
+        Effect.flatMap(Notes, (repo) => repo.list(fixture.campaign.id, {})),
+        (page) => page.items,
+      ).pipe(withActor(fixture.dm)),
+    );
+    const beatRows = await runtime.runPromise(
+      Effect.map(
+        Effect.flatMap(Beats, (repo) => repo.list(fixture.campaign.id, made.session.id, {})),
+        (page) => page.items,
+      ).pipe(withActor(fixture.dm)),
+    );
+    expect(noteRows.map((note) => note.id)).toContain(accepted.note.acceptedNoteId);
+    expect(beatRows.map((beat) => beat.id)).toContain(accepted.beat.acceptedBeatId);
+  });
+});
+
 describe("with no model configured", () => {
   const agentThroughEnv = <A, E>(
     actor: Actor,
@@ -904,6 +1077,15 @@ describe("with no model configured", () => {
               Npcs.layer,
               NpcKnowledge.layer,
               NpcMemories.layer,
+              NpcProposals.layer.pipe(
+                Layer.provide([
+                  Campaigns.layer,
+                  Notes.layer,
+                  Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+                  NpcMemories.layer,
+                  NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
+                ]),
+              ),
               NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
               CampaignCreatorActors.layer,
             ]),
@@ -973,11 +1155,11 @@ describe("the seam", () => {
       const repositories = [...source.matchAll(/from "\.\.\/repo\/(\w+)\.js"/g)].map((m) => m[1]);
       expect(repositories.sort(), name).toEqual(
         name === "NpcAgent.ts"
-          ? ["CreatorActor", "NpcKnowledge", "NpcMemories", "NpcThreads", "Npcs"]
+          ? ["CreatorActor", "NpcKnowledge", "NpcMemories", "NpcProposals", "NpcThreads", "Npcs"]
           : [],
       );
-      // No toolkit anywhere near it: an NPC has no tools in this slice.
-      expect(source, name).not.toMatch(/\bToolkit\b|\bTool\.make\b/);
+      // Proposal tools are bounded to review rows; no assistant file may reach
+      // destination campaign repositories directly.
     }
   });
 

@@ -235,3 +235,7 @@ export type NpcKnowledgeFactId = typeof NpcKnowledgeFactId.Type;
 /** One curated memory an NPC may use after the creator approves it. */
 export const NpcMemoryId = id("NpcMemoryId");
 export type NpcMemoryId = typeof NpcMemoryId.Type;
+
+/** One bounded NPC suggestion waiting for a human decision. */
+export const NpcProposalId = id("NpcProposalId");
+export type NpcProposalId = typeof NpcProposalId.Type;

@@ -3,12 +3,16 @@ import {
   AccountId,
   CampaignId,
   SessionId,
+  NoteId,
+  BeatId,
   NpcId,
   NpcKnowledgeFactId,
   NpcMemoryId,
+  NpcProposalId,
   NpcThreadId,
   NpcTurnId,
 } from "./Ids.js";
+import { NoteKind } from "./Note.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -347,6 +351,59 @@ export const NpcMemoryUpdate = Schema.Struct({
 });
 export type NpcMemoryUpdate = typeof NpcMemoryUpdate.Type;
 
+export const NpcProposalKind = Schema.Literals(["memory", "note", "beat"]);
+export type NpcProposalKind = typeof NpcProposalKind.Type;
+
+export const NpcProposalState = Schema.Literals(["pending", "accepted", "rejected"]);
+export type NpcProposalState = typeof NpcProposalState.Type;
+
+/** What the NPC offered, stored immutably and accepted by id only. */
+export const NpcProposalContent = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("memory"), body: memoryBody }),
+  Schema.Struct({
+    kind: Schema.Literal("note"),
+    title: npcName,
+    body: knowledgeBody,
+    noteKind: NoteKind,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("beat"),
+    body: Schema.NonEmptyString.check(Schema.isMaxLength(1000)),
+  }),
+]);
+export type NpcProposalContent = typeof NpcProposalContent.Type;
+
+/**
+ * A bounded NPC proposal. The destination row does not exist until a permitted
+ * human accepts this stored identity; accept takes no replacement content.
+ */
+export class NpcProposal extends Schema.Class<NpcProposal>("NpcProposal")({
+  id: NpcProposalId,
+  campaignId: CampaignId,
+  npcId: NpcId,
+  threadId: NpcThreadId,
+  npcTurnId: NpcTurnId,
+  proposedByAccountId: Schema.NullOr(AccountId),
+  kind: NpcProposalKind,
+  content: NpcProposalContent,
+  state: NpcProposalState,
+  decidedByAccountId: Schema.NullOr(AccountId),
+  decidedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  rejectionReason: Schema.NullOr(Schema.String),
+  acceptedMemoryId: Schema.NullOr(NpcMemoryId),
+  acceptedNoteId: Schema.NullOr(NoteId),
+  acceptedBeatId: Schema.NullOr(BeatId),
+  visibility: Visibility,
+  ...provenanceFields,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+export const NpcProposalReject = Schema.Struct({
+  reason: Schema.optional(Schema.String.check(Schema.isMaxLength(400))),
+});
+export type NpcProposalReject = typeof NpcProposalReject.Type;
+
 /**
  * Whether a model is behind the rehearsal, and the prompt metadata the
  * inspector shows — the template version and an estimate of the prompt's
@@ -420,14 +477,27 @@ export class NpcFailure extends Schema.Class<NpcFailure>("NpcFailure")({
   message: Schema.String,
 }) {}
 
+export class NpcToolStep extends Schema.Class<NpcToolStep>("NpcToolStep")({
+  name: Schema.String,
+  phase: Schema.Literals(["called", "answered"]),
+  detail: Schema.String,
+}) {}
+
+export class NpcProposed extends Schema.Class<NpcProposed>("NpcProposed")({
+  proposal: NpcProposal,
+}) {}
+
 /**
- * The reply, as SSE — `HobEvent`'s shape without the tool and proposal
- * members, because this loop has neither. No `id` line and no heartbeats, for
- * Hob's reasons: an answer is re-asked, not resumed.
+ * The reply, as SSE. Proposal tools are bounded: they create reviewable
+ * proposal records only, and a destination write still needs explicit accept.
+ * No `id` line and no heartbeats, for Hob's reasons: an answer is re-asked,
+ * not resumed.
  */
 export const NpcEvent = Schema.Union([
   Schema.Struct({ event: Schema.Literal("began"), data: Schema.fromJsonString(NpcBegun) }),
   Schema.Struct({ event: Schema.Literal("delta"), data: Schema.fromJsonString(NpcDelta) }),
+  Schema.Struct({ event: Schema.Literal("tool"), data: Schema.fromJsonString(NpcToolStep) }),
+  Schema.Struct({ event: Schema.Literal("proposal"), data: Schema.fromJsonString(NpcProposed) }),
   Schema.Struct({ event: Schema.Literal("done"), data: Schema.fromJsonString(NpcDone) }),
   Schema.Struct({ event: Schema.Literal("failed"), data: Schema.fromJsonString(NpcFailure) }),
 ]);

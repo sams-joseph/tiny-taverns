@@ -1,9 +1,17 @@
-import type { Npc, NpcKnowledgeFact, NpcMemory, NpcMemoryStatus } from "@taverns/api";
+import type {
+  Npc,
+  NpcKnowledgeFact,
+  NpcMemory,
+  NpcMemoryStatus,
+  NpcProposal,
+  NpcProposalContent,
+} from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Badge, Button, Card, cn, Icon, Input, tabsTriggerVariants } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
+import { useInvalidate } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { DetailFacts, DetailSection } from "../ui/detail";
@@ -38,13 +46,14 @@ import { RehearsalPanel } from "./RehearsalPanel";
  * still renders it, with *Restore* where *Archive* was, and the rehearsal
  * composer replaced by the reason.
  */
-type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory";
+type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory" | "proposals";
 
 const NPC_TABS: ReadonlyArray<{ readonly id: NpcTab; readonly label: string }> = [
   { id: "profile", label: "Profile" },
   { id: "rehearsal", label: "Rehearsal" },
   { id: "knowledge", label: "Knowledge" },
   { id: "memory", label: "Memory" },
+  { id: "proposals", label: "Proposals" },
 ];
 
 export function NpcScreen() {
@@ -123,8 +132,11 @@ function NpcTabs({
 }
 
 function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly active: NpcTab }) {
-  const { npc, knowledge, memories } = detail;
-  const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name);
+  const { npc, knowledge, memories, proposals } = detail;
+  const invalidate = useInvalidate();
+  const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name, () => {
+    invalidate([reads.npcProposals(npc.id), reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)]);
+  });
   const archived = npc.archivedAt !== null;
   const usableRehearsal = archived
     ? {
@@ -144,6 +156,7 @@ function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly acti
 
   if (active === "knowledge") return <KnowledgePanel npc={npc} facts={knowledge} />;
   if (active === "memory") return <MemoryPanel npc={npc} memories={memories} />;
+  if (active === "proposals") return <ProposalPanel npc={npc} proposals={proposals} />;
 
   return (
     <div className="@container">
@@ -169,6 +182,161 @@ function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly acti
       </div>
     </div>
   );
+}
+
+function ProposalPanel({
+  npc,
+  proposals,
+}: {
+  readonly npc: Npc;
+  readonly proposals: ReadonlyArray<NpcProposal>;
+}) {
+  const pending = proposals.filter((proposal) => proposal.state === "pending");
+  const decided = proposals.filter((proposal) => proposal.state !== "pending");
+
+  return (
+    <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
+      <Card className="gap-4 p-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-title leading-title font-semibold text-heading">
+              Pending proposals
+            </h2>
+            <p className="text-body-s leading-body text-muted-foreground">
+              NPC proposals are review records. Accepting one uses this stored content only; the
+              accept button never sends replacement prose.
+            </p>
+          </div>
+          <Badge variant="outline">{pending.length} pending</Badge>
+        </div>
+        <ProposalList npc={npc} proposals={pending} empty="No proposals waiting." />
+      </Card>
+
+      <Card tone="sunken" className="gap-4 p-card">
+        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+          Already reviewed
+        </h3>
+        <ProposalList npc={npc} proposals={decided} empty="Nothing accepted or rejected yet." />
+      </Card>
+    </div>
+  );
+}
+
+function ProposalList({
+  npc,
+  proposals,
+  empty,
+}: {
+  readonly npc: Npc;
+  readonly proposals: ReadonlyArray<NpcProposal>;
+  readonly empty: string;
+}) {
+  if (proposals.length === 0) {
+    return <p className="text-body-s leading-body text-muted-foreground">{empty}</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {proposals.map((proposal) => (
+        <ProposalRow key={proposal.id} npc={npc} proposal={proposal} />
+      ))}
+    </div>
+  );
+}
+
+function ProposalRow({ npc, proposal }: { readonly npc: Npc; readonly proposal: NpcProposal }) {
+  const { busy, failure, submit } = useMutation();
+  const params = { campaignId: npc.campaignId, npcId: npc.id, proposalId: proposal.id };
+  const invalidate = [
+    reads.npcProposals(npc.id),
+    reads.npcMemories(npc.id),
+    reads.npcRehearsal(npc.id),
+    reads.notes(npc.campaignId),
+    reads.sessions(npc.campaignId),
+  ];
+  const content = proposalContent(proposal.content);
+  return (
+    <div className="rounded-card border border-subtle bg-surface-card p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+            {proposal.kind} · {proposal.state}
+          </p>
+          <p className="mt-1 text-body-s leading-body font-medium text-heading">{content.title}</p>
+          {content.body !== "" && (
+            <p className="mt-2 text-body-s leading-body whitespace-pre-wrap text-foreground">
+              {content.body}
+            </p>
+          )}
+          <p className="mt-2 text-caption leading-body text-muted-foreground">
+            Source turn {proposal.npcTurnId.slice(0, 8)} · accept uses the stored proposal only
+          </p>
+        </div>
+        {proposal.state === "pending" && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void submit(
+                  (client) => client.npcs.acceptProposal({ params, payload: {} }),
+                  invalidate,
+                )
+              }
+            >
+              Accept
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void submit(
+                  (client) =>
+                    client.npcs.rejectProposal({
+                      params,
+                      payload: { reason: "Rejected from the Cast screen." },
+                    }),
+                  invalidate,
+                )
+              }
+            >
+              Reject
+            </Button>
+          </div>
+        )}
+      </div>
+      {proposal.state === "accepted" && (
+        <p className="mt-2 text-caption leading-body text-accent-ink">
+          Accepted{proposal.acceptedMemoryId !== null ? " as a memory draft" : " into the campaign"}
+          .
+        </p>
+      )}
+      {proposal.state === "rejected" && (
+        <p className="mt-2 text-caption leading-body text-muted-foreground">
+          Rejected{proposal.rejectionReason === null ? "." : `: ${proposal.rejectionReason}`}
+        </p>
+      )}
+      {failure !== undefined && <SaveFailure failure={failure} />}
+    </div>
+  );
+}
+
+function proposalContent(content: NpcProposalContent): {
+  readonly title: string;
+  readonly body: string;
+} {
+  switch (content.kind) {
+    case "memory":
+      return { title: "Memory draft", body: content.body };
+    case "note":
+      return {
+        title: `${content.noteKind === "read_aloud" ? "Read-aloud note" : "Note"}: ${content.title}`,
+        body: content.body,
+      };
+    case "beat":
+      return { title: "Campaign beat", body: content.body };
+  }
 }
 
 function KnowledgePanel({

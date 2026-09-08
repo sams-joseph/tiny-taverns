@@ -189,6 +189,7 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
 
   return {
     turns,
+    proposals: [],
     thinking: asking && !writing,
     send: status?.available === true ? send : undefined,
     unavailable:
@@ -329,6 +330,7 @@ export function useNpcSessionChat(
 
   return {
     turns,
+    proposals: [],
     thinking: asking && !writing,
     send: status?.available === true ? send : undefined,
     unavailable:

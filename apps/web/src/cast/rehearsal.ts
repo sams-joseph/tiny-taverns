@@ -2,6 +2,7 @@ import type {
   CampaignId,
   NpcEvent,
   NpcId,
+  NpcProposal,
   NpcRehearsalStatus,
   NpcThreadId,
   NpcTurn as RecordedTurn,
@@ -15,9 +16,9 @@ import { useCredential } from "../auth/credential";
 
 /**
  * The creator's rehearsal with one NPC — `hob/conversation.ts`'s shape with
- * the parts an NPC does not have taken out: no tools, no activity line, no
- * proposals, no accept. It asks whether a model is behind the NPC, resumes the
- * newest thread, streams a reply, and holds the prompt metadata the inspector
+ * Hob's campaign-writing accept path taken out. It asks whether a model is
+ * behind the NPC, resumes the newest thread, streams a reply, collects any
+ * review proposal the NPC offered, and holds the prompt metadata the inspector
  * shows.
  *
  * The transcript lives on the server, so this holds a **thread id** rather
@@ -42,6 +43,8 @@ export interface Rehearsal {
   readonly send: ((text: string) => void) | undefined;
   /** Why `send` is undefined, in a sentence with the fix in it. */
   readonly unavailable: string | undefined;
+  /** Proposal records streamed by the answer before the proposals tab refreshes. */
+  readonly proposals: ReadonlyArray<NpcProposal>;
   /** The template version and token estimate — the inspector's facts, never the prompt. */
   readonly status: NpcRehearsalStatus | undefined;
   /**
@@ -79,13 +82,19 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<Rehearsal
       : [{ id: turn.id, who: turn.who, text: turn.text, speakerName: turn.speakerName }],
   );
 
-export function useNpcRehearsal(campaignId: CampaignId, npcId: NpcId, name: string): Rehearsal {
+export function useNpcRehearsal(
+  campaignId: CampaignId,
+  npcId: NpcId,
+  name: string,
+  onProposal?: (proposal: NpcProposal) => void,
+): Rehearsal {
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<RehearsalTurn>>([]);
   const [status, setStatus] = useState<NpcRehearsalStatus | undefined>(undefined);
   const [asking, setAsking] = useState(false);
   const [writing, setWriting] = useState(false);
   const [lastPrompt, setLastPrompt] = useState<Rehearsal["lastPrompt"]>(undefined);
+  const [proposals, setProposals] = useState<ReadonlyArray<NpcProposal>>([]);
 
   const nextId = useRef(0);
   const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
@@ -190,6 +199,10 @@ export function useNpcRehearsal(campaignId: CampaignId, npcId: NpcId, name: stri
           case "delta":
             say(event.data.text);
             return;
+          case "proposal":
+            setProposals((current) => [event.data.proposal, ...current]);
+            onProposal?.(event.data.proposal);
+            return;
           case "failed":
             // The product's sentence, in the NPC's row but not in its voice —
             // the panel draws a failure plainly. It is not saved server-side.
@@ -229,7 +242,7 @@ export function useNpcRehearsal(campaignId: CampaignId, npcId: NpcId, name: stri
 
       answering.current = Effect.runFork(answer);
     },
-    [append, asking, campaignId, name, npcId, say],
+    [append, asking, campaignId, name, npcId, onProposal, say],
   );
 
   const reset = useCallback(() => {
@@ -241,10 +254,12 @@ export function useNpcRehearsal(campaignId: CampaignId, npcId: NpcId, name: stri
     setAsking(false);
     setWriting(false);
     setLastPrompt(undefined);
+    setProposals([]);
   }, []);
 
   return {
     turns,
+    proposals,
     thinking: asking && !writing,
     send: status?.available === true ? send : undefined,
     unavailable:

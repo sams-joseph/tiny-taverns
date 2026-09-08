@@ -187,6 +187,7 @@ describe("migrations", () => {
       "npc",
       "npc_knowledge_fact",
       "npc_memory",
+      "npc_proposal",
       "npc_thread",
       "npc_turn",
       "play_group",
@@ -258,6 +259,7 @@ describe("migrations", () => {
       { migration_id: 39, name: "npc_player_direct_chat" },
       { migration_id: 40, name: "npc_library_sources" },
       { migration_id: 41, name: "npc_session_shared_chat" },
+      { migration_id: 42, name: "npc_proposals" },
     ]);
   }, 60_000);
 
@@ -308,6 +310,7 @@ describe("migrations", () => {
       { migration_id: 39, name: "npc_player_direct_chat" },
       { migration_id: 40, name: "npc_library_sources" },
       { migration_id: 41, name: "npc_session_shared_chat" },
+      { migration_id: 42, name: "npc_proposals" },
     ]);
   }, 60_000);
 });

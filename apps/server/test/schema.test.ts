@@ -188,6 +188,7 @@ describe("every content-bearing table", () => {
       "npc",
       "npc_knowledge_fact",
       "npc_memory",
+      "npc_proposal",
       "npc_thread",
       "npc_turn",
       "prep_item",

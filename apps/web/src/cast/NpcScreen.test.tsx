@@ -194,6 +194,83 @@ describe("NpcScreen", () => {
     expect(bodyOf(server, "POST", "/approve")).toEqual({});
   });
 
+  it("reviews NPC proposals without sending replacement content on accept", async () => {
+    const proposalId = "2b1f2a1e-0000-4000-8000-00000000f601";
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
+      status: 200,
+      body: [
+        {
+          id: proposalId,
+          campaignId,
+          npcId,
+          threadId: npcThreadId,
+          npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+          proposedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
+          kind: "note",
+          content: {
+            kind: "note",
+            title: "Cazril's price",
+            body: "Pearls sink first.",
+            noteKind: "note",
+          },
+          state: "pending",
+          decidedByAccountId: null,
+          decidedAt: null,
+          rejectionReason: null,
+          acceptedMemoryId: null,
+          acceptedNoteId: null,
+          acceptedBeatId: null,
+          visibility: "dm",
+          createdAt: cazril.createdAt,
+          updatedAt: cazril.updatedAt,
+          origin: "assistant",
+          assistantTurnId: null,
+        },
+      ],
+    });
+    server.routes.set(
+      `POST /campaigns/${campaignId}/npcs/${npcId}/proposals/${proposalId}/accept`,
+      {
+        status: 200,
+        body: {
+          id: proposalId,
+          campaignId,
+          npcId,
+          threadId: npcThreadId,
+          npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+          proposedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
+          kind: "note",
+          content: {
+            kind: "note",
+            title: "Cazril's price",
+            body: "Pearls sink first.",
+            noteKind: "note",
+          },
+          state: "accepted",
+          decidedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
+          decidedAt: cazril.updatedAt,
+          rejectionReason: null,
+          acceptedMemoryId: null,
+          acceptedNoteId: "2b1f2a1e-0000-4000-8000-00000000f701",
+          acceptedBeatId: null,
+          visibility: "dm",
+          createdAt: cazril.createdAt,
+          updatedAt: cazril.updatedAt,
+          origin: "assistant",
+          assistantTurnId: null,
+        },
+      },
+    );
+
+    await renderNpc();
+    await userEvent.click(await screen.findByRole("button", { name: "Proposals" }));
+    expect(await screen.findByText("Note: Cazril's price")).toBeInTheDocument();
+    expect(screen.getByText("Pearls sink first.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(bodyOf(server, "POST", `/proposals/${proposalId}/accept`)).toEqual({});
+  });
+
   it("resumes the newest thread on open, so a reload keeps the rehearsal", async () => {
     withModel();
     server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/threads`, {

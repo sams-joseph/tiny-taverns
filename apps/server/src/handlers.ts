@@ -44,6 +44,7 @@ import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
+import { NpcProposals } from "./repo/NpcProposals.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -815,13 +816,14 @@ const NpcsLive = HttpApiBuilder.group(
     const npcs = yield* Npcs;
     const knowledge = yield* NpcKnowledge;
     const memories = yield* NpcMemories;
+    const proposals = yield* NpcProposals;
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
 
-    const asCreator = <A, E>(
+    const asCreator = <A, E, R>(
       campaignId: CampaignId,
-      use: (creator: CampaignCreatorActor) => Effect.Effect<A, E>,
+      use: (creator: CampaignCreatorActor) => Effect.Effect<A, E, R>,
     ) => Effect.flatMap(creators.of(campaignId), use);
 
     return handlers
@@ -900,6 +902,19 @@ const NpcsLive = HttpApiBuilder.group(
       )
       .handle("resetMemories", ({ params }) =>
         asCreator(params.campaignId, (creator) => memories.reset(creator, params.npcId)),
+      )
+      .handle("proposals", ({ params }) =>
+        asCreator(params.campaignId, (creator) => proposals.list(creator, params.npcId)),
+      )
+      .handle("acceptProposal", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          proposals.accept(creator, params.npcId, params.proposalId),
+        ),
+      )
+      .handle("rejectProposal", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) =>
+          proposals.reject(creator, params.npcId, params.proposalId, payload),
+        ),
       )
       .handle("playerList", ({ params }) => npcs.playerList(params.campaignId))
       .handle("playerFindById", ({ params }) =>

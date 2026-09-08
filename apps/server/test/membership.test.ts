@@ -35,6 +35,7 @@ import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { NpcProposals } from "../src/repo/NpcProposals.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
@@ -224,6 +225,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
       "repo/NpcMemories.ts",
+      "repo/NpcProposals.ts",
       "repo/NpcThreads.ts",
       "repo/Npcs.ts",
       "repo/Options.ts",
@@ -297,6 +299,15 @@ const runtime = ManagedRuntime.make(
     Notes.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
+    NpcProposals.layer.pipe(
+      Layer.provide([
+        Campaigns.layer,
+        Notes.layer,
+        Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+        NpcMemories.layer,
+        NpcThreads.layer,
+      ]),
+    ),
     Npcs.layer,
     NpcThreads.layer,
     Options.layer,
@@ -342,6 +353,7 @@ const makeFixture = Effect.gen(function* () {
   const notes = yield* Notes;
   const npcKnowledge = yield* NpcKnowledge;
   const npcMemories = yield* NpcMemories;
+  const npcProposals = yield* NpcProposals;
   const npcs = yield* Npcs;
   const npcThreads = yield* NpcThreads;
   const options = yield* Options;
@@ -542,6 +554,18 @@ const makeFixture = Effect.gen(function* () {
     who: "user",
     text: "What is your price?",
   });
+  const proposalTurnId = randomUUID() as NpcTurnId;
+  yield* npcThreads.append(asDm, npc.id, npcThread.id, {
+    id: proposalTurnId,
+    who: "npc",
+    text: "I may remember that.",
+  });
+  yield* as(
+    npcProposals.record(campaign.id, npc.id, npcThread.id, proposalTurnId, {
+      kind: "memory",
+      body: "Cazril should remember the offered price.",
+    }),
+  );
 
   return {
     dm,
@@ -597,6 +621,7 @@ const READS: Record<
     | Notes
     | NpcKnowledge
     | NpcMemories
+    | NpcProposals
     | Npcs
     | NpcThreads
     | Options
@@ -696,6 +721,10 @@ const READS: Record<
   npc_memory: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
       Effect.flatMap(NpcMemories, (r) => r.list(dm, f.npc.id)),
+    ),
+  npc_proposal: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(NpcProposals, (r) => r.list(dm, f.npc.id)),
     ),
   npc_thread: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>

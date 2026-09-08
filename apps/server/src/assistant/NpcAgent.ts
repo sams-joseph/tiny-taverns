@@ -10,18 +10,32 @@ import {
   NpcFailure,
   type NpcId,
   NpcPlayerStatus,
+  NpcProposal,
+  type NpcProposalContent,
+  NpcProposed,
   type NpcRehearse,
   NpcRehearsalStatus,
   type NpcSessionTalk,
   type NpcTalk,
+  NpcToolStep,
   type NpcTurnId,
   type SessionId,
   type NotFound,
   type PlayerNpc,
   RateLimited,
+  Conflict,
+  NoteKind,
 } from "@taverns/api";
-import { Cause, Context, DateTime, Effect, Layer, Ref, Result, Stream } from "effect";
-import { AiError, LanguageModel, type Response, type Tool } from "effect/unstable/ai";
+import { Cause, Context, DateTime, Effect, Layer, Ref, Result, Schema, Stream } from "effect";
+import {
+  AiError,
+  Chat,
+  LanguageModel,
+  type Prompt,
+  type Response,
+  Tool,
+  Toolkit,
+} from "effect/unstable/ai";
 
 /**
  * The tool set of a loop with no tools — what `LanguageModel.streamText`
@@ -32,6 +46,7 @@ type NoTools = Record<string, Tool.Any>;
 import { type CampaignCreatorActor, CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
+import { NpcProposals } from "../repo/NpcProposals.js";
 import { Npcs } from "../repo/Npcs.js";
 import { NpcThreads, type PlayerNpcRateLimits } from "../repo/NpcThreads.js";
 import { assembleNpcPrompt, npcPromptMetadata, type NpcPromptContext } from "./npcPrompt.js";
@@ -39,11 +54,13 @@ import { assembleNpcPrompt, npcPromptMetadata, type NpcPromptContext } from "./n
 /**
  * An NPC answers, in character, to its own creator.
  *
- * The provider loop is Hob's shape with everything Hob has that an NPC must
- * not: **no toolkit, no rounds, no proposals, no writes.** One
- * `LanguageModel.streamText` call over a prompt assembled by `npcPrompt.ts`
- * from the NPC row, a capped transcript and the line just spoken; the parts
- * are translated into `NpcEvent`s; the reply is saved in a finalizer with the
+ * The provider loop is Hob's shape with the dangerous parts removed: no SQL,
+ * no direct campaign writes, and player-direct/private chat has no tools at
+ * all. Creator rehearsal and shared-session talk may offer one bounded review
+ * proposal; the tool records no destination state, only a pending row the
+ * creator can accept later. The prompt is assembled by `npcPrompt.ts` from the
+ * NPC row, a capped transcript and the line just spoken; the parts are
+ * translated into `NpcEvent`s; the reply is saved in a finalizer with the
  * template version stamped on it. What an NPC knows is exactly what its row
  * holds — this file reads the NPC through `Npcs`, the transcript through
  * `NpcThreads`, and nothing else in the campaign. It has no `SqlClient`, and
@@ -171,6 +188,7 @@ export class NpcAgent extends Context.Service<
     | NpcKnowledge
     | NpcMemories
     | NpcThreads
+    | NpcProposals
     | CampaignCreatorActors
     | LanguageModel.LanguageModel
   > =>
@@ -181,6 +199,7 @@ export class NpcAgent extends Context.Service<
         const knowledge = yield* NpcKnowledge;
         const memories = yield* NpcMemories;
         const threads = yield* NpcThreads;
+        const proposals = yield* NpcProposals;
         const creators = yield* CampaignCreatorActors;
 
         return {
@@ -228,41 +247,28 @@ export class NpcAgent extends Context.Service<
               const written = yield* Ref.make("");
               const broke = yield* Ref.make(false);
               const finished = yield* Ref.make("stop");
+              const offered = yield* Ref.make<NpcProposalContent | undefined>(undefined);
+              const saved = yield* Ref.make<NpcProposal | undefined>(undefined);
 
-              const answering: Stream.Stream<
-                NpcEvent,
-                AiError.AiError,
-                LanguageModel.LanguageModel
-              > = LanguageModel.streamText({ prompt: prompt.messages }).pipe(
-                Stream.filterMapEffect(
-                  (
-                    part: Response.StreamPart<NoTools>,
-                  ): Effect.Effect<Result.Result<NpcEvent, Response.StreamPart<NoTools>>> =>
-                    Effect.gen(function* () {
-                      if (part.type === "finish") {
-                        yield* Ref.set(finished, part.reason);
-                        // `length` is the end of the answer, not a reason to
-                        // note and move on — see `truncated`.
-                        return part.reason === "length"
-                          ? Result.succeed(truncated)
-                          : Result.fail(part);
-                      }
-                      return toNpcEvent(part);
-                    }),
-                ),
+              const answering = npcConversation(
+                prompt.messages,
+                bindProposalTools(offered),
+                finished,
+                offered,
               );
 
               /**
-               * Saves what the NPC actually said, however the stream ended —
-               * in a finalizer, so a creator who closed the tab keeps the half
-               * they read. Best effort: a reply that cannot be saved must not
-               * turn a delivered one into a failure. Nothing is written when
-               * nothing was said, which reads on reload as a line that went
-               * unanswered.
+               * Saves what the NPC actually said or offered, however the
+               * stream ended. Proposal tools still write no destination rows:
+               * they fill `offered`, and this save records one review row tied
+               * to the NPC turn before the client sees its proposal id.
                */
               const save = Effect.gen(function* () {
+                const existing = yield* Ref.get(saved);
+                if (existing !== undefined) return existing;
                 const text = yield* Ref.get(written);
-                if (text === "") return;
+                const content = yield* Ref.get(offered);
+                if (text === "" && content === undefined) return undefined;
                 yield* threads.append(creator, npcId, thread.id, {
                   id: replyId,
                   who: "npc",
@@ -272,20 +278,38 @@ export class NpcAgent extends Context.Service<
                   model: options.model,
                   finishReason: yield* Ref.get(finished),
                 });
-              }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
+                if (content === undefined) return undefined;
+                const proposal = yield* proposals.record(
+                  creator.campaign,
+                  npcId,
+                  thread.id,
+                  replyId,
+                  content,
+                );
+                yield* Ref.set(saved, proposal);
+                return proposal;
+              }).pipe(Effect.provideService(CurrentActor, actor));
 
               const tail = Stream.unwrap(
-                Effect.map(
-                  Effect.all([Ref.get(finished), Ref.get(broke), Ref.get(written)]),
-                  ([reason, failed, text]) =>
-                    Stream.fromIterable<NpcEvent>(
-                      failed
-                        ? []
-                        : text === ""
-                          ? [silence]
-                          : [{ event: "done" as const, data: new NpcDone({ reason }) }],
-                    ),
-                ),
+                Effect.gen(function* () {
+                  const [reason, failed, text, content] = yield* Effect.all([
+                    Ref.get(finished),
+                    Ref.get(broke),
+                    Ref.get(written),
+                    Ref.get(offered),
+                  ]);
+                  const proposal = content === undefined ? undefined : yield* save;
+                  return Stream.fromIterable<NpcEvent>([
+                    ...(proposal === undefined
+                      ? []
+                      : [{ event: "proposal" as const, data: new NpcProposed({ proposal }) }]),
+                    ...(failed
+                      ? []
+                      : text === "" && proposal === undefined
+                        ? [silence]
+                        : [{ event: "done" as const, data: new NpcDone({ reason }) }]),
+                  ]);
+                }),
               );
 
               return Stream.fromIterable<NpcEvent>([
@@ -316,7 +340,7 @@ export class NpcAgent extends Context.Service<
                     ),
                   ),
                 ),
-                Stream.ensuring(save),
+                Stream.ensuring(Effect.ignore(save)),
               );
             }),
 
@@ -436,7 +460,7 @@ export class NpcAgent extends Context.Service<
                     ),
                   ),
                 ),
-                Stream.ensuring(save),
+                Stream.ensuring(Effect.ignore(save)),
               );
             }),
 
@@ -486,31 +510,23 @@ export class NpcAgent extends Context.Service<
               const written = yield* Ref.make("");
               const broke = yield* Ref.make(false);
               const finished = yield* Ref.make("stop");
+              const offered = yield* Ref.make<NpcProposalContent | undefined>(undefined);
+              const saved = yield* Ref.make<NpcProposal | undefined>(undefined);
+              const threadId = history[0]?.threadId ?? user.turn.threadId;
 
-              const answering: Stream.Stream<
-                NpcEvent,
-                AiError.AiError,
-                LanguageModel.LanguageModel
-              > = LanguageModel.streamText({ prompt: prompt.messages }).pipe(
-                Stream.filterMapEffect(
-                  (
-                    part: Response.StreamPart<NoTools>,
-                  ): Effect.Effect<Result.Result<NpcEvent, Response.StreamPart<NoTools>>> =>
-                    Effect.gen(function* () {
-                      if (part.type === "finish") {
-                        yield* Ref.set(finished, part.reason);
-                        return part.reason === "length"
-                          ? Result.succeed(truncated)
-                          : Result.fail(part);
-                      }
-                      return toNpcEvent(part);
-                    }),
-                ),
+              const answering = npcConversation(
+                prompt.messages,
+                bindProposalTools(offered),
+                finished,
+                offered,
               );
 
               const save = Effect.gen(function* () {
+                const existing = yield* Ref.get(saved);
+                if (existing !== undefined) return existing;
                 const text = yield* Ref.get(written);
-                if (text === "") return;
+                const content = yield* Ref.get(offered);
+                if (text === "" && content === undefined) return undefined;
                 yield* threads.sessionAppend(campaignId, sessionId, npcId, {
                   id: replyId,
                   who: "npc",
@@ -520,27 +536,45 @@ export class NpcAgent extends Context.Service<
                   model: options.model,
                   finishReason: yield* Ref.get(finished),
                 });
-              }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
+                if (content === undefined) return undefined;
+                const proposal = yield* proposals.record(
+                  campaignId,
+                  npcId,
+                  threadId,
+                  replyId,
+                  content,
+                );
+                yield* Ref.set(saved, proposal);
+                return proposal;
+              }).pipe(Effect.provideService(CurrentActor, actor));
 
               const tail = Stream.unwrap(
-                Effect.map(
-                  Effect.all([Ref.get(finished), Ref.get(broke), Ref.get(written)]),
-                  ([reason, failed, text]) =>
-                    Stream.fromIterable<NpcEvent>(
-                      failed
-                        ? []
-                        : text === ""
-                          ? [silence]
-                          : [{ event: "done" as const, data: new NpcDone({ reason }) }],
-                    ),
-                ),
+                Effect.gen(function* () {
+                  const [reason, failed, text, content] = yield* Effect.all([
+                    Ref.get(finished),
+                    Ref.get(broke),
+                    Ref.get(written),
+                    Ref.get(offered),
+                  ]);
+                  const proposal = content === undefined ? undefined : yield* save;
+                  return Stream.fromIterable<NpcEvent>([
+                    ...(proposal === undefined
+                      ? []
+                      : [{ event: "proposal" as const, data: new NpcProposed({ proposal }) }]),
+                    ...(failed
+                      ? []
+                      : text === "" && proposal === undefined
+                        ? [silence]
+                        : [{ event: "done" as const, data: new NpcDone({ reason }) }]),
+                  ]);
+                }),
               );
 
               return Stream.fromIterable<NpcEvent>([
                 {
                   event: "began",
                   data: new NpcBegun({
-                    threadId: history[0]?.threadId ?? user.turn.threadId,
+                    threadId,
                     turnId: replyId,
                     templateVersion: prompt.templateVersion,
                     estimatedTokens: prompt.estimatedTokens,
@@ -564,7 +598,7 @@ export class NpcAgent extends Context.Service<
                     ),
                   ),
                 ),
-                Stream.ensuring(save),
+                Stream.ensuring(Effect.ignore(save)),
               );
             }),
         };
@@ -668,6 +702,150 @@ const playerStatusOf = (npc: PlayerNpc, available: boolean): NpcPlayerStatus =>
 
 const freshTurnId: Effect.Effect<NpcTurnId> = Effect.sync(() => crypto.randomUUID() as NpcTurnId);
 
+const ProposalFailure = Schema.Union([Conflict]);
+
+const ProposeNpcMemory = Tool.make("proposeNpcMemory", {
+  description:
+    "Offer the campaign creator a memory this NPC should remember. It is only a suggestion: accepting it creates a draft memory, and that draft is still not prompt-visible until the creator approves it.",
+  parameters: Schema.Struct({
+    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+  }),
+  success: Schema.String,
+  failure: ProposalFailure,
+  failureMode: "return",
+});
+
+const ProposeCampaignNote = Tool.make("proposeCampaignNote", {
+  description:
+    "Offer the campaign creator a note to save. It is only a suggestion: no note is written unless an authorized creator accepts the stored proposal.",
+  parameters: Schema.Struct({
+    title: Schema.String.check(Schema.isLengthBetween(1, 80)),
+    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    noteKind: NoteKind,
+  }),
+  success: Schema.String,
+  failure: ProposalFailure,
+  failureMode: "return",
+});
+
+const ProposeCampaignBeat = Tool.make("proposeCampaignBeat", {
+  description:
+    "Offer the campaign creator one line recording what just happened at the table. It is only a suggestion: no beat is written unless an authorized creator accepts it.",
+  parameters: Schema.Struct({
+    body: Schema.String.check(Schema.isLengthBetween(1, 1000)),
+  }),
+  success: Schema.String,
+  failure: ProposalFailure,
+  failureMode: "return",
+});
+
+const NpcProposalToolkit = Toolkit.make(ProposeNpcMemory, ProposeCampaignNote, ProposeCampaignBeat);
+
+type NpcProposalSlot = Ref.Ref<NpcProposalContent | undefined>;
+
+const oneProposalOnly = new Conflict({
+  message:
+    "An NPC can offer one proposal per reply. Answer briefly about the proposal already offered.",
+});
+
+const offer = (
+  slot: NpcProposalSlot,
+  content: NpcProposalContent,
+  message: string,
+): Effect.Effect<string, Conflict> =>
+  Effect.gen(function* () {
+    if ((yield* Ref.get(slot)) !== undefined) return yield* oneProposalOnly;
+    yield* Ref.set(slot, content);
+    return message;
+  });
+
+const bindProposalTools = (slot: NpcProposalSlot) =>
+  Effect.flatMap(
+    NpcProposalToolkit.toHandlers(
+      NpcProposalToolkit.of({
+        proposeNpcMemory: ({ body }) =>
+          offer(
+            slot,
+            { kind: "memory", body },
+            "Offered a memory draft. It will not be remembered unless the creator accepts and then approves it. Say one short line and stop.",
+          ),
+        proposeCampaignNote: ({ title, body, noteKind }) =>
+          offer(
+            slot,
+            { kind: "note", title, body, noteKind },
+            `Offered a ${noteKind === "read_aloud" ? "read-aloud " : ""}note called "${title}". Say one short line and stop.`,
+          ),
+        proposeCampaignBeat: ({ body }) =>
+          offer(
+            slot,
+            { kind: "beat", body },
+            "Offered a beat for the campaign creator to file against the current session. Say one short line and stop.",
+          ),
+      }),
+    ),
+    (bound) => Effect.provideContext(NpcProposalToolkit, bound),
+  );
+
+const MAX_NPC_PROPOSAL_ROUNDS = 3;
+
+const npcConversation = <Tools extends Record<string, Tool.Any>>(
+  prompt: ReadonlyArray<Prompt.MessageEncoded>,
+  bind: Effect.Effect<Toolkit.WithHandler<Tools>>,
+  finished: Ref.Ref<string>,
+  proposal: NpcProposalSlot,
+): Stream.Stream<NpcEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
+  Stream.unwrap(
+    Effect.map(Effect.all([bind, Chat.fromPrompt(prompt)]), ([toolkit, chat]) =>
+      npcRound(chat, toolkit, MAX_NPC_PROPOSAL_ROUNDS, finished, proposal),
+    ),
+  );
+
+const npcRound = <Tools extends Record<string, Tool.Any>>(
+  chat: Chat.Service,
+  toolkit: Toolkit.WithHandler<Tools>,
+  budget: number,
+  finished: Ref.Ref<string>,
+  proposal: NpcProposalSlot,
+): Stream.Stream<NpcEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
+  Stream.unwrap(
+    Effect.map(Ref.make(false), (calledTool) =>
+      (
+        chat.streamText({ prompt: [], toolkit }) as Stream.Stream<
+          Response.StreamPart<Tools>,
+          AiError.AiError | Schema.SchemaError,
+          LanguageModel.LanguageModel
+        >
+      ).pipe(
+        Stream.filterMapEffect<
+          Response.StreamPart<Tools>,
+          NpcEvent,
+          Response.StreamPart<Tools>,
+          never,
+          never
+        >((part) =>
+          Effect.gen(function* () {
+            if (part.type === "tool-call") yield* Ref.set(calledTool, true);
+            if (part.type === "finish") {
+              yield* Ref.set(finished, part.reason);
+              if (part.reason === "length") return Result.succeed(truncated);
+              return Result.fail(part);
+            }
+            return toNpcEvent(part);
+          }),
+        ),
+        Stream.concat(
+          Stream.unwrap(
+            Effect.map(Effect.all([Ref.get(calledTool), Ref.get(finished)]), ([used, reason]) =>
+              used && budget > 1 && reason !== "length"
+                ? npcRound(chat, toolkit, budget - 1, finished, proposal)
+                : Stream.empty,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
 /**
  * Watches the reply go past: what was said, and whether it broke. A failure
  * sentence is not accumulated — it is the product apologising, not something
@@ -739,12 +917,36 @@ const describe = (error: unknown): string =>
  * The provider's stream parts, as the events the screen understands. Reasoning
  * parts are dropped: a chain of thought is not something the character said.
  */
-const toNpcEvent = (
-  part: Response.StreamPart<NoTools>,
-): Result.Result<NpcEvent, Response.StreamPart<NoTools>> => {
+const detailOf = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const toNpcEvent = <Tools extends Record<string, Tool.Any>>(
+  part: Response.StreamPart<Tools>,
+): Result.Result<NpcEvent, Response.StreamPart<Tools>> => {
   switch (part.type) {
     case "text-delta":
       return Result.succeed({ event: "delta" as const, data: new NpcDelta({ text: part.delta }) });
+    case "tool-call":
+      return Result.succeed({
+        event: "tool" as const,
+        data: new NpcToolStep({ name: part.name, phase: "called", detail: detailOf(part.params) }),
+      });
+    case "tool-result":
+      return Result.succeed({
+        event: "tool" as const,
+        data: new NpcToolStep({
+          name: part.name,
+          phase: "answered",
+          detail: part.isFailure ? "nothing it could use" : detailOf(part.encodedResult),
+        }),
+      });
     case "error":
       return Result.succeed(failure(apology(part.error)));
     default:

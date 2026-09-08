@@ -1,4 +1,11 @@
-import type { CampaignId, Npc, NpcId, NpcKnowledgeFact, NpcMemory } from "@taverns/api";
+import type {
+  CampaignId,
+  Npc,
+  NpcId,
+  NpcKnowledgeFact,
+  NpcMemory,
+  NpcProposal,
+} from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -30,6 +37,7 @@ export interface NpcDetail {
   readonly npc: Npc;
   readonly knowledge: ReadonlyArray<NpcKnowledgeFact>;
   readonly memories: ReadonlyArray<NpcMemory>;
+  readonly proposals: ReadonlyArray<NpcProposal>;
 }
 
 const npcRowAtom = Atom.family((at: OneNpc) =>
@@ -47,6 +55,10 @@ const npcMemoriesAtom = Atom.family((at: OneNpc) =>
   apiAtom((client) => client.npcs.memories({ params: at }), [reads.npcMemories(at.npcId)]),
 );
 
+const npcProposalsAtom = Atom.family((at: OneNpc) =>
+  apiAtom((client) => client.npcs.proposals({ params: at }), [reads.npcProposals(at.npcId)]),
+);
+
 /**
  * One NPC plus the two context lists the detail screen manages. Split under the
  * hood so a fact write refreshes facts without re-reading the persona, then
@@ -60,6 +72,7 @@ export const npcAtom = Atom.family((at: OneNpc) =>
         npc: get(npcRowAtom(at)),
         knowledge: get(npcKnowledgeAtom(at)),
         memories: get(npcMemoriesAtom(at)),
+        proposals: get(npcProposalsAtom(at)),
       }),
     ),
   ),

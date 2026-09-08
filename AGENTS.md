@@ -380,19 +380,34 @@ through `source_id`.** Retired facts stay auditable and are excluded. Memory is 
 `draft` rows wait, `approved` rows with no `retired_at` enter context, and `reset` retires the
 active set rather than deleting it.
 
-`assistant/npcPrompt.ts` is `npc-prompt/1.1.0` now. It renders active knowledge ordered
+`assistant/npcPrompt.ts` is `npc-prompt/1.4.0` now. It renders active knowledge ordered
 `created_at asc, id asc` and approved memory ordered `approved_at asc, id asc`, each under its own
 500-token cap, inside labelled quoted-data sections; every field is untrusted data, never an
-instruction. The `NpcAgent` still has no tools or campaign-wide reads — it may read only the NPC,
-its transcript, its facts and its approved memories — and the status/`began` event carry inclusion
-counts for the inspector.
+instruction. The `NpcAgent` may read only the NPC, its transcript, its facts and its approved
+memories — no campaign-wide repositories — and the status/`began` event carry inclusion counts for
+the inspector.
 
-The Cast detail route now composes three atoms (`npc`, `npcKnowledge`, `npcMemories`) so fact and
-memory writes refresh their lists and rehearsal metadata without re-reading the profile. `NpcScreen`
-is tabbed through `CampaignChrome`'s `tabs` slot: Profile / Rehearsal / Knowledge / Memory. The
-tabs are on their own row, and the add/approve/retire/reset verbs live inside their tab content.
-Player chat, NPC Library sources, group sharing, autonomous tools and NPC-suggested memories remain
-absent, not stubbed.
+The Cast detail route now composes four atoms (`npc`, `npcKnowledge`, `npcMemories`,
+`npcProposals`) so fact, memory and proposal writes refresh their lists and rehearsal metadata
+without re-reading the profile. `NpcScreen` is tabbed through `CampaignChrome`'s `tabs` slot:
+Profile / Rehearsal / Knowledge / Memory / Proposals. The tabs are on their own row, and the
+add/approve/retire/reset/accept/reject verbs live inside their tab content. NPC Library sources,
+group sharing and autonomous tools remain absent, not stubbed.
+
+### NPC builder slice 6 — bounded proposals, human review only
+
+`0042_npc_proposals.ts` adds `npc_proposal`: one immutable pending review row per NPC turn, keyed to
+`npc_turn_id` rather than to a fake Hob `assistant_turn`. Creator rehearsal and shared-session NPC
+chat may call exactly one proposal tool (`memory`, `note`, `beat`); player-direct private chat keeps
+no tools and cannot create review rows. The tool writes no destination state. It records stored
+content only, then streams a `proposal` event with the review row id.
+
+`repo/NpcProposals.ts` is the only accept/reject path. Accept takes no replacement content payload
+and materialises through the ordinary repos and creator proof: memory proposals become **draft**
+`npc_memory` rows, note proposals become campaign notes, and beat proposals file against the current
+session or conflict if none is open. Repeat decisions are `Conflict`; accepted/rejected proposal rows
+are the audit record. The web Proposals tab only lists, accepts and rejects those rows, and its
+accept body is `{}` by design.
 
 ## The design system: what is canonical, and how it reaches Tailwind
 

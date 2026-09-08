@@ -1323,6 +1323,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/npcs/${npcId}/player/threads`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}/knowledge`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}/memories`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, { status: 200, body: [] }],
     [
       `GET /campaigns/${campaignId}/npcs/${npcId}/rehearsal`,
       { status: 200, body: npcRehearsalStatus },
