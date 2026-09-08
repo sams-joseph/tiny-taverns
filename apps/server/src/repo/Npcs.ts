@@ -1,4 +1,5 @@
 import {
+  type AccountId,
   type CampaignId,
   Conflict,
   type Actor,
@@ -9,6 +10,7 @@ import {
   type NpcListFilter,
   type NpcPersona,
   type NpcPrivateMaterial,
+  NpcSource,
   type NpcUpdate,
   NotFound,
   PlayerNpc,
@@ -17,34 +19,45 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
-import { ensureCampaignWritable, rowReadable, rowWritable } from "./visibility.js";
+import {
+  ensureCampaignWritable,
+  libraryRowReadable,
+  libraryRowWritable,
+  rowReadable,
+  rowWritable,
+  usableInCampaign,
+} from "./visibility.js";
 
 /**
- * The campaign's cast — `npc` rows, as the creator reads and writes them.
+ * The campaign's cast and the reusable NPC Library source shelf.
  *
- * **Every method takes a `CampaignCreatorActor`**, and that is the standing
- * rule applied on the day rather than after a disclosure: an NPC row carries
- * creator-only private material, so the creator read is gated and the player
- * read below is a distinct projection. The proof is
- * a precondition on top of the seam, not a replacement for it — every read
- * here still composes `rowWritable`, the creator-only predicate, so a bug in
- * the gate degrades to the same refusal rather than to an open door. There is
- * deliberately no `rowReadable` in the creator methods: the player projection
- * is `PlayerNpc`, a distinct schema on distinct paths.
- *
- * `version` is `character`'s optimistic-concurrency counter and works the same
- * way: every UPDATE bumps it in the same statement it writes, and a caller who
- * sends `expectedVersion` is refused with a `Conflict` when the row moved on.
- * `archive`/`restore` move one column, so a restore is exact.
+ * Campaign methods still take a `CampaignCreatorActor`, because a campaign NPC
+ * carries creator-only private material. Slice 4 adds the account-owned source
+ * half: Library sources are originals in no campaign, group shares grant only
+ * future copying, and copying into a campaign produces an independent snapshot.
  */
 
 interface NpcRow extends ProvenanceColumns {
   readonly id: NpcId;
   readonly campaign_id: CampaignId;
+  readonly account_id: AccountId | null;
   readonly derived_from: NpcId | null;
+  readonly derived_from_version: number | null;
+  readonly derived_from_name: string | null;
   readonly name: string;
   readonly role: string;
   /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
+  readonly persona: NpcPersona;
+  readonly private_material: NpcPrivateMaterial;
+  readonly version: number;
+  readonly archived_at: Date | null;
+}
+
+interface NpcSourceRow extends ProvenanceColumns {
+  readonly id: NpcId;
+  readonly account_id: AccountId;
+  readonly name: string;
+  readonly role: string;
   readonly persona: NpcPersona;
   readonly private_material: NpcPrivateMaterial;
   readonly version: number;
@@ -56,6 +69,21 @@ export const toNpc = (row: NpcRow): Npc =>
     id: row.id,
     campaignId: row.campaign_id,
     derivedFrom: row.derived_from,
+    derivedFromVersion: row.derived_from_version,
+    derivedFromName: row.derived_from_name,
+    name: row.name,
+    role: row.role,
+    persona: row.persona,
+    privateMaterial: row.private_material,
+    version: row.version,
+    archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
+    ...provenanceOf(row),
+  });
+
+export const toNpcSource = (row: NpcSourceRow): NpcSource =>
+  new NpcSource({
+    id: row.id,
+    accountId: row.account_id,
     name: row.name,
     role: row.role,
     persona: row.persona,
@@ -97,7 +125,7 @@ const staleVersion = (expected: number, actual: number): Conflict =>
 export class Npcs extends Context.Service<
   Npcs,
   {
-    /** Live rows by default, by name; `archived: true` is the other shelf. */
+    /** Live campaign rows by default, by name; `archived: true` is the other shelf. */
     readonly list: (
       creator: CampaignCreatorActor,
       filter: NpcListFilter,
@@ -109,6 +137,13 @@ export class Npcs extends Context.Service<
     readonly create: (
       creator: CampaignCreatorActor,
       payload: NpcCreate,
+    ) => Effect.Effect<Npc, NotFound, never>;
+    readonly sourcesForCampaign: (
+      creator: CampaignCreatorActor,
+    ) => Effect.Effect<ReadonlyArray<NpcSource>, NotFound, never>;
+    readonly copyFromSource: (
+      creator: CampaignCreatorActor,
+      sourceId: NpcId,
     ) => Effect.Effect<Npc, NotFound, never>;
     readonly update: (
       creator: CampaignCreatorActor,
@@ -123,6 +158,19 @@ export class Npcs extends Context.Service<
       creator: CampaignCreatorActor,
       id: NpcId,
     ) => Effect.Effect<Npc, NotFound, never>;
+    /** Account-owned source shelf: originals only, never groupmates' shares. */
+    readonly library: (
+      filter: NpcListFilter,
+    ) => Effect.Effect<ReadonlyArray<NpcSource>, never, CurrentActor>;
+    readonly libraryFindById: (id: NpcId) => Effect.Effect<NpcSource, NotFound, CurrentActor>;
+    readonly libraryCreate: (payload: NpcCreate) => Effect.Effect<NpcSource, never, CurrentActor>;
+    readonly libraryUpdate: (
+      id: NpcId,
+      patch: NpcUpdate,
+    ) => Effect.Effect<NpcSource, NotFound | Conflict, CurrentActor>;
+    readonly libraryArchive: (id: NpcId) => Effect.Effect<NpcSource, NotFound, CurrentActor>;
+    readonly libraryRestore: (id: NpcId) => Effect.Effect<NpcSource, NotFound, CurrentActor>;
+    readonly libraryRemove: (id: NpcId) => Effect.Effect<void, NotFound, CurrentActor>;
     /** Player-safe discovery: public profile only, shared live NPCs only. */
     readonly playerList: (
       campaignId: CampaignId,
@@ -145,6 +193,32 @@ export class Npcs extends Context.Service<
           `;
           if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
           return toNpc(rows[0]!);
+        });
+
+      const sourceOne = (id: NpcId, writable: boolean) =>
+        Effect.gen(function* () {
+          const actor = yield* CurrentActor;
+          const rows = yield* sql<NpcSourceRow>`
+            select * from npc
+            where npc.id = ${id}
+              and ${
+                writable
+                  ? libraryRowWritable(sql, "npc", actor)
+                  : libraryRowReadable(sql, "npc", actor)
+              }
+          `;
+          if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
+          return toNpcSource(rows[0]!);
+        });
+
+      const sourcePatchColumns = (patch: NpcUpdate) =>
+        defined({
+          name: patch.name,
+          role: patch.role,
+          persona: patch.persona === undefined ? undefined : JSON.stringify(patch.persona),
+          private_material:
+            patch.privateMaterial === undefined ? undefined : JSON.stringify(patch.privateMaterial),
+          visibility: patch.visibility,
         });
 
       return {
@@ -190,13 +264,77 @@ export class Npcs extends Context.Service<
             ),
           ),
 
+        sourcesForCampaign: (creator) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              yield* ensureCampaignWritable(sql, creator.campaign, creator.actor);
+              const rows = yield* sql<NpcSourceRow>`
+                select * from npc
+                where npc.archived_at is null
+                  and ${usableInCampaign(sql, "npc", creator.campaign, creator.actor)}
+                order by lower(npc.name) asc, npc.id asc
+              `;
+              return rows.map(toNpcSource);
+            }),
+          ),
+
+        copyFromSource: (creator, sourceId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                yield* ensureCampaignWritable(sql, creator.campaign, creator.actor);
+                const inserted = yield* sql<NpcRow>`
+                  insert into npc
+                    (campaign_id, derived_from, derived_from_version, derived_from_name,
+                     name, role, persona, private_material)
+                  select ${creator.campaign}, npc.id, npc.version, npc.name,
+                         npc.name, npc.role, npc.persona,
+                         case when npc.account_id = ${creator.actor.accountId}
+                              then npc.private_material else '{}'::jsonb end
+                  from npc
+                  where npc.id = ${sourceId}
+                    and npc.archived_at is null
+                    and ${usableInCampaign(sql, "npc", creator.campaign, creator.actor)}
+                  returning *
+                `;
+                if (inserted.length === 0)
+                  return yield* new NotFound({ resource: "npc", id: sourceId });
+                const copy = inserted[0]!;
+                const canCopyPrivate = yield* sql<{ readonly owner: boolean }>`
+                  select exists (select 1 from npc where npc.id = ${sourceId} and npc.account_id = ${creator.actor.accountId}) as owner
+                `;
+                const sourceVisible =
+                  canCopyPrivate[0]?.owner === true ? sql`true` : sql`visibility = 'shared'`;
+                yield* sql`
+                  insert into npc_knowledge_fact
+                    (npc_id, body, source_kind, source_id, source_label, visibility)
+                  select ${copy.id}, body, source_kind, source_id, source_label, visibility
+                  from npc_knowledge_fact
+                  where npc_id = ${sourceId}
+                    and retired_at is null
+                    and ${sourceVisible}
+                  order by created_at asc, id asc
+                `;
+                yield* sql`
+                  insert into npc_memory
+                    (npc_id, body, status, approved_at, visibility)
+                  select ${copy.id}, body, status, approved_at, visibility
+                  from npc_memory
+                  where npc_id = ${sourceId}
+                    and status = 'approved'
+                    and retired_at is null
+                    and ${sourceVisible}
+                  order by approved_at asc, id asc
+                `;
+                return toNpc(copy);
+              }),
+            ),
+          ),
+
         update: (creator, id, patch) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                // Read first, under the same creator-only predicate, so a stale
-                // version is a `Conflict` the creator can read rather than an
-                // update that quietly matched no row.
                 const before = yield* one(creator, id);
                 if (
                   patch.expectedVersion !== undefined &&
@@ -204,22 +342,8 @@ export class Npcs extends Context.Service<
                 ) {
                   return yield* staleVersion(patch.expectedVersion, before.version);
                 }
-                const columns = defined({
-                  name: patch.name,
-                  role: patch.role,
-                  persona: patch.persona === undefined ? undefined : JSON.stringify(patch.persona),
-                  private_material:
-                    patch.privateMaterial === undefined
-                      ? undefined
-                      : JSON.stringify(patch.privateMaterial),
-                  visibility: patch.visibility,
-                });
-                // `version = version + 1` rides in the same statement as the
-                // change, and the `where` re-checks the version the caller read
-                // so two writers racing past the read above still cannot both
-                // win.
                 const rows = yield* sql<NpcRow>`
-                  update npc set ${setClause(sql, columns)}, version = npc.version + 1
+                  update npc set ${setClause(sql, sourcePatchColumns(patch))}, version = npc.version + 1
                   where npc.id = ${id}
                     and ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
                     and npc.version = ${before.version}
@@ -257,6 +381,116 @@ export class Npcs extends Context.Service<
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
               return toNpc(rows[0]!);
+            }),
+          ),
+
+        library: (filter) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<NpcSourceRow>`
+                select * from npc
+                where ${libraryRowReadable(sql, "npc", actor)}
+                  and ${filter.archived === true ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
+                order by lower(npc.name) asc, npc.id asc
+              `;
+              return rows.map(toNpcSource);
+            }),
+          ),
+
+        libraryFindById: (id) => dieOnSqlError(sourceOne(id, false)),
+
+        libraryCreate: (payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<NpcSourceRow>`
+                insert into npc ${sql.insert(
+                  defined({
+                    account_id: actor.accountId,
+                    name: payload.name,
+                    role: payload.role,
+                    persona:
+                      payload.persona === undefined ? undefined : JSON.stringify(payload.persona),
+                    private_material:
+                      payload.privateMaterial === undefined
+                        ? undefined
+                        : JSON.stringify(payload.privateMaterial),
+                    visibility: payload.visibility,
+                  }),
+                )}
+                returning *
+              `;
+              return toNpcSource(rows[0]!);
+            }),
+          ),
+
+        libraryUpdate: (id, patch) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const before = yield* sourceOne(id, true);
+                if (
+                  patch.expectedVersion !== undefined &&
+                  patch.expectedVersion !== before.version
+                ) {
+                  return yield* staleVersion(patch.expectedVersion, before.version);
+                }
+                const actor = yield* CurrentActor;
+                const rows = yield* sql<NpcSourceRow>`
+                  update npc set ${setClause(sql, sourcePatchColumns(patch))}, version = npc.version + 1
+                  where npc.id = ${id}
+                    and ${libraryRowWritable(sql, "npc", actor)}
+                    and npc.version = ${before.version}
+                  returning *
+                `;
+                if (rows.length === 0) {
+                  const now = yield* sourceOne(id, true);
+                  return yield* staleVersion(before.version, now.version);
+                }
+                return toNpcSource(rows[0]!);
+              }),
+            ),
+          ),
+
+        libraryArchive: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<NpcSourceRow>`
+                update npc set archived_at = coalesce(npc.archived_at, now()), updated_at = now()
+                where npc.id = ${id} and ${libraryRowWritable(sql, "npc", actor)}
+                returning *
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
+              return toNpcSource(rows[0]!);
+            }),
+          ),
+
+        libraryRestore: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<NpcSourceRow>`
+                update npc set archived_at = null, updated_at = now()
+                where npc.id = ${id} and ${libraryRowWritable(sql, "npc", actor)}
+                returning *
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
+              return toNpcSource(rows[0]!);
+            }),
+          ),
+
+        libraryRemove: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<{ readonly id: NpcId }>`
+                delete from npc
+                where npc.id = ${id} and ${libraryRowWritable(sql, "npc", actor)}
+                returning npc.id
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
             }),
           ),
 

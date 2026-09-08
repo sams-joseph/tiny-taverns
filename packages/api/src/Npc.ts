@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import {
+  AccountId,
   CampaignId,
   NpcId,
   NpcKnowledgeFactId,
@@ -16,10 +17,11 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * The captain's decisions of 2026-09-04 shape everything on this page. An NPC
  * is **a campaign content row that compiles a constrained persona prompt from
  * structured fields** — not a free-form prompt blob, not Hob wearing a name,
- * not a character and not a creature. It is *campaign-owned only* in this
- * slice (no Library source, no group share yet), it has creator rehearsal and
- * private player direct chat channels, it has no tools and it writes nothing
- * into the campaign.
+ * not a character and not a creature. It may also be an account-owned Library
+ * source that is copied into campaigns as a snapshot, with group sharing
+ * granting future copying only. Campaign NPCs have creator rehearsal and
+ * private player direct chat channels, no tools, and write nothing into the
+ * campaign.
  *
  * ### Private material is its own field, by construction
  *
@@ -120,10 +122,10 @@ const npcRole = Schema.String.check(Schema.isMaxLength(120));
 /**
  * The row, as the creator reads it.
  *
- * `derivedFrom` is nullable and unused in this slice — it is the pointer a
- * Library source will one day leave on a campaign snapshot (`derived_from`,
- * the `creature` idiom), carried now so slice 4 is a column filling rather
- * than a rewrite. `archivedAt` is the reversible soft delete: transcripts hang
+ * `derivedFrom` is the nullable pointer a Library source leaves on a campaign
+ * snapshot (`derived_from`, the `creature` idiom). `derivedFromVersion` and
+ * `derivedFromName` keep the provenance understandable after the source moves
+ * or is deleted. `archivedAt` is the reversible soft delete: transcripts hang
  * off an NPC and are worth keeping.
  *
  * `version` is the optimistic-concurrency counter `character` carries, for the
@@ -133,8 +135,27 @@ export class Npc extends Schema.Class<Npc>("Npc")({
   id: NpcId,
   campaignId: CampaignId,
   derivedFrom: Schema.NullOr(NpcId),
+  /** The source's version at the moment this campaign snapshot was copied. */
+  derivedFromVersion: Schema.NullOr(Schema.Int),
+  /** The source's name at the moment this campaign snapshot was copied, kept after source deletion. */
+  derivedFromName: Schema.NullOr(Schema.String),
   name: Schema.String,
   /** A short role or subtitle — "the ferryman at the crossing". */
+  role: Schema.String,
+  persona: NpcPersona,
+  privateMaterial: NpcPrivateMaterial,
+  version: Schema.Int,
+  archivedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  visibility: Visibility,
+  ...provenanceFields,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+export class NpcSource extends Schema.Class<NpcSource>("NpcSource")({
+  id: NpcId,
+  accountId: AccountId,
+  name: Schema.String,
   role: Schema.String,
   persona: NpcPersona,
   privateMaterial: NpcPrivateMaterial,

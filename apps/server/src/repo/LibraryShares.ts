@@ -32,8 +32,8 @@ import { ensureGroupReadable } from "./visibility.js";
  * insert's own `select`), so sharing somebody else's — or a campaign copy —
  * is the ordinary `NotFound` about the resource, and there is no payload
  * field that could name another owner. `unshare` is the same comparison on
- * the way out. The seven legal kinds are the seven copyable corpora; the
- * check constraint holds the list and the type restates it.
+ * the way out. The legal kinds are the copyable corpora; the check constraint
+ * holds the list and the type restates it.
  */
 
 interface ShareRow {
@@ -71,6 +71,7 @@ const KINDS: ReadonlyArray<LibraryShareKind> = [
   "magic_item",
   "rule_article",
   "feat",
+  "npc",
 ];
 
 const nameColumn = (sql: SqlClient.SqlClient): Statement.Fragment =>

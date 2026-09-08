@@ -1,13 +1,109 @@
-import type { Npc } from "@taverns/api";
+import type { CampaignId, Npc, NpcSource } from "@taverns/api";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Button, EMPTY_FILTER_VALUE, FilterInput, Icon } from "@taverns/ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EMPTY_FILTER_VALUE,
+  FilterInput,
+  Icon,
+} from "@taverns/ui";
+import { Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
+import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
+import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
-import { EmptyState } from "../ui/states";
+import { SaveFailure } from "../ui/form";
+import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { npcsAtom } from "./load";
 import { NpcCard } from "./NpcCard";
 import { NpcDialog } from "./NpcDialog";
 import { npcMatches } from "./persona";
+
+const sourceDescription = (source: NpcSource): string => {
+  const summary = source.persona.identity?.summary?.trim() ?? "";
+  if (summary !== "") return summary;
+  const manner = source.persona.voice?.manner?.trim() ?? "";
+  if (manner !== "") return manner;
+  return "No persona written yet.";
+};
+
+const npcSourcesAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom((client) => client.npcs.sources({ params: { campaignId } }), [reads.libraryNpcs]),
+);
+
+function AddNpcFromLibraryDialog({
+  campaignId,
+  onClose,
+}: {
+  readonly campaignId: CampaignId;
+  readonly onClose: () => void;
+}) {
+  const [resource, reload] = useApiAtom(npcSourcesAtom(campaignId));
+  const { busy, failure, submit } = useMutation();
+
+  const copy = async (source: NpcSource) => {
+    const saved = await submit(
+      (client) =>
+        client.npcs.copyFromSource({ params: { campaignId, sourceNpcId: source.id }, payload: {} }),
+      [reads.npcs(campaignId)],
+    );
+    if (Result.isSuccess(saved)) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-label="Add NPC from Library">
+        <DialogHeader>
+          <DialogTitle>Add from Library</DialogTitle>
+          <DialogDescription>
+            Choose a reusable NPC source. The copy in this campaign is a snapshot.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto px-gutter py-3">
+          {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
+          {resource.state === "failed" && (
+            <FailureNotice failure={resource.failure} onRetry={reload} />
+          )}
+          {resource.state === "ready" && resource.value.length === 0 && (
+            <p className="text-body text-muted">No NPC sources are available yet.</p>
+          )}
+          {resource.state === "ready" &&
+            resource.value.map((source) => (
+              <Button
+                key={source.id}
+                variant="outline"
+                className="h-auto justify-start py-3 text-left"
+                onClick={() => void copy(source)}
+                disabled={busy}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-label font-semibold text-heading">
+                    {source.name}
+                  </span>
+                  <span className="line-clamp-2 text-caption text-muted">
+                    {sourceDescription(source)}
+                  </span>
+                </span>
+              </Button>
+            ))}
+        </div>
+        <DialogFooter>
+          {failure !== undefined && <SaveFailure failure={failure} />}
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /**
  * The cast — the campaign's NPCs, as a grid.
@@ -28,6 +124,7 @@ export function CastScreen() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [editing, setEditing] = useState<{ readonly npc: Npc | undefined }>();
+  const [copying, setCopying] = useState(false);
 
   return (
     <CampaignChrome
@@ -48,6 +145,10 @@ export function CastScreen() {
             facets={[]}
             className="min-h-control-sm max-w-52 py-0.5"
           />
+          <Button variant="outline" size="sm" onClick={() => setCopying(true)}>
+            <Icon name="copy" size={14} />
+            Add from Library
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setEditing({ npc: undefined })}>
             <Icon name="plus" size={14} />
             New NPC
@@ -80,6 +181,13 @@ export function CastScreen() {
                   ))}
                 </ul>
               </div>
+            )}
+
+            {copying && (
+              <AddNpcFromLibraryDialog
+                campaignId={view.campaign.id}
+                onClose={() => setCopying(false)}
+              />
             )}
 
             {editing !== undefined && (

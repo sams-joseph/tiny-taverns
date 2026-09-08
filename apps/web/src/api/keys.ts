@@ -238,6 +238,12 @@ export const reads = {
   /** The account's Library of feats: originals, plus the pinned 2014 baseline. */
   libraryFeats: "library:feats" as ReadKey,
 
+  /** The account's Library of reusable NPC sources. */
+  libraryNpcs: "library:npcs" as ReadKey,
+
+  /** One reusable NPC source. */
+  libraryNpc: (npcId: NpcId): ReadKey => key`library:npcs:${npcId}`,
+
   /** One Library feat and its prerequisite rows. */
   libraryFeat: (featId: FeatId): ReadKey => key`library:feats:${featId}`,
 

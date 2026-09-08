@@ -11,6 +11,7 @@ import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
 import { CastScreen } from "./cast/CastScreen";
+import { NpcLibraryScreen } from "./cast/NpcLibraryScreen";
 import { NpcScreen } from "./cast/NpcScreen";
 import { PlayerNpcChatScreen } from "./cast/PlayerNpcChatScreen";
 import { CharacterCreateScreen } from "./characters/CharacterCreateScreen";
@@ -371,6 +372,13 @@ const libraryMagicItemsRoute = createRoute({
   component: MagicItemLibraryScreen,
 });
 
+/** Reusable account-owned NPC sources, copied into campaigns as snapshots. */
+const libraryNpcsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/library/npcs",
+  component: NpcLibraryScreen,
+});
+
 /**
  * The Chronicle names a campaign for the same reason the bestiary does: every
  * source it reads — `sessions.list`, `recap.read`, `search.search` — hangs off
@@ -558,6 +566,7 @@ export const routeTree = rootRoute.addChildren([
   librarySpellsRoute,
   libraryEquipmentRoute,
   libraryMagicItemsRoute,
+  libraryNpcsRoute,
   campaignRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
@@ -617,6 +626,7 @@ export const routes = {
   librarySpells: librarySpellsRoute,
   libraryEquipment: libraryEquipmentRoute,
   libraryMagicItems: libraryMagicItemsRoute,
+  libraryNpcs: libraryNpcsRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,

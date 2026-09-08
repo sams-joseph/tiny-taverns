@@ -21,6 +21,7 @@ export const LibraryShareKind = Schema.Literals([
   "magic_item",
   "rule_article",
   "feat",
+  "npc",
 ]);
 export type LibraryShareKind = typeof LibraryShareKind.Type;
 
@@ -28,7 +29,7 @@ export class GroupLibraryShare extends Schema.Class<GroupLibraryShare>("GroupLib
   groupId: GroupId,
   ownerAccountId: AccountId,
   kind: LibraryShareKind,
-  /** The shared original's own id, in whichever of the seven tables `kind` names. */
+  /** The shared original's own id, in whichever of the copyable Library tables `kind` names. */
   resourceId: Schema.String.check(Schema.isUUID()),
   /**
    * The original's display name, resolved at read time from the row itself —

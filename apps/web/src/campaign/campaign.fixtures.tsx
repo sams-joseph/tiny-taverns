@@ -189,6 +189,8 @@ export const cazril = {
   id: npcId,
   campaignId,
   derivedFrom: null,
+  derivedFromVersion: null,
+  derivedFromName: null,
   name: "Cazril",
   role: "the ferryman at the crossing",
   persona: {
@@ -203,6 +205,22 @@ export const cazril = {
     boundaries: { refuses: ["Naming the hag"] },
   },
   privateMaterial: { secrets: "The hag pays him in years. He has three left." },
+  version: 2,
+  archivedAt: null,
+  visibility: "dm",
+  origin: "authored",
+  assistantTurnId: null,
+  createdAt: stamps.createdAt,
+  updatedAt: stamps.updatedAt,
+};
+
+export const cazrilSource = {
+  id: "2b1f2a1e-0000-4000-8000-00000000d0c0",
+  accountId: theDmAccountId,
+  name: "Cazril",
+  role: "the ferryman at the crossing",
+  persona: cazril.persona,
+  privateMaterial: cazril.privateMaterial,
   version: 2,
   archivedAt: null,
   visibility: "dm",
@@ -1325,6 +1343,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     ["GET /library/magic-items", { status: 200, body: page([lanternRing]) }],
     ["GET /library/compendium", { status: 200, body: page([combatRuleArticle]) }],
     ["GET /library/feats", { status: 200, body: page(libraryFeats) }],
+    ["GET /library/npcs", { status: 200, body: [cazrilSource] }],
     [`GET /library/compendium/${ruleArticleId}`, { status: 200, body: combatRuleDetail }],
     // The rules vocabulary this table builds characters from — the create
     // form's pickers: the shared bundle plus what reaches this table through

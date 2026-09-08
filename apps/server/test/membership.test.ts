@@ -225,6 +225,7 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Memberships.ts",
       "repo/NpcMemories.ts",
       "repo/NpcThreads.ts",
+      "repo/Npcs.ts",
       "repo/Options.ts",
       "repo/Party.ts",
       "repo/PlayerTable.ts",

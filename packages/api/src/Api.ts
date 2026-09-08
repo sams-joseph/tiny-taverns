@@ -140,6 +140,7 @@ import {
   NpcMemoryUpdate,
   NpcPlayerStatus,
   NpcRehearsalStatus,
+  NpcSource,
   NpcRehearse,
   NpcTalk,
   NpcThread,
@@ -1329,6 +1330,42 @@ class LibraryGroup extends HttpApiGroup.make("library")
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
+    HttpApiEndpoint.get("npcs", "/npcs", {
+      query: NpcListFilter,
+      success: Schema.Array(NpcSource),
+    }),
+    HttpApiEndpoint.post("createNpc", "/npcs", {
+      payload: NpcCreate,
+      success: NpcSource,
+    }),
+    HttpApiEndpoint.get("findNpc", "/npcs/:npcId", {
+      params: { npcId: NpcId },
+      success: NpcSource,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("updateNpc", "/npcs/:npcId", {
+      params: { npcId: NpcId },
+      payload: NpcUpdate,
+      success: NpcSource,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("archiveNpc", "/npcs/:npcId/archive", {
+      params: { npcId: NpcId },
+      payload: Schema.Struct({}),
+      success: NpcSource,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("restoreNpc", "/npcs/:npcId/restore", {
+      params: { npcId: NpcId },
+      payload: Schema.Struct({}),
+      success: NpcSource,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeNpc", "/npcs/:npcId", {
+      params: { npcId: NpcId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("magicItems", "/magic-items", {
       query: MagicItemFilter,
       success: pageOf(MagicItem, MagicItemSort),
@@ -1736,6 +1773,17 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
     HttpApiEndpoint.post("create", "/", {
       params: { campaignId: CampaignId },
       payload: NpcCreate,
+      success: Npc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("sources", "/sources", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(NpcSource),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("copyFromSource", "/sources/:sourceNpcId/copy", {
+      params: { campaignId: CampaignId, sourceNpcId: NpcId },
+      payload: Schema.Struct({}),
       success: Npc,
       error: NotFound,
     }),

@@ -39,6 +39,8 @@ const cazril = new Npc({
   id: "2b1f2a1e-0000-4000-8000-00000000d0c1" as NpcId,
   campaignId: "2b1f2a1e-0000-4000-8000-00000000c0de" as CampaignId,
   derivedFrom: null,
+  derivedFromVersion: null,
+  derivedFromName: null,
   name: "Cazril",
   role: "the ferryman at the crossing",
   persona: {

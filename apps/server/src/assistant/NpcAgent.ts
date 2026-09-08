@@ -455,6 +455,8 @@ const promptNpc = (npc: PlayerNpc): Npc =>
     id: npc.id,
     campaignId: npc.campaignId,
     derivedFrom: null,
+    derivedFromVersion: null,
+    derivedFromName: null,
     name: npc.name,
     role: npc.role,
     persona: npc.persona,

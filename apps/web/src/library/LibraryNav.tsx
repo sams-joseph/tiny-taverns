@@ -5,9 +5,9 @@ import { cn, tabsTriggerVariants } from "@taverns/ui";
  * The shelves inside the global Library destination.
  *
  * The global row has one *Library* item; the split between monsters,
- * character-building vocabulary, reference compendium articles, spells, mundane equipment and magic
- * items live one level down, as route tabs. None of these routes names a campaign, because each is
- * account-owned originals rather than campaign copies.
+ * character-building vocabulary, reference compendium articles, spells, mundane equipment, magic
+ * items and reusable NPC sources live one level down, as route tabs. None of these routes names a
+ * campaign, because each is account-owned originals rather than campaign copies.
  */
 export function LibraryNav() {
   const matchRoute = useMatchRoute();
@@ -21,7 +21,9 @@ export function LibraryNav() {
           ? "equipment"
           : matchRoute({ to: "/library/magic-items" })
             ? "magic-items"
-            : "creatures";
+            : matchRoute({ to: "/library/npcs" })
+              ? "npcs"
+              : "creatures";
 
   return (
     <nav aria-label="Library shelves" className="flex items-stretch self-stretch">
@@ -43,6 +45,9 @@ export function LibraryNav() {
       <ShelfLink to="/library/magic-items" active={active === "magic-items"}>
         Magic items
       </ShelfLink>
+      <ShelfLink to="/library/npcs" active={active === "npcs"}>
+        NPCs
+      </ShelfLink>
     </nav>
   );
 }
@@ -58,7 +63,8 @@ function ShelfLink({
     | "/library/compendium"
     | "/library/spells"
     | "/library/equipment"
-    | "/library/magic-items";
+    | "/library/magic-items"
+    | "/library/npcs";
   readonly active: boolean;
   readonly children: string;
 }) {

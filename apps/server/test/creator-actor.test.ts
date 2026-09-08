@@ -449,7 +449,7 @@ describe("the scope, counted", () => {
     // targets, the audit list, the spend and the undo all take the creator
     // proof for the live fight rather than a campaign id a model or client can
     // aim.
-    // Twenty-five through fifty are the cast: `Npcs`, `NpcKnowledge`,
+    // Twenty-five through fifty-two are the cast: `Npcs`, `NpcKnowledge`,
     // `NpcMemories` and `NpcThreads`, gated from the day the endpoints were
     // declared, because an NPC row and its context carry creator-only material
     // and the slice has no player projection to diverge from — "gate first,
@@ -457,7 +457,7 @@ describe("the scope, counted", () => {
     // those files restating their own methods' first parameter (`one`,
     // `threadReachable`, `ensureThread`), which this occurrence count sees
     // exactly as it sees `Proposals.ts`'s duplicate below.
-    expect(gated).toBe(53);
+    expect(gated).toBe(55);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -664,8 +664,11 @@ describe("the scope, counted", () => {
     // is the one hundred and thirty-second: a Library read like the shelf's
     // other five — the rows are in no campaign, so there is no membership to
     // prove and no player projection to diverge from — reached by Hob's
-    // character draft to link a carried name to its bundled row.
-    expect(ungated).toBe(141);
+    // character draft to link a carried name to its bundled row. NPC Library
+    // sources add seven account-owned source methods for the same reason: their
+    // rows are originals in no campaign, so a campaign proof is the wrong
+    // instrument, while copying into a campaign is separately creator-gated.
+    expect(ungated).toBe(148);
   });
 });
 

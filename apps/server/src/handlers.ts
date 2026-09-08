@@ -446,6 +446,7 @@ const LibraryLive = HttpApiBuilder.group(
     const magicItems = yield* MagicItems;
     const ruleArticles = yield* RuleArticles;
     const feats = yield* Feats;
+    const npcs = yield* Npcs;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -489,6 +490,13 @@ const LibraryLive = HttpApiBuilder.group(
         equipment.libraryUpdate(params.equipmentId, payload),
       )
       .handle("removeEquipment", ({ params }) => equipment.libraryRemove(params.equipmentId))
+      .handle("npcs", ({ query }) => npcs.library(query))
+      .handle("createNpc", ({ payload }) => npcs.libraryCreate(payload))
+      .handle("findNpc", ({ params }) => npcs.libraryFindById(params.npcId))
+      .handle("updateNpc", ({ params, payload }) => npcs.libraryUpdate(params.npcId, payload))
+      .handle("archiveNpc", ({ params }) => npcs.libraryArchive(params.npcId))
+      .handle("restoreNpc", ({ params }) => npcs.libraryRestore(params.npcId))
+      .handle("removeNpc", ({ params }) => npcs.libraryRemove(params.npcId))
       .handle("magicItems", ({ query }) => magicItems.library(query))
       .handle("createMagicItem", ({ payload }) => magicItems.libraryCreate(payload))
       .handle("findMagicItem", ({ params }) => magicItems.libraryFindById(params.magicItemId))
@@ -822,6 +830,12 @@ const NpcsLive = HttpApiBuilder.group(
       )
       .handle("create", ({ params, payload }) =>
         asCreator(params.campaignId, (creator) => npcs.create(creator, payload)),
+      )
+      .handle("sources", ({ params }) =>
+        asCreator(params.campaignId, (creator) => npcs.sourcesForCampaign(creator)),
+      )
+      .handle("copyFromSource", ({ params }) =>
+        asCreator(params.campaignId, (creator) => npcs.copyFromSource(creator, params.sourceNpcId)),
       )
       .handle("findById", ({ params }) =>
         asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),
