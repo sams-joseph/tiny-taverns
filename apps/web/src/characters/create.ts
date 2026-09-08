@@ -1,6 +1,7 @@
 import type {
   AbilityBonus,
   AbilityKey,
+  BackgroundOption,
   CampaignMembership,
   CharacterOption,
   CharacterOwnCreate,
@@ -69,6 +70,13 @@ export interface CharacterDraft {
    */
   readonly kitChoices: ReadonlyArray<KitPick>;
   readonly background: string;
+  /**
+   * The same for the background's kit — one entry per its `startingKit.choices`
+   * entry. A 2014 background's one choice is a category (*"any holy symbol"*),
+   * so the pick is which row was taken from it. Reset when the background
+   * changes, because the choices are the background's.
+   */
+  readonly backgroundKitChoices: ReadonlyArray<KitPick>;
   readonly ac: string;
   readonly hpMax: string;
   readonly sheetUrl: string;
@@ -86,6 +94,7 @@ export const emptyDraft: CharacterDraft = {
   className: "",
   kitChoices: [],
   background: "",
+  backgroundKitChoices: [],
   ac: "",
   hpMax: "",
   sheetUrl: "",
@@ -221,20 +230,56 @@ export const kitRowsIn = (
     inCategory(row, categoryIndex),
   );
 
+export const backgroundIn = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): BackgroundOption | undefined =>
+  asBackgroundOption(optionNamed(options, "background", draft.background));
+
+/** The picked background's structured kit, when the importer wrote one. */
+export const backgroundKitOf = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): StartingKit | undefined => backgroundIn(draft, options)?.body.startingKit;
+
+/** The rows a background's kit category offers — the holy symbols, say. */
+export const backgroundKitRowsIn = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+  categoryIndex: string,
+): ReadonlyArray<KitEquipment> =>
+  (backgroundIn(draft, options)?.details?.equipment ?? []).filter((row) =>
+    inCategory(row, categoryIndex),
+  );
+
+/**
+ * Which of the two kits a pick is about. The class's and the background's are
+ * the same shape (`StartingKit`, `KitPick`), read by the same `kitLinesFor`,
+ * so the three pick helpers below take the field rather than existing twice.
+ */
+export type KitField = "kitChoices" | "backgroundKitChoices";
+
 /** A class pick resets the kit to side (a) throughout: the choices are the class's own. */
 export const withKitDefaults = (
   draft: CharacterDraft,
   options: ReadonlyArray<CharacterOption>,
-): CharacterDraft => ({ ...draft, kitChoices: defaultKitPicks(kitOf(draft, options)) });
+  field: KitField = "kitChoices",
+): CharacterDraft => ({
+  ...draft,
+  [field]: defaultKitPicks(
+    field === "kitChoices" ? kitOf(draft, options) : backgroundKitOf(draft, options),
+  ),
+});
 
 /** Take side `option` of choice `index`; the side's own picks start empty. */
 export const pickKitSide = (
   draft: CharacterDraft,
   index: number,
   option: number,
+  field: KitField = "kitChoices",
 ): CharacterDraft => ({
   ...draft,
-  kitChoices: draft.kitChoices.map((pick, at) => (at === index ? { option, picks: [] } : pick)),
+  [field]: draft[field].map((pick, at) => (at === index ? { option, picks: [] } : pick)),
 });
 
 /** Pick the `slot`th row of choice `index`'s category lines, in the side's order. */
@@ -243,9 +288,10 @@ export const pickKitRow = (
   index: number,
   slot: number,
   equipmentId: EquipmentId | undefined,
+  field: KitField = "kitChoices",
 ): CharacterDraft => ({
   ...draft,
-  kitChoices: draft.kitChoices.map((pick, at) => {
+  [field]: draft[field].map((pick, at) => {
     if (at !== index) return pick;
     // The picks are the dense list `kitLinesFor` consumes in order, so a slot
     // cleared in the middle closes up rather than leaving a hole.
@@ -313,10 +359,11 @@ export const payloadFrom = (
     classOption: classIn(draft, options),
     raceOption: asRaceOption(raceOption),
     subraceName: subraceOption?.name ?? (subrace === "" ? undefined : subrace),
-    backgroundOption: asBackgroundOption(optionNamed(options, "background", draft.background)),
+    backgroundOption: backgroundIn(draft, options),
     level: level ?? undefined,
     abilities: seed.abilities,
     kitChoices: draft.kitChoices,
+    backgroundKitChoices: draft.backgroundKitChoices,
   });
   const abilities = withSavingThrows(seed.abilities, grants.savingThrows, grants.proficiencyBonus);
   const identity: SheetIdentity = {

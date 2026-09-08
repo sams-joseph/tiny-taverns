@@ -734,14 +734,88 @@ const bundledRace = (
   ] as ReadonlyArray<readonly [string, Record<string, unknown>]>
 ).map(([name, body], index) => bundled("race", index, name, body));
 
-const bundledBackgrounds = ["Acolyte", "Sage", "Soldier", "Wayfarer"].map((name, index) =>
-  bundled("background", index, name, {
+/** Three bundled `equipment` rows the Acolyte's kit names and offers. */
+export const clothesRow = {
+  ...shieldRow,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0011",
+  index: "clothes-common",
+  name: "Clothes, common",
+  armorCategory: null,
+  weight: 3,
+  gearCategoryIndex: "standard-gear",
+};
+export const pouchRow = {
+  ...clothesRow,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0012",
+  index: "pouch",
+  name: "Pouch",
+  weight: 1,
+};
+export const amuletRow = {
+  ...clothesRow,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0013",
+  index: "amulet",
+  name: "Amulet",
+  weight: 1,
+  gearCategoryIndex: "holy-symbols",
+};
+
+const bundledBackgrounds = ["Acolyte", "Sage", "Soldier", "Wayfarer"].map((name, index) => {
+  const row = bundled("background", index, name, {
     proficiencies: [],
     languages: [],
     equipment: [],
     choices: [],
-  }),
-);
+  });
+  if (name !== "Acolyte") return row;
+  /**
+   * The one bundled background with its kit written out the way the importer
+   * sends it since 2026-09-08: the prose list beside the structured kit, two
+   * counted lines naming their rows and the holy-symbol category the player
+   * picks from, with the rows on `details.equipment` as `optionDetailsFor`
+   * hydrates them.
+   */
+  return {
+    ...row,
+    body: {
+      ...row.body,
+      equipment: ["1 × Clothes, common", "1 × Pouch", "Choose 1 equipment"],
+      gold: "15 gp",
+      startingKit: {
+        fixed: [
+          { name: "Clothes, common", quantity: 1, equipmentId: clothesRow.id },
+          { name: "Pouch", quantity: 1, equipmentId: pouchRow.id },
+        ],
+        choices: [
+          {
+            desc: "",
+            options: [
+              {
+                label: "Any holy symbol",
+                lines: [
+                  {
+                    name: "Any holy symbol",
+                    quantity: 1,
+                    category: { index: "holy-symbols", name: "Holy Symbols" },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    details: {
+      subraces: [],
+      abilityBonuses: [],
+      languages: [],
+      proficiencies: [],
+      traits: [],
+      choices: [],
+      equipment: [clothesRow, pouchRow, amuletRow],
+    },
+  };
+});
 
 /** Named for the tests that reach for one by hand. */
 export const druidOption = { ...bundledClasses[3]!, id: druidOptionId };

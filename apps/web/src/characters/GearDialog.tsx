@@ -1,5 +1,7 @@
-import type { InventoryItem, OwnedCharacter } from "@taverns/api";
+import type { Equipment, EquipmentId, InventoryItem, OwnedCharacter } from "@taverns/api";
+import { gearLineFor, kitEquipmentOf, sheetWithGear } from "@taverns/api";
 import {
+  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -16,10 +18,11 @@ import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure } from "../ui/form";
-import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
+import { EquipmentPicker } from "./EquipmentPicker";
+import { ownCharacterWrites, saveOwnCharacter } from "./write";
 
 /**
- * What they are carrying — `sheet.inventory`, behind the Gear tab's *Add*.
+ * What they are carrying — `sheet.inventory`, behind the Gear section's *Add*.
  *
  * **It opens with a blank line ready to type, and it edits the whole list.**
  * The button that opens it says *Add*, which is the drawing's word and the
@@ -28,6 +31,25 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * too. That is `bestiary/CreatureForm.tsx`'s trait editor, which is this
  * repository's one worked example of editing an array inside a document, and
  * the shape is deliberately its rather than a second one.
+ *
+ * **Since 2026-09-08 a line can be picked from the equipment catalogue as well
+ * as typed.** The captain's report was that a character's gear was not
+ * connected to the equipment table; the starting kit already was (every kit
+ * line names its row), and this dialog was the one place a line came from
+ * with no way to name one. `EquipmentPicker` is the search-and-pick over the
+ * owner's Library shelf — the bundle plus their own originals, the same read
+ * and the same facets the Library's equipment tab uses — and a pick writes a
+ * line with the row's name, its weight and its `equipmentId`, through
+ * `gearLineFor`. Quantity, note and equipped stay the player's; **renaming a
+ * linked line keeps the link**, because the id is provenance the way the kit's
+ * is, not a claim about the text. A free-text line is still a free-text line.
+ *
+ * **A weapon picked here gets its attack, and a weapon removed loses it** —
+ * `sheetWithGear` on save, which derives the line through the kit's own
+ * `weaponAttack` (the 2014 ability and proficiency rule, once) and retires
+ * the derived attack of a link that left the list. The rows it needs are the
+ * ones picked in this dialog plus the ones the sheet already loaded for its
+ * linked lines (`rows`); a line whose row is out of reach keeps what it had.
  *
  * A line with no name is dropped rather than refused: `InventoryItem.name` is a
  * `NonEmptyString`, and an empty row is somebody who pressed *Add* and changed
@@ -49,9 +71,10 @@ interface DraftItem {
   readonly note: string;
   readonly equipped: boolean;
   /**
-   * Carried through untouched: the kit wrote it, the form does not draw it,
-   * and a save that dropped it would cut the weapon attack on `actions` off
-   * from the line it was derived from.
+   * The row the line names — carried through untouched on a kit line, written
+   * by a pick here. The form draws it as a badge and never edits it: a save
+   * that dropped it would cut the weapon attack on `actions` off from the line
+   * it was derived from.
    */
   readonly equipmentId: InventoryItem["equipmentId"];
 }
@@ -66,23 +89,29 @@ const blank = (key: string): DraftItem => ({
   equipmentId: undefined,
 });
 
+const draftOf = (key: string, item: InventoryItem): DraftItem => ({
+  key,
+  name: item.name,
+  quantity: item.quantity === undefined ? "" : String(item.quantity),
+  weight: item.weight ?? "",
+  note: item.note ?? "",
+  equipped: item.equipped === true,
+  equipmentId: item.equipmentId,
+});
+
 const draftsOf = (items: ReadonlyArray<InventoryItem>): ReadonlyArray<DraftItem> =>
-  items.map((item, index) => ({
-    key: `carried-${String(index)}`,
-    name: item.name,
-    quantity: item.quantity === undefined ? "" : String(item.quantity),
-    weight: item.weight ?? "",
-    note: item.note ?? "",
-    equipped: item.equipped === true,
-    equipmentId: item.equipmentId,
-  }));
+  items.map((item, index) => draftOf(`carried-${String(index)}`, item));
 
 /** `""` ⇄ absent, and a fraction of an item is not a thing to carry. */
 const parseCount = (raw: string): number | undefined =>
   raw.trim() === "" || !Number.isInteger(Number(raw)) ? undefined : Number(raw);
 
+const isBlank = (item: DraftItem): boolean =>
+  item.name.trim() === "" && item.equipmentId === undefined;
+
 export function GearDialog({
   owned,
+  rows,
   onClose,
   onSaved,
   onReload,
@@ -93,6 +122,12 @@ export function GearDialog({
    * longer names a campaign on its own.
    */
   readonly owned: OwnedCharacter;
+  /**
+   * The equipment rows the sheet's linked lines name, as the sheet already
+   * loaded them — what a weapon on the list derives its attack from if it has
+   * none yet, and what names the row on a linked line's badge.
+   */
+  readonly rows: ReadonlyArray<Equipment>;
   readonly onClose: () => void;
   readonly onSaved: () => void;
   /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
@@ -107,6 +142,13 @@ export function GearDialog({
   ]);
   const [nextKey, setNextKey] = useState(1);
   const [showProblems, setShowProblems] = useState(false);
+  const [picking, setPicking] = useState(false);
+  /** The rows picked in this dialog, kept whole for the save's derivation. */
+  const [picked, setPicked] = useState<ReadonlyMap<EquipmentId, Equipment>>(new Map());
+  const known = new Map<EquipmentId, Equipment>([
+    ...rows.map((row) => [row.id, row] as const),
+    ...picked,
+  ]);
 
   const { busy, failure, submit } = useMutation();
 
@@ -116,6 +158,24 @@ export function GearDialog({
   const addItem = () => {
     setItems((current) => [...current, blank(`new-${String(nextKey)}`)]);
     setNextKey((key) => key + 1);
+  };
+
+  /**
+   * A pick lands as a linked line — in place of the trailing blank when that
+   * is what is waiting, so the list does not grow an empty row under every
+   * pick — with the row kept for the attack derivation on save.
+   */
+  const pickRow = (row: Equipment) => {
+    const key = `picked-${String(nextKey)}`;
+    setNextKey((n) => n + 1);
+    setPicked((current) => new Map(current).set(row.id, row));
+    setItems((current) => {
+      const last = current[current.length - 1];
+      const line = draftOf(key, gearLineFor(row));
+      return last !== undefined && isBlank(last)
+        ? [...current.slice(0, -1), line, last]
+        : [...current, line];
+    });
   };
 
   /**
@@ -152,7 +212,9 @@ export function GearDialog({
 
     const saved = await submit(
       (client) =>
-        saveOwnCharacter(client, character, { sheet: sheetWith(character, { inventory }) }),
+        saveOwnCharacter(client, character, {
+          sheet: sheetWithGear(character.sheet, inventory, [...known.values()].map(kitEquipmentOf)),
+        }),
       ownCharacterWrites(owned),
     );
     if (Result.isSuccess(saved)) onSaved();
@@ -160,95 +222,130 @@ export function GearDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Edit your gear">
+      <DialogContent aria-label="Edit your gear" className="@container">
         <DialogHeader>
           <DialogTitle>What you are carrying</DialogTitle>
           <DialogDescription>
-            A line per thing. Leave one blank and it is not saved.
+            Pick from the catalogue, or type a line. Leave one blank and it is not saved.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto px-gutter py-3">
-          {items.map((item, index) => (
-            <div
-              key={item.key}
-              className="flex flex-col gap-2.5 rounded-card bg-surface-sunken p-3"
-            >
-              <div className="flex flex-wrap items-end gap-2.5">
-                <Field label="Item" htmlFor={`gear-name-${item.key}`}>
-                  <Input
-                    id={`gear-name-${item.key}`}
-                    placeholder="Halberd"
-                    value={item.name}
-                    onChange={(event) => setItem(item.key, { name: event.target.value })}
-                    className="w-56"
-                  />
-                </Field>
-                <Field
-                  label="How many"
-                  htmlFor={`gear-quantity-${item.key}`}
-                  error={
-                    showProblems && badCounts.some((bad) => bad.key === item.key)
-                      ? "A whole number."
-                      : undefined
-                  }
-                >
-                  <Input
-                    id={`gear-quantity-${item.key}`}
-                    mono
-                    type="number"
-                    min={0}
-                    value={item.quantity}
-                    onChange={(event) => setItem(item.key, { quantity: event.target.value })}
-                    className="w-24"
-                  />
-                </Field>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="mb-0.5 ml-auto"
-                  aria-label={`Remove item ${String(index + 1)}`}
-                  onClick={() =>
-                    setItems((current) => current.filter((entry) => entry.key !== item.key))
-                  }
-                >
-                  <Icon name="trash-2" size={15} />
-                </Button>
-              </div>
-              <div className="flex flex-wrap items-end gap-2.5">
-                <Field label="Weight" htmlFor={`gear-weight-${item.key}`}>
-                  <Input
-                    id={`gear-weight-${item.key}`}
-                    placeholder="6 lb"
-                    value={item.weight}
-                    onChange={(event) => setItem(item.key, { weight: event.target.value })}
-                    className="w-28"
-                  />
-                </Field>
-                <Field
-                  label="Note"
-                  htmlFor={`gear-note-${item.key}`}
-                  hint="Where it came from, what it is for."
-                >
-                  <Input
-                    id={`gear-note-${item.key}`}
-                    placeholder="From session 11"
-                    value={item.note}
-                    onChange={(event) => setItem(item.key, { note: event.target.value })}
-                    className="w-48"
-                  />
-                </Field>
-                <div className="mb-2 flex items-center gap-2.5">
-                  <Switch
-                    id={`gear-equipped-${item.key}`}
-                    checked={item.equipped}
-                    onCheckedChange={(next) => setItem(item.key, { equipped: next })}
-                  />
-                  <Label htmlFor={`gear-equipped-${item.key}`}>Equipped</Label>
-                </div>
-              </div>
+          {/* The catalogue, behind one press: a search box and a list is most
+              of a dialog on its own, and a player who came to tick *equipped*
+              on the halberd should not have to scroll past it. */}
+          <div className="flex flex-col gap-2">
+            <div>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-expanded={picking}
+                onClick={() => setPicking((open) => !open)}
+              >
+                <Icon name={picking ? "chevron-up" : "search"} size={13} />
+                {picking ? "Hide the catalogue" : "Pick from the catalogue"}
+              </Button>
             </div>
-          ))}
+            {picking && <EquipmentPicker onPick={pickRow} />}
+          </div>
+
+          {items.map((item, index) => {
+            const row =
+              item.equipmentId === undefined || item.equipmentId === null
+                ? undefined
+                : known.get(item.equipmentId);
+            return (
+              <div
+                key={item.key}
+                className="flex flex-col gap-2.5 rounded-card bg-surface-sunken p-3"
+              >
+                <div className="flex flex-wrap items-end gap-2.5">
+                  <Field label="Item" htmlFor={`gear-name-${item.key}`}>
+                    <Input
+                      id={`gear-name-${item.key}`}
+                      placeholder="Halberd"
+                      value={item.name}
+                      onChange={(event) => setItem(item.key, { name: event.target.value })}
+                      className="w-56"
+                    />
+                  </Field>
+                  <Field
+                    label="How many"
+                    htmlFor={`gear-quantity-${item.key}`}
+                    error={
+                      showProblems && badCounts.some((bad) => bad.key === item.key)
+                        ? "A whole number."
+                        : undefined
+                    }
+                  >
+                    <Input
+                      id={`gear-quantity-${item.key}`}
+                      mono
+                      type="number"
+                      min={0}
+                      value={item.quantity}
+                      onChange={(event) => setItem(item.key, { quantity: event.target.value })}
+                      className="w-24"
+                    />
+                  </Field>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mb-0.5 ml-auto"
+                    aria-label={`Remove item ${String(index + 1)}`}
+                    onClick={() =>
+                      setItems((current) => current.filter((entry) => entry.key !== item.key))
+                    }
+                  >
+                    <Icon name="trash-2" size={15} />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-end gap-2.5">
+                  <Field label="Weight" htmlFor={`gear-weight-${item.key}`}>
+                    <Input
+                      id={`gear-weight-${item.key}`}
+                      placeholder="6 lb"
+                      value={item.weight}
+                      onChange={(event) => setItem(item.key, { weight: event.target.value })}
+                      className="w-28"
+                    />
+                  </Field>
+                  <Field
+                    label="Note"
+                    htmlFor={`gear-note-${item.key}`}
+                    hint="Where it came from, what it is for."
+                  >
+                    <Input
+                      id={`gear-note-${item.key}`}
+                      placeholder="From session 11"
+                      value={item.note}
+                      onChange={(event) => setItem(item.key, { note: event.target.value })}
+                      className="w-48"
+                    />
+                  </Field>
+                  <div className="mb-2 flex items-center gap-2.5">
+                    <Switch
+                      id={`gear-equipped-${item.key}`}
+                      checked={item.equipped}
+                      onCheckedChange={(next) => setItem(item.key, { equipped: next })}
+                    />
+                    <Label htmlFor={`gear-equipped-${item.key}`}>Equipped</Label>
+                  </div>
+                </div>
+                {item.equipmentId !== undefined && item.equipmentId !== null && (
+                  /* The link, said out loud so a renamed line is legibly still
+                     the row it came from. Not a control: the id is provenance,
+                     and removing the line is how it is let go of. */
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      <Icon name="link" size={11} />
+                      {row === undefined ? "Linked to the catalogue" : `Linked to ${row.name}`}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           <div>
             <Button variant="outline" size="sm" onClick={addItem}>

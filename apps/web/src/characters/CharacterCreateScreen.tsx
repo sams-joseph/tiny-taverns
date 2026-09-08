@@ -24,6 +24,8 @@ import { abilitySummary, type AbilityDraft } from "./abilities";
 import { AbilityScoresDialog } from "./AbilitiesDialog";
 import {
   emptyDraft,
+  backgroundKitOf,
+  backgroundKitRowsIn,
   kitOf,
   kitRowsIn,
   MAX_AC,
@@ -44,8 +46,9 @@ import {
   type SeededField,
 } from "./create";
 import { DraftAside } from "./DraftAside";
+import { KitFields } from "./KitFields";
 import { DraftCard } from "./DraftCard";
-import { ABILITY_KEYS, type AbilityKey, type EquipmentId } from "@taverns/api";
+import { ABILITY_KEYS, type AbilityKey } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
 import { characterCreateWrites, createOwnCharacter } from "./write";
@@ -185,9 +188,14 @@ export function CharacterCreateScreen() {
           : { ...current, [key]: value };
       // A class pick resets the kit to side (a) throughout — the choices are
       // the class's own, and a pick made against another class's list would
-      // point at a side that no longer exists.
+      // point at a side that no longer exists. A background pick does the
+      // same to its own kit.
       return seededDraft(
-        key === "className" ? withKitDefaults(next, options) : next,
+        key === "className"
+          ? withKitDefaults(next, options)
+          : key === "background"
+            ? withKitDefaults(next, options, "backgroundKitChoices")
+            : next,
         edited,
         options,
       );
@@ -259,6 +267,8 @@ export function CharacterCreateScreen() {
   const backgrounds = options.filter((option) => option.kind === "background");
   /** The picked class's starting kit, for the picker below the three selects. */
   const kit = kitOf(draft, options);
+  /** And the picked background's, drawn under it when the importer wrote one. */
+  const backgroundKit = backgroundKitOf(draft, options);
   const selectedRace = raceIn(draft, options);
   const subraces = subraceOptionsOf(selectedRace);
   const raceBonuses = selectedRaceBonuses(draft, options);
@@ -716,125 +726,48 @@ export function CharacterCreateScreen() {
                   </Field>
                 </div>
 
-                {/* **The starting kit, as the source structures it**: the lines
-                    every member of the class carries, then one select per
-                    *(a)/(b)* choice, and — where a side says *"any martial
-                    weapon"* — one select per pick over that category's rows.
+                {/* **The starting kits, as the source structures them** — the
+                    class's, then the background's, each through `KitFields`.
                     Side (a) is the default so an untouched form still carries
                     a coherent kit; a category left unpicked lands on the Gear
-                    section as a line with no weapon attack behind it, rather
-                    than as a weapon nobody chose. Both sides are listed and the
-                    pick decides, which is what `sheetGrantsFor` reads. */}
-                {kit !== undefined && (kit.fixed.length > 0 || kit.choices.length > 0) && (
-                  <fieldset className="flex flex-col gap-2.5">
-                    <legend className="text-label leading-snug font-semibold text-heading">
-                      Starting kit
-                    </legend>
-                    {kit.fixed.length > 0 && (
-                      <p className="text-caption leading-body text-muted-foreground">
-                        Comes with{" "}
-                        {kit.fixed
-                          .map((line) =>
-                            line.quantity > 1
-                              ? `${String(line.quantity)} × ${line.name}`
-                              : line.name,
-                          )
-                          .join(", ")}
-                        .
-                      </p>
-                    )}
-                    {kit.choices.map((choice, index) => {
-                      const taken = draft.kitChoices[index] ?? { option: 0, picks: [] };
-                      const side = choice.options[taken.option] ?? choice.options[0];
-                      const slots = (side?.lines ?? []).flatMap((line) =>
-                        line.category === undefined
-                          ? []
-                          : Array.from({ length: line.quantity }, (_, at) => ({
-                              name:
-                                line.quantity > 1 ? `${line.name} (${String(at + 1)})` : line.name,
-                              category: line.category!,
-                            })),
-                      );
-                      return (
-                        <div
-                          key={`${choice.desc}-${String(index)}`}
-                          className="flex flex-wrap items-end gap-2.5"
-                        >
-                          <Field
-                            label={`Kit choice ${String(index + 1)}`}
-                            htmlFor={`new-character-kit-${String(index)}`}
-                            hint={choice.desc}
-                          >
-                            <Select
-                              value={String(taken.option)}
-                              onValueChange={(value) =>
-                                setDraft((current) => pickKitSide(current, index, Number(value)))
-                              }
-                            >
-                              <SelectTrigger
-                                id={`new-character-kit-${String(index)}`}
-                                className="w-64"
-                              >
-                                <SelectValue>
-                                  {(value) => choice.options[Number(value)]?.label ?? "Pick one"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {choice.options.map((option, at) => (
-                                  <SelectItem key={option.label} value={String(at)}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                          {slots.map((slot, at) => {
-                            const rows = kitRowsIn(draft, options, slot.category.index);
-                            const picked = taken.picks[at] ?? "";
-                            return (
-                              <Field
-                                key={`${slot.category.index}-${String(at)}`}
-                                label={slot.name}
-                                htmlFor={`new-character-kit-${String(index)}-${String(at)}`}
-                              >
-                                <Select
-                                  value={picked}
-                                  onValueChange={(value) =>
-                                    setDraft((current) =>
-                                      pickKitRow(
-                                        current,
-                                        index,
-                                        at,
-                                        value === "" ? undefined : (String(value) as EquipmentId),
-                                      ),
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger
-                                    id={`new-character-kit-${String(index)}-${String(at)}`}
-                                    className="w-48"
-                                  >
-                                    <SelectValue>
-                                      {(value) =>
-                                        rows.find((row) => row.id === value)?.name ?? "Pick one"
-                                      }
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {rows.map((row) => (
-                                      <SelectItem key={row.id} value={row.id}>
-                                        {row.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </Field>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                  </fieldset>
+                    section as a line with no row behind it, rather than as a
+                    thing nobody chose. Both sides are listed and the pick
+                    decides, which is what `sheetGrantsFor` reads. */}
+                {kit !== undefined && (
+                  <KitFields
+                    idPrefix="new-character-kit"
+                    legend="Starting kit"
+                    choiceLabel="Kit choice"
+                    kit={kit}
+                    choices={draft.kitChoices}
+                    rowsFor={(categoryIndex) => kitRowsIn(draft, options, categoryIndex)}
+                    onSide={(index, option) =>
+                      setDraft((current) => pickKitSide(current, index, option))
+                    }
+                    onRow={(index, slot, equipmentId) =>
+                      setDraft((current) => pickKitRow(current, index, slot, equipmentId))
+                    }
+                  />
+                )}
+                {backgroundKit !== undefined && (
+                  <KitFields
+                    idPrefix="new-character-background-kit"
+                    legend="Background kit"
+                    choiceLabel="Background kit choice"
+                    kit={backgroundKit}
+                    choices={draft.backgroundKitChoices}
+                    rowsFor={(categoryIndex) => backgroundKitRowsIn(draft, options, categoryIndex)}
+                    onSide={(index, option) =>
+                      setDraft((current) =>
+                        pickKitSide(current, index, option, "backgroundKitChoices"),
+                      )
+                    }
+                    onRow={(index, slot, equipmentId) =>
+                      setDraft((current) =>
+                        pickKitRow(current, index, slot, equipmentId, "backgroundKitChoices"),
+                      )
+                    }
+                  />
                 )}
 
                 {choice !== undefined && (

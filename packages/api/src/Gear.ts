@@ -156,23 +156,31 @@ export const sheetWithGear = (
   rows: ReadonlyArray<KitEquipment>,
 ): CharacterSheet => {
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const carried = new Set<EquipmentId>();
-  for (const item of inventory) {
-    if (item.equipmentId !== undefined && item.equipmentId !== null) carried.add(item.equipmentId);
-  }
+  const linked = (items: ReadonlyArray<InventoryItem>): Set<EquipmentId> => {
+    const ids = new Set<EquipmentId>();
+    for (const item of items) {
+      if (item.equipmentId !== undefined && item.equipmentId !== null) ids.add(item.equipmentId);
+    }
+    return ids;
+  };
+  const before = linked(sheet.inventory ?? []);
+  const carried = linked(inventory);
   const abilities = sheet.abilities;
   const proficiencyBonus = proficiencyBonusOf(sheet);
   const proficiencies = sheet.proficiencies ?? [];
   const attacksPerAction = attacksPerActionOf(sheet);
 
-  // Retire the derived weapon lines whose gear left the pack; keep everything
-  // else exactly as written, including a weapon line the player typed.
+  // Retire the derived weapon lines whose gear left the pack **in this edit**
+  // — linked before, not linked now. A derived line whose gear was never on
+  // the list as a link (a row written before lines carried one) is left as
+  // written, the way everything the player typed is.
   const kept = (sheet.actions ?? []).filter(
     (action) =>
       !isDerivedWeapon(action) ||
       action.equipmentId === undefined ||
       action.equipmentId === null ||
-      carried.has(action.equipmentId),
+      carried.has(action.equipmentId) ||
+      !before.has(action.equipmentId),
   );
   const alreadyDerived = new Set(
     kept.flatMap((action) =>

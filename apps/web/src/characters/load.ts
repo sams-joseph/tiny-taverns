@@ -4,9 +4,11 @@ import type {
   CharacterId,
   CharacterOption,
   CharacterSpellbook,
+  Equipment,
   OwnedCharacter,
   PlayerLiveTable,
 } from "@taverns/api";
+import { linkedEquipmentIds, MAX_PAGE_SIZE } from "@taverns/api";
 import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
@@ -146,6 +148,16 @@ export const characterSpellsAtom = Atom.family((characterId: CharacterId) =>
 export interface CharacterSheetView extends MyCharactersView {
   /** What is on that character's table right now — `null` when nothing is. */
   readonly live: PlayerLiveTable | null;
+  /**
+   * The equipment rows the sheet's gear lines name (`InventoryItem.equipmentId`),
+   * as many of them as this account can read — the bundle, plus its own
+   * Library originals, through `library.equipment`'s `ids` filter over the
+   * ordinary `libraryRowReadable`. A line whose row is missing here draws
+   * exactly as an unlinked one; the gear section reads facts off these and
+   * never follows the id anywhere else. Empty when nothing is linked, and then
+   * no request is made.
+   */
+  readonly gear: ReadonlyArray<Equipment>;
 }
 
 export const loadCharacterSheet = (characterId: CharacterId) => (client: TavernsClient) =>
@@ -158,12 +170,28 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
     // by joined_at — is the table the character has been at longest. A
     // character seated nowhere has no table to be live at.
     const seat = owned?.seats[0];
-    const live =
-      seat === undefined
-        ? null
-        : yield* client.table.read({ params: { campaignId: seat.campaignId } });
+    // The second round is two reads side by side: the live table, and the rows
+    // the gear names. Both hang off the first round's answer and neither
+    // depends on the other.
+    const ids = owned === undefined ? [] : linkedEquipmentIds(owned.character.sheet);
+    const [live, gear] = yield* Effect.all(
+      [
+        seat === undefined
+          ? Effect.succeed(null)
+          : client.table.read({ params: { campaignId: seat.campaignId } }),
+        ids.length === 0
+          ? Effect.succeed([] as ReadonlyArray<Equipment>)
+          : Effect.map(
+              client.library.equipment({
+                query: { ids: ids.slice(0, MAX_PAGE_SIZE), limit: MAX_PAGE_SIZE },
+              }),
+              (page) => page.items,
+            ),
+      ],
+      { concurrency: "unbounded" },
+    );
 
-    return { ...view, live } satisfies CharacterSheetView;
+    return { ...view, live, gear } satisfies CharacterSheetView;
   });
 
 /**

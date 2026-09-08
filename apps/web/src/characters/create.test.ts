@@ -20,6 +20,8 @@ import {
   seededDraft,
   tablesForNewCharacter,
   withKitDefaults,
+  backgroundKitOf,
+  backgroundKitRowsIn,
   type CharacterDraft,
   type SeededField,
 } from "./create";
@@ -196,6 +198,80 @@ const FIGHTER: CharacterOption = {
   },
 } as unknown as CharacterOption;
 
+/** Three gear rows the Acolyte's kit names and offers, as `details.equipment` carries them. */
+const CLOTHES: KitEquipment = {
+  ...SHIELD,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0011" as never,
+  index: "clothes-common",
+  name: "Clothes, common",
+  armorCategory: null,
+  weight: 3,
+  gearCategoryIndex: "standard-gear",
+};
+const POUCH: KitEquipment = {
+  ...CLOTHES,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0012" as never,
+  index: "pouch",
+  name: "Pouch",
+  weight: 1,
+};
+const AMULET: KitEquipment = {
+  ...CLOTHES,
+  id: "2b1f2a1e-0000-4000-8000-0000000e0013" as never,
+  index: "amulet",
+  name: "Amulet",
+  weight: 1,
+  gearCategoryIndex: "holy-symbols",
+};
+
+/**
+ * The Acolyte as the importer writes it since 2026-09-08: the prose list kept
+ * for the Rules screens, and the kit as structure beside it — two counted
+ * lines naming their rows, and the holy-symbol category the player picks
+ * from, with the rows on `details.equipment`.
+ */
+const ACOLYTE: CharacterOption = {
+  ...option("background", "Acolyte", {
+    proficiencies: ["Insight", "Religion"],
+    languages: [],
+    equipment: ["1 × Clothes, common", "1 × Pouch", "Choose 1 equipment"],
+    gold: "15 gp",
+    choices: [],
+    startingKit: {
+      fixed: [
+        { name: "Clothes, common", quantity: 1, equipmentId: CLOTHES.id },
+        { name: "Pouch", quantity: 1, equipmentId: POUCH.id },
+      ],
+      choices: [
+        {
+          desc: "",
+          options: [
+            {
+              label: "Any holy symbol",
+              lines: [
+                {
+                  name: "Any holy symbol",
+                  quantity: 1,
+                  category: { index: "holy-symbols", name: "Holy Symbols" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  details: {
+    subraces: [],
+    abilityBonuses: [],
+    languages: [],
+    proficiencies: [],
+    traits: [],
+    choices: [],
+    equipment: [CLOTHES, POUCH, AMULET],
+  },
+} as CharacterOption;
+
 const VOCABULARY: ReadonlyArray<CharacterOption> = [
   FIGHTER,
   option("class", "Druid", { hitDie: 8, unarmouredAc: ["DEX"] }),
@@ -243,6 +319,7 @@ const VOCABULARY: ReadonlyArray<CharacterOption> = [
     }),
   ),
   option("background", "Soldier", { proficiencies: [], languages: [], equipment: [], choices: [] }),
+  ACOLYTE,
   option("background", "Salt-runner", {
     proficiencies: ["Athletics"],
     languages: ["River cant"],
@@ -549,6 +626,43 @@ describe("the starting kit", () => {
     // Two handaxes are one attack line.
     expect(sheet?.actions?.filter((action) => action.name === "Handaxe")).toHaveLength(1);
     expect(sheet?.actions?.[0]).toMatchObject({ name: "Handaxe", hit: "+5", dice: "1d6+3" });
+  });
+
+  it("carries the background's kit as rows too, and takes its pick", () => {
+    const acolyte = withKitDefaults(
+      withKitDefaults(draftWith({ className: "Fighter", background: "Acolyte" }), VOCABULARY),
+      VOCABULARY,
+      "backgroundKitChoices",
+    );
+    expect(acolyte.backgroundKitChoices).toEqual([{ option: 0, picks: [] }]);
+    expect(backgroundKitOf(acolyte, VOCABULARY)?.fixed).toHaveLength(2);
+    expect(backgroundKitRowsIn(acolyte, VOCABULARY, "holy-symbols").map((row) => row.name)).toEqual(
+      ["Amulet"],
+    );
+
+    // Unpicked: the category stays a line, after the class kit's lines.
+    const unpicked = payloadFrom(acolyte, VOCABULARY).sheet;
+    expect(unpicked?.inventory).toEqual([
+      { name: "Any martial weapon", note: "Your pick" },
+      { name: "Shield", equipmentId: SHIELD.id },
+      { name: "Clothes, common", equipmentId: CLOTHES.id },
+      { name: "Pouch", equipmentId: POUCH.id },
+      { name: "Any holy symbol", note: "Your pick" },
+    ]);
+
+    // Picked: the row, linked, in the category's place — and no attack from a
+    // background's gear, which is never a weapon.
+    const picked = pickKitRow(acolyte, 0, 0, AMULET.id, "backgroundKitChoices");
+    const sheet = payloadFrom(picked, VOCABULARY).sheet;
+    expect(sheet?.inventory?.slice(-3)).toEqual([
+      { name: "Clothes, common", equipmentId: CLOTHES.id },
+      { name: "Pouch", equipmentId: POUCH.id },
+      { name: "Amulet", equipmentId: AMULET.id },
+    ]);
+    expect(sheet?.actions?.map((action) => action.name)).toEqual(["Second Wind"]);
+    // A background with no kit still lands its prose lines, unlinked.
+    const runner = payloadFrom(draftWith({ background: "Salt-runner" }), VOCABULARY).sheet;
+    expect(runner?.inventory).toEqual([{ name: "ferryman's token" }]);
   });
 
   it("closes a cleared pick up rather than leaving a hole", () => {

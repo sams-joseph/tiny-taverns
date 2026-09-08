@@ -2,6 +2,7 @@ import type {
   Ability,
   CampaignId,
   CharacterId,
+  Equipment,
   InventoryItem,
   OwnedCharacter,
   SheetAction,
@@ -18,6 +19,7 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
+import { DetailFacts } from "../ui/detail";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { AbilitiesDialog } from "./AbilitiesDialog";
@@ -26,6 +28,7 @@ import { campaignsAvailableToJoin } from "./join";
 import { BackstoryDialog } from "./BackstoryDialog";
 import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { GearDialog } from "./GearDialog";
+import { compactGearLine, gearFacts, gearWeight } from "./gearFacts";
 import { IdentityDialog } from "./IdentityDialog";
 import { SkillsDialog } from "./SkillsDialog";
 import { SpellPickerDialog } from "./SpellPickerDialog";
@@ -523,28 +526,67 @@ function RollLog({
   );
 }
 
-function InventoryLine({ item, first }: { readonly item: InventoryItem; readonly first: boolean }) {
+function InventoryLine({
+  item,
+  row,
+  first,
+}: {
+  readonly item: InventoryItem;
+  /** The equipment row the line names, when the sheet could read it. */
+  readonly row: Equipment | undefined;
+  readonly first: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const weight = gearWeight(item, row);
+  const detailsId = `gear-${item.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
-    <div
-      className={cn(
-        "flex min-h-10 flex-wrap items-center gap-2.5 py-1",
-        first ? "" : "border-t border-hairline",
-      )}
-    >
-      <Icon
-        name={item.equipped === true ? "shield" : "package"}
-        size={15}
-        className={item.equipped === true ? "shrink-0 text-accent-ink" : "shrink-0 text-faint"}
-      />
-      <span className="min-w-0 flex-1 text-body-s leading-body text-foreground">{item.name}</span>
-      {item.note !== undefined && item.note !== "" && <Badge variant="outline">{item.note}</Badge>}
-      {item.quantity !== undefined && (
-        <span className="font-mono text-mono leading-none text-muted-foreground">
-          ×{item.quantity}
-        </span>
-      )}
-      {item.weight !== undefined && item.weight !== "" && (
-        <span className="text-micro leading-none text-faint">{item.weight}</span>
+    <div className={cn("flex flex-col py-1", first ? "" : "border-t border-hairline")}>
+      <div className="flex min-h-10 flex-wrap items-center gap-2.5">
+        <Icon
+          name={item.equipped === true ? "shield" : "package"}
+          size={15}
+          className={item.equipped === true ? "shrink-0 text-accent-ink" : "shrink-0 text-faint"}
+        />
+        <div className="min-w-0 flex-1">
+          <span className="text-body-s leading-body text-foreground">{item.name}</span>
+          {row !== undefined && (
+            /* **The row's facts, compact, under the name.** A linked line
+               draws what its equipment row says — the kind of thing it is,
+               what it rolls or is worth, its cost — so the gear a character
+               carries reads as the catalogue's rows rather than as names. An
+               unlinked line, or one whose row is out of reach, draws exactly
+               as it always did: the name and whatever was typed beside it. */
+            <p className="text-micro leading-body text-faint">{compactGearLine(row)}</p>
+          )}
+        </div>
+        {item.note !== undefined && item.note !== "" && (
+          <Badge variant="outline">{item.note}</Badge>
+        )}
+        {item.quantity !== undefined && (
+          <span className="font-mono text-mono leading-none text-muted-foreground">
+            ×{item.quantity}
+          </span>
+        )}
+        {weight !== undefined && (
+          <span className="text-micro leading-none text-faint">{weight}</span>
+        )}
+        {row !== undefined && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-expanded={open}
+            aria-controls={detailsId}
+            aria-label={open ? `Hide details for ${item.name}` : `Show details for ${item.name}`}
+            onClick={() => setOpen((current) => !current)}
+          >
+            <Icon name={open ? "chevron-up" : "chevron-down"} size={14} />
+          </Button>
+        )}
+      </div>
+      {row !== undefined && open && (
+        <div id={detailsId} className="pb-2 pl-6.5">
+          <DetailFacts facts={gearFacts(row)} />
+        </div>
       )}
     </div>
   );
@@ -615,6 +657,7 @@ const EditButton = ({
 
 function SheetDocument({
   owned,
+  gearRows,
   sections,
   register,
   onEditAbilities,
@@ -625,6 +668,8 @@ function SheetDocument({
   rollCampaignId,
 }: {
   readonly owned: OwnedCharacter;
+  /** The equipment rows the gear lines name — see `CharacterSheetView.gear`. */
+  readonly gearRows: ReadonlyArray<Equipment>;
   readonly sections: ReadonlyArray<SheetSectionSpec>;
   readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
   readonly onEditAbilities: () => void;
@@ -646,6 +691,7 @@ function SheetDocument({
     { label: "Flaw", value: story?.flaw },
   ].flatMap(({ label, value }) => (value === undefined || value === "" ? [] : [{ label, value }]));
   const purse = sheet.currency === undefined ? [] : coins(sheet.currency);
+  const gearById = new Map(gearRows.map((row) => [row.id, row]));
   const drawn = (id: SheetSectionId) => sections.find((section) => section.id === id);
   const { busy, failure, submit } = useMutation();
   const [pending, setPending] = useState<Record<string, number>>({});
@@ -994,7 +1040,16 @@ function SheetDocument({
                 </p>
               ) : (
                 sheet.inventory.map((item, index) => (
-                  <InventoryLine key={item.name} item={item} first={index === 0} />
+                  <InventoryLine
+                    key={`${item.name}-${String(index)}`}
+                    item={item}
+                    row={
+                      item.equipmentId === undefined || item.equipmentId === null
+                        ? undefined
+                        : gearById.get(item.equipmentId)
+                    }
+                    first={index === 0}
+                  />
                 ))
               )}
             </div>
@@ -1458,6 +1513,7 @@ function LiveTableBanner({ banner }: { readonly banner: LiveBanner }) {
  */
 function SheetScroller({
   owned,
+  gearRows,
   banner,
   active,
   onActive,
@@ -1469,6 +1525,7 @@ function SheetScroller({
   rollCampaignId,
 }: {
   readonly owned: OwnedCharacter;
+  readonly gearRows: ReadonlyArray<Equipment>;
   readonly banner: LiveBanner | undefined;
   readonly rollCampaignId: CampaignId | undefined;
   readonly active: SheetSectionId;
@@ -1583,6 +1640,7 @@ function SheetScroller({
         <SectionSpine ref={spine} sections={sections} active={active} onGo={go} />
         <SheetDocument
           owned={owned}
+          gearRows={gearRows}
           sections={sections}
           register={register}
           onEditAbilities={() => onEdit("abilities")}
@@ -1610,7 +1668,9 @@ const sheetAtom = Atom.family((characterId: CharacterId) =>
   // sheet save re-reads the roster this screen picks its character out of, and
   // the live banner beside it is read in the round that follows. Nothing on
   // this screen writes the table, so there is no second key to name.
-  apiAtom(loadCharacterSheet(characterId), [reads.myCharacters]),
+  // …and the equipment Library, because the second round reads the rows the
+  // gear names from it: an original written on the shelf reaches the sheet.
+  apiAtom(loadCharacterSheet(characterId), [reads.myCharacters, reads.libraryEquipment]),
 );
 
 export function CharacterSheetScreen() {
@@ -1806,6 +1866,7 @@ export function CharacterSheetScreen() {
         ) : (
           <SheetScroller
             owned={owned}
+            gearRows={view.gear}
             banner={banner}
             active={lit}
             onActive={setActive}
@@ -1839,7 +1900,13 @@ export function CharacterSheetScreen() {
         <BackstoryDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "gear" && (
-        <GearDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
+        <GearDialog
+          owned={owned}
+          rows={view?.gear ?? []}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
       )}
       {owned !== undefined && view !== undefined && editing === "join" && (
         <AddToCampaignDialog

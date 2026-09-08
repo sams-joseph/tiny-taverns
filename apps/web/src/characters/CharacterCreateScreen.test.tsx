@@ -218,6 +218,27 @@ describe("writing down a character of your own", () => {
     ]);
   });
 
+  it("draws the background's kit under the class's, and takes the holy-symbol pick", async () => {
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Sorrel Ash");
+    await pick("Background", "Acolyte");
+
+    // One choice with one side is the pick itself: no side select, just the
+    // category's rows.
+    expect(screen.getByText("Comes with Clothes, common, Pouch.")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Background kit choice 1" })).toBeNull();
+    await pick("Any holy symbol", "Amulet");
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+
+    const body = bodyOf(server, "POST", createPath) as { sheet: Record<string, unknown> };
+    expect(body.sheet["inventory"]).toEqual([
+      { name: "Clothes, common", equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0011" },
+      { name: "Pouch", equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0012" },
+      { name: "Amulet", equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0013" },
+    ]);
+  });
+
   it("takes the other side of a kit choice and drops the picks made against the first", async () => {
     await renderCreate();
     await fillItIn();
