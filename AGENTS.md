@@ -190,7 +190,8 @@ this wins.**
 - **Known gaps, reported rather than built**: spell slots and the casting numbers are written now
   (see the actions section below); choosing known or prepared spells is still its own picker
   domain and nothing writes `spellcasting.known`. `party.join` does have a client caller now:
-  _Add to campaign_ on the character roster and sheet.
+  _Add to campaign_ on the character roster and sheet. The background's kit is rows too since
+  2026-09-08 — see "Gear is the equipment table" below.
 
 ## Actions and resources on a fresh sheet, 2026-09-03: the corpus writes both
 
@@ -262,6 +263,48 @@ with slice 0 folded in. Pointer-style; the files carry the arguments.
   and `POST .../hob-direct-updates/:id/undo` is the DM's inverse, safe only while the counter still
   holds Hob's after value; the undo appends `hob-resource-undone`. Player and group Hob toolkits are
   unchanged.
+
+## Gear is the equipment table, 2026-09-08: four paths, one link, one attack rule
+
+The captain's report, verbatim: _"when you create a character the inventory of items don't
+appear to be connected to the actual equipment we have in the database. That needs to change."_
+The class kit already was (every kit line carries `equipmentId`); the other three ways a line
+reached `sheet.inventory` were not. Pointer-style; the files carry the arguments.
+
+- **`InventoryItem.equipmentId` is the one link, and it is provenance, never read through** —
+  the `derived_from` idiom, unchanged. What changed is that every path writes it where a row
+  exists: the class kit (as before), **the background kit** (`BackgroundBody.startingKit`,
+  written by `ruleset/import.ts`'s `backgroundBodyOf` off the same `starting_equipment` grammar
+  as the class's, additive beside the prose `equipment` list the Rules screens still draw),
+  **the Gear dialog's picker** (`characters/EquipmentPicker.tsx`, `gearLineFor`), and **Hob's
+  drafted kit** (`EquipmentRepo.bundledNamed` + `gearLinesNamed`: bundle only, exactly one
+  case-insensitive match, otherwise the name stays as typed). A free-text line is still allowed
+  everywhere, and renaming a linked line keeps the link.
+- **`sheetGrantsFor` takes `backgroundKitChoices`** — the class kit's `KitPick` shape — and the
+  create form draws both kits through one `characters/KitFields.tsx`; `create.ts`'s three pick
+  helpers take a `KitField`. A background whose row has no `startingKit` (a homebrew one, or a
+  row written before it existed) still lands its prose lines, unlinked. `optionDetailsFor`
+  needed no edit: it reads `body -> 'startingKit'` and the reference table for _any_ option.
+- **The server never nulls a dead `equipmentId`.** The schema comment says a line's id goes
+  `null` when its row is gone; nothing implements that, and this change does not either. The
+  sheet reads the rows it can reach — `library.equipment`'s new `ids` filter, one request over
+  the ordinary `libraryRowReadable`, in `loadCharacterSheet`'s second round — and a line whose
+  row is absent draws exactly as an unlinked one (`gear.test.tsx` pins it). `Equipment` on the
+  wire carries `sourceKey` now, so a weapon picked later keys its attack `atk:longsword` the way
+  the kit did.
+- **One attack rule.** `packages/api/src/Gear.ts`'s `sheetWithGear` lifts `SheetGrants.ts`'s
+  `weaponAttack` (exported for this caller and no other) for gear added after creation: the six
+  cells, `identity.proficiency` and `proficiencies` are read off the sheet, _Extra Attack_ is
+  read back off a derived weapon line's `Attack ×N` (a feature the sheet cannot see), a newly
+  linked weapon gets a line, an existing derived line is kept as written, and a derived line
+  whose gear was linked before the edit and is not after is retired. A line the player typed is
+  never touched. The level-up recompute rewrites spell lines only and leaves these standing.
+- **The gear line draws its row** (`characters/gearFacts.ts`, in the `DetailFacts` idiom):
+  compact under the name (kind · damage or AC · cost), the row's weight when none was typed, and
+  a chevron that expands the full grid. The row's promoted columns only, never the document, so
+  a Library original with bare columns says the same things a bundled row does.
+- **Out of scope by the brief and untouched**: encumbrance, shops, currency, magic items on the
+  gear tab, campaign-scoped equipment.
 
 ## The design system: what is canonical, and how it reaches Tailwind
 
