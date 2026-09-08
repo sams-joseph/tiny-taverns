@@ -26,6 +26,8 @@ const costLine = (row: Equipment): string => `${String(row.costQuantity)} ${row.
 
 const kindLine = (row: Equipment): string => {
   if (row.categoryRange !== null) return row.categoryRange;
+  // A shield is its own category in the 2014 rows, not "Shield armour".
+  if (row.armorCategory === "Shield") return "Shield";
   if (row.armorCategory !== null) return `${row.armorCategory} armour`;
   if (row.toolCategory !== null) return row.toolCategory;
   if (row.vehicleCategory !== null) return row.vehicleCategory;
@@ -42,6 +44,8 @@ const damageLine = (row: Equipment): string | undefined => {
 
 const armourLine = (row: Equipment): string | undefined => {
   if (row.armorClassBase === null) return undefined;
+  // A shield adds to the armour class rather than setting it.
+  if (row.armorCategory === "Shield") return `+${String(row.armorClassBase)} AC`;
   const dex =
     row.armorClassDexBonus === true
       ? row.armorClassMaxBonus === null

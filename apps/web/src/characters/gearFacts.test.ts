@@ -79,6 +79,19 @@ describe("compactGearLine", () => {
   it("says kind, the armour class and the cost for armour", () => {
     expect(compactGearLine(chainMail)).toBe("Heavy armour · AC 16 · 75 gp");
   });
+  it("says a shield adds to the armour class rather than setting it", () => {
+    const shield = rowOf({
+      ...chainMail,
+      name: "Shield",
+      armorCategory: "Shield",
+      armorClassBase: 2,
+      strengthMinimum: null,
+      stealthDisadvantage: null,
+      costQuantity: 10,
+      weight: 6,
+    });
+    expect(compactGearLine(shield)).toBe("Shield · +2 AC · 10 gp");
+  });
   it("says the gear category and the cost for plain gear", () => {
     expect(compactGearLine(rope)).toBe("Standard Gear · 1 gp");
   });
