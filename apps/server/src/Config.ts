@@ -112,6 +112,11 @@ export const hobApiKey = Config.option(Config.redacted("HOB_API_KEY"));
  */
 export const hobMaxTokens = Config.int("HOB_MAX_TOKENS").pipe(Config.withDefault(4096));
 
+/** Campaign-wide player/NPC messages per UTC day. Per-player minute cap is fixed at 10. */
+export const npcPlayerCampaignDailyLimit = Config.int("NPC_PLAYER_CAMPAIGN_DAILY_LIMIT").pipe(
+  Config.withDefault(500),
+);
+
 /**
  * Clerk's JWT public verification key, in PEM form.
  *

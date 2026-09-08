@@ -1,6 +1,8 @@
 import {
   type CampaignId,
   Conflict,
+  type Actor,
+  CurrentActor,
   Npc,
   type NpcCreate,
   type NpcId,
@@ -9,26 +11,26 @@ import {
   type NpcPrivateMaterial,
   type NpcUpdate,
   NotFound,
+  PlayerNpc,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
-import { ensureCampaignWritable, rowWritable } from "./visibility.js";
+import { ensureCampaignWritable, rowReadable, rowWritable } from "./visibility.js";
 
 /**
  * The campaign's cast — `npc` rows, as the creator reads and writes them.
  *
  * **Every method takes a `CampaignCreatorActor`**, and that is the standing
  * rule applied on the day rather than after a disclosure: an NPC row carries
- * creator-only private material, this slice has no player projection, and a
- * boundary that waits for the screen behind it is not a boundary. The proof is
+ * creator-only private material, so the creator read is gated and the player
+ * read below is a distinct projection. The proof is
  * a precondition on top of the seam, not a replacement for it — every read
  * here still composes `rowWritable`, the creator-only predicate, so a bug in
  * the gate degrades to the same refusal rather than to an open door. There is
- * deliberately no `rowReadable` anywhere in this file: nothing about an NPC is
- * a player's to read yet, and when it is, it will be a distinct schema on a
- * distinct path.
+ * deliberately no `rowReadable` in the creator methods: the player projection
+ * is `PlayerNpc`, a distinct schema on distinct paths.
  *
  * `version` is `character`'s optimistic-concurrency counter and works the same
  * way: every UPDATE bumps it in the same statement it writes, and a caller who
@@ -62,6 +64,30 @@ export const toNpc = (row: NpcRow): Npc =>
     archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
     ...provenanceOf(row),
   });
+
+interface PlayerNpcRow {
+  readonly id: NpcId;
+  readonly campaign_id: CampaignId;
+  readonly name: string;
+  readonly role: string;
+  readonly persona: NpcPersona;
+}
+
+const toPlayerNpc = (row: PlayerNpcRow): PlayerNpc =>
+  new PlayerNpc({
+    id: row.id,
+    campaignId: row.campaign_id,
+    name: row.name,
+    role: row.role,
+    persona: row.persona,
+  });
+
+export const playerNpcReadable = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([rowReadable(sql, "npc", campaignId, actor), sql`npc.archived_at is null`]);
 
 const staleVersion = (expected: number, actual: number): Conflict =>
   new Conflict({
@@ -97,6 +123,14 @@ export class Npcs extends Context.Service<
       creator: CampaignCreatorActor,
       id: NpcId,
     ) => Effect.Effect<Npc, NotFound, never>;
+    /** Player-safe discovery: public profile only, shared live NPCs only. */
+    readonly playerList: (
+      campaignId: CampaignId,
+    ) => Effect.Effect<ReadonlyArray<PlayerNpc>, NotFound, CurrentActor>;
+    readonly playerFindById: (
+      campaignId: CampaignId,
+      id: NpcId,
+    ) => Effect.Effect<PlayerNpc, NotFound, CurrentActor>;
   }
 >()("Npcs") {
   static readonly layer = Layer.effect(this)(
@@ -223,6 +257,34 @@ export class Npcs extends Context.Service<
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
               return toNpc(rows[0]!);
+            }),
+          ),
+
+        playerList: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<PlayerNpcRow>`
+                select npc.id, npc.campaign_id, npc.name, npc.role, npc.persona
+                from npc
+                where ${playerNpcReadable(sql, campaignId, actor)}
+                order by lower(npc.name) asc, npc.id asc
+              `;
+              return rows.map(toPlayerNpc);
+            }),
+          ),
+
+        playerFindById: (campaignId, id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<PlayerNpcRow>`
+                select npc.id, npc.campaign_id, npc.name, npc.role, npc.persona
+                from npc
+                where npc.id = ${id} and ${playerNpcReadable(sql, campaignId, actor)}
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
+              return toPlayerNpc(rows[0]!);
             }),
           ),
       };

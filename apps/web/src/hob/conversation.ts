@@ -138,6 +138,8 @@ const sentenceFor = (failure: ApiFailure): string => {
       return "Hob could not answer: this campaign is not reachable with this credential.";
     case "unreachable":
       return "Hob could not answer: the server did not respond.";
+    case "rate-limited":
+      return failure.message;
     default:
       return `Hob could not answer: ${failure.kind === "conflict" ? failure.message : failure.detail}`;
   }

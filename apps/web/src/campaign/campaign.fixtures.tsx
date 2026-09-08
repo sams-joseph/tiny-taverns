@@ -212,6 +212,14 @@ export const cazril = {
   updatedAt: stamps.updatedAt,
 };
 
+export const playerCazril = {
+  id: npcId,
+  campaignId,
+  name: "Cazril",
+  role: "the ferryman at the crossing",
+  persona: cazril.persona,
+};
+
 export const npcRehearsalStatus = {
   available: false,
   model: null,
@@ -1287,7 +1295,14 @@ export const fullCampaign = (): Map<string, Answer> =>
     // The cast: one NPC, its detail, and a rehearsal with no model behind it
     // and no thread yet — the ordinary state on a server without a model.
     [`GET /campaigns/${campaignId}/npcs`, { status: 200, body: [cazril] }],
+    [`GET /campaigns/${campaignId}/npcs/-/player`, { status: 200, body: [playerCazril] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}`, { status: 200, body: cazril }],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/player`, { status: 200, body: playerCazril }],
+    [
+      `GET /campaigns/${campaignId}/npcs/${npcId}/player/status`,
+      { status: 200, body: { available: false, npc: "Cazril" } },
+    ],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/player/threads`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}/knowledge`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}/memories`, { status: 200, body: [] }],
     [

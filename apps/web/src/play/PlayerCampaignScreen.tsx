@@ -127,7 +127,7 @@ function Section({
  * A table this account only sits at, keyed on the campaign.
  */
 const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
-  // One atom rather than three, and the keys are the three it reads: a player
+  // One atom rather than three, and the keys are the reads it makes: a player
   // writes nothing here, so this list exists to keep the screen honest if a DM
   // in another tab does — and to say which reads it is, which is the question
   // every atom in this app answers.
@@ -135,6 +135,7 @@ const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
     reads.campaign(campaignId),
     reads.party(campaignId),
     reads.notes(campaignId),
+    reads.npcs(campaignId),
   ]),
 );
 
@@ -142,7 +143,11 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
   const [resource, reload] = useApiAtom(playerCampaignAtom(campaignId));
 
   const view = resource.state === "ready" ? resource.value : undefined;
-  const empty = view !== undefined && view.party.length === 0 && view.notes.length === 0;
+  const empty =
+    view !== undefined &&
+    view.party.length === 0 &&
+    view.notes.length === 0 &&
+    view.npcs.length === 0;
 
   return (
     <AppShell
@@ -194,6 +199,45 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
                       <PartyMember key={seat.seat.id} seat={seat} />
                     ))}
                   </Card>
+                </Section>
+              )}
+
+              {view.npcs.length > 0 && (
+                <Section title="People you can talk to">
+                  <div className="grid gap-4 @3xl:grid-cols-2">
+                    {view.npcs.map((npc) => (
+                      <Card key={npc.id}>
+                        <CardHeader>
+                          <CardTitle>{npc.name}</CardTitle>
+                          {npc.role !== "" && (
+                            <p className="text-body-s leading-body text-muted-foreground">
+                              {npc.role}
+                            </p>
+                          )}
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-3">
+                          {npc.persona.identity?.summary !== undefined && (
+                            <p className="text-body-s leading-body text-foreground">
+                              {npc.persona.identity.summary}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            nativeButton={false}
+                            render={
+                              <Link
+                                to="/campaigns/$campaignId/cast/$npcId/talk"
+                                params={{ campaignId, npcId: npc.id }}
+                              />
+                            }
+                          >
+                            <Icon name="mic" size={14} />
+                            Talk privately
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </Section>
               )}
 

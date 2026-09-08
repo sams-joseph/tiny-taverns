@@ -69,7 +69,7 @@ import {
   EncounterRunUpdate,
   NextTurn,
 } from "./EncounterRun.js";
-import { Conflict, NotFound } from "./Errors.js";
+import { Conflict, NotFound, RateLimited } from "./Errors.js";
 import {
   Group,
   GroupCampaignCard,
@@ -138,11 +138,14 @@ import {
   NpcMemory,
   NpcMemoryCreate,
   NpcMemoryUpdate,
+  NpcPlayerStatus,
   NpcRehearsalStatus,
   NpcRehearse,
+  NpcTalk,
   NpcThread,
   NpcTurn,
   NpcUpdate,
+  PlayerNpc,
 } from "./Npc.js";
 import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
 import { PlayerLiveEvent, PlayerLiveTable } from "./PlayerLive.js";
@@ -1837,6 +1840,37 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       payload: Schema.Struct({}),
       success: Schema.Array(NpcMemory),
       error: NotFound,
+    }),
+    HttpApiEndpoint.get("playerList", "/-/player", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PlayerNpc),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("playerFindById", "/:npcId/player", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: PlayerNpc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("playerStatus", "/:npcId/player/status", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: NpcPlayerStatus,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("playerThreads", "/:npcId/player/threads", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: Schema.Array(NpcThread),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("playerTurns", "/:npcId/player/threads/:threadId/turns", {
+      params: { campaignId: CampaignId, npcId: NpcId, threadId: NpcThreadId },
+      success: Schema.Array(NpcTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("talk", "/:npcId/player/talk", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcTalk,
+      success: HttpApiSchema.StreamSse({ events: NpcEvent }),
+      error: [NotFound, HobUnavailable, RateLimited],
     }),
   )
   .prefix("/campaigns/:campaignId/npcs")

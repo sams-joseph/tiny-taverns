@@ -1,4 +1,6 @@
 import {
+  type CampaignId,
+  CurrentActor,
   NpcKnowledgeFact,
   type NpcKnowledgeFactCreate,
   type NpcKnowledgeFactId,
@@ -10,6 +12,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { playerNpcReadable } from "./Npcs.js";
 import { NPC } from "./NpcThreads.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
@@ -78,6 +81,11 @@ export class NpcKnowledge extends Context.Service<
       npcId: NpcId,
       id: NpcKnowledgeFactId,
     ) => Effect.Effect<NpcKnowledgeFact, NotFound, never>;
+    /** Active, explicitly shared facts for a player prompt; source ids are not exposed. */
+    readonly playerSafeForPrompt: (
+      campaignId: CampaignId,
+      npcId: NpcId,
+    ) => Effect.Effect<ReadonlyArray<NpcKnowledgeFact>, NotFound, CurrentActor>;
   }
 >()("NpcKnowledge") {
   static readonly layer = Layer.effect(this)(
@@ -170,6 +178,41 @@ export class NpcKnowledge extends Context.Service<
               if (rows.length === 0)
                 return yield* new NotFound({ resource: "npc_knowledge_fact", id });
               return toNpcKnowledgeFact(rows[0]!);
+            }),
+          ),
+
+        playerSafeForPrompt: (campaignId, npcId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<FactRow>`
+                select npc_knowledge_fact.id,
+                       npc_knowledge_fact.npc_id,
+                       npc_knowledge_fact.body,
+                       npc_knowledge_fact.source_kind,
+                       null::uuid as source_id,
+                       npc_knowledge_fact.source_label,
+                       npc_knowledge_fact.retired_at,
+                       npc_knowledge_fact.visibility,
+                       npc_knowledge_fact.origin,
+                       npc_knowledge_fact.assistant_turn_id,
+                       npc_knowledge_fact.created_at,
+                       npc_knowledge_fact.updated_at
+                from npc_knowledge_fact
+                where npc_knowledge_fact.npc_id = ${npcId}
+                  and npc_knowledge_fact.retired_at is null
+                  and npc_knowledge_fact.visibility = 'shared'
+                  and exists (select 1 from npc where npc.id = npc_knowledge_fact.npc_id and ${playerNpcReadable(sql, campaignId, actor)})
+                order by npc_knowledge_fact.created_at asc, npc_knowledge_fact.id asc
+              `;
+              if (rows.length === 0) {
+                const reachable = yield* sql<{ readonly id: NpcId }>`
+                  select npc.id from npc where npc.id = ${npcId} and ${playerNpcReadable(sql, campaignId, actor)}
+                `;
+                if (reachable.length === 0)
+                  return yield* new NotFound({ resource: "npc", id: npcId });
+              }
+              return rows.map(toNpcKnowledgeFact);
             }),
           ),
       };

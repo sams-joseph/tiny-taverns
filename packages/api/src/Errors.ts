@@ -22,3 +22,13 @@ export class Conflict extends Schema.ErrorClass<Conflict>("Conflict")(
   },
   { httpApiStatus: 409 },
 ) {}
+
+/** A bounded-cost endpoint refused this request for now. */
+export class RateLimited extends Schema.ErrorClass<RateLimited>("RateLimited")(
+  {
+    _tag: Schema.tag("RateLimited"),
+    message: Schema.String,
+    retryAfterSeconds: Schema.Int,
+  },
+  { httpApiStatus: 429 },
+) {}

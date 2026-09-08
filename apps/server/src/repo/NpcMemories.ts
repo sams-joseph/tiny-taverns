@@ -1,4 +1,6 @@
 import {
+  type CampaignId,
+  CurrentActor,
   NpcMemory,
   type NpcMemoryCreate,
   type NpcMemoryId,
@@ -12,6 +14,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { playerNpcReadable } from "./Npcs.js";
 import { NPC, NPC_THREADS } from "./NpcThreads.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
@@ -91,6 +94,11 @@ export class NpcMemories extends Context.Service<
       creator: CampaignCreatorActor,
       npcId: NpcId,
     ) => Effect.Effect<ReadonlyArray<NpcMemory>, NotFound, never>;
+    /** Approved, explicitly shared memories for player prompts; source ids stay private. */
+    readonly playerSafeForPrompt: (
+      campaignId: CampaignId,
+      npcId: NpcId,
+    ) => Effect.Effect<ReadonlyArray<NpcMemory>, NotFound, CurrentActor>;
   }
 >()("NpcMemories") {
   static readonly layer = Layer.effect(this)(
@@ -111,6 +119,8 @@ export class NpcMemories extends Context.Service<
             const threads = yield* sql<{ readonly id: NpcThreadId }>`
               select npc_thread.id from npc_thread
               where npc_thread.id = ${sourceThreadId}
+                and npc_thread.channel = 'rehearsal'
+                and npc_thread.account_id is null
                 and ${containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor)}
             `;
             if (threads.length === 0) {
@@ -122,6 +132,8 @@ export class NpcMemories extends Context.Service<
               select npc_turn.id from npc_turn
               join npc_thread on npc_thread.id = npc_turn.thread_id
               where npc_turn.id = ${sourceTurnId}
+                and npc_thread.channel = 'rehearsal'
+                and npc_thread.account_id is null
                 and ${containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor)}
             `;
             if (turns.length === 0) {
@@ -238,6 +250,43 @@ export class NpcMemories extends Context.Service<
                 where ${memoryReachable(creator, npcId)} and npc_memory.status <> 'retired'
                 returning *
               `;
+              return rows.map(toNpcMemory);
+            }),
+          ),
+
+        playerSafeForPrompt: (campaignId, npcId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<MemoryRow>`
+                select npc_memory.id,
+                       npc_memory.npc_id,
+                       npc_memory.body,
+                       npc_memory.status,
+                       null::uuid as source_thread_id,
+                       null::uuid as source_turn_id,
+                       npc_memory.approved_at,
+                       npc_memory.retired_at,
+                       npc_memory.visibility,
+                       npc_memory.origin,
+                       npc_memory.assistant_turn_id,
+                       npc_memory.created_at,
+                       npc_memory.updated_at
+                from npc_memory
+                where npc_memory.npc_id = ${npcId}
+                  and npc_memory.status = 'approved'
+                  and npc_memory.retired_at is null
+                  and npc_memory.visibility = 'shared'
+                  and exists (select 1 from npc where npc.id = npc_memory.npc_id and ${playerNpcReadable(sql, campaignId, actor)})
+                order by npc_memory.approved_at asc, npc_memory.id asc
+              `;
+              if (rows.length === 0) {
+                const reachable = yield* sql<{ readonly id: NpcId }>`
+                  select npc.id from npc where npc.id = ${npcId} and ${playerNpcReadable(sql, campaignId, actor)}
+                `;
+                if (reachable.length === 0)
+                  return yield* new NotFound({ resource: "npc", id: npcId });
+              }
               return rows.map(toNpcMemory);
             }),
           ),

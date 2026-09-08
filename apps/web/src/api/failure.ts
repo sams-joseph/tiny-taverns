@@ -35,6 +35,8 @@ export type ApiFailure =
    * ("set HOB_API_URL…") in the process that knows them.
    */
   | { readonly kind: "unavailable"; readonly message: string }
+  /** The server accepted the credential but the rate window is full. */
+  | { readonly kind: "rate-limited"; readonly message: string; readonly retryAfterSeconds: number }
   /** The payload does not satisfy the contract. See `classifyFailure` — it never left. */
   | { readonly kind: "invalid"; readonly detail: string }
   /** Nothing answered: the API is not running, or the browser is offline. */
@@ -82,6 +84,15 @@ export const classifyFailure = (error: unknown): ApiFailure => {
         kind: "unavailable",
         message: stringField(error, "message") ?? "That part of the server is not switched on.",
       };
+    case "RateLimited": {
+      const retry = (error as { readonly retryAfterSeconds?: unknown }).retryAfterSeconds;
+      return {
+        kind: "rate-limited",
+        message:
+          stringField(error, "message") ?? "That is being asked too often. Try again in a moment.",
+        retryAfterSeconds: typeof retry === "number" ? retry : 60,
+      };
+    }
     /**
      * A payload the contract rejects **never reaches the network**: the derived
      * client encodes through the same schema the handler decodes with, so

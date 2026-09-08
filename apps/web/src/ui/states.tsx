@@ -103,6 +103,8 @@ export function FailureNotice({
         // configured. Its own sentence carries the fix, so nothing is composed
         // here — see `ApiFailure`.
         return { icon: "info" as const, title: "Not switched on", body: failure.message };
+      case "rate-limited":
+        return { icon: "clock" as const, title: "Too many messages", body: failure.message };
       case "invalid":
         return {
           icon: "triangle-alert" as const,

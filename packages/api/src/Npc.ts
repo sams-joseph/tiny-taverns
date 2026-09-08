@@ -17,8 +17,9 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * is **a campaign content row that compiles a constrained persona prompt from
  * structured fields** — not a free-form prompt blob, not Hob wearing a name,
  * not a character and not a creature. It is *campaign-owned only* in this
- * slice (no Library source, no group share yet), it talks only to its own
- * creator (rehearsal), it has no tools and it writes nothing into the campaign.
+ * slice (no Library source, no group share yet), it has creator rehearsal and
+ * private player direct chat channels, it has no tools and it writes nothing
+ * into the campaign.
  *
  * ### Private material is its own field, by construction
  *
@@ -87,7 +88,7 @@ export type NpcBoundaries = typeof NpcBoundaries.Type;
 /**
  * The public persona document. Every key optional, so an NPC that is only a
  * name and a role decodes, and a section the creator never opened is absent
- * rather than blank.
+ * rather than blank. This is the whole player-facing profile.
  */
 export const NpcPersona = Schema.Struct({
   identity: Schema.optional(NpcIdentity),
@@ -178,11 +179,11 @@ export type NpcListFilter = typeof NpcListFilter.Type;
 
 /**
  * The channel a thread is on. **One member in this slice**, and the column
- * is a closed check so a second one is a migration rather than a string: the
- * player and session channels are later slices with their own privacy
- * decisions.
+ * is a closed check so a second one is a migration rather than a string. Each
+ * channel carries its own privacy decision: rehearsal is creator-only;
+ * player_direct is one player's private transcript.
  */
-export const NpcChannel = Schema.Literals(["rehearsal"]);
+export const NpcChannel = Schema.Literals(["rehearsal", "player_direct"]);
 export type NpcChannel = typeof NpcChannel.Type;
 
 export const NpcWho = Schema.Literals(["user", "npc"]);
@@ -196,6 +197,18 @@ export class NpcThread extends Schema.Class<NpcThread>("NpcThread")({
   title: Schema.String,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+/**
+ * The row as a player may discover it: public persona only, no private
+ * material, no version, no prompt/audit/usage metadata.
+ */
+export class PlayerNpc extends Schema.Class<PlayerNpc>("PlayerNpc")({
+  id: NpcId,
+  campaignId: CampaignId,
+  name: Schema.String,
+  role: Schema.String,
+  persona: NpcPersona,
 }) {}
 
 /**
@@ -324,6 +337,12 @@ export class NpcRehearsalStatus extends Schema.Class<NpcRehearsalStatus>("NpcReh
   memoriesTotal: Schema.Int,
 }) {}
 
+/** Player chat status: no context counts or usage metadata to infer from. */
+export class NpcPlayerStatus extends Schema.Class<NpcPlayerStatus>("NpcPlayerStatus")({
+  available: Schema.Boolean,
+  npc: Schema.String,
+}) {}
+
 const turnText = Schema.String.check(Schema.isLengthBetween(1, 4000));
 
 /** One line to the NPC, and the thread it continues. Absent starts one. */
@@ -333,19 +352,24 @@ export const NpcRehearse = Schema.Struct({
 });
 export type NpcRehearse = typeof NpcRehearse.Type;
 
+/** A private player direct message to one shared NPC. Absent starts a thread. */
+export const NpcTalk = NpcRehearse;
+export type NpcTalk = typeof NpcTalk.Type;
+
 /**
- * Said first, before the model is called: the thread, the turn the reply will
- * be saved as, and the prompt metadata for this very answer.
+ * Said first, before the model is called: the thread and the turn the reply
+ * will be saved as. Rehearsal includes prompt metadata for the creator's
+ * inspector; player direct chat omits it by leaving these fields absent.
  */
 export class NpcBegun extends Schema.Class<NpcBegun>("NpcBegun")({
   threadId: NpcThreadId,
   turnId: NpcTurnId,
-  templateVersion: Schema.String,
-  estimatedTokens: Schema.Int,
-  knowledgeIncluded: Schema.Int,
-  knowledgeTotal: Schema.Int,
-  memoriesIncluded: Schema.Int,
-  memoriesTotal: Schema.Int,
+  templateVersion: Schema.optional(Schema.String),
+  estimatedTokens: Schema.optional(Schema.Int),
+  knowledgeIncluded: Schema.optional(Schema.Int),
+  knowledgeTotal: Schema.optional(Schema.Int),
+  memoriesIncluded: Schema.optional(Schema.Int),
+  memoriesTotal: Schema.optional(Schema.Int),
 }) {}
 
 export class NpcDelta extends Schema.Class<NpcDelta>("NpcDelta")({

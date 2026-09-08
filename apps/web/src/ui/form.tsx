@@ -135,6 +135,8 @@ const sentenceFor = (failure: ApiFailure): string => {
       return failure.message;
     case "invalid":
       return "That will not save as written.";
+    case "rate-limited":
+      return failure.message;
     case "unreachable":
       return "The server did not answer. Check it is running, then try again.";
     default:

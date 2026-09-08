@@ -17,6 +17,7 @@ import {
   hobApiUrl,
   hobMaxTokens,
   hobModel,
+  npcPlayerCampaignDailyLimit,
 } from "./Config.js";
 import * as Database from "./Database.js";
 import { ApiLive } from "./handlers.js";
@@ -203,11 +204,12 @@ export const assistantFromConfig: Layer.Layer<
 );
 
 /**
- * Whether there is a model behind the NPC rehearsal — the same three variables
- * Hob reads, deliberately: an NPC is a second surface on the one configured
- * model, not a second model to configure. Unset means `NpcAgent.unavailable`,
- * which mirrors `Hob.unavailable`; the boot line for Hob already names the
- * model and endpoint, so this one says only which mode the cast is in.
+ * Whether there is a model behind NPC rehearsal and player chat — the same
+ * three variables Hob reads, deliberately: an NPC is a second surface on the
+ * one configured model, not a second model to configure. Unset means
+ * `NpcAgent.unavailable`, which mirrors `Hob.unavailable`; the boot line for
+ * Hob already names the model and endpoint, so this one says only which mode
+ * the cast is in.
  */
 export const npcAgentFromConfig: Layer.Layer<
   NpcAgent,
@@ -220,16 +222,20 @@ export const npcAgentFromConfig: Layer.Layer<
 
     if (Option.isNone(apiUrl) || Option.isNone(model)) {
       yield* Effect.logInfo(
-        "NPC rehearsal is OFF: it shares Hob's model configuration, and none is set.",
+        "NPC rehearsal and player chat are OFF: they share Hob's model configuration, and none is set.",
       );
       return NpcAgent.unavailable;
     }
 
     const apiKey = yield* hobApiKey;
     const maxTokens = yield* hobMaxTokens;
-    yield* Effect.logInfo(`NPC rehearsal is ON, on Hob's model ${model.value}.`);
+    const campaignDailyLimit = yield* npcPlayerCampaignDailyLimit;
+    yield* Effect.logInfo(`NPC rehearsal and player chat are ON, on Hob's model ${model.value}.`);
 
-    return NpcAgent.layer({ model: model.value }).pipe(
+    return NpcAgent.layer({
+      model: model.value,
+      playerRateLimits: { perPlayerPerMinute: 10, perCampaignPerDay: campaignDailyLimit },
+    }).pipe(
       Layer.provide(
         languageModelLayer({
           apiUrl: apiUrl.value,

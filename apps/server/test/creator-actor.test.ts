@@ -665,7 +665,7 @@ describe("the scope, counted", () => {
     // other five — the rows are in no campaign, so there is no membership to
     // prove and no player projection to diverge from — reached by Hob's
     // character draft to link a carried name to its bundled row.
-    expect(ungated).toBe(132);
+    expect(ungated).toBe(141);
   });
 });
 

@@ -156,6 +156,8 @@ export const draftFailureFor = (failure: ApiFailure): string => {
       return "Hob could not answer: the server did not respond.";
     case "conflict":
       return failure.message;
+    case "rate-limited":
+      return failure.message;
     default:
       return `Hob could not answer: ${failure.detail}`;
   }

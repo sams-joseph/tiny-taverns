@@ -18,9 +18,17 @@ import type { Rehearsal } from "./rehearsal";
 export function RehearsalPanel({
   name,
   rehearsal,
+  subtitle = "Rehearsal · only you can see this",
+  emptyTitle = `Rehearse with ${name}`,
+  emptyBody = "Say something in the scene and hear how they answer. Nothing here reaches your players, and nothing they say changes the campaign.",
+  label = `Say something to ${name}`,
 }: {
   readonly name: string;
   readonly rehearsal: Rehearsal;
+  readonly subtitle?: string;
+  readonly emptyTitle?: string;
+  readonly emptyBody?: string;
+  readonly label?: string;
 }) {
   const thread = useRef<HTMLDivElement>(null);
 
@@ -41,9 +49,7 @@ export function RehearsalPanel({
         <NpcAvatar name={name} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-body-s leading-tight font-medium text-heading">{name}</span>
-          <span className="truncate text-micro leading-snug text-faint">
-            Rehearsal · only you can see this
-          </span>
+          <span className="truncate text-micro leading-snug text-faint">{subtitle}</span>
         </span>
         <Button
           size="sm"
@@ -61,11 +67,10 @@ export function RehearsalPanel({
           <div className="flex shrink-0 flex-col items-center px-2 pt-6 pb-1 text-center">
             <NpcAvatar name={name} size="lg" />
             <h3 className="mt-3 font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-              Rehearse with {name}
+              {emptyTitle}
             </h3>
             <p className="mt-1.5 max-w-measure text-body-s leading-body text-muted-foreground">
-              Say something in the scene and hear how they answer. Nothing here reaches your
-              players, and nothing they say changes the campaign.
+              {emptyBody}
             </p>
           </div>
         ) : (
@@ -95,8 +100,8 @@ export function RehearsalPanel({
         ) : (
           <Composer
             onSend={rehearsal.send}
-            label={`Say something to ${name}`}
-            placeholder={`Say something to ${name}`}
+            label={label}
+            placeholder={label}
             showCommands={false}
           />
         )}

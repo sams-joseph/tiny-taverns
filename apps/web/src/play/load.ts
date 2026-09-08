@@ -4,6 +4,7 @@ import type {
   CreatedOrder,
   Note,
   OwnedCharacter,
+  PlayerNpc,
   PageCursor,
   PartySeat,
   PlayerLiveTable,
@@ -25,6 +26,8 @@ export interface PlayerCampaignView {
   readonly party: ReadonlyArray<PartySeat>;
   /** What the DM has shared. A player is answered no `dm` row, by predicate. */
   readonly notes: ReadonlyArray<Note>;
+  /** NPCs the DM explicitly made player-facing. No private material or usage metadata. */
+  readonly npcs: ReadonlyArray<PlayerNpc>;
 }
 
 /**
@@ -45,18 +48,19 @@ export interface PlayerCampaignView {
  */
 export const loadPlayerCampaignView = (campaignId: CampaignId) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [campaign, party, notes] = yield* Effect.all(
+    const [campaign, party, notes, npcs] = yield* Effect.all(
       [
         client.campaigns.findById({ params: { campaignId } }),
         client.party.list({ params: { campaignId } }),
         collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
           client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
         ),
+        client.npcs.playerList({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     );
 
-    return { campaign, party, notes } satisfies PlayerCampaignView;
+    return { campaign, party, notes, npcs } satisfies PlayerCampaignView;
   });
 
 export interface PlayerTableView {

@@ -129,6 +129,7 @@ const makeFixture = Effect.gen(function* () {
       boundaries: { refuses: ["Naming the hag"] },
     },
     privateMaterial: { secrets: `${PRIVATE} He owes the hag three years.` },
+    visibility: "shared",
   });
 
   yield* knowledge.create(creator, cazril.id, {
@@ -136,6 +137,7 @@ const makeFixture = Effect.gen(function* () {
     sourceKind: "note",
     sourceLabel: "Ford note",
     sourceId: "2b1f2a1e-0000-4000-8000-00000000f001",
+    visibility: "shared",
   });
   const staleFact = yield* knowledge.create(creator, cazril.id, {
     body: `${RETIRED_FACT} This should not reach the provider.`,
@@ -145,6 +147,7 @@ const makeFixture = Effect.gen(function* () {
   yield* knowledge.retire(creator, cazril.id, staleFact.id);
   const approved = yield* memories.draft(creator, cazril.id, {
     body: `${APPROVED_MEMORY} The party promised Cazril a true name.`,
+    visibility: "shared",
   });
   yield* memories.approve(creator, cazril.id, approved.id);
   yield* memories.draft(creator, cazril.id, {
@@ -392,6 +395,155 @@ const begunIn = (events: ReadonlyArray<NpcEvent>) => {
   if (began?.event !== "began") throw new Error("no began event");
   return began.data;
 };
+
+const talk = (
+  actor: Actor,
+  campaignId: CampaignId,
+  npcId: NpcId,
+  options?: {
+    readonly rounds?: ReadonlyArray<ReturnType<typeof textChunks> | ReturnType<typeof refused>>;
+    readonly text?: string;
+    readonly threadId?: Parameters<(typeof NpcAgent)["Service"]["talk"]>[2]["threadId"];
+    readonly perPlayerPerMinute?: number;
+    readonly perCampaignPerDay?: number;
+  },
+): Promise<Rehearsed> => {
+  const model = scriptedModel({
+    model: "scripted-local",
+    maxTokens: MAX_TOKENS,
+    rounds: options?.rounds ?? [textChunks("The river is listening.")],
+  });
+
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const agent = yield* NpcAgent;
+      const stream = yield* agent.talk(campaignId, npcId, {
+        text: options?.text ?? "Can I cross?",
+        ...(options?.threadId === undefined ? {} : { threadId: options.threadId }),
+      });
+      const events = yield* Stream.runCollect(stream);
+      return { events: Array.from(events), requests: model.requests() };
+    }).pipe(
+      withActor(actor),
+      Effect.provide(
+        NpcAgent.layer({
+          model: "scripted-local",
+          playerRateLimits: {
+            perPlayerPerMinute: options?.perPlayerPerMinute ?? 10,
+            perCampaignPerDay: options?.perCampaignPerDay ?? 500,
+          },
+        }).pipe(Layer.provide(model.layer)),
+      ),
+    ),
+  );
+};
+
+describe("player direct chat", () => {
+  it("lists and finds only shared live NPCs through a player-safe projection", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const npcs = yield* Npcs;
+        const playerList = yield* npcs.playerList(fixture.campaign.id);
+        const playerFound = yield* npcs.playerFindById(fixture.campaign.id, fixture.cazril.id);
+        const dmList = yield* npcs
+          .playerList(fixture.campaign.id)
+          .pipe(withActor(fixture.dm), Effect.result);
+        const stranger = yield* npcs
+          .playerFindById(fixture.campaign.id, fixture.cazril.id)
+          .pipe(withActor(fixture.stranger), Effect.result);
+        return { playerList, playerFound, dmList, stranger };
+      }).pipe(withActor(fixture.player)),
+    );
+
+    expect(seen.playerList.map((npc) => npc.name)).toEqual(["Cazril"]);
+    expect(seen.playerFound).toMatchObject({
+      id: fixture.cazril.id,
+      name: "Cazril",
+      persona: { identity: { summary: "Takes names, not coin." } },
+    });
+    expect(JSON.stringify(seen.playerFound)).not.toContain(PRIVATE);
+    expect(seen.dmList._tag).toBe("Success");
+    expect(seen.stranger._tag).toBe("Failure");
+    expect(seen.stranger._tag === "Failure" && seen.stranger.failure).toBeInstanceOf(NotFound);
+  }, 60_000);
+
+  it("prompts with player-safe material only and stores a private player transcript", async () => {
+    const { events, requests } = await talk(
+      fixture.player,
+      fixture.campaign.id,
+      fixture.cazril.id,
+      {
+        text: "Can you take me to the ford?",
+      },
+    );
+    const shown = shownTo(requests);
+    const began = begunIn(events);
+
+    expect(began.templateVersion).toBeUndefined();
+    expect(began.estimatedTokens).toBeUndefined();
+    expect(began.knowledgeIncluded).toBeUndefined();
+    expect(began.memoriesIncluded).toBeUndefined();
+    expect(texts(events)).toEqual(["The river is listening."]);
+    expect(events.at(-1)).toMatchObject({ event: "done", data: { reason: "stop" } });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.tools).toBeUndefined();
+    expect(shown).toContain("AUDIENCE: private player direct chat");
+    expect(shown).toContain("Cazril");
+    expect(shown).toContain(OWN_FACT);
+    expect(shown).toContain(APPROVED_MEMORY);
+    expect(shown).not.toContain(PRIVATE);
+    expect(shown).not.toContain(DM_NOTE);
+    expect(shown).not.toContain(PLAYER_SHEET);
+    expect(shown).not.toContain(PLAYER_THREAD);
+    expect(shown).not.toContain(RETIRED_FACT);
+    expect(shown).not.toContain(DRAFT_MEMORY);
+    expect(shown).not.toContain("2b1f2a1e-0000-4000-8000-00000000f001");
+    expect(shown).toContain("does not change campaign canon");
+
+    const visibleToPlayer = await runtime.runPromise(
+      Effect.flatMap(NpcThreads, (threads) =>
+        threads.playerTurns(fixture.campaign.id, fixture.cazril.id, began.threadId),
+      ).pipe(withActor(fixture.player)),
+    );
+    expect(visibleToPlayer.map((turn) => [turn.who, turn.text])).toEqual([
+      ["user", "Can you take me to the ford?"],
+      ["npc", "The river is listening."],
+    ]);
+    expect(visibleToPlayer.map((turn) => [turn.templateVersion, turn.promptTokens])).toEqual([
+      [null, null],
+      [null, null],
+    ]);
+
+    const refusedToCreator = await runtime.runPromise(
+      Effect.flatMap(NpcThreads, (threads) =>
+        threads.turns(fixture.creator, fixture.cazril.id, began.threadId),
+      ).pipe(Effect.result),
+    );
+    expect(refusedToCreator._tag).toBe("Failure");
+  }, 60_000);
+
+  it("rate-limits before the provider is called", async () => {
+    const model = scriptedModel({ model: "scripted-local", maxTokens: MAX_TOKENS, rounds: [] });
+    const result = await runtime.runPromise(
+      Effect.flatMap(NpcAgent, (agent) =>
+        agent.talk(fixture.campaign.id, fixture.cazril.id, { text: "Too soon" }),
+      ).pipe(
+        withActor(fixture.player),
+        Effect.provide(
+          NpcAgent.layer({
+            model: "scripted-local",
+            playerRateLimits: { perPlayerPerMinute: 0, perCampaignPerDay: 500 },
+          }).pipe(Layer.provide(model.layer)),
+        ),
+        Effect.result,
+      ),
+    );
+
+    expect(result._tag).toBe("Failure");
+    expect(result._tag === "Failure" && result.failure).toMatchObject({ _tag: "RateLimited" });
+    expect(model.requests()).toHaveLength(0);
+  }, 60_000);
+});
 
 describe("rehearsing", () => {
   it("streams the reply in pieces, says which thread and turn first, and ends on done", async () => {
@@ -648,16 +800,24 @@ describe("the seam", () => {
     }
   });
 
-  it("gates every repository method on the creator proof", () => {
-    // The type-level half is `Npcs`/`NpcThreads`' signatures; this is the
-    // grep-level half, the way `creator-actor.test.ts` counts the others.
-    const repos = ["Npcs.ts", "NpcKnowledge.ts", "NpcMemories.ts", "NpcThreads.ts"].map((name) =>
-      code(fileURLToPath(new URL(`../src/repo/${name}`, import.meta.url))),
+  it("keeps creator-only reads behind the proof and spells the player seam explicitly", () => {
+    // Slice 3 adds a second, narrow player projection. The creator-only methods
+    // still take the proof; the player methods are the only place these repos may
+    // mention `account_id` or the readable seam.
+    const repos = ["Npcs.ts", "NpcKnowledge.ts", "NpcMemories.ts", "NpcThreads.ts"].map(
+      (name) =>
+        [name, code(fileURLToPath(new URL(`../src/repo/${name}`, import.meta.url)))] as const,
     );
-    for (const source of repos) {
-      expect(source).not.toContain("rowReadable(");
-      expect(source).not.toContain("containedRowReadable(");
-      expect(source).not.toContain("account_id");
+    for (const [name, source] of repos) {
+      if (name === "NpcThreads.ts") {
+        expect(source).toContain("npc_thread.account_id = ");
+      } else if (name === "NpcMemories.ts") {
+        expect(source).toContain("npc_thread.account_id is null");
+        expect(source).not.toContain("npc_thread.account_id = ");
+      } else {
+        expect(source).not.toContain("npc_thread.account_id");
+      }
+      expect(source).not.toContain("creator_account_id");
     }
   });
 

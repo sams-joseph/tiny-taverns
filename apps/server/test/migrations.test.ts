@@ -255,6 +255,7 @@ describe("migrations", () => {
       { migration_id: 36, name: "session_event_character" },
       { migration_id: 37, name: "npcs" },
       { migration_id: 38, name: "npc_knowledge_memory" },
+      { migration_id: 39, name: "npc_player_direct_chat" },
     ]);
   }, 60_000);
 
@@ -302,6 +303,7 @@ describe("migrations", () => {
       { migration_id: 36, name: "session_event_character" },
       { migration_id: 37, name: "npcs" },
       { migration_id: 38, name: "npc_knowledge_memory" },
+      { migration_id: 39, name: "npc_player_direct_chat" },
     ]);
   }, 60_000);
 });

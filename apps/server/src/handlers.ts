@@ -886,6 +886,18 @@ const NpcsLive = HttpApiBuilder.group(
       )
       .handle("resetMemories", ({ params }) =>
         asCreator(params.campaignId, (creator) => memories.reset(creator, params.npcId)),
+      )
+      .handle("playerList", ({ params }) => npcs.playerList(params.campaignId))
+      .handle("playerFindById", ({ params }) =>
+        npcs.playerFindById(params.campaignId, params.npcId),
+      )
+      .handle("playerStatus", ({ params }) => agent.playerStatus(params.campaignId, params.npcId))
+      .handle("playerThreads", ({ params }) => threads.playerList(params.campaignId, params.npcId))
+      .handle("playerTurns", ({ params }) =>
+        threads.playerTurns(params.campaignId, params.npcId, params.threadId),
+      )
+      .handle("talk", ({ params, payload }) =>
+        agent.talk(params.campaignId, params.npcId, payload),
       );
   }),
 );

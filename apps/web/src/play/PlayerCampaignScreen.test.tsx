@@ -9,6 +9,7 @@ import {
   character,
   installStubServer,
   mintingSession,
+  npcId,
   readAloud,
   page,
 } from "../campaign/campaign.fixtures";
@@ -60,6 +61,7 @@ describe("a table you sit at", () => {
     // with the continuity decision.
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/party`);
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/notes`);
+    expect(pathsCalled()).toContain(`/campaigns/${campaignId}/npcs/-/player`);
     // The creator's load composes these, and the creator gate refuses a player
     // the first of them — which is the whole reason this screen is not that
     // screen narrowed. The other two are screens of their own.
@@ -79,6 +81,8 @@ describe("a table you sit at", () => {
     // A player talks to Hob only from the character-drafting composer. The DM's
     // docked session-writing panel is not offered on this overview.
     expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();
+    const talk = screen.getByRole("button", { name: /Talk privately/ });
+    expect(talk.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/cast/${npcId}/talk`);
   });
 
   it("keeps the DM's nav off the player's bar", async () => {
@@ -100,6 +104,7 @@ describe("a table you sit at", () => {
   it("says what an empty table means rather than looking broken", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: [] });
     server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/player`, { status: 200, body: [] });
 
     await renderScreen();
 

@@ -2,19 +2,23 @@ import {
   type CampaignId,
   CurrentActor,
   HobUnavailable,
-  type Npc,
+  Npc,
   NpcBegun,
   NpcDelta,
   NpcDone,
   type NpcEvent,
   NpcFailure,
   type NpcId,
+  NpcPlayerStatus,
   type NpcRehearse,
   NpcRehearsalStatus,
+  type NpcTalk,
   type NpcTurnId,
   type NotFound,
+  type PlayerNpc,
+  RateLimited,
 } from "@taverns/api";
-import { Cause, Context, Effect, Layer, Ref, Result, Stream } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Ref, Result, Stream } from "effect";
 import { AiError, LanguageModel, type Response, type Tool } from "effect/unstable/ai";
 
 /**
@@ -27,7 +31,7 @@ import { type CampaignCreatorActor, CampaignCreatorActors } from "../repo/Creato
 import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
 import { Npcs } from "../repo/Npcs.js";
-import { NpcThreads } from "../repo/NpcThreads.js";
+import { NpcThreads, type PlayerNpcRateLimits } from "../repo/NpcThreads.js";
 import { assembleNpcPrompt, npcPromptMetadata, type NpcPromptContext } from "./npcPrompt.js";
 
 /**
@@ -81,6 +85,19 @@ export class NpcAgent extends Context.Service<
       npcId: NpcId,
       ask: NpcRehearse,
     ) => Effect.Effect<Stream.Stream<NpcEvent>, NotFound | HobUnavailable, CurrentActor>;
+    readonly playerStatus: (
+      campaignId: CampaignId,
+      npcId: NpcId,
+    ) => Effect.Effect<NpcPlayerStatus, NotFound, CurrentActor>;
+    readonly talk: (
+      campaignId: CampaignId,
+      npcId: NpcId,
+      ask: NpcTalk,
+    ) => Effect.Effect<
+      Stream.Stream<NpcEvent>,
+      NotFound | HobUnavailable | RateLimited,
+      CurrentActor
+    >;
   }
 >()("NpcAgent") {
   static readonly unavailable: Layer.Layer<
@@ -112,12 +129,20 @@ export class NpcAgent extends Context.Service<
           ),
         rehearse: (campaignId, npcId) =>
           Effect.andThen(resolve(campaignId, npcId), Effect.fail(off)),
+        playerStatus: (campaignId, npcId) =>
+          Effect.gen(function* () {
+            const npc = yield* npcs.playerFindById(campaignId, npcId);
+            return playerStatusOf(npc, false);
+          }),
+        talk: (campaignId, npcId) =>
+          Effect.andThen(npcs.playerFindById(campaignId, npcId), Effect.fail(off)),
       };
     }),
   );
 
   static readonly layer = (options: {
     readonly model: string;
+    readonly playerRateLimits?: PlayerNpcRateLimits;
   }): Layer.Layer<
     NpcAgent,
     never,
@@ -273,6 +298,126 @@ export class NpcAgent extends Context.Service<
                 Stream.ensuring(save),
               );
             }),
+
+          playerStatus: (campaignId, npcId) =>
+            Effect.gen(function* () {
+              const npc = yield* npcs.playerFindById(campaignId, npcId);
+              return playerStatusOf(npc, true);
+            }),
+
+          talk: (campaignId, npcId, ask) =>
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const npc = yield* npcs.playerFindById(campaignId, npcId);
+              const context = yield* playerContextFor(campaignId, npcId, knowledge, memories);
+
+              const thread =
+                ask.threadId === undefined
+                  ? yield* threads.playerStart(
+                      campaignId,
+                      npcId,
+                      ask.text,
+                      playerRateLimitsOf(options),
+                    )
+                  : yield* threads.playerFindById(campaignId, npcId, ask.threadId);
+              const history = yield* threads.playerTurns(campaignId, npcId, thread.id);
+
+              yield* threads.playerAppend(
+                campaignId,
+                npcId,
+                thread.id,
+                {
+                  id: yield* freshTurnId,
+                  who: "user",
+                  text: ask.text,
+                },
+                ask.threadId === undefined ? undefined : playerRateLimitsOf(options),
+              );
+
+              const replyId = yield* freshTurnId;
+              const prompt = assembleNpcPrompt(
+                promptNpc(npc),
+                history,
+                ask.text,
+                "player-direct",
+                context,
+              );
+
+              const written = yield* Ref.make("");
+              const broke = yield* Ref.make(false);
+              const finished = yield* Ref.make("stop");
+
+              const answering: Stream.Stream<
+                NpcEvent,
+                AiError.AiError,
+                LanguageModel.LanguageModel
+              > = LanguageModel.streamText({ prompt: prompt.messages }).pipe(
+                Stream.filterMapEffect(
+                  (
+                    part: Response.StreamPart<NoTools>,
+                  ): Effect.Effect<Result.Result<NpcEvent, Response.StreamPart<NoTools>>> =>
+                    Effect.gen(function* () {
+                      if (part.type === "finish") {
+                        yield* Ref.set(finished, part.reason);
+                        return part.reason === "length"
+                          ? Result.succeed(truncated)
+                          : Result.fail(part);
+                      }
+                      return toNpcEvent(part);
+                    }),
+                ),
+              );
+
+              const save = Effect.gen(function* () {
+                const text = yield* Ref.get(written);
+                if (text === "") return;
+                yield* threads.playerAppend(campaignId, npcId, thread.id, {
+                  id: replyId,
+                  who: "npc",
+                  text,
+                  finishReason: yield* Ref.get(finished),
+                });
+              }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
+
+              const tail = Stream.unwrap(
+                Effect.map(
+                  Effect.all([Ref.get(finished), Ref.get(broke), Ref.get(written)]),
+                  ([reason, failed, text]) =>
+                    Stream.fromIterable<NpcEvent>(
+                      failed
+                        ? []
+                        : text === ""
+                          ? [silence]
+                          : [{ event: "done" as const, data: new NpcDone({ reason }) }],
+                    ),
+                ),
+              );
+
+              return Stream.fromIterable<NpcEvent>([
+                {
+                  event: "began",
+                  data: new NpcBegun({
+                    threadId: thread.id,
+                    turnId: replyId,
+                  }),
+                },
+              ]).pipe(
+                Stream.concat(answering.pipe(Stream.tap((event) => note(written, broke, event)))),
+                Stream.concat(tail),
+                Stream.provideService(LanguageModel.LanguageModel, languageModel),
+                Stream.catchCause((cause) =>
+                  Stream.unwrap(
+                    Effect.as(
+                      Effect.logWarning(
+                        `${npc.name}'s player reply failed: ${describe(Cause.squash(cause))}`,
+                      ),
+                      Stream.succeed(failure(apology(Cause.squash(cause)))),
+                    ),
+                  ),
+                ),
+                Stream.ensuring(save),
+              );
+            }),
         };
       }),
     );
@@ -288,6 +433,39 @@ const contextFor = (
     const facts = yield* knowledge.activeForPrompt(creator, npcId);
     const approved = yield* memories.approvedForPrompt(creator, npcId);
     return { knowledge: facts, memories: approved };
+  });
+
+const playerRateLimitsOf = (options: { readonly playerRateLimits?: PlayerNpcRateLimits }) =>
+  options.playerRateLimits ?? { perPlayerPerMinute: 10, perCampaignPerDay: 500 };
+
+const playerContextFor = (
+  campaignId: CampaignId,
+  npcId: NpcId,
+  knowledge: (typeof NpcKnowledge)["Service"],
+  memories: (typeof NpcMemories)["Service"],
+): Effect.Effect<NpcPromptContext, NotFound, CurrentActor> =>
+  Effect.gen(function* () {
+    const facts = yield* knowledge.playerSafeForPrompt(campaignId, npcId);
+    const approved = yield* memories.playerSafeForPrompt(campaignId, npcId);
+    return { knowledge: facts, memories: approved };
+  });
+
+const promptNpc = (npc: PlayerNpc): Npc =>
+  new Npc({
+    id: npc.id,
+    campaignId: npc.campaignId,
+    derivedFrom: null,
+    name: npc.name,
+    role: npc.role,
+    persona: npc.persona,
+    privateMaterial: {},
+    version: 0,
+    archivedAt: null,
+    visibility: "shared",
+    origin: "authored",
+    assistantTurnId: null,
+    createdAt: DateTime.fromDateUnsafe(new Date(0)),
+    updatedAt: DateTime.fromDateUnsafe(new Date(0)),
   });
 
 const statusOf = (
@@ -309,6 +487,12 @@ const statusOf = (
     memoriesTotal: metadata.memoriesTotal,
   });
 };
+
+const playerStatusOf = (npc: PlayerNpc, available: boolean): NpcPlayerStatus =>
+  new NpcPlayerStatus({
+    available,
+    npc: npc.name,
+  });
 
 const freshTurnId: Effect.Effect<NpcTurnId> = Effect.sync(() => crypto.randomUUID() as NpcTurnId);
 
