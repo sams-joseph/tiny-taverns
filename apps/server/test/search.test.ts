@@ -19,6 +19,8 @@ import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Npcs } from "../src/repo/Npcs.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Party } from "../src/repo/Party.js";
 import { Search } from "../src/repo/Search.js";
 import { Sessions } from "../src/repo/Sessions.js";
@@ -39,8 +41,8 @@ import { migratedDatabase } from "./support/database.js";
  *   generated columns the choice over a denormalised copy.
  * - **two matchers**, because full text alone does not find a half-typed word
  *   and `ILIKE` alone does not find a creature trait that is in no column.
- * - **`session_event` is not in the corpus**, deliberately, and nothing here
- *   quietly grows a fifth arm.
+ * - **`session_event` is not in the corpus**, deliberately, and adding the
+ *   Cast did not make combat payloads searchable.
  */
 const services = Layer.mergeAll(
   Accounts.layer,
@@ -52,6 +54,8 @@ const services = Layer.mergeAll(
   Creatures.layer,
   Invites.layer,
   Notes.layer,
+  Npcs.layer,
+  CampaignCreatorActors.layer,
   Search.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_search")));
@@ -80,6 +84,8 @@ const makeFixture = Effect.gen(function* () {
   const beats = yield* Beats;
   const sessions = yield* Sessions;
   const creatures = yield* Creatures;
+  const npcs = yield* Npcs;
+  const creators = yield* CampaignCreatorActors;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
@@ -218,6 +224,26 @@ const makeFixture = Effect.gen(function* () {
 
   /** A credential minted for one table: `campaignId` set, not null. */
   const scopedDm = scopedTo(dm, campaign.id);
+  const creator = yield* as(creators.of(campaign.id));
+  const otherCreator = yield* as(creators.of(otherTable.id));
+  const cazril = yield* npcs.create(creator, {
+    name: "Cazril",
+    role: "ferryman broker",
+    visibility: "shared",
+    persona: { identity: { summary: "Ferryman keeper of the eastern ford." } },
+    privateMaterial: { secrets: "Cazril serves the glass queen." },
+  });
+  const privateNpc = yield* npcs.create(creator, {
+    name: "Mire Clerk",
+    role: "records the crate debts",
+    persona: { identity: { summary: "Private cast member." } },
+  });
+  yield* npcs.create(otherCreator, {
+    name: "Sixpence Cazril",
+    role: "unrelated broker",
+    persona: { identity: { summary: "Other campaign sentinel." } },
+  });
+
   const player = yield* aPlayerAt(campaign.id, "Pim");
 
   return {
@@ -237,6 +263,8 @@ const makeFixture = Effect.gen(function* () {
     brannoc,
     pell,
     wren,
+    cazril,
+    privateNpc,
   };
 }).pipe(Effect.orDie);
 
@@ -271,12 +299,13 @@ describe("the corpus", () => {
     const hits = await found(fixture.dm, fixture.campaign.id, "ferryman");
 
     expect(new Set(hits.map((hit) => hit.source))).toEqual(
-      new Set(["note", "beat", "creature", "character"]),
+      new Set(["note", "beat", "creature", "character", "npc"]),
     );
     expect(keys(hits)).toContain(`note:${fixture.ferrymanNote.id}`);
     expect(keys(hits)).toContain(`beat:${fixture.ferrymanBeat.id}`);
     expect(keys(hits)).toContain(`creature:${fixture.shade.id}`);
     expect(keys(hits)).toContain(`character:${fixture.brannoc.id}`);
+    expect(keys(hits)).toContain(`npc:${fixture.cazril.id}`);
   });
 
   it("returns an excerpt with no markup in it", async () => {
@@ -302,7 +331,7 @@ describe("the corpus", () => {
     expect(beat).not.toHaveProperty("title");
   });
 
-  it("narrows to one arm when asked, and to all four when not", async () => {
+  it("narrows to one arm when asked, and to all five when not", async () => {
     const everything = await found(fixture.dm, fixture.campaign.id, "ferryman");
     const onlyBeats = await found(fixture.dm, fixture.campaign.id, "ferryman", "beat");
 
@@ -339,6 +368,16 @@ describe("two matchers, because one is not enough", () => {
     // merely stored.
     const hits = await found(fixture.dm, fixture.campaign.id, "lay on hands");
     expect(keys(hits)).toEqual([`character:${fixture.brannoc.id}`]);
+  });
+
+  it("finds an NPC by public persona, without indexing creator-only secrets", async () => {
+    const hits = await found(fixture.dm, fixture.campaign.id, "eastern ford", "npc");
+    expect(keys(hits)).toEqual([`npc:${fixture.cazril.id}`]);
+    expect(hits[0]?.snippet).toContain("eastern ford");
+
+    // `private_material` belongs to Hob's creator-only `getNpc` tool, not to
+    // campaign search: this same tool is also offered to player Hob.
+    expect(await found(fixture.dm, fixture.campaign.id, "glass queen", "npc")).toEqual([]);
   });
 
   it("finds a character by the player running them", async () => {
@@ -411,6 +450,7 @@ describe("scoping — proven, not reasoned about", () => {
     for (const hit of hits) {
       expect(hit.snippet).not.toContain("Sixpence");
       expect(hit.source === "character" && hit.title).not.toBe("Sixpence Brannoc");
+      expect(hit.source === "npc" && hit.title).not.toBe("Sixpence Cazril");
       if (hit.source === "beat") expect(hit.sessionId).toBe(fixture.night.id);
     }
   });
@@ -436,6 +476,12 @@ describe("scoping — proven, not reasoned about", () => {
     // reach her.
     expect(keys(here)).toContain(`character:${fixture.brannoc.id}`);
     expect(keys(crate)).not.toContain(`character:${fixture.pell.id}`);
+
+    // Shared NPCs are discoverable by their public profile; DM-only NPCs and
+    // creator-only private material are not exposed through the shared search tool.
+    expect(keys(here)).toContain(`npc:${fixture.cazril.id}`);
+    expect(keys(crate)).not.toContain(`npc:${fixture.privateNpc.id}`);
+    expect(await found(fixture.player, fixture.campaign.id, "glass queen", "npc")).toEqual([]);
 
     // And the other table is a 404, not a shorter list.
     expect(elsewhere._tag).toBe("Failure");

@@ -36,6 +36,9 @@ import { HobDirectWrites } from "../src/repo/HobDirectWrites.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Party } from "../src/repo/Party.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -90,6 +93,9 @@ const services = Layer.mergeAll(
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
+  Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
   Options.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Recap.layer,
@@ -390,6 +396,7 @@ describe("answering", () => {
       tools.map((tool) => (tool.function as { name: string } | undefined)?.name).sort(),
     ).toEqual([
       "getCreature",
+      "getNpc",
       "listCreatures",
       "listSessions",
       "proposeBeat",
@@ -581,7 +588,7 @@ describe("answering", () => {
     // words a template writes when it cannot spell one — and nothing wider: a
     // string arm would swallow a mistyped `"creatur"` as "no filter".
     const source = JSON.stringify(search?.parameters?.properties?.source);
-    expect(source).toContain(`"note","beat","creature","character"`);
+    expect(source).toContain(`"note","beat","creature","character","npc"`);
     expect(source).toContain(`"","null","Null","NULL","none","None","NONE"`);
     expect(source).not.toContain(`{"type":"string"}`);
     // `query` no longer carries a minimum on the wire, which is the half of the
@@ -1702,10 +1709,11 @@ describe("the assistant seam", () => {
   it("reaches the record only through repositories that require an actor", () => {
     // Every tool handler is one repository call, and every one of those returns
     // `Effect<…, …, CurrentActor>` — so an unscoped read does not compile.
-    // Listing them here means a tenth capability is a visible edit rather than
+    // Listing them here means another capability is a visible edit rather than
     // a quiet one.
     expect(Object.keys(HobToolkit.tools).sort()).toEqual([
       "getCreature",
+      "getNpc",
       "listCreatures",
       "listSessions",
       "proposeBeat",

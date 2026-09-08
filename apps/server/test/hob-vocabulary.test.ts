@@ -21,6 +21,9 @@ import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Search } from "../src/repo/Search.js";
@@ -72,6 +75,9 @@ const services = Layer.mergeAll(
   HobThreads.layer,
   Invites.layer,
   LibraryShares.layer,
+  Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
   Options.layer,
   Recap.layer,
   Search.layer,
@@ -462,13 +468,14 @@ describe("the boundary — one table's words are in no other table's schema", ()
   it("costs a DM nothing: their toolkit is unchanged and has no vocabulary in it", async () => {
     // The extra read is the player's. A DM's toolkit has no `proposeCharacter`,
     // so `Hob.ask` does not make it — stated as a cost in the design and
-    // measured here as the nine tools they had before.
+    // measured here as the campaign-panel tools they had before.
     const { requests } = await ask(fixture.dm, fixture.campaign.id, {
       rounds: [toolCallChunks("searchCampaign", { query: "oath" }), textChunks("Nothing there.")],
     });
 
     expect(toolNames(requests[0])).toEqual([
       "getCreature",
+      "getNpc",
       "listCreatures",
       "listSessions",
       "proposeBeat",
@@ -632,6 +639,9 @@ describe("a campaign with nothing written down", () => {
     EquipmentRepo.layer,
     HobThreads.layer,
     Invites.layer,
+    Npcs.layer,
+    NpcKnowledge.layer,
+    NpcMemories.layer,
     Options.layer,
     Recap.layer,
     Search.layer,

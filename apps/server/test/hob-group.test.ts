@@ -26,6 +26,9 @@ import { Groups } from "../src/repo/Groups.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Proposals } from "../src/repo/Proposals.js";
@@ -66,6 +69,9 @@ const services = Layer.mergeAll(
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
+  Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
   Options.layer,
   PrepItems.layer,
   Proposals.layer.pipe(

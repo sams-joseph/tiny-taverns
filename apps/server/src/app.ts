@@ -162,6 +162,9 @@ export const assistantFromConfig: Layer.Layer<
   | GroupHistory
   | Groups
   | HobThreads
+  | NpcKnowledge
+  | NpcMemories
+  | Npcs
   | Options
   | Recap
   | Search
@@ -271,6 +274,9 @@ export const servicesOver = <E>(
     | GroupHistory
     | Groups
     | HobThreads
+    | NpcKnowledge
+    | NpcMemories
+    | Npcs
     | Options
     | Recap
     | Search
@@ -498,6 +504,9 @@ export const servicesOver = <E>(
         Groups.layer,
         GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
         HobThreads.layer,
+        Npcs.layer,
+        NpcKnowledge.layer,
+        NpcMemories.layer,
         HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of

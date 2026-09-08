@@ -26,6 +26,9 @@ import {
   isRaceOption,
   modifierFor,
   NotFound,
+  NpcId,
+  NpcPersona,
+  NpcPrivateMaterial,
   OptionKind,
   optionNamed,
   SearchHit,
@@ -61,6 +64,9 @@ import type {
   HobDirectWrites,
 } from "../repo/HobDirectWrites.js";
 import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
+import type { NpcKnowledge } from "../repo/NpcKnowledge.js";
+import type { NpcMemories } from "../repo/NpcMemories.js";
+import type { Npcs } from "../repo/Npcs.js";
 import type { Options } from "../repo/Options.js";
 import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
@@ -460,10 +466,11 @@ const toolFailure = Schema.Union([NotFound, Conflict]);
 export const SearchCampaign = Tool.make("searchCampaign", {
   description:
     "Search this campaign's record — the DM's prep notes, the beats they jotted " +
-    "during play, and the bestiary. Lexical: search for the words the DM would " +
-    "have written, especially invented names. Use this before answering anything " +
-    "about people, places, things or creatures. It needs a word: to see the " +
-    "whole bestiary rather than search it, call listCreatures.",
+    "during play, the party, the Cast and the bestiary. Lexical: search for " +
+    "the words the DM would have written, especially invented names. Use this " +
+    "before answering anything about people, places, things or creatures. It " +
+    "needs a word: to see the whole bestiary rather than search it, call " +
+    "listCreatures.",
   parameters: Schema.Struct({
     /**
      * **Length 0 is deliberate, and it is a defect fix.**
@@ -558,6 +565,39 @@ export const GetCreature = Tool.make("getCreature", {
     "searchCampaign hit whose source is 'creature'.",
   parameters: Schema.Struct({ creatureId: CreatureId }),
   success: Creature,
+  failure: NotFound,
+  failureMode: "return",
+});
+
+const NPC_CONTEXT_LIMIT = 12;
+
+const NpcContext = Schema.Struct({
+  npcId: NpcId,
+  name: Schema.String,
+  role: Schema.String,
+  derivedFrom: Schema.NullOr(NpcId),
+  derivedFromVersion: Schema.NullOr(Schema.Int),
+  derivedFromName: Schema.NullOr(Schema.String),
+  persona: NpcPersona,
+  privateMaterial: NpcPrivateMaterial,
+  knowledge: Schema.Array(
+    Schema.Struct({
+      body: Schema.String,
+      sourceLabel: Schema.String,
+    }),
+  ),
+  memories: Schema.Array(Schema.Struct({ body: Schema.String })),
+});
+
+export const GetNpc = Tool.make("getNpc", {
+  description:
+    "Read one campaign NPC's bounded creator context by id: the campaign " +
+    "instance's public persona, creator-only private material, active knowledge " +
+    "facts and approved memories. Take the id from a searchCampaign hit whose " +
+    "source is 'npc'. This reads the campaign snapshot, not the Library source, " +
+    "and never includes NPC chat transcripts.",
+  parameters: Schema.Struct({ npcId: NpcId }),
+  success: NpcContext,
   failure: NotFound,
   failureMode: "return",
 });
@@ -1139,6 +1179,7 @@ export const HobToolkit = Toolkit.make(
   ListCreatures,
   ReadRecap,
   GetCreature,
+  GetNpc,
   ReadSessionLog,
   // The group context, read-only: what the group has agreed happened, so a
   // campaign's Hob can answer "what happened at the other table" exactly as
@@ -1228,6 +1269,9 @@ export interface HobRepositories {
   readonly sessions: (typeof Sessions)["Service"];
   readonly recap: (typeof Recap)["Service"];
   readonly creatures: (typeof Creatures)["Service"];
+  readonly npcs: (typeof Npcs)["Service"];
+  readonly npcKnowledge: (typeof NpcKnowledge)["Service"];
+  readonly npcMemories: (typeof NpcMemories)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
   /** Slice 6's audited direct counter write, reached only by the conditional DM toolkit. */
   readonly directWrites?: (typeof HobDirectWrites)["Service"] | undefined;
@@ -1484,6 +1528,30 @@ export const dmHandlersFor = (
     // because the person reading them is the person who set them.
     sessionRecap: ({ sessionId }) => repositories.recap.read(dm, sessionId),
     getCreature: ({ creatureId }) => as(repositories.creatures.findById(campaignId, creatureId)),
+    getNpc: ({ npcId }) =>
+      Effect.gen(function* () {
+        const npc = yield* repositories.npcs.findById(dm, npcId);
+        if (npc.archivedAt !== null) return yield* new NotFound({ resource: "npc", id: npcId });
+        const [knowledge, memories] = yield* Effect.all([
+          repositories.npcKnowledge.activeForPrompt(dm, npcId),
+          repositories.npcMemories.approvedForPrompt(dm, npcId),
+        ]);
+        return {
+          npcId: npc.id,
+          name: npc.name,
+          role: npc.role,
+          derivedFrom: npc.derivedFrom,
+          derivedFromVersion: npc.derivedFromVersion,
+          derivedFromName: npc.derivedFromName,
+          persona: npc.persona,
+          privateMaterial: npc.privateMaterial,
+          knowledge: knowledge.slice(0, NPC_CONTEXT_LIMIT).map((fact) => ({
+            body: fact.body,
+            sourceLabel: fact.sourceLabel,
+          })),
+          memories: memories.slice(0, NPC_CONTEXT_LIMIT).map((memory) => ({ body: memory.body })),
+        };
+      }),
     sessionLog: ({ sessionId, since }) =>
       repositories.events.list(dm, sessionId, { since: absent(since), limit: LOG_LIMIT }),
 

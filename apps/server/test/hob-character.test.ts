@@ -29,6 +29,9 @@ import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Party } from "../src/repo/Party.js";
 import { Proposals } from "../src/repo/Proposals.js";
@@ -83,6 +86,9 @@ const services = Layer.mergeAll(
   HobThreads.layer,
   Invites.layer,
   Notes.layer,
+  Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
   Options.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Proposals.layer.pipe(
@@ -875,7 +881,7 @@ describe("the creator drafts too, and `intent` is what says so", () => {
     expect(proposed?.proposal.target).toBe("character");
   }, 60_000);
 
-  it("keeps the panel exactly as it was: no intent, nine tools, no drafts", async () => {
+  it("keeps the panel exactly as it was: no intent, campaign-panel tools, no drafts", async () => {
     const { requests } = await ask(fixture.dm, {
       rounds: [textChunks("The marsh road is half reeds.")],
     });

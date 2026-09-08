@@ -260,6 +260,7 @@ describe("migrations", () => {
       { migration_id: 40, name: "npc_library_sources" },
       { migration_id: 41, name: "npc_session_shared_chat" },
       { migration_id: 42, name: "npc_proposals" },
+      { migration_id: 43, name: "npc_search" },
     ]);
   }, 60_000);
 
@@ -311,6 +312,7 @@ describe("migrations", () => {
       { migration_id: 40, name: "npc_library_sources" },
       { migration_id: 41, name: "npc_session_shared_chat" },
       { migration_id: 42, name: "npc_proposals" },
+      { migration_id: 43, name: "npc_search" },
     ]);
   }, 60_000);
 });

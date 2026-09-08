@@ -171,7 +171,7 @@ describe("searching the record", () => {
 
     await screen.findByText(/0 results for .*quokka/);
     expect(screen.getByText("Nothing matches")).toBeInTheDocument();
-    expect(screen.getByText(/notes, beats or bestiary/)).toBeInTheDocument();
+    expect(screen.getByText(/notes, beats, cast or bestiary/)).toBeInTheDocument();
   });
 
   it("opens the night a beat came from", async () => {

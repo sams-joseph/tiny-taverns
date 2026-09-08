@@ -26,6 +26,9 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Proposals } from "../src/repo/Proposals.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -68,6 +71,9 @@ const services = Layer.mergeAll(
   EquipmentRepo.layer,
   HobThreads.layer,
   Notes.layer,
+  Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
   Options.layer,
   Proposals.layer.pipe(
     Layer.provide([

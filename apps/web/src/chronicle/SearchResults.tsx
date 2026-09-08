@@ -4,12 +4,12 @@ import { dayOf } from "./format";
 import { segments } from "./search";
 
 /**
- * What the record answers, across its four sources.
+ * What the record answers, across its five sources.
  *
  * `SearchHit` is a union discriminated on `source` rather than one record with
  * nullable fields (`Search.ts`), so this branches once and renders only the
  * fields that arm actually has: a beat has a `sessionId` and no title, and a
- * note, a creature and a character have a title and no session. Nothing here
+ * note, a creature, a character and an NPC have a title and no session. Nothing here
  * renders a blank where the API has nothing — the same rule the bestiary card
  * follows.
  *
@@ -27,6 +27,7 @@ const META: Record<SearchHit["source"], { readonly icon: IconName; readonly labe
   // `shield` is the documented glyph for a player character and `PartyList`
   // already wears it, so a party hit reads the same in both places.
   character: { icon: "shield", label: "Party" },
+  npc: { icon: "user-round", label: "Cast" },
 };
 
 /**

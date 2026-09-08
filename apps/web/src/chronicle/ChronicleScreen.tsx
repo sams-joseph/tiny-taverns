@@ -31,7 +31,7 @@ import { SessionEntry } from "./SessionEntry";
  * aloud* toggle that drops the DM-only half of the page rather than restyling
  * it; and a search box. What is different from the prototype is what the record
  * is made of: the recap of a night is assembled per read from five tables
- * (`Recap.ts`), and the search reaches notes, beats and the bestiary through the
+ * (`Recap.ts`), and the search reaches notes, beats, the Cast and the bestiary through the
  * one indexed path over the corpus (`repo/Search.ts`) rather than filtering the
  * recap titles a fixture had in memory.
  *
@@ -85,6 +85,7 @@ const SEARCH_FACETS: ReadonlyArray<FilterInputFacet> = [
       { value: "note", label: "Notes" },
       { value: "creature", label: "Bestiary" },
       { value: "character", label: "Party" },
+      { value: "npc", label: "Cast" },
     ],
   },
 ];
@@ -286,7 +287,7 @@ function Chronicle({
             hits.state !== "failed" &&
             (answered.hits.length === 0 ? (
               <EmptyState icon="search" title="Nothing matches">
-                Nothing in this campaign&rsquo;s notes, beats or bestiary answers to &ldquo;
+                Nothing in this campaign&rsquo;s notes, beats, cast or bestiary answers to &ldquo;
                 {answered.q}&rdquo;. Try a name you wrote down, or widen the search above.
               </EmptyState>
             ) : (

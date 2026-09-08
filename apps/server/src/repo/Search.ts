@@ -6,6 +6,7 @@ import {
   type CreatureId,
   CurrentActor,
   type NoteId,
+  type NpcId,
   NotFound,
   type SearchFilterValues,
   type SearchHit,
@@ -27,7 +28,7 @@ import {
 } from "./visibility.js";
 
 /**
- * Campaign search: one query over the DM's prose and their bestiary.
+ * Campaign search: one query over the DM's prose, Cast and bestiary.
  *
  * **This is the only place in the product where a `tsvector` is queried**, and
  * keeping it that way is the point of the file. The assistant's `searchCampaign`
@@ -37,7 +38,7 @@ import {
  * without an actor to scope it. Two search paths over one corpus would become
  * permanent; there is one.
  *
- * ### Four arms, each carrying its own predicate
+ * ### Five arms, each carrying its own predicate
  *
  * The arms are unioned in SQL rather than merged in TypeScript, so the ordering
  * and the limit are applied once, over the whole result, by the database.
@@ -48,10 +49,13 @@ import {
  * | `beat`      | the `beat → session` chain    | nested, no `campaign_id`|
  * | `creature`  | `usableInCampaign`            | what the picker offers  |
  * | `character` | `characterSeatedAt`           | reached through a seat  |
+ * | `npc`       | `rowReadable`                 | public Cast discovery   |
  *
  * The fourth arm is what `0009_search_index.ts` advertised as "about eight
- * lines", spent — and it is the arm that makes the people the campaign is about
- * findable at all.
+ * lines", spent — and it is the arm that makes the player characters findable.
+ * The fifth is the same discovery path for campaign NPCs: a public-shaped hit
+ * here, then Hob's creator-only `getNpc` read for private material and bounded
+ * NPC knowledge.
  *
  * **The campaign gate is inside every arm, never outside a bare `OR`.** That is
  * the `corpusRowReadable` lesson (`visibility.ts`) applied to a union: written
@@ -115,6 +119,8 @@ const toHit = (row: HitRow): SearchHit => {
       return { source: "creature", id: row.id as CreatureId, title: row.title ?? "", ...common };
     case "character":
       return { source: "character", id: row.id as CharacterId, title: row.title ?? "", ...common };
+    case "npc":
+      return { source: "npc", id: row.id as NpcId, title: row.title ?? "", ...common };
   }
 };
 
@@ -304,6 +310,53 @@ const characterArm = (
     query,
   );
 
+const npcSnippet = (sql: SqlClient.SqlClient, query: string): Statement.Fragment => sql`coalesce(
+  nullif(
+    ts_headline(
+      'english',
+      btrim(npc.role || ' ' ||
+        coalesce(npc.persona #>> '{identity,summary}', '') || ' ' ||
+        coalesce(npc.persona #>> '{voice,manner}', '') || ' ' ||
+        coalesce(npc.persona #>> '{intent,wants}', '') || ' ' ||
+        coalesce(npc.persona #>> '{intent,fears}', '') || ' ' ||
+        coalesce(npc.persona #>> '{intent,loyalties}', '') || ' ' ||
+        coalesce(npc.persona #>> '{intent,attitude}', '')
+      ),
+      websearch_to_tsquery('english', ${query}),
+      ${HEADLINE}
+    ),
+    ''),
+  npc.role,
+  '')`;
+
+const npcArm = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+  query: string,
+): Statement.Fragment =>
+  arm(
+    sql,
+    {
+      source: "npc",
+      table: "npc",
+      title: sql`npc.name`,
+      sessionId: sql`null::uuid`,
+      // Public persona only. `private_material` is deliberately absent from the
+      // search vector and the snippet because `searchCampaign` is also a player
+      // Hob tool. The creator-only `getNpc` tool reads private material after
+      // the DM proof is checked.
+      snippet: npcSnippet(sql, query),
+      readable: sql.and([rowReadable(sql, "npc", campaignId, actor), sql`npc.archived_at is null`]),
+      matches: sql.or([
+        sql`npc.name ilike ${likeContains(query)}`,
+        sql`npc.role ilike ${likeContains(query)}`,
+        sql`npc.search @@ websearch_to_tsquery('english', ${query})`,
+      ]),
+    },
+    query,
+  );
+
 /** Enough for a results panel; a DM refines rather than scrolls. */
 const DEFAULT_LIMIT = 50;
 
@@ -345,6 +398,9 @@ export class Search extends Context.Service<
                   : undefined,
                 filter.source === undefined || filter.source === "character"
                   ? characterArm(sql, campaignId, actor, query)
+                  : undefined,
+                filter.source === undefined || filter.source === "npc"
+                  ? npcArm(sql, campaignId, actor, query)
                   : undefined,
               ].filter((fragment) => fragment !== undefined);
 

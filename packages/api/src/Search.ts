@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { BeatId, CharacterId, CreatureId, NoteId, SessionId } from "./Ids.js";
+import { BeatId, CharacterId, CreatureId, NoteId, NpcId, SessionId } from "./Ids.js";
 
 /**
  * Searching one campaign's record.
@@ -19,7 +19,7 @@ import { BeatId, CharacterId, CreatureId, NoteId, SessionId } from "./Ids.js";
 /**
  * Which table a hit came from.
  *
- * Four arms, and the reason each is here rather than a fifth:
+ * Five arms, and the reason each is here rather than a sixth:
  *
  * - `note` — the DM's prep prose, written before the night.
  * - `beat` — the DM's own line about what happened during it.
@@ -30,12 +30,16 @@ import { BeatId, CharacterId, CreatureId, NoteId, SessionId } from "./Ids.js";
  *   gave a character a document to search: until then the people the campaign
  *   is about were the one part of the record that could not be found at all,
  *   and "what is Ilse's AC" had no answer here.
+ * - `npc` — the Cast. Campaign NPCs are people in the campaign too, and Hob's
+ *   campaign-context path is this search plus a focused read tool. The search
+ *   arm indexes only the public persona, so a shared NPC can be found without
+ *   making private material a player-visible existence oracle.
  *
  * `session_event` is deliberately absent — see `0009_search_index.ts`, which
  * carries the captain's reasoning. Combat is reached by name, by recap, or by
  * reading the log.
  */
-export const SearchSource = Schema.Literals(["note", "beat", "creature", "character"]);
+export const SearchSource = Schema.Literals(["note", "beat", "creature", "character", "npc"]);
 export type SearchSource = typeof SearchSource.Type;
 
 /**
@@ -139,13 +143,29 @@ export const CharacterHit = Schema.Struct({
 });
 
 /**
+ * A campaign NPC from the Cast.
+ *
+ * The hit is deliberately public-shaped: title plus a result-line snippet.
+ * Creator-only private material is read by Hob's `getNpc` tool after a creator
+ * proof is checked; it is not part of campaign search, because the same search
+ * tool is also on the player drafting surface.
+ */
+export const NpcHit = Schema.Struct({
+  source: Schema.Literal("npc"),
+  id: NpcId,
+  /** The NPC's name. */
+  title: Schema.String,
+  ...hitFields,
+});
+
+/**
  * One result.
  *
  * Discriminated on `source`, the same shape `NoteAttachment` and `LiveEvent`
  * use, so a client branches once and gets the branded id and the fields that
  * actually exist for that arm.
  */
-export const SearchHit = Schema.Union([NoteHit, BeatHit, CreatureHit, CharacterHit]);
+export const SearchHit = Schema.Union([NoteHit, BeatHit, CreatureHit, CharacterHit, NpcHit]);
 export type SearchHit = typeof SearchHit.Type;
 
 /**

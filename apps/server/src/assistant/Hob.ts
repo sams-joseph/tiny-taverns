@@ -37,6 +37,9 @@ import { CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { EquipmentRepo } from "../repo/Equipment.js";
 import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirectWrites.js";
 import { HobThreads } from "../repo/HobThreads.js";
+import { NpcKnowledge } from "../repo/NpcKnowledge.js";
+import { NpcMemories } from "../repo/NpcMemories.js";
+import { Npcs } from "../repo/Npcs.js";
 import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
 import { Search } from "../repo/Search.js";
@@ -196,6 +199,9 @@ export class Hob extends Context.Service<
     | GroupHistory
     | Groups
     | HobThreads
+    | NpcKnowledge
+    | NpcMemories
+    | Npcs
     | LanguageModel.LanguageModel
     | Options
     | Recap
@@ -216,6 +222,9 @@ export class Hob extends Context.Service<
           sessions: yield* Sessions,
           recap: yield* Recap,
           creatures: yield* Creatures,
+          npcs: yield* Npcs,
+          npcKnowledge: yield* NpcKnowledge,
+          npcMemories: yield* NpcMemories,
           events: yield* SessionEvents,
           directWrites: Option.getOrUndefined(yield* Effect.serviceOption(HobDirectWrites)),
           // The seventh, and the one no tool handler calls: a campaign's
