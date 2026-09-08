@@ -1,4 +1,4 @@
-import { CampaignId, CharacterId, EncounterRunId, GroupId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, GroupId, NpcId, SessionId } from "@taverns/api";
 import {
   createHashHistory,
   createRootRoute,
@@ -10,6 +10,8 @@ import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
+import { CastScreen } from "./cast/CastScreen";
+import { NpcScreen } from "./cast/NpcScreen";
 import { CharacterCreateScreen } from "./characters/CharacterCreateScreen";
 import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
@@ -93,6 +95,7 @@ const decoder = <A,>(schema: Schema.Codec<A, string>) => {
 const asCampaignId = decoder(CampaignId);
 const asGroupId = decoder(GroupId);
 const asCharacterId = decoder(CharacterId);
+const asNpcId = decoder(NpcId);
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
 
@@ -224,6 +227,44 @@ const notesRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "notes",
   component: NotesScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/**
+ * The campaign's cast — the structured NPCs a creator builds and rehearses
+ * with (the NPC builder decisions of 2026-09-04). A campaign destination like
+ * Notes, for the same reason: an NPC is campaign content, and every read hangs
+ * off `/campaigns/:campaignId/npcs`. One NPC is its own screen, named by id,
+ * because the rehearsal beside it is a conversation worth bookmarking; a bad
+ * id falls back to the cast list rather than to the campaign.
+ */
+const castRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "cast",
+  component: CastScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+const npcRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "cast/$npcId",
+  params: {
+    parse: ({ npcId }) => {
+      const decoded = asNpcId(npcId);
+      return decoded === undefined ? false : { npcId: decoded };
+    },
+  },
+  component: NpcScreen,
+  // A different NPC is a different rehearsal: nothing said to one may survive
+  // into another's panel.
+  remountDeps: ({ params }) => params.npcId,
+});
+
+/** A half-typed NPC link still knows it meant the cast. */
+const castSplatRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "cast/$",
+  component: CastScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -507,6 +548,9 @@ export const routeTree = rootRoute.addChildren([
     campaignIndexRoute,
     encountersRoute,
     notesRoute,
+    castRoute,
+    npcRoute,
+    castSplatRoute,
     chronicleRoute,
     partyRoute,
     playerTableRoute,
@@ -561,6 +605,8 @@ export const routes = {
   campaign: campaignRoute,
   encounters: encountersRoute,
   notes: notesRoute,
+  cast: castRoute,
+  npc: npcRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
   characterCreate: characterCreateRoute,

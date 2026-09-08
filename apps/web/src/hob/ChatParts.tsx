@@ -162,10 +162,18 @@ export function Composer({
   onSend,
   placeholder = "Ask Hob, or type / for a command",
   showCommands = true,
+  label = "Ask Hob",
 }: {
   readonly onSend: (text: string) => void;
   readonly placeholder?: string;
   readonly showCommands?: boolean;
+  /**
+   * The input's accessible name. Hob's by default; an NPC rehearsal names the
+   * character instead, because a control that says "Ask Hob" over a
+   * conversation with the ferryman is the one branding slip this surface
+   * must not make.
+   */
+  readonly label?: string;
 }) {
   const [value, setValue] = useState("");
   const matches = value.startsWith("/")
@@ -209,7 +217,7 @@ export function Composer({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder={placeholder}
-          aria-label="Ask Hob"
+          aria-label={label}
           className="h-control min-w-0 flex-1 rounded-control border border-strong bg-surface-sunken px-2.5 text-body-s text-foreground outline-none transition-control placeholder:text-faint focus-visible:border-accent focus-visible:ring-focus"
         />
         <Button size="icon" type="submit" aria-label="Send">

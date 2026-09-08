@@ -24,6 +24,8 @@ export const encounterId = "2b1f2a1e-0000-4000-8000-000000000601";
 export const sketchId = "2b1f2a1e-0000-4000-8000-000000000602";
 export const prepItemId = "2b1f2a1e-0000-4000-8000-000000000701";
 export const noteId = "2b1f2a1e-0000-4000-8000-000000000801";
+export const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
+export const npcThreadId = "2b1f2a1e-0000-4000-8000-00000000e001";
 export const goblinId = "2b1f2a1e-0000-4000-8000-000000000a01";
 export const hagId = "2b1f2a1e-0000-4000-8000-000000000a02";
 export const rosterRowId = "2b1f2a1e-0000-4000-8000-000000000b01";
@@ -178,6 +180,46 @@ export const readAloud = {
 };
 
 /** Who owns Brannoc — the player, whose account the seat below names too. */
+/**
+ * One NPC in the cast — the ferryman, with a persona and creator-only
+ * material, so the Cast and NPC screens have a card, a detail and a private
+ * section to draw. The JSON the server sends, not the decoded class.
+ */
+export const cazril = {
+  id: npcId,
+  campaignId,
+  derivedFrom: null,
+  name: "Cazril",
+  role: "the ferryman at the crossing",
+  persona: {
+    identity: {
+      pronouns: "he/him",
+      summary: "An old ferryman who takes names instead of coin, and remembers every one.",
+    },
+    voice: {
+      manner: "Slow and dry. Answers a question with a smaller question.",
+      phrases: ["Names keep. Coin sinks."],
+    },
+    boundaries: { refuses: ["Naming the hag"] },
+  },
+  privateMaterial: { secrets: "The hag pays him in years. He has three left." },
+  version: 2,
+  archivedAt: null,
+  visibility: "dm",
+  origin: "authored",
+  assistantTurnId: null,
+  createdAt: stamps.createdAt,
+  updatedAt: stamps.updatedAt,
+};
+
+export const npcRehearsalStatus = {
+  available: false,
+  model: null,
+  npc: "Cazril",
+  templateVersion: "npc-prompt/1.0.0",
+  estimatedTokens: 240,
+};
+
 export const ilseAccountId = "2b1f2a1e-0000-4000-8000-0000000000a2";
 
 export const character = {
@@ -1238,6 +1280,15 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
+    // The cast: one NPC, its detail, and a rehearsal with no model behind it
+    // and no thread yet — the ordinary state on a server without a model.
+    [`GET /campaigns/${campaignId}/npcs`, { status: 200, body: [cazril] }],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}`, { status: 200, body: cazril }],
+    [
+      `GET /campaigns/${campaignId}/npcs/${npcId}/rehearsal`,
+      { status: 200, body: npcRehearsalStatus },
+    ],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/threads`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/party`, { status: 200, body: [partySeat] }],
     // The Party screen's own two reads. A campaign with only its DM in it and
     // nothing outstanding — `party/party.fixtures.tsx` is where a populated
@@ -1331,6 +1382,14 @@ export const installStubServer = (): StubServer => {
       status: 404,
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     };
+    if (answer.sse !== undefined) {
+      return Promise.resolve(
+        new Response(answer.sse, {
+          status: answer.status,
+          headers: { "content-type": "text/event-stream" },
+        }),
+      );
+    }
     return Promise.resolve(
       new Response(answer.status === 204 ? null : JSON.stringify(answer.body), {
         status: answer.status,

@@ -3,6 +3,7 @@ import type {
   CharacterId,
   CharacterOptionId,
   FeatId,
+  NpcId,
   RuleArticleId,
   SessionId,
   GroupId,
@@ -130,6 +131,19 @@ export const reads = {
    * architecture: the owner's list, and the party screen's third status.
    */
   invites: (groupId: GroupId): ReadKey => key`invites:${groupId}`,
+
+  /**
+   * The campaign's cast — live NPCs and the archived shelf, one key. Archiving
+   * moves a row from one list to the other, so a key per list would be a
+   * write that has to remember both.
+   */
+  npcs: (campaignId: CampaignId): ReadKey => key`npcs:${campaignId}`,
+
+  /** One NPC's row: the detail screen's read, refreshed by its own edits. */
+  npc: (npcId: NpcId): ReadKey => key`npc:${npcId}`,
+
+  /** One NPC's rehearsal threads, and whether a model is behind them. */
+  npcRehearsal: (npcId: NpcId): ReadKey => key`npc-rehearsal:${npcId}`,
 
   /** Who is at this table. Withdrawing an accepted invitation takes a row out of it. */
   members: (campaignId: CampaignId): ReadKey => key`members:${campaignId}`,

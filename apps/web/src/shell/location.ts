@@ -54,6 +54,7 @@ export type Section =
   | "overview"
   | "encounters"
   | "notes"
+  | "cast"
   | "party"
   | "chronicle"
   | "table";
@@ -71,6 +72,8 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
   if (matchRoute({ to: "/campaigns/$campaignId/encounters" })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
+  // One NPC's screen is *within* the cast, the way a sheet is within the roster.
+  if (matchRoute({ to: "/campaigns/$campaignId/cast", fuzzy: true })) return "cast";
   // Anything else *inside* a campaign is that campaign's Overview — the index,
   // a fight, the character create form, and the splat a half-typed section
   // falls back through.

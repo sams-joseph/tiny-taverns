@@ -168,6 +168,11 @@ const campaignNavFor = (
       section: "notes",
     },
     {
+      label: "Cast",
+      link: { to: "/campaigns/$campaignId/cast", params: { campaignId } },
+      section: "cast",
+    },
+    {
       label: "Chronicle",
       link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
       section: "chronicle",

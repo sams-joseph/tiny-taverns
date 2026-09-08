@@ -32,6 +32,7 @@ import { renderAt } from "../test/renderRoute";
 
 const groupId = Schema.decodeSync(GroupId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
+const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
 const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000cafe");
 const runId = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-00000000beef");
 const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-00000000fade");
@@ -66,6 +67,9 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
   "/campaigns/$campaignId/notes": `/campaigns/${campaignId}/notes`,
+  "/campaigns/$campaignId/cast": `/campaigns/${campaignId}/cast`,
+  "/campaigns/$campaignId/cast/$npcId": `/campaigns/${campaignId}/cast/${npcId}`,
+  "/campaigns/$campaignId/cast/$": `/campaigns/${campaignId}/cast/not-a-uuid`,
   "/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
   "/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
   "/campaigns/$campaignId/table": `/campaigns/${campaignId}/table`,
@@ -235,6 +239,7 @@ describe("the shell's top bar", () => {
         "Encounters",
         "Party",
         "Notes",
+        "Cast",
         "Chronicle",
       ]);
       // Every one of them names the campaign, because every endpoint behind
