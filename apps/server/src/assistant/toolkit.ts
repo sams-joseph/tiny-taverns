@@ -19,6 +19,7 @@ import {
   CreatureId,
   CurrentActor,
   Difficulty,
+  gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
   isClassOption,
@@ -65,6 +66,7 @@ import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
 import type { SessionEvents } from "../repo/SessionEvents.js";
 import type { Sessions } from "../repo/Sessions.js";
+import type { EquipmentRepo } from "../repo/Equipment.js";
 import type { Spells } from "../repo/Spells.js";
 
 /**
@@ -1247,6 +1249,13 @@ export interface HobRepositories {
   /** The same rules answer the manual spell picker uses, before a draft is accepted. */
   readonly spells: (typeof Spells)["Service"];
   /**
+   * The bundled equipment a drafted kit's names are resolved against
+   * (`bundledNamed`), so a carried line the model spells the way the SRD does
+   * lands linked to its row — the same link the starting kit writes — and a
+   * name with no single bundled row stays exactly as typed.
+   */
+  readonly equipment: (typeof EquipmentRepo)["Service"];
+  /**
    * The group's chronicle and summary — the two group-context reads on the
    * DM's toolkit, keyed on the proof's own `group`. Read-only like everything
    * else here; what it can answer is bounded by what was admitted, which is
@@ -1978,44 +1987,50 @@ export const playerHandlersFor = (
         ...(blank(ideal) === undefined ? {} : { ideal: blank(ideal)! }),
         ...(blank(flaw) === undefined ? {} : { flaw: blank(flaw)! }),
       };
-      const carried = [
-        ...grants.inventory,
-        ...(kit ?? [])
-          .map((item) => item.trim())
-          .filter((item) => item !== "")
-          .map((name) => ({ name })),
-      ];
-      /**
-       * The document, assembled here so the card and the row cannot disagree.
-       *
-       * Every optional key is omitted rather than written empty, for the reason
-       * `emptyCharacterSheet` names only its three required keys: a sheet with
-       * `skills: []` on it draws a Skills section that says nothing, where a
-       * sheet without the key draws the section's own invitation to fill it in.
-       */
-      const baseSheet: CharacterSheet = {
-        notes: blank(backstory) ?? "",
-        // The seed's, not the ranking's: these are the cells with the race and
-        // subrace bonuses applied, and they are the cells its armour class and
-        // hit points were read from — with the class's saving throws marked on
-        // them, numbers only where the progression corpus supplied the bonus.
-        abilities,
-        traits: grants.traits,
-        ...(Object.keys(identity).length === 0 ? {} : { identity }),
-        ...(Object.keys(story).length === 0 ? {} : { story }),
-        ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
-        ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
-        // The corpus's half of the Actions and Spellcasting sections, through
-        // the same `sheetGrantsFor` the form composes — so a drafted Fighter
-        // and a hand-filled one carry the same Longsword line.
-        ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
-        ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
-        ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
-        ...(carried.length === 0 ? {} : { inventory: carried }),
-        ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
-      };
+      const modelKit = (kit ?? []).map((item) => item.trim()).filter((item) => item !== "");
 
       return Effect.gen(function* () {
+        /**
+         * The model's own carried lines, each linked to the bundled row called
+         * exactly that when there is one — *"Scimitar"* is the SRD's scimitar,
+         * with its weight, and a line the sheet's gear section can draw the
+         * row's facts for. A name no bundled row answers, or two do, stays
+         * as typed: *"Leather armour"* in the model's spelling is a name, not
+         * a guess. The kit's own lines above are already linked by the corpus.
+         */
+        const bundled =
+          modelKit.length === 0 ? [] : yield* as(repositories.equipment.bundledNamed(modelKit));
+        const carried = [...grants.inventory, ...gearLinesNamed(modelKit, bundled)];
+        /**
+         * The document, assembled here so the card and the row cannot disagree.
+         *
+         * Every optional key is omitted rather than written empty, for the reason
+         * `emptyCharacterSheet` names only its three required keys: a sheet with
+         * `skills: []` on it draws a Skills section that says nothing, where a
+         * sheet without the key draws the section's own invitation to fill it in.
+         */
+        const baseSheet: CharacterSheet = {
+          notes: blank(backstory) ?? "",
+          // The seed's, not the ranking's: these are the cells with the race and
+          // subrace bonuses applied, and they are the cells its armour class and
+          // hit points were read from — with the class's saving throws marked on
+          // them, numbers only where the progression corpus supplied the bonus.
+          abilities,
+          traits: grants.traits,
+          ...(Object.keys(identity).length === 0 ? {} : { identity }),
+          ...(Object.keys(story).length === 0 ? {} : { story }),
+          ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
+          ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
+          // The corpus's half of the Actions and Spellcasting sections, through
+          // the same `sheetGrantsFor` the form composes — so a drafted Fighter
+          // and a hand-filled one carry the same Longsword line.
+          ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
+          ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
+          ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
+          ...(carried.length === 0 ? {} : { inventory: carried }),
+          ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
+        };
+
         const spellBook = yield* as(
           repositories.spells.forDraft(campaignId, {
             className: classOption?.name ?? className,

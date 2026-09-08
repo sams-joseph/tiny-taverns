@@ -403,7 +403,26 @@ export type BackgroundFeature = typeof BackgroundFeature.Type;
 export const BackgroundBody = Schema.Struct({
   proficiencies: textList,
   languages: textList,
+  /**
+   * The starting equipment as prose lines — *"1 × Clothes, common"*, *"Choose 1
+   * equipment"* — the readable source summary the Rules screens draw. Since
+   * 2026-09-08 it is the **display** half only: `startingKit` below is the
+   * structured, row-linked half the sheet is written from, and this list is
+   * what a background with no kit (a homebrew one typed into the Library) still
+   * lands on a fresh sheet as. Kept, not replaced, so every row decodes.
+   */
   equipment: textList,
+  /**
+   * The background's starting equipment **structured and resolved**, exactly
+   * as `ClassBody.startingKit` is: the counted lines naming their bundled
+   * `equipment` row, and a category line (*"any holy symbol"*) the player picks
+   * from. Written by the ruleset importer off the same source grammar the class
+   * kit uses, so a background's *Clothes, common* is provenance the moment the
+   * sheet carries it rather than a name somebody typed. Absent on a row
+   * written before it existed and on a background whose source lists nothing;
+   * `sheetGrantsFor` falls back to `equipment` then.
+   */
+  startingKit: Schema.optional(StartingKit),
   gold: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80))),
   feature: Schema.optional(BackgroundFeature),
   choices: textList,

@@ -1076,6 +1076,113 @@ describe("the worked examples: a Wizard 3", () => {
   });
 });
 
+/**
+ * The Acolyte as the importer writes it since 2026-09-08: the prose `equipment`
+ * list kept for the Rules screens, and beside it the kit as structure — the two
+ * counted lines naming their bundled rows, and the holy-symbol category the
+ * player picks from. `details.equipment` carries the rows the kit names plus
+ * the category's members, exactly as a class option's does.
+ */
+const CLOTHES = equipmentOf("Clothes, common", {
+  index: "clothes-common",
+  gearCategoryIndex: "standard-gear",
+  weight: 3,
+});
+const POUCH = equipmentOf("Pouch", {
+  index: "pouch",
+  gearCategoryIndex: "standard-gear",
+  weight: 1,
+});
+const RELIQUARY = equipmentOf("Reliquary", {
+  index: "reliquary",
+  gearCategoryIndex: "holy-symbols",
+});
+
+const ACOLYTE_KIT: BackgroundOption = Schema.decodeUnknownSync(BackgroundOption)({
+  ...optionBase,
+  id: uuidOf("b-acolyte-kit") as never,
+  kind: "background",
+  name: "Acolyte",
+  body: {
+    ...ACOLYTE.body,
+    equipment: ["1 × Clothes, common", "1 × Pouch", "Choose 1 equipment"],
+    startingKit: {
+      fixed: [counted(CLOTHES), counted(POUCH)],
+      choices: [
+        {
+          desc: "",
+          options: [side(category("holy-symbols", "Holy Symbols"))],
+        },
+      ],
+    },
+  },
+  details: { ...emptyDetails, equipment: [CLOTHES, POUCH, HOLY_SYMBOL, RELIQUARY] },
+});
+
+describe("the worked examples: an Acolyte's kit", () => {
+  it("writes the background's counted lines with their equipment rows, and the category as a line", () => {
+    const grants = sheetGrantsFor({ backgroundOption: ACOLYTE_KIT });
+    expect(grants.inventory).toEqual([
+      { name: "Clothes, common", equipmentId: CLOTHES.id },
+      { name: "Pouch", equipmentId: POUCH.id },
+      { name: "Any holy symbol", note: "Your pick" },
+    ]);
+    // Still the background's gold, read off the same body.
+    expect(grants.gold).toBe(15);
+  });
+
+  it("takes the pick for the category, through the same picks the class kit takes", () => {
+    const grants = sheetGrantsFor({
+      backgroundOption: ACOLYTE_KIT,
+      backgroundKitChoices: [{ option: 0, picks: [RELIQUARY.id] }],
+    });
+    expect(grants.inventory).toEqual([
+      { name: "Clothes, common", equipmentId: CLOTHES.id },
+      { name: "Pouch", equipmentId: POUCH.id },
+      { name: "Reliquary", equipmentId: RELIQUARY.id },
+    ]);
+  });
+
+  it("refuses a pick from outside the category, exactly as the class kit does", () => {
+    const grants = sheetGrantsFor({
+      backgroundOption: ACOLYTE_KIT,
+      backgroundKitChoices: [{ option: 0, picks: [CLOTHES.id] }],
+    });
+    expect(grants.inventory.map((item) => item.name)).toEqual([
+      "Clothes, common",
+      "Pouch",
+      "Any holy symbol",
+    ]);
+  });
+
+  it("lands after the class kit, and a background weapon would derive no attack twice", () => {
+    const grants = sheetGrantsFor({
+      classOption: FIGHTER,
+      backgroundOption: ACOLYTE_KIT,
+      abilities: cells([16, 14, 15, 8, 12, 10]),
+      kitChoices: [
+        { option: 0, picks: [] },
+        { option: 0, picks: [LONGSWORD.id] },
+        { option: 0, picks: [] },
+      ],
+    });
+    const names = grants.inventory.map((item) => item.name);
+    expect(names.slice(-3)).toEqual(["Clothes, common", "Pouch", "Any holy symbol"]);
+    expect(names.indexOf("Chain Mail")).toBeLessThan(names.indexOf("Clothes, common"));
+    // The class kit's attacks and nothing from the background: its rows are gear.
+    expect(grants.actions.map((action) => action.name)).toEqual([
+      "Longsword",
+      "Crossbow, light",
+      "Second Wind",
+    ]);
+  });
+
+  it("falls back to the prose lines for a background with no kit — a homebrew one, or an old row", () => {
+    const grants = sheetGrantsFor({ backgroundOption: ACOLYTE });
+    expect(grants.inventory).toEqual([{ name: "1 × Clothes, common" }, { name: "1 × Pouch" }]);
+  });
+});
+
 describe("the overlay", () => {
   it("names only slugs the sheet can spell, and every entry with a resource has a recharge", () => {
     for (const [key, entry] of [

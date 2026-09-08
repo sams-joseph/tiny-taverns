@@ -34,6 +34,7 @@ import { GroupHistory } from "../repo/GroupHistory.js";
 import { Groups } from "../repo/Groups.js";
 import { Creatures } from "../repo/Creatures.js";
 import { CampaignCreatorActors } from "../repo/CreatorActor.js";
+import { EquipmentRepo } from "../repo/Equipment.js";
 import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirectWrites.js";
 import { HobThreads } from "../repo/HobThreads.js";
 import { Options } from "../repo/Options.js";
@@ -191,6 +192,7 @@ export class Hob extends Context.Service<
     | Campaigns
     | Creatures
     | CampaignCreatorActors
+    | EquipmentRepo
     | GroupHistory
     | Groups
     | HobThreads
@@ -223,6 +225,10 @@ export class Hob extends Context.Service<
           options: yield* Options,
           // The spell picker rules are shared with Hob's draft through this repository.
           spells: yield* Spells,
+          // The bundled equipment a drafted kit's names resolve against, so a
+          // model saying "Scimitar" links the SRD's scimitar rather than
+          // leaving a name nothing on the sheet can read.
+          equipment: yield* EquipmentRepo,
           // The group context: the chronicle and the summary for the DM's two
           // group tools, and the whole record for group Hob's.
           history: yield* GroupHistory,

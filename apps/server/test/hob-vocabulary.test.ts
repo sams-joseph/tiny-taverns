@@ -17,6 +17,7 @@ import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
+import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
@@ -67,6 +68,7 @@ const services = Layer.mergeAll(
   GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
+  EquipmentRepo.layer,
   HobThreads.layer,
   Invites.layer,
   LibraryShares.layer,
@@ -627,6 +629,7 @@ describe("a campaign with nothing written down", () => {
     GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
     Creatures.layer,
     CampaignCreatorActors.layer,
+    EquipmentRepo.layer,
     HobThreads.layer,
     Invites.layer,
     Options.layer,

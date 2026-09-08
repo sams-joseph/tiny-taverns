@@ -22,6 +22,7 @@ import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
+import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
@@ -76,6 +77,7 @@ const services = Layer.mergeAll(
   Characters.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
+  EquipmentRepo.layer,
   EncounterCreatures.layer,
   Encounters.layer,
   HobThreads.layer,
@@ -632,21 +634,39 @@ describe("the accept makes a character, and it is the player's own", () => {
     expect(character.sheet.identity?.hitDice).toBe("1/1 d8");
     // The class's starting kit first — side (a) of every choice, because the
     // tool takes no picks, with a category the source leaves open kept as a
-    // line — then the background's, then the model's own names.
+    // line — then the background's, then the model's own names. **The model's
+    // names are resolved against the bundle**: `"Scimitar"` and
+    // `"Herbalism kit"` each name exactly one bundled row and land linked, in
+    // the row's own spelling and with its weight; `"Leather armour"` — the
+    // model's spelling, which no bundled row is called — stays as typed.
     expect(character.sheet.inventory?.map((item) => item.name)).toEqual([
       "Leather Armor",
       "Explorer's Pack",
       "Shield",
       "Scimitar",
       "Any druidic focus",
-      "1 × Clothes, common",
-      "1 × Pouch",
-      "Choose 1 equipment",
+      "Clothes, common",
+      "Pouch",
+      "Any holy symbol",
       "Leather armour",
       "Scimitar",
-      "Herbalism kit",
+      "Herbalism Kit",
     ]);
     expect(character.sheet.inventory?.[3]?.equipmentId).toBeTypeOf("string");
+    // The background's counted lines are rows now, the same link the class kit writes.
+    expect(character.sheet.inventory?.[5]?.equipmentId).toBeTypeOf("string");
+    expect(character.sheet.inventory?.[6]?.equipmentId).toBeTypeOf("string");
+    expect(character.sheet.inventory?.[7]).toEqual({ name: "Any holy symbol", note: "Your pick" });
+    expect(character.sheet.inventory?.[8]).toEqual({ name: "Leather armour" });
+    expect(character.sheet.inventory?.[9]?.equipmentId).toBe(
+      character.sheet.inventory?.[3]?.equipmentId,
+    );
+    expect(character.sheet.inventory?.[9]?.weight).toBe("3 lb");
+    expect(character.sheet.inventory?.[10]).toMatchObject({
+      name: "Herbalism Kit",
+      weight: "3 lb",
+    });
+    expect(character.sheet.inventory?.[10]?.equipmentId).toBeTypeOf("string");
     expect(character.sheet.currency).toEqual({ gp: 15 });
     // **The Actions and Spellcasting sections are the corpus's now**, through
     // the same `sheetGrantsFor` the form calls: the scimitar swung with the
@@ -689,6 +709,52 @@ describe("the accept makes a character, and it is the player's own", () => {
     // `descriptor` is a generated column over the three, so the drafted race
     // and class reach the line under the name with nothing computing it twice.
     expect(character.descriptor).toBe("Level 1 Elf Druid");
+  }, 60_000);
+
+  it("leaves a carried name as text when two bundled rows answer to it", async () => {
+    // A second bundled row called *Herbalism Kit*, under a source key of its
+    // own — the shape a future corpus could take, and the one case the
+    // resolver must not guess at. Removed again below so the fixture's other
+    // drafts still resolve the name to the SRD's one row.
+    const inserted = await runtime.runPromise(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ readonly id: string }>`
+          insert into equipment (
+            campaign_id, account_id, origin, source_corpus, source_family, source_key,
+            name, category_index, category_name, cost_quantity, cost_unit, cost_gp,
+            visibility, body
+          )
+          values (
+            null, null, 'system', 'taverns-test', 'equipment', 'herbalism-kit-twin',
+            'Herbalism Kit', 'tools', 'Tools', 5, 'gp', 5, 'shared',
+            '{"equipmentCategory":{"index":"tools","name":"Tools"},"cost":{"quantity":5,"unit":"gp"}}'::jsonb
+          )
+          returning id::text
+        `,
+      ).pipe(Effect.orDie),
+    );
+    try {
+      const { events } = await ask(fixture.player);
+      const { threadId, turnId } = begunIn(events);
+      const accepted = await accept(fixture.player, threadId, turnId);
+      if (accepted._tag !== "Success" || accepted.success.accepted !== "character") {
+        throw new Error("not a character");
+      }
+      const carried = accepted.success.character.sheet.inventory ?? [];
+      // The scimitar still resolves — one bundled row — and the kit's name
+      // with two candidates is written exactly as the model spelled it, with
+      // no link, because a guess written into a link is worse than a name.
+      expect(carried.at(-2)).toMatchObject({ name: "Scimitar", weight: "3 lb" });
+      expect(carried.at(-1)).toEqual({ name: "Herbalism kit" });
+    } finally {
+      await runtime.runPromise(
+        Effect.flatMap(
+          SqlClient.SqlClient,
+          (sql) => sql`delete from equipment where id = ${inserted[0]!.id}`,
+        ).pipe(Effect.orDie),
+      );
+    }
   }, 60_000);
 
   it("is an ordinary unseated character afterwards: the player reads it, the table does not", async () => {

@@ -319,6 +319,7 @@ export const hempRope = {
   accountId: null,
   derivedFrom: null,
   name: "Rope, hempen (50 feet)",
+  sourceKey: "rope-hempen-50-feet",
   categoryIndex: "adventuring-gear",
   categoryName: "Adventuring Gear",
   costQuantity: 1,

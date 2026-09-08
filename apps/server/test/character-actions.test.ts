@@ -111,6 +111,30 @@ describe("the importer keeps what the sheet needs", () => {
     expect(by.get("Barbarian")).toBeNull();
   });
 
+  it("writes the background's kit as structure too, and keeps the prose list beside it", async () => {
+    const rows = await sql(
+      (client) => client<{
+        readonly equipment: ReadonlyArray<string>;
+        readonly kit: {
+          readonly fixed: ReadonlyArray<{ readonly name: string; readonly equipmentId?: string }>;
+          readonly choices: ReadonlyArray<unknown>;
+        } | null;
+      }>`
+        select body -> 'equipment' as equipment, body -> 'startingKit' as kit
+        from character_option
+        where kind = 'background' and name = 'Acolyte' and campaign_id is null and account_id is null
+      `,
+    );
+    const acolyte = rows[0]!;
+    // The Rules screens' readable summary is untouched…
+    expect(acolyte.equipment).toEqual(["1 × Clothes, common", "1 × Pouch", "Choose 1 equipment"]);
+    // …and beside it the kit the sheet is written from, every counted line
+    // naming a bundled row and the holy-symbol category the player picks from.
+    expect(acolyte.kit?.fixed.map((line) => line.name)).toEqual(["Clothes, common", "Pouch"]);
+    expect(acolyte.kit?.fixed.every((line) => typeof line.equipmentId === "string")).toBe(true);
+    expect(acolyte.kit?.choices).toHaveLength(1);
+  });
+
   it("writes the kit as structure, every counted line naming its bundled row", async () => {
     const rows = await sql(
       (client) => client<{
@@ -339,11 +363,30 @@ describe("a Fighter 1, written down through the real create endpoint", () => {
       "Crossbow, light",
       "Crossbow bolt",
       "Explorer's Pack",
-      "1 × Clothes, common",
-      "1 × Pouch",
-      "Choose 1 equipment",
+      "Clothes, common",
+      "Pouch",
+      "Any holy symbol",
     ]);
     expect(created.sheet.inventory?.[1]?.equipmentId).toBe(longsword.id);
+    // **The background's lines are real rows too** — the captain's report was
+    // that a new character's gear was not connected to the equipment table,
+    // and the background was the half of the kit that was not. Each counted
+    // line names the bundled row the importer resolved it to; the category
+    // the source leaves open stays a line with no row, as the class kit's does.
+    const clothes = created.sheet.inventory?.find((item) => item.name === "Clothes, common");
+    const pouch = created.sheet.inventory?.find((item) => item.name === "Pouch");
+    const symbol = created.sheet.inventory?.find((item) => item.name === "Any holy symbol");
+    expect(clothes?.equipmentId).toBeTypeOf("string");
+    expect(pouch?.equipmentId).toBeTypeOf("string");
+    expect(symbol).toEqual({ name: "Any holy symbol", note: "Your pick" });
+    const rows = await sql(
+      (client) => client<{ readonly id: string; readonly source_key: string }>`
+        select id::text, source_key from equipment
+        where id = any(${[clothes!.equipmentId!, pouch!.equipmentId!]})
+        order by source_key
+      `,
+    );
+    expect(rows.map((row) => row.source_key)).toEqual(["clothes-common", "pouch"]);
     expect(created.sheet.identity).toMatchObject({
       proficiency: "+2",
       hitDice: "1/1 d10",

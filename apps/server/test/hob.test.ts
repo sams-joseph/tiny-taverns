@@ -31,6 +31,7 @@ import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
+import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { HobDirectWrites } from "../src/repo/HobDirectWrites.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
@@ -80,6 +81,7 @@ const services = Layer.mergeAll(
   GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
+  EquipmentRepo.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),

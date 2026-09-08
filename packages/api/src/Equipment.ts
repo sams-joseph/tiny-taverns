@@ -111,6 +111,13 @@ export class Equipment extends Schema.Class<Equipment>("Equipment")({
   accountId: Schema.NullOr(AccountId),
   derivedFrom: Schema.NullOr(EquipmentId),
   name: Schema.String,
+  /**
+   * The bundle's stable key for the row (`"longsword"`), `null` on an authored
+   * original. What a weapon attack derived from this row is keyed on
+   * (`atk:longsword`), so a weapon picked after creation spells its line the
+   * way the starting kit did — see `Gear.ts`.
+   */
+  sourceKey: Schema.NullOr(sourceKey),
   categoryIndex: sourceKey,
   categoryName: label,
   costQuantity: nonNegative,
@@ -221,6 +228,15 @@ export type EquipmentSort = typeof EquipmentSort.Type;
 /** Filters the actual Library and campaign equipment screens expose. */
 export const EquipmentFilter = {
   q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
+  /**
+   * Exactly these rows, by id — what a character sheet asks for the rows its
+   * linked gear lines name (`InventoryItem.equipmentId`), in one request over
+   * the same `libraryRowReadable` predicate every other filter here narrows.
+   * An id the reader cannot reach is simply absent from the answer, which is
+   * what lets a line whose row is gone draw exactly as an unlinked one. Not a
+   * reach: nothing here answers a row the Library list would not.
+   */
+  ids: Schema.optional(queryArray(EquipmentId).check(Schema.isLengthBetween(0, 200))),
   categories: Schema.optional(sourceKeys),
   gearCategories: Schema.optional(sourceKeys),
   armorCategories: Schema.optional(labels),

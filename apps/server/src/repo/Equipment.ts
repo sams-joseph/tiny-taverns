@@ -82,6 +82,7 @@ interface EquipmentRow extends ProvenanceColumns {
 export const toEquipment = (row: EquipmentRow): Equipment =>
   new Equipment({
     id: row.id,
+    sourceKey: row.source_key,
     campaignId: row.campaign_id,
     accountId: row.account_id,
     derivedFrom: row.derived_from,
@@ -336,6 +337,13 @@ const narrowedBy = (
   if (filter.q !== undefined && filter.q.trim() !== "") {
     clauses.push(matchesQuery(sql, filter.q.trim()));
   }
+  if (filter.ids !== undefined) {
+    // Exactly these rows — a sheet asking for the rows its gear names. An
+    // empty list is an empty answer, not the whole shelf.
+    clauses.push(
+      filter.ids.length === 0 ? sql`false` : sql`equipment.id = any(${[...filter.ids]})`,
+    );
+  }
   if (filter.categories !== undefined && filter.categories.length > 0) {
     clauses.push(sql`equipment.category_index = any(${filter.categories})`);
   }
@@ -428,6 +436,18 @@ export class EquipmentRepo extends Context.Service<
       patch: EquipmentLibraryUpdate,
     ) => Effect.Effect<Equipment, NotFound, CurrentActor>;
     readonly libraryRemove: (id: EquipmentId) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
+     * The bundled rows called exactly these names, case-insensitively — what
+     * Hob's `proposeCharacter` resolves a drafted kit against. **Bundle only**
+     * (`campaign_id` and `account_id` both null): a model naming *"Pouch"*
+     * means the SRD's pouch, and an original somebody typed into their
+     * Library under the same name is not what a draft should silently link.
+     * Every match is returned, so the caller can tell one row from an
+     * ambiguity; a name with two bundled rows stays free text there.
+     */
+    readonly bundledNamed: (
+      names: ReadonlyArray<string>,
+    ) => Effect.Effect<ReadonlyArray<Equipment>, never, CurrentActor>;
   }
 >()("EquipmentRepo") {
   static readonly layer = Layer.effect(this)(
@@ -456,6 +476,26 @@ export class EquipmentRepo extends Context.Service<
               limit ${pageLimit(filter.limit)}
             `;
               return pageOfRows(rows, filter.limit, ordering, sort, toEquipment);
+            }),
+          ),
+
+        bundledNamed: (names) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const wanted = [
+                ...new Set(names.map((name) => name.trim().toLowerCase()).filter((n) => n !== "")),
+              ];
+              if (wanted.length === 0) return [];
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<EquipmentRow>`
+              select * from equipment
+              where equipment.campaign_id is null
+                and equipment.account_id is null
+                and lower(equipment.name) = any(${wanted})
+                and ${libraryRowReadable(sql, "equipment", actor)}
+              order by lower(equipment.name), equipment.id
+            `;
+              return rows.map(toEquipment);
             }),
           ),
 

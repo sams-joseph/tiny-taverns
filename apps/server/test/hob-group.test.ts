@@ -20,6 +20,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
@@ -60,6 +61,7 @@ const services = Layer.mergeAll(
   Creatures.layer,
   CampaignCreatorActors.layer,
   Encounters.layer,
+  EquipmentRepo.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   HobThreads.layer,
   Invites.layer,

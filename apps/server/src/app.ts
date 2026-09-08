@@ -127,6 +127,7 @@ export const assistantFromConfig: Layer.Layer<
   | Campaigns
   | Creatures
   | CampaignCreatorActors
+  | EquipmentRepo
   | GroupHistory
   | Groups
   | HobThreads
@@ -198,6 +199,7 @@ export const servicesOver = <E>(
     | Campaigns
     | Creatures
     | CampaignCreatorActors
+    | EquipmentRepo
     | GroupHistory
     | Groups
     | HobThreads
@@ -391,6 +393,8 @@ export const servicesOver = <E>(
         SessionEvents.layer,
         Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
         Spells.layer,
+        // The bundled equipment a drafted kit resolves its names against.
+        EquipmentRepo.layer,
       ]),
     ),
   ).pipe(Layer.provide(database));

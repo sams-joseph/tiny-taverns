@@ -377,5 +377,85 @@ describe("2014 SRD mundane equipment", () => {
       ]),
     );
     expect(links.every((link) => link.target_family === "equipment")).toBe(true);
+
+    // And the kit as structure on the body, every counted line naming the row
+    // the reference table names — the same shape a class carries, off the same
+    // reader, so the sheet's background lines are provenance from import.
+    const kit = await sql(
+      (client) => client<{
+        readonly kit: {
+          readonly fixed: ReadonlyArray<{ readonly name: string; readonly equipmentId?: string }>;
+          readonly choices: ReadonlyArray<{
+            readonly options: ReadonlyArray<{
+              readonly lines: ReadonlyArray<Record<string, unknown>>;
+            }>;
+          }>;
+        };
+        readonly clothes: string;
+        readonly pouch: string;
+      }>`
+        select body -> 'startingKit' as kit,
+               (select id::text from equipment where source_key = 'clothes-common'
+                  and campaign_id is null and account_id is null) as clothes,
+               (select id::text from equipment where source_key = 'pouch'
+                  and campaign_id is null and account_id is null) as pouch
+        from character_option
+        where source_family = 'backgrounds' and source_key = 'acolyte'
+      `,
+    );
+    const row = kit[0]!;
+    expect(row.kit.fixed).toEqual([
+      { name: "Clothes, common", quantity: 1, equipmentId: row.clothes },
+      { name: "Pouch", quantity: 1, equipmentId: row.pouch },
+    ]);
+    expect(row.kit.choices).toHaveLength(1);
+    expect(row.kit.choices[0]?.options[0]?.lines).toEqual([
+      {
+        name: "Any holy symbol",
+        quantity: 1,
+        category: { index: "holy-symbols", name: "Holy Symbols" },
+      },
+    ]);
+  }, 60_000);
+
+  it("answers exactly the rows an `ids` filter names, and none for an empty list", async () => {
+    const { actor } = await run(dmCampaign("The Sheet Table"));
+    const club = await run(withActor(actor, firstEquipmentNamed("Club")));
+    const shield = await run(withActor(actor, firstEquipmentNamed("Shield")));
+    const named = await run(
+      withActor(
+        actor,
+        Effect.flatMap(EquipmentRepo, (equipment) =>
+          equipment.library({
+            ids: [club.id, shield.id, "00000000-0000-4000-8000-000000000000" as never],
+            limit: 200,
+          }),
+        ),
+      ),
+    );
+    expect(named.items.map((item) => item.name).sort()).toEqual(["Club", "Shield"]);
+    // The bundle's stable key rides on the wire now, so a weapon picked onto a
+    // sheet keys its attack the way the starting kit does.
+    expect(named.items.find((item) => item.name === "Club")?.sourceKey).toBe("club");
+
+    const none = await run(
+      withActor(
+        actor,
+        Effect.flatMap(EquipmentRepo, (equipment) => equipment.library({ ids: [], limit: 200 })),
+      ),
+    );
+    expect(none.items).toEqual([]);
+
+    // Bundle-only name resolution, for Hob's drafted kit: one row per name,
+    // case-insensitively, and a name nothing answers is simply absent.
+    const bundled = await run(
+      withActor(
+        actor,
+        Effect.flatMap(EquipmentRepo, (equipment) =>
+          equipment.bundledNamed(["club", "SHIELD", "a thing nobody sells", ""]),
+        ),
+      ),
+    );
+    expect(bundled.map((item) => item.name)).toEqual(["Club", "Shield"]);
   }, 60_000);
 });

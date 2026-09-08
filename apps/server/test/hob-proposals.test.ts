@@ -23,6 +23,7 @@ import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Notes } from "../src/repo/Notes.js";
 import { Options } from "../src/repo/Options.js";
@@ -64,6 +65,7 @@ const services = Layer.mergeAll(
   CampaignCreatorActors.layer,
   EncounterCreatures.layer,
   Encounters.layer,
+  EquipmentRepo.layer,
   HobThreads.layer,
   Notes.layer,
   Options.layer,

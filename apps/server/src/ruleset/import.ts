@@ -1,5 +1,6 @@
 import type {
   AbilityKey,
+  BackgroundBody,
   ClassBody,
   KitChoice,
   KitLine,
@@ -225,6 +226,29 @@ const classBodyOf = (
     };
   });
 
+/**
+ * The snapshot's background body plus its kit as structure, off the same
+ * `starting_equipment` / `starting_equipment_options` grammar the class kit
+ * is read from — the 2014 source spells a background's gear exactly the way
+ * it spells a class's, so `startingKitOf` is the one reader of both. The
+ * prose `equipment` list stays beside it for the Rules screens; the kit is
+ * what a fresh sheet is written from, every counted line naming its bundled
+ * row (which is why `equipment:import` runs first).
+ */
+const backgroundBodyOf = (
+  sql: SqlClient.SqlClient,
+  option: SystemOption & { readonly kind: "background" },
+): Effect.Effect<BackgroundBody, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const startingKit = yield* startingKitOf(option.raw, {
+      equipmentId: (index) => systemEquipmentId(sql, index),
+    });
+    return {
+      ...option.body,
+      ...(startingKit === undefined ? {} : { startingKit }),
+    };
+  });
+
 const optionEquipmentReferences = (raw: unknown): ReadonlyArray<EquipmentReference> => {
   const found: EquipmentReference[] = [];
   const record = maybeRecord(raw);
@@ -416,8 +440,12 @@ export const importSystemOptions = (
            * on a database that predates them — the upsert below rewrites
            * `body` whole.
            */
-          const body: ClassBody | SystemOption["body"] =
-            option.kind === "class" ? yield* classBodyOf(sql, option) : option.body;
+          const body: ClassBody | BackgroundBody | SystemOption["body"] =
+            option.kind === "class"
+              ? yield* classBodyOf(sql, option)
+              : option.kind === "background"
+                ? yield* backgroundBodyOf(sql, option)
+                : option.body;
           const rows = yield* sql<{ readonly id: string; readonly inserted: boolean }>`
             insert into character_option (
               campaign_id, account_id, origin, source_corpus, source_family, source_key,

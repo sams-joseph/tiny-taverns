@@ -84,6 +84,13 @@ export interface SheetGrantSources {
   readonly abilities?: ReadonlyArray<Ability> | undefined;
   /** One pick per `startingKit.choices` entry, in order; see `KitPick`. */
   readonly kitChoices?: ReadonlyArray<KitPick> | undefined;
+  /**
+   * The same, for the background's own `startingKit` — one pick per choice,
+   * in order. A 2014 background's one choice is a category (*"any holy
+   * symbol"*), so a pick here is which row was taken from it; absent, the
+   * category stays a line with no row behind it, exactly as the class kit's.
+   */
+  readonly backgroundKitChoices?: ReadonlyArray<KitPick> | undefined;
 }
 
 /**
@@ -324,7 +331,7 @@ export const inCategory = (row: KitEquipment, categoryIndex: string): boolean =>
 };
 
 /** The kit's lines as the Gear section draws them. */
-const kitInventory = (lines: ReadonlyArray<KitLine>): ReadonlyArray<InventoryItem> =>
+export const kitInventory = (lines: ReadonlyArray<KitLine>): ReadonlyArray<InventoryItem> =>
   lines.map((line) => ({
     name: line.name,
     ...(line.quantity > 1 ? { quantity: line.quantity } : {}),
@@ -368,8 +375,13 @@ const feet = (normal: number | null, long: number | null): string =>
  * for Finesse, STR otherwise), the proficiency bonus when the character is
  * proficient with the weapon or its category, and the bonus written inside the
  * damage notation so a roll reads it whole.
+ *
+ * **Exported for `Gear.ts`, and that is the whole reason it is exported.** A
+ * weapon picked onto the sheet after creation derives its line through this
+ * same function (`sheetWithGear`), so there is one 2014 attack rule in the
+ * product and not a second one that agrees until the day it does not.
  */
-const weaponAttack = (
+export const weaponAttack = (
   row: KitEquipment,
   abilities: ReadonlyArray<Ability>,
   proficiencyBonus: number | undefined,
@@ -528,6 +540,26 @@ const spellcastingOf = (
   };
 };
 
+/**
+ * The background's starting equipment as lines to carry.
+ *
+ * Through the same `kitLinesFor` the class kit uses when the importer wrote a
+ * `startingKit` — so *Clothes, common* and *Pouch* name their bundled rows and
+ * the holy-symbol category takes the player's pick or stays a line — and off
+ * the prose `equipment` list when it did not: a background typed into the
+ * Library, or a row written before the kit existed, still lands what it says.
+ */
+const backgroundInventory = (
+  option: BackgroundOption | undefined,
+  sources: SheetGrantSources,
+): ReadonlyArray<InventoryItem> => {
+  const kit = option?.body.startingKit;
+  if (kit === undefined) return (option?.body.equipment ?? []).map((name) => ({ name }));
+  return kitInventory(
+    kitLinesFor(kit, option?.details?.equipment ?? [], sources.backgroundKitChoices),
+  );
+};
+
 export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
   const classOption =
     sources.classOption !== undefined && isClassOption(sources.classOption)
@@ -654,10 +686,7 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
     proficiencies,
     savingThrows: savingThrowsOf(classOption),
     ...(proficiencyBonus === undefined ? {} : { proficiencyBonus }),
-    inventory: [
-      ...kitInventory(kitLines),
-      ...(background?.equipment ?? []).map((name) => ({ name })),
-    ],
+    inventory: [...kitInventory(kitLines), ...backgroundInventory(backgroundOption, sources)],
     ...(gold === undefined ? {} : { gold }),
     ...(raceOption === undefined ? {} : { speed: raceOption.body.speed }),
     ...(hitDie === undefined ? {} : { hitDie }),

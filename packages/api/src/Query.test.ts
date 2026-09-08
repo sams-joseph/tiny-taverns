@@ -107,6 +107,7 @@ describe("the query parameters this contract declares", () => {
       "library.spells.levels",
       "library.spells.schools",
       "library.spells.classes",
+      "library.equipment.ids",
       "library.equipment.categories",
       "library.equipment.gearCategories",
       "library.equipment.armorCategories",
@@ -129,7 +130,9 @@ describe("the query parameters this contract declares", () => {
             ? "required"
             : field.name === "variantStates"
               ? "variant"
-              : "Cave";
+              : field.name === "ids"
+                ? "2b1f2a1e-0000-4000-8000-0000000e0001"
+                : "Cave";
       const expected = [sample];
       const one = Schema.decodeUnknownSync(field_)(sample);
       expect(one, `${field.endpoint}.${field.name}`).toEqual(expected);

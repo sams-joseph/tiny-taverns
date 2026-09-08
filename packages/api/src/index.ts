@@ -14,6 +14,7 @@ export * from "./EncounterRun.js";
 export * from "./Equipment.js";
 export * from "./Errors.js";
 export * from "./Feat.js";
+export * from "./Gear.js";
 export * from "./Hob.js";
 export * from "./HobDirectResourceUpdate.js";
 export * from "./Ids.js";
