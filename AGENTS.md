@@ -306,6 +306,71 @@ reached `sheet.inventory` were not. Pointer-style; the files carry the arguments
 - **Out of scope by the brief and untouched**: encumbrance, shops, currency, magic items on the
   gear tab, campaign-scoped equipment.
 
+## The cast, 2026-09-08: NPC builder slice 1 — campaign NPC profile and creator rehearsal
+
+The captain's NPC builder decisions of 2026-09-04 (`~/projects/firstmate/data/tav-npc-agent-builder-plan/`):
+a structured, bounded NPC, creator-only rehearsal first, no raw secrets in a player prompt, manual
+memory later, conversation only, on a campaign **Cast** screen. Slice 1 ships the profile and the
+rehearsal; knowledge, memory, player chat, Library sources, group sharing, proposals and NPC tools
+are later slices and are absent rather than stubbed. Pointer-style; the files carry the arguments.
+
+- **Three tables, campaign-owned only** (`0037_npcs.ts`): `npc`, `npc_thread`, `npc_turn`. No
+  `account_id` yet — a Library original is slice 4 and will be the `creature` three-owner idiom —
+  but `derived_from` is already nullable so a snapshot is a column filling. `version` is
+  `character`'s optimistic-concurrency counter (`expectedVersion` → `Conflict`), `archived_at` the
+  reversible soft delete (transcripts stay; an archived NPC takes no new lines). `channel` is a
+  closed check with one member, `rehearsal`; a player or session channel is a migration with a
+  privacy decision behind it. **`npc_turn` relaxes the provenance check on purpose**: an NPC's own
+  line is `origin = 'assistant'` pointing at _no_ Hob turn, and `who = 'npc'` ⇔ `assistant`.
+- **Private material is its own column and its own prompt section, never part of `persona`.**
+  `packages/api/src/Npc.ts` has `NpcPersona` (identity / voice / intent / boundaries — boundaries
+  are _behavioural_, "dodges who pays him", never the fact) beside `NpcPrivateMaterial` (secrets,
+  instructions). `assistant/npcPrompt.ts` renders the two from two arguments and the audience
+  decides whether the private section exists at all, so a later player channel excludes secrets
+  by construction. The web form keeps the split as two pure functions over disjoint draft keys
+  (`cast/persona.ts`, pinned in `persona.test.ts`).
+- **Every method on `repo/Npcs.ts` and `repo/NpcThreads.ts` takes the `CampaignCreatorActor`
+  proof** and composes `rowWritable` / the writable containment chain underneath — there is no
+  `rowReadable` in either file, because there is no player projection yet ("gate first, project
+  later", applied on the day). `creator-actor.test.ts`'s occurrence count is 38 now (24 + eleven
+  methods + three inner helpers). Player, revoked member, stranger and mis-scoped credential all get
+  the campaign's `NotFound` from the gate; `npcs.test.ts` and `npcs-api.test.ts` pin every endpoint.
+- **`assistant/NpcAgent.ts` is Hob's loop with everything an NPC must not have removed**: one
+  `LanguageModel.streamText` call, no toolkit, no rounds, no proposals, no writes; it imports
+  `Npcs`, `NpcThreads` and `CreatorActor` and nothing else, and `hob.test.ts`'s seam sweep over
+  `src/assistant/` covers it (no SQL). The reply is saved in a finalizer with
+  `NPC_PROMPT_TEMPLATE_VERSION` and a token estimate stamped on the NPC turn; the assembled prompt
+  is never stored or sent to a client. `npcs.test.ts` plants sentinels in another campaign's NPC, a
+  DM-only note, a player's sheet and a player's Hob thread and proves zero bytes reach the provider
+  request, while this NPC's private material _does_ (the creator is the audience). Bump the
+  template version when `npcPrompt.ts`'s behaviour changes and add a snapshot beside the old one
+  (`npc-prompt.test.ts`, `__snapshots__/`).
+- **It shares Hob's configuration and Hob's error class.** `npcAgentFromConfig` reads
+  `HOB_API_URL`/`HOB_MODEL`/`HOB_API_KEY`/`HOB_MAX_TOKENS` through the same `languageModelLayer`
+  helper in `app.ts` (the one place the provider layer is spelled now), logs its own ON/OFF line,
+  and `rehearse` is a declared `HobUnavailable` when off — so `classifyFailure`'s `unavailable`
+  branch and the panel's composer-less state cover both surfaces. Do not add a second model
+  configuration for NPCs.
+- **The web is `apps/web/src/cast/`**: `CastScreen` (a campaign destination like Notes — search and
+  _New NPC_ in the bar's action slot, `npcsAtom` as the frame's `extra`, cards in a `@container`
+  grid), `NpcScreen` (persona + inspector left, rehearsal right above `@3xl`, rehearsal first below
+  it), `NpcDialog` (Basic = name, role, who they are, how they talk; _Advanced_ is one disclosure
+  holding identity, voice, motives, boundaries and the boxed private section), `rehearsal.ts`
+  (Hob's conversation hook without tools or accept) and `RehearsalPanel` (Hob's `UserTurn`,
+  `Composer`, `NothingListens` reused; the reply row wears the NPC's initials and **nothing on the
+  panel says Hob** — `Composer` grew a `label` prop for exactly this). _Cast_ sits between Notes
+  and Chronicle on the creator's campaign row; `campaignRow.test.tsx`, `AppShell.test.tsx` and the
+  fixtures (`cazril`, `npcRehearsalStatus`, `installStubServer`'s `sse` answers) were extended.
+  Icons are from the existing table (`mic`, `eye-off`, `refresh-cw`, `lock`, `user-round`); no glyph
+  was added.
+- **The inspector shows metadata, never the prompt**: template version, persona size in tokens
+  (`npcs.rehearsal`), model, and the last reply's measured prompt from its `began` event.
+- Measured in headless Chromium against a real server, a real Postgres and a scripted model at
+  1440 and 760: no sideways scroll on either screen or the dialog, _Cast_ lit on the row, the
+  rehearsal streamed in pieces and survived a reload, the dialog at `z-dialog` 110 over
+  `z-scrim` 100 with the private section inside it, and the one provider request carrying
+  `max_tokens`, no `tools`, the private material and neither of the other two NPCs.
+
 ## The design system: what is canonical, and how it reaches Tailwind
 
 `packages/design-system` is the designers' delivered Tiny Taverns system, copied in whole.
