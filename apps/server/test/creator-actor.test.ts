@@ -652,8 +652,12 @@ describe("the scope, counted", () => {
     // pre-accept proposal grammar share a campaign-readable spellbook answer,
     // and neither has a DM projection to prove. Rolls add four more: create,
     // list, findById and the own-character log answer a session's player-safe
-    // dice tray, not a DM projection of the runner.
-    expect(ungated).toBe(131);
+    // dice tray, not a DM projection of the runner. `EquipmentRepo.bundledNamed`
+    // is the one hundred and thirty-second: a Library read like the shelf's
+    // other five — the rows are in no campaign, so there is no membership to
+    // prove and no player projection to diverge from — reached by Hob's
+    // character draft to link a carried name to its bundled row.
+    expect(ungated).toBe(132);
   });
 });
 
