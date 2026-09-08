@@ -227,3 +227,11 @@ export type NpcThreadId = typeof NpcThreadId.Type;
 /** One line of an NPC conversation — the creator's, or the NPC's. */
 export const NpcTurnId = id("NpcTurnId");
 export type NpcTurnId = typeof NpcTurnId.Type;
+
+/** One explicit copied fact the creator lets an NPC know. */
+export const NpcKnowledgeFactId = id("NpcKnowledgeFactId");
+export type NpcKnowledgeFactId = typeof NpcKnowledgeFactId.Type;
+
+/** One curated memory an NPC may use after the creator approves it. */
+export const NpcMemoryId = id("NpcMemoryId");
+export type NpcMemoryId = typeof NpcMemoryId.Type;

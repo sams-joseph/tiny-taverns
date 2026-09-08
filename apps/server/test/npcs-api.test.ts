@@ -1,5 +1,11 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { type CampaignId, type NpcId, TavernsApi } from "@taverns/api";
+import {
+  type CampaignId,
+  type NpcId,
+  type NpcKnowledgeFactId,
+  type NpcMemoryId,
+  TavernsApi,
+} from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
@@ -126,6 +132,71 @@ describe("the npcs group", () => {
     expect(seen.restored.archivedAt).toBeNull();
   }, 60_000);
 
+  it("manages explicit knowledge and approved memory over HTTP", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const dm = yield* clientFor(creator);
+        const fact = yield* dm.npcs.createKnowledge({
+          params: { campaignId, npcId: cazril },
+          payload: {
+            body: "Cazril knows the ford by the willow.",
+            sourceKind: "manual",
+            sourceLabel: "Typed by Jo",
+          },
+        });
+        const changedFact = yield* dm.npcs.updateKnowledge({
+          params: { campaignId, npcId: cazril, factId: fact.id },
+          payload: { body: "Cazril knows the ford by the black willow." },
+        });
+        const draft = yield* dm.npcs.draftMemory({
+          params: { campaignId, npcId: cazril },
+          payload: { body: "The party promised a true name." },
+        });
+        const approved = yield* dm.npcs.approveMemory({
+          params: { campaignId, npcId: cazril, memoryId: draft.id },
+          payload: {},
+        });
+        const memories = yield* dm.npcs.memories({ params: { campaignId, npcId: cazril } });
+        const status = yield* dm.npcs.rehearsal({ params: { campaignId, npcId: cazril } });
+        const retired = yield* dm.npcs.retireKnowledge({
+          params: { campaignId, npcId: cazril, factId: fact.id },
+          payload: {},
+        });
+        const reset = yield* dm.npcs.resetMemories({
+          params: { campaignId, npcId: cazril },
+          payload: {},
+        });
+        const factsAfter = yield* dm.npcs.knowledge({ params: { campaignId, npcId: cazril } });
+        const memoriesAfter = yield* dm.npcs.memories({ params: { campaignId, npcId: cazril } });
+        return {
+          fact,
+          changedFact,
+          approved,
+          memories,
+          status,
+          retired,
+          reset,
+          factsAfter,
+          memoriesAfter,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.changedFact.body).toBe("Cazril knows the ford by the black willow.");
+    expect(seen.memories.map((memory) => memory.id)).toEqual([seen.approved.id]);
+    expect(seen.approved.status).toBe("approved");
+    expect(seen.status).toMatchObject({
+      knowledgeIncluded: 1,
+      knowledgeTotal: 1,
+      memoriesIncluded: 1,
+      memoriesTotal: 1,
+    });
+    expect(seen.retired.retiredAt).not.toBeNull();
+    expect(seen.reset.every((memory) => memory.retiredAt !== null)).toBe(true);
+    expect(seen.factsAfter[0]?.retiredAt).not.toBeNull();
+    expect(seen.memoriesAfter.every((memory) => memory.retiredAt !== null)).toBe(true);
+  }, 60_000);
+
   it("answers the rehearsal status as unavailable, with the prompt metadata, and no threads yet", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
@@ -159,6 +230,8 @@ describe("the npcs group", () => {
         Effect.gen(function* () {
           const client = yield* clientFor(token);
           const params = { campaignId, npcId: cazril };
+          const factId = "2b1f2a1e-0000-4000-8000-00000000a099" as NpcKnowledgeFactId;
+          const memoryId = "2b1f2a1e-0000-4000-8000-00000000b099" as NpcMemoryId;
           const attempts: Record<string, Effect.Effect<unknown, unknown>> = {
             list: client.npcs.list({ params: { campaignId }, query: {} }),
             create: client.npcs.create({ params: { campaignId }, payload: { name: "Mine" } }),
@@ -169,6 +242,34 @@ describe("the npcs group", () => {
             rehearsal: client.npcs.rehearsal({ params }),
             rehearse: client.npcs.rehearse({ params, payload: { text: "hello" } }),
             threads: client.npcs.threads({ params }),
+            knowledge: client.npcs.knowledge({ params }),
+            createKnowledge: client.npcs.createKnowledge({
+              params,
+              payload: { body: "mine", sourceKind: "manual", sourceLabel: "mine" },
+            }),
+            updateKnowledge: client.npcs.updateKnowledge({
+              params: { ...params, factId },
+              payload: { body: "mine" },
+            }),
+            retireKnowledge: client.npcs.retireKnowledge({
+              params: { ...params, factId },
+              payload: {},
+            }),
+            memories: client.npcs.memories({ params }),
+            draftMemory: client.npcs.draftMemory({ params, payload: { body: "mine" } }),
+            updateMemory: client.npcs.updateMemory({
+              params: { ...params, memoryId },
+              payload: { body: "mine" },
+            }),
+            approveMemory: client.npcs.approveMemory({
+              params: { ...params, memoryId },
+              payload: {},
+            }),
+            retireMemory: client.npcs.retireMemory({
+              params: { ...params, memoryId },
+              payload: {},
+            }),
+            resetMemories: client.npcs.resetMemories({ params, payload: {} }),
           };
           return yield* Effect.all(
             Object.fromEntries(

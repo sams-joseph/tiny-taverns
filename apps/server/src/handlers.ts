@@ -42,6 +42,8 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { NpcKnowledge } from "./repo/NpcKnowledge.js";
+import { NpcMemories } from "./repo/NpcMemories.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -803,6 +805,8 @@ const NpcsLive = HttpApiBuilder.group(
   "npcs",
   Effect.fnUntraced(function* (handlers) {
     const npcs = yield* Npcs;
+    const knowledge = yield* NpcKnowledge;
+    const memories = yield* NpcMemories;
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
@@ -842,6 +846,46 @@ const NpcsLive = HttpApiBuilder.group(
         asCreator(params.campaignId, (creator) =>
           threads.turns(creator, params.npcId, params.threadId),
         ),
+      )
+      .handle("knowledge", ({ params }) =>
+        asCreator(params.campaignId, (creator) => knowledge.list(creator, params.npcId)),
+      )
+      .handle("createKnowledge", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) => knowledge.create(creator, params.npcId, payload)),
+      )
+      .handle("updateKnowledge", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) =>
+          knowledge.update(creator, params.npcId, params.factId, payload),
+        ),
+      )
+      .handle("retireKnowledge", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          knowledge.retire(creator, params.npcId, params.factId),
+        ),
+      )
+      .handle("memories", ({ params }) =>
+        asCreator(params.campaignId, (creator) => memories.list(creator, params.npcId)),
+      )
+      .handle("draftMemory", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) => memories.draft(creator, params.npcId, payload)),
+      )
+      .handle("updateMemory", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) =>
+          memories.update(creator, params.npcId, params.memoryId, payload),
+        ),
+      )
+      .handle("approveMemory", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          memories.approve(creator, params.npcId, params.memoryId),
+        ),
+      )
+      .handle("retireMemory", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          memories.retire(creator, params.npcId, params.memoryId),
+        ),
+      )
+      .handle("resetMemories", ({ params }) =>
+        asCreator(params.campaignId, (creator) => memories.reset(creator, params.npcId)),
       );
   }),
 );

@@ -185,6 +185,8 @@ describe("migrations", () => {
       "magic_school",
       "note",
       "npc",
+      "npc_knowledge_fact",
+      "npc_memory",
       "npc_thread",
       "npc_turn",
       "play_group",
@@ -252,6 +254,7 @@ describe("migrations", () => {
       { migration_id: 35, name: "hob_direct_resource_writes" },
       { migration_id: 36, name: "session_event_character" },
       { migration_id: 37, name: "npcs" },
+      { migration_id: 38, name: "npc_knowledge_memory" },
     ]);
   }, 60_000);
 
@@ -298,6 +301,7 @@ describe("migrations", () => {
       { migration_id: 35, name: "hob_direct_resource_writes" },
       { migration_id: 36, name: "session_event_character" },
       { migration_id: 37, name: "npcs" },
+      { migration_id: 38, name: "npc_knowledge_memory" },
     ]);
   }, 60_000);
 });

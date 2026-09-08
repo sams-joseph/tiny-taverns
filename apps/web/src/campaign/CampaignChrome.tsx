@@ -205,6 +205,7 @@ export function CampaignChrome<Extra = undefined>({
   title,
   subtitle,
   actions,
+  tabs,
   extra: extraFrom,
   children,
 }: {
@@ -214,6 +215,8 @@ export function CampaignChrome<Extra = undefined>({
   readonly subtitle?: (slots: CampaignChromeSlots<Extra>) => string | undefined;
   /** This screen's own top-bar controls: its search box and its create button. */
   readonly actions?: (slots: CampaignChromeSlots<Extra>) => ReactNode;
+  /** A tab strip for this screen, on `TopBar`'s own tab row below the title. */
+  readonly tabs?: (slots: CampaignChromeSlots<Extra>) => ReactNode;
   /**
    * What this screen reads beyond the campaign view — see `CampaignExtraAtom`.
    *
@@ -367,7 +370,11 @@ export function CampaignChrome<Extra = undefined>({
         )
       }
       topBar={
-        <TopBar title={title} subtitle={slots === undefined ? undefined : subtitle?.(slots)}>
+        <TopBar
+          title={title}
+          subtitle={slots === undefined ? undefined : subtitle?.(slots)}
+          tabs={slots === undefined ? undefined : tabs?.(slots)}
+        >
           {slots !== undefined && actions?.(slots)}
         </TopBar>
       }

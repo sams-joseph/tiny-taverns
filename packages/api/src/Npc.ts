@@ -1,5 +1,12 @@
 import { Schema } from "effect";
-import { CampaignId, NpcId, NpcThreadId, NpcTurnId } from "./Ids.js";
+import {
+  CampaignId,
+  NpcId,
+  NpcKnowledgeFactId,
+  NpcMemoryId,
+  NpcThreadId,
+  NpcTurnId,
+} from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -209,6 +216,96 @@ export class NpcTurn extends Schema.Class<NpcTurn>("NpcTurn")({
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
 
+export const NpcKnowledgeSourceKind = Schema.Literals([
+  "manual",
+  "note",
+  "beat",
+  "group_history",
+  "recap",
+]);
+export type NpcKnowledgeSourceKind = typeof NpcKnowledgeSourceKind.Type;
+
+const sourceId = Schema.String.check(Schema.isUUID());
+const knowledgeBody = Schema.NonEmptyString.check(Schema.isMaxLength(4000));
+const sourceLabel = Schema.String.check(Schema.isMaxLength(200));
+
+/**
+ * One explicit fact the creator has selected for this NPC.
+ *
+ * `body` is the copied fact. `source*` is provenance only: prompt assembly and
+ * repository reads never follow it, so a source that is deleted, edited, or no
+ * longer readable cannot leak fresh content into a later answer.
+ */
+export class NpcKnowledgeFact extends Schema.Class<NpcKnowledgeFact>("NpcKnowledgeFact")({
+  id: NpcKnowledgeFactId,
+  npcId: NpcId,
+  body: Schema.String,
+  sourceKind: NpcKnowledgeSourceKind,
+  sourceId: Schema.NullOr(sourceId),
+  sourceLabel: Schema.String,
+  retiredAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  visibility: Visibility,
+  ...provenanceFields,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+export const NpcKnowledgeFactCreate = Schema.Struct({
+  body: knowledgeBody,
+  sourceKind: Schema.optional(NpcKnowledgeSourceKind),
+  sourceId: Schema.optional(Schema.NullOr(sourceId)),
+  sourceLabel: Schema.optional(sourceLabel),
+  visibility: Schema.optional(Visibility),
+});
+export type NpcKnowledgeFactCreate = typeof NpcKnowledgeFactCreate.Type;
+
+export const NpcKnowledgeFactUpdate = Schema.Struct({
+  body: Schema.optional(knowledgeBody),
+  sourceKind: Schema.optional(NpcKnowledgeSourceKind),
+  sourceId: Schema.optional(Schema.NullOr(sourceId)),
+  sourceLabel: Schema.optional(sourceLabel),
+  visibility: Schema.optional(Visibility),
+});
+export type NpcKnowledgeFactUpdate = typeof NpcKnowledgeFactUpdate.Type;
+
+export const NpcMemoryStatus = Schema.Literals(["draft", "approved", "retired"]);
+export type NpcMemoryStatus = typeof NpcMemoryStatus.Type;
+
+const memoryBody = Schema.NonEmptyString.check(Schema.isMaxLength(4000));
+
+/**
+ * A curated memory. Drafts are audit/editing state only; only `approved` rows
+ * with `retiredAt === null` enter model context.
+ */
+export class NpcMemory extends Schema.Class<NpcMemory>("NpcMemory")({
+  id: NpcMemoryId,
+  npcId: NpcId,
+  body: Schema.String,
+  status: NpcMemoryStatus,
+  sourceThreadId: Schema.NullOr(NpcThreadId),
+  sourceTurnId: Schema.NullOr(NpcTurnId),
+  approvedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  retiredAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  visibility: Visibility,
+  ...provenanceFields,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+export const NpcMemoryCreate = Schema.Struct({
+  body: memoryBody,
+  sourceThreadId: Schema.optional(Schema.NullOr(NpcThreadId)),
+  sourceTurnId: Schema.optional(Schema.NullOr(NpcTurnId)),
+  visibility: Schema.optional(Visibility),
+});
+export type NpcMemoryCreate = typeof NpcMemoryCreate.Type;
+
+export const NpcMemoryUpdate = Schema.Struct({
+  body: Schema.optional(memoryBody),
+  visibility: Schema.optional(Visibility),
+});
+export type NpcMemoryUpdate = typeof NpcMemoryUpdate.Type;
+
 /**
  * Whether a model is behind the rehearsal, and the prompt metadata the
  * inspector shows — the template version and an estimate of the prompt's
@@ -219,8 +316,12 @@ export class NpcRehearsalStatus extends Schema.Class<NpcRehearsalStatus>("NpcReh
   model: Schema.NullOr(Schema.String),
   npc: Schema.String,
   templateVersion: Schema.String,
-  /** A character-count estimate of the persona sections, in tokens. */
+  /** A character-count estimate of the persona, active knowledge and approved memory. */
   estimatedTokens: Schema.Int,
+  knowledgeIncluded: Schema.Int,
+  knowledgeTotal: Schema.Int,
+  memoriesIncluded: Schema.Int,
+  memoriesTotal: Schema.Int,
 }) {}
 
 const turnText = Schema.String.check(Schema.isLengthBetween(1, 4000));
@@ -241,6 +342,10 @@ export class NpcBegun extends Schema.Class<NpcBegun>("NpcBegun")({
   turnId: NpcTurnId,
   templateVersion: Schema.String,
   estimatedTokens: Schema.Int,
+  knowledgeIncluded: Schema.Int,
+  knowledgeTotal: Schema.Int,
+  memoriesIncluded: Schema.Int,
+  memoriesTotal: Schema.Int,
 }) {}
 
 export class NpcDelta extends Schema.Class<NpcDelta>("NpcDelta")({

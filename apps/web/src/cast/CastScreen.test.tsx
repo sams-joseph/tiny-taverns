@@ -91,9 +91,21 @@ describe("CastScreen", () => {
         available: false,
         model: null,
         npc: "Fen",
-        templateVersion: "npc-prompt/1.0.0",
+        templateVersion: "npc-prompt/1.1.0",
         estimatedTokens: 90,
+        knowledgeIncluded: 0,
+        knowledgeTotal: 0,
+        memoriesIncluded: 0,
+        memoriesTotal: 0,
       },
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/knowledge`, {
+      status: 200,
+      body: [],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/memories`, {
+      status: 200,
+      body: [],
     });
     server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/threads`, {
       status: 200,

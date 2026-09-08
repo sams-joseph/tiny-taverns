@@ -48,6 +48,11 @@ const withModel = () => {
   });
 };
 
+const openRehearsal = async () => {
+  await userEvent.click(await screen.findByRole("button", { name: "Rehearsal" }));
+  return await screen.findByRole("region", { name: "Rehearse with Cazril" });
+};
+
 describe("NpcScreen", () => {
   it("draws the persona, marks the private half, and shows prompt metadata rather than a prompt", async () => {
     await renderNpc();
@@ -64,7 +69,7 @@ describe("NpcScreen", () => {
 
     // The inspector: version, size, model — and never the assembled prompt.
     const inspector = await screen.findByLabelText("Prompt inspector");
-    await within(inspector).findByText("npc-prompt/1.0.0");
+    await within(inspector).findByText("npc-prompt/1.1.0");
     expect(within(inspector).getByText("about 240 tokens")).toBeInTheDocument();
     expect(within(inspector).getByText("none configured")).toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE MATERIAL/)).toBeNull();
@@ -74,7 +79,7 @@ describe("NpcScreen", () => {
   it("offers no composer when no model is behind the NPC, and says why", async () => {
     await renderNpc();
 
-    const panel = await screen.findByRole("region", { name: "Rehearse with Cazril" });
+    const panel = await openRehearsal();
     expect(
       await within(panel).findByText(/No model is configured behind Cazril/),
     ).toBeInTheDocument();
@@ -91,8 +96,12 @@ describe("NpcScreen", () => {
         frame("began", {
           threadId: npcThreadId,
           turnId: "2b1f2a1e-0000-4000-8000-00000000e101",
-          templateVersion: "npc-prompt/1.0.0",
+          templateVersion: "npc-prompt/1.1.0",
           estimatedTokens: 312,
+          knowledgeIncluded: 0,
+          knowledgeTotal: 0,
+          memoriesIncluded: 0,
+          memoriesTotal: 0,
         }) +
         frame("delta", { text: "Names keep. " }) +
         frame("delta", { text: "Coin sinks." }) +
@@ -100,7 +109,7 @@ describe("NpcScreen", () => {
     });
     await renderNpc();
 
-    const panel = await screen.findByRole("region", { name: "Rehearse with Cazril" });
+    const panel = await openRehearsal();
     const input = await within(panel).findByRole("textbox", { name: "Say something to Cazril" });
     await userEvent.type(input, "What is your price?{enter}");
 
@@ -111,12 +120,79 @@ describe("NpcScreen", () => {
     const sent = bodyOf(server, "POST", "/rehearse") as { readonly text: string };
     expect(sent).toEqual({ text: "What is your price?" });
     // And the inspector now knows what that reply's prompt measured.
+    await userEvent.click(screen.getByRole("button", { name: "Profile" }));
     const inspector = screen.getByLabelText("Prompt inspector");
     expect(
-      await within(inspector).findByText("about 312 tokens sent, npc-prompt/1.0.0"),
+      await within(inspector).findByText("about 312 tokens sent, npc-prompt/1.1.0"),
     ).toBeInTheDocument();
     expect(within(panel).queryByText(/Hob/)).toBeNull();
   }, 20_000);
+
+  it("manages facts and memory from their own tab rows", async () => {
+    const fact = {
+      id: "2b1f2a1e-0000-4000-8000-00000000a001",
+      npcId,
+      body: "Cazril knows the ford by the willow.",
+      sourceKind: "manual",
+      sourceLabel: "Typed lore",
+      sourceId: null,
+      retiredAt: null,
+      visibility: "dm",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: cazril.createdAt,
+      updatedAt: cazril.updatedAt,
+    };
+    const memory = {
+      id: "2b1f2a1e-0000-4000-8000-00000000b001",
+      npcId,
+      body: "The party promised Cazril a true name.",
+      status: "draft",
+      sourceThreadId: null,
+      sourceTurnId: null,
+      approvedAt: null,
+      retiredAt: null,
+      visibility: "dm",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: cazril.createdAt,
+      updatedAt: cazril.updatedAt,
+    };
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/knowledge`, {
+      status: 200,
+      body: [fact],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/knowledge`, {
+      status: 200,
+      body: { ...fact, id: "2b1f2a1e-0000-4000-8000-00000000a002" },
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/memories`, {
+      status: 200,
+      body: [memory],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/memories/${memory.id}/approve`, {
+      status: 200,
+      body: { ...memory, status: "approved", approvedAt: cazril.updatedAt },
+    });
+
+    await renderNpc();
+    await userEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
+    expect(await screen.findByText("Cazril knows the ford by the willow.")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Fact"), "He knows where the hag sleeps.");
+    await userEvent.selectOptions(screen.getByLabelText("Source kind"), "note");
+    await userEvent.type(screen.getByLabelText("Source label"), "Session 12");
+    await userEvent.click(screen.getByRole("button", { name: "Add fact" }));
+    expect(bodyOf(server, "POST", "/knowledge")).toEqual({
+      body: "He knows where the hag sleeps.",
+      sourceKind: "note",
+      sourceLabel: "Session 12",
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Memory" }));
+    expect(await screen.findByText("The party promised Cazril a true name.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(bodyOf(server, "POST", "/approve")).toEqual({});
+  });
 
   it("resumes the newest thread on open, so a reload keeps the rehearsal", async () => {
     withModel();
@@ -150,7 +226,7 @@ describe("NpcScreen", () => {
           threadId: npcThreadId,
           who: "npc",
           text: "Dawn, if you have names.",
-          templateVersion: "npc-prompt/1.0.0",
+          templateVersion: "npc-prompt/1.1.0",
           promptTokens: 300,
           createdAt: cazril.createdAt,
         },
@@ -158,7 +234,7 @@ describe("NpcScreen", () => {
     });
     await renderNpc();
 
-    const panel = await screen.findByRole("region", { name: "Rehearse with Cazril" });
+    const panel = await openRehearsal();
     expect(await within(panel).findByText("Dawn, if you have names.")).toBeInTheDocument();
     expect(within(panel).getByText("Will you take us at dawn?")).toBeInTheDocument();
     // The thread can be set aside: *New thread* forgets it on screen.

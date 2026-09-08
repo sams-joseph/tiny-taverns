@@ -145,6 +145,12 @@ export const reads = {
   /** One NPC's rehearsal threads, and whether a model is behind them. */
   npcRehearsal: (npcId: NpcId): ReadKey => key`npc-rehearsal:${npcId}`,
 
+  /** One NPC's explicit selected facts. */
+  npcKnowledge: (npcId: NpcId): ReadKey => key`npc-knowledge:${npcId}`,
+
+  /** One NPC's draft, approved and retired memories. */
+  npcMemories: (npcId: NpcId): ReadKey => key`npc-memories:${npcId}`,
+
   /** Who is at this table. Withdrawing an accepted invitation takes a row out of it. */
   members: (campaignId: CampaignId): ReadKey => key`members:${campaignId}`,
 

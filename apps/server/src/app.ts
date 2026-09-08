@@ -45,6 +45,8 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { NpcKnowledge } from "./repo/NpcKnowledge.js";
+import { NpcMemories } from "./repo/NpcMemories.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -210,7 +212,7 @@ export const assistantFromConfig: Layer.Layer<
 export const npcAgentFromConfig: Layer.Layer<
   NpcAgent,
   Config.ConfigError,
-  Npcs | NpcThreads | CampaignCreatorActors
+  Npcs | NpcKnowledge | NpcMemories | NpcThreads | CampaignCreatorActors
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -272,7 +274,7 @@ export const servicesOver = <E>(
   npcAgent: Layer.Layer<
     NpcAgent,
     E | Config.ConfigError,
-    Npcs | NpcThreads | CampaignCreatorActors
+    Npcs | NpcKnowledge | NpcMemories | NpcThreads | CampaignCreatorActors
   > = npcAgentFromConfig,
 ): Layer.Layer<
   | Accounts
@@ -302,6 +304,8 @@ export const servicesOver = <E>(
   | Memberships
   | Notes
   | NpcAgent
+  | NpcKnowledge
+  | NpcMemories
   | Npcs
   | NpcThreads
   // A campaign's rules vocabulary, and the Library originals behind it. An
@@ -378,10 +382,21 @@ export const servicesOver = <E>(
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
     // every method behind the `CampaignCreatorActor` proof.
     Npcs.layer,
+    NpcKnowledge.layer,
+    NpcMemories.layer,
     NpcThreads.layer,
     // The NPC rehearsal loop: no tools, no writes, one model call over a
-    // versioned prompt. It reads the NPC and its transcript and nothing else.
-    npcAgent.pipe(Layer.provide([Npcs.layer, NpcThreads.layer, CampaignCreatorActors.layer])),
+    // versioned prompt. It reads the NPC, its transcript, and this NPC's
+    // explicit facts/approved memories — no campaign-wide repositories.
+    npcAgent.pipe(
+      Layer.provide([
+        Npcs.layer,
+        NpcKnowledge.layer,
+        NpcMemories.layer,
+        NpcThreads.layer,
+        CampaignCreatorActors.layer,
+      ]),
+    ),
     // The classes, races and backgrounds a character is built from — the campaign's
     // vocabulary and the Library originals behind it. No `LiveEvents`: editing
     // a class changes what the *next* character is made from, which is not
@@ -521,6 +536,8 @@ export const applicationOver = <E>(
     | Memberships
     | Notes
     | NpcAgent
+    | NpcKnowledge
+    | NpcMemories
     | Npcs
     | NpcThreads
     | Options

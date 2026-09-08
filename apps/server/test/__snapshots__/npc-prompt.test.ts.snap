@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`the NPC prompt contract, npc-prompt/1.0.0 > matches the snapshot for this version, byte for byte 1`] = `
+exports[`the NPC prompt contract, npc-prompt/1.1.0 > matches the snapshot for this version, byte for byte 1`] = `
 [
   {
     "content": "You are Cazril, the ferryman at the crossing — a character in a tabletop roleplaying campaign, played in character.

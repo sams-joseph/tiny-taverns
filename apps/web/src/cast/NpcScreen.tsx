@@ -1,14 +1,14 @@
-import type { Npc } from "@taverns/api";
+import type { Npc, NpcKnowledgeFact, NpcMemory, NpcMemoryStatus } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, Icon } from "@taverns/ui";
+import { Badge, Button, Card, cn, Icon, Input, tabsTriggerVariants } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { DetailFacts, DetailSection } from "../ui/detail";
-import { SaveFailure } from "../ui/form";
-import { npcAtom } from "./load";
+import { Field, SaveFailure, Textarea } from "../ui/form";
+import { npcAtom, type NpcDetail } from "./load";
 import { NpcAvatar } from "./NpcCard";
 import { NpcDialog } from "./NpcDialog";
 import { useNpcRehearsal } from "./rehearsal";
@@ -38,16 +38,29 @@ import { RehearsalPanel } from "./RehearsalPanel";
  * still renders it, with *Restore* where *Archive* was, and the rehearsal
  * composer replaced by the reason.
  */
+type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory";
+
+const NPC_TABS: ReadonlyArray<{ readonly id: NpcTab; readonly label: string }> = [
+  { id: "profile", label: "Profile" },
+  { id: "rehearsal", label: "Rehearsal" },
+  { id: "knowledge", label: "Knowledge" },
+  { id: "memory", label: "Memory" },
+];
+
 export function NpcScreen() {
   const { campaignId, npcId } = useParams({ from: "/campaigns/$campaignId/cast/$npcId" });
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<NpcTab>("profile");
 
   return (
     <CampaignChrome
       campaignId={campaignId}
       title="Cast"
       extra={npcAtom({ campaignId, npcId })}
-      subtitle={({ extra }) => (extra.role === "" ? extra.name : `${extra.name} · ${extra.role}`)}
+      subtitle={({ extra }) =>
+        extra.npc.role === "" ? extra.npc.name : `${extra.npc.name} · ${extra.npc.role}`
+      }
+      tabs={() => <NpcTabs active={tab} onChange={setTab} />}
       actions={({ extra }) => (
         <>
           <Button
@@ -63,17 +76,17 @@ export function NpcScreen() {
             <Icon name="pencil" size={14} />
             Edit
           </Button>
-          <ArchiveButton npc={extra} />
+          <ArchiveButton npc={extra.npc} />
         </>
       )}
     >
-      {({ extra: npc }) => (
+      {({ extra }) => (
         <>
-          <NpcBody npc={npc} />
+          <NpcBody detail={extra} active={tab} />
           {editing && (
             <NpcDialog
               campaignId={campaignId}
-              npc={npc}
+              npc={extra.npc}
               onClose={() => setEditing(false)}
               onSaved={() => setEditing(false)}
             />
@@ -84,56 +97,424 @@ export function NpcScreen() {
   );
 }
 
-function NpcBody({ npc }: { readonly npc: Npc }) {
+function NpcTabs({
+  active,
+  onChange,
+}: {
+  readonly active: NpcTab;
+  readonly onChange: (tab: NpcTab) => void;
+}) {
+  return (
+    <nav aria-label="NPC sections" className="flex items-stretch gap-1">
+      {NPC_TABS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={cn(tabsTriggerVariants(), "h-auto self-stretch px-3.25")}
+          data-state={active === item.id ? "active" : "inactive"}
+          aria-current={active === item.id ? "page" : undefined}
+          onClick={() => onChange(item.id)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly active: NpcTab }) {
+  const { npc, knowledge, memories } = detail;
   const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name);
   const archived = npc.archivedAt !== null;
+  const usableRehearsal = archived
+    ? {
+        ...rehearsal,
+        send: undefined,
+        unavailable: `${npc.name} is archived. Restore them to rehearse again; the transcript is kept either way.`,
+      }
+    : rehearsal;
+
+  if (active === "rehearsal") {
+    return (
+      <div className="flex min-h-[34rem] flex-col">
+        <RehearsalPanel name={npc.name} rehearsal={usableRehearsal} />
+      </div>
+    );
+  }
+
+  if (active === "knowledge") return <KnowledgePanel npc={npc} facts={knowledge} />;
+  if (active === "memory") return <MemoryPanel npc={npc} memories={memories} />;
 
   return (
     <div className="@container">
-      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* The rehearsal leads on a narrow column and sits right on a wide one.
-            Not sticky: the scroll container is the shell's column under a
-            sticky `TopBar` whose height is neither a token nor constant, so a
-            pinned panel would park its header under the bar (the Chronicle's
-            aside records the same measurement). Its height is the viewport
-            less the two nav rows, the bar and the gutters, so the composer
-            is above the fold on load. */}
-        <div className="order-1 flex min-h-96 flex-col @3xl:order-2 @3xl:h-[calc(100vh-var(--spacing)*60)] @3xl:max-h-[52rem]">
-          <RehearsalPanel
-            name={npc.name}
-            rehearsal={
-              archived
-                ? {
-                    ...rehearsal,
-                    send: undefined,
-                    unavailable: `${npc.name} is archived. Restore them to rehearse again; the transcript is kept either way.`,
-                  }
-                : rehearsal
-            }
-          />
-        </div>
-
-        <div className="order-2 flex flex-col gap-4 @3xl:order-1">
-          <Card className="gap-4 p-card">
-            <div className="flex items-start gap-3">
-              <NpcAvatar name={npc.name} size="lg" />
-              <div className="min-w-0 flex-1">
-                <h2 className="font-display text-title leading-title font-semibold text-heading">
-                  {npc.name}
-                </h2>
-                {npc.role !== "" && (
-                  <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
-                )}
-              </div>
-              {archived && <Badge variant="outline">Archived</Badge>}
+      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.45fr)]">
+        <Card className="gap-4 p-card">
+          <div className="flex items-start gap-3">
+            <NpcAvatar name={npc.name} size="lg" />
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-title leading-title font-semibold text-heading">
+                {npc.name}
+              </h2>
+              {npc.role !== "" && (
+                <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
+              )}
             </div>
+            {archived && <Badge variant="outline">Archived</Badge>}
+          </div>
 
-            <Persona npc={npc} />
-          </Card>
+          <Persona npc={npc} />
+        </Card>
 
-          <Inspector npc={npc} rehearsal={rehearsal} />
+        <Inspector npc={npc} rehearsal={rehearsal} />
+      </div>
+    </div>
+  );
+}
+
+function KnowledgePanel({
+  npc,
+  facts,
+}: {
+  readonly npc: Npc;
+  readonly facts: ReadonlyArray<NpcKnowledgeFact>;
+}) {
+  const [body, setBody] = useState("");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [sourceKind, setSourceKind] = useState<NpcKnowledgeFact["sourceKind"]>("manual");
+  const [showProblem, setShowProblem] = useState(false);
+  const { busy, failure, submit } = useMutation();
+  const live = facts.filter((fact) => fact.retiredAt === null);
+  const retired = facts.filter((fact) => fact.retiredAt !== null);
+  const problem = body.trim() === "" ? "Write the fact first." : undefined;
+
+  const save = async () => {
+    setShowProblem(true);
+    if (problem !== undefined) return;
+    const saved = await submit(
+      (client) =>
+        client.npcs.createKnowledge({
+          params: { campaignId: npc.campaignId, npcId: npc.id },
+          payload: {
+            body: body.trim(),
+            sourceKind,
+            sourceLabel: sourceLabel.trim(),
+          },
+        }),
+      [reads.npcKnowledge(npc.id), reads.npcRehearsal(npc.id)],
+    );
+    if (Result.isSuccess(saved)) {
+      setBody("");
+      setSourceLabel("");
+      setShowProblem(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
+      <Card className="gap-4 p-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-title leading-title font-semibold text-heading">
+              Knowledge facts
+            </h2>
+            <p className="text-body-s leading-body text-muted-foreground">
+              Facts copied into this NPC. Source links are provenance only; rehearsal never reads
+              through them.
+            </p>
+          </div>
+          <Badge variant="outline">{live.length} active</Badge>
+        </div>
+        <div className="flex flex-col gap-3">
+          {live.length === 0 ? (
+            <p className="text-body-s leading-body text-muted-foreground">
+              No explicit knowledge yet. Add only facts this NPC should know in rehearsal.
+            </p>
+          ) : (
+            live.map((fact) => <KnowledgeRow key={fact.id} npc={npc} fact={fact} />)
+          )}
+        </div>
+      </Card>
+
+      <Card tone="sunken" className="gap-4 p-card">
+        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+          Add a fact
+        </h3>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <Field
+            label="Fact"
+            htmlFor="npc-knowledge-body"
+            error={showProblem ? problem : undefined}
+          >
+            <Textarea
+              id="npc-knowledge-body"
+              rows={5}
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+            />
+          </Field>
+          <div className="grid gap-3 @lg:grid-cols-2">
+            <Field label="Source kind" htmlFor="npc-knowledge-source-kind">
+              <select
+                id="npc-knowledge-source-kind"
+                className="h-10 rounded-control border border-subtle bg-surface-raised px-3 text-body-s text-foreground"
+                value={sourceKind}
+                onChange={(event) =>
+                  setSourceKind(event.target.value as NpcKnowledgeFact["sourceKind"])
+                }
+              >
+                <option value="manual">Manual</option>
+                <option value="note">Note</option>
+                <option value="beat">Beat</option>
+                <option value="recap">Recap</option>
+                <option value="group_history">Group history</option>
+              </select>
+            </Field>
+            <Field label="Source label" htmlFor="npc-knowledge-source-label">
+              <Input
+                id="npc-knowledge-source-label"
+                value={sourceLabel}
+                onChange={(event) => setSourceLabel(event.target.value)}
+                placeholder="Session 12 recap"
+              />
+            </Field>
+          </div>
+          {failure !== undefined && <SaveFailure failure={failure} />}
+          <Button type="submit" disabled={busy}>
+            <Icon name="plus" size={14} />
+            Add fact
+          </Button>
+        </form>
+        {retired.length > 0 && (
+          <p className="text-caption leading-body text-muted-foreground">
+            {retired.length} retired {retired.length === 1 ? "fact is" : "facts are"} kept for the
+            audit trail and excluded from rehearsal.
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function KnowledgeRow({ npc, fact }: { readonly npc: Npc; readonly fact: NpcKnowledgeFact }) {
+  const { busy, failure, submit } = useMutation();
+  const retire = () =>
+    submit(
+      (client) =>
+        client.npcs.retireKnowledge({
+          params: { campaignId: npc.campaignId, npcId: npc.id, factId: fact.id },
+          payload: {},
+        }),
+      [reads.npcKnowledge(npc.id), reads.npcRehearsal(npc.id)],
+    );
+  return (
+    <div className="rounded-card border border-subtle bg-surface-card p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+            {fact.body}
+          </p>
+          <p className="mt-2 text-caption leading-body text-muted-foreground">
+            {fact.sourceKind}
+            {fact.sourceLabel === "" ? "" : ` · ${fact.sourceLabel}`}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => void retire()}>
+          Retire
+        </Button>
+      </div>
+      {failure !== undefined && <SaveFailure failure={failure} />}
+    </div>
+  );
+}
+
+function MemoryPanel({
+  npc,
+  memories,
+}: {
+  readonly npc: Npc;
+  readonly memories: ReadonlyArray<NpcMemory>;
+}) {
+  const [body, setBody] = useState("");
+  const [showProblem, setShowProblem] = useState(false);
+  const { busy, failure, submit } = useMutation();
+  const problem = body.trim() === "" ? "Write the memory first." : undefined;
+  const approved = memories.filter(
+    (memory) => memory.status === "approved" && memory.retiredAt === null,
+  );
+  const drafts = memories.filter(
+    (memory) => memory.status === "draft" && memory.retiredAt === null,
+  );
+  const retired = memories.filter((memory) => memory.retiredAt !== null);
+
+  const draft = async () => {
+    setShowProblem(true);
+    if (problem !== undefined) return;
+    const saved = await submit(
+      (client) =>
+        client.npcs.draftMemory({
+          params: { campaignId: npc.campaignId, npcId: npc.id },
+          payload: { body: body.trim() },
+        }),
+      [reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)],
+    );
+    if (Result.isSuccess(saved)) {
+      setBody("");
+      setShowProblem(false);
+    }
+  };
+
+  const reset = () =>
+    submit(
+      (client) =>
+        client.npcs.resetMemories({
+          params: { campaignId: npc.campaignId, npcId: npc.id },
+          payload: {},
+        }),
+      [reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)],
+    );
+
+  return (
+    <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
+      <Card className="gap-4 p-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-title leading-title font-semibold text-heading">
+              Approved memory
+            </h2>
+            <p className="text-body-s leading-body text-muted-foreground">
+              Rehearsal sees only approved memories. Drafts are visible here until you approve or
+              retire them.
+            </p>
+          </div>
+          <Badge variant="outline">{approved.length} approved</Badge>
+        </div>
+        <MemoryList npc={npc} memories={approved} empty="No approved memories yet." />
+        <DetailSection title="Drafts awaiting approval">
+          <MemoryList npc={npc} memories={drafts} empty="No drafts waiting." />
+        </DetailSection>
+        {retired.length > 0 && (
+          <p className="text-caption leading-body text-muted-foreground">
+            {retired.length} retired {retired.length === 1 ? "memory is" : "memories are"} kept out
+            of the prompt.
+          </p>
+        )}
+      </Card>
+
+      <Card tone="sunken" className="gap-4 p-card">
+        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+          Draft a memory
+        </h3>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void draft();
+          }}
+        >
+          <Field label="Memory" htmlFor="npc-memory-body" error={showProblem ? problem : undefined}>
+            <Textarea
+              id="npc-memory-body"
+              rows={5}
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+            />
+          </Field>
+          {failure !== undefined && <SaveFailure failure={failure} />}
+          <Button type="submit" disabled={busy}>
+            <Icon name="plus" size={14} />
+            Save draft
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy || memories.length === 0}
+            onClick={() => void reset()}
+          >
+            Retire all memories
+          </Button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function MemoryList({
+  npc,
+  memories,
+  empty,
+}: {
+  readonly npc: Npc;
+  readonly memories: ReadonlyArray<NpcMemory>;
+  readonly empty: string;
+}) {
+  if (memories.length === 0) {
+    return <p className="text-body-s leading-body text-muted-foreground">{empty}</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {memories.map((memory) => (
+        <MemoryRow key={memory.id} npc={npc} memory={memory} />
+      ))}
+    </div>
+  );
+}
+
+function memoryStatusLabel(status: NpcMemoryStatus): string {
+  if (status === "approved") return "Approved";
+  if (status === "retired") return "Retired";
+  return "Draft";
+}
+
+function MemoryRow({ npc, memory }: { readonly npc: Npc; readonly memory: NpcMemory }) {
+  const { busy, failure, submit } = useMutation();
+  const params = { campaignId: npc.campaignId, npcId: npc.id, memoryId: memory.id };
+  const invalidate = [reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)];
+  return (
+    <div className="rounded-card border border-subtle bg-surface-card p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+            {memory.body}
+          </p>
+          <p className="mt-2 text-caption leading-body text-muted-foreground">
+            {memoryStatusLabel(memory.status)}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {memory.status === "draft" && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void submit(
+                  (client) => client.npcs.approveMemory({ params, payload: {} }),
+                  invalidate,
+                )
+              }
+            >
+              Approve
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy || memory.retiredAt !== null}
+            onClick={() =>
+              void submit((client) => client.npcs.retireMemory({ params, payload: {} }), invalidate)
+            }
+          >
+            Retire
+          </Button>
         </div>
       </div>
+      {failure !== undefined && <SaveFailure failure={failure} />}
     </div>
   );
 }
@@ -306,6 +687,20 @@ function Inspector({
           {
             label: "Model",
             value: status === undefined ? "…" : (status.model ?? "none configured"),
+          },
+          {
+            label: "Knowledge",
+            value:
+              status === undefined
+                ? "…"
+                : `${String(status.knowledgeIncluded)} of ${String(status.knowledgeTotal)} facts`,
+          },
+          {
+            label: "Memory",
+            value:
+              status === undefined
+                ? "…"
+                : `${String(status.memoriesIncluded)} of ${String(status.memoriesTotal)} approved`,
           },
           ...(rehearsal.lastPrompt === undefined
             ? []

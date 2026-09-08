@@ -1,6 +1,6 @@
-import type { CampaignId, NpcId } from "@taverns/api";
-import { Atom } from "effect/unstable/reactivity";
-import { apiAtom } from "../api/atoms";
+import type { CampaignId, Npc, NpcId, NpcKnowledgeFact, NpcMemory } from "@taverns/api";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
 
 /**
@@ -26,14 +26,41 @@ interface OneNpc {
   readonly npcId: NpcId;
 }
 
-/**
- * One NPC. Named on both its own key and the list's, so an edit made on the
- * detail screen redraws the card behind it and an archive made on the list
- * redraws the detail — a write names `reads.npc` and `reads.npcs` together.
- */
-export const npcAtom = Atom.family((at: OneNpc) =>
+export interface NpcDetail {
+  readonly npc: Npc;
+  readonly knowledge: ReadonlyArray<NpcKnowledgeFact>;
+  readonly memories: ReadonlyArray<NpcMemory>;
+}
+
+const npcRowAtom = Atom.family((at: OneNpc) =>
   apiAtom(
     (client) => client.npcs.findById({ params: at }),
     [reads.npc(at.npcId), reads.npcs(at.campaignId)],
+  ),
+);
+
+const npcKnowledgeAtom = Atom.family((at: OneNpc) =>
+  apiAtom((client) => client.npcs.knowledge({ params: at }), [reads.npcKnowledge(at.npcId)]),
+);
+
+const npcMemoriesAtom = Atom.family((at: OneNpc) =>
+  apiAtom((client) => client.npcs.memories({ params: at }), [reads.npcMemories(at.npcId)]),
+);
+
+/**
+ * One NPC plus the two context lists the detail screen manages. Split under the
+ * hood so a fact write refreshes facts without re-reading the persona, then
+ * combined back to one value so the screen keeps its three states.
+ */
+export const npcAtom = Atom.family((at: OneNpc) =>
+  Atom.readable((get): AsyncResult.AsyncResult<NpcDetail, unknown> =>
+    combine(
+      get,
+      AsyncResult.all({
+        npc: get(npcRowAtom(at)),
+        knowledge: get(npcKnowledgeAtom(at)),
+        memories: get(npcMemoriesAtom(at)),
+      }),
+    ),
   ),
 );

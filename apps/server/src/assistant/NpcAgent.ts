@@ -23,10 +23,12 @@ import { AiError, LanguageModel, type Response, type Tool } from "effect/unstabl
  * as the statement it is.
  */
 type NoTools = Record<string, Tool.Any>;
-import { CampaignCreatorActors } from "../repo/CreatorActor.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "../repo/CreatorActor.js";
+import { NpcKnowledge } from "../repo/NpcKnowledge.js";
+import { NpcMemories } from "../repo/NpcMemories.js";
 import { Npcs } from "../repo/Npcs.js";
 import { NpcThreads } from "../repo/NpcThreads.js";
-import { assembleNpcPrompt, npcPromptMetadata } from "./npcPrompt.js";
+import { assembleNpcPrompt, npcPromptMetadata, type NpcPromptContext } from "./npcPrompt.js";
 
 /**
  * An NPC answers, in character, to its own creator.
@@ -81,38 +83,57 @@ export class NpcAgent extends Context.Service<
     ) => Effect.Effect<Stream.Stream<NpcEvent>, NotFound | HobUnavailable, CurrentActor>;
   }
 >()("NpcAgent") {
-  static readonly unavailable: Layer.Layer<NpcAgent, never, Npcs | CampaignCreatorActors> =
-    Layer.effect(this)(
-      Effect.gen(function* () {
-        const npcs = yield* Npcs;
-        const creators = yield* CampaignCreatorActors;
-        const off = new HobUnavailable({
-          message:
-            "There is no model behind this NPC. Set HOB_API_URL and HOB_MODEL in " +
-            "apps/server/.env.local (see .env.example) and restart the server.",
+  static readonly unavailable: Layer.Layer<
+    NpcAgent,
+    never,
+    Npcs | NpcKnowledge | NpcMemories | CampaignCreatorActors
+  > = Layer.effect(this)(
+    Effect.gen(function* () {
+      const npcs = yield* Npcs;
+      const knowledge = yield* NpcKnowledge;
+      const memories = yield* NpcMemories;
+      const creators = yield* CampaignCreatorActors;
+      const off = new HobUnavailable({
+        message:
+          "There is no model behind this NPC. Set HOB_API_URL and HOB_MODEL in " +
+          "apps/server/.env.local (see .env.example) and restart the server.",
+      });
+      const resolve = (campaignId: CampaignId, npcId: NpcId) =>
+        Effect.gen(function* () {
+          const creator = yield* creators.of(campaignId);
+          const npc = yield* npcs.findById(creator, npcId);
+          const context = yield* contextFor(creator, npcId, knowledge, memories);
+          return { npc, context };
         });
-        const resolve = (campaignId: CampaignId, npcId: NpcId) =>
-          Effect.flatMap(creators.of(campaignId), (creator) => npcs.findById(creator, npcId));
-        return {
-          status: (campaignId, npcId) =>
-            Effect.map(resolve(campaignId, npcId), (npc) => statusOf(npc, false, null)),
-          rehearse: (campaignId, npcId) =>
-            Effect.andThen(resolve(campaignId, npcId), Effect.fail(off)),
-        };
-      }),
-    );
+      return {
+        status: (campaignId, npcId) =>
+          Effect.map(resolve(campaignId, npcId), ({ npc, context }) =>
+            statusOf(npc, context, false, null),
+          ),
+        rehearse: (campaignId, npcId) =>
+          Effect.andThen(resolve(campaignId, npcId), Effect.fail(off)),
+      };
+    }),
+  );
 
   static readonly layer = (options: {
     readonly model: string;
   }): Layer.Layer<
     NpcAgent,
     never,
-    Npcs | NpcThreads | CampaignCreatorActors | LanguageModel.LanguageModel
+    | Npcs
+    | NpcKnowledge
+    | NpcMemories
+    | NpcThreads
+    | CampaignCreatorActors
+    | LanguageModel.LanguageModel
   > =>
     Layer.effect(this)(
       Effect.gen(function* () {
         const languageModel = yield* LanguageModel.LanguageModel;
         const npcs = yield* Npcs;
+        const knowledge = yield* NpcKnowledge;
+        const memories = yield* NpcMemories;
         const threads = yield* NpcThreads;
         const creators = yield* CampaignCreatorActors;
 
@@ -121,7 +142,8 @@ export class NpcAgent extends Context.Service<
             Effect.gen(function* () {
               const creator = yield* creators.of(campaignId);
               const npc = yield* npcs.findById(creator, npcId);
-              return statusOf(npc, true, options.model);
+              const context = yield* contextFor(creator, npcId, knowledge, memories);
+              return statusOf(npc, context, true, options.model);
             }),
 
           rehearse: (campaignId, npcId, ask) =>
@@ -132,6 +154,7 @@ export class NpcAgent extends Context.Service<
               // a 404 before the response body opens.
               const creator = yield* creators.of(campaignId);
               const npc = yield* npcs.findById(creator, npcId);
+              const context = yield* contextFor(creator, npcId, knowledge, memories);
 
               const thread =
                 ask.threadId === undefined
@@ -148,7 +171,13 @@ export class NpcAgent extends Context.Service<
               // Generated here rather than by the column default, because the
               // client is told it in `began` before there is a reply to save.
               const replyId = yield* freshTurnId;
-              const prompt = assembleNpcPrompt(npc, history, ask.text, "creator-rehearsal");
+              const prompt = assembleNpcPrompt(
+                npc,
+                history,
+                ask.text,
+                "creator-rehearsal",
+                context,
+              );
 
               const written = yield* Ref.make("");
               const broke = yield* Ref.make(false);
@@ -221,6 +250,10 @@ export class NpcAgent extends Context.Service<
                     turnId: replyId,
                     templateVersion: prompt.templateVersion,
                     estimatedTokens: prompt.estimatedTokens,
+                    knowledgeIncluded: prompt.knowledge.included,
+                    knowledgeTotal: prompt.knowledge.total,
+                    memoriesIncluded: prompt.memories.included,
+                    memoriesTotal: prompt.memories.total,
                   }),
                 },
               ]).pipe(
@@ -245,14 +278,35 @@ export class NpcAgent extends Context.Service<
     );
 }
 
-const statusOf = (npc: Npc, available: boolean, model: string | null): NpcRehearsalStatus => {
-  const metadata = npcPromptMetadata(npc, "creator-rehearsal");
+const contextFor = (
+  creator: CampaignCreatorActor,
+  npcId: NpcId,
+  knowledge: (typeof NpcKnowledge)["Service"],
+  memories: (typeof NpcMemories)["Service"],
+): Effect.Effect<NpcPromptContext, NotFound> =>
+  Effect.gen(function* () {
+    const facts = yield* knowledge.activeForPrompt(creator, npcId);
+    const approved = yield* memories.approvedForPrompt(creator, npcId);
+    return { knowledge: facts, memories: approved };
+  });
+
+const statusOf = (
+  npc: Npc,
+  context: NpcPromptContext,
+  available: boolean,
+  model: string | null,
+): NpcRehearsalStatus => {
+  const metadata = npcPromptMetadata(npc, "creator-rehearsal", context);
   return new NpcRehearsalStatus({
     available,
     model,
     npc: npc.name,
     templateVersion: metadata.templateVersion,
     estimatedTokens: metadata.estimatedTokens,
+    knowledgeIncluded: metadata.knowledgeIncluded,
+    knowledgeTotal: metadata.knowledgeTotal,
+    memoriesIncluded: metadata.memoriesIncluded,
+    memoriesTotal: metadata.memoriesTotal,
   });
 };
 

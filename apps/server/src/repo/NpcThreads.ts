@@ -40,7 +40,7 @@ import {
  * reply, so a dropped stream keeps the line the creator already read.
  */
 
-const NPC: Containment = inCampaign("npc");
+export const NPC: Containment = inCampaign("npc");
 export const NPC_THREADS: Containment = under("npc_thread", "npc_id", NPC);
 export const NPC_TURNS: Containment = under("npc_turn", "thread_id", NPC_THREADS);
 

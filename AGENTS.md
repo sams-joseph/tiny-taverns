@@ -371,6 +371,29 @@ are later slices and are absent rather than stubbed. Pointer-style; the files ca
   `z-scrim` 100 with the private section inside it, and the one provider request carrying
   `max_tokens`, no `tools`, the private material and neither of the other two NPCs.
 
+### NPC builder slice 2 — explicit knowledge and approved memory
+
+`0038_npc_knowledge_memory.ts` adds `npc_knowledge_fact` and `npc_memory`, both owned by the
+campaign NPC and creator-only through `CampaignCreatorActor` (`repo/NpcKnowledge.ts`,
+`repo/NpcMemories.ts`). **Knowledge is copied text plus provenance; prompt assembly never reads
+through `source_id`.** Retired facts stay auditable and are excluded. Memory is creator-governed:
+`draft` rows wait, `approved` rows with no `retired_at` enter context, and `reset` retires the
+active set rather than deleting it.
+
+`assistant/npcPrompt.ts` is `npc-prompt/1.1.0` now. It renders active knowledge ordered
+`created_at asc, id asc` and approved memory ordered `approved_at asc, id asc`, each under its own
+500-token cap, inside labelled quoted-data sections; every field is untrusted data, never an
+instruction. The `NpcAgent` still has no tools or campaign-wide reads — it may read only the NPC,
+its transcript, its facts and its approved memories — and the status/`began` event carry inclusion
+counts for the inspector.
+
+The Cast detail route now composes three atoms (`npc`, `npcKnowledge`, `npcMemories`) so fact and
+memory writes refresh their lists and rehearsal metadata without re-reading the profile. `NpcScreen`
+is tabbed through `CampaignChrome`'s `tabs` slot: Profile / Rehearsal / Knowledge / Memory. The
+tabs are on their own row, and the add/approve/retire/reset verbs live inside their tab content.
+Player chat, NPC Library sources, group sharing, autonomous tools and NPC-suggested memories remain
+absent, not stubbed.
+
 ## The design system: what is canonical, and how it reaches Tailwind
 
 `packages/design-system` is the designers' delivered Tiny Taverns system, copied in whole.

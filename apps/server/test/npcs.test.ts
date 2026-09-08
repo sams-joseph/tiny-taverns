@@ -26,6 +26,8 @@ import { Groups } from "../src/repo/Groups.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
@@ -77,6 +79,8 @@ const services = Layer.mergeAll(
   Invites.layer,
   Notes.layer,
   Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
   NpcThreads.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npcs")));
@@ -96,8 +100,14 @@ const OTHER_SECRET = "OTHERNPCSECRET";
 const DM_NOTE = "DMNOTESECRET";
 const PLAYER_SHEET = "PLAYERSHEETSECRET";
 const PLAYER_THREAD = "PLAYERTHREADSECRET";
+const OWN_FACT = "OWNNPCFACT";
+const RETIRED_FACT = "RETIREDNPCFACT";
+const APPROVED_MEMORY = "APPROVEDNPCMEMORY";
+const DRAFT_MEMORY = "DRAFTNPCMEMORY";
 
 const makeFixture = Effect.gen(function* () {
+  const knowledge = yield* NpcKnowledge;
+  const memories = yield* NpcMemories;
   const npcs = yield* Npcs;
   const notes = yield* Notes;
   const hob = yield* HobThreads;
@@ -119,6 +129,26 @@ const makeFixture = Effect.gen(function* () {
       boundaries: { refuses: ["Naming the hag"] },
     },
     privateMaterial: { secrets: `${PRIVATE} He owes the hag three years.` },
+  });
+
+  yield* knowledge.create(creator, cazril.id, {
+    body: `${OWN_FACT} He knows the old ford by the leaning willow.`,
+    sourceKind: "note",
+    sourceLabel: "Ford note",
+    sourceId: "2b1f2a1e-0000-4000-8000-00000000f001",
+  });
+  const staleFact = yield* knowledge.create(creator, cazril.id, {
+    body: `${RETIRED_FACT} This should not reach the provider.`,
+    sourceKind: "manual",
+    sourceLabel: "Retired",
+  });
+  yield* knowledge.retire(creator, cazril.id, staleFact.id);
+  const approved = yield* memories.draft(creator, cazril.id, {
+    body: `${APPROVED_MEMORY} The party promised Cazril a true name.`,
+  });
+  yield* memories.approve(creator, cazril.id, approved.id);
+  yield* memories.draft(creator, cazril.id, {
+    body: `${DRAFT_MEMORY} This draft is awaiting approval and must stay out.`,
   });
 
   // Another NPC at the same DM's other table: the leak that would look like
@@ -373,6 +403,10 @@ describe("rehearsing", () => {
     const began = begunIn(events);
     expect(began.templateVersion).toBe(NPC_PROMPT_TEMPLATE_VERSION);
     expect(began.estimatedTokens).toBeGreaterThan(50);
+    expect(began.knowledgeIncluded).toBe(1);
+    expect(began.knowledgeTotal).toBe(1);
+    expect(began.memoriesIncluded).toBe(1);
+    expect(began.memoriesTotal).toBe(1);
   }, 60_000);
 
   it("persists both lines, with the template version stamped on the NPC's", async () => {
@@ -439,10 +473,14 @@ describe("rehearsing", () => {
     expect(requests[0]?.tools).toBeUndefined();
     expect(requests[0]?.max_tokens).toBe(MAX_TOKENS);
 
-    // Present: the persona and the creator-only material.
+    // Present: the persona, the creator-only material, and only explicit
+    // active/approved NPC context copied onto this NPC.
     expect(shown).toContain("Cazril");
     expect(shown).toContain("Names keep. Coin sinks.");
     expect(shown).toContain(PRIVATE);
+    expect(shown).toContain(OWN_FACT);
+    expect(shown).toContain(APPROVED_MEMORY);
+    expect(shown).toContain("source id 2b1f2a1e-0000-4000-8000-00000000f001");
 
     // Absent — zero bytes, in the one request there is: another campaign's
     // NPC (public and private), a DM-only note at this table, a player's
@@ -453,6 +491,8 @@ describe("rehearsing", () => {
     expect(shown).not.toContain(DM_NOTE);
     expect(shown).not.toContain(PLAYER_SHEET);
     expect(shown).not.toContain(PLAYER_THREAD);
+    expect(shown).not.toContain(RETIRED_FACT);
+    expect(shown).not.toContain(DRAFT_MEMORY);
     expect(shown).not.toContain("Brannoc");
   }, 60_000);
 
@@ -527,7 +567,13 @@ describe("with no model configured", () => {
         withActor(actor),
         Effect.provide(
           npcAgentFromConfig.pipe(
-            Layer.provide([Npcs.layer, NpcThreads.layer, CampaignCreatorActors.layer]),
+            Layer.provide([
+              Npcs.layer,
+              NpcKnowledge.layer,
+              NpcMemories.layer,
+              NpcThreads.layer,
+              CampaignCreatorActors.layer,
+            ]),
           ),
         ),
         // Outermost, so it covers the layer's construction — see hob.test.ts.
@@ -547,6 +593,10 @@ describe("with no model configured", () => {
       model: null,
       npc: "Cazril",
       templateVersion: NPC_PROMPT_TEMPLATE_VERSION,
+      knowledgeIncluded: 1,
+      knowledgeTotal: 1,
+      memoriesIncluded: 1,
+      memoriesTotal: 1,
     });
   }, 60_000);
 
@@ -589,7 +639,9 @@ describe("the seam", () => {
       expect(source, name).not.toContain('"effect/unstable/sql"');
       const repositories = [...source.matchAll(/from "\.\.\/repo\/(\w+)\.js"/g)].map((m) => m[1]);
       expect(repositories.sort(), name).toEqual(
-        name === "NpcAgent.ts" ? ["CreatorActor", "NpcThreads", "Npcs"] : [],
+        name === "NpcAgent.ts"
+          ? ["CreatorActor", "NpcKnowledge", "NpcMemories", "NpcThreads", "Npcs"]
+          : [],
       );
       // No toolkit anywhere near it: an NPC has no tools in this slice.
       expect(source, name).not.toMatch(/\bToolkit\b|\bTool\.make\b/);
@@ -599,7 +651,7 @@ describe("the seam", () => {
   it("gates every repository method on the creator proof", () => {
     // The type-level half is `Npcs`/`NpcThreads`' signatures; this is the
     // grep-level half, the way `creator-actor.test.ts` counts the others.
-    const repos = ["Npcs.ts", "NpcThreads.ts"].map((name) =>
+    const repos = ["Npcs.ts", "NpcKnowledge.ts", "NpcMemories.ts", "NpcThreads.ts"].map((name) =>
       code(fileURLToPath(new URL(`../src/repo/${name}`, import.meta.url))),
     );
     for (const source of repos) {

@@ -33,6 +33,8 @@ import { Feats } from "../src/repo/Feats.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
+import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
@@ -290,6 +292,8 @@ const runtime = ManagedRuntime.make(
     MagicItems.layer,
     HobThreads.layer,
     Notes.layer,
+    NpcKnowledge.layer,
+    NpcMemories.layer,
     Npcs.layer,
     NpcThreads.layer,
     Options.layer,
@@ -333,6 +337,8 @@ const makeFixture = Effect.gen(function* () {
   const hob = yield* HobThreads;
   const magicItems = yield* MagicItems;
   const notes = yield* Notes;
+  const npcKnowledge = yield* NpcKnowledge;
+  const npcMemories = yield* NpcMemories;
   const npcs = yield* Npcs;
   const npcThreads = yield* NpcThreads;
   const options = yield* Options;
@@ -521,6 +527,12 @@ const makeFixture = Effect.gen(function* () {
     role: "the ferryman",
     privateMaterial: { secrets: "He is paid by the hag." },
   });
+  yield* npcKnowledge.create(asDm, npc.id, {
+    body: "Cazril knows the hag's ferryman rite.",
+    sourceKind: "manual",
+    sourceLabel: "Membership fixture",
+  });
+  yield* npcMemories.draft(asDm, npc.id, { body: "The party asked Cazril about the crossing." });
   const npcThread = yield* npcThreads.start(asDm, npc.id, "What is your price?");
   yield* npcThreads.append(asDm, npc.id, npcThread.id, {
     id: randomUUID() as NpcTurnId,
@@ -580,6 +592,8 @@ const READS: Record<
     | MagicItems
     | HobThreads
     | Notes
+    | NpcKnowledge
+    | NpcMemories
     | Npcs
     | NpcThreads
     | Options
@@ -672,6 +686,14 @@ const READS: Record<
   // fails at the gate with the `NotFound` branch.
   npc: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) => Effect.flatMap(Npcs, (r) => r.list(dm, {}))),
+  npc_knowledge_fact: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(NpcKnowledge, (r) => r.list(dm, f.npc.id)),
+    ),
+  npc_memory: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(NpcMemories, (r) => r.list(dm, f.npc.id)),
+    ),
   npc_thread: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
       Effect.flatMap(NpcThreads, (r) => r.list(dm, f.npc.id)),

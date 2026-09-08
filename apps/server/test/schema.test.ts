@@ -186,6 +186,8 @@ describe("every content-bearing table", () => {
       // own turns are `origin = 'assistant'` pointing at no Hob turn; see
       // 0037_npcs.ts for why that one check is relaxed there.
       "npc",
+      "npc_knowledge_fact",
+      "npc_memory",
       "npc_thread",
       "npc_turn",
       "prep_item",

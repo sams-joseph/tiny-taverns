@@ -216,8 +216,12 @@ export const npcRehearsalStatus = {
   available: false,
   model: null,
   npc: "Cazril",
-  templateVersion: "npc-prompt/1.0.0",
+  templateVersion: "npc-prompt/1.1.0",
   estimatedTokens: 240,
+  knowledgeIncluded: 0,
+  knowledgeTotal: 0,
+  memoriesIncluded: 0,
+  memoriesTotal: 0,
 };
 
 export const ilseAccountId = "2b1f2a1e-0000-4000-8000-0000000000a2";
@@ -1284,6 +1288,8 @@ export const fullCampaign = (): Map<string, Answer> =>
     // and no thread yet — the ordinary state on a server without a model.
     [`GET /campaigns/${campaignId}/npcs`, { status: 200, body: [cazril] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}`, { status: 200, body: cazril }],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/knowledge`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/memories`, { status: 200, body: [] }],
     [
       `GET /campaigns/${campaignId}/npcs/${npcId}/rehearsal`,
       { status: 200, body: npcRehearsalStatus },
