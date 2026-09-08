@@ -184,6 +184,9 @@ describe("migrations", () => {
       "magic_item_variant",
       "magic_school",
       "note",
+      "npc",
+      "npc_thread",
+      "npc_turn",
       "play_group",
       "prep_item",
       "proficiency",
@@ -248,6 +251,7 @@ describe("migrations", () => {
       { migration_id: 34, name: "rolls" },
       { migration_id: 35, name: "hob_direct_resource_writes" },
       { migration_id: 36, name: "session_event_character" },
+      { migration_id: 37, name: "npcs" },
     ]);
   }, 60_000);
 
@@ -293,6 +297,7 @@ describe("migrations", () => {
       { migration_id: 34, name: "rolls" },
       { migration_id: 35, name: "hob_direct_resource_writes" },
       { migration_id: 36, name: "session_event_character" },
+      { migration_id: 37, name: "npcs" },
     ]);
   }, 60_000);
 });

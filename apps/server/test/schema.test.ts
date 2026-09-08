@@ -181,6 +181,13 @@ describe("every content-bearing table", () => {
       "feature",
       "magic_item",
       "note",
+      // The cast: a structured NPC, its rehearsal threads and their turns —
+      // creator-only content in this slice, carrying the whole tail. An NPC's
+      // own turns are `origin = 'assistant'` pointing at no Hob turn; see
+      // 0037_npcs.ts for why that one check is relaxed there.
+      "npc",
+      "npc_thread",
+      "npc_turn",
       "prep_item",
       "racial_trait",
       "rule_article",

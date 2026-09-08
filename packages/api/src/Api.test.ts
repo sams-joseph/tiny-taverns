@@ -15,6 +15,7 @@ import { EncounterRun, EncounterRunStart } from "./EncounterRun.js";
 import { MagicItem, MagicItemCreate } from "./MagicItem.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
+import { Npc, NpcCreate } from "./Npc.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
 import { Roll, RollCreate } from "./Roll.js";
 import { RuleArticle, RuleArticleLibraryCreate } from "./RuleArticle.js";
@@ -171,6 +172,9 @@ describe("the API declaration", () => {
       "me",
       "members",
       "notes",
+      // The campaign's cast and the creator's rehearsal with each NPC —
+      // creator-only in every endpoint (the NPC builder decisions of 2026-09-04).
+      "npcs",
       // A campaign's rules vocabulary: the classes, races and backgrounds a
       // character at that table is built from. Campaign-scoped because the
       // group-share disjunct needs a campaign to resolve through — and the one
@@ -205,6 +209,7 @@ describe("every content schema", () => {
     // character's own deliberate shape is pinned in its own test below.
     CampaignCharacter,
     Note,
+    Npc,
     Encounter,
     PrepItem,
     Creature,
@@ -258,6 +263,7 @@ describe("every content schema", () => {
       // the only possible answer — the strongest form of this test's property.
       PartyJoin,
       NoteCreate,
+      NpcCreate,
       EncounterCreate,
       PrepItemCreate,
       CreatureCreate,
@@ -280,6 +286,7 @@ describe("every content schema", () => {
       CharacterOwnCreate: { name: "x" },
       PartyJoin: { characterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       NoteCreate: { title: "x" },
+      NpcCreate: { name: "x" },
       EncounterCreate: { name: "x" },
       PrepItemCreate: { label: "x" },
       CreatureCreate: { name: "x", type: "Humanoid", cr: "1/4", ac: 15, hp: 11 },

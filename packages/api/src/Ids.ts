@@ -205,3 +205,25 @@ export type AssistantTurnId = typeof AssistantTurnId.Type;
 /** One audited resource counter Hob moved directly during a live fight. */
 export const HobDirectResourceUpdateId = id("HobDirectResourceUpdateId");
 export type HobDirectResourceUpdateId = typeof HobDirectResourceUpdateId.Type;
+
+/**
+ * A campaign NPC — the structured, bounded persona a creator builds inside a
+ * campaign and rehearses with (the NPC builder decisions of 2026-09-04). Not a
+ * `CharacterId` and not a `CreatureId`: a speaking persona is a third thing,
+ * and the row it names carries creator-only material neither of those may.
+ */
+export const NpcId = id("NpcId");
+export type NpcId = typeof NpcId.Type;
+
+/**
+ * One conversation with an NPC, on one channel. Its own table rather than an
+ * `AssistantThreadId`: an NPC conversation is not Hob's, offers no proposals,
+ * and will carry channels (rehearsal, later player and session) that
+ * `assistant_thread` has no axis for.
+ */
+export const NpcThreadId = id("NpcThreadId");
+export type NpcThreadId = typeof NpcThreadId.Type;
+
+/** One line of an NPC conversation — the creator's, or the NPC's. */
+export const NpcTurnId = id("NpcTurnId");
+export type NpcTurnId = typeof NpcTurnId.Type;

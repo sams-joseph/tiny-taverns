@@ -106,6 +106,8 @@ import {
   GroupInviteId,
   HobDirectResourceUpdateId,
   MagicItemId,
+  NpcId,
+  NpcThreadId,
   RuleArticleId,
   RollId,
   SpellId,
@@ -123,6 +125,17 @@ import {
 } from "./Invite.js";
 import { CampaignMember, CampaignMemberAdd, CampaignMembership } from "./Membership.js";
 import { Note, NoteCreate, NoteUpdate } from "./Note.js";
+import {
+  Npc,
+  NpcCreate,
+  NpcEvent,
+  NpcListFilter,
+  NpcRehearsalStatus,
+  NpcRehearse,
+  NpcThread,
+  NpcTurn,
+  NpcUpdate,
+} from "./Npc.js";
 import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
 import { PlayerLiveEvent, PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
@@ -1683,6 +1696,87 @@ class HobGroup extends HttpApiGroup.make("hob")
   .middleware(Authorization) {}
 
 /**
+ * The campaign's cast: structured NPCs, and the creator's rehearsal with each.
+ *
+ * **Creator-only, in every endpoint.** An NPC row carries creator-only private
+ * material, and this slice has no player projection at all, so the whole group
+ * answers through the `CampaignCreatorActor` path: a player, a stranger and a
+ * revoked member all get the campaign's ordinary `NotFound`. When a player
+ * channel arrives it will be a *distinct schema on a distinct path* — the
+ * `PlayerSessionRecap` rule — never a field filter over `Npc`.
+ *
+ * `rehearse` is `hob.ask`'s protocol without the tools: a `POST` that answers a
+ * stream, authorised before a byte of body so a denial is a 404 and an
+ * unconfigured server a 503 (`HobUnavailable`, the same class, so one client
+ * classifier covers both surfaces). `rehearsal` is the status read the screen
+ * makes before it offers a composer, and it carries the prompt metadata the
+ * inspector shows — the template version and a token estimate, never the
+ * prompt. `archive` and `restore` are the reversible soft delete: transcripts
+ * hang off an NPC and are worth keeping.
+ */
+class NpcsGroup extends HttpApiGroup.make("npcs")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: NpcListFilter,
+      success: Schema.Array(Npc),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: NpcCreate,
+      success: Npc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("findById", "/:npcId", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: Npc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:npcId", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcUpdate,
+      success: Npc,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("archive", "/:npcId/archive", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: Schema.Struct({}),
+      success: Npc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("restore", "/:npcId/restore", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: Schema.Struct({}),
+      success: Npc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("rehearsal", "/:npcId/rehearsal", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: NpcRehearsalStatus,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("rehearse", "/:npcId/rehearse", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcRehearse,
+      success: HttpApiSchema.StreamSse({ events: NpcEvent }),
+      error: [NotFound, HobUnavailable],
+    }),
+    HttpApiEndpoint.get("threads", "/:npcId/threads", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: Schema.Array(NpcThread),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("turns", "/:npcId/threads/:threadId/turns", {
+      params: { campaignId: CampaignId, npcId: NpcId, threadId: NpcThreadId },
+      success: Schema.Array(NpcTurn),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/npcs")
+  .middleware(Authorization) {}
+
+/**
  * The live session: starting a fight, running it, and ending it.
  *
  * Nested under the session because a run belongs to one night — and, as
@@ -1992,6 +2086,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(RollsGroup)
   .add(SearchGroup)
   .add(HobGroup)
+  .add(NpcsGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)
   .add(LiveGroup)
