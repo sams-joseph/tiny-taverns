@@ -403,7 +403,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates twenty-four methods and leaves every other actor-scoped read and write alone", () => {
+  it("gates thirty-five methods and leaves every other actor-scoped read and write alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -449,7 +449,15 @@ describe("the scope, counted", () => {
     // targets, the audit list, the spend and the undo all take the creator
     // proof for the live fight rather than a campaign id a model or client can
     // aim.
-    expect(gated).toBe(24);
+    // Twenty-five through thirty-five are the cast: `Npcs`' six and
+    // `NpcThreads`' five, gated from the day the endpoints were declared,
+    // because an NPC row carries creator-only private material and the slice
+    // has no player projection to diverge from — "gate first, project later"
+    // applied on the day. The three after are inner helpers in those two
+    // files restating their own methods' first parameter (`one`,
+    // `threadReachable`, `ensureThread`), which this occurrence count sees
+    // exactly as it sees `Proposals.ts`'s duplicate below.
+    expect(gated).toBe(38);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

@@ -2,11 +2,12 @@ import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
 import { NodeHttpClient } from "@effect/platform-node";
 import type { PgClient } from "@effect/sql-pg";
 import type { Authorization } from "@taverns/api";
-import { type Config, Effect, Layer, Option } from "effect";
+import { type Config, Effect, Layer, Option, type Redacted } from "effect";
 import { HttpMiddleware, HttpRouter } from "effect/unstable/http";
 import type { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
+import { NpcAgent } from "./assistant/NpcAgent.js";
 import { AuthorizationLive } from "./Authorization.js";
 import { ClerkIdentityProvider } from "./ClerkIdentityProvider.js";
 import {
@@ -44,6 +45,8 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { Npcs } from "./repo/Npcs.js";
+import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
@@ -96,6 +99,30 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
     return ClerkIdentityProvider.layer({ jwtKey: jwtKey.value, authorizedParties });
   }),
 );
+
+/**
+ * The provider layer both model-backed surfaces sit on — Hob and the NPC
+ * rehearsal — spelled once so the two cannot disagree about the endpoint, the
+ * credential or the output budget. `max_output_tokens` is named explicitly,
+ * always: a provider package that does not recognise a model id caps it
+ * silently, and the first symptom is an answer cut off mid-sentence.
+ */
+const languageModelLayer = (options: {
+  readonly apiUrl: string;
+  readonly model: string;
+  readonly apiKey: Redacted.Redacted | undefined;
+  readonly maxTokens: number;
+}) =>
+  OpenAiLanguageModel.layer({
+    model: options.model,
+    config: { max_output_tokens: options.maxTokens },
+  }).pipe(
+    Layer.provide(
+      OpenAiClient.layer({ apiUrl: options.apiUrl, apiKey: options.apiKey }).pipe(
+        Layer.provide(NodeHttpClient.layerUndici),
+      ),
+    ),
+  );
 
 /**
  * Whether there is a model behind Hob — the assistant's half of the same
@@ -159,23 +186,55 @@ export const assistantFromConfig: Layer.Layer<
 
     return Hob.layer({ model: model.value }).pipe(
       Layer.provide(
-        OpenAiLanguageModel.layer({
+        languageModelLayer({
+          apiUrl: apiUrl.value,
           model: model.value,
-          // Named explicitly, always. See `hobMaxTokens` — a provider package
-          // that does not recognise a model id caps this silently, and the
-          // first symptom is an answer cut off mid-sentence.
-          config: { max_output_tokens: maxTokens },
-        }).pipe(
-          Layer.provide(
-            OpenAiClient.layer({
-              apiUrl: apiUrl.value,
-              // Absent is the ordinary case: a local server generally wants no
-              // credential, and some want a placeholder. Neither is our
-              // business, so the option is passed through as it arrived.
-              apiKey: Option.getOrUndefined(apiKey),
-            }).pipe(Layer.provide(NodeHttpClient.layerUndici)),
-          ),
-        ),
+          // Absent is the ordinary case: a local server generally wants no
+          // credential, and some want a placeholder. Neither is our business,
+          // so the option is passed through as it arrived.
+          apiKey: Option.getOrUndefined(apiKey),
+          maxTokens,
+        }),
+      ),
+    );
+  }),
+);
+
+/**
+ * Whether there is a model behind the NPC rehearsal — the same three variables
+ * Hob reads, deliberately: an NPC is a second surface on the one configured
+ * model, not a second model to configure. Unset means `NpcAgent.unavailable`,
+ * which mirrors `Hob.unavailable`; the boot line for Hob already names the
+ * model and endpoint, so this one says only which mode the cast is in.
+ */
+export const npcAgentFromConfig: Layer.Layer<
+  NpcAgent,
+  Config.ConfigError,
+  Npcs | NpcThreads | CampaignCreatorActors
+> = Layer.unwrap(
+  Effect.gen(function* () {
+    const apiUrl = yield* hobApiUrl;
+    const model = yield* hobModel;
+
+    if (Option.isNone(apiUrl) || Option.isNone(model)) {
+      yield* Effect.logInfo(
+        "NPC rehearsal is OFF: it shares Hob's model configuration, and none is set.",
+      );
+      return NpcAgent.unavailable;
+    }
+
+    const apiKey = yield* hobApiKey;
+    const maxTokens = yield* hobMaxTokens;
+    yield* Effect.logInfo(`NPC rehearsal is ON, on Hob's model ${model.value}.`);
+
+    return NpcAgent.layer({ model: model.value }).pipe(
+      Layer.provide(
+        languageModelLayer({
+          apiUrl: apiUrl.value,
+          model: model.value,
+          apiKey: Option.getOrUndefined(apiKey),
+          maxTokens,
+        }),
       ),
     );
   }),
@@ -210,6 +269,11 @@ export const servicesOver = <E>(
     | Sessions
     | Spells
   > = assistantFromConfig,
+  npcAgent: Layer.Layer<
+    NpcAgent,
+    E | Config.ConfigError,
+    Npcs | NpcThreads | CampaignCreatorActors
+  > = npcAgentFromConfig,
 ): Layer.Layer<
   | Accounts
   | Authorization
@@ -237,6 +301,9 @@ export const servicesOver = <E>(
   | MagicItems
   | Memberships
   | Notes
+  | NpcAgent
+  | Npcs
+  | NpcThreads
   // A campaign's rules vocabulary, and the Library originals behind it. An
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
@@ -308,6 +375,13 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     Memberships.layer,
     Notes.layer,
+    // The campaign's cast and its rehearsal transcripts: creator-only rows,
+    // every method behind the `CampaignCreatorActor` proof.
+    Npcs.layer,
+    NpcThreads.layer,
+    // The NPC rehearsal loop: no tools, no writes, one model call over a
+    // versioned prompt. It reads the NPC and its transcript and nothing else.
+    npcAgent.pipe(Layer.provide([Npcs.layer, NpcThreads.layer, CampaignCreatorActors.layer])),
     // The classes, races and backgrounds a character is built from — the campaign's
     // vocabulary and the Library originals behind it. No `LiveEvents`: editing
     // a class changes what the *next* character is made from, which is not
@@ -446,6 +520,9 @@ export const applicationOver = <E>(
     | MagicItems
     | Memberships
     | Notes
+    | NpcAgent
+    | Npcs
+    | NpcThreads
     | Options
     | RuleArticles
     | Rolls

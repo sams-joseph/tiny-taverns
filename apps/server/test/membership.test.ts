@@ -1,6 +1,7 @@
 import {
   type Actor,
   type AssistantTurnId,
+  type NpcTurnId,
   type CampaignId,
   CurrentActor,
   type NotFound,
@@ -32,6 +33,8 @@ import { Feats } from "../src/repo/Feats.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { MagicItems } from "../src/repo/MagicItems.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Npcs } from "../src/repo/Npcs.js";
+import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
 import { Options } from "../src/repo/Options.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
@@ -287,6 +290,8 @@ const runtime = ManagedRuntime.make(
     MagicItems.layer,
     HobThreads.layer,
     Notes.layer,
+    Npcs.layer,
+    NpcThreads.layer,
     Options.layer,
     PrepItems.layer,
     RuleArticles.layer,
@@ -328,6 +333,8 @@ const makeFixture = Effect.gen(function* () {
   const hob = yield* HobThreads;
   const magicItems = yield* MagicItems;
   const notes = yield* Notes;
+  const npcs = yield* Npcs;
+  const npcThreads = yield* NpcThreads;
   const options = yield* Options;
   const prep = yield* PrepItems;
   const ruleArticles = yield* RuleArticles;
@@ -507,6 +514,20 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
 
+  // The cast: an NPC with creator-only material, one rehearsal thread and one
+  // line in it — three more rows a stranger must never see.
+  const npc = yield* npcs.create(asDm, {
+    name: "Cazril",
+    role: "the ferryman",
+    privateMaterial: { secrets: "He is paid by the hag." },
+  });
+  const npcThread = yield* npcThreads.start(asDm, npc.id, "What is your price?");
+  yield* npcThreads.append(asDm, npc.id, npcThread.id, {
+    id: randomUUID() as NpcTurnId,
+    who: "user",
+    text: "What is your price?",
+  });
+
   return {
     dm,
     /** A DM of their own table, and a stranger to this one. */
@@ -516,6 +537,8 @@ const makeFixture = Effect.gen(function* () {
     encounter,
     run,
     thread,
+    npc,
+    npcThread,
     homebrew,
     houseRules,
   };
@@ -557,6 +580,8 @@ const READS: Record<
     | MagicItems
     | HobThreads
     | Notes
+    | Npcs
+    | NpcThreads
     | Options
     | Party
     | PrepItems
@@ -641,6 +666,19 @@ const READS: Record<
   session_event: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
       Effect.flatMap(SessionEvents, (r) => r.list(dm, f.session.id, {})),
+    ),
+  // The cast is creator-only in every read: the proof is minted from the
+  // ambient actor exactly as the three gated tables above are, so a stranger
+  // fails at the gate with the `NotFound` branch.
+  npc: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) => Effect.flatMap(Npcs, (r) => r.list(dm, {}))),
+  npc_thread: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(NpcThreads, (r) => r.list(dm, f.npc.id)),
+    ),
+  npc_turn: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(NpcThreads, (r) => r.turns(dm, f.npc.id, f.npcThread.id)),
     ),
   assistant_thread: (f) => Effect.flatMap(HobThreads, (r) => r.list("dm", f.campaign.id)),
   assistant_turn: (f) =>

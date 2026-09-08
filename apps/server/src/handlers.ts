@@ -15,6 +15,7 @@ import { Duration, Effect, Layer, Result, Schedule, Stream } from "effect";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
+import { NpcAgent } from "./assistant/NpcAgent.js";
 import { liveHeartbeatSeconds } from "./Config.js";
 import { Health } from "./Health.js";
 import { LiveEvents } from "./live/LiveEvents.js";
@@ -41,6 +42,8 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Notes } from "./repo/Notes.js";
+import { Npcs } from "./repo/Npcs.js";
+import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -786,6 +789,64 @@ const HobLive = HttpApiBuilder.group(
 );
 
 /**
+ * The campaign's cast.
+ *
+ * Every handler mints the `CampaignCreatorActor` proof first and hands it to a
+ * repository whose methods take nothing else — so a player, a stranger and a
+ * revoked member get the campaign's ordinary `NotFound` from the gate, before
+ * any NPC row is read. `rehearse` is `hob.ask`'s ordering: the `Effect` half
+ * resolves the proof, the NPC and the thread, so a denial is a real 404 and an
+ * unconfigured server a real 503 before the response body opens.
+ */
+const NpcsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "npcs",
+  Effect.fnUntraced(function* (handlers) {
+    const npcs = yield* Npcs;
+    const threads = yield* NpcThreads;
+    const agent = yield* NpcAgent;
+    const creators = yield* CampaignCreatorActors;
+
+    const asCreator = <A, E>(
+      campaignId: CampaignId,
+      use: (creator: CampaignCreatorActor) => Effect.Effect<A, E>,
+    ) => Effect.flatMap(creators.of(campaignId), use);
+
+    return handlers
+      .handle("list", ({ params, query }) =>
+        asCreator(params.campaignId, (creator) => npcs.list(creator, query)),
+      )
+      .handle("create", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) => npcs.create(creator, payload)),
+      )
+      .handle("findById", ({ params }) =>
+        asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),
+      )
+      .handle("update", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) => npcs.update(creator, params.npcId, payload)),
+      )
+      .handle("archive", ({ params }) =>
+        asCreator(params.campaignId, (creator) => npcs.archive(creator, params.npcId)),
+      )
+      .handle("restore", ({ params }) =>
+        asCreator(params.campaignId, (creator) => npcs.restore(creator, params.npcId)),
+      )
+      .handle("rehearsal", ({ params }) => agent.status(params.campaignId, params.npcId))
+      .handle("rehearse", ({ params, payload }) =>
+        agent.rehearse(params.campaignId, params.npcId, payload),
+      )
+      .handle("threads", ({ params }) =>
+        asCreator(params.campaignId, (creator) => threads.list(creator, params.npcId)),
+      )
+      .handle("turns", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          threads.turns(creator, params.npcId, params.threadId),
+        ),
+      );
+  }),
+);
+
+/**
  * Group Hob's handlers — the same five as the campaign surface, with one
  * reach: the group's conversation is the group's, so there is no proof to
  * resolve and no two sets to tell apart. `conversationReachable`'s `"group"`
@@ -1064,6 +1125,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SearchLive,
     HobLive,
     HobGroupLive,
+    NpcsLive,
     RunsLive,
     CombatantsLive,
     LiveLive,
