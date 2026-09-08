@@ -910,8 +910,23 @@ const NpcsLive = HttpApiBuilder.group(
       .handle("playerTurns", ({ params }) =>
         threads.playerTurns(params.campaignId, params.npcId, params.threadId),
       )
-      .handle("talk", ({ params, payload }) =>
-        agent.talk(params.campaignId, params.npcId, payload),
+      .handle("talk", ({ params, payload }) => agent.talk(params.campaignId, params.npcId, payload))
+      .handle("sessionList", ({ params }) =>
+        threads.sessionList(params.campaignId, params.sessionId),
+      )
+      .handle("openSession", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          threads.openSession(creator, params.npcId, params.sessionId),
+        ),
+      )
+      .handle("sessionStatus", ({ params }) =>
+        agent.sessionStatus(params.campaignId, params.sessionId, params.npcId),
+      )
+      .handle("sessionTurns", ({ params }) =>
+        threads.sessionTurns(params.campaignId, params.sessionId, params.npcId),
+      )
+      .handle("sessionTalk", ({ params, payload }) =>
+        agent.sessionTalk(params.campaignId, params.sessionId, params.npcId, payload),
       );
   }),
 );

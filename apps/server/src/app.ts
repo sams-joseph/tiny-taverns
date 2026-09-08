@@ -390,7 +390,7 @@ export const servicesOver = <E>(
     Npcs.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
-    NpcThreads.layer,
+    NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
     // The NPC rehearsal loop: no tools, no writes, one model call over a
     // versioned prompt. It reads the NPC, its transcript, and this NPC's
     // explicit facts/approved memories — no campaign-wide repositories.
@@ -399,7 +399,7 @@ export const servicesOver = <E>(
         Npcs.layer,
         NpcKnowledge.layer,
         NpcMemories.layer,
-        NpcThreads.layer,
+        NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
         CampaignCreatorActors.layer,
       ]),
     ),

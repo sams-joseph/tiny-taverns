@@ -142,6 +142,7 @@ import {
   NpcRehearsalStatus,
   NpcSource,
   NpcRehearse,
+  NpcSessionTalk,
   NpcTalk,
   NpcThread,
   NpcTurn,
@@ -1919,6 +1920,33 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       payload: NpcTalk,
       success: HttpApiSchema.StreamSse({ events: NpcEvent }),
       error: [NotFound, HobUnavailable, RateLimited],
+    }),
+    HttpApiEndpoint.get("sessionList", "/-/sessions/:sessionId", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      success: Schema.Array(PlayerNpc),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("openSession", "/:npcId/sessions/:sessionId/open", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      payload: Schema.Struct({}),
+      success: NpcThread,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("sessionStatus", "/:npcId/sessions/:sessionId/status", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      success: NpcPlayerStatus,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("sessionTurns", "/:npcId/sessions/:sessionId/turns", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      success: Schema.Array(NpcTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("sessionTalk", "/:npcId/sessions/:sessionId/talk", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      payload: NpcSessionTalk,
+      success: HttpApiSchema.StreamSse({ events: NpcEvent }),
+      error: [NotFound, HobUnavailable],
     }),
   )
   .prefix("/campaigns/:campaignId/npcs")

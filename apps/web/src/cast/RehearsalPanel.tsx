@@ -22,6 +22,7 @@ export function RehearsalPanel({
   emptyTitle = `Rehearse with ${name}`,
   emptyBody = "Say something in the scene and hear how they answer. Nothing here reaches your players, and nothing they say changes the campaign.",
   label = `Say something to ${name}`,
+  ariaLabel = `Rehearse with ${name}`,
 }: {
   readonly name: string;
   readonly rehearsal: Rehearsal;
@@ -29,6 +30,7 @@ export function RehearsalPanel({
   readonly emptyTitle?: string;
   readonly emptyBody?: string;
   readonly label?: string;
+  readonly ariaLabel?: string;
 }) {
   const thread = useRef<HTMLDivElement>(null);
 
@@ -42,7 +44,7 @@ export function RehearsalPanel({
 
   return (
     <section
-      aria-label={`Rehearse with ${name}`}
+      aria-label={ariaLabel}
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-card border border-hairline bg-surface-card"
     >
       <header className="flex shrink-0 items-center gap-2.5 border-b border-hairline p-3.5">
@@ -76,7 +78,9 @@ export function RehearsalPanel({
         ) : (
           rehearsal.turns.map((turn) =>
             turn.who === "user" ? (
-              <UserTurn key={turn.id}>{turn.text}</UserTurn>
+              <AttributedUserTurn key={turn.id} speakerName={turn.speakerName}>
+                {turn.text}
+              </AttributedUserTurn>
             ) : (
               <NpcReply key={turn.id} name={name}>
                 {turn.text}
@@ -107,6 +111,24 @@ export function RehearsalPanel({
         )}
       </div>
     </section>
+  );
+}
+
+/** What a table participant said, with attribution when this is a shared session transcript. */
+function AttributedUserTurn({
+  speakerName,
+  children,
+}: {
+  readonly speakerName?: string | null;
+  readonly children: string;
+}) {
+  if (speakerName == null || speakerName === "") return <UserTurn>{children}</UserTurn>;
+
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1 pl-10">
+      <span className="text-micro leading-snug text-faint">{speakerName}</span>
+      <UserTurn>{children}</UserTurn>
+    </div>
   );
 }
 

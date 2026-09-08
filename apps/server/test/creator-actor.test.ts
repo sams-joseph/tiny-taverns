@@ -449,15 +449,15 @@ describe("the scope, counted", () => {
     // targets, the audit list, the spend and the undo all take the creator
     // proof for the live fight rather than a campaign id a model or client can
     // aim.
-    // Twenty-five through fifty-two are the cast: `Npcs`, `NpcKnowledge`,
+    // Twenty-five through fifty-three are the cast: `Npcs`, `NpcKnowledge`,
     // `NpcMemories` and `NpcThreads`, gated from the day the endpoints were
     // declared, because an NPC row and its context carry creator-only material
-    // and the slice has no player projection to diverge from — "gate first,
-    // project later" applied on the day. The three after are inner helpers in
-    // those files restating their own methods' first parameter (`one`,
-    // `threadReachable`, `ensureThread`), which this occurrence count sees
-    // exactly as it sees `Proposals.ts`'s duplicate below.
-    expect(gated).toBe(55);
+    // and the creator action that opens a shared session channel is still the
+    // campaign creator's act. The three after are inner helpers in those files
+    // restating their own methods' first parameter (`one`, `threadReachable`,
+    // `ensureThread`), which this occurrence count sees exactly as it sees
+    // `Proposals.ts`'s duplicate below.
+    expect(gated).toBe(56);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -668,7 +668,11 @@ describe("the scope, counted", () => {
     // sources add seven account-owned source methods for the same reason: their
     // rows are originals in no campaign, so a campaign proof is the wrong
     // instrument, while copying into a campaign is separately creator-gated.
-    expect(ungated).toBe(148);
+    // NPC session chat adds five participant/player-safe methods: listing,
+    // finding, reading turns, appending and building prompt context for the
+    // shared live-session channel. They deliberately read through active table
+    // presence, not a creator proof; only opening the channel is creator-gated.
+    expect(ungated).toBe(153);
   });
 });
 

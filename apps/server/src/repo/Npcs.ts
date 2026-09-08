@@ -101,7 +101,7 @@ interface PlayerNpcRow {
   readonly persona: NpcPersona;
 }
 
-const toPlayerNpc = (row: PlayerNpcRow): PlayerNpc =>
+export const toPlayerNpc = (row: PlayerNpcRow): PlayerNpc =>
   new PlayerNpc({
     id: row.id,
     campaignId: row.campaign_id,

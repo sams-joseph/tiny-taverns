@@ -1,17 +1,22 @@
 import type {
   CampaignId,
+  NpcId,
+  PlayerNpc,
   PlayerLiveCombatant,
   PlayerLiveCombatantYou,
   Roll,
   RollMode,
+  SessionId,
   SheetAction,
 } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { useNpcSessionChat } from "../cast/playerChat";
+import { RehearsalPanel } from "../cast/RehearsalPanel";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { actionRows } from "../characters/sheet";
@@ -46,6 +51,14 @@ const playerTableAtom = Atom.family((campaignId: CampaignId) =>
     reads.myCharacters,
     reads.notes(campaignId),
   ]),
+);
+
+const sessionNpcsAtom = Atom.family(
+  ({ campaignId, sessionId }: { readonly campaignId: CampaignId; readonly sessionId: SessionId }) =>
+    apiAtom(
+      (client) => client.npcs.sessionList({ params: { campaignId, sessionId } }),
+      [reads.sessionNpcs(sessionId)],
+    ),
 );
 
 const bandLabel = (band: PlayerLiveCombatant & { kind: "npc" }) =>
@@ -114,6 +127,120 @@ function PendingRollLine({ roll }: { readonly roll: PendingRoll }) {
       <span className="text-caption text-muted-foreground">{rollDetail(roll)}</span>
       <span className="text-caption text-muted-foreground">{roll.message}</span>
     </div>
+  );
+}
+
+function SessionNpcConversation({
+  campaignId,
+  sessionId,
+  npc,
+  refreshToken,
+}: {
+  readonly campaignId: CampaignId;
+  readonly sessionId: SessionId;
+  readonly npc: PlayerNpc;
+  readonly refreshToken: number;
+}) {
+  const chat = useNpcSessionChat(campaignId, sessionId, npc.id, npc.name, refreshToken);
+  return (
+    <RehearsalPanel
+      name={npc.name}
+      rehearsal={chat}
+      subtitle="At the table · shared with active participants"
+      emptyTitle={`Talk to ${npc.name}`}
+      emptyBody="Everyone in this shared live-session channel can read the exchange. The NPC cannot change the campaign or remember this automatically."
+      label={`Say something to ${npc.name}`}
+      ariaLabel={`Talk to ${npc.name}`}
+    />
+  );
+}
+
+function SessionNpcCard({
+  campaignId,
+  sessionId,
+  refreshToken,
+}: {
+  readonly campaignId: CampaignId;
+  readonly sessionId: SessionId;
+  readonly refreshToken: number;
+}) {
+  const [resource, reload] = useApiAtom(sessionNpcsAtom({ campaignId, sessionId }));
+  const [selected, setSelected] = useState<NpcId | undefined>(undefined);
+
+  useEffect(() => {
+    if (refreshToken > 0) reload();
+  }, [refreshToken, reload]);
+
+  if (resource.state === "loading") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>NPCs at the table</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-body-s text-muted-foreground">Looking for shared NPCs…</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (resource.state === "failed") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>NPCs at the table</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FailureNotice failure={resource.failure} onRetry={reload} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const npcs = resource.value;
+  const npc = npcs.find((row) => row.id === selected) ?? npcs[0];
+  if (npc === undefined) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>NPCs at the table</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-body-s leading-body text-muted-foreground">
+            The DM has not shared an NPC conversation with this live session.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Talk to an NPC</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {npcs.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            {npcs.map((row) => (
+              <Button
+                key={row.id}
+                size="sm"
+                variant={row.id === npc.id ? "secondary" : "ghost"}
+                onClick={() => setSelected(row.id)}
+              >
+                {row.name}
+              </Button>
+            ))}
+          </div>
+        )}
+        <SessionNpcConversation
+          campaignId={campaignId}
+          sessionId={sessionId}
+          npc={npc}
+          refreshToken={refreshToken}
+        />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -204,16 +331,22 @@ export function PlayerTableScreen() {
   const { failure, submit } = useMutation();
   const [rollMode, setRollMode] = useState<RollMode>("normal");
   const [pendingRolls, setPendingRolls] = useState<ReadonlyArray<PendingRoll>>([]);
+  const [tableTicks, setTableTicks] = useState(0);
   const visiblePendingRolls = pendingRolls.filter(
     (pending) => !view?.rolls.some((roll) => roll.requestId === pending.localId),
   );
+
+  const refreshTable = useCallback(() => {
+    reload();
+    setTableTicks((count) => count + 1);
+  }, [reload]);
 
   const connection = usePlayerTableStream({
     campaignId,
     sessionId: table?.sessionId,
     enabled: table !== undefined && table !== null,
-    onTick: reload,
-    onReconnected: reload,
+    onTick: refreshTable,
+    onReconnected: refreshTable,
   });
 
   const recordRoll = (roll: LocalRoll | undefined) => {
@@ -351,6 +484,11 @@ export function PlayerTableScreen() {
               </div>
 
               <aside className="flex min-w-0 flex-col gap-5">
+                <SessionNpcCard
+                  campaignId={campaignId}
+                  sessionId={table.sessionId}
+                  refreshToken={tableTicks}
+                />
                 <RollControls
                   character={you}
                   actions={actions}

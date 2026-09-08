@@ -29,6 +29,8 @@ export interface RehearsalTurn {
   readonly id: string;
   readonly who: "user" | "npc";
   readonly text: string;
+  /** Shared session transcript attribution; absent for private rehearsal/direct chat and local drafts. */
+  readonly speakerName?: string | null;
 }
 
 export interface Rehearsal {
@@ -72,7 +74,9 @@ const sentenceFor = (name: string, failure: ApiFailure): string => {
 
 const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<RehearsalTurn> =>
   recorded.flatMap((turn) =>
-    turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }],
+    turn.text === ""
+      ? []
+      : [{ id: turn.id, who: turn.who, text: turn.text, speakerName: turn.speakerName }],
   );
 
 export function useNpcRehearsal(campaignId: CampaignId, npcId: NpcId, name: string): Rehearsal {

@@ -4,6 +4,7 @@ import type {
   NpcId,
   NpcPlayerStatus,
   NpcThreadId,
+  SessionId,
   NpcTurn as RecordedTurn,
 } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
@@ -33,7 +34,9 @@ const sentenceFor = (name: string, failure: ApiFailure): string => {
 
 const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<RehearsalTurn> =>
   recorded.flatMap((turn) =>
-    turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }],
+    turn.text === ""
+      ? []
+      : [{ id: turn.id, who: turn.who, text: turn.text, speakerName: turn.speakerName }],
   );
 
 /** Private player↔NPC chat: own thread only, no tools, no proposals, no memory writes. */
@@ -197,5 +200,145 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
     status: undefined,
     lastPrompt: undefined,
     reset: turns.length > 0 ? reset : undefined,
+  };
+}
+
+/** Shared live-session NPC chat: one session thread visible to table participants. */
+export function useNpcSessionChat(
+  campaignId: CampaignId,
+  sessionId: SessionId,
+  npcId: NpcId,
+  name: string,
+  refreshToken = 0,
+): Rehearsal {
+  const fetchCredential = useCredential();
+  const [turns, setTurns] = useState<ReadonlyArray<RehearsalTurn>>([]);
+  const [status, setStatus] = useState<NpcPlayerStatus | undefined>(undefined);
+  const [asking, setAsking] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const nextId = useRef(0);
+  const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
+  const askingRef = useRef(false);
+  const writingRef = useRef(false);
+  const credentialRef = useRef(fetchCredential);
+  credentialRef.current = fetchCredential;
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const token = await credentialRef.current();
+      const result = await runApiResult(
+        (client) =>
+          Effect.all(
+            {
+              status: client.npcs.sessionStatus({ params: { campaignId, sessionId, npcId } }),
+              recorded: client.npcs.sessionTurns({ params: { campaignId, sessionId, npcId } }),
+            },
+            { concurrency: 2 },
+          ),
+        token,
+      );
+      if (!live || Result.isFailure(result)) return;
+      setStatus(result.success.status);
+      const recorded = shownAs(result.success.recorded);
+      setTurns((current) => (askingRef.current && writingRef.current ? current : recorded));
+    })();
+    return () => {
+      live = false;
+    };
+  }, [campaignId, npcId, refreshToken, sessionId]);
+
+  useEffect(
+    () => () => {
+      const fiber = answering.current;
+      if (fiber !== undefined) Effect.runFork(Fiber.interrupt(fiber));
+    },
+    [],
+  );
+
+  const append = useCallback(
+    (turn: RehearsalTurn) => setTurns((current) => [...current, turn]),
+    [],
+  );
+
+  const say = useCallback((text: string) => {
+    writingRef.current = true;
+    setWriting(true);
+    setTurns((current) => {
+      const last = current.at(-1);
+      return last?.who === "npc"
+        ? [...current.slice(0, -1), { ...last, text: last.text + text }]
+        : [...current, { id: `npc-${String(nextId.current++)}`, who: "npc" as const, text }];
+    });
+  }, []);
+
+  const send = useCallback(
+    (text: string) => {
+      if (asking) return;
+      append({ id: `you-${String(nextId.current++)}`, who: "user", text });
+      askingRef.current = true;
+      writingRef.current = false;
+      setAsking(true);
+      setWriting(false);
+      const requestId = globalThis.crypto?.randomUUID?.() ?? `npc-${String(Date.now())}`;
+
+      const receive = (event: NpcEvent) => {
+        switch (event.event) {
+          case "delta":
+            say(event.data.text);
+            return;
+          case "failed":
+            append({ id: `npc-${String(nextId.current++)}`, who: "npc", text: event.data.message });
+            return;
+          default:
+            return;
+        }
+      };
+
+      const answer = Effect.gen(function* () {
+        const token = yield* Effect.promise(() => credentialRef.current());
+        const client = yield* makeClient(token);
+        const stream = yield* client.npcs.sessionTalk({
+          params: { campaignId, sessionId, npcId },
+          payload: { text, requestId },
+        });
+        yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
+      }).pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.result,
+        Effect.map((outcome) => {
+          askingRef.current = false;
+          writingRef.current = false;
+          setAsking(false);
+          setWriting(false);
+          answering.current = undefined;
+          if (Result.isFailure(outcome)) {
+            append({
+              id: `npc-${String(nextId.current++)}`,
+              who: "npc",
+              text: sentenceFor(name, classifyFailure(outcome.failure)),
+            });
+          }
+        }),
+      );
+
+      answering.current = Effect.runFork(answer);
+    },
+    [append, asking, campaignId, name, npcId, say, sessionId],
+  );
+
+  return {
+    turns,
+    thinking: asking && !writing,
+    send: status?.available === true ? send : undefined,
+    unavailable:
+      status?.available === true
+        ? undefined
+        : status === undefined
+          ? `Checking whether ${name} can answer…`
+          : `No model is configured behind ${name}.`,
+    status: undefined,
+    lastPrompt: undefined,
+    reset: undefined,
   };
 }

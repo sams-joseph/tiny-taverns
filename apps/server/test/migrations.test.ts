@@ -257,6 +257,7 @@ describe("migrations", () => {
       { migration_id: 38, name: "npc_knowledge_memory" },
       { migration_id: 39, name: "npc_player_direct_chat" },
       { migration_id: 40, name: "npc_library_sources" },
+      { migration_id: 41, name: "npc_session_shared_chat" },
     ]);
   }, 60_000);
 
@@ -306,6 +307,7 @@ describe("migrations", () => {
       { migration_id: 38, name: "npc_knowledge_memory" },
       { migration_id: 39, name: "npc_player_direct_chat" },
       { migration_id: 40, name: "npc_library_sources" },
+      { migration_id: 41, name: "npc_session_shared_chat" },
     ]);
   }, 60_000);
 });

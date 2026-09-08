@@ -644,8 +644,9 @@ export const installCharacterServer = (): CharacterStubServer => {
         ),
       );
     }
+    const body = typeof answer.body === "function" ? answer.body() : answer.body;
     return Promise.resolve(
-      new Response(answer.status === 204 ? null : JSON.stringify(answer.body), {
+      new Response(answer.status === 204 ? null : JSON.stringify(body), {
         status: answer.status,
         headers: { "content-type": "application/json" },
       }),

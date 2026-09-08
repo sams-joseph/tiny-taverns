@@ -12,8 +12,10 @@ import {
   NpcPlayerStatus,
   type NpcRehearse,
   NpcRehearsalStatus,
+  type NpcSessionTalk,
   type NpcTalk,
   type NpcTurnId,
+  type SessionId,
   type NotFound,
   type PlayerNpc,
   RateLimited,
@@ -98,17 +100,29 @@ export class NpcAgent extends Context.Service<
       NotFound | HobUnavailable | RateLimited,
       CurrentActor
     >;
+    readonly sessionStatus: (
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      npcId: NpcId,
+    ) => Effect.Effect<NpcPlayerStatus, NotFound, CurrentActor>;
+    readonly sessionTalk: (
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      npcId: NpcId,
+      ask: NpcSessionTalk,
+    ) => Effect.Effect<Stream.Stream<NpcEvent>, NotFound | HobUnavailable, CurrentActor>;
   }
 >()("NpcAgent") {
   static readonly unavailable: Layer.Layer<
     NpcAgent,
     never,
-    Npcs | NpcKnowledge | NpcMemories | CampaignCreatorActors
+    Npcs | NpcKnowledge | NpcMemories | NpcThreads | CampaignCreatorActors
   > = Layer.effect(this)(
     Effect.gen(function* () {
       const npcs = yield* Npcs;
       const knowledge = yield* NpcKnowledge;
       const memories = yield* NpcMemories;
+      const threads = yield* NpcThreads;
       const creators = yield* CampaignCreatorActors;
       const off = new HobUnavailable({
         message:
@@ -136,6 +150,13 @@ export class NpcAgent extends Context.Service<
           }),
         talk: (campaignId, npcId) =>
           Effect.andThen(npcs.playerFindById(campaignId, npcId), Effect.fail(off)),
+        sessionStatus: (campaignId, sessionId, npcId) =>
+          Effect.gen(function* () {
+            const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
+            return playerStatusOf(npc, false);
+          }),
+        sessionTalk: (campaignId, sessionId, npcId) =>
+          Effect.andThen(threads.sessionFind(campaignId, sessionId, npcId), Effect.fail(off)),
       };
     }),
   );
@@ -418,6 +439,134 @@ export class NpcAgent extends Context.Service<
                 Stream.ensuring(save),
               );
             }),
+
+          sessionStatus: (campaignId, sessionId, npcId) =>
+            Effect.gen(function* () {
+              const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
+              return playerStatusOf(npc, true);
+            }),
+
+          sessionTalk: (campaignId, sessionId, npcId, ask) =>
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
+              const history = yield* threads.sessionTurns(campaignId, sessionId, npcId);
+              const context = yield* sessionContextFor(
+                campaignId,
+                sessionId,
+                npcId,
+                knowledge,
+                memories,
+                threads,
+              );
+              const user = yield* threads.sessionAppend(campaignId, sessionId, npcId, {
+                id: yield* freshTurnId,
+                who: "user",
+                text: ask.text,
+                accountId: actor.accountId,
+                requestId: ask.requestId,
+              });
+              const replyId = yield* freshTurnId;
+              if (!user.inserted) {
+                return Stream.succeed<NpcEvent>(
+                  failure(
+                    "That table line was already sent. Wait for the reply already in progress.",
+                  ),
+                );
+              }
+
+              const prompt = assembleNpcPrompt(
+                promptNpc(npc),
+                history,
+                ask.text,
+                "session-shared",
+                context,
+              );
+
+              const written = yield* Ref.make("");
+              const broke = yield* Ref.make(false);
+              const finished = yield* Ref.make("stop");
+
+              const answering: Stream.Stream<
+                NpcEvent,
+                AiError.AiError,
+                LanguageModel.LanguageModel
+              > = LanguageModel.streamText({ prompt: prompt.messages }).pipe(
+                Stream.filterMapEffect(
+                  (
+                    part: Response.StreamPart<NoTools>,
+                  ): Effect.Effect<Result.Result<NpcEvent, Response.StreamPart<NoTools>>> =>
+                    Effect.gen(function* () {
+                      if (part.type === "finish") {
+                        yield* Ref.set(finished, part.reason);
+                        return part.reason === "length"
+                          ? Result.succeed(truncated)
+                          : Result.fail(part);
+                      }
+                      return toNpcEvent(part);
+                    }),
+                ),
+              );
+
+              const save = Effect.gen(function* () {
+                const text = yield* Ref.get(written);
+                if (text === "") return;
+                yield* threads.sessionAppend(campaignId, sessionId, npcId, {
+                  id: replyId,
+                  who: "npc",
+                  text,
+                  templateVersion: prompt.templateVersion,
+                  promptTokens: prompt.estimatedTokens,
+                  model: options.model,
+                  finishReason: yield* Ref.get(finished),
+                });
+              }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
+
+              const tail = Stream.unwrap(
+                Effect.map(
+                  Effect.all([Ref.get(finished), Ref.get(broke), Ref.get(written)]),
+                  ([reason, failed, text]) =>
+                    Stream.fromIterable<NpcEvent>(
+                      failed
+                        ? []
+                        : text === ""
+                          ? [silence]
+                          : [{ event: "done" as const, data: new NpcDone({ reason }) }],
+                    ),
+                ),
+              );
+
+              return Stream.fromIterable<NpcEvent>([
+                {
+                  event: "began",
+                  data: new NpcBegun({
+                    threadId: history[0]?.threadId ?? user.turn.threadId,
+                    turnId: replyId,
+                    templateVersion: prompt.templateVersion,
+                    estimatedTokens: prompt.estimatedTokens,
+                    knowledgeIncluded: prompt.knowledge.included,
+                    knowledgeTotal: prompt.knowledge.total,
+                    memoriesIncluded: prompt.memories.included,
+                    memoriesTotal: prompt.memories.total,
+                  }),
+                },
+              ]).pipe(
+                Stream.concat(answering.pipe(Stream.tap((event) => note(written, broke, event)))),
+                Stream.concat(tail),
+                Stream.provideService(LanguageModel.LanguageModel, languageModel),
+                Stream.catchCause((cause) =>
+                  Stream.unwrap(
+                    Effect.as(
+                      Effect.logWarning(
+                        `${npc.name}'s table reply failed: ${describe(Cause.squash(cause))}`,
+                      ),
+                      Stream.succeed(failure(apology(Cause.squash(cause)))),
+                    ),
+                  ),
+                ),
+                Stream.ensuring(save),
+              );
+            }),
         };
       }),
     );
@@ -448,6 +597,27 @@ const playerContextFor = (
     const facts = yield* knowledge.playerSafeForPrompt(campaignId, npcId);
     const approved = yield* memories.playerSafeForPrompt(campaignId, npcId);
     return { knowledge: facts, memories: approved };
+  });
+
+const sessionContextFor = (
+  campaignId: CampaignId,
+  sessionId: SessionId,
+  npcId: NpcId,
+  knowledge: (typeof NpcKnowledge)["Service"],
+  memories: (typeof NpcMemories)["Service"],
+  threads: (typeof NpcThreads)["Service"],
+): Effect.Effect<NpcPromptContext, NotFound, CurrentActor> =>
+  Effect.gen(function* () {
+    const base = yield* playerContextFor(campaignId, npcId, knowledge, memories);
+    const session = yield* threads.sessionPromptContext(campaignId, sessionId, npcId);
+    return {
+      ...base,
+      session: {
+        number: session.sessionNumber,
+        title: session.sessionTitle,
+        fight: session.fight,
+      },
+    };
   });
 
 const promptNpc = (npc: PlayerNpc): Npc =>

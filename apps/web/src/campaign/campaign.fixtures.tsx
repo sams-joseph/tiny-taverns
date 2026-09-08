@@ -1122,7 +1122,7 @@ export const rosterRow = {
 
 export interface Answer {
   readonly status: number;
-  readonly body?: unknown;
+  readonly body?: unknown | (() => unknown);
   /**
    * A pre-framed `text/event-stream` body, for the one endpoint that streams.
    *
@@ -1430,8 +1430,9 @@ export const installStubServer = (): StubServer => {
         }),
       );
     }
+    const body = typeof answer.body === "function" ? answer.body() : answer.body;
     return Promise.resolve(
-      new Response(answer.status === 204 ? null : JSON.stringify(answer.body), {
+      new Response(answer.status === 204 ? null : JSON.stringify(body), {
         status: answer.status,
         headers: { "content-type": "application/json" },
       }),

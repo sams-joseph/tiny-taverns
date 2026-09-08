@@ -10,8 +10,9 @@ import {
   type NpcEvent,
   type NpcId,
   NotFound,
+  type SessionId,
 } from "@taverns/api";
-import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect";
+import { ConfigProvider, Effect, Fiber, Layer, ManagedRuntime, Result, Stream } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
@@ -31,6 +32,7 @@ import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
+import { Sessions } from "../src/repo/Sessions.js";
 import {
   aCharacterAt,
   anAccount,
@@ -72,6 +74,7 @@ import {
 const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
+  LiveEvents.layer,
   Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   CampaignCreatorActors.layer,
@@ -81,8 +84,9 @@ const services = Layer.mergeAll(
   Npcs.layer,
   NpcKnowledge.layer,
   NpcMemories.layer,
-  NpcThreads.layer,
+  NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npcs")));
 
 const runtime = ManagedRuntime.make(services);
@@ -438,6 +442,39 @@ const talk = (
   );
 };
 
+const sessionTalk = (
+  actor: Actor,
+  campaignId: CampaignId,
+  sessionId: SessionId,
+  npcId: NpcId,
+  options?: {
+    readonly rounds?: ReadonlyArray<ReturnType<typeof textChunks> | ReturnType<typeof refused>>;
+    readonly text?: string;
+    readonly requestId?: string;
+  },
+): Promise<Rehearsed> => {
+  const model = scriptedModel({
+    model: "scripted-local",
+    maxTokens: MAX_TOKENS,
+    rounds: options?.rounds ?? [textChunks("The reeds bow back.")],
+  });
+
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const agent = yield* NpcAgent;
+      const stream = yield* agent.sessionTalk(campaignId, sessionId, npcId, {
+        text: options?.text ?? "Cazril, are we safe to cross?",
+        requestId: options?.requestId ?? crypto.randomUUID(),
+      });
+      const events = yield* Stream.runCollect(stream);
+      return { events: Array.from(events), requests: model.requests() };
+    }).pipe(
+      withActor(actor),
+      Effect.provide(NpcAgent.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
+    ),
+  );
+};
+
 describe("player direct chat", () => {
   it("lists and finds only shared live NPCs through a player-safe projection", async () => {
     const seen = await runtime.runPromise(
@@ -542,6 +579,150 @@ describe("player direct chat", () => {
     expect(result._tag).toBe("Failure");
     expect(result._tag === "Failure" && result.failure).toMatchObject({ _tag: "RateLimited" });
     expect(model.requests()).toHaveLength(0);
+  }, 60_000);
+});
+
+describe("shared live-session NPC chat", () => {
+  it("is opened by the creator and read by active table participants only", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const sessions = yield* Sessions;
+        const threads = yield* NpcThreads;
+        const live = yield* LiveEvents;
+        const as = withActor(fixture.dm);
+        const session = yield* as(
+          sessions.create(fixture.campaign.id, {
+            number: 77,
+            title: "At the ford",
+            visibility: "shared",
+          }),
+        );
+        yield* as(campaigns.update(fixture.campaign.id, { currentSessionId: session.id }));
+        const opened = yield* threads.openSession(fixture.creator, fixture.cazril.id, session.id);
+        const openedAgain = yield* threads.openSession(
+          fixture.creator,
+          fixture.cazril.id,
+          session.id,
+        );
+        const playerList = yield* withActor(fixture.player)(
+          threads.sessionList(fixture.campaign.id, session.id),
+        );
+        const stranger = yield* withActor(fixture.stranger)(
+          threads.sessionList(fixture.campaign.id, session.id),
+        ).pipe(Effect.result);
+        const revoked = yield* withActor(fixture.revoked)(
+          threads.sessionList(fixture.campaign.id, session.id),
+        ).pipe(Effect.result);
+        const heard = yield* live
+          .subscribe(session.id)
+          .pipe(
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.timeout("2 seconds"),
+            Effect.forkChild({ startImmediately: true }),
+          );
+        const first = yield* withActor(fixture.player)(
+          threads.sessionAppend(fixture.campaign.id, session.id, fixture.cazril.id, {
+            id: crypto.randomUUID() as never,
+            who: "user",
+            text: "Ferryman, the reeds are moving.",
+            requestId: "one-visible-line",
+          }),
+        );
+        const duplicate = yield* withActor(fixture.player)(
+          threads.sessionAppend(fixture.campaign.id, session.id, fixture.cazril.id, {
+            id: crypto.randomUUID() as never,
+            who: "user",
+            text: "Ferryman, the reeds are moving.",
+            requestId: "one-visible-line",
+          }),
+        );
+        const turns = yield* withActor(fixture.player)(
+          threads.sessionTurns(fixture.campaign.id, session.id, fixture.cazril.id),
+        );
+        const rings = yield* Fiber.join(heard);
+        return {
+          sessionId: session.id,
+          opened,
+          openedAgain,
+          playerList,
+          stranger,
+          revoked,
+          first,
+          duplicate,
+          turns,
+          rings,
+        };
+      }),
+    );
+
+    expect(seen.openedAgain.id).toBe(seen.opened.id);
+    expect(seen.playerList.map((npc) => npc.name)).toContain("Cazril");
+    expect(Result.isFailure(seen.stranger) && seen.stranger.failure._tag).toBe("NotFound");
+    expect(Result.isFailure(seen.revoked) && seen.revoked.failure._tag).toBe("NotFound");
+    expect(seen.first.inserted).toBe(true);
+    expect(Array.from(seen.rings).map((ring) => ring.sessionId)).toEqual([seen.sessionId]);
+    expect(seen.duplicate.inserted).toBe(false);
+    expect(seen.turns).toHaveLength(1);
+    expect(seen.turns[0]).toMatchObject({ who: "user", speakerName: "Pim" });
+  });
+
+  it("prompts from player-safe session context and never from secrets or private chats", async () => {
+    const session = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const sessions = yield* Sessions;
+        const threads = yield* NpcThreads;
+        const as = withActor(fixture.dm);
+        const session = yield* as(
+          sessions.create(fixture.campaign.id, {
+            number: 78,
+            title: "Lanterns in the rain",
+            visibility: "shared",
+          }),
+        );
+        yield* as(campaigns.update(fixture.campaign.id, { currentSessionId: session.id }));
+        yield* threads.openSession(fixture.creator, fixture.cazril.id, session.id);
+        return session;
+      }),
+    );
+
+    const { events, requests } = await sessionTalk(
+      fixture.player,
+      fixture.campaign.id,
+      session.id,
+      fixture.cazril.id,
+      { text: "Cazril, who is in the fog?" },
+    );
+    const shown = shownTo(requests);
+    const began = begunIn(events);
+
+    expect(began.templateVersion).toBe(NPC_PROMPT_TEMPLATE_VERSION);
+    expect(texts(events)).toEqual(["The reeds bow back."]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.tools).toBeUndefined();
+    expect(shown).toContain("AUDIENCE: shared live-session table chat");
+    expect(shown).toContain("Session 78: Lanterns in the rain");
+    expect(shown).toContain("No shared fight is on the table");
+    expect(shown).toContain(OWN_FACT);
+    expect(shown).toContain(APPROVED_MEMORY);
+    expect(shown).not.toContain(PRIVATE);
+    expect(shown).not.toContain(DM_NOTE);
+    expect(shown).not.toContain(PLAYER_THREAD);
+    expect(shown).not.toContain(PLAYER_SHEET);
+    expect(shown).not.toContain(RETIRED_FACT);
+    expect(shown).not.toContain(DRAFT_MEMORY);
+
+    const visibleToCreator = await runtime.runPromise(
+      Effect.flatMap(NpcThreads, (threads) =>
+        threads.sessionTurns(fixture.campaign.id, session.id, fixture.cazril.id),
+      ).pipe(withActor(fixture.dm)),
+    );
+    expect(visibleToCreator.map((turn) => [turn.who, turn.speakerName, turn.text])).toEqual([
+      ["user", "Pim", "Cazril, who is in the fog?"],
+      ["npc", null, "The reeds bow back."],
+    ]);
   }, 60_000);
 });
 
@@ -723,7 +904,7 @@ describe("with no model configured", () => {
               Npcs.layer,
               NpcKnowledge.layer,
               NpcMemories.layer,
-              NpcThreads.layer,
+              NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
               CampaignCreatorActors.layer,
             ]),
           ),

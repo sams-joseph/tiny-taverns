@@ -24,6 +24,28 @@ const server = installCharacterServer();
 
 const tableRollsPath = `GET /campaigns/${campaignId}/table/sessions/${sessionId}/characters/${brannocId}/rolls`;
 const tableEventsPath = `GET /campaigns/${campaignId}/table/sessions/${sessionId}/events`;
+const sharedNpcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
+const sharedNpcThreadId = "2b1f2a1e-0000-4000-8000-00000000e0c1";
+const sharedNpcTurnsPath = `GET /campaigns/${campaignId}/npcs/${sharedNpcId}/sessions/${sessionId}/turns`;
+
+const sharedNpc = {
+  id: sharedNpcId,
+  campaignId,
+  name: "Cazril",
+  role: "the ferryman",
+  persona: { identity: { summary: "Takes names, not coin." } },
+};
+
+const sharedNpcLine = {
+  id: "2b1f2a1e-0000-4000-8000-00000000e101",
+  threadId: sharedNpcThreadId,
+  who: "user",
+  speakerName: "Pim",
+  text: "Cazril, the reeds are moving.",
+  templateVersion: null,
+  promptTokens: null,
+  createdAt: "2026-08-04T19:05:00.000Z",
+};
 
 const roll = {
   id: "2b1f2a1e-0000-4000-8000-00000000aa01",
@@ -167,6 +189,46 @@ describe("PlayerTableScreen", () => {
     await waitFor(() => {
       const reads = server.calls.filter(
         (entry) => entry.method === "GET" && entry.pathname === `/campaigns/${campaignId}/table`,
+      );
+      expect(reads.length).toBeGreaterThan(1);
+    });
+  });
+
+  it("refreshes the shared NPC transcript when another participant speaks", async () => {
+    server.routes.set(...playing(campaignId));
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
+      status: 200,
+      body: [sharedNpc],
+    });
+    server.routes.set(
+      `GET /campaigns/${campaignId}/npcs/${sharedNpcId}/sessions/${sessionId}/status`,
+      {
+        status: 200,
+        body: { available: true, npc: "Cazril" },
+      },
+    );
+    server.routes.set(sharedNpcTurnsPath, {
+      status: 200,
+      body: () => {
+        const calls = server.calls.filter(
+          (entry) => entry.method === "GET" && entry.pathname === sharedNpcTurnsPath.slice(4),
+        );
+        return calls.length < 2 ? [] : [sharedNpcLine];
+      },
+    });
+    server.routes.set(tableEventsPath, {
+      status: 200,
+      sse: 'id: 9\nevent: tick\ndata: {"tick":"session"}\n\n',
+    });
+
+    await renderTable();
+
+    await screen.findByText("Talk to an NPC");
+    await screen.findByText("Cazril, the reeds are moving.");
+    expect(screen.getByText("Pim")).toBeTruthy();
+    await waitFor(() => {
+      const reads = server.calls.filter(
+        (entry) => entry.method === "GET" && entry.pathname === sharedNpcTurnsPath.slice(4),
       );
       expect(reads.length).toBeGreaterThan(1);
     });

@@ -2,6 +2,7 @@ import type {
   Combatant,
   CombatantId,
   HobDirectResourceUpdate,
+  Npc,
   Roll,
   SessionEvent,
 } from "@taverns/api";
@@ -20,11 +21,14 @@ import {
   toast,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useApiAtom } from "../api/atoms";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
+import { reads } from "../api/keys";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
+import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
@@ -72,6 +76,13 @@ import { useLiveStream } from "./stream";
  */
 const LOG_KEPT = 40;
 
+const runNpcsAtom = Atom.family((path: RunPath) =>
+  apiAtom(
+    (client) => client.npcs.list({ params: { campaignId: path.campaignId }, query: {} }),
+    [reads.npcs(path.campaignId), reads.sessionNpcs(path.sessionId)],
+  ),
+);
+
 const rollFaces = (roll: Roll): string => {
   const faces = roll.dice.join(", ");
   const kept = roll.kept.length === roll.dice.length ? undefined : `kept ${roll.kept.join(", ")}`;
@@ -80,6 +91,81 @@ const rollFaces = (roll: Roll): string => {
 
 const rollByline = (roll: Roll): string =>
   [roll.accountName, roll.characterName].filter((part) => part !== null && part !== "").join(" · ");
+
+function ShareNpcCard({ path }: { readonly path: RunPath }) {
+  const [resource, reload] = useApiAtom(runNpcsAtom(path));
+  const { failure, submit, busy } = useMutation();
+  const [selected, setSelected] = useState("");
+
+  if (resource.state === "loading") {
+    return (
+      <section className="rounded-card border border-hairline bg-surface-card p-card">
+        <p className="text-body-s text-muted-foreground">Reading the cast…</p>
+      </section>
+    );
+  }
+  if (resource.state === "failed")
+    return <FailureNotice failure={resource.failure} onRetry={reload} />;
+
+  const shareable = resource.value.filter((npc: Npc) => npc.visibility === "shared");
+  if (shareable.length === 0) {
+    return (
+      <section className="rounded-card border border-hairline bg-surface-card p-card">
+        <h3 className="text-title-s font-semibold text-foreground">NPC conversations</h3>
+        <p className="mt-2 text-body-s text-muted-foreground">
+          Share an NPC with the campaign before opening a table conversation.
+        </p>
+      </section>
+    );
+  }
+
+  const chosen = shareable.find((npc) => npc.id === selected) ?? shareable[0]!;
+  return (
+    <section className="rounded-card border border-hairline bg-surface-card p-card">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-title-s font-semibold text-foreground">NPC conversations</h3>
+          <p className="text-caption text-muted-foreground">
+            Open a shared chat on this live table.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            void submit(
+              (client) =>
+                client.npcs.openSession({
+                  params: {
+                    campaignId: path.campaignId,
+                    sessionId: path.sessionId,
+                    npcId: chosen.id,
+                  },
+                  payload: {},
+                }),
+              [reads.sessionNpcs(path.sessionId)],
+            );
+          }}
+        >
+          Share
+        </Button>
+      </div>
+      <select
+        className="mt-3 w-full rounded-control border border-input bg-surface-sunken px-3 py-2 text-body-s text-foreground"
+        value={chosen.id}
+        onChange={(event) => setSelected(event.currentTarget.value)}
+      >
+        {shareable.map((npc) => (
+          <option key={npc.id} value={npc.id}>
+            {npc.name}
+          </option>
+        ))}
+      </select>
+      {failure !== undefined && <SaveFailure failure={failure} />}
+    </section>
+  );
+}
 
 function DiceTray({
   rolls,
@@ -582,6 +668,7 @@ export function RunScreen() {
                   busy={direct.busy}
                   onUndo={(update) => void undoDirectUpdate(update)}
                 />
+                {!over && <ShareNpcCard path={path} />}
                 <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
                 <SessionLog
                   events={log}

@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import {
   AccountId,
   CampaignId,
+  SessionId,
   NpcId,
   NpcKnowledgeFactId,
   NpcMemoryId,
@@ -202,9 +203,11 @@ export type NpcListFilter = typeof NpcListFilter.Type;
  * The channel a thread is on. **One member in this slice**, and the column
  * is a closed check so a second one is a migration rather than a string. Each
  * channel carries its own privacy decision: rehearsal is creator-only;
- * player_direct is one player's private transcript.
+ * player_direct is one player's private transcript; session_shared is the
+ * one live-session table conversation, visible only to the active session
+ * participants who may see the live player table.
  */
-export const NpcChannel = Schema.Literals(["rehearsal", "player_direct"]);
+export const NpcChannel = Schema.Literals(["rehearsal", "player_direct", "session_shared"]);
 export type NpcChannel = typeof NpcChannel.Type;
 
 export const NpcWho = Schema.Literals(["user", "npc"]);
@@ -214,6 +217,8 @@ export class NpcThread extends Schema.Class<NpcThread>("NpcThread")({
   id: NpcThreadId,
   npcId: NpcId,
   channel: NpcChannel,
+  /** Set only for `session_shared`: the live night this shared channel belongs to. */
+  sessionId: Schema.NullOr(SessionId),
   /** The first line, shortened — what a picker would list. */
   title: Schema.String,
   createdAt: Schema.DateTimeUtcFromString,
@@ -244,6 +249,8 @@ export class NpcTurn extends Schema.Class<NpcTurn>("NpcTurn")({
   id: NpcTurnId,
   threadId: NpcThreadId,
   who: NpcWho,
+  /** Who spoke a `user` line in a shared session; null for NPC lines and old private rows. */
+  speakerName: Schema.optional(Schema.NullOr(Schema.String)),
   text: Schema.String,
   templateVersion: Schema.NullOr(Schema.String),
   promptTokens: Schema.NullOr(Schema.Int),
@@ -376,6 +383,14 @@ export type NpcRehearse = typeof NpcRehearse.Type;
 /** A private player direct message to one shared NPC. Absent starts a thread. */
 export const NpcTalk = NpcRehearse;
 export type NpcTalk = typeof NpcTalk.Type;
+
+/** A line in the one shared live-session NPC channel. The thread is chosen by session. */
+export const NpcSessionTalk = Schema.Struct({
+  text: turnText,
+  /** Optional idempotency key for a browser retry of the same visible send. */
+  requestId: Schema.optional(Schema.String.check(Schema.isMaxLength(120))),
+});
+export type NpcSessionTalk = typeof NpcSessionTalk.Type;
 
 /**
  * Said first, before the model is called: the thread and the turn the reply
