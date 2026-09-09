@@ -4,6 +4,7 @@ import {
   type NpcId,
   type NpcKnowledgeFactId,
   type NpcMemoryId,
+  type SessionId,
   TavernsApi,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -232,6 +233,7 @@ describe("the npcs group", () => {
           const params = { campaignId, npcId: cazril };
           const factId = "2b1f2a1e-0000-4000-8000-00000000a099" as NpcKnowledgeFactId;
           const memoryId = "2b1f2a1e-0000-4000-8000-00000000b099" as NpcMemoryId;
+          const sessionId = "2b1f2a1e-0000-4000-8000-00000000c099" as SessionId;
           const attempts: Record<string, Effect.Effect<unknown, unknown>> = {
             list: client.npcs.list({ params: { campaignId }, query: {} }),
             create: client.npcs.create({ params: { campaignId }, payload: { name: "Mine" } }),
@@ -242,6 +244,23 @@ describe("the npcs group", () => {
             rehearsal: client.npcs.rehearsal({ params }),
             rehearse: client.npcs.rehearse({ params, payload: { text: "hello" } }),
             threads: client.npcs.threads({ params }),
+            sessionMonitor: client.npcs.sessionMonitor({ params: { campaignId, sessionId } }),
+            openSession: client.npcs.openSession({
+              params: { ...params, sessionId },
+              payload: {},
+            }),
+            pauseSession: client.npcs.pauseSession({
+              params: { ...params, sessionId },
+              payload: {},
+            }),
+            resumeSession: client.npcs.resumeSession({
+              params: { ...params, sessionId },
+              payload: {},
+            }),
+            closeSession: client.npcs.closeSession({
+              params: { ...params, sessionId },
+              payload: {},
+            }),
             knowledge: client.npcs.knowledge({ params }),
             createKnowledge: client.npcs.createKnowledge({
               params,

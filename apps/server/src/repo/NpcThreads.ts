@@ -2,9 +2,12 @@ import {
   type AccountId,
   type Actor,
   type CampaignId,
+  Conflict,
   CurrentActor,
   type NpcChannel,
   type NpcId,
+  NpcSessionMonitor,
+  type NpcSessionState,
   NpcThread,
   type NpcThreadId,
   NpcTurn,
@@ -61,6 +64,7 @@ interface ThreadRow extends ProvenanceColumns {
   readonly channel: NpcChannel;
   readonly account_id: AccountId | null;
   readonly session_id: SessionId | null;
+  readonly session_state: NpcSessionState;
   readonly title: string;
 }
 
@@ -81,6 +85,7 @@ const toThread = (row: ThreadRow): NpcThread => {
     npcId: row.npc_id,
     channel: row.channel,
     sessionId: row.session_id,
+    sessionState: row.session_state,
     title: row.title,
     createdAt,
     updatedAt,
@@ -157,6 +162,16 @@ const campaignDayLimited = (retryAfterSeconds: number): RateLimited =>
     retryAfterSeconds,
   });
 
+const blockedSessionState = (state: NpcSessionState): Conflict =>
+  new Conflict({
+    message:
+      state === "paused"
+        ? "that NPC conversation is paused by the DM"
+        : "that NPC conversation is closed for this session",
+  });
+
+const alreadyClosed = new Conflict({ message: "that NPC conversation is already closed" });
+
 export class NpcThreads extends Context.Service<
   NpcThreads,
   {
@@ -219,7 +234,28 @@ export class NpcThreads extends Context.Service<
       creator: CampaignCreatorActor,
       npcId: NpcId,
       sessionId: SessionId,
-    ) => Effect.Effect<NpcThread, NotFound, never>;
+    ) => Effect.Effect<NpcThread, NotFound | Conflict, never>;
+    readonly pauseSession: (
+      creator: CampaignCreatorActor,
+      npcId: NpcId,
+      sessionId: SessionId,
+    ) => Effect.Effect<NpcThread, NotFound | Conflict, never>;
+    readonly resumeSession: (
+      creator: CampaignCreatorActor,
+      npcId: NpcId,
+      sessionId: SessionId,
+    ) => Effect.Effect<NpcThread, NotFound | Conflict, never>;
+    readonly closeSession: (
+      creator: CampaignCreatorActor,
+      npcId: NpcId,
+      sessionId: SessionId,
+    ) => Effect.Effect<NpcThread, NotFound | Conflict, never>;
+    readonly sessionMonitor: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+      model: string | null,
+      available: boolean,
+    ) => Effect.Effect<ReadonlyArray<NpcSessionMonitor>, NotFound, never>;
     /** Player-safe, shared live-session NPCs, visible to creator or active seated players. */
     readonly sessionList: (
       campaignId: CampaignId,
@@ -240,7 +276,7 @@ export class NpcThreads extends Context.Service<
       sessionId: SessionId,
       npcId: NpcId,
       draft: NpcTurnDraft,
-    ) => Effect.Effect<NpcTurnWrite, NotFound, CurrentActor>;
+    ) => Effect.Effect<NpcTurnWrite, NotFound | Conflict, CurrentActor>;
     readonly sessionPromptContext: (
       campaignId: CampaignId,
       sessionId: SessionId,
@@ -362,7 +398,7 @@ export class NpcThreads extends Context.Service<
           sql`npc_thread.channel = 'session_shared'`,
           sql`npc_thread.session_id = ${sessionId}`,
           sessionParticipant(campaignId, sessionId, actor),
-          sql`(${campaignWritableById(sql, campaignId, actor)} or npc_thread.visibility = 'shared')`,
+          sql`(${campaignWritableById(sql, campaignId, actor)} or (npc_thread.visibility = 'shared' and npc_thread.session_state <> 'closed'))`,
           sql`exists (select 1 from npc
                       where npc.id = npc_thread.npc_id
                         and npc.campaign_id = ${campaignId}
@@ -390,6 +426,55 @@ export class NpcThreads extends Context.Service<
           `;
           if (rows.length === 0) return yield* new NotFound({ resource: "npc_thread", id: npcId });
           return { actor, thread: toThread(rows[0]!) };
+        });
+
+      const ensureCreatorSessionThread = (
+        creator: CampaignCreatorActor,
+        npcId: NpcId,
+        sessionId: SessionId,
+      ) =>
+        Effect.gen(function* () {
+          const rows = yield* sql<ThreadRow>`
+            select npc_thread.* from npc_thread
+            join npc on npc.id = npc_thread.npc_id
+            join session on session.id = npc_thread.session_id
+            join campaign on campaign.id = session.campaign_id
+            where npc_thread.npc_id = ${npcId}
+              and npc_thread.channel = 'session_shared'
+              and npc_thread.session_id = ${sessionId}
+              and npc.campaign_id = ${creator.campaign}
+              and npc.archived_at is null
+              and campaign.id = ${creator.campaign}
+              and campaign.current_session_id = session.id
+              and ${containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor)}
+            limit 1
+          `;
+          if (rows.length === 0) return yield* new NotFound({ resource: "npc_thread", id: npcId });
+          return toThread(rows[0]!);
+        });
+
+      const setSessionState = (
+        creator: CampaignCreatorActor,
+        npcId: NpcId,
+        sessionId: SessionId,
+        state: NpcSessionState,
+      ) =>
+        Effect.gen(function* () {
+          const current = yield* ensureCreatorSessionThread(creator, npcId, sessionId);
+          if (current.sessionState === "closed") return yield* alreadyClosed;
+          if (current.sessionState === state) return current;
+          const rows = yield* sql<ThreadRow>`
+            update npc_thread
+            set session_state = ${state}, updated_at = now()
+            where npc_thread.id = ${current.id}
+            returning *
+          `;
+          const changed = toThread(rows[0]!);
+          yield* Option.match(live, {
+            onNone: () => Effect.void,
+            onSome: (events) => events.touched(sessionId),
+          });
+          return changed;
         });
 
       return {
@@ -614,13 +699,16 @@ export class NpcThreads extends Context.Service<
                       session_id: sessionId,
                       channel: "session_shared",
                       visibility: "shared",
+                      session_state: "open",
                       title: "At the table",
                     })}
                     on conflict (npc_id, session_id) where channel = 'session_shared'
                     do update set updated_at = npc_thread.updated_at
                     returning *
                   `;
-                  return toThread(rows[0]!);
+                  const row = toThread(rows[0]!);
+                  if (row.sessionState === "closed") return yield* blockedSessionState("closed");
+                  return row;
                 }),
               );
               yield* Option.match(live, {
@@ -631,19 +719,108 @@ export class NpcThreads extends Context.Service<
             }),
           ),
 
+        pauseSession: (creator, npcId, sessionId) =>
+          dieOnSqlError(setSessionState(creator, npcId, sessionId, "paused")),
+
+        resumeSession: (creator, npcId, sessionId) =>
+          dieOnSqlError(setSessionState(creator, npcId, sessionId, "open")),
+
+        closeSession: (creator, npcId, sessionId) =>
+          dieOnSqlError(setSessionState(creator, npcId, sessionId, "closed")),
+
+        sessionMonitor: (creator, sessionId, model, configured) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const sessionRows = yield* sql<{ readonly id: SessionId }>`
+                select session.id
+                from session
+                join campaign on campaign.id = session.campaign_id
+                where session.id = ${sessionId}
+                  and campaign.id = ${creator.campaign}
+                  and campaign.current_session_id = session.id
+                  and ${campaignWritableById(sql, creator.campaign, creator.actor)}
+              `;
+              if (sessionRows.length === 0)
+                return yield* new NotFound({ resource: "session", id: sessionId });
+
+              const threadRows = yield* sql<ThreadRow>`
+                select npc_thread.*
+                from npc_thread
+                join npc on npc.id = npc_thread.npc_id
+                where npc_thread.channel = 'session_shared'
+                  and npc_thread.session_id = ${sessionId}
+                  and npc.campaign_id = ${creator.campaign}
+                  and npc.archived_at is null
+                order by npc_thread.updated_at desc, npc_thread.id desc
+              `;
+
+              return yield* Effect.all(
+                threadRows.map((threadRow) =>
+                  Effect.gen(function* () {
+                    const npcRows = yield* sql<Parameters<typeof toPlayerNpc>[0]>`
+                      select npc.*, npc_thread.session_state
+                      from npc
+                      join npc_thread on npc_thread.npc_id = npc.id
+                      where npc_thread.id = ${threadRow.id}
+                    `;
+                    const turns = (yield* sql<TurnRow>`
+                      select npc_turn.*, account.name as speaker_name
+                      from npc_turn
+                      left join account on account.id = npc_turn.account_id
+                      where npc_turn.thread_id = ${threadRow.id}
+                      order by npc_turn.created_at asc, npc_turn.id asc
+                    `).map(toNpcTurn);
+                    const proposalRows = yield* sql<{ readonly count: number }>`
+                      select count(*)::int as count
+                      from npc_proposal
+                      where npc_proposal.thread_id = ${threadRow.id}
+                        and npc_proposal.state = 'pending'
+                    `;
+                    const lastRows = yield* sql<{ readonly finish_reason: string | null }>`
+                      select npc_turn.finish_reason
+                      from npc_turn
+                      where npc_turn.thread_id = ${threadRow.id}
+                        and npc_turn.who = 'npc'
+                      order by npc_turn.created_at desc, npc_turn.id desc
+                      limit 1
+                    `;
+                    const thread = toThread(threadRow);
+                    const finish = lastRows[0]?.finish_reason ?? null;
+                    const lastFailure =
+                      finish === null || finish === "stop"
+                        ? null
+                        : `Last reply ended with ${finish}.`;
+                    return new NpcSessionMonitor({
+                      npc: toPlayerNpc(npcRows[0]!),
+                      thread,
+                      turns,
+                      pendingProposals: proposalRows[0]?.count ?? 0,
+                      available: configured && thread.sessionState === "open",
+                      model,
+                      lastFailure: configured
+                        ? lastFailure
+                        : "No model is configured behind NPC chat.",
+                    });
+                  }),
+                ),
+                { concurrency: 4 },
+              );
+            }),
+          ),
+
         sessionList: (campaignId, sessionId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* ensureSessionParticipant(campaignId, sessionId);
               const rows = yield* sql<Parameters<typeof toPlayerNpc>[0]>`
-                select npc.* from npc
+                select npc.*, npc_thread.session_state from npc
                 join npc_thread on npc_thread.npc_id = npc.id
                 where npc_thread.channel = 'session_shared'
                   and npc_thread.session_id = ${sessionId}
                   and ${sessionParticipant(campaignId, sessionId, actor)}
                   and npc.campaign_id = ${campaignId}
                   and npc.archived_at is null
-                  and (${campaignWritableById(sql, campaignId, actor)} or (npc.visibility = 'shared' and npc_thread.visibility = 'shared'))
+                  and (${campaignWritableById(sql, campaignId, actor)} or (npc.visibility = 'shared' and npc_thread.visibility = 'shared' and npc_thread.session_state <> 'closed'))
                 order by npc.name asc, npc.id asc
               `;
               return rows.map(toPlayerNpc);
@@ -655,7 +832,7 @@ export class NpcThreads extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<Parameters<typeof toPlayerNpc>[0]>`
-                select npc.* from npc
+                select npc.*, npc_thread.session_state from npc
                 join npc_thread on npc_thread.npc_id = npc.id
                 where npc.id = ${npcId}
                   and ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}
@@ -690,6 +867,9 @@ export class NpcThreads extends Context.Service<
                     sessionId,
                     npcId,
                   );
+                  if (draft.who === "user" && thread.sessionState !== "open") {
+                    return yield* blockedSessionState(thread.sessionState);
+                  }
                   const insertedRows = yield* sql<TurnRow & { readonly inserted: boolean }>`
                     insert into npc_turn ${sql.insert(
                       defined({

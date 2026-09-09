@@ -363,6 +363,7 @@ describe("NpcScreen", () => {
           npcId,
           channel: "rehearsal",
           sessionId: null,
+          sessionState: "open",
           title: "Will you take us at dawn?",
           createdAt: cazril.createdAt,
           updatedAt: cazril.updatedAt,

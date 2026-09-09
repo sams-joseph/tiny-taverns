@@ -112,6 +112,7 @@ export const liveFight = (): Map<string, Answer> =>
     [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
     [`GET ${base}/npcs`, { status: 200, body: [cazril] }],
     [`GET ${base}/npcs/-/sessions/${sessionIdRaw}`, { status: 200, body: [] }],
+    [`GET ${base}/npcs/-/sessions/${sessionIdRaw}/monitor`, { status: 200, body: [] }],
     [`GET ${base}/npcs/${npcId}/proposals`, { status: 200, body: [] }],
     [
       `GET ${base}/table/sessions/${sessionIdRaw}/events`,

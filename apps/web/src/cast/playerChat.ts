@@ -357,7 +357,11 @@ export function useNpcSessionChat(
         ? undefined
         : status === undefined
           ? `Checking whether ${name} can answer…`
-          : `No model is configured behind ${name}. Your DM can still use their profile, knowledge and memory to play them by hand; this table chat is unavailable until the server is configured.`,
+          : status.sessionState === "paused"
+            ? `The DM has paused ${name}'s table conversation. The transcript stays visible and the DM can resume it when the scene is ready.`
+            : status.sessionState === "closed"
+              ? `The DM has closed ${name}'s table conversation for this session.`
+              : `No model is configured behind ${name}. Your DM can still use their profile, knowledge and memory to play them by hand; this table chat is unavailable until the server is configured.`,
     status: undefined,
     lastPrompt: undefined,
     reset: undefined,

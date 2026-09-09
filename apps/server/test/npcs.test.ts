@@ -690,6 +690,204 @@ describe("shared live-session NPC chat", () => {
     expect(seen.turns[0]).toMatchObject({ who: "user", speakerName: "Pim" });
   });
 
+  it("lets the creator monitor, pause, resume and close without mutating transcript history", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const sessions = yield* Sessions;
+        const threads = yield* NpcThreads;
+        const live = yield* LiveEvents;
+        const as = withActor(fixture.dm);
+        const session = yield* as(
+          sessions.create(fixture.campaign.id, {
+            number: 79,
+            title: "Market voices",
+            visibility: "shared",
+          }),
+        );
+        yield* as(campaigns.update(fixture.campaign.id, { currentSessionId: session.id }));
+        const otherSession = yield* as(
+          sessions.create(fixture.campaign.id, {
+            number: 81,
+            title: "Not tonight",
+            visibility: "shared",
+          }),
+        );
+        const monitorOther = yield* threads
+          .sessionMonitor(fixture.creator, otherSession.id, "scripted-local", true)
+          .pipe(Effect.result);
+        const opened = yield* threads.openSession(fixture.creator, fixture.cazril.id, session.id);
+        const first = yield* withActor(fixture.player)(
+          threads.sessionAppend(fixture.campaign.id, session.id, fixture.cazril.id, {
+            id: randomUUID() as NpcTurnId,
+            who: "user",
+            text: "Who paid you, Cazril?",
+            requestId: "market-one",
+          }),
+        );
+        const npcReply = yield* withActor(fixture.dm)(
+          threads.sessionAppend(fixture.campaign.id, session.id, fixture.cazril.id, {
+            id: randomUUID() as NpcTurnId,
+            who: "npc",
+            text: "Names cost extra.",
+            model: "scripted-local",
+            finishReason: "stop",
+          }),
+        );
+        const monitored = yield* threads.sessionMonitor(
+          fixture.creator,
+          session.id,
+          "scripted-local",
+          true,
+        );
+        const heard = yield* live
+          .subscribe(session.id)
+          .pipe(
+            Stream.take(3),
+            Stream.runCollect,
+            Effect.timeout("2 seconds"),
+            Effect.forkChild({ startImmediately: true }),
+          );
+        const paused = yield* threads.pauseSession(fixture.creator, fixture.cazril.id, session.id);
+        const pausedPlayer = yield* withActor(fixture.player)(
+          threads.sessionFind(fixture.campaign.id, session.id, fixture.cazril.id),
+        );
+        const pausedAppend = yield* withActor(fixture.player)(
+          threads.sessionAppend(fixture.campaign.id, session.id, fixture.cazril.id, {
+            id: randomUUID() as NpcTurnId,
+            who: "user",
+            text: "Answer while paused.",
+            requestId: "market-paused",
+          }),
+        ).pipe(Effect.result);
+        const resumed = yield* threads.resumeSession(
+          fixture.creator,
+          fixture.cazril.id,
+          session.id,
+        );
+        const afterResume = yield* withActor(fixture.player)(
+          threads.sessionAppend(fixture.campaign.id, session.id, fixture.cazril.id, {
+            id: randomUUID() as NpcTurnId,
+            who: "user",
+            text: "Then answer after the DM resumes.",
+            requestId: "market-two",
+          }),
+        );
+        const closed = yield* threads.closeSession(fixture.creator, fixture.cazril.id, session.id);
+        const playerListAfterClose = yield* withActor(fixture.player)(
+          threads.sessionList(fixture.campaign.id, session.id),
+        );
+        const monitorAfterClose = yield* threads.sessionMonitor(
+          fixture.creator,
+          session.id,
+          "scripted-local",
+          true,
+        );
+        const reopen = yield* threads
+          .openSession(fixture.creator, fixture.cazril.id, session.id)
+          .pipe(Effect.result);
+        const rings = yield* Fiber.join(heard);
+        return {
+          opened,
+          first,
+          npcReply,
+          monitored,
+          monitorOther,
+          paused,
+          pausedPlayer,
+          pausedAppend,
+          resumed,
+          afterResume,
+          closed,
+          playerListAfterClose,
+          monitorAfterClose,
+          reopen,
+          rings,
+        };
+      }),
+    );
+
+    expect(seen.opened.sessionState).toBe("open");
+    expect(seen.first.inserted).toBe(true);
+    expect(seen.npcReply.turn.text).toBe("Names cost extra.");
+    expect(Result.isFailure(seen.monitorOther) && seen.monitorOther.failure._tag).toBe("NotFound");
+    expect(seen.monitored).toHaveLength(1);
+    expect(seen.monitored[0]).toMatchObject({
+      available: true,
+      model: "scripted-local",
+      pendingProposals: 0,
+      npc: { name: "Cazril" },
+      thread: { sessionState: "open" },
+    });
+    expect(seen.monitored[0]?.turns.map((turn) => [turn.who, turn.speakerName, turn.text])).toEqual(
+      [
+        ["user", "Pim", "Who paid you, Cazril?"],
+        ["npc", null, "Names cost extra."],
+      ],
+    );
+    expect(seen.paused.sessionState).toBe("paused");
+    expect(seen.pausedPlayer.sessionState).toBe("paused");
+    expect(Result.isFailure(seen.pausedAppend) && seen.pausedAppend.failure._tag).toBe("Conflict");
+    expect(seen.resumed.sessionState).toBe("open");
+    expect(seen.afterResume.inserted).toBe(true);
+    expect(seen.closed.sessionState).toBe("closed");
+    expect(seen.playerListAfterClose).toEqual([]);
+    expect(seen.monitorAfterClose[0]?.thread.sessionState).toBe("closed");
+    expect(seen.monitorAfterClose[0]?.turns.map((turn) => turn.text)).toEqual([
+      "Who paid you, Cazril?",
+      "Names cost extra.",
+      "Then answer after the DM resumes.",
+    ]);
+    expect(Result.isFailure(seen.reopen) && seen.reopen.failure._tag).toBe("Conflict");
+    expect(Array.from(seen.rings).map((ring) => ring.sessionId)).toEqual([
+      seen.opened.sessionId,
+      seen.opened.sessionId,
+      seen.opened.sessionId,
+    ]);
+  });
+
+  it("pauses before invoking the session model", async () => {
+    const model = scriptedModel({ model: "scripted-local", maxTokens: MAX_TOKENS, rounds: [] });
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const sessions = yield* Sessions;
+        const threads = yield* NpcThreads;
+        const as = withActor(fixture.dm);
+        const session = yield* as(
+          sessions.create(fixture.campaign.id, {
+            number: 80,
+            title: "Paused before the line",
+            visibility: "shared",
+          }),
+        );
+        yield* as(campaigns.update(fixture.campaign.id, { currentSessionId: session.id }));
+        yield* threads.openSession(fixture.creator, fixture.cazril.id, session.id);
+        yield* threads.pauseSession(fixture.creator, fixture.cazril.id, session.id);
+        const result = yield* Effect.flatMap(NpcAgent, (agent) =>
+          agent.sessionTalk(fixture.campaign.id, session.id, fixture.cazril.id, {
+            text: "Can you hear me?",
+            requestId: "paused-model",
+          }),
+        ).pipe(
+          withActor(fixture.player),
+          Effect.provide(
+            NpcAgent.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer)),
+          ),
+          Effect.result,
+        );
+        const turns = yield* withActor(fixture.dm)(
+          threads.sessionTurns(fixture.campaign.id, session.id, fixture.cazril.id),
+        );
+        return { result, turns };
+      }),
+    );
+
+    expect(Result.isFailure(seen.result) && seen.result.failure._tag).toBe("Conflict");
+    expect(seen.turns).toEqual([]);
+    expect(model.requests()).toHaveLength(0);
+  }, 60_000);
+
   it("prompts from player-safe session context and never from secrets or private chats", async () => {
     const session = await runtime.runPromise(
       Effect.gen(function* () {

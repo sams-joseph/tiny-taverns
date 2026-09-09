@@ -143,6 +143,7 @@ import {
   NpcProposal,
   NpcProposalReject,
   NpcRehearsalStatus,
+  NpcSessionMonitor,
   NpcSource,
   NpcRehearse,
   NpcSessionTalk,
@@ -1946,7 +1947,30 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       success: Schema.Array(PlayerNpc),
       error: NotFound,
     }),
+    HttpApiEndpoint.get("sessionMonitor", "/-/sessions/:sessionId/monitor", {
+      params: { campaignId: CampaignId, sessionId: SessionId },
+      success: Schema.Array(NpcSessionMonitor),
+      error: NotFound,
+    }),
     HttpApiEndpoint.post("openSession", "/:npcId/sessions/:sessionId/open", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      payload: Schema.Struct({}),
+      success: NpcThread,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("pauseSession", "/:npcId/sessions/:sessionId/pause", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      payload: Schema.Struct({}),
+      success: NpcThread,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("resumeSession", "/:npcId/sessions/:sessionId/resume", {
+      params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
+      payload: Schema.Struct({}),
+      success: NpcThread,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("closeSession", "/:npcId/sessions/:sessionId/close", {
       params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
       payload: Schema.Struct({}),
       success: NpcThread,
@@ -1966,7 +1990,7 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
       payload: NpcSessionTalk,
       success: HttpApiSchema.StreamSse({ events: NpcEvent }),
-      error: [NotFound, HobUnavailable, RateLimited],
+      error: [NotFound, Conflict, HobUnavailable, RateLimited],
     }),
   )
   .prefix("/campaigns/:campaignId/npcs")

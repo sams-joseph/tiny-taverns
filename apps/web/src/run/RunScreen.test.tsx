@@ -16,7 +16,6 @@ import {
   session,
   sessionEvent,
 } from "./run.fixtures";
-import { cazril } from "../campaign/campaign.fixtures";
 import { reads } from "../api/keys";
 import { combatantWrites } from "./load";
 
@@ -182,6 +181,7 @@ describe("the runner", () => {
           npcId: cazril.id,
           channel: "session_shared",
           sessionId: session.id,
+          sessionState: "open",
           title: "Cazril",
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
@@ -199,6 +199,119 @@ describe("the runner", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/npcs/${cazril.id}/sessions/${session.id}/open`)).toEqual({}),
     );
+  });
+
+  it("monitors session NPC transcripts and keeps controls DM-side", async () => {
+    let state: "open" | "paused" | "closed" = "open";
+    const threadId = "2b1f2a1e-0000-4000-8000-00000000e0c1";
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, visibility: "shared" }],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${session.id}/monitor`, {
+      status: 200,
+      body: () => [
+        {
+          npc: { ...playerCazril, sessionState: state },
+          thread: {
+            id: threadId,
+            npcId,
+            channel: "session_shared",
+            sessionId: session.id,
+            sessionState: state,
+            title: "At the table",
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+          },
+          turns: [
+            {
+              id: "2b1f2a1e-0000-4000-8000-00000000e111",
+              threadId,
+              who: "user",
+              speakerName: "Pim",
+              text: "Who paid you, Cazril?",
+              templateVersion: null,
+              promptTokens: null,
+              createdAt: session.createdAt,
+            },
+            {
+              id: "2b1f2a1e-0000-4000-8000-00000000e112",
+              threadId,
+              who: "npc",
+              speakerName: null,
+              text: "Names cost extra.",
+              templateVersion: "npc-prompt/1.4.0",
+              promptTokens: 180,
+              createdAt: session.updatedAt,
+            },
+          ],
+          pendingProposals: 0,
+          available: state === "open",
+          model: "scripted-local",
+          lastFailure: null,
+        },
+      ],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/sessions/${session.id}/pause`, {
+      status: 200,
+      body: () => ({
+        id: threadId,
+        npcId,
+        channel: "session_shared",
+        sessionId: session.id,
+        sessionState: state,
+        title: "At the table",
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      }),
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/sessions/${session.id}/resume`, {
+      status: 200,
+      body: () => ({
+        id: threadId,
+        npcId,
+        channel: "session_shared",
+        sessionId: session.id,
+        sessionState: state,
+        title: "At the table",
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      }),
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/sessions/${session.id}/close`, {
+      status: 200,
+      body: () => ({
+        id: threadId,
+        npcId,
+        channel: "session_shared",
+        sessionId: session.id,
+        sessionState: state,
+        title: "At the table",
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      }),
+    });
+
+    await renderRunner();
+    expect(await screen.findByText("Who paid you, Cazril?")).toBeInTheDocument();
+    expect(screen.getByText("Pim")).toBeInTheDocument();
+    expect(screen.getByText("Names cost extra.")).toBeInTheDocument();
+    expect(screen.getByText(/scripted-local/)).toBeInTheDocument();
+
+    state = "paused";
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(await screen.findByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(screen.getByText("Who paid you, Cazril?")).toBeInTheDocument();
+
+    state = "open";
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(await screen.findByRole("button", { name: "Pause" })).toBeInTheDocument();
+
+    state = "closed";
+    await userEvent.click(screen.getAllByRole("button", { name: "Close" })[0]!);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Pause" })).toBeNull());
+    expect(screen.getAllByText("closed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Who paid you, Cazril?")).toBeInTheDocument();
   });
 
   it("says which of the two visibility levels is in force, and never implies more", async () => {
@@ -466,8 +579,13 @@ describe("the runner", () => {
           : [],
     });
 
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${session.id}/monitor`, {
+      status: 200,
+      body: [],
+    });
+
     await renderRunner();
-    expect(await screen.findByRole("heading", { name: "NPC conversations" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
     expect(screen.queryByText("NPC proposals waiting")).toBeNull();
     await waitFor(() => expect(server.open()).toBeGreaterThan(0));
 

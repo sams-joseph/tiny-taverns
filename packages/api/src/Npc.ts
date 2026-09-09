@@ -217,12 +217,18 @@ export type NpcChannel = typeof NpcChannel.Type;
 export const NpcWho = Schema.Literals(["user", "npc"]);
 export type NpcWho = typeof NpcWho.Type;
 
+/** The durable lifecycle of a shared-session NPC conversation. */
+export const NpcSessionState = Schema.Literals(["open", "paused", "closed"]);
+export type NpcSessionState = typeof NpcSessionState.Type;
+
 export class NpcThread extends Schema.Class<NpcThread>("NpcThread")({
   id: NpcThreadId,
   npcId: NpcId,
   channel: NpcChannel,
   /** Set only for `session_shared`: the live night this shared channel belongs to. */
   sessionId: Schema.NullOr(SessionId),
+  /** Set on shared-session threads; `open` on older/private channels. */
+  sessionState: NpcSessionState,
   /** The first line, shortened — what a picker would list. */
   title: Schema.String,
   createdAt: Schema.DateTimeUtcFromString,
@@ -239,6 +245,8 @@ export class PlayerNpc extends Schema.Class<PlayerNpc>("PlayerNpc")({
   name: Schema.String,
   role: Schema.String,
   persona: NpcPersona,
+  /** Present only when read as a live-session conversation. */
+  sessionState: Schema.optional(NpcSessionState),
 }) {}
 
 /**
@@ -426,6 +434,8 @@ export class NpcRehearsalStatus extends Schema.Class<NpcRehearsalStatus>("NpcReh
 export class NpcPlayerStatus extends Schema.Class<NpcPlayerStatus>("NpcPlayerStatus")({
   available: Schema.Boolean,
   npc: Schema.String,
+  /** Present only for shared-session chat. */
+  sessionState: Schema.optional(NpcSessionState),
 }) {}
 
 const turnText = Schema.String.check(Schema.isLengthBetween(1, 4000));
@@ -448,6 +458,17 @@ export const NpcSessionTalk = Schema.Struct({
   requestId: Schema.optional(Schema.String.check(Schema.isMaxLength(120))),
 });
 export type NpcSessionTalk = typeof NpcSessionTalk.Type;
+
+export class NpcSessionMonitor extends Schema.Class<NpcSessionMonitor>("NpcSessionMonitor")({
+  npc: PlayerNpc,
+  thread: NpcThread,
+  turns: Schema.Array(NpcTurn),
+  pendingProposals: Schema.Int,
+  /** Whether the model is configured and the thread is currently open for player messages. */
+  available: Schema.Boolean,
+  model: Schema.NullOr(Schema.String),
+  lastFailure: Schema.NullOr(Schema.String),
+}) {}
 
 /**
  * Said first, before the model is called: the thread and the turn the reply

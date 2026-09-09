@@ -15,6 +15,7 @@ import {
   NpcProposed,
   type NpcRehearse,
   NpcRehearsalStatus,
+  type NpcSessionMonitor,
   type NpcSessionTalk,
   type NpcTalk,
   NpcToolStep,
@@ -117,6 +118,10 @@ export class NpcAgent extends Context.Service<
       NotFound | HobUnavailable | RateLimited,
       CurrentActor
     >;
+    readonly sessionMonitor: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+    ) => Effect.Effect<ReadonlyArray<NpcSessionMonitor>, NotFound, never>;
     readonly sessionStatus: (
       campaignId: CampaignId,
       sessionId: SessionId,
@@ -127,7 +132,7 @@ export class NpcAgent extends Context.Service<
       sessionId: SessionId,
       npcId: NpcId,
       ask: NpcSessionTalk,
-    ) => Effect.Effect<Stream.Stream<NpcEvent>, NotFound | HobUnavailable, CurrentActor>;
+    ) => Effect.Effect<Stream.Stream<NpcEvent>, NotFound | Conflict | HobUnavailable, CurrentActor>;
   }
 >()("NpcAgent") {
   static readonly unavailable: Layer.Layer<
@@ -167,13 +172,19 @@ export class NpcAgent extends Context.Service<
           }),
         talk: (campaignId, npcId) =>
           Effect.andThen(npcs.playerFindById(campaignId, npcId), Effect.fail(off)),
+        sessionMonitor: (creator, sessionId) =>
+          threads.sessionMonitor(creator, sessionId, null, false),
         sessionStatus: (campaignId, sessionId, npcId) =>
           Effect.gen(function* () {
             const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
             return playerStatusOf(npc, false);
           }),
         sessionTalk: (campaignId, sessionId, npcId) =>
-          Effect.andThen(threads.sessionFind(campaignId, sessionId, npcId), Effect.fail(off)),
+          Effect.gen(function* () {
+            const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
+            if (npc.sessionState !== "open") return yield* blockedSessionState(npc.sessionState);
+            return yield* off;
+          }),
       };
     }),
   );
@@ -464,16 +475,20 @@ export class NpcAgent extends Context.Service<
               );
             }),
 
+          sessionMonitor: (creator, sessionId) =>
+            threads.sessionMonitor(creator, sessionId, options.model, true),
+
           sessionStatus: (campaignId, sessionId, npcId) =>
             Effect.gen(function* () {
               const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
-              return playerStatusOf(npc, true);
+              return playerStatusOf(npc, npc.sessionState === "open");
             }),
 
           sessionTalk: (campaignId, sessionId, npcId, ask) =>
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const npc = yield* threads.sessionFind(campaignId, sessionId, npcId);
+              if (npc.sessionState !== "open") return yield* blockedSessionState(npc.sessionState);
               const history = yield* threads.sessionTurns(campaignId, sessionId, npcId);
               const context = yield* sessionContextFor(
                 campaignId,
@@ -694,10 +709,19 @@ const statusOf = (
   });
 };
 
+const blockedSessionState = (state: PlayerNpc["sessionState"]): Conflict =>
+  new Conflict({
+    message:
+      state === "paused"
+        ? "that NPC conversation is paused by the DM"
+        : "that NPC conversation is closed for this session",
+  });
+
 const playerStatusOf = (npc: PlayerNpc, available: boolean): NpcPlayerStatus =>
   new NpcPlayerStatus({
     available,
     npc: npc.name,
+    ...(npc.sessionState === undefined ? {} : { sessionState: npc.sessionState }),
   });
 
 const freshTurnId: Effect.Effect<NpcTurnId> = Effect.sync(() => crypto.randomUUID() as NpcTurnId);

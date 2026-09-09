@@ -14,6 +14,7 @@ import {
   type NpcUpdate,
   NotFound,
   PlayerNpc,
+  type NpcSessionState,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
@@ -99,6 +100,7 @@ interface PlayerNpcRow {
   readonly name: string;
   readonly role: string;
   readonly persona: NpcPersona;
+  readonly session_state?: NpcSessionState;
 }
 
 export const toPlayerNpc = (row: PlayerNpcRow): PlayerNpc =>
@@ -108,6 +110,7 @@ export const toPlayerNpc = (row: PlayerNpcRow): PlayerNpc =>
     name: row.name,
     role: row.role,
     persona: row.persona,
+    ...(row.session_state === undefined ? {} : { sessionState: row.session_state }),
   });
 
 export const playerNpcReadable = (

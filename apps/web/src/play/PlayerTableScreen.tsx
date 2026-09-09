@@ -219,6 +219,7 @@ function SessionNpcCard({
         <CardTitle>Open at the table</CardTitle>
         <p className="text-body-s leading-body text-muted-foreground">
           This is the shared live-session conversation for active table participants.
+          {npc.sessionState === "paused" ? " The DM has paused new messages for now." : ""}
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -232,6 +233,7 @@ function SessionNpcCard({
                 onClick={() => setSelected(row.id)}
               >
                 {row.name}
+                {row.sessionState === "paused" && <Badge variant="secondary">paused</Badge>}
               </Button>
             ))}
           </div>

@@ -3,6 +3,7 @@ import type {
   CombatantId,
   HobDirectResourceUpdate,
   Npc,
+  NpcSessionMonitor,
   Roll,
   SessionEvent,
 } from "@taverns/api";
@@ -81,6 +82,16 @@ const runNpcsAtom = Atom.family((path: RunPath) =>
   apiAtom(
     (client) => client.npcs.list({ params: { campaignId: path.campaignId }, query: {} }),
     [reads.npcs(path.campaignId), reads.sessionNpcs(path.sessionId)],
+  ),
+);
+
+const sessionNpcMonitorAtom = Atom.family((path: RunPath) =>
+  apiAtom(
+    (client) =>
+      client.npcs.sessionMonitor({
+        params: { campaignId: path.campaignId, sessionId: path.sessionId },
+      }),
+    [reads.sessionNpcs(path.sessionId)],
   ),
 );
 
@@ -234,6 +245,198 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
       </select>
       {failure !== undefined && <SaveFailure failure={failure} />}
     </section>
+  );
+}
+
+function SessionNpcMonitorPanel({
+  path,
+  refreshToken,
+}: {
+  readonly path: RunPath;
+  readonly refreshToken: number;
+}) {
+  const [resource, reload] = useApiAtom(sessionNpcMonitorAtom(path));
+  const { failure, submit, busy } = useMutation();
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (refreshToken > 0) reload();
+  }, [refreshToken, reload]);
+
+  if (resource.state === "loading") {
+    return (
+      <section className="rounded-card border border-hairline bg-surface-card p-card">
+        <h3 className="text-title-s font-semibold text-foreground">Scene cast</h3>
+        <p className="mt-2 text-body-s text-muted-foreground">Reading open NPC conversations…</p>
+      </section>
+    );
+  }
+  if (resource.state === "failed")
+    return <FailureNotice failure={resource.failure} onRetry={reload} />;
+
+  const rows = resource.value;
+  const selected = rows.find((row) => row.npc.id === selectedId) ?? rows[0];
+  const control = (row: NpcSessionMonitor, action: "pause" | "resume" | "close", label: string) => {
+    void submit(
+      (client) => {
+        const params = {
+          campaignId: path.campaignId,
+          sessionId: path.sessionId,
+          npcId: row.npc.id,
+        };
+        if (action === "pause") return client.npcs.pauseSession({ params, payload: {} });
+        if (action === "resume") return client.npcs.resumeSession({ params, payload: {} });
+        return client.npcs.closeSession({ params, payload: {} });
+      },
+      [reads.sessionNpcs(path.sessionId)],
+    ).then((result) => {
+      if (Result.isSuccess(result)) {
+        reload();
+        toast.add({ type: "success", title: label, description: `${row.npc.name} updated.` });
+      }
+    });
+  };
+
+  return (
+    <section className="rounded-card border border-hairline bg-surface-card p-card">
+      <div className="flex flex-col gap-3">
+        <div>
+          <h3 className="text-title-s font-semibold text-foreground">Scene cast</h3>
+          <p className="text-caption leading-snug text-muted-foreground">
+            Open NPCs, monitor shared table transcripts, and pause or close an NPC conversation
+            without editing its history.
+          </p>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-body-s leading-body text-muted-foreground">
+            No NPC conversation is open in this session yet. Choose one above to bring them into the
+            scene.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {rows.map((row) => (
+                <Button
+                  key={row.thread.id}
+                  size="sm"
+                  variant={selected?.thread.id === row.thread.id ? "secondary" : "ghost"}
+                  onClick={() => setSelectedId(row.npc.id)}
+                >
+                  {row.npc.name}
+                  <Badge variant={badgeForSessionState(row.thread.sessionState)}>
+                    {row.thread.sessionState}
+                  </Badge>
+                  {row.pendingProposals > 0 && (
+                    <Badge variant="magic">{row.pendingProposals}</Badge>
+                  )}
+                </Button>
+              ))}
+            </div>
+            {selected !== undefined && (
+              <SessionNpcMonitorDetail
+                row={selected}
+                busy={busy}
+                onPause={() => control(selected, "pause", "NPC conversation paused")}
+                onResume={() => control(selected, "resume", "NPC conversation resumed")}
+                onClose={() => control(selected, "close", "NPC conversation closed")}
+              />
+            )}
+          </>
+        )}
+        {failure !== undefined && <SaveFailure failure={failure} />}
+      </div>
+    </section>
+  );
+}
+
+function badgeForSessionState(
+  state: NpcSessionMonitor["thread"]["sessionState"],
+): "default" | "secondary" | "outline" {
+  return state === "open" ? "default" : state === "paused" ? "secondary" : "outline";
+}
+
+function SessionNpcMonitorDetail({
+  row,
+  busy,
+  onPause,
+  onResume,
+  onClose,
+}: {
+  readonly row: NpcSessionMonitor;
+  readonly busy: boolean;
+  readonly onPause: () => void;
+  readonly onResume: () => void;
+  readonly onClose: () => void;
+}) {
+  const state = row.thread.sessionState;
+  return (
+    <div className="rounded-card border border-hairline bg-surface-sunken p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-body-s font-semibold text-foreground">{row.npc.name}</h4>
+            <Badge variant={badgeForSessionState(state)}>{state}</Badge>
+            <Badge variant={row.available ? "success" : "outline"}>
+              {row.available ? "available" : "unavailable"}
+            </Badge>
+          </div>
+          <p className="mt-1 text-caption leading-snug text-muted-foreground">
+            {row.npc.role || "Cast NPC"} · {row.model ?? "no model configured"}
+            {row.lastFailure === null ? "" : ` · ${row.lastFailure}`}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {state === "open" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onPause}>
+              Pause
+            </Button>
+          ) : state === "paused" ? (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={onResume}>
+              Resume
+            </Button>
+          ) : null}
+          {state !== "closed" && (
+            <Button size="sm" variant="destructive" disabled={busy} onClick={onClose}>
+              Close
+            </Button>
+          )}
+          {row.pendingProposals > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/campaigns/$campaignId/cast/$npcId"
+                  params={{ campaignId: row.npc.campaignId, npcId: row.npc.id }}
+                  hash="proposals"
+                />
+              }
+            >
+              Review proposals
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 max-h-80 space-y-2 overflow-auto rounded-control border border-hairline bg-surface-card p-2">
+        {row.turns.length === 0 ? (
+          <p className="text-caption leading-body text-muted-foreground">
+            No one has spoken in this shared conversation yet.
+          </p>
+        ) : (
+          row.turns.map((turn) => (
+            <div key={turn.id} className="rounded-control bg-surface-sunken px-2.5 py-2">
+              <p className="text-micro leading-snug tracking-caps uppercase text-faint">
+                {turn.who === "npc" ? row.npc.name : turn.speakerName || "Table participant"}
+              </p>
+              <p className="mt-1 text-body-s leading-body whitespace-pre-wrap text-foreground">
+                {turn.text}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -742,6 +945,9 @@ export function RunScreen() {
                   onUndo={(update) => void undoDirectUpdate(update)}
                 />
                 {!over && <ShareNpcCard path={path} />}
+                {!over && (
+                  <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />
+                )}
                 {!over && (
                   <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
                 )}

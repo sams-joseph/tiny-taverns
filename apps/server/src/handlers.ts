@@ -931,9 +931,27 @@ const NpcsLive = HttpApiBuilder.group(
       .handle("sessionList", ({ params }) =>
         threads.sessionList(params.campaignId, params.sessionId),
       )
+      .handle("sessionMonitor", ({ params }) =>
+        asCreator(params.campaignId, (creator) => agent.sessionMonitor(creator, params.sessionId)),
+      )
       .handle("openSession", ({ params }) =>
         asCreator(params.campaignId, (creator) =>
           threads.openSession(creator, params.npcId, params.sessionId),
+        ),
+      )
+      .handle("pauseSession", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          threads.pauseSession(creator, params.npcId, params.sessionId),
+        ),
+      )
+      .handle("resumeSession", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          threads.resumeSession(creator, params.npcId, params.sessionId),
+        ),
+      )
+      .handle("closeSession", ({ params }) =>
+        asCreator(params.campaignId, (creator) =>
+          threads.closeSession(creator, params.npcId, params.sessionId),
         ),
       )
       .handle("sessionStatus", ({ params }) =>
